@@ -2,7 +2,13 @@ import { expect, test as base, type Page, type Locator } from '@playwright/test'
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import type { SharedPlaylistPayload } from '../src/lib/api/types';
-import { FlowGuard, boundingBoxes, nameStartingWith, type ExpectedRefusal } from './helpers';
+import {
+	FlowGuard,
+	boundingBoxes,
+	nameStartingWith,
+	ONLY_IN_SHELL,
+	type ExpectedRefusal
+} from './helpers';
 import {
 	PLAYLIST_API,
 	PLAYLIST_TITLE,
@@ -115,7 +121,16 @@ async function loadedImages(images: Locator) {
 async function currentCover(page: Page, cover: string) {
 	const viewport = page.viewportSize();
 	if (!viewport) throw new Error('A viewport is required');
-	await page.setViewportSize({ width: viewport.width, height: 600 });
+	await page.setViewportSize({ width: 390, height: 600 });
+	await expect
+		.poll(async () => {
+			const [lyrics, songs] = await Promise.all([
+				page.locator('.np-page-lyrics').boundingBox(),
+				page.locator('.np-page-songs').boundingBox()
+			]);
+			return lyrics !== null && songs !== null && songs.y >= lyrics.y + lyrics.height;
+		})
+		.toBe(true);
 	await scroll(page, 'bottom');
 	await expect(bar(page)).toBeVisible();
 	await expect(bar(page).locator('.track-cover img')).toHaveAttribute('src', cover);
@@ -160,32 +175,57 @@ async function startStream(page: Page, playlist: RealPlaylist, start: () => Prom
 	return payload;
 }
 
-test('1374_rule_2 P1: playlist player stands ready before Play', async ({
-	visitor: page
-}, info) => {
-	await openMock(page);
-	await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-	await expect(page.locator('.cover-line').first()).toHaveText('Playlist · 3 songs');
-	await expect(page.locator('.cover-art .playlist-cover-cell img')).toHaveCount(3);
-	await loadedImages(page.locator('.cover-art .playlist-cover-cell img'));
-	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(1));
-	for (const name of ['Shuffle', 'Previous song', 'Play', 'Next song'])
-		await expect(control(page, name)).toBeVisible();
-	await expect(slider(page)).toBeVisible();
-	await expect(page.locator('.queue-title')).toHaveText([1, 2, 3].map(songTitle));
-	await expect(page.getByRole('dialog')).toHaveCount(0);
-	await expect(page.getByRole('button', { name: 'NOW PLAYING', exact: true })).toHaveCount(0);
-	const boxes = await boundingBoxes(
-		page.getByRole('heading', { level: 1 }),
-		page.locator('.now-playing-line'),
-		control(page, 'Play'),
-		slider(page),
-		page.locator('.lyrics-heading'),
-		page.getByRole('heading', { name: 'Songs', exact: true })
+for (const height of [900, 600]) {
+	test(
+		`1374_rule_11 P1 at ${height}: playlist player stands ready before Play`,
+		{ tag: height === 600 ? ONLY_IN_SHELL.desktop : [] },
+		async ({ visitor: page, expectedRefusals }, info) => {
+			expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
+			if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
+			await openMock(page);
+			await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+			await expect(page.locator('.cover-line').first()).toHaveText('Playlist · 3 songs');
+			await expect(page.locator('.cover-art .playlist-cover-cell img')).toHaveCount(3);
+			await loadedImages(page.locator('.cover-art .playlist-cover-cell img'));
+			await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(1));
+			for (const name of ['Shuffle', 'Previous song', 'Play', 'Next song'])
+				await expect(control(page, name)).toBeVisible();
+			await expect(slider(page)).toBeVisible();
+			await expect(page.locator('.queue-title')).toHaveText([1, 2, 3].map(songTitle));
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			await expect(page.getByRole('button', { name: 'NOW PLAYING', exact: true })).toHaveCount(0);
+			const boxes = await boundingBoxes(
+				page.getByRole('heading', { level: 1 }),
+				page.locator('.now-playing-line'),
+				control(page, 'Play'),
+				slider(page),
+				page.locator('.lyrics-heading'),
+				page.getByRole('heading', { name: 'Songs', exact: true })
+			);
+			const vertical = (page.viewportSize()?.width ?? 1440) <= 768 ? boxes : boxes.slice(0, 4);
+			for (let i = 1; i < vertical.length; i++)
+				expect(vertical[i].y).toBeGreaterThan(vertical[i - 1].y);
+			if ((page.viewportSize()?.width ?? 1440) > 768) {
+				expect(boxes[3].x + boxes[3].width).toBeLessThanOrEqual(boxes[4].x);
+				expect(boxes[4].x + boxes[4].width).toBeLessThanOrEqual(boxes[5].x);
+			}
+			const [artwork] = await boundingBoxes(page.locator('.cover-art'));
+			expect(artwork.width).toBeGreaterThan(100);
+			expect(artwork.height).toBeCloseTo(artwork.width, 0);
+			const [lyrics] = await boundingBoxes(page.locator('.np-page-lyrics'));
+			if (info.project.name === 'desktop')
+				expect(lyrics.y + lyrics.height).toBeLessThanOrEqual(height);
+			await screenshot(
+				page,
+				`before-play-${page.viewportSize()?.height ?? 900}`,
+				info.project.use.viewport?.width ?? 1440
+			);
+			await row(page, 2).click();
+			await selected(page, 2);
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(PLAYLIST_TITLE);
+		}
 	);
-	for (let i = 1; i < boxes.length; i++) expect(boxes[i].y).toBeGreaterThan(boxes[i - 1].y);
-	await screenshot(page, 'before-play', info.project.use.viewport?.width ?? 1440);
-});
+}
 
 test('1374_rule_5 P2: numbered rows name their album beneath the title', async ({
 	visitor: page
@@ -288,6 +328,7 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 	const restoredStream = await requestStream(page, realPlaylist, () =>
 		control(page, 'Disable shuffle').click()
 	);
+	// The server reuses the snapshot when the original queue order returns.
 	expect(restoredStream.stream_url).toBe(initialStream.stream_url);
 	await expect(control(page, 'Pause')).toBeVisible();
 	const resumedAt = Number(await slider(page).inputValue());
@@ -413,7 +454,7 @@ test('1374_rule_10 P11: missing words and failed covers recover on the next song
 	await mockPlaylist(page, payload);
 	await page.route(`**${PLAYLIST_API}/album-covers/2?*`, (route) => route.fulfill({ status: 404 }));
 	await page.goto(PLAYLIST_URL);
-	await page.setViewportSize({ width: page.viewportSize()?.width ?? 1440, height: 600 });
+	await page.setViewportSize({ width: 390, height: 600 });
 	await expect(page.locator('.lyrics-empty')).toHaveText('No lyrics');
 	await row(page, 1).click();
 	await scroll(page, 'bottom');
@@ -436,7 +477,12 @@ test('1374_rule_16 P12: 24 rows remain reachable with bounded lyrics at full and
 	expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 	const payload = playlistPayload(24);
 	payload.entries.forEach((entry) => {
-		entry.lyrics = Array.from({ length: 300 }, (_, i) => `Long line ${i}`).join('\n');
+		entry.whisper_cues = Array.from({ length: 300 }, (_, i) => ({
+			text: `Long line ${i}`,
+			start: i * 0.4,
+			end: (i + 1) * 0.4
+		}));
+		entry.lyrics = entry.whisper_cues.map((cue) => cue.text).join('\n');
 	});
 	await openMock(page, payload);
 	for (const height of [page.viewportSize()?.height ?? 900, 600]) {
@@ -448,42 +494,66 @@ test('1374_rule_16 P12: 24 rows remain reachable with bounded lyrics at full and
 			await expect(row(page, position)).toHaveAttribute('aria-current', 'true');
 			await expect(control(page, 'Pause')).toBeVisible();
 			await expect(page.locator('.now-playing-line')).toContainText(`${position} of 24`);
+			await expect(page.locator('.lyrics-line').first()).toBeVisible();
+			await page.locator('.lyrics').press('PageDown');
+			const follow = page.getByRole('button', { name: 'Follow', exact: true });
+			await expect(follow).toBeInViewport({ ratio: 1 });
+			await follow.click();
+			await expect(follow).toBeHidden();
 			const [lyrics] = await boundingBoxes(page.locator('.np-page-lyrics'));
-			expect(lyrics.height).toBeLessThanOrEqual(300);
+			expect(lyrics.height).toBeLessThanOrEqual(height);
+			if ((page.viewportSize()?.width ?? 1440) > 768) {
+				await expect(control(page, 'Pause')).toBeInViewport({ ratio: 1 });
+				expect(lyrics.y).toBeGreaterThanOrEqual(0);
+				expect(lyrics.y + lyrics.height).toBeLessThanOrEqual(height);
+				await expect(bar(page)).toBeHidden();
+			}
+			expect(
+				await page.locator('.shared-page').evaluate((root) => root.scrollWidth <= root.clientWidth)
+			).toBe(true);
 		}
 	}
 });
 
-test('1374_rule_16 P13: scrolled bar follows the song and returns without history', async ({
-	visitor: page,
-	expectedRefusals
-}, info) => {
-	expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
-	await openMock(page, playlistPayload(24));
-	await control(page, 'Play').click();
-	await control(page, 'Next song').click();
-	await selected(page, 2, 24);
-	const history = await page.evaluate(() => window.history.length);
-	await scroll(page, 'bottom');
-	await expect(bar(page)).toBeVisible();
-	await expect(bar(page).locator('.track-cover img')).toHaveAttribute('src', coverOf(2).card);
-	await loadedImages(bar(page).locator('.track-cover img'));
-	await screenshot(page, 'scrolled-bar', info.project.use.viewport?.width ?? 1440);
-	await bar(page).getByRole('button', { name: 'Pause', exact: true }).click();
-	await expect(bar(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible();
-	await bar(page).getByRole('button', { name: 'Play', exact: true }).click();
-	await expect(bar(page).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
-	const [footer, transport] = await boundingBoxes(
-		page.getByRole('button', { name: 'Impressum' }),
-		bar(page)
+for (const height of [900, 600]) {
+	test(
+		`1374_rule_11 P13 scrolling at ${height} keeps desktop transport and phone return available`,
+		{ tag: height === 600 ? ONLY_IN_SHELL.desktop : [] },
+		async ({ visitor: page, expectedRefusals }, info) => {
+			expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
+			if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
+			await openMock(page, playlistPayload(24));
+			await control(page, 'Play').click();
+			await control(page, 'Next song').click();
+			await selected(page, 2, 24);
+			const history = await page.evaluate(() => window.history.length);
+			await scroll(page, 'bottom');
+			if (info.project.name === 'desktop') {
+				await expect(control(page, 'Pause')).toBeInViewport({ ratio: 1 });
+				await expect(bar(page)).toBeHidden();
+				return;
+			}
+			await expect(bar(page)).toBeVisible();
+			await expect(bar(page).locator('.track-cover img')).toHaveAttribute('src', coverOf(2).card);
+			await loadedImages(bar(page).locator('.track-cover img'));
+			await screenshot(page, 'scrolled-bar', info.project.use.viewport?.width ?? 1440);
+			await bar(page).getByRole('button', { name: 'Pause', exact: true }).click();
+			await expect(bar(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+			await bar(page).getByRole('button', { name: 'Play', exact: true }).click();
+			await expect(bar(page).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+			const [footer, transport] = await boundingBoxes(
+				page.getByRole('button', { name: 'Impressum' }),
+				bar(page)
+			);
+			expect(footer.y + footer.height).toBeLessThanOrEqual(transport.y);
+			await bar(page).getByRole('button', { name: 'Back to the player' }).first().click();
+			await expect(control(page, 'Pause')).toBeInViewport();
+			await expect(bar(page)).toBeHidden();
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+			expect(await page.evaluate(() => window.history.length)).toBe(history);
+		}
 	);
-	expect(footer.y + footer.height).toBeLessThanOrEqual(transport.y);
-	await bar(page).getByRole('button', { name: 'Back to the player' }).first().click();
-	await expect(control(page, 'Pause')).toBeInViewport();
-	await expect(bar(page)).toBeHidden();
-	await expect(page.getByRole('dialog')).toHaveCount(0);
-	expect(await page.evaluate(() => window.history.length)).toBe(history);
-});
+}
 
 async function rights(page: Page, payload: SharedPlaylistPayload) {
 	await expect(

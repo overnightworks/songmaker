@@ -1255,9 +1255,10 @@ test.describe('Back closes the open overlay outside the library', () => {
 		}
 	});
 
-	test('scrolling back to the playlist player leaves browser Back intact', async ({
+	test('playlist scrolling keeps transport reachable and browser Back intact', async ({
 		browser
 	}, testInfo) => {
+		const shell = shellOf(testInfo);
 		const { viewport, isMobile, hasTouch } = testInfo.project.use;
 		const loggedOut = await browser.newContext({
 			storageState: undefined,
@@ -1277,11 +1278,19 @@ test.describe('Back closes the open overlay outside the library', () => {
 				.locator('.now-playing.page')
 				.getByRole('button', { name: 'Play', exact: true })
 				.click();
+			const historyLength = await sharePage.evaluate(() => window.history.length);
 			await sharePage
 				.locator('.shared-page')
 				.evaluate((element) => element.scrollTo(0, element.scrollHeight));
 			const bar = sharePage.locator('footer.player-bar');
-			await bar.getByRole('button', { name: 'Back to the player' }).first().click();
+			await expect(sharePage.locator('.queue-row').last()).toBeInViewport();
+			if (shell === 'mobile') {
+				await bar.getByRole('button', { name: 'Back to the player' }).first().click();
+			}
+			await expect(
+				sharePage.locator('.now-playing.page').getByRole('button', { name: 'Pause', exact: true })
+			).toBeInViewport({ ratio: 1 });
+			expect(await sharePage.evaluate(() => window.history.length)).toBe(historyLength);
 			await expect(bar).toBeHidden();
 			await expect(sharePage.getByRole('dialog')).toHaveCount(0);
 			await sharePage.goBack();
