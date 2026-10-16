@@ -142,7 +142,7 @@ describe('NewAlbumCard', () => {
 			reason: "You're offline, so nothing was created. Try again once you're back online."
 		}
 	])(
-		'keeps the card and what was typed when $case, and says why in words that fit',
+		'915_E2 keeps the card and what was typed when $case, and says why in words that fit',
 		async ({ refusal, reason }) => {
 			createAlbum.mockRejectedValue(refusal);
 			const root = await render();

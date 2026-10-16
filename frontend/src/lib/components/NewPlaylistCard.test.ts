@@ -136,7 +136,7 @@ describe('NewPlaylistCard', () => {
 			reason: "You're offline, so nothing was created. Try again once you're back online."
 		}
 	])(
-		'keeps the card and the name when $case, and says why in words that fit',
+		'915_E2 keeps the card and the name when $case, and says why in words that fit',
 		async ({ refusal, reason }) => {
 			createPlaylist.mockRejectedValue(refusal);
 			const root = await render();

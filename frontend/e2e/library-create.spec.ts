@@ -9,7 +9,14 @@
 // the first-album path runs against the seeded stack; creating the album and
 // opening its page are real.
 
-import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import {
+	expect,
+	test,
+	type BrowserContext,
+	type Locator,
+	type Page,
+	type Route
+} from '@playwright/test';
 import {
 	LIBRARY_NEW_ALBUM_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
@@ -40,7 +47,6 @@ import {
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openRailNav,
-	regainNetwork,
 	shellOf,
 	workspace,
 	HOME_PATH,
@@ -253,7 +259,7 @@ const CREATE_CARDS: CreateCard[] = [
 ];
 
 for (const card of CREATE_CARDS) {
-	test(`#1508 E1: Escape folds the ${card.name} card, returns focus and keeps the title typed`, async ({
+	test(`915_E1 Escape folds the ${card.name} card, returns focus and keeps the title typed`, async ({
 		page
 	}, testInfo) => {
 		const library = readSeededLibrary();
@@ -273,8 +279,8 @@ for (const card of CREATE_CARDS) {
 
 const SERVER_REASON = 'That title is already taken.';
 
-function toastsShown(page: Page): Locator {
-	return page.locator('.toast-container').getByRole('alert');
+function toastMessages(page: Page): Locator {
+	return page.locator('.toast-container .toast-message');
 }
 
 async function answerAlbumCreates(
@@ -299,56 +305,52 @@ async function typeIntoNewAlbumCard(page: Page, title: string): Promise<Locator>
 	return card;
 }
 
-async function expectCardKeptItsTitle(card: Locator, title: string): Promise<void> {
-	await expect(card.getByLabel(NEW_ALBUM_TITLE_LABEL)).toHaveValue(title);
-	await expect(card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL })).toBeEnabled();
+interface FailedCreate {
+	failure: string;
+	tag: string;
+	arrange: (page: Page, context: BrowserContext) => Promise<void>;
+	toast: string;
 }
 
-test(
-	"#1508 E2: a create the server refuses says why in the server's words and offers no Try again",
-	{ tag: REFUSED_CREATE_TAG },
-	async ({ page }, testInfo) => {
-		const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
-		await answerAlbumCreates(page, () => ({ status: 422, detail: SERVER_REASON }));
-		const card = await typeIntoNewAlbumCard(page, title);
-
-		await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
-
-		await expect(toastsShown(page)).toHaveText([SERVER_REASON]);
-		await expectCardKeptItsTitle(card, title);
+const FAILED_CREATES: FailedCreate[] = [
+	{
+		failure: 'the server refuses it: its reason, no Try again',
+		tag: REFUSED_CREATE_TAG,
+		arrange: (page) => answerAlbumCreates(page, () => ({ status: 422, detail: SERVER_REASON })),
+		toast: SERVER_REASON
+	},
+	{
+		failure: 'the server fails: Try again, without its details',
+		tag: ANSWERS_SERVER_ERROR_TAG,
+		arrange: (page) =>
+			answerAlbumCreates(page, () => ({ status: 500, detail: 'Internal Server Error' })),
+		toast: NEW_ALBUM_FAILED
+	},
+	{
+		failure: 'the network is gone: Try again once back online',
+		tag: LOSES_NETWORK_TAG,
+		arrange: (page, context) => loseNetwork(page, context),
+		toast: NEW_PLACE_OFFLINE
 	}
-);
+];
 
-test(
-	"#1508 E2: a create the server fails offers Try again and keeps the server's own words out",
-	{ tag: ANSWERS_SERVER_ERROR_TAG },
-	async ({ page }, testInfo) => {
-		const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
-		await answerAlbumCreates(page, () => ({ status: 500, detail: 'Internal Server Error' }));
-		const card = await typeIntoNewAlbumCard(page, title);
+for (const { failure, tag, arrange, toast } of FAILED_CREATES) {
+	test(
+		`915_E2 a create where ${failure}, with the card keeping its title`,
+		{ tag },
+		async ({ page, context }, testInfo) => {
+			const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
+			const card = await typeIntoNewAlbumCard(page, title);
+			await arrange(page, context);
 
-		await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+			await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
 
-		await expect(toastsShown(page)).toHaveText([NEW_ALBUM_FAILED]);
-		await expectCardKeptItsTitle(card, title);
-	}
-);
-
-test(
-	'#1508 E2: a create made offline offers Try again once back online',
-	{ tag: LOSES_NETWORK_TAG },
-	async ({ page, context }, testInfo) => {
-		const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
-		const card = await typeIntoNewAlbumCard(page, title);
-		await loseNetwork(page, context);
-
-		await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
-
-		await expect(toastsShown(page)).toHaveText([NEW_PLACE_OFFLINE]);
-		await expectCardKeptItsTitle(card, title);
-		await regainNetwork(page, context);
-	}
-);
+			await expect(toastMessages(page)).toHaveText([toast]);
+			await expect(card.getByLabel(NEW_ALBUM_TITLE_LABEL)).toHaveValue(title);
+			await expect(card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL })).toBeEnabled();
+		}
+	);
+}
 
 async function archiveAlbum(page: Page, albumId: string): Promise<void> {
 	const archived = await page.request.post(`${ALBUMS_API}/${albumId}/archive`, {
@@ -362,7 +364,7 @@ function albumIdOfAddress(address: string): string {
 }
 
 test(
-	'#1508 E3: refusals in a row leave one toast, × clears it, and a made album clears the next',
+	'915_E3 refusals in a row leave one toast, × clears it, and a made album clears the next',
 	{ tag: REFUSED_CREATE_TAG },
 	async ({ page }, testInfo) => {
 		const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
@@ -376,23 +378,23 @@ test(
 
 		try {
 			await create.click();
-			await expect(toastsShown(page)).toHaveText(['First reason']);
+			await expect(toastMessages(page)).toHaveText(['First reason']);
 
 			refusalReason = 'Second reason';
 			await create.click();
-			await expect(toastsShown(page)).toHaveText(['Second reason']);
+			await expect(toastMessages(page)).toHaveText(['Second reason']);
 
-			await toastsShown(page).getByRole('button', { name: 'Dismiss' }).click();
-			await expect(toastsShown(page)).toHaveCount(0);
+			await page.locator('.toast-container').getByRole('button', { name: 'Dismiss' }).click();
+			await expect(toastMessages(page)).toHaveCount(0);
 
 			await create.click();
-			await expect(toastsShown(page)).toHaveText(['Second reason']);
+			await expect(toastMessages(page)).toHaveText(['Second reason']);
 
 			refusalReason = null;
 			await create.click();
 			await expect(page).toHaveURL(/\/album\//);
 			createdAlbumId = albumIdOfAddress(page.url());
-			await expect(toastsShown(page)).toHaveCount(0);
+			await expect(toastMessages(page)).toHaveCount(0);
 		} finally {
 			if (createdAlbumId) await archiveAlbum(page, createdAlbumId);
 		}
@@ -400,7 +402,7 @@ test(
 );
 
 test(
-	'#1508 E4: a long unbroken album title ends in … on the New song card and leaves × on screen',
+	'915_E4 a long unbroken album title ends in … on the New song card and leaves × on screen',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		const albumTitle = `${'Nightdrive'.repeat(15)}${Date.now()}`;

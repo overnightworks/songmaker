@@ -128,7 +128,7 @@ describe('NewSongCard', () => {
 			toast: "You're offline, so nothing was created. Try again once you're back online."
 		}
 	])(
-		'keeps the card and the title when $case, and says why in words that fit',
+		'915_E2 keeps the card and the title when $case, and says why in words that fit',
 		async ({ failure, toast }) => {
 			createSong.mockRejectedValueOnce(failure);
 			const root = await render();
@@ -145,7 +145,7 @@ describe('NewSongCard', () => {
 		}
 	);
 
-	it('says only the latest failure when the create is refused again', async () => {
+	it('915_E3 says only the latest failure when the create is refused again', async () => {
 		failOnce(422, 'That title is taken');
 		failOnce(422, 'That title is too long');
 		const root = await render();
@@ -158,7 +158,7 @@ describe('NewSongCard', () => {
 		await vi.waitFor(() => expect(toastMessages()).toEqual(['That title is too long']));
 	});
 
-	it('clears the failure it said once the song is made after all', async () => {
+	it('915_E3 clears the failure it said once the song is made after all', async () => {
 		failOnce(500, 'Internal Server Error');
 		const root = await render();
 		type(field(root, 'Title'), 'Tidewater');
