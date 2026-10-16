@@ -52,10 +52,11 @@ describe('service worker fetch routing', () => {
 		expect(shouldInterceptInServiceWorker('/api/jobs/1')).toBe(false);
 	});
 
-	it('strips query and hash from pathnames', () => {
-		expect(requestPathname('https://x.example/offline/stream/s1?recover=2#t')).toBe(
-			'/offline/stream/s1'
-		);
+	it.each([
+		['an absolute URL', 'https://x.example/offline/stream/s1?recover=2#t'],
+		['a relative URL', '/offline/stream/s1?recover=2#t']
+	])('strips query and hash from pathnames of %s', (_kind, url) => {
+		expect(requestPathname(url)).toBe('/offline/stream/s1');
 	});
 });
 
