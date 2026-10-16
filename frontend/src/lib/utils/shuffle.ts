@@ -1,4 +1,4 @@
-export type RandomSource = () => number;
+type RandomSource = () => number;
 
 const playbackRandom: RandomSource = () => Math.random(); // NOSONAR(S2245) Playback ordering does not generate secrets or security tokens.
 

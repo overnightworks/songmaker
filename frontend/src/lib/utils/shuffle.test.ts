@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { shuffled, type RandomSource } from './shuffle';
+import { shuffled } from './shuffle';
 
 const ITEMS = ['a', 'b', 'c', 'd', 'e', 'f'];
 
-function alwaysDraws(value: number): RandomSource {
+function alwaysDraws(value: number): () => number {
 	return () => value;
 }
 
