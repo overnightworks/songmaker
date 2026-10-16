@@ -913,14 +913,11 @@ export function toggleOrStartCollection(
 	const state = get(collectionTransport)(kind, id);
 	if (state.waiting) stopStartAwaitingNetwork();
 	else if (state.current) audioPlayer.toggle();
-	else if (onstart) {
-		setShuffle(false);
-		onstart();
-	}
+	else if (onstart) onstart();
 }
 
 // The bar's and the header's press withdraw a waiting start altogether.
-export function stopStartAwaitingNetwork(): boolean {
+function stopStartAwaitingNetwork(): boolean {
 	if (!pauseStartAwaitingNetwork()) return false;
 	dropPendingStart();
 	return true;

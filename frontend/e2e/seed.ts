@@ -1196,7 +1196,6 @@ export async function seedPhoneLibrary(
 			const songTitle = `E2E Phone Song ${index} ${trackIndex + 1}`;
 			const song = await seed.postJson<CreatedResource>('/api/songs', {
 				title: songTitle,
-				track_number: trackIndex + 1,
 				album_id: album.id
 			});
 			const take = await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {

@@ -8,7 +8,7 @@
 	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '$lib/constants';
 	import { songCountLabel } from '$lib/utils/format';
 	import { historyLayerState } from '$lib/stores/layers';
-	import { collectionTransport, toggleOrStartCollection } from '$lib/stores/player';
+	import { collectionTransport, toggleOrStartCollection, setShuffle } from '$lib/stores/player';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -140,8 +140,22 @@
 
 	const collectionState = $derived($collectionTransport(kind, collectionId));
 
+	// The circle plays the collection in order from the top, so it turns the
+	// player's shuffle off, and the player's shuffle control shows that order;
+	// shuffling is the player's (#1354 rule 24). Which collection starts is the
+	// view's answer, through onplay. While this collection already plays, the
+	// circle pauses and resumes it instead and the order stays as it is — even
+	// once the collection has emptied under it. A view with nothing to start
+	// passes no onplay, which dims the circle unless this collection is the
+	// queue, so no tap there reaches the listener's shuffle setting.
 	function onCircle(): void {
-		toggleOrStartCollection(kind, collectionId, onplay);
+		toggleOrStartCollection(kind, collectionId, onplay ? startFromTheTop : null);
+	}
+
+	function startFromTheTop(): void {
+		if (!onplay) return;
+		setShuffle(false);
+		onplay();
 	}
 </script>
 

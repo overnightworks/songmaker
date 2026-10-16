@@ -311,23 +311,21 @@
 						playlistCovers: 'album_covers' in item ? item.album_covers : null
 					}}
 					{@const onopen = () => (kind === 'library' ? openAlbum(item.id) : openPlaylist(item.id))}
-					<div
-						class="wall-tile"
-						class:phone={narrow}
-						class:selected={currentCollection?.kind === placeType &&
-							currentCollection.id === item.id}
-					>
-						{#if narrow}
-							<LibraryRow
-								{...content}
-								subtitle={sizeLabel(item)}
-								openLabel={`Open ${placeType} ${item.title}`}
-								{onopen}
-								onplay={rowPlay(item)}
-								current={placeType === 'album' && transport.current}
-								transport={transport.transport}
-							/>
-						{:else}
+					{@const selected =
+						currentCollection?.kind === placeType && currentCollection.id === item.id}
+					{#if narrow}
+						<LibraryRow
+							{...content}
+							{selected}
+							subtitle={sizeLabel(item)}
+							openLabel={`Open ${placeType} ${item.title}`}
+							{onopen}
+							onplay={rowPlay(item)}
+							current={placeType === 'album' && transport.current}
+							transport={transport.transport}
+						/>
+					{:else}
+						<div class="wall-tile" class:selected>
 							<button
 								type="button"
 								class="wall-tile-body"
@@ -336,8 +334,8 @@
 							>
 								<LibraryTileContent {...content} subtitle={tileDetail(item)} />
 							</button>
-						{/if}
-					</div>
+						</div>
+					{/if}
 				{/each}
 			</div>
 		{:else if loadStatuses.includes('loading')}
@@ -521,12 +519,6 @@
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
 		background: var(--surface);
-	}
-
-	.wall-tile.phone {
-		border: 0;
-		border-radius: 0;
-		background: transparent;
 	}
 
 	.wall-tile.selected {

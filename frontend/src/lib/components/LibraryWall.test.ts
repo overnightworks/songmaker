@@ -26,10 +26,12 @@ import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import {
 	playAlbum,
+	setShuffle,
+	shuffleEnabled,
 	queueContext,
 	pendingStart,
 	playStartNotice,
-	stopStartAwaitingNetwork
+	toggleOrStartCollection
 } from '$lib/stores/player';
 import { fetchSong } from '$lib/api/client';
 import { ApiError, NetworkError } from '$lib/api/fetch';
@@ -98,8 +100,9 @@ async function unmountAll(): Promise<void> {
 
 afterEach(async () => {
 	await unmountAll();
-	stopStartAwaitingNetwork();
+	toggleOrStartCollection('album', 'waiting', null);
 	queueContext.set({ type: 'library' });
+	setShuffle(false);
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
 	vi.restoreAllMocks();
@@ -853,7 +856,7 @@ it('1354_rule_10: the row withdraws an album start waiting for the network', asy
 		makeSong({ id: 'waiting-song', album_id: 'waiting', generations: [], generation_count: 1 })
 	]);
 	reportResourceStreamReachable(false);
-	vi.mocked(fetchSong).mockRejectedValue(
+	vi.mocked(fetchSong).mockRejectedValueOnce(
 		new NetworkError('/api/songs/waiting-song', new TypeError('Failed to fetch'))
 	);
 	await playAlbum('waiting');
@@ -866,4 +869,18 @@ it('1354_rule_10: the row withdraws an album start waiting for the network', asy
 	expect(get(pendingStart)).toBeNull();
 	expect(get(playStartNotice)).toBe('idle');
 	expect(root.querySelector('.row-play')).toHaveAccessibleName('Play Waiting');
+});
+
+it('1354_rule_10: the phone row starts an album without switching shuffle off', async () => {
+	phoneViewport();
+	albumList.set([album({ id: 'shuffle', title: 'Shuffle', has_playable_take: true })]);
+	songList.set([
+		makeSong({ id: 'shuffle-song', album_id: 'shuffle', generations: [makeGeneration()] })
+	]);
+	albumSongsLoad.set({ shuffle: 'idle' });
+	setShuffle(true);
+	const root = await render();
+	getByRoleButton(root, 'Play Shuffle').click();
+	await tick();
+	expect(get(shuffleEnabled)).toBe(true);
 });

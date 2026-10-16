@@ -140,6 +140,10 @@ test(
 		const audioResponse = page.waitForResponse(
 			(response) => new URL(response.url()).pathname === fixture.tracks[playable.id][0].audioPath
 		);
+		const secondTrack = fixture.tracks[playable.id][1];
+		const secondAudioResponse = page.waitForResponse(
+			(response) => new URL(response.url()).pathname === secondTrack.audioPath
+		);
 		await page.keyboard.press('Enter');
 		expect((await audioResponse).ok()).toBe(true);
 		const pause = row(page, playable.title).getByRole('button', {
@@ -163,10 +167,10 @@ test(
 			})
 		);
 		await screenshot(page, 'playing');
-		const secondTrack = fixture.tracks[playable.id][1];
 		const playerBar = page.locator('.player-bar');
 		await playerBar.getByRole('button', { name: 'Next', exact: true }).click();
 		await expect(playerBar).toContainText(secondTrack.title);
+		expect((await secondAudioResponse).ok()).toBe(true);
 		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(1);
 		await pause.click();
 		await expect(play).toBeVisible();
@@ -274,5 +278,38 @@ test(
 		await expect(
 			workspace(page).getByRole('heading', { name: fixture.playlist.title, exact: true })
 		).toBeVisible();
+	}
+);
+
+test(
+	'1354_rule_10: P4 direct audio keeps the second track through row pause and resume',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		// Browsers without MSE use a media URL; the ordinary P1–P6 flow above
+		// keeps Chromium's continuous blob-backed deck enabled.
+		await page.addInitScript(() => Reflect.deleteProperty(window, 'MediaSource'));
+		const playable = fixture.albums[2];
+		const secondTrack = fixture.tracks[playable.id][1];
+		await page.goto(LIBRARY_PATH);
+		const play = row(page, playable.title).getByRole('button', {
+			name: `Play ${playable.title}`,
+			exact: true
+		});
+		await play.click();
+		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(0);
+		await page.locator('.player-bar').getByRole('button', { name: 'Next', exact: true }).click();
+		await expect
+			.poll(async () => new URL((await audioState(page)).src).pathname)
+			.toBe(secondTrack.audioPath);
+		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(1);
+		await row(page, playable.title)
+			.getByRole('button', { name: `Pause ${playable.title}`, exact: true })
+			.click();
+		const paused = await audioState(page);
+		expect(paused.paused).toBe(true);
+		await play.click();
+		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(paused.time + 0.2);
+		expect(new URL((await audioState(page)).src).pathname).toBe(secondTrack.audioPath);
+		await expect(page).toHaveURL(LIBRARY_URL);
 	}
 );

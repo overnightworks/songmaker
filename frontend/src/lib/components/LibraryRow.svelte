@@ -13,11 +13,19 @@
 		onopen: () => void;
 		onplay?: () => void;
 		transport?: TransportState;
+		selected?: boolean;
 	};
-	let { openLabel, onopen, onplay, transport = 'idle', ...content }: Props = $props();
+	let {
+		openLabel,
+		onopen,
+		onplay,
+		transport = 'idle',
+		selected = false,
+		...content
+	}: Props = $props();
 </script>
 
-<div class="library-row">
+<div class="wall-tile library-row" class:selected>
 	<button type="button" class="wall-tile-body" aria-label={openLabel} onclick={onopen}>
 		<LibraryTileContent {...content} presentation="row" />
 	</button>
@@ -43,6 +51,9 @@
 		height: 58px;
 		min-width: 0;
 		border-bottom: 1px solid var(--border);
+	}
+	.library-row.selected {
+		box-shadow: inset 0 0 0 2px var(--accent);
 	}
 	.wall-tile-body {
 		display: flex;

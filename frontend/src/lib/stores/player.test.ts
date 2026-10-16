@@ -146,7 +146,6 @@ import {
 	transportOfTheStart,
 	waitingStartOf,
 	pendingStart,
-	stopStartAwaitingNetwork,
 	windowEnded
 } from './player';
 import {
@@ -2791,7 +2790,7 @@ describe('playAlbum start track', () => {
 		});
 
 		afterEach(() => {
-			stopStartAwaitingNetwork();
+			toggleOrStartCollection('album', 'a1', null);
 			vi.useRealTimers();
 		});
 
@@ -2818,7 +2817,7 @@ describe('playAlbum start track', () => {
 					lockScreen: lockScreen.metadata
 				};
 
-				stopStartAwaitingNetwork();
+				toggleOrStartCollection('album', 'a1', null);
 
 				expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
 					whileWaiting: {
@@ -5335,7 +5334,7 @@ describe('a share link that takes the player (#1391)', () => {
 
 describe('collection transport', () => {
 	it.each(['album', 'playlist'] as const)(
-		'names the %s queue even when browsing another collection',
+		'1354_rule_10: names the %s queue even when browsing another collection',
 		(kind) => {
 			albumList.set([makeAlbum({ id: 'source', title: 'Source' })]);
 			queueContext.set(
@@ -5359,19 +5358,19 @@ describe('collection transport', () => {
 		}
 	);
 
-	it('starts a new collection in order, but leaves shuffle alone when there is nothing to start', () => {
+	it('1354_rule_10: starting a collection leaves shuffle unchanged', () => {
 		setShuffle(true);
 		toggleOrStartCollection('album', 'new', null);
 		expect(get(shuffleEnabled)).toBe(true);
-		let startedInOrder = false;
+		let startedWithShuffle = false;
 		toggleOrStartCollection('album', 'new', () => {
-			startedInOrder = !get(shuffleEnabled);
+			startedWithShuffle = get(shuffleEnabled);
 		});
-		expect(startedInOrder).toBe(true);
+		expect(startedWithShuffle).toBe(true);
 	});
 
 	it.each(['awaiting-network', 'gave-up-on-network'] as const)(
-		'withdraws a %s album start without starting over or changing shuffle',
+		'(#1330) withdraws a %s album start without starting over or changing shuffle',
 		async (notice) => {
 			songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 			reportResourceStreamReachable(false);
