@@ -41,11 +41,13 @@ class FakeAudio {
 
 const playlist = {
 	title: 'Shared playlist',
+	album_covers: [],
 	entries: [
 		{
 			entry_id: 'entry-1',
 			song_title: 'First',
 			artist: 'Artist',
+			album_title: 'Album',
 			generation_number: 1,
 			audio_url: '/audio/first.mp3'
 		},
@@ -53,6 +55,7 @@ const playlist = {
 			entry_id: 'entry-2',
 			song_title: 'Second',
 			artist: 'Artist',
+			album_title: 'Album',
 			generation_number: 1,
 			audio_url: '/audio/second.mp3'
 		}
@@ -76,7 +79,7 @@ function manifest(windowed: boolean): QueueStreamManifest {
 			song_id: `s${index + 1}`,
 			song_title: entry.song_title,
 			artist: entry.artist,
-			album_title: '',
+			album_title: entry.album_title,
 			lyrics: null,
 			generation_number: entry.generation_number,
 			mp3_path: `${entry.entry_id}.mp3`,
@@ -96,6 +99,13 @@ let audio: FakeAudio;
 
 beforeEach(() => {
 	audio = new FakeAudio();
+	vi.stubGlobal(
+		'IntersectionObserver',
+		class {
+			observe() {}
+			disconnect() {}
+		}
+	);
 	vi.stubGlobal('fetch', mockFetch);
 	vi.stubGlobal(
 		'Audio',
@@ -121,41 +131,49 @@ afterEach(async () => {
 });
 
 describe('shared playlist page', () => {
-	it('shows each entry with its own artist', async () => {
+	it('1374_rule_5 shows each entry with its album', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist });
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
 
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 		expect(target.textContent).toContain('First');
-		expect(target.textContent).toContain('Artist');
+		expect(target.textContent).toContain('Album');
 	});
 
-	it('#1374 rule 7: a playlist stream stops at its last song and Play again starts song 1', async () => {
-		mockFetch
-			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist })
-			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+	it.each(['classic', 'stream'] as const)(
+		'1374_rule_7 a playlist %s stops at its last song and Play again starts song 1',
+		async (mode) => {
+			mockFetch
+				.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist })
+				.mockResolvedValue({
+					ok: mode === 'stream',
+					status: mode === 'stream' ? 200 : 503,
+					json: async () => manifest(false)
+				});
+			const target = document.createElement('div');
+			document.body.appendChild(target);
+			component = mount(Page, { target });
+			await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track-row')[1].click();
-		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
-		audio.fire('ended');
-		await tick();
-		document.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
+			target.querySelectorAll<HTMLButtonElement>('.queue-row')[1].click();
+			await vi.waitFor(() => expect(audioPlayer.current?.songTitle).toBe('Second'));
+			expect(audioPlayer.mode).toBe(mode);
+			expect(audioPlayer.current?.albumTitle).toBe('Album');
+			audio.fire('ended');
+			await tick();
 
-		const rows = () => target.querySelectorAll<HTMLButtonElement>('.track-row');
-		expect(rows()[1].classList).toContain('current');
-		await vi.waitFor(() => expect(document.querySelector('.play-again')).not.toBeNull());
-		expect(document.querySelector('.play-again')?.textContent).toContain('Play again');
-		expect(
-			document.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
-		).toBe(true);
+			const rows = () => target.querySelectorAll<HTMLButtonElement>('.queue-row');
+			expect(rows()[1].classList).toContain('current');
+			await vi.waitFor(() => expect(document.querySelector('.play-again')).not.toBeNull());
+			expect(document.querySelector('.play-again')?.textContent).toContain('Play again');
+			expect(
+				document.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
+			).toBe(true);
 
-		document.querySelector<HTMLButtonElement>('.play-again')?.click();
-		await vi.waitFor(() => expect(rows()[0].classList).toContain('current'));
-	});
+			document.querySelector<HTMLButtonElement>('.play-again')?.click();
+			await vi.waitFor(() => expect(rows()[0].classList).toContain('current'));
+		}
+	);
 });

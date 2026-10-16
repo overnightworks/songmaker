@@ -1,16 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { historyLayerState } from '$lib/stores/layers';
 	import {
-		collectionSubtitle,
 		playableTracks,
 		trackPlaybackInfo,
-		type SharedCollectionView,
-		type SharedTrack
+		type SharedCollectionView
 	} from '$lib/share/sharedCollection';
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
-	import { ALBUM_COVER_ALT_TYPE } from '$lib/constants';
 	import {
 		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
@@ -19,19 +15,17 @@
 		SHARE_SONGS_HEADING,
 		SHARE_BACK_TO_PLAYER_LABEL,
 		shareAlbumSubtitle,
+		sharePlaylistSubtitle,
 		shareNowPlayingLine,
 		SHARE_NO_AUDIO_NOTICE,
-		SHARE_NOW_PLAYING_NO_LYRICS,
-		SHARE_NOW_PLAYING_SHEET_LABEL
+		SHARE_NOW_PLAYING_NO_LYRICS
 	} from '$lib/constants/share';
 	import { formatTime, titleInitials } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import CollectionHeaderFrame from '$lib/components/CollectionHeaderFrame.svelte';
 	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
 	import TransportBarFrame from '$lib/components/TransportBarFrame.svelte';
 	import NowPlayingFrame from '$lib/components/NowPlayingFrame.svelte';
 	import NowPlayingQueue from '$lib/components/NowPlayingQueue.svelte';
-	import PlayingMark from '$lib/components/PlayingMark.svelte';
 	import ShareStatus from '$lib/components/ShareStatus.svelte';
 	import SharedFooter from './SharedFooter.svelte';
 
@@ -53,22 +47,32 @@
 	let mobileTransport = $state(false);
 	let pageElement: HTMLElement | undefined = $state();
 	let playerOutOfView = $state(false);
-	const nowPlayingOpen = historyLayerState('shared-now-playing', false);
 
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
-	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${view?.albumTitle ?? view?.title ?? ''}`);
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
-	const opensAsPlayer = $derived(view?.kind !== 'playlist');
-	const hasScrollBar = $derived(view?.kind === 'album');
+	const hasScrollBar = $derived(view?.kind === 'album' || view?.kind === 'playlist');
+	const subtitleByEntryId = $derived(
+		view?.kind === 'playlist'
+			? new Map(tracks.map((track) => [track.key, track.albumTitle ?? '']))
+			: undefined
+	);
+	const transportCover = $derived(
+		view?.kind === 'playlist' ? playback.currentTrack?.cover : view?.cover
+	);
+	let failedTransportCover = $state<string | null>(null);
+	const transportCoverUrl = $derived(transportCover?.card ?? null);
 	const stagedTrack = $derived(
-		playback.currentTrack ?? tracks[0] ?? (view?.kind === 'album' ? null : view?.tracks[0]) ?? null
+		playback.currentTrack ?? tracks[0] ?? (hasScrollBar ? null : view?.tracks[0]) ?? null
 	);
 	const collectionHead = $derived(
-		view?.kind === 'album' && stagedTrack
+		hasScrollBar && view && stagedTrack
 			? {
 					title: view.title,
-					subtitle: shareAlbumSubtitle(view.artist),
+					subtitle:
+						view.kind === 'playlist'
+							? sharePlaylistSubtitle(tracks.length)
+							: shareAlbumSubtitle(view.artist),
 					nowPlaying: shareNowPlayingLine(
 						stagedTrack.title,
 						Math.max(0, playback.queue.currentIndex) + 1,
@@ -93,10 +97,6 @@
 		if (!collection) return;
 		untrack(() => playback.start(collection, streamFetcher));
 		return () => playback.stop();
-	});
-
-	$effect(() => {
-		if (!playback.currentTrack) $nowPlayingOpen = false;
 	});
 
 	$effect(() => {
@@ -125,16 +125,7 @@
 	function scrollBackToPlayer(): void {
 		pageElement?.querySelector('.now-playing.page')?.scrollIntoView({ behavior: 'smooth' });
 	}
-
-	function onRowClick(track: SharedTrack): void {
-		playback.toggle(track);
-	}
 </script>
-
-{#snippet titleArea()}
-	<h2 class="header-title">{view?.title ?? ''}</h2>
-	{#if view}<p class="header-subtitle">{collectionSubtitle(view)}</p>{/if}
-{/snippet}
 
 {#snippet playlistCover()}
 	{#if view?.kind === 'playlist'}
@@ -142,15 +133,21 @@
 			title={view.title}
 			covers={view.playlistCovers ?? []}
 			cover={view.cover}
-			size="56px"
+			size="100%"
 		/>
 	{/if}
 {/snippet}
 
 {#snippet trackInfo(titleGlowStyle: string)}
 	<span class="track-cover" aria-hidden="true">
-		{#if coverUrl}
-			<img src={coverUrl} alt="" />
+		{#if transportCoverUrl && transportCoverUrl !== failedTransportCover}
+			<img
+				src={transportCoverUrl}
+				alt=""
+				onerror={() => (failedTransportCover = transportCoverUrl)}
+			/>
+		{:else}
+			{titleInitials(playback.currentTrack?.title ?? '')}
 		{/if}
 	</span>
 	<span class="track-text">
@@ -161,12 +158,13 @@
 	</span>
 {/snippet}
 
-{#snippet albumSongs()}
+{#snippet collectionSongs()}
 	<NowPlayingQueue
 		queue={playback.queue}
 		contextLabel={view?.title ?? null}
 		currentSongTitle={stagedTrack?.title ?? ''}
 		heading={SHARE_SONGS_HEADING}
+		{subtitleByEntryId}
 		onJump={(index) => {
 			if (index === playback.queue.currentIndex && playback.currentTrack)
 				playback.toggle(playback.currentTrack);
@@ -176,19 +174,8 @@
 	/>
 {/snippet}
 
-{#snippet rightPanel()}
-	<NowPlayingQueue
-		queue={playback.queue}
-		contextLabel={view?.title ?? null}
-		currentSongTitle={playback.currentTrack?.title ?? view?.title ?? ''}
-		onJump={(index) => playback.jump(index)}
-		showTakeLabel={false}
-	/>
-{/snippet}
-
 <div
-	class="shared-page"
-	class:player-page={opensAsPlayer}
+	class="shared-page player-page"
 	class:bar-room={hasScrollBar && playback.currentTrack !== null}
 	bind:this={pageElement}
 >
@@ -205,24 +192,23 @@
 			{resource}
 			onretry={errorKind === 'error' ? onretry : undefined}
 		/>
-	{:else if opensAsPlayer && stagedInfo}
+	{:else if stagedInfo}
 		<NowPlayingFrame
 			surface="page"
+			artwork={view?.kind === 'playlist' ? playlistCover : undefined}
 			{collectionHead}
-			songs={view?.kind === 'album' ? albumSongs : undefined}
+			songs={hasScrollBar ? collectionSongs : undefined}
 			canPrev={playback.canPrev}
 			canNext={playback.currentTrack ? playback.canNext : tracks.length > 1}
-			onprev={view?.kind === 'album' ? () => playback.prev() : undefined}
-			onnext={view?.kind === 'album'
+			onprev={hasScrollBar ? () => playback.prev() : undefined}
+			onnext={hasScrollBar
 				? () => (playback.currentTrack ? playback.next() : playback.jump(1))
 				: undefined}
 			shuffle={playback.shuffle}
 			shuffleLabel={playback.shuffle
 				? NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
 				: NOW_PLAYING_SHUFFLE_LABEL_PREFIX}
-			onToggleShuffle={view?.kind === 'album'
-				? () => playback.setShuffle(!playback.shuffle)
-				: undefined}
+			onToggleShuffle={hasScrollBar ? () => playback.setShuffle(!playback.shuffle) : undefined}
 			info={stagedInfo}
 			onCoverError={() => (coverFailed = true)}
 			{coverUrl}
@@ -235,50 +221,15 @@
 			lyricsCues={stagedTrack?.cues ?? null}
 			lyricsText={stagedTrack?.lyrics ?? null}
 		/>
-	{:else if view?.kind === 'album'}
+	{:else if view}
 		<h1 class="header-title">{view.title}</h1>
 		<p class="no-audio" role="status">{SHARE_NO_AUDIO_NOTICE}</p>
-	{:else if view}
-		<CollectionHeaderFrame
-			{coverUrl}
-			showCover={view.kind !== 'playlist' && Boolean(coverUrl)}
-			onCoverError={() => (coverFailed = true)}
-			{coverAlt}
-			initials={titleInitials(view.title)}
-			artFill={null}
-			kind={view.kind}
-			transport={playback.currentTrack !== null ? audioPlayer.transport : 'idle'}
-			onplay={tracks.length > 0 ? () => playback.play() : null}
-			{titleArea}
-			coverFallback={view.kind === 'playlist' ? playlistCover : undefined}
-		/>
-
-		{#if tracks.length === 0}
-			<p class="no-audio">{SHARE_NO_AUDIO_NOTICE}</p>
-		{:else}
-			<div class="track-list">
-				{#each tracks as track (track.key)}
-					{@const row = playback.queueRows.find((r) => r.key === track.key)}
-					{@const current = playback.currentTrack?.key === track.key}
-					<button type="button" class="track-row" class:current onclick={() => onRowClick(track)}>
-						<PlayingMark {current} />
-						<span class="track-row-body">
-							<span class="track-row-title">{track.title}</span>
-							{#if track.subtitle}<span class="track-row-meta">{track.subtitle}</span>{/if}
-						</span>
-						{#if row?.durationSec != null}
-							<span class="track-row-duration">{formatTime(row.durationSec)}</span>
-						{/if}
-					</button>
-				{/each}
-			</div>
-		{/if}
 	{/if}
 
 	<SharedFooter />
 </div>
 
-{#if playback.currentTrack && (!opensAsPlayer || (hasScrollBar && playerOutOfView))}
+{#if playback.currentTrack && hasScrollBar && playerOutOfView}
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
@@ -293,38 +244,12 @@
 		onTogglePlay={() => playback.play()}
 		onSeek={(seconds) => playback.seek(seconds)}
 		{trackInfo}
-		nowPlayingOpen={$nowPlayingOpen}
-		onOpenNowPlaying={() => ($nowPlayingOpen = true)}
+		nowPlayingOpen={false}
+		onOpenNowPlaying={scrollBackToPlayer}
 		nowPlayingDisabled={false}
 		{mobileTransport}
-		nowPlayingTargetLabel={hasScrollBar ? SHARE_BACK_TO_PLAYER_LABEL : undefined}
-		onReturnToPlayer={hasScrollBar ? scrollBackToPlayer : undefined}
-	/>
-{/if}
-
-{#if $nowPlayingOpen && audioPlayer.current && !opensAsPlayer}
-	<NowPlayingFrame
-		info={audioPlayer.current}
-		{coverUrl}
-		onclose={() => ($nowPlayingOpen = false)}
-		canPrev={playback.canPrev}
-		canNext={playback.canNext}
-		onprev={() => playback.prev()}
-		onnext={() => playback.next()}
-		shuffle={playback.shuffle}
-		shuffleLabel={playback.shuffle ? 'Disable shuffle' : 'Shuffle'}
-		onToggleShuffle={() => playback.setShuffle(!playback.shuffle)}
-		onTogglePlay={() => playback.play()}
-		onSeek={(seconds) => playback.seek(seconds)}
-		ended={playback.ended}
-		upNextTitle={playback.queue.upNext?.songTitle ?? null}
-		rightPanelLabel="Queue"
-		sheetLabel={SHARE_NOW_PLAYING_SHEET_LABEL}
-		showTakeLabel={false}
-		lyricsEmptyLabel={SHARE_NOW_PLAYING_NO_LYRICS}
-		lyricsCues={playback.currentCues}
-		lyricsText={playback.currentTrack?.lyrics ?? null}
-		{rightPanel}
+		nowPlayingTargetLabel={SHARE_BACK_TO_PLAYER_LABEL}
+		onReturnToPlayer={scrollBackToPlayer}
 	/>
 {/if}
 
@@ -403,12 +328,6 @@
 		margin: 0;
 	}
 
-	.header-subtitle {
-		margin: 0.2rem 0 0;
-		font-size: 0.85rem;
-		color: var(--text-muted, #888);
-	}
-
 	.no-audio {
 		margin-top: 1.5rem;
 		text-align: center;
@@ -416,72 +335,9 @@
 		font-size: 0.9rem;
 	}
 
-	.track-list {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		margin-top: 1.2rem;
-	}
-
-	.track-row {
-		display: flex;
-		align-items: center;
-		gap: 0.8rem;
-		padding: 0.7rem 1rem;
-		background: color-mix(in srgb, var(--surface) 80%, transparent);
-		border: 1px solid transparent;
-		border-radius: 4px;
-		color: var(--text, #e0e0e0);
-		font-size: 0.95rem;
-		cursor: pointer;
-		text-align: left;
-		transition:
-			background 0.15s,
-			border-color 0.15s;
-	}
-
-	.track-row:hover {
-		background: color-mix(in srgb, var(--surface-hover) 90%, transparent);
-		border-color: color-mix(in srgb, var(--accent) 15%, transparent);
-	}
-
-	.track-row.current {
-		background: color-mix(in srgb, var(--surface-hover) 90%, transparent);
-		border-left: 3px solid transparent;
-		border-image: linear-gradient(to bottom, var(--primary), var(--accent)) 1;
-	}
-
-	.track-row.current .track-row-title {
-		color: var(--primary);
-	}
-
-	.track-row-body {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.track-row-title {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.track-row-meta {
-		font-size: 0.75rem;
-		color: var(--text-muted, #888);
-	}
-
-	.track-row-duration {
-		flex-shrink: 0;
-		font-size: 0.75rem;
-		color: var(--text-subtle, #888);
-	}
-
 	.track-cover {
-		display: block;
+		display: grid;
+		place-items: center;
 		width: 44px;
 		height: 44px;
 		flex-shrink: 0;

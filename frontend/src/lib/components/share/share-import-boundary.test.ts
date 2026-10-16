@@ -22,7 +22,7 @@ const ENTRY_FILES = [
 	'lib/components/share/SharedFooter.svelte',
 	'lib/share/sharedCollection.ts',
 	'lib/share/sharePlayback.svelte.ts',
-	'lib/components/CollectionHeaderFrame.svelte',
+	'lib/components/PlaylistCover.svelte',
 	'lib/components/TransportBarFrame.svelte',
 	'lib/components/NowPlayingFrame.svelte',
 	'lib/components/NowPlayingQueue.svelte',

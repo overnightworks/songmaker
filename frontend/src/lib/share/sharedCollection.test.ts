@@ -33,6 +33,7 @@ function media(
 function track(overrides: Partial<SharedTrack> & { key: string; title: string }): SharedTrack {
 	return {
 		subtitle: null,
+		albumTitle: null,
 		audioUrl: null,
 		durationSec: null,
 		lyrics: null,
@@ -102,7 +103,7 @@ describe('fromSharedAlbum', () => {
 });
 
 describe('fromSharedPlaylist', () => {
-	it('maps a playlist payload to a collection view carrying per-entry artist', () => {
+	it('1374_rule_5 maps each playlist entry album separately from its artist', () => {
 		const view = fromSharedPlaylist({
 			title: 'Late Night Mix',
 			cover: {
@@ -158,6 +159,7 @@ describe('fromSharedPlaylist', () => {
 				key: 'e1',
 				title: 'First',
 				subtitle: 'Artist One',
+				albumTitle: 'Album One',
 				audioUrl: '/audio/first.mp3',
 				durationSec: 95,
 				lyrics: 'verse one',
@@ -167,7 +169,7 @@ describe('fromSharedPlaylist', () => {
 					detail: '/shared/playlist/mix/album-cover/a1?variant=detail&v=album.png'
 				}
 			}),
-			track({ key: 'e2', title: 'Second', subtitle: 'Artist Two' })
+			track({ key: 'e2', title: 'Second', subtitle: 'Artist Two', albumTitle: 'Album Two' })
 		]);
 	});
 });
@@ -308,7 +310,7 @@ describe('trackPlaybackInfo', () => {
 		expect(info.generation.version_lyrics).toBe('the lantern hums');
 	});
 
-	it('uses the entry artist for a playlist track', () => {
+	it('1374_rule_5 uses the entry artist and album for classic playlist playback', () => {
 		const view = fromSharedPlaylist({
 			title: 'Late Night Mix',
 			album_covers: [],
@@ -327,7 +329,7 @@ describe('trackPlaybackInfo', () => {
 		const info = trackPlaybackInfo(view, view.tracks[0]);
 
 		expect(info.artist).toBe('Artist One');
-		expect(info.albumTitle).toBe('');
+		expect(info.albumTitle).toBe('Album One');
 	});
 
 	it('uses the collection album_title for a song or take track', () => {

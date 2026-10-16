@@ -30,11 +30,12 @@ export interface SharedTrack {
 	key: string;
 	title: string;
 	subtitle: string | null;
+	albumTitle: string | null;
 	audioUrl: string | null;
 	durationSec: number | null;
 	lyrics: string | null;
 	cues: WhisperCue[] | null;
-	cover?: AlbumCoverUrls | null;
+	cover: AlbumCoverUrls | null;
 }
 
 export interface SharedCollectionView {
@@ -60,12 +61,14 @@ function sharedTrack(
 	title: string,
 	subtitle: string | null,
 	media: SharedTakeMedia,
-	cover: AlbumCoverUrls | null = null
+	cover: AlbumCoverUrls | null = null,
+	albumTitle: string | null = null
 ): SharedTrack {
 	return {
 		key,
 		title,
 		subtitle,
+		albumTitle,
 		audioUrl: media.audio_url,
 		durationSec: media.audio_duration,
 		lyrics: media.lyrics,
@@ -97,7 +100,14 @@ export function fromSharedPlaylist(payload: SharedPlaylistPayload): SharedCollec
 		cover: payload.cover ?? null,
 		playlistCovers: payload.album_covers,
 		tracks: payload.entries.map((entry) =>
-			sharedTrack(entry.entry_id, entry.song_title, entry.artist, entry, entry.album_cover ?? null)
+			sharedTrack(
+				entry.entry_id,
+				entry.song_title,
+				entry.artist,
+				entry,
+				entry.album_cover ?? null,
+				entry.album_title
+			)
 		)
 	};
 }
@@ -168,7 +178,10 @@ export function trackPlaybackInfo(
 	collection: SharedCollectionView,
 	track: SharedTrack
 ): PlaybackInfo {
-	const albumTitle = collection.kind === 'album' ? collection.title : (collection.albumTitle ?? '');
+	const albumTitle =
+		collection.kind === 'album'
+			? collection.title
+			: (track.albumTitle ?? collection.albumTitle ?? '');
 	const artist = collection.kind === 'playlist' ? (track.subtitle ?? '') : collection.artist;
 	const generation: GenerationItem = {
 		id: track.key,
