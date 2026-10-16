@@ -54,7 +54,7 @@ def _arguments() -> argparse.Namespace:
 
 
 def _git(project_root: Path, *arguments: str) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(  # NOSONAR Fixed Git argv is shell-free.
+    return subprocess.run(  # NOSONAR(S8705) Fixed Git subcommands plus a validated SHA.
         ["git", *arguments], cwd=project_root, check=False, capture_output=True
     )
 
@@ -77,7 +77,7 @@ def _git_regular_file(project_root: Path, base_revision: str, location: Path) ->
         metadata, raw_location = records[0].split(b"\t", 1)
         mode, kind, _object = metadata.decode("ascii").split()
         exact_location = raw_location.decode("utf-8") == location.as_posix()
-    except (IndexError, UnicodeDecodeError, ValueError) as error:
+    except (IndexError, ValueError) as error:
         raise RequirementContractError(
             f"{location} is not a regular Git file in exact base {base_revision}"
         ) from error
@@ -205,11 +205,10 @@ def _validate_mode(arguments: argparse.Namespace) -> None:
     if os.environ.get("GITHUB_ACTIONS") != "true":
         return
     event = os.environ.get("GITHUB_EVENT_NAME")
-    if arguments.current_only:
-        if event != "workflow_dispatch":
-            raise RequirementContractError(
-                "--current-only is allowed in GitHub Actions only for workflow_dispatch"
-            )
+    if arguments.current_only and event != "workflow_dispatch":
+        raise RequirementContractError(
+            "--current-only is allowed in GitHub Actions only for workflow_dispatch"
+        )
 
 
 def main() -> int:

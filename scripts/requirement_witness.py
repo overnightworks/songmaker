@@ -34,6 +34,7 @@ API_VERSION = "2022-11-28"
 MAX_API_RESPONSE_BYTES = 256 * 1024
 READ_CHUNK_BYTES = 8192
 REQUEST_TIMEOUT_SECONDS = 15.0
+API_REQUEST_FAILED = "GitHub API request failed"
 LIVE_DEADLINE_SECONDS = 120.0
 ROUTE = re.compile(
     rf"/repos/{re.escape(EXPECTED_REPOSITORY_FULL_NAME)}"
@@ -109,7 +110,7 @@ def canonical_witness_bytes(captured: CapturedApproval) -> bytes:
             ensure_ascii=True,
             allow_nan=False,
         ).encode("ascii")
-    except (UnicodeEncodeError, ValueError, TypeError) as error:
+    except (ValueError, TypeError) as error:
         raise LiveWitnessError("approval witness cannot be serialized canonically") from error
     return rendered + b"\n"
 
@@ -127,7 +128,7 @@ class HttpsGitHubClient:
         self._token = token
         self._connection_factory = connection_factory
         self._clock = clock
-        self._context = ssl.create_default_context()  # NOSONAR Uses Python 3.12 TLS defaults.
+        self._context = ssl.create_default_context()
 
     @classmethod
     def from_environment(cls) -> HttpsGitHubClient:
@@ -152,12 +153,6 @@ class HttpsGitHubClient:
         if ROUTE.fullmatch(route) is None:
             raise LiveWitnessError("GitHub API route is outside the fixed repository boundary")
         timeout = self._remaining_timeout(deadline)
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {self._token}",
-            "User-Agent": "songmaker-requirement-witness",
-            "X-GitHub-Api-Version": API_VERSION,
-        }
         connection = None
         try:
             connection = self._connection_factory(
@@ -165,44 +160,42 @@ class HttpsGitHubClient:
                 timeout=timeout,
                 context=self._context,
             )
-            connection.request("GET", route, headers=headers)
-            self._set_socket_timeout(connection, deadline)
-            response = connection.getresponse()
-            self._set_socket_timeout(connection, deadline)
-            if response.status != 200:
-                raise LiveWitnessError("GitHub API request failed")
-            length = response.getheader("Content-Length")
-            if length is not None:
-                try:
-                    declared_length = int(length)
-                except ValueError as error:
-                    raise LiveWitnessError(
-                        "GitHub API returned an invalid Content-Length"
-                    ) from error
-                if declared_length < 0 or declared_length > MAX_API_RESPONSE_BYTES:
-                    raise LiveWitnessError("GitHub API response exceeds the size limit")
-            payload = bytearray()
-            while True:
-                self._set_socket_timeout(connection, deadline)
-                chunk = response.read(
-                    min(READ_CHUNK_BYTES, MAX_API_RESPONSE_BYTES + 1 - len(payload))
-                )
-                if not chunk:
-                    break
-                payload.extend(chunk)
-                if len(payload) > MAX_API_RESPONSE_BYTES:
-                    raise LiveWitnessError("GitHub API response exceeds the size limit")
+            payload = self._fetch(connection, route, deadline)
         except LiveWitnessError:
             raise
         except Exception as error:
-            raise LiveWitnessError("GitHub API request failed") from error
+            raise LiveWitnessError(API_REQUEST_FAILED) from error
         finally:
             if connection is not None:
                 try:
                     connection.close()
                 except Exception as error:
-                    raise LiveWitnessError("GitHub API request failed") from error
-        return _api_json(bytes(payload))
+                    raise LiveWitnessError(API_REQUEST_FAILED) from error
+        return _api_json(payload)
+
+    def _fetch(self, connection: Any, route: str, deadline: float) -> bytes:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self._token}",
+            "User-Agent": "songmaker-requirement-witness",
+            "X-GitHub-Api-Version": API_VERSION,
+        }
+        connection.request("GET", route, headers=headers)
+        self._set_socket_timeout(connection, deadline)
+        response = connection.getresponse()
+        self._set_socket_timeout(connection, deadline)
+        if response.status != 200:
+            raise LiveWitnessError(API_REQUEST_FAILED)
+        _reject_oversized_declared_length(response.getheader("Content-Length"))
+        payload = bytearray()
+        while True:
+            self._set_socket_timeout(connection, deadline)
+            chunk = response.read(min(READ_CHUNK_BYTES, MAX_API_RESPONSE_BYTES + 1 - len(payload)))
+            if not chunk:
+                return bytes(payload)
+            payload.extend(chunk)
+            if len(payload) > MAX_API_RESPONSE_BYTES:
+                raise LiveWitnessError("GitHub API response exceeds the size limit")
 
     def _remaining_timeout(self, deadline: float) -> float:
         remaining = deadline - self._clock()
@@ -368,6 +361,17 @@ def _matches_stored_witness(
     )
 
 
+def _reject_oversized_declared_length(content_length: str | None) -> None:
+    if content_length is None:
+        return
+    try:
+        declared_length = int(content_length)
+    except ValueError as error:
+        raise LiveWitnessError("GitHub API returned an invalid Content-Length") from error
+    if declared_length < 0 or declared_length > MAX_API_RESPONSE_BYTES:
+        raise LiveWitnessError("GitHub API response exceeds the size limit")
+
+
 def _positive_identifier(value: int, owner: str) -> None:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise LiveWitnessError(f"invalid {owner}")
@@ -423,7 +427,7 @@ def _api_json(payload: bytes) -> dict[str, Any]:
             object_pairs_hook=unique_object,
             parse_constant=reject_constant,
         )
-    except (json.JSONDecodeError, RecursionError, ValueError) as error:
+    except (RecursionError, ValueError) as error:
         raise LiveWitnessError("GitHub API returned malformed JSON") from error
     if not isinstance(parsed, dict):
         raise LiveWitnessError("GitHub API returned a non-object JSON document")
