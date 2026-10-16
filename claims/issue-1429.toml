@@ -1,0 +1,8 @@
+claim_id = "b126b6eccdb44feab52fb407332e0299"
+agent = "claude-head"
+role = "builder"
+base = "ddf71f2a73f381ed3415bb3210fe973d70b739ce"
+branch = "claude-head/issue-1429-e2e-entry-constants"
+scope = ["frontend/e2e/album-address.spec.ts", "frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/album-new-song.spec.ts", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/library-continue.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/offline.spec.ts", "frontend/e2e/playback-diagnostics.spec.ts", "frontend/e2e/queue-continuity.spec.ts", "frontend/e2e/rail-collapse.spec.ts"]
+opened_commit = "88a32ba5329794f2d32e53b4a194f08b464ebb93"
+whole_reason = "e2e entry points through LIBRARY_PATH and HOME_PATH: the helper and every spec that navigates to the root address"
