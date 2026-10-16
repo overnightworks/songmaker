@@ -37,6 +37,7 @@ function track(overrides: Partial<SharedTrack> & { key: string; title: string })
 		durationSec: null,
 		lyrics: null,
 		cues: null,
+		cover: null,
 		...overrides
 	};
 }
@@ -121,6 +122,10 @@ describe('fromSharedPlaylist', () => {
 					artist: 'Artist One',
 					generation_number: 1,
 					audio_url: '/audio/first.mp3',
+					album_cover: {
+						card: '/shared/playlist/mix/album-cover/a1?variant=card&v=album.png',
+						detail: '/shared/playlist/mix/album-cover/a1?variant=detail&v=album.png'
+					},
 					...media({ audio_duration: 95, lyrics: 'verse one', whisper_cues: CUES })
 				},
 				{
@@ -154,7 +159,11 @@ describe('fromSharedPlaylist', () => {
 				audioUrl: '/audio/first.mp3',
 				durationSec: 95,
 				lyrics: 'verse one',
-				cues: CUES
+				cues: CUES,
+				cover: {
+					card: '/shared/playlist/mix/album-cover/a1?variant=card&v=album.png',
+					detail: '/shared/playlist/mix/album-cover/a1?variant=detail&v=album.png'
+				}
 			}),
 			track({ key: 'e2', title: 'Second', subtitle: 'Artist Two' })
 		]);
@@ -207,7 +216,6 @@ describe('fromSharedSong and fromSharedGeneration', () => {
 			artist: 'Artist',
 			album_title: 'Album',
 			generation_number: 3,
-			seed: 42,
 			album_cover: { card: '/album-c.jpg', detail: '/album-d.jpg' },
 			audio_url: '/audio/take3.mp3',
 			...media({ audio_duration: 187, lyrics: 'take lyrics', whisper_cues: CUES })
@@ -288,7 +296,6 @@ describe('trackPlaybackInfo', () => {
 			artist: 'Artist',
 			album_title: 'Album',
 			generation_number: 3,
-			seed: null,
 			audio_url: '/audio/take3.mp3',
 			...media({ lyrics: 'the lantern hums', whisper_cues: CUES })
 		});
@@ -393,7 +400,6 @@ describe('collectionSubtitle', () => {
 			artist: 'Artist',
 			album_title: 'Album',
 			generation_number: 3,
-			seed: null,
 			audio_url: '/a.mp3',
 			...media()
 		});

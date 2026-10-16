@@ -111,18 +111,17 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		});
 		await postJson(page, `/api/albums/${album.id}/archive`, {});
 
-		let wallCoverRequests = 0;
-		let railCoverRequests = 0;
-		let measuringRailCoverRequests = false;
+		let foldedRailCoverRequests = 0;
+		let railIsFolded = false;
 		page.on('request', (request) => {
 			const url = new URL(request.url());
 			if (
+				railIsFolded &&
 				request.method() === 'GET' &&
 				url.pathname === `/api/albums/${album.id}/cover` &&
 				url.searchParams.get('variant') === 'card'
 			) {
-				if (measuringRailCoverRequests) railCoverRequests += 1;
-				else wallCoverRequests += 1;
+				foldedRailCoverRequests += 1;
 			}
 		});
 
@@ -130,7 +129,9 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		const wallPlaylistTile = page
 			.locator('.library-wall .tile-grid')
 			.getByRole('button', { name: `Open playlist ${playlistTitle}`, exact: true });
-		await expect(wallPlaylistTile.locator('.playlist-cover-cell img')).toHaveCount(1);
+		const wallCover = wallPlaylistTile.locator('.playlist-cover-cell img');
+		await expect(wallCover).toHaveCount(1);
+		await expect(wallCover).toHaveJSProperty('complete', true);
 		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 		const rail = isMobile
 			? page
@@ -141,14 +142,19 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		const collapsedMosaicRow = rail
 			.locator('#rail-playlists-group li')
 			.filter({ hasText: playlistTitle });
+		// A group is unfolded on its own page (#1354 D3), so the rail row fetches its
+		// cover there. Let that fetch finish, then fold the group with its caret:
+		// from here on the rail must stay off the network.
+		await expect(playlistsGroup).toHaveAttribute('aria-expanded', 'true');
+		const unfoldedRailCover = collapsedMosaicRow.locator('.playlist-cover-cell img');
+		await expect(unfoldedRailCover).toHaveCount(1);
+		await expect(unfoldedRailCover).toHaveJSProperty('complete', true);
+		railIsFolded = true;
+		await playlistsGroup.click();
 		await expect(playlistsGroup).toHaveAttribute('aria-expanded', 'false');
 		await expect(collapsedMosaicRow.locator('.playlist-cover-cell')).toHaveCount(4);
 		await expect(collapsedMosaicRow.locator('.playlist-cover-cell img')).toHaveCount(0);
-		// The visible 6C wall tile legitimately consumes one lazy image request.
-		// Count it separately: the collapsed rail has no image element and must not request a cover.
-		expect(wallCoverRequests).toBe(1);
-		measuringRailCoverRequests = true;
-		expect(railCoverRequests).toBe(0);
+		expect(foldedRailCoverRequests).toBe(0);
 		if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
 			await playlistsGroup.click();
 		const row = rail

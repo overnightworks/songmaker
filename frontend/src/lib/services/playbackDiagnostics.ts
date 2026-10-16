@@ -43,17 +43,14 @@ interface TimerGap {
 	totalMs: number;
 }
 
-// Session and sequence name one event across tabs, reloads and the log.
-type EventKey = string;
-
 interface Recording {
 	userId: string;
 	session: SessionFacts;
 	nextSequence: number;
 	events: BufferedEvent[];
-	inFlight: Set<EventKey>;
-	taken: Set<EventKey>;
-	written: Set<EventKey>;
+	inFlight: Set<string>;
+	taken: Set<string>;
+	written: Set<string>;
 	lastWrite: number;
 	openGap: TimerGap | null;
 }
@@ -347,7 +344,8 @@ function isOwn(from: Recording, buffered: BufferedEvent): boolean {
 	return buffered.session.session_id === from.session.session_id;
 }
 
-function keyOf(buffered: BufferedEvent): EventKey {
+// Session and sequence name one event across tabs, reloads and the log.
+function keyOf(buffered: BufferedEvent): string {
 	return `${buffered.session.session_id}:${buffered.event.sequence}`;
 }
 
@@ -476,7 +474,7 @@ function sentByAnotherTab(
 	from: Recording,
 	buffered: BufferedEvent,
 	stored: StoredBuffer,
-	storedKeys: ReadonlySet<EventKey>
+	storedKeys: ReadonlySet<string>
 ): boolean {
 	const key = keyOf(buffered);
 	const grownFromLastWrite = stored.grownFrom[from.session.session_id] === from.lastWrite;
@@ -491,7 +489,7 @@ function inSessionOrder(events: BufferedEvent[]): BufferedEvent[] {
 		else session.push(buffered);
 	}
 	return [...sessions.values()].flatMap((session) =>
-		session.sort((a, b) => a.event.sequence - b.event.sequence)
+		session.toSorted((a, b) => a.event.sequence - b.event.sequence)
 	);
 }
 

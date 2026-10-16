@@ -453,7 +453,7 @@ function takePendingReconnect(jobId: string): PendingReconnect | undefined {
 }
 
 function reconnectAllWaitingJobs(): void {
-	for (const jobId of [...pendingReconnects.keys()]) reconnectNow(jobId);
+	for (const jobId of pendingReconnects.keys()) reconnectNow(jobId);
 }
 
 function cancelPendingReconnect(jobId: string): void {

@@ -13,15 +13,15 @@ const LORA_STATUS_PREPROCESSING = 'preprocessing';
 const LORA_STATUS_TRAINING = 'training';
 const LORA_STATUS_EXPORTING = 'exporting';
 
-const LORA_ACTIVE_STATUSES: readonly string[] = [
+const LORA_ACTIVE_STATUSES: ReadonlySet<string> = new Set([
 	LORA_STATUS_QUEUED,
 	LORA_STATUS_PREPROCESSING,
 	LORA_STATUS_TRAINING,
 	LORA_STATUS_EXPORTING
-];
+]);
 
 export function isLoraActive(status: string): boolean {
-	return LORA_ACTIVE_STATUSES.includes(status);
+	return LORA_ACTIVE_STATUSES.has(status);
 }
 
 export const loras = writable<UserLoraItem[]>([]);
