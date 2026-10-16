@@ -187,9 +187,10 @@ afterEach(async () => {
 	nowPlayingDockable.set(false);
 	songList.set([]);
 	albumList.set([]);
-	// Leaving the playing song loads its album's songs; a swallowed load arms
+	// Going to the playing song loads its album's songs; a swallowed load arms
 	// the library's own reload, which would fire inside a later test.
 	resetLibraryDataForTests();
+	toasts.set([]);
 	queueContext.set({ type: 'library' });
 	curationActive.set(false);
 	selectedPlaylistDetail.set(null);
@@ -719,7 +720,6 @@ describeBackClosesOverlay({
 
 describe('NowPlaying when the take details cannot load', () => {
 	afterEach(() => {
-		toasts.set([]);
 		resetConnectivityForTests();
 		vi.useRealTimers();
 	});
@@ -737,22 +737,51 @@ describe('NowPlaying when the take details cannot load', () => {
 		expect(shown.join(' ')).not.toMatch(/Failed to (fetch|load take details)/);
 	});
 
-	it('loads nothing again for a take-details load the network swallowed after it unmounted', async () => {
-		vi.useFakeTimers();
-		let swallowTheLoad: (error: Error) => void = () => undefined;
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(() => new Promise((_, reject) => (swallowTheLoad = reject)))
-		);
-		await renderSurface(info());
-		await unmountSurface();
+	type PendingFetch = { resolve: (response: unknown) => void; reject: (error: Error) => void };
 
-		swallowTheLoad(new TypeError('Failed to fetch'));
-		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+	// Every call after the first fails, so a load armed after the unmount would
+	// reach a toast within the backoff instead of hanging unseen.
+	const settlingAfterUnmount = [
+		{
+			way: 'the network swallowed',
+			settle: (load: PendingFetch) => load.reject(new TypeError('Failed to fetch'))
+		},
+		{
+			way: 'the server refused',
+			settle: (load: PendingFetch) =>
+				load.resolve({
+					ok: false,
+					status: 503,
+					headers: new Headers(),
+					json: async () => ({ detail: 'Song store is down' })
+				})
+		}
+	];
 
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(get(toasts)).toEqual([]);
-	});
+	it.each(settlingAfterUnmount)(
+		'shows and loads nothing for a take-details load $way after it unmounted',
+		async ({ settle }) => {
+			vi.useFakeTimers();
+			let load!: PendingFetch;
+			vi.stubGlobal(
+				'fetch',
+				vi
+					.fn()
+					.mockImplementationOnce(
+						() => new Promise((resolve, reject) => (load = { resolve, reject }))
+					)
+					.mockRejectedValue(new TypeError('Failed to fetch'))
+			);
+			await renderSurface(info());
+			await unmountSurface();
+
+			settle(load);
+			await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+
+			expect(get(toasts)).toEqual([]);
+			expect(fetch).toHaveBeenCalledTimes(1);
+		}
+	);
 
 	it('while no strip shows, loads again on a bounded backoff and then names the failure', async () => {
 		vi.useFakeTimers();
