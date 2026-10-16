@@ -70,15 +70,15 @@ from songmaker_cli.covers import (
     resolve_song_cover_file,
     song_cover_file_exists,
 )
-from songmaker_cli.db.models import Album, Generation, Playlist, Song
+from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song
 from songmaker_cli.db.queries import (
     get_album_by_slug,
     get_generation_by_slug,
     get_playlist_by_slug,
     get_song_by_slug,
-    shared_album_audio_filename_is_presented,
-    shared_playlist_audio_filename_is_presented,
-    shared_song_audio_filename_is_presented,
+    shared_album_take_stored_path,
+    shared_playlist_take_stored_path,
+    shared_song_take_stored_path,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.queue_streams import (
@@ -104,6 +104,9 @@ AUDIO_FILE_CACHE_CONTROL: Final = "private, max-age=31536000, immutable"
 # A queue-stream snapshot expires within hours and its share can be revoked, so
 # no cache may keep it past the request.
 QUEUE_STREAM_AUDIO_CACHE_CONTROL: Final = "no-store"
+# A public audio address names the take, never its stored path: that path
+# starts with the creator's account id.
+SHARED_AUDIO_SUFFIX: Final = ".mp3"
 
 
 # Public, unauthenticated share endpoints fail open: blocking real listeners
@@ -181,18 +184,49 @@ def _shared_audio_url(
         or not is_playable_take(generation)
     ):
         return None
-    return _shared_audio_url_for_filename(route, generation.mp3_path)
+    return _shared_audio_url_for_take(route, generation)
 
 
-def _shared_audio_url_for_filename(
-    route: str,
-    stored_filename: str,
-) -> str | None:
+def _shared_audio_url_for_take(route: str, generation: Generation) -> str | None:
+    if not generation.mp3_path:
+        return None
     try:
-        require_canonical_audio_filename(stored_filename)
+        require_canonical_audio_filename(generation.mp3_path)
     except HTTPException:
         return None
-    return f"{route}/{stored_filename}"
+    return f"{route}/{generation.id}{SHARED_AUDIO_SUFFIX}"
+
+
+def _generation_id_of_shared_audio_name(filename: str) -> str | None:
+    generation_id = filename.removesuffix(SHARED_AUDIO_SUFFIX)
+    if generation_id == filename or not generation_id or "/" in generation_id:
+        return None
+    return generation_id
+
+
+def _stored_filename_of_presented_audio(
+    db: Session,
+    slug: str,
+    filename: str,
+    stored_path_of_presented_take: Callable[[Session, str, str], str | None],
+) -> str:
+    """The stored path behind a public audio name, once the share presents that take."""
+    generation_id = _generation_id_of_shared_audio_name(filename)
+    stored_filename = (
+        stored_path_of_presented_take(db, slug, generation_id) if generation_id else None
+    )
+    if stored_filename is None:
+        raise HTTPException(404, HTTP_NOT_FOUND)
+    return stored_filename
+
+
+def _shared_audio_file_response(ctx: AppContext, stored_filename: str) -> FileResponse:
+    audio_path = canonical_audio_path(ctx.audio_dir, stored_filename)
+    try:
+        audio_path = require_existing_audio_path(audio_path)
+    except AudioFileNotFoundError as exc:
+        raise_audio_file_http_error(exc, public=True)
+    return _audio_file_response(audio_path)
 
 
 def _shared_cover_response(
@@ -244,8 +278,8 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
             raise HTTPException(404, NOT_FOUND_DETAIL)
         valid_tracks = {
             (entry.id, entry.generation.id)
-            for entry in playlist.entries
-            if entry.generation is not None and is_playable_take(entry.generation)
+            for entry in _presented_playlist_entries(playlist)
+            if is_playable_take(entry.generation)
         }
         if any((track.entry_id, track.generation_id) not in valid_tracks for track in tracks):
             raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
@@ -406,15 +440,10 @@ def get_shared_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    audio_path = canonical_audio_path(ctx.audio_dir, filename)
-    if not shared_album_audio_filename_is_presented(db, slug, filename):
-        raise HTTPException(404, HTTP_NOT_FOUND)
-
-    try:
-        audio_path = require_existing_audio_path(audio_path)
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    return _audio_file_response(audio_path)
+    stored_filename = _stored_filename_of_presented_audio(
+        db, slug, filename, shared_album_take_stored_path,
+    )
+    return _shared_audio_file_response(ctx, stored_filename)
 
 
 @router.get(
@@ -510,15 +539,10 @@ def get_shared_song_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    audio_path = canonical_audio_path(ctx.audio_dir, filename)
-    if not shared_song_audio_filename_is_presented(db, slug, filename):
-        raise HTTPException(404, HTTP_NOT_FOUND)
-
-    try:
-        audio_path = require_existing_audio_path(audio_path)
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    return _audio_file_response(audio_path)
+    stored_filename = _stored_filename_of_presented_audio(
+        db, slug, filename, shared_song_take_stored_path,
+    )
+    return _shared_audio_file_response(ctx, stored_filename)
 
 
 def _get_presented_generation(db: Session, slug: str) -> Generation | None:
@@ -563,12 +587,7 @@ def get_shared_generation(
         artist=album.artist if album else "",
         album_title=album.title if album else "",
         generation_number=gen.generation_number,
-        audio_url=(
-            _shared_audio_url_for_filename(
-                f"/shared/gen/{slug}/audio", gen.mp3_path,
-            )
-            if gen.mp3_path else None
-        ),
+        audio_url=_shared_audio_url_for_take(f"/shared/gen/{slug}/audio", gen),
         generation_id=media.generation_id,
         audio_duration=media.audio_duration,
         lyrics=media.lyrics,
@@ -609,20 +628,10 @@ def get_shared_gen_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    require_canonical_audio_filename(filename)
     gen = _get_presented_generation(db, slug)
-    if not gen:
+    if not gen or _generation_id_of_shared_audio_name(filename) != gen.id:
         raise HTTPException(404, HTTP_NOT_FOUND)
-
-    if filename != gen.mp3_path:
-        raise HTTPException(404, HTTP_NOT_FOUND)
-
-    audio_path = canonical_audio_path(ctx.audio_dir, filename)
-    try:
-        audio_path = require_existing_audio_path(audio_path)
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    return _audio_file_response(audio_path)
+    return _shared_audio_file_response(ctx, gen.mp3_path)
 
 
 @router.get(
@@ -639,7 +648,7 @@ def get_shared_playlist(
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
         raise HTTPException(404, NOT_FOUND_DETAIL)
-    entries = sorted(playlist.entries, key=lambda e: e.position)
+    entries = _presented_playlist_entries(playlist)
     entry_items = _shared_playlist_entries(ctx, entries, slug)
     cover = _shared_playlist_cover(ctx, playlist, slug)
     album_covers = _shared_playlist_album_covers(ctx, entries, slug) if cover is None else []
@@ -664,7 +673,18 @@ def _shared_playlist_entries(
             album_cover=_shared_entry_album_cover(ctx, entry, slug),
         )
         for entry in entries
-        if entry.generation is not None
+    ]
+
+
+def _presented_playlist_entries(playlist: Playlist) -> list[PlaylistEntry]:
+    """The playlist's entries in order, minus those whose song was deleted.
+
+    The soft-delete filter hides a deleted song, so its take loads without one.
+    """
+    return [
+        entry
+        for entry in sorted(playlist.entries, key=lambda e: e.position)
+        if entry.generation is not None and entry.generation.song is not None
     ]
 
 
@@ -776,10 +796,9 @@ def get_shared_playlist_stream(
     if not playlist:
         raise HTTPException(404, NOT_FOUND_DETAIL)
     sources = []
-    entries = sorted(playlist.entries, key=lambda e: e.position)
-    for entry in entries:
+    for entry in _presented_playlist_entries(playlist):
         gen = entry.generation
-        if gen is None or not is_playable_take(gen):
+        if not is_playable_take(gen):
             continue
         audio_url = _shared_audio_url(
             f"/shared/playlist/{slug}/audio", gen,
@@ -824,15 +843,10 @@ def get_shared_playlist_audio(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     _check_shared_rate_limit(request)
-    audio_path = canonical_audio_path(ctx.audio_dir, filename)
-    if not shared_playlist_audio_filename_is_presented(db, slug, filename):
-        raise HTTPException(404, HTTP_NOT_FOUND)
-
-    try:
-        audio_path = require_existing_audio_path(audio_path)
-    except AudioFileNotFoundError as exc:
-        raise_audio_file_http_error(exc, public=True)
-    return _audio_file_response(audio_path)
+    stored_filename = _stored_filename_of_presented_audio(
+        db, slug, filename, shared_playlist_take_stored_path,
+    )
+    return _shared_audio_file_response(ctx, stored_filename)
 
 
 @router.get(

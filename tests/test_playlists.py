@@ -944,8 +944,80 @@ def test_shared_playlist_audio(tmp_path: Path) -> None:
     slug = resp.json()["share_slug"]
 
     unauthed = web_client(client.app, cookies={})
-    resp = unauthed.get(f"/shared/playlist/{slug}/audio/admin_user/g1.mp3")
+    resp = unauthed.get(f"/shared/playlist/{slug}/audio/g1.mp3")
     assert resp.status_code == 200
+
+
+def test_shared_playlist_stops_presenting_a_deleted_songs_take_1374_rule_9(
+    tmp_path: Path,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    login_and_csrf(client, "admin", "admin12345")
+    audio_dir = tmp_path / "audio" / "admin_user"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    (audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    listener = web_client(client.app, cookies={})
+    audio_url = f"/shared/playlist/{slug}/audio/g1.mp3"
+    assert listener.get(audio_url).status_code == 200
+
+    assert client.delete("/api/songs/s1").status_code == 200
+
+    assert listener.get(f"/shared/playlist/{slug}").json()["entries"] == []
+    assert listener.get(audio_url).status_code == 404
+
+
+def _seed_two_song_sharing_data(session) -> None:
+    _seed_sharing_data(session)
+    session.add(
+        Song(id="s2", title="Song Two", album_id="a1", track_number=2, slug="song-two"),
+    )
+    session.add(Version(id="v2", song_id="s2", version_number=1, lyrics="ho"))
+    session.add(Generation(
+        id="g2", song_id="s2", version_id="v2", generation_number=1,
+        mp3_path="admin_user/g2.mp3", seed=43, is_picked=True,
+    ))
+    session.add(PlaylistEntry(
+        id="pe2", playlist_id="pl1", generation_id="g2", position=1,
+    ))
+
+
+@pytest.mark.parametrize(
+    ("deleted_song_ids", "expected_new_stream_status", "expected_new_stream_takes"),
+    [
+        pytest.param(["s1"], 200, ["g2"], id="one-of-two"),
+        pytest.param(["s1", "s2"], 422, None, id="only-songs"),
+    ],
+)
+@pytest.mark.usefixtures("fake_queue_stream_build")
+def test_shared_playlist_stream_stops_presenting_a_deleted_songs_take_1374_rule_9(
+    tmp_path: Path,
+    deleted_song_ids: list[str],
+    expected_new_stream_status: int,
+    expected_new_stream_takes: list[str] | None,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_two_song_sharing_data)
+    login_and_csrf(client, "admin", "admin12345")
+    audio_dir = tmp_path / "audio" / "admin_user"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    for take_id in ("g1", "g2"):
+        (audio_dir / f"{take_id}.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    listener = web_client(client.app, cookies={})
+    stream_path = f"/shared/playlist/{slug}/stream"
+    old_stream_url = listener.post(stream_path).json()["stream_url"]
+    assert listener.get(old_stream_url).status_code == 200
+
+    for song_id in deleted_song_ids:
+        assert client.delete(f"/api/songs/{song_id}").status_code == 200
+
+    assert listener.get(old_stream_url).status_code == 404
+    new_stream = listener.post(stream_path)
+    assert new_stream.status_code == expected_new_stream_status
+    if expected_new_stream_takes is not None:
+        assert [t["generation_id"] for t in new_stream.json()["tracks"]] == (
+            expected_new_stream_takes
+        )
 
 
 def test_shared_playlist_not_found(tmp_path: Path) -> None:

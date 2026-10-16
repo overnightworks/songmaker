@@ -630,3 +630,14 @@ def run_compose_config(
         timeout=COMPOSE_CONFIG_TIMEOUT_SECONDS,
         check=False,
     )
+
+
+@pytest.fixture
+def fake_queue_stream_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    import songmaker_cli.queue_streams as queue_streams
+
+    def _write_stream(_concat_path: Path, output_path: Path) -> None:
+        output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
+
+    monkeypatch.setattr(queue_streams, "probe_audio_duration", lambda _path: 10.0)
+    monkeypatch.setattr(queue_streams, "run_ffmpeg_concat", _write_stream)

@@ -717,7 +717,12 @@ by exact-key-set tests in `tests/test_sharing.py`. Album: `title`, `artist`,
 `cover`, `album_covers` (the mosaic) and `entries` (each `entry_id`,
 `song_title`, `artist`, `generation_number`, `audio_url` and `album_cover`,
 the entry's own album cover, present only when the file exists and served only
-for albums that are members of the shared playlist). A `SharedTrack` therefore knows its own
+for albums that are members of the shared playlist). Every `audio_url` names the
+take, `{audio route}/{generation_id}.mp3`, never its stored path, which starts
+with the creator's account id (#1426, rule 8 of #1374): the share audio routes
+read the id, require that the share presents that take, and only then open the
+stored file, so an old stored-path URL answers 404 (`sharing_api.py#_shared_audio_url_for_take`,
+`#_stored_filename_of_presented_audio`). A `SharedTrack` therefore knows its own
 duration, lyrics and cues without a stream manifest.
 
 A shared song or take opens as the player (#1391): `SharedCollection.svelte`
@@ -1359,10 +1364,10 @@ close the stream.
 | GET | `/shared/song/{slug}/cover` | public | Stream the shared song's own cover after the song share-slug gate. 404 when the song has no file of its own, even if the album has one. |
 | GET | `/shared/song/{slug}/album-cover` | public | Stream the parent album cover after the same song share-slug gate as song JSON. |
 | GET | `/shared/gen/{slug}/album-cover` | public | Stream the parent album cover after the same generation share-slug gate as generation JSON. |
-| GET | `/shared/{slug}/audio/{file}` | public | Stream shared album audio after filename allowlist validation |
-| GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio after filename allowlist validation |
-| GET | `/shared/gen/{slug}/audio/{file}` | public | Stream shared generation audio after filename allowlist validation |
-| GET | `/shared/playlist/{slug}/audio/{file}` | public | Stream shared playlist audio after filename allowlist validation |
+| GET | `/shared/{slug}/audio/{file}` | public | Stream shared album audio by take id (`{generation_id}.mp3`) once the share presents that take |
+| GET | `/shared/song/{slug}/audio/{file}` | public | Stream shared song audio by take id (`{generation_id}.mp3`) once the share presents that take |
+| GET | `/shared/gen/{slug}/audio/{file}` | public | Stream the shared take's audio by its id (`{generation_id}.mp3`) |
+| GET | `/shared/playlist/{slug}/audio/{file}` | public | Stream shared playlist audio by take id (`{generation_id}.mp3`) once the playlist presents that take |
 | POST | `/api/songs/{id}/reimport` | user | Upload MP3/WAV to reimport into a song |
 | GET | `/audio/{owner_id}/{file}` | user | Serve audio files (MP3/WAV, ownership-checked by user ID) |
 
