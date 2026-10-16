@@ -1,8 +1,0 @@
-claim_id = "921abe2c4ad74ae4a9a196c5337394e1"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "2bfd523d429997d95a31b444dd86b825a45a413c"
-branch = "claude/issue-1466-s6a-python-nosonar-keys"
-scope = ["src/acestep_engine/client.py", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/jobs/model_lifecycle.py", "src/songmaker_cli/scheduler.py", "src/songmaker_cli/server.py"]
-opened_commit = "4cc881546046aad06ffa57469cbde5b49d2b569c"
-whole_reason = "Six comment-only marker lines in five Python files that one PR analysis must prove together."
