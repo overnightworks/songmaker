@@ -17,7 +17,15 @@ import {
 	newSongCardLabel,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
-import { appBar, boundingBoxes, csrfHeaders, FlowGuard, shellOf, workspace } from './helpers';
+import {
+	appBar,
+	boundingBoxes,
+	csrfHeaders,
+	FlowGuard,
+	shellOf,
+	workspace,
+	HOME_PATH
+} from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -88,7 +96,7 @@ test('a filled album ends its track list with + New song, under a header of Play
 test('an empty album makes its first song from + New song and opens it', async ({
 	page
 }, testInfo) => {
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 	const album = await createEmptyAlbum(page, testInfo);
 	const songTitle = `Tidewater ${Date.now()}`;
 	await page.goto(`/album/${album.id}`);

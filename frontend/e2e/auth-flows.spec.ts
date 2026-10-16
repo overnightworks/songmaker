@@ -80,7 +80,9 @@ import {
 	regainNetwork,
 	shellOf,
 	workspace,
-	type Shell
+	type Shell,
+	HOME_PATH,
+	LIBRARY_PATH
 } from './helpers';
 import {
 	BASE_URL,
@@ -185,7 +187,6 @@ const PHONE_VIEWPORT = { width: 375, height: 844 };
 
 const LOGIN_PAGE_URL = /\/login(\?|$)/;
 const WALL_URL = /\/(\?|$)/;
-const WALL_PATH = '/';
 
 // What the account this spec creates signs in with, and what it never signs in
 // with. Both satisfy the login form's own `minlength`, so the browser submits
@@ -304,7 +305,7 @@ async function submitLogin(page: Page, username: string, password: string): Prom
  * sign-in lands anyway.
  */
 function isSignInFor(url: URL, address: string): boolean {
-	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? WALL_PATH;
+	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? LIBRARY_PATH;
 	return url.pathname === '/login' && returnTo === address;
 }
 
@@ -759,7 +760,7 @@ test.describe("the run's admin on the Users tab", () => {
 test('a musician signs in and the shell shows whose session it is', async ({ page }, testInfo) => {
 	// A tab that knows nothing is sent to the door rather than shown a wall,
 	// and is not told about a session it never had.
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
 	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeHidden();
@@ -803,7 +804,7 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	// cleared it, this would walk straight back in. B5's `verified_session_id`
 	// is what makes the stored session go with it.
 	await page.context().addCookies([signedIn as Cookie]);
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
 	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
@@ -826,7 +827,7 @@ test(
 
 		// Not an empty Library, and not the account menu's entry stepped through:
 		// the door, which brings the person back to the Library.
-		await expect(page).toHaveURL((url) => isSignInFor(url, WALL_PATH));
+		await expect(page).toHaveURL((url) => isSignInFor(url, LIBRARY_PATH));
 		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 		expect(await appHistorySteps(page)).toEqual([]);
 		await attachShot(page, testInfo, 'auth-signed-out-back');
@@ -847,7 +848,7 @@ test(
 		await playTheTake(page, shell);
 		let leftFrom = songAddress;
 		if (shell === 'mobile') {
-			leftFrom = WALL_PATH;
+			leftFrom = LIBRARY_PATH;
 			await openLibraryWall(page, shell);
 			await expect(page).toHaveURL(WALL_URL);
 		}

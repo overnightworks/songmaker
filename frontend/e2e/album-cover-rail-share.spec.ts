@@ -11,6 +11,7 @@ import {
 	RAIL_NAV_LABEL
 } from '../src/lib/constants';
 import { BASE_URL } from './seed';
+import { LIBRARY_PATH } from './helpers';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -141,7 +142,7 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 			postJson<ShareResult>(page, `/api/generations/${take.id}/share`, {})
 		]);
 
-		await page.goto('/');
+		await page.goto(LIBRARY_PATH);
 		const wallTile = page.locator('.wall-tile').filter({ hasText: albumTitle });
 		await expect(wallTile.locator('.tile-cover img')).toBeVisible();
 		await expect(wallTile.locator('.tile-cover img')).toHaveAttribute('alt', `Album ${albumTitle}`);

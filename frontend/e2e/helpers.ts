@@ -37,6 +37,12 @@ export const ONLY_IN_SHELL: Record<Shell, string> = {
 	mobile: '@mobile-only'
 };
 
+/** Where the Library wall lives; the Library moves off `/` with #1354 slice 6, so this changes then. */
+export const LIBRARY_PATH = '/';
+
+/** The app's first page, for flows that need only a loaded app; it stays `/` when the Library moves. */
+export const HOME_PATH = '/';
+
 // Above 1099px Now Playing keeps its three columns and docks beside the
 // workspace rather than covering it, and above 768px the shell keeps its rail;
 // the mobile viewport is a phone in portrait, and the narrow one is the

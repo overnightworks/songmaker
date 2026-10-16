@@ -29,7 +29,8 @@ import {
 	nameStartingWith,
 	openRailNav,
 	shellOf,
-	workspace
+	workspace,
+	LIBRARY_PATH
 } from './helpers';
 
 /**
@@ -83,7 +84,7 @@ test('an empty library makes its first album from + New on the Library head and 
 }, testInfo) => {
 	const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
 	await answerTheLibraryEmpty(page);
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 
 	const wall = workspace(page);
 	const libraryTitle = wall.getByRole('heading', { name: 'Library', level: 1 });
@@ -128,7 +129,7 @@ test('+ New makes a named playlist from the Library head and opens it', async ({
 	page
 }, testInfo) => {
 	const name = `Road Trip ${shellOf(testInfo)} ${Date.now()}`;
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	const wall = workspace(page);
 
 	await newButton(page).click();
@@ -161,7 +162,7 @@ test('#1354 rule 9: an empty account reads one line on the Library and one on Pl
 	await answerTheLibraryEmpty(page);
 
 	for (const { address, line } of [
-		{ address: '/', line: LIBRARY_WALL_EMPTY },
+		{ address: LIBRARY_PATH, line: LIBRARY_WALL_EMPTY },
 		{ address: '/playlists', line: PLAYLISTS_WALL_EMPTY }
 	]) {
 		await page.goto(address);

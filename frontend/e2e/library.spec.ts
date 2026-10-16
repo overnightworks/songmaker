@@ -69,7 +69,8 @@ import {
 	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
 	workspace,
-	type Shell
+	type Shell,
+	LIBRARY_PATH
 } from './helpers';
 import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
@@ -414,7 +415,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	const [firstPlaylistSong, secondPlaylistSong] = playlist.songTitles;
 	const surface = workspace(page);
 
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 
 	await surface
@@ -665,7 +666,7 @@ test(
 		const surface = workspace(page);
 		const albumHeading = surface.getByRole('heading', { name: library.albumTitle });
 
-		await page.goto('/');
+		await page.goto(LIBRARY_PATH);
 		await surface
 			.locator('.library-wall .tile-grid')
 			.locator('.wall-tile-body')
@@ -1049,7 +1050,7 @@ test('#1354 rule 7: the Library lists albums only, opens in A–Z, re-sorts by L
 	const library = readSeededLibrary();
 	await listenInSeededAlbum(page);
 
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	await expect(orders.getByRole('button')).toHaveText([
 		LIBRARY_WALL_ORDER_LABELS.title,
 		LIBRARY_WALL_ORDER_LABELS.played
@@ -1112,7 +1113,7 @@ test('the rail lists albums and playlists in the order the Library and Playlists
 	);
 	await listenInPlaylist(page, laterInAlphabet);
 
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'title')).toHaveAttribute(
 		'aria-pressed',
 		'true'
@@ -1127,7 +1128,7 @@ test('the rail lists albums and playlists in the order the Library and Playlists
 	await choice(PLAYLISTS_WALL_ORDER_GROUP_LABEL, 'played').click();
 	await expect(tiles.first()).toContainText(laterInAlphabet.title);
 	expect((await railOrderMatchingWall('.playlist-label'))[0]).toBe(laterInAlphabet.title);
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'played')).toHaveAttribute(
 		'aria-pressed',
 		'true'
@@ -1259,7 +1260,7 @@ test('#1354 rule 40: the word Library or Playlists opens its covers, the arrow o
 	const groupArrow = async (label: string) =>
 		(await openRailNav(page, shell)).getByRole('button', { name: label, exact: true });
 
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 	await expect(await groupWord(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-current', 'page');
 	await expect(await groupArrow(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-expanded', 'true');

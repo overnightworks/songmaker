@@ -48,7 +48,9 @@ import {
 	playlistEntryRows,
 	shellOf,
 	workspace,
-	type Shell
+	type Shell,
+	HOME_PATH,
+	LIBRARY_PATH
 } from './helpers';
 import {
 	deleteVoiceProofData,
@@ -679,7 +681,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 		page
 	}, testInfo) => {
 		const guard = new FlowGuard(page);
-		await page.goto('/');
+		await page.goto(LIBRARY_PATH);
 		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
 		await expect(wall).toBeVisible();
 		await openVoicesSettings(page, shellOf(testInfo));
@@ -697,7 +699,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 	}, testInfo) => {
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
-		await page.goto('/');
+		await page.goto(LIBRARY_PATH);
 		await expect(workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 		await expect(wallTileNamed(page, library.albumTitle)).toBeVisible();
 		const leftAt = await scrollWallHalfway(page);
@@ -843,7 +845,7 @@ for (const gapMs of [30, 0]) {
 		const surface = workspace(page);
 		const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
 		const album = surface.getByRole('heading', { name: library.albumTitle });
-		await page.goto('/');
+		await page.goto(LIBRARY_PATH);
 		await wallTiles(page)
 			.locator('.wall-tile-body')
 			.filter({ hasText: library.albumTitle })
@@ -899,7 +901,7 @@ test('two Backs in one task from Settings over a song show the album at its addr
 	const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
 	const album = surface.getByRole('heading', { name: library.albumTitle });
 	const song = songBar(page, shell).getByRole('heading', { name: library.pickedSongTitle });
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
 	await expect(album).toBeVisible();
 	const albumAddress = page.url();
@@ -948,7 +950,7 @@ test('one Back right after a song opens from its album returns to the album', as
 	const guard = new FlowGuard(page);
 	const library = readSeededLibrary();
 	const surface = workspace(page);
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
 	const album = surface.getByRole('heading', { name: library.albumTitle });
 	await expect(album).toBeVisible();
@@ -1002,7 +1004,7 @@ for (const gapMs of [5, 20]) {
 			const guard = new FlowGuard(page);
 			const library = readSeededLibrary();
 			const surface = workspace(page);
-			await page.goto('/');
+			await page.goto(LIBRARY_PATH);
 			await wallTileNamed(page, library.albumTitle).click();
 			const album = surface.getByRole('heading', { name: library.albumTitle });
 			await expect(album).toBeVisible();
@@ -1144,7 +1146,7 @@ test(
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		const guard = new FlowGuard(page);
-		await page.goto('/');
+		await page.goto(HOME_PATH);
 		const album = await seedAlbumWithoutTakes(page);
 		try {
 			await page.goto(`/album/${album.id}`);
@@ -1178,7 +1180,7 @@ test(
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		const guard = new FlowGuard(page);
-		await page.goto('/');
+		await page.goto(LIBRARY_PATH);
 		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
 		await expect(wall).toBeVisible();
 		await accountCircle(page).click();
@@ -1203,7 +1205,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 	}
 
 	async function openVoicesOverTheWall(page: Page, shell: Shell): Promise<void> {
-		await page.goto('/');
+		await page.goto(LIBRARY_PATH);
 		await expect(workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 		await openVoicesSettings(page, shell);
 	}

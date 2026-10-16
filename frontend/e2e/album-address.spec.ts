@@ -22,7 +22,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { RESOURCE_SYNC_ERROR, songEditorOpenLabel } from '../src/lib/constants';
-import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
+import { FlowGuard, ONLY_IN_SHELL, workspace, HOME_PATH } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -204,7 +204,7 @@ test(
 
 		// A genuine earlier page first, so Back has somewhere honest to land --
 		// the legacy address itself must not be that place.
-		await page.goto('/');
+		await page.goto(HOME_PATH);
 		await expectWorkspaceStanding(page);
 
 		await page.goto(`/?song=${pickedSong.id}`);
@@ -213,6 +213,6 @@ test(
 		await expectWorkspaceStanding(page);
 
 		await page.goBack();
-		await expect(page).toHaveURL('/');
+		await expect(page).toHaveURL(HOME_PATH);
 	}
 );

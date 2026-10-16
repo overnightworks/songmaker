@@ -25,7 +25,14 @@ import {
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	NOW_PLAYING_UP_NEXT_PREFIX
 } from '../src/lib/constants/now-playing';
-import { FlowGuard, nameStartingWith, shellOf, workspace, type Shell } from './helpers';
+import {
+	FlowGuard,
+	nameStartingWith,
+	shellOf,
+	workspace,
+	type Shell,
+	LIBRARY_PATH
+} from './helpers';
 import {
 	BASE_URL,
 	createAccount,
@@ -301,7 +308,7 @@ test('shuffle while a library take plays keeps the position reached during the p
 			return nativePlay.call(this);
 		};
 	});
-	await page.goto('/');
+	await page.goto(LIBRARY_PATH);
 	const transport = page.getByRole('contentinfo');
 	await transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true }).click();
 	await expect.poll(() => timeline.position).toBeGreaterThan(0);
