@@ -139,7 +139,7 @@ songmaker_cli/settings_api.py:api_get_cowriter_settings # HTTP dispatcher: route
 songmaker_cli/settings_api.py:api_get_default_config # HTTP dispatcher: router.get('/settings/default-config')
 songmaker_cli/settings_api.py:api_get_generation_defaults # HTTP dispatcher: router.get('/settings/generation-defaults')
 songmaker_cli/settings_api.py:api_get_judge_settings # HTTP dispatcher: router.get('/settings/judge', responses={422: {'description': 'Stored judge configuration is invalid'}})
-songmaker_cli/settings_api.py:api_get_provider_status # HTTP dispatcher: router.get('/settings/providers', responses={422: {'description': 'Stored judge route is invalid'}})
+songmaker_cli/settings_api.py:api_get_provider_status # HTTP dispatcher: router.get('/settings/providers')
 songmaker_cli/settings_api.py:api_list_active_models # HTTP dispatcher: router.get('/settings/models')
 songmaker_cli/settings_api.py:api_list_all_models # HTTP dispatcher: router.get('/settings/models/all')
 songmaker_cli/settings_api.py:api_list_presets # HTTP dispatcher: router.get('/settings/presets')

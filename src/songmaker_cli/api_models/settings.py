@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
 from agent_providers.errors import SafeRouteReason
@@ -175,31 +174,9 @@ class CoverSettingsResponse(BaseModel):
     model: str
 
 
-class ProviderSurfaceState(StrEnum):
-    UNVERIFIED = "unverified"
-    CONFIGURED = "configured"
-    CLI_LOGIN_NEEDS_API_KEY = "cli_login_needs_api_key"
-    API_KEY_NEEDS_CLI_LOGIN = "api_key_needs_cli_login"
-    MISSING_DEPENDENCY = "missing_dependency"
-    UNCONFIGURED = "unconfigured"
-
-
-class ProviderSurfaceStatus(BaseModel):
-    state: ProviderSurfaceState
-    needs: Literal["cli_login", "api_key"] | None = None
-    setup_method: Literal["api_key", "claude_cli", "grok_cli", "codex_cli"] | None = None
-    environment_key: str | None = None
-    missing_dependency: str | None = None
-    probed_at: ComputedTimestamp = None
-
-
 class ProviderStatusResponse(BaseModel):
     provider: str
-    cowriter: ProviderSurfaceStatus
-    judge: ProviderSurfaceStatus
-    cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse] = Field(
-        default=None,
-    )
+    cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse]
     cover_routes: dict[Literal["cli", "api"], ProviderRouteReadiness]
 
 
