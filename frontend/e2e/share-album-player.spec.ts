@@ -115,10 +115,9 @@ async function scrollPageTo(page: Page, edge: 'top' | 'bottom'): Promise<void> {
 }
 
 test.describe('before Play', () => {
-	test('1374_rule_11 landscape touch keeps cover left and Play in the first screen', async ({
+	test('1374_rule_11 landscape touch keeps cover left and Play in the first screen @mobile-only', async ({
 		visitor
 	}, testInfo) => {
-		test.skip(testInfo.project.name !== 'mobile', 'Landscape touch regression');
 		const { page } = visitor;
 		await page.setViewportSize({ width: 844, height: 390 });
 		await openMockAlbum(visitor);
@@ -134,13 +133,9 @@ test.describe('before Play', () => {
 	});
 
 	for (const height of [900, 600]) {
-		test(`1374_rule_11 A1 A2 at ${height}: album keeps desktop columns and phone reading order`, async ({
+		test(`1374_rule_11 A1 A2 at ${height}: album keeps desktop columns and phone reading order${height === 600 ? ' @desktop-only' : ''}`, async ({
 			visitor
 		}, testInfo) => {
-			test.skip(
-				testInfo.project.name === 'mobile' && height === 600,
-				'Phone cell already runs at 844'
-			);
 			if (testInfo.project.name === 'desktop')
 				await visitor.page.setViewportSize({ width: 1440, height });
 			await openMockAlbum(visitor);
@@ -421,13 +416,9 @@ test.describe('a long album', () => {
 	});
 
 	for (const height of [900, 600]) {
-		test(`1374_rule_11 E5 D3 scrolling at ${height} keeps desktop transport and phone return available`, async ({
+		test(`1374_rule_11 E5 D3 scrolling at ${height} keeps desktop transport and phone return available${height === 600 ? ' @desktop-only' : ''}`, async ({
 			visitor
 		}, testInfo) => {
-			test.skip(
-				testInfo.project.name === 'mobile' && height === 600,
-				'Phone cell already runs at 844'
-			);
 			if (testInfo.project.name === 'desktop')
 				await visitor.page.setViewportSize({ width: 1440, height });
 			await openMockAlbum(visitor, mockSongs(40));

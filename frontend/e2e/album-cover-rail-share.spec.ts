@@ -339,11 +339,10 @@ test('a shared song shows Play and its words in one screen at every phone height
 
 for (const kind of ['song', 'gen'] as const) {
 	for (const height of [900, 600]) {
-		test(`1374_rule_11 shared ${kind} keeps player and plain lyrics reachable at ${height}`, async ({
+		test(`1374_rule_11 shared ${kind} keeps player and plain lyrics reachable at ${height}${height === 600 ? ' @desktop-only' : ''}`, async ({
 			browser
 		}, info) => {
 			const phone = info.project.name === 'mobile';
-			test.skip(phone && height === 600, 'Phone cell already runs at 844');
 			const viewport = phone ? { width: 390, height: 844 } : { width: 1440, height };
 			const context = await browser.newContext({
 				storageState: undefined,

@@ -170,11 +170,10 @@ async function startStream(page: Page, playlist: RealPlaylist, start: () => Prom
 }
 
 for (const height of [900, 600]) {
-	test(`1374_rule_11 P1 at ${height}: playlist player stands ready before Play`, async ({
+	test(`1374_rule_11 P1 at ${height}: playlist player stands ready before Play${height === 600 ? ' @desktop-only' : ''}`, async ({
 		visitor: page,
 		expectedRefusals
 	}, info) => {
-		test.skip(info.project.name === 'mobile' && height === 600, 'Phone cell already runs at 844');
 		expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 		if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 		await openMock(page);
@@ -510,11 +509,10 @@ test('1374_rule_16 P12: 24 rows remain reachable with bounded lyrics at full and
 });
 
 for (const height of [900, 600]) {
-	test(`1374_rule_11 P13 scrolling at ${height} keeps desktop transport and phone return available`, async ({
+	test(`1374_rule_11 P13 scrolling at ${height} keeps desktop transport and phone return available${height === 600 ? ' @desktop-only' : ''}`, async ({
 		visitor: page,
 		expectedRefusals
 	}, info) => {
-		test.skip(info.project.name === 'mobile' && height === 600, 'Phone cell already runs at 844');
 		expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 		if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 		await openMock(page, playlistPayload(24));

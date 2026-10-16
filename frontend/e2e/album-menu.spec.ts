@@ -170,8 +170,20 @@ test('the public playlist opens with the page-player order', async ({ browser },
 			sharePage.locator('.lyrics-heading'),
 			sharePage.getByRole('heading', { name: 'Songs', exact: true })
 		);
-		for (let index = 1; index < boxes.length; index++)
-			expect(boxes[index].y).toBeGreaterThan(boxes[index - 1].y);
+		if (shellOf(testInfo) === 'mobile') {
+			for (let index = 1; index < boxes.length; index++)
+				expect(boxes[index].y).toBeGreaterThan(boxes[index - 1].y);
+		} else {
+			const [cover, transport, lyrics, songs] = await boundingBoxes(
+				sharePage.locator('.cover-art'),
+				sharePage.locator('.now-playing.page .transport'),
+				sharePage.locator('.np-page-lyrics'),
+				sharePage.locator('.np-page-songs')
+			);
+			expect(cover.x + cover.width).toBeLessThanOrEqual(lyrics.x);
+			expect(transport.x + transport.width).toBeLessThanOrEqual(lyrics.x);
+			expect(lyrics.x + lyrics.width).toBeLessThanOrEqual(songs.x);
+		}
 		await expect(sharePage.locator('.collection-header')).toHaveCount(0);
 	} finally {
 		try {
