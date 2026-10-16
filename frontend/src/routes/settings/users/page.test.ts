@@ -644,6 +644,21 @@ describe('admin settings compact layout', () => {
 	});
 });
 
+function typeInto(form: HTMLFormElement, placeholder: string, value: string): void {
+	const input = requireElement<HTMLInputElement>(form, `input[placeholder="${placeholder}"]`);
+	input.value = value;
+	input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+async function submitCreate(target: HTMLElement): Promise<HTMLFormElement> {
+	const form = requireElement<HTMLFormElement>(target, '.create-form');
+	typeInto(form, 'Username', 'jane');
+	typeInto(form, 'Password', 'example-password');
+	form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+	await flush();
+	return form;
+}
+
 describe('admin sessions, revokes and the errors they leave', () => {
 	const KIM_SESSION: SessionItem = { ...SESSION, id: 's2', user_id: 'u3', username: 'kim' };
 	const USERS_TAB_REFUSAL = 'Cannot remove the last admin';
@@ -705,21 +720,6 @@ describe('admin sessions, revokes and the errors they leave', () => {
 		if (!disable) throw new Error(`Expected a Disable button for ${username}`);
 		disable.click();
 		await flush();
-	}
-
-	function typeInto(form: HTMLFormElement, placeholder: string, value: string): void {
-		const input = requireElement<HTMLInputElement>(form, `input[placeholder="${placeholder}"]`);
-		input.value = value;
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-	}
-
-	async function submitCreate(target: HTMLElement): Promise<HTMLFormElement> {
-		const form = requireElement<HTMLFormElement>(target, '.create-form');
-		typeInto(form, 'Username', 'jane');
-		typeInto(form, 'Password', 'example-password');
-		form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-		await flush();
-		return form;
 	}
 
 	it.each([true, false])(
@@ -930,17 +930,37 @@ describe('admin error ownership (#1447)', () => {
 		{ action: 'MODEL ON', tab: 'acestep', request: 'toggleModel' }
 	] as const;
 
-	it.each(
-		races.flatMap((scenario) =>
-			[false, true].map((returnBeforeReply) => ({ ...scenario, returnBeforeReply }))
-		)
-	)(
-		'defect:#920-11 drops a pending $tab $action error after leaving (return: $returnBeforeReply)',
-		async ({ action, tab, request, returnBeforeReply }) => {
+	it.each([
+		...races.flatMap((scenario) =>
+			[false, true].map((returnBeforeReply) => ({
+				...scenario,
+				returnBeforeReply,
+				freshError: false
+			}))
+		),
+		...races
+			.filter(({ tab }) => tab === 'users')
+			.map((scenario) => ({
+				...scenario,
+				returnBeforeReply: true,
+				freshError: true
+			})),
+		{
+			action: 'Create',
+			tab: 'users',
+			request: 'createUser',
+			returnBeforeReply: true,
+			freshError: true
+		} as const
+	])(
+		'defect:#920-11 ignores stale $tab $action completion (return: $returnBeforeReply, fresh error: $freshError)',
+		async ({ action, tab, request, returnBeforeReply, freshError }) => {
 			let rejectRequest!: (reason: unknown) => void;
+			let resolveRequest!: (value: unknown) => void;
 			api[request].mockImplementationOnce(
 				() =>
-					new Promise((_, reject) => {
+					new Promise((resolve, reject) => {
+						resolveRequest = resolve;
 						rejectRequest = reject;
 					})
 			);
@@ -951,7 +971,8 @@ describe('admin error ownership (#1447)', () => {
 			api.fetchAllModels.mockResolvedValue([{ id: 'model', is_active: true }]);
 			const target = await renderPage(true);
 			await selectTab(target, tab);
-			if (tab === 'users') await userAction(target, action);
+			if (action === 'Create') await submitCreate(target);
+			else if (tab === 'users') await userAction(target, action);
 			else if (action === 'Save Overrides' || action === 'Clear All') {
 				userRow(target).click();
 				await flush();
@@ -968,15 +989,26 @@ describe('admin error ownership (#1447)', () => {
 			await flush();
 			await selectTab(target, 'voices');
 			if (returnBeforeReply) await selectTab(target, tab);
-			rejectRequest(
-				action === 'Revoke already ended'
-					? new ApiError(404, 'Not Found', '/api/admin/sessions/s1')
-					: serverRefusal('Action refused')
-			);
+			const freshMessage = 'Cannot remove the last admin';
+			if (freshError) {
+				api.updateUser.mockRejectedValueOnce(serverRefusal(freshMessage));
+				await userAction(target, 'Disable');
+				expect(requireElement(target, '.error').textContent).toBe(freshMessage);
+			}
+			if (action === 'Create') resolveRequest(OTHER_USER);
+			else
+				rejectRequest(
+					action === 'Revoke already ended'
+						? new ApiError(404, 'Not Found', '/api/admin/sessions/s1')
+						: serverRefusal('Action refused')
+				);
 			await flush();
-			expect(target.querySelector('.error')).toBeNull();
-			await selectTab(target, tab);
-			expect(target.querySelector('.error')).toBeNull();
+			if (freshError) expect(requireElement(target, '.error').textContent).toBe(freshMessage);
+			else expect(target.querySelector('.error')).toBeNull();
+			if (!returnBeforeReply) {
+				await selectTab(target, tab);
+				expect(target.querySelector('.error')).toBeNull();
+			}
 		}
 	);
 
