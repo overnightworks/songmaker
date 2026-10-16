@@ -648,6 +648,7 @@ test(
 
 		await expectHomeShown(page);
 		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toHaveCount(0);
+		await expectOpenCollectionNamedByMiniPlayer(page, library.albumTitle, true);
 		expect(await addressesWrittenToHistory(page)).not.toContain(LIBRARY_PATH);
 		guard.assertClean();
 	}
