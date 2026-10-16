@@ -15,10 +15,10 @@ from functools import partial
 from pathlib import Path
 
 import pytest
+from conftest import make_authenticated_user
 from sqlalchemy import create_engine, event, insert, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
-from webauth.dependencies import AuthenticatedUser
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
@@ -347,9 +347,7 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
     barrier = threading.Barrier(2)
     statuses: list[int] = []
     errors: list[Exception] = []
-    user = AuthenticatedUser(
-        id="lora-user", username="lora-user", role="user", is_active=True,
-    )
+    user = make_authenticated_user("lora-user")
 
     def create(name: str) -> None:
         try:

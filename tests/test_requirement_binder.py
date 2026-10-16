@@ -709,3 +709,78 @@ def test_ignored_contract_entries_exceed_a_fixed_bound_before_network(
         bind_genesis(project, client)
 
     assert client.calls == []
+
+
+@pytest.fixture
+def spawned_pids(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    original = binder.subprocess.Popen
+    pids: list[int] = []
+
+    def recording_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+        process = original(*args, **kwargs)
+        pids.append(process.pid)
+        return process
+
+    monkeypatch.setattr(binder.subprocess, "Popen", recording_popen)
+    return pids
+
+
+@pytest.mark.parametrize(
+    ("git_binary", "arguments", "timeout_seconds", "maximum", "message"),
+    (
+        pytest.param(
+            "/bin/sleep", ("30",), 0.3, binder.MAX_GIT_OUTPUT_BYTES,
+            "local Git command exceeded its deadline", id="deadline",
+        ),
+        pytest.param(
+            "/usr/bin/yes", (), binder.GIT_TIMEOUT_SECONDS, 64,
+            "local Git output exceeds its size limit", id="size-limit",
+        ),
+        pytest.param(
+            "/bin/false", (), binder.GIT_TIMEOUT_SECONDS, binder.MAX_GIT_OUTPUT_BYTES,
+            "local Git command refused the repository state", id="refused-exit-status",
+        ),
+    ),
+)
+def test_git_runner_refuses_a_bad_command_and_leaves_no_child(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    spawned_pids: list[int],
+    git_binary: str,
+    arguments: tuple[str, ...],
+    timeout_seconds: float,
+    maximum: int,
+    message: str,
+) -> None:
+    monkeypatch.setattr(binder, "GIT_BINARY", Path(git_binary))
+    monkeypatch.setattr(binder, "GIT_TIMEOUT_SECONDS", timeout_seconds)
+    runner = binder.GitRunner(tmp_path)
+
+    with pytest.raises(binder.RequirementBinderError, match=message):
+        runner.run(*arguments, maximum=maximum)
+
+    (child_pid,) = spawned_pids
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+
+
+def test_git_runner_reports_a_binary_it_cannot_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unlaunchable = tmp_path / "git"
+    unlaunchable.write_text("#!/bin/sh\n")
+    unlaunchable.chmod(0o644)
+    monkeypatch.setattr(binder, "GIT_BINARY", unlaunchable)
+    runner = binder.GitRunner(tmp_path)
+
+    with pytest.raises(binder.RequirementBinderError, match="local Git command failed"):
+        runner.run()
+
+
+def test_git_runner_refuses_a_missing_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(binder, "GIT_BINARY", tmp_path / "absent")
+
+    with pytest.raises(binder.RequirementBinderError, match="binary is unavailable"):
+        binder.GitRunner(tmp_path)

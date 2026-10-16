@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -49,68 +50,113 @@ PYTEST_CONFIG = source_text(
     'markers = ["acceptance(identifier): Acceptance evidence claim."]',
 )
 MALFORMED_MARKERS = (
-    source_text("import pytest", "pytestmark = pytest.mark.acceptance('ACC-DEMO-01')"),
-    source_text(
-        "import pytest",
-        "class TestClaim:",
-        "    @pytest.mark.acceptance('ACC-DEMO-01')",
-        "    def test_claim(self):",
-        "        pass",
+    pytest.param(
+        source_text("import pytest", "pytestmark = pytest.mark.acceptance('ACC-DEMO-01')"),
+        "acceptance marker is not direct top-level",
+        id="module-pytestmark",
     ),
-    source_text(
-        "from pytest import mark as marks",
-        "@marks.acceptance('ACC-DEMO-01')",
-        "def test_claim():",
-        "    pass",
+    pytest.param(
+        source_text(
+            "import pytest",
+            "class TestClaim:",
+            "    @pytest.mark.acceptance('ACC-DEMO-01')",
+            "    def test_claim(self):",
+            "        pass",
+        ),
+        "acceptance marker is not direct top-level",
+        id="class-method",
     ),
-    source_text(
-        "import pytest",
-        "@pytest.mark.acceptance(identifier='ACC-DEMO-01')",
-        "def test_claim():",
-        "    pass",
+    pytest.param(
+        source_text(
+            "from pytest import mark as marks",
+            "@marks.acceptance('ACC-DEMO-01')",
+            "def test_claim():",
+            "    pass",
+        ),
+        "acceptance marker must be direct",
+        id="aliased-mark",
     ),
-    source_text(
-        "import pytest",
-        "@pytest.mark.acceptance('ACC-DEMO-01', 'ACC-DEMO-02')",
-        "def test_claim():",
-        "    pass",
+    pytest.param(
+        source_text(
+            "import pytest",
+            "@pytest.mark.acceptance(identifier='ACC-DEMO-01')",
+            "def test_claim():",
+            "    pass",
+        ),
+        "acceptance marker needs one literal ID",
+        id="keyword-argument",
     ),
-    source_text(
-        "import pytest",
-        "identifier = 'ACC-DEMO-01'",
-        "@pytest.mark.acceptance(identifier)",
-        "def test_claim():",
-        "    pass",
+    pytest.param(
+        source_text(
+            "import pytest",
+            "@pytest.mark.acceptance('ACC-DEMO-01', 'ACC-DEMO-02')",
+            "def test_claim():",
+            "    pass",
+        ),
+        "acceptance marker needs one literal ID",
+        id="two-arguments",
     ),
-    source_text(
-        "import pytest",
-        "@pytest.mark.acceptance('ACC-DEMO-01')",
-        "@pytest.mark.acceptance('ACC-DEMO-01')",
-        "def test_claim():",
-        "    pass",
+    pytest.param(
+        source_text(
+            "import pytest",
+            "identifier = 'ACC-DEMO-01'",
+            "@pytest.mark.acceptance(identifier)",
+            "def test_claim():",
+            "    pass",
+        ),
+        "acceptance marker ID must be literal",
+        id="variable-argument",
     ),
-    source_text(
-        "from pytest.mark import acceptance",
-        "@acceptance('ACC-DEMO-01')",
-        "def test_claim():",
-        "    pass",
+    pytest.param(
+        source_text(
+            "import pytest",
+            "@pytest.mark.acceptance('ACC-DEMO-01')",
+            "@pytest.mark.acceptance('ACC-DEMO-01')",
+            "def test_claim():",
+            "    pass",
+        ),
+        "has duplicate acceptance markers",
+        id="double-marker",
     ),
-    source_text(
-        "import pytest",
-        "@pytest.mark.acceptance",
-        "def test_claim():",
-        "    pass",
+    pytest.param(
+        source_text(
+            "from pytest.mark import acceptance",
+            "@acceptance('ACC-DEMO-01')",
+            "def test_claim():",
+            "    pass",
+        ),
+        "acceptance marker must be direct",
+        id="imported-acceptance",
+    ),
+    pytest.param(
+        source_text(
+            "import pytest",
+            "@pytest.mark.acceptance",
+            "def test_claim():",
+            "    pass",
+        ),
+        "acceptance marker must be direct",
+        id="bare-marker",
+    ),
+    pytest.param(
+        source_text(
+            "import pytest",
+            "@pytest.mark.acceptance('ACC-DEMO-01')",
+            "def helper():",
+            "    pass",
+        ),
+        "acceptance marker is not on test_*",
+        id="not-a-test-function",
     ),
 )
 
 
-@pytest.mark.parametrize(
-    "source",
-    MALFORMED_MARKERS,
-)
-def test_collect_claims_rejects_malformed_markers(tmp_path: Path, source: str) -> None:
+@pytest.mark.parametrize(("source", "message"), MALFORMED_MARKERS)
+def test_collect_claims_rejects_malformed_markers(
+    tmp_path: Path, source: str, message: str
+) -> None:
     source_path = write_test_source(tmp_path, source)
-    with pytest.raises(AcceptanceEvidenceError):
+    with pytest.raises(AcceptanceEvidenceError, match=re.escape(message)):
         collect_claims(source_path.parent)
 
 

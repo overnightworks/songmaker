@@ -9,9 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash, web_client
+from conftest import login_and_csrf, make_authenticated_user, make_test_app, stored_hash, web_client
 from fastapi import HTTPException
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
@@ -199,12 +198,7 @@ def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
         "songmaker_cli.queue_stream_api._get_queue_stream_limiter",
         lambda _request: limiter,
     )
-    user = AuthenticatedUser(
-        id="owner-id",
-        username="owner",
-        role="user",
-        is_active=True,
-    )
+    user = make_authenticated_user("owner-id", username="owner")
 
     with pytest.raises(HTTPException) as exc_info:
         check_queue_stream_rate_limit(object(), user)
