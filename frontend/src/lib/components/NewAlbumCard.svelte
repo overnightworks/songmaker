@@ -10,6 +10,7 @@
 		NEW_ALBUM_CLOSE_LABEL,
 		NEW_ALBUM_FAILED,
 		NEW_ALBUM_HINT,
+		NEW_ALBUM_REFUSED,
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
 	} from '$lib/constants';
@@ -40,6 +41,7 @@
 	closeLabel={NEW_ALBUM_CLOSE_LABEL}
 	hint={NEW_ALBUM_HINT}
 	failedMessage={NEW_ALBUM_FAILED}
+	refusedMessage={NEW_ALBUM_REFUSED}
 	draftKey="album"
 	bind:title
 	ready={title.trim() !== ''}

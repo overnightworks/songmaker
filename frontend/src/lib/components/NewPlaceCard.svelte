@@ -1,13 +1,27 @@
 <script module lang="ts">
 	// Kept per card kind -- its failure message -- rather than per instance or
 	// label: a failure said by a card that was closed since, or that named
-	// another album, is just as false once that kind of place exists.
-	const failureToastsByCard: Record<string, number[]> = {};
+	// another album, is just as false once that kind of place exists. One toast
+	// per kind: a repeat takes the place of the one before it.
+	const failureToastByCard: Record<string, number | undefined> = {};
+
+	const FIRST_CLIENT_ERROR_STATUS = 400;
+	const FIRST_SERVER_ERROR_STATUS = 500;
+
+	// The server answered and said no: asking again with the same words gets the
+	// same answer, so only a retry after a server error or a lost network can help.
+	function retryCannotHelp(err: unknown): boolean {
+		return (
+			err instanceof ApiError &&
+			err.status >= FIRST_CLIENT_ERROR_STATUS &&
+			err.status < FIRST_SERVER_ERROR_STATUS
+		);
+	}
 </script>
 
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
-	import { describeFailure } from '$lib/api/fetch';
+	import { ApiError, describeFailure } from '$lib/api/fetch';
 	import { dropTitleDraft, keepTitleDraft, titleDraft } from '$lib/stores/titleDrafts';
 	import { addToast, dismissToast } from '$lib/stores/toast';
 	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '$lib/constants';
@@ -17,8 +31,10 @@
 		label: string;
 		closeLabel: string;
 		hint: string;
-		/** The readable reason a refused create names; never the server's own detail. */
+		/** What a create that failed says, ending in the retry that can help; never the server's own detail. */
 		failedMessage: string;
+		/** What a create the server refused says when the server gave no reason of its own. */
+		refusedMessage: string;
 		/** Which card's title draft this is: one per card kind, and per album for a song. */
 		draftKey: string;
 		/** The title field's text, which the card keeps as its draft. */
@@ -37,6 +53,7 @@
 		closeLabel,
 		hint,
 		failedMessage,
+		refusedMessage,
 		draftKey,
 		title = $bindable(),
 		ready,
@@ -68,23 +85,29 @@
 			return;
 		}
 		dropTitleDraft(draftKey);
-		dismissEarlierFailures();
+		dismissEarlierFailure();
 		oncreated();
 		await open(id);
 	}
 
 	function sayCreateFailed(err: unknown): void {
-		const message = describeFailure(err, failedMessage, {
+		dismissEarlierFailure();
+		failureToastByCard[failedMessage] = addToast(createFailureMessage(err), 'error');
+	}
+
+	function createFailureMessage(err: unknown): string {
+		if (retryCannotHelp(err)) return describeFailure(err, refusedMessage);
+		return describeFailure(err, failedMessage, {
 			offline: NEW_PLACE_OFFLINE,
 			withholdServerDetail: true
 		});
-		const earlier = failureToastsByCard[failedMessage] ?? [];
-		failureToastsByCard[failedMessage] = [...earlier, addToast(message, 'error')];
 	}
 
-	function dismissEarlierFailures(): void {
-		for (const id of failureToastsByCard[failedMessage] ?? []) dismissToast(id);
-		failureToastsByCard[failedMessage] = [];
+	function dismissEarlierFailure(): void {
+		const earlier = failureToastByCard[failedMessage];
+		if (earlier === undefined) return;
+		dismissToast(earlier);
+		failureToastByCard[failedMessage] = undefined;
 	}
 </script>
 
@@ -118,10 +141,15 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		gap: 8px;
 		margin: -6px -6px -4px 0;
 	}
 
 	.card-title {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 		color: var(--text);
 		font-family: var(--font-display);
 		font-size: 0.85rem;
@@ -130,6 +158,7 @@
 	}
 
 	.close-btn {
+		flex: none;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;

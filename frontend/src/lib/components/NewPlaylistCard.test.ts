@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
@@ -114,22 +114,44 @@ describe('NewPlaylistCard', () => {
 		expect(creates).toBe(1);
 	});
 
-	it('keeps the card and the name when the server refuses, and says why readably', async () => {
-		createPlaylist.mockRejectedValue(
-			new ApiError(422, 'Validation error on: body.title', '/api/playlists')
-		);
-		const root = await render();
-		type(field(root, 'Name'), 'Road Trip');
+	it.each([
+		{
+			case: 'the server refuses it and says why',
+			refusal: new ApiError(422, 'That name is taken', '/api/playlists'),
+			reason: 'That name is taken'
+		},
+		{
+			case: 'the server refuses it without a reason',
+			refusal: new ApiError(422, '', '/api/playlists'),
+			reason: 'The playlist could not be created.'
+		},
+		{
+			case: 'the server fails',
+			refusal: new ApiError(500, 'Internal Server Error', '/api/playlists'),
+			reason: 'The playlist could not be created. Try again.'
+		},
+		{
+			case: 'the network is gone',
+			refusal: new NetworkError('/api/playlists', new TypeError('Failed to fetch')),
+			reason: "You're offline, so nothing was created. Try again once you're back online."
+		}
+	])(
+		'keeps the card and the name when $case, and says why in words that fit',
+		async ({ refusal, reason }) => {
+			createPlaylist.mockRejectedValue(refusal);
+			const root = await render();
+			type(field(root, 'Name'), 'Road Trip');
 
-		createButton(root).click();
-		await createSettled(createPlaylist);
+			createButton(root).click();
+			await createSettled(createPlaylist);
 
-		expect(creates).toBe(0);
-		expect(field(root, 'Name').value).toBe('Road Trip');
-		expect(createButton(root).disabled).toBe(false);
-		expect(listedIds()).toEqual([]);
-		expect(addToast).toHaveBeenCalledWith('The playlist could not be created. Try again.', 'error');
-	});
+			expect(creates).toBe(0);
+			expect(field(root, 'Name').value).toBe('Road Trip');
+			expect(createButton(root).disabled).toBe(false);
+			expect(listedIds()).toEqual([]);
+			expect(addToast).toHaveBeenCalledWith(reason, 'error');
+		}
+	);
 
 	it('keeps the created playlist listed and says nothing failed when only opening it fails', async () => {
 		const openFailure = new Error('navigation aborted');
