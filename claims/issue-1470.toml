@@ -1,8 +1,0 @@
-claim_id = "679772cbd56b499fa4929e3bb2890fd4"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "98c5544e7e1cf7dfc467cf505697cda12d0ec0de"
-branch = "claude/issue-1470-worker-token-every-route"
-scope = ["docs/acestep.md", "docs/security.md", "src/acestep_worker/wrapper.py", "tests/acestep_worker/test_wrapper.py", "tests/test_acestep_worker_train_lora.py", "tests/test_admin_api.py", "tests/test_fake_training_worker.py", "tests/test_jobs.py", "tests/test_scheduler.py"]
-opened_commit = "123c093cd05133381eb8722a8d0a02567af4b7c1"
-whole_reason = "One auth boundary: the router change, its enumerating test, the caller pins that prove S2, and the two docs that state the rule."
