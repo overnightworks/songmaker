@@ -51,7 +51,7 @@ async def load_model_on_worker(
 
     token = get_settings().songmaker_internal_token.get_secret_value()
     headers = {INTERNAL_TOKEN_HEADER: token}
-    url = f"http://{worker.host}:{worker.port}/load_model"  # NOSONAR Private network.
+    url = f"http://{worker.host}:{worker.port}/load_model"  # NOSONAR(S5332) Compose network only.
 
     try:
         async with httpx.AsyncClient(timeout=960) as client:
