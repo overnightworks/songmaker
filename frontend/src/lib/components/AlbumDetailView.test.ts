@@ -474,6 +474,20 @@ describe('AlbumDetailView header', () => {
 		expect(get(shuffleEnabled)).toBe(true);
 	});
 
+	it('1354_rule_11: dims play on an album whose completed load found no songs, whatever the server says', async () => {
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', has_playable_take: true })]);
+		songList.set([]);
+		vi.mocked(fetchSongs).mockResolvedValueOnce(songsPage([]));
+		await loadSongsForAlbum('a-local');
+		const target = await renderDetail();
+
+		const circle = getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+		);
+		expect(circle.disabled).toBe(true);
+	});
+
 	it.each([
 		['the server says nothing is playable', false, 'unloaded'],
 		['its loaded songs hold only archived takes (defect:#1386)', true, 'loaded']
@@ -931,16 +945,105 @@ describe('AlbumDetailView song row', () => {
 			expect(vi.mocked(outcome === 'editor' ? playAlbumSong : selectSong)).not.toHaveBeenCalled();
 		});
 
-		it('takes the play path when the takes cannot be read, so the player says so', async () => {
-			fetchSong.mockRejectedValue(new Error('offline'));
-			const target = await renderSongs();
+		describe('with the read still pending', () => {
+			const afterPendingMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve));
 
-			boxOf(target, 'Ebb').click();
+			function holdRead(): {
+				answer: (outcome: 'archived-only' | 'fail') => void;
+			} {
+				let settle!: (outcome: 'archived-only' | 'fail') => void;
+				fetchSong.mockImplementation(
+					(id: string) =>
+						new Promise((resolve, reject) => {
+							settle = (outcome) =>
+								outcome === 'fail'
+									? reject(new Error('offline'))
+									: resolve(
+											song({
+												id,
+												album_id: 'a-local',
+												album_title: 'Night Drive',
+												generation_count: 1,
+												generations: [
+													generation({
+														id: `g-${id}`,
+														song_id: id,
+														is_archived: outcome === 'archived-only'
+													})
+												]
+											})
+										);
+						})
+				);
+				return { answer: (outcome) => settle(outcome) };
+			}
 
-			await vi.waitFor(() =>
-				expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
-			);
-			expect(selectSong).not.toHaveBeenCalled();
+			it('takes the play path when the takes cannot be read, so the player says so', async () => {
+				const read = holdRead();
+				const target = await renderSongs();
+
+				boxOf(target, 'Ebb').click();
+				await tick();
+				expect(playAlbumSong).not.toHaveBeenCalled();
+				expect(selectSong).not.toHaveBeenCalled();
+
+				read.answer('fail');
+
+				await vi.waitFor(() =>
+					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
+				);
+				expect(selectSong).not.toHaveBeenCalled();
+			});
+
+			it.each([
+				['the person moves to another album', () => selectedAlbumId.set('a-other')],
+				['the page closes', () => unmount(mounted.pop()!)]
+			])('1354_rule_11: opens nothing when %s before the takes arrive', async (_, leave) => {
+				const read = holdRead();
+				const target = await renderSongs();
+
+				boxOf(target, 'Ebb').click();
+				await tick();
+				await leave();
+				read.answer('archived-only');
+				await afterPendingMicrotasks();
+
+				expect(selectSong).not.toHaveBeenCalled();
+				expect(playAlbumSong).not.toHaveBeenCalled();
+			});
+
+			it('keeps the newer tap when the older read answers last', async () => {
+				const answers = new Map<string, () => void>();
+				fetchSong.mockImplementation(
+					(id: string) =>
+						new Promise((resolve) => {
+							answers.set(id, () =>
+								resolve(
+									song({
+										id,
+										album_id: 'a-local',
+										album_title: 'Night Drive',
+										generation_count: 1,
+										generations: [generation({ id: `g-${id}`, song_id: id })]
+									})
+								)
+							);
+						})
+				);
+				const target = await renderSongs();
+
+				boxOf(target, 'Ebb').click();
+				boxOf(target, 'Tide').click();
+				await tick();
+				answers.get('s-tide')!();
+				await vi.waitFor(() =>
+					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide')
+				);
+				answers.get('s-ebb')!();
+				await afterPendingMicrotasks();
+
+				expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide');
+			});
 		});
 	});
 
