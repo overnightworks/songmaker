@@ -119,6 +119,7 @@ describe('fromSharedPlaylist', () => {
 				{
 					entry_id: 'e1',
 					song_title: 'First',
+					album_title: 'Album One',
 					artist: 'Artist One',
 					generation_number: 1,
 					audio_url: '/audio/first.mp3',
@@ -131,6 +132,7 @@ describe('fromSharedPlaylist', () => {
 				{
 					entry_id: 'e2',
 					song_title: 'Second',
+					album_title: 'Album Two',
 					artist: 'Artist Two',
 					generation_number: 2,
 					audio_url: null,
@@ -314,6 +316,7 @@ describe('trackPlaybackInfo', () => {
 				{
 					entry_id: 'e1',
 					song_title: 'First',
+					album_title: 'Album One',
 					artist: 'Artist One',
 					generation_number: 1,
 					audio_url: '/audio/first.mp3',
@@ -347,6 +350,7 @@ describe('collectionSubtitle', () => {
 		return {
 			entry_id: entryId,
 			song_title: title,
+			album_title: 'Album',
 			artist: 'Artist',
 			generation_number: 1,
 			audio_url: audioUrl,
