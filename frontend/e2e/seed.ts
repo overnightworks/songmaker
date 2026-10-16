@@ -15,7 +15,7 @@ const execFileAsync = promisify(execFile);
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ARTIFACT_DIR = path.join(E2E_DIR, '.artifacts');
-const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
+export const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
 const SEEDED_LIBRARY_FILE = path.join(ARTIFACT_DIR, 'seeded-library.json');
 // The compose recipe this suite always runs under (README, e2e.yml) -- run
 // from the repo root so a caller's own COMPOSE_PROJECT_NAME (or its default,

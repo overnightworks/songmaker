@@ -185,7 +185,12 @@
 	/>
 {/snippet}
 
-<div class="shared-page" class:player-page={opensAsPlayer} bind:this={pageElement}>
+<div
+	class="shared-page"
+	class:player-page={opensAsPlayer}
+	class:bar-room={opensAsPlayer && playback.currentTrack !== null}
+	bind:this={pageElement}
+>
 	<div class="bg-effects" aria-hidden="true">
 		<div class="glow glow-1"></div>
 		<div class="glow glow-2"></div>
@@ -543,5 +548,11 @@
 		.shared-page.player-page {
 			padding: 0.8rem 1.2rem;
 		}
+	}
+
+	/* The bar sits over the page's end once the player is out of view, so the
+	   footer keeps its room above it from the first Play on. */
+	.shared-page.player-page.bar-room {
+		padding-bottom: calc(var(--transport-bar-height) + 1rem);
 	}
 </style>

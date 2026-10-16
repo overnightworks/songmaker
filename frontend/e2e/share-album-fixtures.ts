@@ -4,13 +4,10 @@
 // and refuses the stream manifest, so each song plays from its own address.
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { Page } from '@playwright/test';
-import { BASE_URL } from './seed';
+import { BASE_URL, TAKE_FIXTURE } from './seed';
 
-const TAKE_FIXTURE = join(__dirname, 'fixtures', 'take.mp3');
-const ID3_HEADER_BYTES = 45;
-const MPEG_FRAME_SYNC = Buffer.from([0xff, 0xf3, 0x70, 0xc0]);
+const AUDIO_FRAME_SYNC = Buffer.from([0xff, 0xf3, 0x40]);
 const COPIES_OF_THE_TAKE = 40;
 const MOCK_SONG_SECONDS = 120;
 const AUDIO_TYPE = 'audio/mpeg';
@@ -43,12 +40,12 @@ export function mockSongs(count: number): MockSong[] {
 	}));
 }
 
-// The take's leading Info frame states three seconds; dropping it lets the
-// repeated frames play for as long as they run.
+// The take's leading Info frame states three seconds; dropping everything
+// before its first audio frame lets the repeated frames play for as long as
+// they run.
 function longAudio(): Buffer {
 	const take = readFileSync(TAKE_FIXTURE);
-	const infoFrame = take.indexOf(MPEG_FRAME_SYNC, ID3_HEADER_BYTES);
-	const firstAudioFrame = take.indexOf(MPEG_FRAME_SYNC, infoFrame + MPEG_FRAME_SYNC.length);
+	const firstAudioFrame = take.indexOf(AUDIO_FRAME_SYNC);
 	return Buffer.concat(Array(COPIES_OF_THE_TAKE).fill(take.subarray(firstAudioFrame)));
 }
 

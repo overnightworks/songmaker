@@ -300,6 +300,11 @@ test.describe('a long album', () => {
 
 		await scrollPageTo(page, 'bottom');
 		await expect(bar).toBeVisible();
+		const [barBox, footerBox] = await boundingBoxes(
+			bar,
+			page.getByRole('button', { name: 'Impressum' })
+		);
+		expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
 
 		await bar.getByRole('button', { name: SHARE_BACK_TO_PLAYER_LABEL }).first().click();
 		await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport();
