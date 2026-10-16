@@ -18,6 +18,7 @@
 		libraryPlaceOrder
 	} from '$lib/stores/libraryOrder';
 	import { libraryWallOrder } from '$lib/stores/ui';
+	import { pickedTake, songPlayability } from '$lib/utils/playable';
 	import {
 		compareAlbumTracks,
 		openAlbum,
@@ -162,9 +163,9 @@
 	}
 
 	function trackMeta(song: SongItem): string {
-		if (song.generation_count === 0) return RAIL_CONTEXT_NO_TAKES;
+		if (songPlayability(song) === 'none') return RAIL_CONTEXT_NO_TAKES;
 		const takes = `${song.generation_count} take${song.generation_count !== 1 ? 's' : ''}`;
-		const hasPick = song.generations.some((generation) => generation.is_picked);
+		const hasPick = pickedTake(song) !== undefined;
 		return hasPick ? `${takes} · pick` : takes;
 	}
 

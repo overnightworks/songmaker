@@ -8,6 +8,13 @@ import {
 	fetchSong
 } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
+import {
+	bestTake,
+	isPlayableTake,
+	pickedTake,
+	songHasPlayableTake,
+	songTakesLoaded
+} from '$lib/utils/playable';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -109,7 +116,7 @@ export async function ensureGenerationsLoaded(songId: string): Promise<void> {
 	// partial retain (fewer takes than the count) or a song not yet in the list
 	// must be fetched; otherwise a later snapshot can hide a take created while
 	// sync was stopped.
-	if (song && song.generations.length >= song.generation_count) return;
+	if (song && songTakesLoaded(song)) return;
 	const inflight = songGenerationLoads.get(songId);
 	if (inflight !== undefined) return inflight;
 	const load = (async () => {
@@ -969,7 +976,7 @@ export function canPlayPrevSong(
 	}
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
-	return pool.filter((s) => s.generation_count > 0).length > 1;
+	return pool.filter(songHasPlayableTake).length > 1;
 }
 
 export function canPlayNextSong(
@@ -985,21 +992,7 @@ export function canPlayNextSong(
 	}
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
-	return pool.some((s) => s.id !== current.songId && s.generation_count > 0);
-}
-
-// Archived takes are not playable (their rows offer no play affordance), so
-// they never stand in as a song's take in a queue either.
-function playableGens(song: SongItem): GenerationItem[] {
-	return song.generations.filter((gen) => !gen.is_archived);
-}
-
-function pickedGen(song: SongItem): GenerationItem | undefined {
-	return playableGens(song).find((gen) => gen.is_picked);
-}
-
-function bestGen(song: SongItem): GenerationItem | undefined {
-	return pickedGen(song) ?? playableGens(song)[0];
+	return pool.some((s) => s.id !== current.songId && songHasPlayableTake(s));
 }
 
 function albumQueueTake(song: SongItem, gen: GenerationItem): PlaybackInfo {
@@ -1040,7 +1033,7 @@ async function collectAlbumEntries(
 	const entries: PlaylistEntryItem[] = [];
 	for (const song of albumSongsInOrder(albumId)) {
 		if (!playStartIsCurrent(seq)) return null;
-		if (song.generation_count === 0) continue;
+		if (!songHasPlayableTake(song)) continue;
 		await ensureGenerationsLoaded(song.id);
 		if (!playStartIsCurrent(seq)) return null;
 		const fresh = get(songList).find((s) => s.id === song.id);
@@ -1048,7 +1041,7 @@ async function collectAlbumEntries(
 		const gen =
 			start && fresh.id === start.song.id
 				? (fresh.generations.find((g) => g.id === start.gen.id) ?? start.gen)
-				: bestGen(fresh);
+				: bestTake(fresh);
 		if (!gen) continue;
 		entries.push({ ...toAlbumQueueEntry(fresh, gen), position: entries.length });
 	}
@@ -1094,7 +1087,7 @@ function followPicksAheadInAlbumQueue(songs: SongItem[]): void {
 	const takes = ctx.takes.map((take, index) => {
 		if (index <= currentIndex) return take;
 		const song = songsById.get(take.songId);
-		const picked = song && pickedGen(song);
+		const picked = song && pickedTake(song);
 		if (!song || !picked || picked.id === take.generation.id) return take;
 		repicked = true;
 		return albumQueueTake(song, picked);
@@ -1552,9 +1545,8 @@ export function playPrevSong(): void {
 }
 
 // The album's opening take, which is not always the opening track's:
-// `generation_count` counts archived takes too, so a track whose takes are
-// all archived is skipped rather than taken as proof the album is
-// unplayable. Returns null both when nothing is playable and when a newer
+// A track with nothing playable (all takes archived or without a file) is
+// skipped rather than taken as proof the album is unplayable. Returns null both when nothing is playable and when a newer
 // play start superseded this one — the caller separates the two with its
 // own playStartIsCurrent check. A rejected load (e.g. 429) is handed to the
 // caller with the song whose takes it could not read.
@@ -1564,7 +1556,7 @@ async function firstPlayableAlbumTake(
 	start: AlbumStart
 ): Promise<{ song: SongItem; gen: GenerationItem } | { unread: SongItem; error: unknown } | null> {
 	for (const song of albumSongsFrom(albumId, start)) {
-		if (song.generation_count === 0) continue;
+		if (!songHasPlayableTake(song)) continue;
 		try {
 			await ensureGenerationsLoaded(song.id);
 		} catch (error) {
@@ -1572,7 +1564,7 @@ async function firstPlayableAlbumTake(
 		}
 		if (!playStartIsCurrent(seq)) return null;
 		const fresh = get(songList).find((item) => item.id === song.id) ?? song;
-		const gen = bestGen(fresh);
+		const gen = bestTake(fresh);
 		if (gen) return { song: fresh, gen };
 	}
 	return null;
@@ -1671,7 +1663,7 @@ async function gatherAlbumQueueAround(
 }
 
 // The one entry point for curation: the same per-song candidate takes
-// playAlbum already builds (existing pick, else bestGen), started at the
+// playAlbum already builds (existing pick, else bestTake), started at the
 // first song without a pick — or track 1 once every song has one, so
 // re-curating an already-picked album still starts somewhere sensible.
 export async function curateAlbum(albumId: string): Promise<void> {
@@ -2230,7 +2222,7 @@ async function playableSavedTake(
 ): Promise<{ song: SongItem; take: GenerationItem } | null> {
 	const song = await quietly(() => fetchSong(saved.songId));
 	if (song === null) return null;
-	const take = song.generations.find((gen) => gen.id === saved.generationId && !gen.is_archived);
+	const take = song.generations.find((gen) => gen.id === saved.generationId && isPlayableTake(gen));
 	return take === undefined ? null : { song, take };
 }
 

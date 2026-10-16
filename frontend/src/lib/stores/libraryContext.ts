@@ -58,6 +58,7 @@ import {
 	takeRoutePath
 } from '$lib/routes/addresses';
 import { CREATED_SORTS } from '$lib/utils/recency';
+import { songTakesLoaded } from '$lib/utils/playable';
 
 // 'browse' shows the library wall (the LibraryWall component), 'playlists'
 // the Playlists page's wall of playlists alone (#1402); 'detail' shows
@@ -1013,7 +1014,7 @@ export function enterAlbumOfSong(song: SongItem): void {
 async function hydrateSelectedSong(songId: string, apply: HistoryApply): Promise<void> {
 	if (!applyStands(apply)) return;
 	const listed = get(songList).find((song) => song.id === songId);
-	if (listed && listed.generations.length >= listed.generation_count) {
+	if (listed && songTakesLoaded(listed)) {
 		enterAlbumOfSong(listed);
 		await hydrateSongAlbum(listed.album_id, apply);
 		return;

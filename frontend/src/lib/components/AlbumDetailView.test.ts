@@ -114,6 +114,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
+		ensureGenerationsLoaded: vi.fn(),
 		playAlbum: vi.fn(),
 		playAlbumSong: vi.fn()
 	};
@@ -123,6 +124,7 @@ import AlbumDetailView from './AlbumDetailView.svelte';
 import songRowSource from './SongRow.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import {
+	ensureGenerationsLoaded,
 	pendingStart,
 	playAlbum,
 	playAlbumSong,
@@ -165,6 +167,7 @@ beforeEach(() => {
 	vi.mocked(addToast).mockReset();
 	vi.mocked(selectSong).mockReset();
 	createSong.mockReset();
+	vi.mocked(ensureGenerationsLoaded).mockReset();
 	vi.mocked(playAlbum).mockReset();
 	vi.mocked(playAlbumSong).mockReset();
 	setShuffle(false);
@@ -452,6 +455,7 @@ describe('AlbumDetailView header', () => {
 		]
 	])('dims play on an album %s, and a tap keeps the running queue', async (_, songs) => {
 		setShuffle(true);
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', has_playable_take: false })]);
 		songList.set(songs);
 		const running = { type: 'library' as const, index: 3 };
 		queueContext.set(running);
@@ -469,6 +473,52 @@ describe('AlbumDetailView header', () => {
 		expect(get(queueContext)).toBe(running);
 		expect(get(shuffleEnabled)).toBe(true);
 	});
+
+	it('1354_rule_11: dims play on an album whose completed load found no songs, whatever the server says', async () => {
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', has_playable_take: true })]);
+		songList.set([]);
+		vi.mocked(fetchSongs).mockResolvedValueOnce(songsPage([]));
+		await loadSongsForAlbum('a-local');
+		const target = await renderDetail();
+
+		const circle = getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+		);
+		expect(circle.disabled).toBe(true);
+	});
+
+	it.each([
+		['the server says nothing is playable', false, 'unloaded'],
+		['its loaded songs hold only archived takes (defect:#1386)', true, 'loaded']
+	])(
+		'1354_rule_11: dims play on an album with takes but nothing to hear, because %s',
+		async (_, serverSaysPlayable, songsState) => {
+			albumList.set([
+				album({ id: 'a-local', title: 'Night Drive', has_playable_take: serverSaysPlayable })
+			]);
+			const archivedOnly = song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generation_count: 1,
+				generations: [generation({ song_id: 's-local', is_archived: true })]
+			});
+			if (songsState === 'loaded') {
+				vi.mocked(fetchSongs).mockResolvedValueOnce(songsPage([archivedOnly]));
+				await loadSongsForAlbum('a-local');
+			} else {
+				songList.set([archivedOnly]);
+			}
+			const target = await renderDetail();
+
+			const circle = getByRoleButton(
+				requireElement(target, '.collection-header'),
+				collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+			);
+			expect(circle.disabled).toBe(true);
+		}
+	);
 
 	it('keeps pause on the circle of a playing album whose songs have no takes', async () => {
 		songList.set([
@@ -856,18 +906,46 @@ describe('AlbumDetailView song row', () => {
 		const target = await renderSongs();
 
 		boxOf(target, 'Tide').click();
-		await tick();
 
 		expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide');
 		expect(selectSong).not.toHaveBeenCalled();
 		expect(getByRoleHeading(target, 'Night Drive')).not.toBeNull();
 	});
 
+	it.each([
+		['unloaded', 1, [], 'player'],
+		['loaded with archived takes', 1, [generation({ is_archived: true })], 'editor'],
+		['loaded with empty-path takes', 1, [generation({ mp3_path: '' })], 'editor'],
+		['loaded with a playable take', 1, [generation()], 'player'],
+		['without generations', 0, [], 'editor']
+	] as const)(
+		'defect:#1386: a song %s acts immediately without loading takes first',
+		async (_, count, takes, destination) => {
+			const target = await renderSongs();
+			songList.update((songs) =>
+				songs.map((item) =>
+					item.id === 's-ebb' ? { ...item, generation_count: count, generations: [...takes] } : item
+				)
+			);
+			await tick();
+
+			boxOf(target, 'Ebb').click();
+
+			if (destination === 'editor') {
+				expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-ebb');
+				expect(playAlbumSong).not.toHaveBeenCalled();
+			} else {
+				expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb');
+				expect(selectSong).not.toHaveBeenCalled();
+			}
+			expect(ensureGenerationsLoaded).not.toHaveBeenCalled();
+		}
+	);
+
 	it('opens a song with no take yet in the song editor on a tap (#1354 rule 23)', async () => {
 		const target = await renderSongs();
 
 		boxOf(target, 'Fresh').click();
-		await tick();
 
 		expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-fresh');
 		expect(playAlbumSong).not.toHaveBeenCalled();
