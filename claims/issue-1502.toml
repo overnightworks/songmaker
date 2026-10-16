@@ -1,0 +1,8 @@
+claim_id = "163ec1ffad3448ff8d4dacaca8ece1ad"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "64b15bb19a27be221f1cb8b7389e51586739d517"
+branch = "claude/issue-1502-test-gaps-factory-binder-markers"
+scope = ["tests/test_acceptance_evidence.py", "tests/test_album_cover_suggestions.py", "tests/test_cowriter_claude_adapter.py", "tests/test_cowriter_dispatch.py", "tests/test_postgresql.py", "tests/test_queue_streams.py", "tests/test_requirement_binder.py"]
+opened_commit = "6233123b937f38ab2bb574b5e526971dfa27b350"
+whole_reason = "Three test-only cards from one distributor, landed as one small lane to amortize the claim and the review."
