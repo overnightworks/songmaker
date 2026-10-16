@@ -1,8 +1,0 @@
-claim_id = "0290e50bc70a4689bf984c3ec1f844a3"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "011b4d6d4df70c4ad02c0543bffe1790ca9e34c3"
-branch = "claude/issue-1495-song-menu-on-menupopover"
-scope = ["docs/architecture.md", "frontend/e2e/album-menu.spec.ts", "frontend/e2e/menu-viewport.ts", "frontend/e2e/song-menu.spec.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts"]
-opened_commit = "6dac9fa044d50f72504fc3191a1800885e7e09de"
-whole_reason = "One menu moved onto the shared popover, with its phone override removed, its e2e proof and helper, and the doc row that describes it."
