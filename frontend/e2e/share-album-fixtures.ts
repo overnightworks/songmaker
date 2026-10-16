@@ -74,7 +74,9 @@ export async function mockSharedAlbum(page: Page, songs: MockSong[]): Promise<vo
 	await page.route(`**/shared/${MOCK_SLUG}`, (route) =>
 		route.fulfill({ json: albumPayload(songs) })
 	);
-	await page.route(`**/shared/${MOCK_SLUG}/stream`, (route) => route.fulfill({ status: 404 }));
+	await page.route(`**/shared/${MOCK_SLUG}/stream`, (route) =>
+		route.fulfill({ status: 404, json: { detail: 'Stream unavailable' } })
+	);
 	await page.route(`**/shared/${MOCK_SLUG}/audio/*`, (route) => {
 		const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers()['range'] ?? '');
 		const start = range ? Number(range[1]) : 0;

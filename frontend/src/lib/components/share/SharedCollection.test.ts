@@ -36,10 +36,21 @@ function extractRule(source: string, selector: string): string {
 }
 
 let mounted: ReturnType<typeof mount> | undefined;
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
 
 // jsdom plays no media: its element neither loads nor pauses, and says so
 // on every share page, since each one first clears the player it takes over.
 beforeEach(() => {
+	// jsdom has no intersections; visibility scenarios install a controllable observer.
+	vi.stubGlobal(
+		'IntersectionObserver',
+		vi.fn(
+			class {
+				observe = vi.fn();
+				disconnect = vi.fn();
+			}
+		)
+	);
 	vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 	vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 });
@@ -51,6 +62,9 @@ afterEach(async () => {
 	audioPlayer.status = 'idle';
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
+	if (originalScrollIntoView)
+		Object.defineProperty(Element.prototype, 'scrollIntoView', originalScrollIntoView);
+	else Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
 });
 
 const DETAIL_COVER = { card: '/covers/card.jpg', detail: '/covers/detail.jpg' };
@@ -600,40 +614,61 @@ describe('Shared album player page', () => {
 		expect(audioPlayer.transport).toBe('paused');
 	});
 
-	it('1374_rule_16 E5 shows the bar once the player leaves the view and a tap on it scrolls back', async () => {
-		stubLayout(true);
-		let reportView: (isIntersecting: boolean) => void = () => {};
-		vi.stubGlobal(
-			'IntersectionObserver',
-			class {
-				constructor(
-					callback: (entries: Pick<IntersectionObserverEntry, 'isIntersecting'>[]) => void
-				) {
-					reportView = (isIntersecting) => callback([{ isIntersecting }]);
+	it.each(['album', 'song', 'take'] as const)(
+		'1374_rule_16 E5 reserves room and follows transport visibility only for an album (%s)',
+		async (kind) => {
+			stubLayout(true);
+			const observed = new Map<Element, (visible: boolean) => void>();
+			vi.stubGlobal(
+				'IntersectionObserver',
+				class {
+					private target?: Element;
+					constructor(
+						private callback: (entries: Pick<IntersectionObserverEntry, 'isIntersecting'>[]) => void
+					) {}
+					observe(target: Element): void {
+						this.target = target;
+						observed.set(target, (visible) => this.callback([{ isIntersecting: visible }]));
+					}
+					disconnect(): void {
+						if (this.target) observed.delete(this.target);
+					}
 				}
-				observe(): void {}
-				disconnect(): void {}
+			);
+			const scrollIntoView = vi.fn();
+			Object.defineProperty(Element.prototype, 'scrollIntoView', {
+				configurable: true,
+				value: scrollIntoView
+			});
+			const target = await renderShare({
+				kind,
+				tracks: [sharedTrack('first', 'Tide'), sharedTrack('second', 'Ebb')]
+			});
+			const reportVisibility = async (visible: boolean) => {
+				for (const report of observed.values()) report(visible);
+				await tick();
+			};
+			await reportVisibility(false);
+			expect(document.querySelector('footer.player-bar')).toBeNull();
+			getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+			await tick();
+			expect(target.querySelector('.bar-room') !== null).toBe(kind === 'album');
+			await reportVisibility(false);
+			expect(document.querySelector('footer.player-bar') !== null).toBe(kind === 'album');
+			if (kind === 'album') {
+				getByRoleButton(target, SONG_NEXT_LABEL).click();
+				await tick();
+				await reportVisibility(false);
+				expect(document.querySelector('footer.player-bar')).not.toBeNull();
+				expect(document.querySelector('footer.player-bar')?.textContent).toContain('Ebb');
+				document.querySelector<HTMLButtonElement>('footer.player-bar .open-now-playing')?.click();
+				expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth' });
+				await reportVisibility(true);
+				expect(document.querySelector('footer.player-bar')).toBeNull();
 			}
-		);
-		const scrollIntoView = vi.fn();
-		Element.prototype.scrollIntoView = scrollIntoView;
-		const target = await renderShare({
-			tracks: [sharedTrack('first', 'Tide'), sharedTrack('second', 'Ebb')]
-		});
-		target.querySelector<HTMLButtonElement>('.queue-row')?.click();
-		await tick();
-		expect(target.ownerDocument.querySelector('footer.player-bar')).toBeNull();
-
-		reportView(false);
-		await tick();
-		expect(target.ownerDocument.querySelector('footer.player-bar')).not.toBeNull();
-		target.ownerDocument
-			.querySelector<HTMLButtonElement>('footer.player-bar .open-now-playing')
-			?.click();
-
-		expect(scrollIntoView).toHaveBeenCalled();
-		reportView(true);
-		await tick();
-		expect(target.ownerDocument.querySelector('footer.player-bar')).toBeNull();
-	});
+			if (mounted) await unmount(mounted);
+			mounted = undefined;
+			expect(observed.size).toBe(0);
+		}
+	);
 });

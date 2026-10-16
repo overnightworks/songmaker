@@ -131,6 +131,16 @@ let component: ReturnType<typeof mount> | undefined;
 let audio: FakeAudio;
 
 beforeEach(() => {
+	// jsdom has no intersections; visibility scenarios install a controllable observer.
+	vi.stubGlobal(
+		'IntersectionObserver',
+		vi.fn(
+			class {
+				observe = vi.fn();
+				disconnect = vi.fn();
+			}
+		)
+	);
 	audio = new FakeAudio();
 	vi.stubGlobal('fetch', mockFetch);
 	vi.stubGlobal(

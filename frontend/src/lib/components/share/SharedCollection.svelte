@@ -60,6 +60,7 @@
 	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${view?.albumTitle ?? view?.title ?? ''}`);
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
 	const opensAsPlayer = $derived(view?.kind !== 'playlist');
+	const hasScrollBar = $derived(view?.kind === 'album');
 	const stagedTrack = $derived(
 		playback.currentTrack ?? tracks[0] ?? (view?.kind === 'album' ? null : view?.tracks[0]) ?? null
 	);
@@ -109,7 +110,7 @@
 	$effect(() => {
 		void stagedTrack?.key;
 		const transport = pageElement?.querySelector('.now-playing.page .transport');
-		if (!pageElement || !transport) {
+		if (!hasScrollBar || !pageElement || !transport) {
 			playerOutOfView = false;
 			return;
 		}
@@ -188,7 +189,7 @@
 <div
 	class="shared-page"
 	class:player-page={opensAsPlayer}
-	class:bar-room={opensAsPlayer && playback.currentTrack !== null}
+	class:bar-room={hasScrollBar && playback.currentTrack !== null}
 	bind:this={pageElement}
 >
 	<div class="bg-effects" aria-hidden="true">
@@ -277,7 +278,7 @@
 	<SharedFooter />
 </div>
 
-{#if playback.currentTrack && (!opensAsPlayer || playerOutOfView)}
+{#if playback.currentTrack && (!opensAsPlayer || (hasScrollBar && playerOutOfView))}
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
@@ -296,8 +297,8 @@
 		onOpenNowPlaying={() => ($nowPlayingOpen = true)}
 		nowPlayingDisabled={false}
 		{mobileTransport}
-		nowPlayingTargetLabel={opensAsPlayer ? SHARE_BACK_TO_PLAYER_LABEL : undefined}
-		onReturnToPlayer={opensAsPlayer ? scrollBackToPlayer : undefined}
+		nowPlayingTargetLabel={hasScrollBar ? SHARE_BACK_TO_PLAYER_LABEL : undefined}
+		onReturnToPlayer={hasScrollBar ? scrollBackToPlayer : undefined}
 	/>
 {/if}
 
