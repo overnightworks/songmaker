@@ -209,8 +209,9 @@ def test_run_download_ends_cancelled_when_cancelled_while_stopping_its_progress_
             download_fn=instant_download,
         )
 
+    cancelled_download = go()
     with pytest.raises(asyncio.CancelledError):
-        _run(go())
+        _run(cancelled_download)
 
 
 def test_poll_progress_emits_updates(tmp_path: Path) -> None:
