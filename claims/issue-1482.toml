@@ -1,0 +1,8 @@
+claim_id = "8c8f968f57924dfc9818201754965f71"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "4d6fb2cd387fe3282f16ceaf444a8439b9c31905"
+branch = "claude/issue-1482-s6g-requirement-scripts-sonar"
+scope = ["scripts/acceptance_evidence.py", "scripts/bind_requirement_revision.py", "scripts/check_requirements.py", "scripts/requirement_binder.py", "scripts/requirement_contract.py", "scripts/requirement_witness.py"]
+opened_commit = "38ceb4c0547811c57a197085401dba4b294ae438"
+whole_reason = "The requirement scripts' findings and markers, proven by one copy measure."
