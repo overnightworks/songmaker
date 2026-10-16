@@ -997,7 +997,7 @@ describe('AlbumDetailView song row', () => {
 
 			it.each([
 				['the person moves to another album', () => selectedAlbumId.set('a-other')],
-				['the page closes', () => unmount(mounted.pop()!)]
+				['the page closes', () => unmount(mounted.splice(0)[0])]
 			])('1354_rule_11: opens nothing when %s before the takes arrive', async (_, leave) => {
 				const read = holdRead();
 				const target = await renderSongs();
@@ -1035,11 +1035,11 @@ describe('AlbumDetailView song row', () => {
 				boxOf(target, 'Ebb').click();
 				boxOf(target, 'Tide').click();
 				await tick();
-				answers.get('s-tide')!();
+				answers.get('s-tide')?.();
 				await vi.waitFor(() =>
 					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide')
 				);
-				answers.get('s-ebb')!();
+				answers.get('s-ebb')?.();
 				await afterPendingMicrotasks();
 
 				expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide');
