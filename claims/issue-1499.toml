@@ -1,0 +1,8 @@
+claim_id = "85929c813b17491fa91119b4b0c3d3c1"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "0366076665efa2046cacb18c3f4185615a3450ae"
+branch = "claude/issue-1499-s6i-scripts-sonar-markers"
+scope = ["scripts/comping_v3.py", "scripts/extract_ab_test.py", "scripts/generate_types.py", "scripts/lyric_alignment_golden.py", "scripts/main_checkout.py", "scripts/mirror_agent_cli_credentials.py", "scripts/prove_codex_image_sandbox.py", "scripts/seed_e2e_job_states.py", "scripts/seed_e2e_song_takes.py", "tests/test_generate_types.py", "tests/test_lyric_alignment_golden.py", "tests/test_prove_codex_image_sandbox.py"]
+opened_commit = "4008d50b022fb07a48b522567590da9a06c13ad3"
+whole_reason = "One Sonar clean-up of the remaining scripts plus the S6j marker keys."
