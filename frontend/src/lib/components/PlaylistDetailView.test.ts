@@ -70,6 +70,7 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => ({
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
+import { menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
@@ -293,11 +294,13 @@ describe('PlaylistDetailView header', () => {
 		await tick();
 		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Playlist · Night Drive');
-		expect(menu.querySelector('.menu-row-label')?.textContent).toBe('Share playlist');
-		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
-			el.textContent?.trim()
-		);
-		expect(items).toEqual(['Upload…', 'Save offline', 'Rename', 'Delete playlist']);
+		expect(menuRowLabels(menu)).toEqual([
+			'Share playlist',
+			'Upload…',
+			'Save offline',
+			'Rename',
+			'Delete playlist'
+		]);
 	});
 });
 
