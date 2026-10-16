@@ -164,9 +164,6 @@ class GitRunner:
     ) -> tuple[int, bytes]:
         command = [str(GIT_BINARY), *arguments]
         process: subprocess.Popen[bytes] | None = None
-        selector = selectors.DefaultSelector()
-        stdout = bytearray()
-        stderr = bytearray()
         deadline = time.monotonic() + GIT_TIMEOUT_SECONDS
         try:
             process = subprocess.Popen(
@@ -178,44 +175,60 @@ class GitRunner:
                 stderr=subprocess.PIPE,
                 shell=False,
             )
-            if process.stdout is None or process.stderr is None:
-                raise RequirementBinderError("local Git did not provide output pipes")
-            selector.register(process.stdout, selectors.EVENT_READ, stdout)
-            selector.register(process.stderr, selectors.EVENT_READ, stderr)
-            while selector.get_map():
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise RequirementBinderError("local Git command exceeded its deadline")
-                events = selector.select(min(0.25, remaining))
-                if not events and process.poll() is not None:
-                    events = [(key, selectors.EVENT_READ) for key in selector.get_map().values()]
-                for key, _mask in events:
-                    chunk = os.read(key.fileobj.fileno(), 8192)
-                    if not chunk:
-                        selector.unregister(key.fileobj)
-                        continue
-                    key.data.extend(chunk)
-                    if len(stdout) + len(stderr) > maximum:
-                        raise RequirementBinderError("local Git output exceeds its size limit")
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise RequirementBinderError("local Git command exceeded its deadline")
-            returncode = process.wait(timeout=remaining)
+            returncode, stdout = _collect_git_output(process, deadline, maximum)
         except RequirementBinderError:
-            if process is not None:
-                process.kill()
-                process.wait()
+            _reap_git_process(process)
             raise
         except Exception as error:
-            if process is not None:
-                process.kill()
-                process.wait()
+            _reap_git_process(process)
             raise RequirementBinderError("local Git command failed") from error
-        finally:
-            selector.close()
         if returncode not in allowed:
             raise RequirementBinderError("local Git command refused the repository state")
-        return returncode, bytes(stdout)
+        return returncode, stdout
+
+
+def _collect_git_output(
+    process: subprocess.Popen[bytes], deadline: float, maximum: int
+) -> tuple[int, bytes]:
+    if process.stdout is None or process.stderr is None:
+        raise RequirementBinderError("local Git did not provide output pipes")
+    stdout = bytearray()
+    stderr = bytearray()
+    with selectors.DefaultSelector() as selector:
+        selector.register(process.stdout, selectors.EVENT_READ, stdout)
+        selector.register(process.stderr, selectors.EVENT_READ, stderr)
+        while selector.get_map():
+            for key, _mask in _ready_git_pipes(process, selector, _git_time_left(deadline)):
+                chunk = os.read(key.fileobj.fileno(), 8192)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                key.data.extend(chunk)
+                if len(stdout) + len(stderr) > maximum:
+                    raise RequirementBinderError("local Git output exceeds its size limit")
+    return process.wait(timeout=_git_time_left(deadline)), bytes(stdout)
+
+
+def _ready_git_pipes(
+    process: subprocess.Popen[bytes], selector: selectors.BaseSelector, remaining: float
+) -> list[tuple[selectors.SelectorKey, int]]:
+    events = selector.select(min(0.25, remaining))
+    if not events and process.poll() is not None:
+        return [(key, selectors.EVENT_READ) for key in selector.get_map().values()]
+    return events
+
+
+def _git_time_left(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RequirementBinderError("local Git command exceeded its deadline")
+    return remaining
+
+
+def _reap_git_process(process: subprocess.Popen[bytes] | None) -> None:
+    if process is not None:
+        process.kill()
+        process.wait()
 
 
 def bind_requirement_revision(
@@ -427,23 +440,7 @@ def _status(git: GitRunner) -> dict[Path, str]:
     )
     statuses: dict[Path, str] = {}
     for record in (item for item in output.split(b"\0") if item):
-        if record.startswith(b"? "):
-            raw_path = record[2:]
-            kind = "?"
-        elif record.startswith(b"1 "):
-            fields = record.split(b" ", 8)
-            if len(fields) != 9:
-                raise RequirementBinderError("local Git returned malformed status data")
-            try:
-                kind = fields[1].decode("ascii")
-                submodule = fields[2].decode("ascii")
-            except UnicodeDecodeError as error:
-                raise RequirementBinderError("local Git returned malformed status data") from error
-            if submodule != "N...":
-                raise RequirementBinderError("binder refuses submodule status changes")
-            raw_path = fields[8]
-        else:
-            raise RequirementBinderError("binder refuses non-ordinary Git status changes")
+        raw_path, kind = _status_record(record)
         try:
             path = Path(raw_path.decode("utf-8"))
         except UnicodeDecodeError as error:
@@ -452,6 +449,24 @@ def _status(git: GitRunner) -> dict[Path, str]:
             raise RequirementBinderError("local Git returned duplicate status paths")
         statuses[path] = kind
     return statuses
+
+
+def _status_record(record: bytes) -> tuple[bytes, str]:
+    if record.startswith(b"? "):
+        return record[2:], "?"
+    if not record.startswith(b"1 "):
+        raise RequirementBinderError("binder refuses non-ordinary Git status changes")
+    fields = record.split(b" ", 8)
+    if len(fields) != 9:
+        raise RequirementBinderError("local Git returned malformed status data")
+    try:
+        kind = fields[1].decode("ascii")
+        submodule = fields[2].decode("ascii")
+    except UnicodeDecodeError as error:
+        raise RequirementBinderError("local Git returned malformed status data") from error
+    if submodule != "N...":
+        raise RequirementBinderError("binder refuses submodule status changes")
+    return fields[8], kind
 
 
 def _capture_prewrite_snapshot(
@@ -612,7 +627,7 @@ def _materialize_head(git: GitRunner, destination: Path, head: str) -> None:
             metadata, raw_path = record.split(b"\t", 1)
             mode, kind, object_id = metadata.decode("ascii").split()
             path = Path(raw_path.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError) as error:
+        except ValueError as error:
             raise RequirementBinderError("HEAD contract tree is malformed") from error
         if path.is_absolute() or ".." in path.parts:
             raise RequirementBinderError("HEAD contract tree contains an unsafe path")
