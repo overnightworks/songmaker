@@ -1,0 +1,8 @@
+claim_id = "8828ad40156e46a5bca6cfc74eb49292"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "537090a51f141ad22dde598a7bc38c175e0581d2"
+branch = "claude/issue-1479-deploy-honours-acestep-pin"
+scope = ["docs/architecture.md", "docs/security.md", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py"]
+opened_commit = "bdb21724f45f9167949c7b1e5531c0b415bfe7f7"
+whole_reason = "One deploy guard: the script change, its real-entry tests, and the two doc passages that describe the tick."
