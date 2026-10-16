@@ -5,6 +5,7 @@ import {
 } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { fakePage, holdRouteLoads, reportedNavigations } from '$lib/test-utils/app-navigation';
 import { discardDraft, editLyrics, setDraftLyrics } from '$lib/stores/editor';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -158,6 +159,7 @@ import {
 	followAppPageLink,
 	initNavigation,
 	openRailSearchTarget,
+	openListOverPage,
 	pendingDirtyNavigation,
 	persistLibraryHistory,
 	selectSong
@@ -1135,6 +1137,7 @@ describe('AlbumDetailView song row', () => {
 					has_more: false
 				});
 				vi.mocked(fetchSongs).mockResolvedValue(songsPage(get(songList)));
+				selectedSongId.set('s-tide');
 				const state = snapshotLibraryHistory(1);
 				pushHistoryEntry(libraryHistoryUrl(state), state);
 				if (direction === 'Forward') await pressBack();
@@ -1189,8 +1192,77 @@ describe('AlbumDetailView song row', () => {
 				expect(playAlbumSong).not.toHaveBeenCalled();
 			});
 
+			it.each(['direct address', 'raw goto'] as const)(
+				'defect:#1386: drops a pending tap after %s while destination resolution is held',
+				async (way) => {
+					const read = holdRead();
+					const target = await renderSongs();
+					prepareAlbumHistory();
+					boxOf(target, 'Ebb').click();
+					await tick();
+					let resolveDestination!: (value: ReturnType<typeof songsPage>) => void;
+					vi.mocked(fetchSongs).mockReturnValueOnce(
+						new Promise((resolve) => {
+							resolveDestination = resolve;
+						})
+					);
+					onTestFinished(() => resolveDestination(songsPage([])));
+					const destination = '/album/a-local/destination';
+					if (way === 'direct address') mountAddressRoute(destination);
+					else await goto(resolve(destination));
+					const navigation = openSongAddress('a-local', 'destination');
+					await tick();
+					expect(location.pathname).toBe(destination);
+					expect(get(selectedAlbumId)).toBe('a-local');
+					expect(get(selectedSongId)).toBeNull();
+					read.answer('archived-only');
+					await afterPendingMicrotasks();
+
+					expect(selectSong).not.toHaveBeenCalled();
+					expect(playAlbumSong).not.toHaveBeenCalled();
+					resolveDestination(songsPage([]));
+					await expect(navigation).resolves.toBe('unknown-song');
+				}
+			);
+
+			it.each(['/', '/playlists', '/settings'] as const)(
+				'defect:#1386: drops a pending tap after openListOverPage(%s)',
+				async (list) => {
+					const read = holdRead();
+					const target = await renderSongs();
+					prepareAlbumHistory();
+					boxOf(target, 'Ebb').click();
+					await tick();
+
+					await openListOverPage(list);
+					expect(location.pathname).toBe(list);
+					read.answer('archived-only');
+					await afterPendingMicrotasks();
+
+					expect(selectSong).not.toHaveBeenCalled();
+					expect(playAlbumSong).not.toHaveBeenCalled();
+				}
+			);
+
+			it.each(['archived-only', 'playable'] as const)(
+				'defect:#1386: a pending tap survives a query-only change with %s takes',
+				async (outcome) => {
+					const read = holdRead();
+					const target = await renderSongs();
+					prepareAlbumHistory();
+					boxOf(target, 'Ebb').click();
+					await tick();
+					const state = snapshotLibraryHistory(1);
+					await writeLibraryHistory(state, `${location.pathname}?sort=title`, 'replace');
+					expect(location.search).toBe('?sort=title');
+					read.answer(outcome);
+
+					await expectTapOutcome(outcome);
+				}
+			);
+
 			it.each(['link', 'search'] as const)(
-				'defect:#1386: withdraws a pending tap on an accepted %s while the destination route loads',
+				'defect:#1386: drops a pending tap after an accepted %s changes the standing pathname',
 				async (way) => {
 					const read = holdRead();
 					const target = await renderSongs();
@@ -1208,6 +1280,11 @@ describe('AlbumDetailView song row', () => {
 					}
 					await vi.waitFor(() => expect(goto).toHaveBeenCalled());
 					expect(fakePage.url.pathname).not.toBe(way === 'link' ? '/' : '/playlists');
+					if (way === 'link') {
+						releaseRoute();
+						await vi.waitFor(() => expect(location.pathname).toBe('/'));
+					}
+					expect(location.pathname).toBe(way === 'link' ? '/' : '/playlists');
 					read.answer('archived-only');
 					await afterPendingMicrotasks();
 

@@ -15,7 +15,6 @@ import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/j
 import { addToast } from '$lib/stores/toast';
 import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
 import {
-	cancelPendingPlayIntent,
 	selectedSongId,
 	selectedGenerationId,
 	selectedSong,
@@ -142,17 +141,13 @@ async function guardDirtyNavigation(
 	action: () => void | Promise<void>,
 	beforeAsking: () => void = () => undefined
 ): Promise<void> {
-	const accepted = async () => {
-		cancelPendingPlayIntent();
-		await action();
-	};
 	if (get(draftHasUnversionedChanges)) {
 		beforeAsking();
 		closeSidebar();
-		pendingDirtyNavigation.set(accepted);
+		pendingDirtyNavigation.set(action);
 		return;
 	}
-	await accepted();
+	await action();
 }
 
 // The rail context (and every other "song open" entry point — search hits,

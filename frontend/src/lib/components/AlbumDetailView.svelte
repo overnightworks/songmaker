@@ -296,8 +296,8 @@
 	// to play, so the tap opens it in the song editor instead. Its takes are
 	// read first, because the count alone cannot say whether one is playable.
 	// The tap is the person's intent only while it stands: a newer start or
-	// transport action in the player ends it, and so does leaving the album,
-	// closing the page. Navigation withdraws it through the player as well.
+	// transport action in the player ends it. The standing pathname, unlike
+	// the mounted route, follows shallow navigation and cancelled traversals.
 	let pendingTap: PlayIntent | null = null;
 
 	$effect(() => {
@@ -307,9 +307,10 @@
 
 	async function onSongTap(song: SongItem): Promise<void> {
 		const tap = (pendingTap = beginPlayIntent());
+		const tappedPathname = location.pathname;
 		// A failed read leaves the play path, where the player says it honestly.
 		await ensureGenerationsLoaded(song.id).catch(() => undefined);
-		if (!tap.stands()) return;
+		if (!tap.stands() || location.pathname !== tappedPathname) return;
 		const loaded = get(songList).find((s) => s.id === song.id) ?? song;
 		if (songPlayability(loaded) === 'none') selectSong(song.id);
 		else void playAlbumSong(song.album_id, song.id);
