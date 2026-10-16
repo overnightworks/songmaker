@@ -49,6 +49,7 @@ describe('syncRailSearch', () => {
 					colors: {},
 					song_count: 0,
 					picked_count: 0,
+					has_playable_take: true,
 					is_shared: false,
 					share_slug: null,
 					created_at: '2026-01-01T00:00:00+00:00',

@@ -8,6 +8,9 @@ from songmaker_cli.db.queries.activity import list_worked_songs as list_worked_s
 from songmaker_cli.db.queries.activity import record_song_edit as record_song_edit
 from songmaker_cli.db.queries.activity import record_song_played as record_song_played
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError as RestoreWindowExpiredError
+from songmaker_cli.db.queries.albums import (
+    album_ids_with_playable_take as album_ids_with_playable_take,
+)
 from songmaker_cli.db.queries.albums import archive_album as archive_album
 from songmaker_cli.db.queries.albums import cleanup_album as cleanup_album
 from songmaker_cli.db.queries.albums import count_albums as count_albums

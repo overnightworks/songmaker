@@ -70,6 +70,7 @@ from songmaker_cli.db.queries import (
     UNSET,
     JobStatusUpdate,
     RestoreWindowExpiredError,
+    album_ids_with_playable_take,
     archive_album,
     cleanup_album,
     count_albums,
@@ -110,10 +111,12 @@ def _single_album_response(session: Session, album: Album) -> AlbumResponse:
     """
     picked_counts = count_picked_songs_by_album(session, [album.id])
     song_counts = count_songs_by_album(session, [album.id])
+    playable_album_ids = album_ids_with_playable_take(session, [album.id])
     return AlbumResponse.from_orm(
         album,
         song_count=song_counts.get(album.id, 0),
         picked_count=picked_counts.get(album.id, 0),
+        has_playable_take=album.id in playable_album_ids,
     )
 
 
@@ -135,9 +138,13 @@ def api_list_albums(
     )
     picked_counts = count_picked_songs_by_album(session, [a.id for a in albums])
     song_counts = count_songs_by_album(session, [a.id for a in albums])
+    playable_album_ids = album_ids_with_playable_take(session, [a.id for a in albums])
     items = [
         AlbumResponse.from_orm(
-            a, song_count=song_counts.get(a.id, 0), picked_count=picked_counts.get(a.id, 0),
+            a,
+            song_count=song_counts.get(a.id, 0),
+            picked_count=picked_counts.get(a.id, 0),
+            has_playable_take=a.id in playable_album_ids,
         )
         for a in albums
     ]

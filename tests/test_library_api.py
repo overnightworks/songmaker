@@ -1083,6 +1083,31 @@ def test_search_album_title_nachtstrom(alice: TestClient) -> None:
     assert album_hit["album"]["title"] == "Nachtstrom"
 
 
+def test_search_album_hit_says_whether_it_has_a_playable_take_1354_rule_11(
+    library_ctx: tuple[object, object],
+) -> None:
+    factory, ctx = library_ctx
+
+    def _seed_takes(session) -> None:
+        _add_take(
+            session, generation_id="tide-take", song_id="song-tide", created_at=_later(0),
+        )
+        _add_take(
+            session, generation_id="solo-take", song_id="song-alice", created_at=_later(0),
+            is_archived=True,
+        )
+
+    _seed(factory, _seed_takes)
+    alice = _client_for(ctx, USER_A)
+    items = alice.get("/api/library/search", params={"q": "o"}).json()["items"]
+    reported = {
+        item["album"]["id"]: item["album"]["has_playable_take"]
+        for item in items if item["type"] == LIBRARY_ITEM_ALBUM
+    }
+    assert reported["nachtstrom"] is True
+    assert reported["alice-own"] is False
+
+
 def test_search_song_title_includes_album_context(alice: TestClient) -> None:
     resp = alice.get("/api/library/search", params={"q": "remix"})
     assert resp.status_code == 200

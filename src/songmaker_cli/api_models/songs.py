@@ -147,6 +147,7 @@ class AlbumResponse(BaseModel):
     colors: dict[str, str] = Field(default_factory=dict)
     song_count: int = 0
     picked_count: int = 0
+    has_playable_take: bool = False
     is_shared: bool = False
     share_slug: str | None = None
     cover: AlbumCoverUrls | None = None
@@ -155,7 +156,14 @@ class AlbumResponse(BaseModel):
     archived_at: str | None = None
 
     @classmethod
-    def from_orm(cls, album: Album, *, song_count: int, picked_count: int = 0) -> AlbumResponse:
+    def from_orm(
+        cls,
+        album: Album,
+        *,
+        song_count: int,
+        picked_count: int = 0,
+        has_playable_take: bool = False,
+    ) -> AlbumResponse:
         cover = album_cover_urls(album.id, album.cover_key) if album.cover_key else None
         return cls(
             id=album.id,
@@ -166,6 +174,7 @@ class AlbumResponse(BaseModel):
             colors=album.colors or {},
             song_count=song_count,
             picked_count=picked_count,
+            has_playable_take=has_playable_take,
             is_shared=album.is_shared,
             share_slug=album.share_slug,
             cover=cover,

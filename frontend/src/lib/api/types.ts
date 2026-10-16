@@ -80,6 +80,7 @@ export interface AlbumItem {
 	colors: Record<string, string>;
 	song_count: number;
 	picked_count: number;
+	has_playable_take: boolean;
 	is_shared: boolean;
 	share_slug?: string | null;
 	cover?: AlbumCoverUrls | null;
