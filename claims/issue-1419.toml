@@ -1,8 +1,0 @@
-claim_id = "b91f2bc268414d929f28c61c28a71310"
-agent = "claude-head"
-role = "builder"
-base = "02ea1712b8e1dd6dcc2f720cf830029385bb3548"
-branch = "claude-head/issue-1419-share-end-lockscreen-copy"
-scope = ["docs/architecture.md", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/share/SharedCollection.svelte", "frontend/src/lib/components/share/SharedCollection.test.ts", "frontend/src/lib/share/sharePlayback.svelte.ts", "frontend/src/lib/share/sharePlayback.test.ts", "frontend/src/routes/share/[slug]/+page.svelte", "frontend/src/routes/share/[slug]/page.test.ts", "frontend/src/routes/share/gen/[slug]/+page.svelte", "frontend/src/routes/share/gen/[slug]/page.test.ts", "frontend/src/routes/share/playlist/[slug]/+page.svelte", "frontend/src/routes/share/playlist/[slug]/page.test.ts", "frontend/src/routes/share/song/[slug]/+page.svelte"]
-opened_commit = "90314fc6fa7a51a14262e51972eb5ad8c328ba16"
-whole_reason = "a shared collection's end and lock screen in the share playback owner, the share route pages' copy and their tests, the page frame's no-audio lyrics, and the architecture share paragraph"
