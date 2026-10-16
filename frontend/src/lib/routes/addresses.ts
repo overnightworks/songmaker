@@ -1,6 +1,8 @@
 const ALBUM_ROUTE_PREFIX = '/album/';
 const TAKE_ROUTE_SEGMENT = '/take/';
 const PLAYLIST_ROUTE_PREFIX = '/playlist/';
+export const HOME_ROUTE_PATH = '/';
+export const LIBRARY_ROUTE_PATH = '/';
 export const PLAYLISTS_ROUTE_PATH = '/playlists';
 
 export function albumRoutePath(albumId: string): string {
@@ -52,7 +54,7 @@ export function libraryRouteShape(pathname: string): LibraryRouteShape {
 		if (!isSongRoutePath(pathname)) return 'album';
 		return isTakeRoutePath(pathname) ? 'album-song-take' : 'album-song';
 	}
-	return pathname === '/' ? 'root' : 'external';
+	return pathname === LIBRARY_ROUTE_PATH ? 'root' : 'external';
 }
 
 export function readLegacySongQuery(searchParams: URLSearchParams): {
@@ -66,7 +68,9 @@ export function readLegacySongQuery(searchParams: URLSearchParams): {
 }
 
 export function legacySongRoutePath(songId: string, generationId: string | null): string {
-	return generationId ? `/?song=${songId}&gen=${generationId}` : `/?song=${songId}`;
+	return generationId
+		? `${HOME_ROUTE_PATH}?song=${songId}&gen=${generationId}`
+		: `${HOME_ROUTE_PATH}?song=${songId}`;
 }
 
 export function pendingTakeRoutePath(songPath: string, generationId: string): string {

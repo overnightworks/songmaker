@@ -89,7 +89,7 @@ describe('login page', () => {
 			'/login?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river',
 			'/album/northern-lights/glass-river'
 		],
-		['the library without a target', '/login', '/'],
+		["the app's landing page", '/login', '/'],
 		[
 			'the library instead of a foreign site',
 			`/login?redirect=${encodeURIComponent('https://attacker.example/x')}`,

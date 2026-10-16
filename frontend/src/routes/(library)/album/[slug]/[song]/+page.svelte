@@ -3,7 +3,7 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { describeFailure } from '$lib/api/fetch';
-	import { albumRoutePath } from '$lib/routes/addresses';
+	import { albumRoutePath, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 	import { openSongAddress } from '$lib/stores/libraryContext';
 	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
@@ -78,7 +78,7 @@
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_ALBUM_HEADING}</h1>
 		<p>{UNKNOWN_ALBUM_MESSAGE}</p>
-		<a class="address-action" href={resolve('/')}>{BACK_TO_LIBRARY_LABEL}</a>
+		<a class="address-action" href={resolve(LIBRARY_ROUTE_PATH)}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
 {:else if addressState === 'unreachable'}
 	<div class="address-overlay" role="alert">

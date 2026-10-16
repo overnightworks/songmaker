@@ -22,6 +22,7 @@ import {
 	syncRailSearch,
 	visibleRailSearchPages
 } from './railSearch';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -222,7 +223,7 @@ describe('groupRailSearchResults', () => {
 		'offers $viewer the Library, the Playlists page and every Settings section they can see',
 		({ admin, settingsPages }) => {
 			expect(visibleRailSearchPages(admin)).toEqual([
-				{ label: 'Library', href: '/', section: null, glyph: '▦' },
+				{ label: 'Library', href: LIBRARY_ROUTE_PATH, section: null, glyph: '▦' },
 				{ label: 'Playlists', href: '/playlists', section: null, glyph: '♫' },
 				...settingsPages
 			]);

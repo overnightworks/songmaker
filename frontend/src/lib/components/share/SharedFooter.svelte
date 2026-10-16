@@ -2,6 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { tick } from 'svelte';
 	import { APP_NAME } from '$lib/constants';
+	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import LegalContent from '../LegalContent.svelte';
@@ -31,7 +32,7 @@
 
 <footer class="powered">
 	<LegalLinks onopen={(section) => ($legalSection = section)}>
-		{#snippet lead()}Powered by <a href="/">{APP_NAME}</a>{/snippet}
+		{#snippet lead()}Powered by <a href={HOME_ROUTE_PATH}>{APP_NAME}</a>{/snippet}
 	</LegalLinks>
 </footer>
 

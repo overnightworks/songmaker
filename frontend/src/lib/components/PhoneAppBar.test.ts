@@ -29,6 +29,7 @@ import {
 	resetHistoryControllerForTests,
 	stampNavigatedEntry
 } from '$lib/history/historyController';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
 import { resetLayersForTests } from '$lib/stores/layers';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -165,7 +166,7 @@ beforeEach(async () => {
 	phoneAppBar.set(null);
 	sidebarOpen.set(false);
 	sessionStorage.clear();
-	await enterAppOn('/');
+	await enterAppOn(LIBRARY_ROUTE_PATH);
 	seedLibrary();
 	playlistsOnServer.fetchPlaylists.mockResolvedValue([]);
 	for (const open of Object.values(navigation)) open.mockClear();
@@ -283,7 +284,12 @@ describe('PhoneAppBar', () => {
 	// #1354 rule 25: ‹ is named after where it goes, and a page opened from
 	// another one carries no account circle (navigation.html, frame I3).
 	it.each<{ page: string; opened: Pathname; from?: Pathname; name: string }>([
-		{ page: 'an album opened from the Library', opened: '/album/a1', from: '/', name: 'Library' },
+		{
+			page: 'an album opened from the Library',
+			opened: '/album/a1',
+			from: LIBRARY_ROUTE_PATH,
+			name: 'Library'
+		},
 		{
 			page: 'an album opened from another album',
 			opened: '/album/a1',
@@ -356,7 +362,7 @@ describe('PhoneAppBar', () => {
 	});
 
 	it('steps back on ‹ onto the page below, whose ‹ names the page below it', async () => {
-		await standOn('/album/a2', '/');
+		await standOn('/album/a2', LIBRARY_ROUTE_PATH);
 		await followLinkTo('/album/a1');
 		const target = renderBar();
 		await tick();
@@ -383,7 +389,7 @@ describe('PhoneAppBar search sheet', () => {
 	}
 
 	it('opens over the page with the search field focused', async () => {
-		await standOn('/album/a1', '/');
+		await standOn('/album/a1', LIBRARY_ROUTE_PATH);
 
 		const sheet = await openSearch();
 
@@ -393,7 +399,7 @@ describe('PhoneAppBar search sheet', () => {
 	});
 
 	it('closes on Back and leaves the page where it was', async () => {
-		await standOn('/album/a1', '/');
+		await standOn('/album/a1', LIBRARY_ROUTE_PATH);
 		await openSearch();
 
 		history.back();
