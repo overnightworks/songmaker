@@ -287,7 +287,7 @@ def create_app(
     app.add_middleware(IpRateLimitMiddleware, policy=build_rate_limit_policy(settings))
     app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(settings))
 
-    app.add_middleware(  # NOSONAR CORS order is security-critical; see block above.
+    app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
         CORSMiddleware,
         **_cors_middleware_kwargs(settings.cors_origin),
     )

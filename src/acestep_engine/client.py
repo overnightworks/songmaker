@@ -220,7 +220,7 @@ def _optional_submit_payload(config: AceStepConfig) -> dict[str, object]:
         payload["use_cot_language"] = False
     if config.constrained_decoding:
         payload["constrained_decoding"] = True
-    if config.lm_repetition_penalty != 1.0:  # NOSONAR Exact protocol values must be forwarded.
+    if config.lm_repetition_penalty != 1.0:  # NOSONAR(S1244) Exact protocol values are forwarded.
         payload["lm_repetition_penalty"] = config.lm_repetition_penalty
     if config.use_adg:
         payload["use_adg"] = True
@@ -238,7 +238,7 @@ def _repaint_submit_payload(config: AceStepConfig) -> dict[str, object]:
     }
     if config.repaint_mode:
         payload["repaint_mode"] = config.repaint_mode
-    if config.repaint_strength != 0.5:  # NOSONAR Exact protocol values must be forwarded.
+    if config.repaint_strength != 0.5:  # NOSONAR(S1244) Exact protocol values are forwarded.
         payload["repaint_strength"] = config.repaint_strength
     if config.repaint_latent_crossfade_frames > 0:
         payload["repaint_latent_crossfade_frames"] = config.repaint_latent_crossfade_frames

@@ -134,7 +134,7 @@ class _PickedWorker:
 
     @property
     def base_url(self) -> str:
-        return f"http://{self.host}:{self.port}"  # NOSONAR Private traffic uses an internal token.
+        return f"http://{self.host}:{self.port}"  # NOSONAR(S5332) Compose network only.
 
     def record_loaded(self, mode: str) -> None:
         if mode not in self.loaded_modes:
