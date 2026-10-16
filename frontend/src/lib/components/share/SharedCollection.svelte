@@ -12,6 +12,14 @@
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
 	import { ALBUM_COVER_ALT_TYPE } from '$lib/constants';
 	import {
+		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
+		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
+	} from '$lib/constants/now-playing';
+	import {
+		SHARE_SONGS_HEADING,
+		SHARE_BACK_TO_PLAYER_LABEL,
+		shareAlbumSubtitle,
+		shareNowPlayingLine,
 		SHARE_NO_AUDIO_NOTICE,
 		SHARE_NOW_PLAYING_NO_LYRICS,
 		SHARE_NOW_PLAYING_SHEET_LABEL
@@ -43,18 +51,32 @@
 	const playback = new SharePlayback();
 	let coverFailed = $state(false);
 	let mobileTransport = $state(false);
+	let pageElement: HTMLElement | undefined = $state();
+	let playerOutOfView = $state(false);
 	const nowPlayingOpen = historyLayerState('shared-now-playing', false);
 
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
 	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${view?.albumTitle ?? view?.title ?? ''}`);
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
-	// A shared song or take is the player itself (#1391); an album or a
-	// playlist keeps its header, its songs and the bar until its own slice.
-	const opensAsPlayer = $derived(view?.kind === 'song' || view?.kind === 'take');
-	// The track the player page stands on: the one playing, else the one the
-	// share offers, so the player and its words are there before Play.
-	const stagedTrack = $derived(playback.currentTrack ?? view?.tracks[0] ?? null);
+	const opensAsPlayer = $derived(view?.kind !== 'playlist');
+	const hasScrollBar = $derived(view?.kind === 'album');
+	const stagedTrack = $derived(
+		playback.currentTrack ?? tracks[0] ?? (view?.kind === 'album' ? null : view?.tracks[0]) ?? null
+	);
+	const collectionHead = $derived(
+		view?.kind === 'album' && stagedTrack
+			? {
+					title: view.title,
+					subtitle: shareAlbumSubtitle(view.artist),
+					nowPlaying: shareNowPlayingLine(
+						stagedTrack.title,
+						Math.max(0, playback.queue.currentIndex) + 1,
+						tracks.length
+					)
+				}
+			: undefined
+	);
 	const stagedInfo = $derived(view && stagedTrack ? trackPlaybackInfo(view, stagedTrack) : null);
 
 	$effect(() => {
@@ -82,6 +104,27 @@
 			mobileTransport = value;
 		}, MOBILE_TRANSPORT_MEDIA);
 	});
+
+	// The transport sits in the keyed branch of the player, which a track
+	// change rebuilds, so the observer follows the current transport.
+	$effect(() => {
+		void stagedTrack?.key;
+		const transport = pageElement?.querySelector('.now-playing.page .transport');
+		if (!hasScrollBar || !pageElement || !transport) {
+			playerOutOfView = false;
+			return;
+		}
+		const observer = new IntersectionObserver(
+			([entry]) => (playerOutOfView = !entry.isIntersecting),
+			{ root: pageElement }
+		);
+		observer.observe(transport);
+		return () => observer.disconnect();
+	});
+
+	function scrollBackToPlayer(): void {
+		pageElement?.querySelector('.now-playing.page')?.scrollIntoView({ behavior: 'smooth' });
+	}
 
 	function onRowClick(track: SharedTrack): void {
 		playback.toggle(track);
@@ -118,6 +161,21 @@
 	</span>
 {/snippet}
 
+{#snippet albumSongs()}
+	<NowPlayingQueue
+		queue={playback.queue}
+		contextLabel={view?.title ?? null}
+		currentSongTitle={stagedTrack?.title ?? ''}
+		heading={SHARE_SONGS_HEADING}
+		onJump={(index) => {
+			if (index === playback.queue.currentIndex && playback.currentTrack)
+				playback.toggle(playback.currentTrack);
+			else playback.jump(index);
+		}}
+		showTakeLabel={false}
+	/>
+{/snippet}
+
 {#snippet rightPanel()}
 	<NowPlayingQueue
 		queue={playback.queue}
@@ -128,7 +186,12 @@
 	/>
 {/snippet}
 
-<div class="shared-page" class:player-page={opensAsPlayer}>
+<div
+	class="shared-page"
+	class:player-page={opensAsPlayer}
+	class:bar-room={hasScrollBar && playback.currentTrack !== null}
+	bind:this={pageElement}
+>
 	<div class="bg-effects" aria-hidden="true">
 		<div class="glow glow-1"></div>
 		<div class="glow glow-2"></div>
@@ -145,7 +208,23 @@
 	{:else if opensAsPlayer && stagedInfo}
 		<NowPlayingFrame
 			surface="page"
+			{collectionHead}
+			songs={view?.kind === 'album' ? albumSongs : undefined}
+			canPrev={playback.canPrev}
+			canNext={playback.currentTrack ? playback.canNext : tracks.length > 1}
+			onprev={view?.kind === 'album' ? () => playback.prev() : undefined}
+			onnext={view?.kind === 'album'
+				? () => (playback.currentTrack ? playback.next() : playback.jump(1))
+				: undefined}
+			shuffle={playback.shuffle}
+			shuffleLabel={playback.shuffle
+				? NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
+				: NOW_PLAYING_SHUFFLE_LABEL_PREFIX}
+			onToggleShuffle={view?.kind === 'album'
+				? () => playback.setShuffle(!playback.shuffle)
+				: undefined}
 			info={stagedInfo}
+			onCoverError={() => (coverFailed = true)}
 			{coverUrl}
 			onTogglePlay={() => playback.play()}
 			onSeek={(seconds) => playback.seek(seconds)}
@@ -156,6 +235,9 @@
 			lyricsCues={stagedTrack?.cues ?? null}
 			lyricsText={stagedTrack?.lyrics ?? null}
 		/>
+	{:else if view?.kind === 'album'}
+		<h1 class="header-title">{view.title}</h1>
+		<p class="no-audio" role="status">{SHARE_NO_AUDIO_NOTICE}</p>
 	{:else if view}
 		<CollectionHeaderFrame
 			{coverUrl}
@@ -196,7 +278,7 @@
 	<SharedFooter />
 </div>
 
-{#if playback.currentTrack && !opensAsPlayer}
+{#if playback.currentTrack && (!opensAsPlayer || (hasScrollBar && playerOutOfView))}
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
@@ -215,6 +297,8 @@
 		onOpenNowPlaying={() => ($nowPlayingOpen = true)}
 		nowPlayingDisabled={false}
 		{mobileTransport}
+		nowPlayingTargetLabel={hasScrollBar ? SHARE_BACK_TO_PLAYER_LABEL : undefined}
+		onReturnToPlayer={hasScrollBar ? scrollBackToPlayer : undefined}
 	/>
 {/if}
 
@@ -465,5 +549,11 @@
 		.shared-page.player-page {
 			padding: 0.8rem 1.2rem;
 		}
+	}
+
+	/* The bar sits over the page's end once the player is out of view, so the
+	   footer keeps its room above it from the first Play on. */
+	.shared-page.player-page.bar-room {
+		padding-bottom: calc(var(--transport-bar-height) + 1rem);
 	}
 </style>

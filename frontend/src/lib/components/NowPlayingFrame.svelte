@@ -46,6 +46,7 @@
 	let {
 		info,
 		coverUrl,
+		onCoverError,
 		source = null,
 		surface = 'full',
 		onclose,
@@ -80,10 +81,15 @@
 		// comes from the share payload instead.
 		lyricsText = null,
 		rightPanel,
-		curationBar
+		curationBar,
+		collectionHead,
+		songs
 	}: {
+		collectionHead?: { title: string; subtitle: string; nowPlaying: string };
+		songs?: Snippet;
 		info: PlaybackInfo;
 		coverUrl: string | null;
+		onCoverError?: () => void;
 		// Where the playing queue comes from. The stacked layout names it under
 		// the title as a way back there; everywhere else the album line stands.
 		source?: NowPlayingSource | null;
@@ -229,7 +235,7 @@
 {#snippet coverArt()}
 	<div class="cover-art" aria-hidden="true">
 		{#if coverUrl}
-			<img src={coverUrl} alt="" />
+			<img src={coverUrl} alt="" onerror={onCoverError} />
 		{/if}
 	</div>
 {/snippet}
@@ -354,6 +360,7 @@
 		{whisperText}
 		emptyLabel={lyricsEmptyLabel}
 		position={sungAt}
+		songTitle={isPage && collectionHead ? info.songTitle : undefined}
 	/>
 {/snippet}
 
@@ -362,6 +369,7 @@
 	class="now-playing"
 	class:docked={isDocked}
 	class:page={isPage}
+	class:collection={isPage && Boolean(collectionHead)}
 	class:stacked
 	role={isLayer ? 'dialog' : isDocked ? 'complementary' : undefined}
 	aria-modal={isLayer ? 'true' : undefined}
@@ -377,12 +385,21 @@
 			<div class="np-body">
 				{@render coverArt()}
 				<section class="np-player-col">
-					{@render coverMeta()}
+					{#if collectionHead}
+						<div class="cover-meta">
+							<h1 class="cover-title">{collectionHead.title}</h1>
+							<span class="cover-line">{collectionHead.subtitle}</span>
+							<span class="cover-line now-playing-line">{collectionHead.nowPlaying}</span>
+						</div>
+					{:else}
+						{@render coverMeta()}
+					{/if}
 					{@render transportControls()}
 					{@render progress()}
 					{#if unplayableNotice === null}
 						<div class="np-page-lyrics">{@render lyrics()}</div>
 					{/if}
+					{#if songs}<div class="np-page-songs">{@render songs()}</div>{/if}
 				</section>
 			</div>
 		{:else}
@@ -1001,6 +1018,36 @@
 		}
 		.now-playing.page.stacked .cover-title {
 			font-size: 1.4rem;
+		}
+	}
+	.now-playing.page.collection {
+		height: auto;
+		container-type: normal;
+	}
+	.now-playing.page.collection .np-body {
+		height: auto;
+		grid-template-rows: auto;
+		overflow: visible;
+	}
+	.now-playing.page.collection .np-page-lyrics {
+		flex: none;
+		height: 18rem;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
+		text-align: left;
+	}
+	.np-page-songs {
+		align-self: stretch;
+	}
+	@media (max-width: 768px) {
+		.now-playing.page.collection .np-body {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 1.6rem;
+		}
+		.now-playing.page.collection .cover-art {
+			width: min(220px, 100%);
+			height: auto;
+			justify-self: center;
 		}
 	}
 </style>

@@ -54,6 +54,9 @@
 		nowPlayingTargetDescriptionId?: string;
 		onNowPlayingTriggerBind?: (el: HTMLButtonElement | undefined) => void;
 		mobileTransport: boolean;
+		// Set where the player is a view in the page the bar sits under: the
+		// bar then only leads back up to it, and the dialog pill has no place.
+		onReturnToPlayer?: () => void;
 	}
 
 	let {
@@ -80,7 +83,8 @@
 		nowPlayingTargetLabel = NOW_PLAYING_LABEL,
 		nowPlayingTargetDescriptionId,
 		onNowPlayingTriggerBind,
-		mobileTransport
+		mobileTransport,
+		onReturnToPlayer
 	}: Props = $props();
 
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
@@ -104,6 +108,9 @@
 	const isError = $derived(transport === 'failed');
 	const waitingForNetwork = $derived(transport === 'waiting-for-network');
 	const buttonFace = $derived(transportButtonFace(transport));
+
+	const leaveBar = $derived(onReturnToPlayer ?? onOpenNowPlaying);
+	const opensDialog = $derived(!nowPlayingDocked && !onReturnToPlayer);
 
 	const phoneNoticeId = $props.id();
 	const playbackFailure = $derived(isError ? errorMsg : null);
@@ -297,10 +304,10 @@
 				<button
 					bind:this={nowPlayingTrigger}
 					class="phone-side track-info open-now-playing"
-					onclick={onOpenNowPlaying}
+					onclick={leaveBar}
 					aria-label={nowPlayingTargetLabel}
 					aria-describedby={nowPlayingTargetDescribedBy}
-					aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
+					aria-haspopup={opensDialog ? 'dialog' : undefined}
 					aria-expanded={nowPlayingOpen}
 					aria-live="polite"
 				>
@@ -320,7 +327,7 @@
 			{:else}
 				<button
 					class="phone-side open-now-playing"
-					onclick={onOpenNowPlaying}
+					onclick={leaveBar}
 					tabindex="-1"
 					aria-hidden="true"
 				>
@@ -346,9 +353,20 @@
 				{/if}
 				{@render stepAndPlay()}
 			</div>
-			<div class="track-info" aria-live="polite">
-				{@render trackInfo(trackTitleGlowStyle, playbackFailure)}
-			</div>
+			{#if onReturnToPlayer}
+				<button
+					class="track-info open-now-playing"
+					onclick={leaveBar}
+					aria-label={nowPlayingTargetLabel}
+					aria-live="polite"
+				>
+					{@render trackInfo(trackTitleGlowStyle, playbackFailure)}
+				</button>
+			{:else}
+				<div class="track-info" aria-live="polite">
+					{@render trackInfo(trackTitleGlowStyle, playbackFailure)}
+				</div>
+			{/if}
 			<div class="timeline">
 				{#if waitingForNetwork}{@render waitingNotice()}{/if}
 				{#if takeIsCurrent}
@@ -357,19 +375,21 @@
 					<span class="time">{formatTime(duration)}</span>
 				{/if}
 			</div>
-			<button
-				bind:this={nowPlayingTrigger}
-				class="now-playing-btn"
-				data-hitbox="frequent"
-				onclick={onOpenNowPlaying}
-				disabled={nowPlayingDisabled}
-				aria-label={NOW_PLAYING_LABEL}
-				aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
-				aria-expanded={nowPlayingOpen}
-			>
-				<span>{NOW_PLAYING_LABEL}</span>
-				<Icon name="chevron-up" size={16} />
-			</button>
+			{#if !onReturnToPlayer}
+				<button
+					bind:this={nowPlayingTrigger}
+					class="now-playing-btn"
+					data-hitbox="frequent"
+					onclick={onOpenNowPlaying}
+					disabled={nowPlayingDisabled}
+					aria-label={NOW_PLAYING_LABEL}
+					aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
+					aria-expanded={nowPlayingOpen}
+				>
+					<span>{NOW_PLAYING_LABEL}</span>
+					<Icon name="chevron-up" size={16} />
+				</button>
+			{/if}
 		{/if}
 	</div>
 </footer>

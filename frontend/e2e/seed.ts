@@ -15,7 +15,7 @@ const execFileAsync = promisify(execFile);
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ARTIFACT_DIR = path.join(E2E_DIR, '.artifacts');
-const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
+export const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
 const SEEDED_LIBRARY_FILE = path.join(ARTIFACT_DIR, 'seeded-library.json');
 // The compose recipe this suite always runs under (README, e2e.yml) -- run
 // from the repo root so a caller's own COMPOSE_PROJECT_NAME (or its default,
@@ -178,6 +178,8 @@ export interface SeededLibrary {
 	/** Also the album's address: an album id is its slug (issue #269). */
 	albumId: string;
 	albumShareUrl: string;
+	/** A shared playlist, the one public collection that still opens as the old header and list. */
+	playlistShareUrl: string;
 	/** Its take is the album pick — played from the album row, added to a playlist by hand. */
 	pickedSongTitle: string;
 	/**
@@ -449,6 +451,19 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 
 	const share = await seed.postJson<ShareLink>(`/api/albums/${album.id}/share`, {});
 
+	const sharedPlaylist = await seed.postJson<CreatedPlaylist>('/api/playlists', {
+		title: `${PLAYLIST_TITLE_PREFIX} shared ${runMarker()}`
+	});
+	for (const songTitle of playlistSongTitles) {
+		await seed.postJson(`/api/playlists/${sharedPlaylist.id}/entries/generation`, {
+			generation_id: takeId(takeBySongTitle, songTitle)
+		});
+	}
+	const playlistShare = await seed.postJson<ShareLink>(
+		`/api/playlists/${sharedPlaylist.id}/share`,
+		{}
+	);
+
 	const secondAlbumTitle = `${RAIL_ALBUM_TITLE_PREFIX} ${runMarker()}`;
 	const secondAlbum = await seed.postJson<CreatedResource>('/api/albums', {
 		title: secondAlbumTitle,
@@ -479,6 +494,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumTracks: albumSongs.map((song) => song.track),
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
+		playlistShareUrl: `${BASE_URL}/share/playlist/${playlistShare.share_slug}`,
 		pickedSongTitle,
 		continueReorderSongs,
 		secondAlbumTitle,

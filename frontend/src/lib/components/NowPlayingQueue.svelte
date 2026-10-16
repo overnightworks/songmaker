@@ -24,7 +24,8 @@
 		skipped = [],
 		skippedComplete = true,
 		windowEnded = false,
-		showTakeLabel = true
+		showTakeLabel = true,
+		heading
 	}: {
 		queue: QueueViewModel;
 		// The name of what is playing, or null for the library pool, whose own
@@ -43,14 +44,16 @@
 		// Off for a public share queue — there is no real per-row take number to
 		// show (see SharedCollection.svelte), and versionNumber is always null.
 		showTakeLabel?: boolean;
+		// Names the list when it is not the player's "Queue" (a shared album's "Songs").
+		heading?: string;
 	} = $props();
 
-	const heading = $derived(nowPlayingQueueHeading(contextLabel));
+	const shownHeading = $derived(heading ?? nowPlayingQueueHeading(contextLabel));
 </script>
 
-<section class="np-queue" aria-label={NOW_PLAYING_QUEUE_TAB}>
+<section class="np-queue" aria-label={heading ?? NOW_PLAYING_QUEUE_TAB}>
 	<div class="queue-heading-row">
-		<h3 class="queue-heading">{heading}</h3>
+		<h3 class="queue-heading">{shownHeading}</h3>
 		<div class="queue-heading-actions">
 			{#if takePool}
 				<div class="pool-trio" role="group" aria-label="Take pool">
@@ -83,7 +86,9 @@
 						aria-current={index === queue.currentIndex ? 'true' : undefined}
 						onclick={() => onJump(index)}
 					>
-						<span class="queue-position">{index === queue.currentIndex ? '' : index + 1}</span>
+						<span class="queue-position" aria-hidden="true"
+							>{index === queue.currentIndex ? '' : index + 1}</span
+						>
 						<span class="queue-title">{item.songTitle}</span>
 						{#if showTakeLabel}
 							<span class="queue-take">

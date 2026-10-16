@@ -147,7 +147,9 @@ test('the playlist ⋯ opens fully on screen, under its own row of actions', asy
 	await expectMenuFullyOnScreen(page, header);
 });
 
-test('the public album page keeps its actions on their own row', async ({ browser }, testInfo) => {
+test('the public playlist page keeps its actions on their own row', async ({
+	browser
+}, testInfo) => {
 	const library = readSeededLibrary();
 	const { isMobile, hasTouch } = testInfo.project.use;
 	const visitor = await browser.newContext({
@@ -159,12 +161,12 @@ test('the public album page keeps its actions on their own row', async ({ browse
 	const sharePage = await visitor.newPage();
 	const shareGuard = new FlowGuard(sharePage);
 
-	await sharePage.goto(library.albumShareUrl);
+	await sharePage.goto(library.playlistShareUrl);
 
 	await expectActionRowUnderCoverAndTitle(
 		sharePage.locator('.collection-header'),
-		'album',
-		library.albumTitle
+		'playlist',
+		await sharePage.locator('.header-title').innerText()
 	);
 	shareGuard.assertClean();
 	await visitor.close();

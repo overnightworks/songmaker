@@ -194,9 +194,13 @@ interface LyricsProps {
 	whisperText: string | null;
 	// Where the take stands; a take the test does not place stands at its start.
 	position?: number | null;
+	songTitle?: string;
 }
 
-type MountedLyricsProps = Required<LyricsProps> & { emptyLabel: string };
+type MountedLyricsProps = Required<Omit<LyricsProps, 'songTitle'>> & {
+	emptyLabel: string;
+	songTitle?: string;
+};
 
 // Props the test can change afterwards, as the panel's own props change when
 // the listener moves to another take.
@@ -221,6 +225,16 @@ async function render(props: LyricsProps) {
 }
 
 describe('NowPlayingLyrics', () => {
+	it('1374_rule_2 names the song in the heading when given one, else only Lyrics', async () => {
+		await render({ lyrics: LINE_1, cues: null, whisperText: null, songTitle: 'Paper Lanterns' });
+		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics · Paper Lanterns');
+	});
+
+	it('keeps the plain Lyrics heading without a song title', async () => {
+		await render({ lyrics: LINE_1, cues: null, whisperText: null });
+		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics');
+	});
+
 	it('shows the named empty state when there are no lyrics', async () => {
 		await render({ lyrics: null, cues: null, whisperText: null });
 

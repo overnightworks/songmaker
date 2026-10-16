@@ -49,6 +49,28 @@ async function render(props: Partial<NowPlayingQueueProps> = {}) {
 }
 
 describe('NowPlayingQueue', () => {
+	it('1374_rule_5 names an album list Songs and keeps row names starting with the title', async () => {
+		await render({
+			heading: 'Songs',
+			takePool: undefined,
+			showTakeLabel: false,
+			queue: {
+				items: [
+					item({ key: 'first', songTitle: 'Tide' }),
+					item({ key: 'second', songTitle: 'Ebb' })
+				],
+				currentIndex: 0,
+				upNext: null
+			}
+		});
+		expect(target.querySelector('.queue-heading')?.textContent).toBe('Songs');
+		expect(target.querySelector('.np-queue')?.getAttribute('aria-label')).toBe('Songs');
+		expect(target.querySelectorAll('.queue-take')).toHaveLength(0);
+		const rows = Array.from(target.querySelectorAll('.queue-row'));
+		expect(rows[0]).toHaveAccessibleName(/^Tide/);
+		expect(rows[1]).toHaveAccessibleName(/^Ebb/);
+	});
+
 	it('offers the take pool trio when the queue is built from a pool', async () => {
 		await render();
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(3);
