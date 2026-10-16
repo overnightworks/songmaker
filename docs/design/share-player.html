@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Share player — the picture for shared song, take, album and playlist (#1374)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Open+Sans:wght@400;600;700&family=Oswald:wght@400;500;600&display=swap">
+<style>
+/* Layout: one block per screen: the after frame (left), the exact changes beside it.
+   Page tokens follow the viewer's theme; the app frames stay in Hallucinai's dark default so they match the screenshots. */
+:root {
+  --paper:#f6f5f8; --panel:#fff; --ink:#1b1a20; --soft:#5e5966; --muted:#86808d; --line:#e3e0e7;
+  --mark:#5d2598; --mark-soft:#f0eafa; --gone:#b4232c; --gone-soft:#fbe9ea; --new:#1f7a4d; --new-soft:#e5f3eb; --same:#6b6672;
+  --frame-shadow:0 2px 4px rgba(0,0,0,.08),0 12px 32px rgba(0,0,0,.14);
+  --a-bg:#0d0d0d; --a-bar:#0b0b0b; --a-surface:#141414; --a-tile:#1e1e1e; --a-hover:#1d1d1d; --a-border:#333; --a-text:#e4e4e4;
+  --a-muted:#9a9a9a; --a-dim:#666; --a-brand:#a020f0; --a-pick:#c27bff; --a-pick-soft:#2a1442; --a-play:#f2392c; --a-on-play:#fff;
+  --f-display:"Oswald","Arial Narrow",sans-serif; --f-app:"Open Sans",Arial,sans-serif;
+  --f-page:"IBM Plex Sans",system-ui,sans-serif; --f-label:"Barlow Condensed","Arial Narrow",sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:#121115; --panel:#1b1a20; --ink:#ece9f0; --soft:#b3adb9; --muted:#8a8490; --line:#2e2b33;
+    --mark:#c39af5; --mark-soft:#2a2036; --gone:#ef6b72; --gone-soft:#3a1c20; --new:#5fc28e; --new-soft:#173225; --same:#9a94a0;
+    --frame-shadow:0 2px 4px rgba(0,0,0,.4),0 12px 32px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:#121115; --panel:#1b1a20; --ink:#ece9f0; --soft:#b3adb9; --muted:#8a8490; --line:#2e2b33;
+  --mark:#c39af5; --mark-soft:#2a2036; --gone:#ef6b72; --gone-soft:#3a1c20; --new:#5fc28e; --new-soft:#173225; --same:#9a94a0;
+  --frame-shadow:0 2px 4px rgba(0,0,0,.4),0 12px 32px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.55 var(--f-page); }
+.wrap { max-width:1180px; margin:0 auto; padding-block:36px 80px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+.eyebrow { color:var(--mark); font:600 13px/1 var(--f-label); letter-spacing:.12em; text-transform:uppercase; }
+h1 { margin:8px 0 10px; font:500 34px/1.15 var(--f-display); text-wrap:balance; }
+.lead { margin:0; max-width:70ch; color:var(--soft); }
+.toc { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0 0; padding:0; list-style:none; }
+.toc a { display:inline-block; padding:5px 12px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--ink); text-decoration:none; font-size:13.5px; }
+.toc a:hover { border-color:var(--mark); color:var(--mark); }
+
+.pair { margin-top:56px; scroll-margin-top:16px; }
+.pair-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding-bottom:8px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+.pair-head h2 { margin:0; font:500 24px/1.2 var(--f-display); }
+.pair-head .taps { color:var(--soft); font-size:14px; }
+.pair-head .taps b { font:500 18px/1 var(--f-display); color:var(--new); font-variant-numeric:tabular-nums; }
+.pair-head .call { padding:1px 9px; border-radius:999px; background:var(--mark-soft); color:var(--mark); font:600 12px/1.6 var(--f-label); letter-spacing:.08em; text-transform:uppercase; }
+.pair-body { display:grid; grid-template-columns:auto auto minmax(0,1fr); gap:24px; align-items:start; }
+.shot { margin:0; display:flex; flex-direction:column; gap:8px; }
+.shot figcaption { font:600 13px/1 var(--f-label); letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+.shot.after figcaption { color:var(--new); }
+.shot img, .frame { --fw:300; display:block; width:calc(var(--fw) * 1px); max-width:100%; height:auto; border-radius:12px; box-shadow:var(--frame-shadow); border:1px solid var(--line); }
+.changes { min-width:0; display:flex; flex-direction:column; gap:10px; margin:22px 0 0; padding:0; list-style:none; }
+.changes li { display:grid; grid-template-columns:72px minmax(0,1fr); gap:10px; align-items:baseline; font-size:14.5px; }
+.chip { justify-self:start; padding:1px 8px; border-radius:4px; font:600 11.5px/1.6 var(--f-label); letter-spacing:.08em; text-transform:uppercase; }
+.chip.gone { background:var(--gone-soft); color:var(--gone); }
+.chip.new { background:var(--new-soft); color:var(--new); }
+.chip.moved { background:var(--mark-soft); color:var(--mark); }
+.chip.same { border:1px solid var(--line); color:var(--same); }
+
+/* ── the app frame (drawn at 390 css px, shown at 300) ───── */
+.frame { aspect-ratio:390 / 844; overflow:hidden; position:relative; background:var(--a-bg); }
+.app { position:absolute; top:0; left:0; width:390px; height:844px; transform-origin:0 0; transform:scale(calc(var(--fw) / 390)); display:flex; flex-direction:column; background:var(--a-bg); color:var(--a-text); font:15px/1.35 var(--f-app); }
+.topbar { height:46px; flex:none; display:flex; align-items:center; gap:6px; padding:0 10px 0 16px; border-bottom:1px solid var(--a-border); }
+.topbar.back { padding-left:6px; }
+.brand { flex:1; font:600 20px/1 var(--f-display); letter-spacing:.05em; color:var(--a-brand); }
+.ico { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+.ico.fill { fill:currentColor; stroke:none; }
+.tb-icon { width:40px; height:40px; display:grid; place-items:center; color:var(--a-muted); }
+.avatar { width:30px; height:30px; border-radius:50%; border:1px solid var(--a-border); display:grid; place-items:center; font:500 15px/1 var(--f-display); background:var(--a-surface); }
+.backlink { display:flex; align-items:center; gap:2px; font:500 18px/1 var(--f-display); letter-spacing:.04em; color:var(--a-text); flex:1; }
+.body { flex:1; min-height:0; overflow:hidden; padding:0 12px; }
+.ptitle { display:flex; align-items:center; margin:18px 0 10px; }
+.ptitle h3 { margin:0; font:600 28px/1 var(--f-display); letter-spacing:.06em; text-transform:uppercase; }
+.ptitle small { margin-left:10px; font:400 17px/1 var(--f-display); color:var(--a-muted); }
+.newbtn { margin-left:auto; display:flex; align-items:center; gap:8px; height:44px; padding:0 14px; border:1px solid var(--a-border); border-radius:4px; font:500 15px/1 var(--f-display); letter-spacing:.08em; color:var(--a-muted); }
+.sec { margin:14px 0 9px; font:600 14px/1 var(--f-display); letter-spacing:.1em; text-transform:uppercase; }
+.tile { background:var(--a-tile); display:grid; place-items:center; color:var(--a-text); font:400 16px/1 var(--f-display); letter-spacing:.04em; border-radius:3px; flex:none; position:relative; overflow:hidden; }
+.tile.mosaic { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:3px; background:transparent; }
+.tile.mosaic i { background:var(--a-tile); display:grid; place-items:center; font:400 13px/1 var(--f-display); color:var(--a-muted); font-style:normal; border-radius:2px; }
+.shelf { display:flex; gap:10px; margin-right:-12px; overflow:hidden; }
+.card { width:120px; flex:none; display:flex; flex-direction:column; gap:5px; }
+.card .tile { width:120px; height:120px; font-size:30px; }
+.card b { font:500 15px/1.15 var(--f-display); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.card small { font-size:12px; color:var(--a-muted); margin-top:-3px; }
+.card.on b { color:var(--a-pick); }
+.resume { position:absolute; right:7px; bottom:7px; width:36px; height:36px; border-radius:50%; background:var(--a-play); color:var(--a-on-play); display:grid; place-items:center; }
+.resume .ico { width:16px; height:16px; }
+.row { display:flex; align-items:center; gap:12px; height:58px; border-bottom:1px solid var(--a-border); }
+.row .tile { width:42px; height:42px; font-size:14px; }
+.row .meta { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.row .meta b { font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.row .meta small { color:var(--a-muted); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.row .rp { width:40px; height:40px; display:grid; place-items:center; color:var(--a-text); }
+.row .rp .ico { width:20px; height:20px; }
+.row.on .meta b { color:var(--a-pick); }
+.row.lit { background:var(--a-pick-soft); margin:0 -12px; padding:0 12px; }
+.sort { display:inline-flex; border:1px solid var(--a-border); border-radius:4px; overflow:hidden; margin-left:auto; }
+.sort span { padding:9px 10px; font:500 13px/1 var(--f-display); letter-spacing:.07em; text-transform:uppercase; color:var(--a-muted); }
+.sort span.on { background:var(--a-pick-soft); color:var(--a-pick); }
+.alb { display:flex; gap:14px; align-items:center; margin:18px 0 18px; }
+.addcover { width:56px; height:56px; border:1px dashed var(--a-muted); display:grid; place-items:center; text-align:center; font:400 9px/1.2 var(--f-display); letter-spacing:.05em; color:var(--a-muted); flex:none; }
+.alb h3 { margin:0 0 6px; font:600 22px/1.05 var(--f-display); letter-spacing:.08em; text-transform:uppercase; }
+.alb small { color:var(--a-muted); font-size:14px; }
+.actions { display:flex; align-items:center; gap:14px; margin-bottom:22px; }
+.bigred { width:48px; height:48px; border-radius:50%; background:var(--a-play); color:var(--a-on-play); display:grid; place-items:center; }
+.bigred .ico { width:24px; height:24px; }
+.more { margin-left:auto; width:44px; height:44px; border:1px solid var(--a-border); border-radius:4px; display:grid; place-items:center; color:var(--a-text); font-size:18px; letter-spacing:.1em; }
+.song { display:flex; align-items:center; gap:8px; height:60px; padding:0 4px 0 13px; border:1px solid var(--a-border); border-radius:5px; background:var(--a-surface); margin-bottom:4px; }
+.song .t { flex:1; min-width:0; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.song .k { color:var(--a-muted); font-size:13px; }
+.song .pen { width:40px; height:40px; display:grid; place-items:center; color:var(--a-muted); }
+.song .pen .ico { width:18px; height:18px; }
+.song.on { border-color:var(--a-pick); }
+.song.on .t { color:var(--a-pick); font-weight:600; }
+.eq { display:inline-flex; gap:2px; align-items:flex-end; height:14px; }
+.eq i { width:3px; background:var(--a-pick); border-radius:1px; }
+.eq i:nth-child(1) { height:8px; } .eq i:nth-child(2) { height:14px; } .eq i:nth-child(3) { height:5px; }
+.newsong { display:flex; align-items:center; gap:14px; padding:20px 14px; color:var(--a-muted); font-size:15px; }
+.player { flex:none; position:relative; overflow:hidden; margin:0 8px 6px; height:68px; display:flex; align-items:center; gap:12px; padding:6px 6px 0 10px; border-radius:10px; background:#202023; border:1px solid #2c2c30; box-shadow:0 8px 22px rgba(0,0,0,.55); }
+.player .handle { position:absolute; top:5px; left:50%; width:34px; height:4px; margin-left:-17px; border-radius:2px; background:#55555c; }
+.player .line { position:absolute; left:0; bottom:0; height:3px; width:38%; background:linear-gradient(90deg,var(--a-play),var(--a-brand)); }
+.player .pp { width:44px; height:44px; border-radius:50%; background:var(--a-play); color:var(--a-on-play); display:grid; place-items:center; flex:none; }
+.player .pp .ico { width:20px; height:20px; }
+.player .tile { width:46px; height:46px; font-size:14px; }
+.player .meta { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.player .meta b { font:500 17px/1.15 var(--f-display); letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.player .meta small { color:var(--a-muted); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.player .meta small u { color:var(--a-text); text-decoration-color:var(--a-play); text-underline-offset:3px; }
+.player .skip { width:38px; height:38px; display:grid; place-items:center; color:var(--a-text); }
+.tabs { flex:none; height:54px; display:grid; grid-template-columns:repeat(3,1fr); background:var(--a-bar); }
+.dock { flex:none; padding-top:6px; background:linear-gradient(to bottom, transparent, var(--a-bar) 30%); }
+.bottom-only { position:absolute; left:0; bottom:0; width:390px; }
+.tabs span { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--a-muted); font:500 11.5px/1 var(--f-display); letter-spacing:.12em; text-transform:uppercase; }
+.tabs span.on { color:var(--a-text); }
+.tabs span.on .ico { color:var(--a-brand); }
+.note-pin { position:absolute; z-index:3; padding:4px 9px; border-radius:999px; background:var(--a-play); color:#fff; font:600 12px/1.3 var(--f-app); box-shadow:0 4px 14px rgba(0,0,0,.4); white-space:nowrap; }
+
+.calls { margin-top:56px; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.callcard { min-width:0; padding:16px 18px; border:1px solid var(--mark); border-radius:8px; background:var(--panel); }
+.callcard h3 { margin:0 0 6px; font:600 15.5px/1.3 var(--f-page); }
+.callcard p { margin:0 0 6px; color:var(--soft); font-size:14px; }
+.callcard p:last-child { margin:0; }
+
+.shot img.crop { aspect-ratio:390 / 150; object-fit:cover; object-position:bottom; }
+.frame.crop { aspect-ratio:390 / 150; }
+.frame.crop .app { height:150px; }
+.same-grid { display:grid; grid-template-columns:240px 150px minmax(0,1fr); gap:24px; align-items:start; }
+.schema { display:flex; flex-direction:column; gap:8px; }
+.sch-title { font:600 13px/1 var(--f-label); letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+.sch-desk { display:grid; grid-template-columns:90px 1fr; grid-template-rows:130px 26px; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--panel); font-size:11.5px; }
+.sch-side { display:flex; flex-direction:column; gap:4px; padding:8px; border-right:1px solid var(--line); }
+.sch-side b { font:600 10px/1.2 var(--f-display); letter-spacing:.1em; color:var(--mark); }
+.sch-item { font-weight:600; } .sch-sub { color:var(--muted); padding-left:12px; font-size:10.5px; }
+.sch-main { display:grid; place-items:center; color:var(--muted); text-align:center; padding:6px; }
+.sch-bar { grid-column:1 / -1; display:grid; place-items:center; border-top:1px solid var(--line); color:var(--soft); }
+.sch-phone { display:grid; grid-template-rows:150px 28px 28px; width:150px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); font-size:11px; }
+.sch-card { margin:0 5px; display:grid; place-items:center; border:1px solid var(--line); border-radius:6px; color:var(--soft); }
+.sch-tabs { display:grid; grid-template-columns:repeat(3,1fr); place-items:center; font-weight:600; font-size:9px; white-space:nowrap; }
+.same-text p { margin:0 0 10px; color:var(--soft); max-width:62ch; }
+.same-text b { color:var(--ink); }
+
+.fp { flex:1; display:flex; flex-direction:column; align-items:center; padding:0 22px; }
+.fp-top { align-self:stretch; display:flex; align-items:center; gap:8px; height:56px; }
+.fp-close { width:40px; height:40px; display:grid; place-items:center; color:var(--a-text); margin-left:-8px; }
+.fp-close .ico { width:26px; height:26px; }
+.fp-label { font:500 14px/1 var(--f-display); letter-spacing:.12em; text-transform:uppercase; color:var(--a-muted); }
+.fp-cover { width:278px; height:278px; margin-top:6px; border-radius:8px; background:var(--a-tile); display:grid; place-items:center; font:400 64px/1 var(--f-display); color:var(--a-text); box-shadow:0 20px 50px rgba(0,0,0,.6); }
+.fp-title { margin-top:24px; font:500 26px/1.1 var(--f-display); letter-spacing:.03em; text-transform:uppercase; }
+.fp-from { margin-top:12px; color:var(--a-play); font-size:15px; }
+.fp-take { margin-top:10px; color:var(--a-muted); font-size:14px; }
+.seek { position:relative; align-self:stretch; height:48px; margin-top:44px; }
+.seek-hit { position:absolute; inset:0; border:1px dashed rgba(194,123,255,.55); border-radius:6px; }
+.seek-hit-label { position:absolute; right:6px; top:-17px; font:600 10.5px/1 var(--f-app); color:var(--a-pick); }
+.seek-track { position:absolute; left:0; right:0; top:21px; height:6px; border-radius:3px; background:#3a3a3e; overflow:hidden; }
+.seek-fill { display:block; height:100%; width:40%; background:linear-gradient(90deg,var(--a-play),var(--a-brand)); }
+.seek-knob { position:absolute; left:calc(40% - 14px); top:10px; width:28px; height:28px; border-radius:50%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.5); }
+.seek-bubble { position:absolute; left:calc(40% - 24px); top:-30px; width:48px; text-align:center; padding:4px 0; border-radius:6px; background:#fff; color:#111; font:600 13px/1 var(--f-app); }
+.fp-times { align-self:stretch; display:flex; justify-content:space-between; margin-top:2px; color:var(--a-muted); font:400 14px/1 var(--f-display); font-variant-numeric:tabular-nums; }
+.fp-transport { align-self:stretch; display:grid; grid-template-columns:repeat(5,1fr); place-items:center; margin-top:22px; }
+.fp-side { width:44px; height:44px; display:grid; place-items:center; color:var(--a-text); }
+.fp-ring { width:72px; height:72px; border-radius:50%; border:2px solid var(--a-play); display:grid; place-items:center; color:var(--a-play); }
+.fp-ring .ico { width:30px; height:30px; }
+.fp-lyrics { align-self:stretch; margin-top:26px; display:flex; flex-direction:column; gap:8px; color:var(--a-muted); font-size:15px; }
+.fp-lyrics b { font:500 13px/1 var(--f-display); letter-spacing:.1em; text-transform:uppercase; }
+
+@media (max-width: 1000px) {
+  .same-grid { grid-template-columns:auto auto; }
+  .same-text { grid-column:1 / -1; }
+  .pair-body { grid-template-columns:auto; }
+  .changes { grid-column:1 / -1; margin-top:0; }
+}
+@media (max-width: 660px) {
+  .shot img, .frame { --fw:168; }
+  .pair-body { gap:12px; }
+  .calls { grid-template-columns:minmax(0,1fr); }
+  .changes li { grid-template-columns:62px minmax(0,1fr); font-size:14px; }
+}
+
+.share-bg { background:radial-gradient(120% 60% at 20% 10%, #1a1024 0%, transparent 60%), radial-gradient(90% 50% at 80% 90%, #1d120c 0%, transparent 60%), var(--a-bg); }
+.sp { flex:1; display:flex; flex-direction:column; align-items:center; padding:28px 22px 0; }
+.sp-cover { width:300px; height:300px; border-radius:10px; background:linear-gradient(160deg,#2b3270 0%,#8d6f9e 55%,#f3c9d6 100%); box-shadow:0 22px 50px rgba(0,0,0,.6); flex:none; }
+.sp-title { margin-top:24px; font:500 28px/1.1 var(--f-display); letter-spacing:.04em; text-transform:uppercase; }
+.sp-sub { margin-top:8px; color:var(--a-muted); font-size:15px; }
+.sp-play { margin-top:22px; width:76px; height:76px; border-radius:50%; background:var(--a-play); color:#fff; display:grid; place-items:center; box-shadow:0 8px 24px rgba(242,57,44,.35); flex:none; }
+.sp-play .ico { width:34px; height:34px; }
+.sp-again { margin-top:22px; display:flex; align-items:center; gap:10px; height:56px; padding:0 24px 0 18px; border-radius:999px; background:var(--a-play); color:#fff; font:600 17px/1 var(--f-app); }
+.sp-again .ico { width:24px; height:24px; }
+.sp .seek { margin-top:26px; }
+.seek-hit { border:0 !important; }
+.sp-lyrics { align-self:stretch; margin-top:22px; display:flex; flex-direction:column; gap:6px; color:var(--a-text); font-size:15.5px; line-height:1.45; }
+.sp-lyrics b { font:500 13px/1 var(--f-display); letter-spacing:.1em; text-transform:uppercase; color:var(--a-muted); margin-bottom:6px; }
+.sp-foot { margin-top:auto; padding:16px 0 18px; color:var(--a-muted); font-size:12.5px; text-align:center; }
+.sp-foot span { color:#c79bd8; }
+.ah { display:flex; gap:16px; align-items:center; padding:28px 22px 14px; }
+.ah .cv { width:110px; height:110px; border-radius:6px; background:linear-gradient(160deg,#2b3270 0%,#8d6f9e 55%,#f3c9d6 100%); flex:none; }
+.ah h3 { margin:0 0 6px; font:600 26px/1.05 var(--f-display); letter-spacing:.07em; text-transform:uppercase; }
+.ah small { color:var(--a-muted); font-size:14.5px; }
+.tracks { padding:0 12px; }
+.trk { display:flex; align-items:center; gap:10px; height:46px; padding:0 14px; border-radius:4px; font-size:16px; }
+.trk + .trk { margin-top:2px; }
+.trk .d { margin-left:auto; color:var(--a-muted); font-size:13px; }
+.trk.on { color:#ff4d40; border:1px solid #c0306a; }
+.player .cv-mini { width:46px; height:46px; border-radius:3px; background:linear-gradient(160deg,#2b3270 0%,#8d6f9e 55%,#f3c9d6 100%); flex:none; }
+.dframe { --dw:560; display:block; width:100%; max-width:100%; aspect-ratio:1440 / 900; overflow:hidden; position:relative; border-radius:10px; box-shadow:var(--frame-shadow); border:1px solid var(--line); container-type:inline-size; }
+.dapp { position:absolute; top:0; left:0; width:1440px; height:900px; transform-origin:0 0; transform:scale(calc(var(--dw) / 1440)); display:grid; grid-template-columns:520px 1fr; gap:64px; padding:90px 160px 0; color:var(--a-text); font:15px/1.35 var(--f-app); }
+.dapp .sp-cover { width:520px; height:520px; }
+.dapp .col { display:flex; flex-direction:column; align-items:flex-start; padding-top:30px; }
+.dapp .sp-title { margin-top:0; font-size:46px; }
+.dapp .sp-sub { font-size:18px; }
+.dapp .sp-play { margin-top:30px; }
+.dapp .seek { align-self:stretch; margin-top:34px; }
+.dapp .fp-times { align-self:stretch; }
+.dapp .sp-lyrics { font-size:17px; }
+.dapp .sp-foot { position:absolute; left:0; right:0; bottom:22px; margin:0; padding:0; }
+.shot img.wide { width:100%; height:auto; aspect-ratio:1440 / 900; }
+.pair-body.wide { grid-template-columns:minmax(0,1fr); }
+.two { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.two > * { min-width:0; }
+@media (max-width: 1000px) { .two { grid-template-columns:minmax(0,1fr); } }
+.sp-cover.sm { width:220px; height:220px; }
+.mos { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:3px; overflow:hidden; border-radius:10px; box-shadow:0 22px 50px rgba(0,0,0,.6); background:none !important; }
+.mos i { display:block; }
+.sp-ctrls { margin-top:18px; display:flex; align-items:center; gap:14px; }
+.sp-ctrls .sp-play { margin-top:0; }
+.sp-skip { width:48px; height:48px; display:grid; place-items:center; color:var(--a-text); }
+.sp-skip .ico { width:26px; height:26px; }
+.sp-now { margin-top:14px; color:var(--a-muted); font-size:13.5px; }
+.sp-now b { color:var(--a-text); font-weight:600; }
+.sp .tracks { align-self:stretch; padding:0; margin-top:18px; }
+.trk .n { width:18px; color:var(--a-muted); font-size:13px; text-align:right; }
+.trk .tt { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.trk .tt small { color:var(--a-muted); font-size:12px; }
+.trk.on .tt small { color:#ff8f86; }
+.sp.scrolled { padding-top:6px; }
+.sp.scrolled .tracks { margin-top:0; }
+.sp-more { align-self:stretch; margin-top:12px; color:var(--a-muted); font-size:12.5px; text-align:center; }
+.stick { position:absolute; left:0; right:0; bottom:0; padding:0 0 6px; }
+.dapp.album { grid-template-columns:420px 1fr; }
+.dapp.album .col:first-child { align-items:center; padding-top:0; }
+.dapp.album .col:first-child .sp-cover { width:380px; height:380px; }
+.dapp.album .col:first-child .sp-title { margin-top:22px; font-size:38px; }
+.dapp.album .col:first-child .seek, .dapp.album .col:first-child .fp-times { align-self:stretch; }
+.dapp.album .tracks { align-self:stretch; padding:0; margin-top:20px; }
+.dapp.album .trk { height:56px; font-size:18px; }
+.rule-box { margin:22px 0 0; padding:14px 16px; border:1px solid var(--mark); border-radius:10px; background:var(--panel); max-width:78ch; }
+.rule-box b { color:var(--mark); }
+
+.sp-shuffle { color:var(--a-muted); }
+.sp-shuffle.on { color:var(--a-play); }
+/* #924 (operator 20.09.2026): the action colour is violet; red stays for failure and delete only. */
+.app, .dapp { --a-play:#a020f0; }
+.trk.on { color:#c27bff; border-color:#7a3fb0; }
+.trk.on .tt small { color:#b99ad6; }
+.sp-play { box-shadow:0 8px 24px rgba(160,32,240,.35); }
+.sp-shuffle.on { color:#c27bff; }
+
+.sp-tabs { align-self:stretch; display:grid; grid-template-columns:1fr 1fr; margin-top:16px; border-bottom:1px solid var(--a-border); }
+.sp-tabs span { text-align:center; padding:10px 0 9px; font:500 14px/1 var(--f-display); letter-spacing:.1em; text-transform:uppercase; color:var(--a-muted); }
+.sp-tabs span.on { color:var(--a-text); box-shadow:inset 0 -2px 0 var(--a-play); }
+.sp .sp-tabs + .tracks { margin-top:8px; }
+
+.trk-lyrics { display:flex; flex-direction:column; gap:3px; margin:2px 0 8px; padding:10px 14px 12px 42px; border-left:2px solid var(--a-play); background:rgba(160,32,240,.07); border-radius:0 0 4px 4px; font-size:14.5px; line-height:1.45; color:var(--a-text); }
+.trk-lyrics i { font-style:normal; color:var(--a-muted); font-size:12.5px; margin-top:4px; }
+.trk.on { border-radius:4px 4px 0 0; }
+.dapp.album { grid-template-columns:400px 1fr 1fr; gap:44px; padding:80px 90px 0; }
+.dapp.album .col.lyr { padding-top:0; }
+.dapp.album .lyr-head { font:500 15px/1 var(--f-display); letter-spacing:.1em; text-transform:uppercase; color:var(--a-muted); margin:6px 0 10px; }
+.dapp.album .lyr .trk-lyrics { padding:6px 0 0 16px; background:none; font-size:19px; gap:6px; }
+.dapp.album .lyr .trk-lyrics i { font-size:14px; }
+
+.trk-lyrics span { color:var(--a-muted); }
+.trk-lyrics span.lit { color:var(--a-text); font-weight:600; }
+.dapp.album .lyr .trk-lyrics span.lit { color:#fff; }
+.follow-pill { position:absolute; right:14px; bottom:88px; z-index:4; padding:7px 12px; border-radius:999px; background:#2a1442; color:#e9d5ff; font:600 13px/1 var(--f-app); box-shadow:0 6px 16px rgba(0,0,0,.5); }
+
+.sec-h { align-self:stretch; margin:18px 0 6px; font:500 13px/1 var(--f-display); letter-spacing:.1em; text-transform:uppercase; color:var(--a-muted); }
+.trk-lyrics.pv { align-self:stretch; margin:0; padding:2px 0 4px; border:0; background:none; font-size:15.5px; gap:4px; }
+.trk-lyrics.pv.tail { padding-top:14px; }
+.trk.on { border-radius:4px; }
+.sp.collapsed { padding-top:12px; }
+.mini-head { align-self:stretch; display:flex; gap:12px; align-items:center; }
+.mini-head .mh-cover { width:64px; height:64px; border-radius:6px; flex:none; }
+.mini-head b { display:block; font:500 20px/1.1 var(--f-display); letter-spacing:.04em; text-transform:uppercase; }
+.mini-head small { color:var(--a-muted); font-size:13px; }
+.sp.collapsed .sp-ctrls { margin-top:14px; }
+.dapp.album { grid-template-columns:380px 1fr 1fr; }
+.dapp.album .sec-h { font-size:15px; margin-top:6px; }
+
+.before-note { margin:10px 0 0; color:var(--soft); font-size:14px; }
+.freeze-note { margin:14px 0 0; color:var(--soft); font-size:14px; }
+.open-note { margin:22px 0 0; padding:10px 14px; border-left:4px solid var(--mark); background:var(--mark-soft); max-width:78ch; }
+.ruled { margin:16px 0 0; padding:0; list-style:none; display:grid; gap:10px; max-width:100ch; }
+.ruled li { display:grid; grid-template-columns:32px minmax(0,1fr); gap:10px; font-size:15px; }
+.ruled li > b { font:600 18px/1.4 var(--f-display); color:var(--mark); }
+.ruled time { display:block; color:var(--muted); font-size:13px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M5 19h3.5L19 8.5 15.5 5 5 15.5z"/><path d="M13.5 7l3.5 3.5"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 9.5V19h11V9.5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6" height="6" rx="1"/><rect x="13.5" y="4.5" width="6" height="6" rx="1"/><rect x="4.5" y="13.5" width="6" height="6" rx="1"/><rect x="13.5" y="13.5" width="6" height="6" rx="1"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 17.5V6l10-2v11.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M4 7h3.5c4 0 5 10 9 10H20M4 17h3.5c1.6 0 2.7-1.6 3.6-3.6M13 10.6C13.9 8.6 15 7 16.5 7H20M17.5 4.5L20 7l-2.5 2.5M17.5 14.5L20 17l-2.5 2.5"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 6l-9 6 9 6z"/><rect x="5.8" y="6" width="2.2" height="12" rx=".6"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 6l9 6-9 6z"/><rect x="16" y="6" width="2.2" height="12" rx=".6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-replay" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2.1-5"/><path d="M5 4.5V8h3.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+</svg>
+
+
+<main class="wrap">
+  <div class="eyebrow">Hallucinai · picture owner of the shared pages (#1374) · blessed 15.10.2026</div>
+  <h1>Every shared page is the player</h1>
+  <p class="lead">Left: today, in real screenshots of shared links opened signed out on a phone (test album "Glass Rivers"). Right: the same moment after the change. Under each pair is the exact list of changes.</p>
+  <p class="freeze-note">Blessed 15.10.2026, frozen 16.10.2026 (#1432). The before screenshots are dropped; the blessed artifact keeps them. The after frames, change lists and the order are unchanged. [Frozen copy: the 'Left' screenshots the lede names are not in this file; read each section as the after frame with its change list.]</p>
+  <p class="rule-box"><b>One rule for every shared link:</b> the page is the player for what you shared. At the top it is always the same: the big cover, the title, a big ▶ and the slider. It is the app's own full player, in the same order everywhere: cover, title, controls and slider; then the lyrics of the song now playing, which follow along; then, for an album or a playlist, its songs. A shared song simply has no song list. Albums and playlists add shuffle and ⏮ ⏭. Nothing is hidden behind a second player, and there is no second place for lyrics.</p>
+  <ul class="toc">
+    <li><a href="#open">1 · Opening a shared song</a></li>
+    <li><a href="#playing">2 · While it plays</a></li>
+    <li><a href="#end">3 · At the end</a></li>
+    <li><a href="#album">4 · Opening a shared album</a></li>
+    <li><a href="#scroll">5 · A long album, scrolled</a></li>
+    <li><a href="#lyrics">5b · Lyrics while an album plays</a></li>
+    <li><a href="#playlist">6 · A shared playlist</a></li>
+    <li><a href="#desk">7 · Desktop</a></li>
+    <li><a href="#ruled">Ruled lines</a></li>
+  </ul>
+  <p class="open-note"><b>Open:</b> Collection h1: decided at slice 6 against this picture.</p>
+
+  <section class="pair" id="open">
+    <div class="pair-head"><h2>1 · Opening a shared song or take</h2><span class="taps">taps to the full player: <b>2 → 0</b></span></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body">
+      <figure class="shot after"><figcaption>After · just opened</figcaption><div class="frame" data-after="song-open"></div></figure>
+      <ul class="changes">
+        <li><span class="chip moved">Changed</span><span>The small header with a one-row list becomes <b>the full player as the page</b>: big cover, title, album and artist, a big ▶, the slider and the lyrics. The person came for exactly this song and now sees all of it at once.</span></li>
+        <li><span class="chip gone">Gone</span><span>The one-row track list, since one song needs no list. Also ⏮, ⏭, shuffle and Queue, since a single song has nothing to skip to. What remains are ▶ and the slider.</span></li>
+        <li><span class="chip same">Same</span><span>The footer: Powered by Hallucinai · Impressum · Datenschutz · Nutzungsbedingungen.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="playing">
+    <div class="pair-head"><h2>2 · While it plays</h2><span class="taps">taps to see this: <b>2 → 1</b></span></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body">
+      <figure class="shot after"><figcaption>After · after Play</figcaption><div class="frame" data-after="song-playing"></div></figure>
+      <ul class="changes">
+        <li><span class="chip moved">Changed</span><span>Today this view needs Play and then a tap on the bar, which nothing marks, so most people never see it. After the change it is simply the page, and ▶ turns into pause.</span></li>
+        <li><span class="chip gone">Gone</span><span>The bar underneath the full player: there is nothing else on the page to go back to.</span></li>
+        <li><span class="chip same">Same</span><span>The lyrics, and the slider as in the app: 48 px, and a tap anywhere jumps there.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="end">
+    <div class="pair-head"><h2>3 · At the end</h2></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body">
+      <figure class="shot after"><figcaption>After · after the last second</figcaption><div class="frame" data-after="song-ended"></div></figure>
+      <ul class="changes">
+        <li><span class="chip moved">Changed</span><span>Today the song stops and the slider jumps back to 0:00, so nothing shows that it ended. After the change, the big ▶ becomes <b>↻ Play again</b> and the slider stays at the end.</span></li>
+        <li><span class="chip same">Rights</span><span>Nothing else appears, not even "more from this album", because the person may see only what you shared. If you share the whole album, that link shows the album.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="album">
+    <div class="pair-head"><h2>4 · Opening a shared album</h2><span class="taps">same top as a shared song</span></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body">
+      <figure class="shot after"><figcaption>After · just opened</figcaption><div class="frame" data-after="album-open"></div></figure>
+      <ul class="changes">
+        <li><span class="chip moved">Changed</span><span>The top looks <b>like a shared song</b>: big cover, title, the big ▶ and the slider, here with shuffle and ⏮ ⏭, like the app's full player, because an album has songs to skip between.</span></li>
+        <li><span class="chip new">New</span><span>Song 1 stands ready with its lyrics before anything plays. Below the lyrics come the album's songs, numbered, with their length. A tap on a song plays it.</span></li>
+        <li><span class="chip gone">Gone</span><span>The separate full player that a bar at the bottom opened. The page is the player now.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="scroll">
+    <div class="pair-head"><h2>5 · A long album, scrolled down</h2></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body">
+      <figure class="shot after"><figcaption>After · scrolled down while song 2 plays</figcaption><div class="frame" data-after="album-scrolled"></div></figure>
+      <ul class="changes">
+        <li><span class="chip new">New</span><span>Once the big player scrolls out of view, a slim bar stays at the bottom: cover, song, "2 of 5", pause and ⏭. A tap on it scrolls back up to the big player, so nothing opens on top.</span></li>
+        <li><span class="chip new">New</span><span>Scrolled past the lyrics into the songs: the playing song is marked, and <b>↓ Follow</b> stands ready because you left the following lyrics.</span></li>
+        <li><span class="chip moved">Changed</span><span>The bar's look is the same card as in your app. On a shared page it has no handle, because it opens nothing; it only brings you back up.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="lyrics">
+    <div class="pair-head"><h2>5b · Lyrics while an album plays</h2><span class="taps">today: only in the hidden full player · after: <b>right under the player</b></span></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body">
+      <figure class="shot after"><figcaption>After · song 2 playing, scrolled a little</figcaption><div class="frame" data-after="album-lyrics"></div></figure>
+      <ul class="changes">
+        <li><span class="chip moved">Changed</span><span>The lyrics always stand <b>right under the player</b>, the same place as in the app's full player and on a shared song. When the next song starts, its lyrics replace the old ones. No tab, nothing opens in the list.</span></li>
+        <li><span class="chip new">New</span><span>On the phone, the big cover shrinks into a small header as you scroll down, so the lyrics and the songs get the room. No switch is needed.</span></li>
+        <li><span class="chip new">New</span><span>The lyrics follow the singing: the sung line lights up. Scroll yourself and following stops; <b>↓ Follow</b> brings it back (see 5).</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="playlist">
+    <div class="pair-head"><h2>6 · A shared playlist</h2></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body">
+      <figure class="shot after"><figcaption>After · while song 2 plays</figcaption><div class="frame" data-after="playlist-playing"></div></figure>
+      <ul class="changes">
+        <li><span class="chip moved">Changed</span><span>The same page as an album. The cover is a mosaic of the songs' album covers, and each song names its album underneath.</span></li>
+        <li><span class="chip moved">Fixed</span><span>The player shows each song's album cover. Today it shows an empty grey square (real bug, seen 15.10.2026).</span></li>
+        <li><span class="chip same">At the end</span><span>Album and playlist end like a song: the big ▶ becomes ↻ Play again, starting at song 1.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="desk">
+    <div class="pair-head"><h2>7 · Desktop: a shared song and a shared album</h2></div>
+    <p class="before-note">Before: see the change list; screenshots in the blessed artifact.</p>
+    <div class="pair-body wide">
+      <div class="two">
+        <figure class="shot after"><figcaption>After · a song, playing</figcaption><div class="dframe" data-desk="song"></div></figure>
+        <figure class="shot after"><figcaption>After · an album, playing</figcaption><div class="dframe" data-desk="album"></div></figure>
+      </div>
+      <ul class="changes">
+        <li><span class="chip moved">Changed</span><span>The same rule in two columns. A song puts the big cover on the left and title, ▶, slider and lyrics on the right. An album uses three columns: cover and player on the left, the playing song's lyrics in the middle, the songs on the right. No bar at the bottom.</span></li>
+        <li><span class="chip gone">Gone</span><span>The bar with its small "NOW PLAYING ⌃" pill (107 × 30 px), today the only way into the full player.</span></li>
+        <li><span class="chip moved">Fixed</span><span>After the footer link, the browser tab still says "Neon Tide — Mara Lind" on the sign-in page (real bug, seen 15.10.2026).</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="pair" id="ruled">
+    <div class="pair-head"><h2>Ruled lines (#1374)</h2></div>
+  <ol class="ruled">
+    <li><b>1</b><span>[Song page] A shared song or take opens as the player: big cover, title, album and artist, a big ▶, the slider, and the lyrics right under it. It has no song list and no ⏮ ⏭ or shuffle. Not: A small header with a one-row list, and the player hidden behind a bar. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>2</b><span>[Collection page] A shared album or playlist opens as the same player view: song 1 ready with its lyrics, shuffle ⏮ ▶ ⏭, the slider, and the album's songs below the lyrics. Not: A list with a bar that hides the real player. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>3</b><span>[Lyrics] The lyrics of the song now playing always stand right under the player. When the next song starts, its lyrics replace the old ones. Not: Lyrics in tabs, or opening inside the list. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>4</b><span>[Lyrics] The sung line lights up and stays in view. Scrolling the lyrics by hand pauses this, and '↓ Follow' brings it back. Takes without timing show plain text. Not: The text jumps back while you read. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>5</b><span>[Songs] A tap on a song in the list plays it, and the playing song is marked. Not: A tap that opens something else. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>6</b><span>[Scroll] On the phone the big cover shrinks into a small header as you scroll. Once the player is out of view, a slim bar (the app's card, without a handle) stays at the bottom, and a tap on it scrolls back up. Not: Controls you cannot reach without scrolling all the way up. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>7</b><span>[End] At the end the big ▶ becomes '↻ Play again'. For an album or playlist it starts again at song 1. Not: The slider jumps to 0:00 and nothing says it ended. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>8</b><span>[Rights] (Needs your spoken yes: rights.) A shared link shows only what you shared: no other songs or albums, no 'more from', no library, no editing, no co-writer, no account details. Not: 'More from Glass Rivers' under a shared song. Anmerkung: operator 15.10.2026, spoken: "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>9</b><span>[Rights] A link you stopped sharing, or whose song was deleted, says so in one line with a way back, as today. Not: A broken player or an error page. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>10</b><span>[Playlist] A shared playlist shows the album cover of each song: a mosaic at the top, and the playing song's cover in the player. Not: An empty grey square. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>11</b><span>[Desktop] On the desktop a shared song uses two columns (cover | player and lyrics), and an album or playlist uses three (cover and player | lyrics | songs). There is no bar at the bottom. Not: A small header with a bar and a 107 × 30 px pill. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>12</b><span>[Colour] Play and the marks use the violet action colour (#924). Red stays only for failure. Not: A red Play. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>13</b><span>[One owner] Shared pages use the app's own player building blocks (the full player, lyrics, card, one song-row owner, one legal-links owner). They import nothing from the signed-in app, and the boundary test stays green. Not: A second, hand-built player on shared pages. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>14</b><span>[Playable] A shared album or playlist lists only songs that can be played. Not: A row that fails when tapped. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>15</b><span>[Tab title] After the footer link, the sign-in page shows its own tab title. Not: 'Neon Tide — Mara Lind' on the sign-in page. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+    <li><b>16</b><span>[Scale] An album with 20 or more songs and long lyrics stays easy to use: the slim bar keeps the controls reachable, and every song can be reached by scrolling. Not: Controls lost off-screen. Anmerkung: operator 15.10.2026: defaults kept ("isnt it clear?"), rule 8 confirmed "ja logo"<time>ruled 2026-10-15</time></span></li>
+  </ol>
+  </section>
+</main>
+
+
+<script>
+const ico = (id, cls = '') => `<svg class="ico ${cls}"><use href="#i-${id}"/></svg>`;
+const LYR = '<div class="sp-lyrics"><b>Lyrics</b><span>[Verse 1]</span><span>Streetlights hum a borrowed tune</span><span>Your jacket smells of rain and June</span><span>We count the cars like falling stars</span></div>';
+const FOOT = '<div class="sp-foot">Powered by <span>Hallucinai</span> · Impressum · Datenschutz · Nutzungsbedingungen</div>';
+const ALBUM = ['Neon Tide', 'Paper Lanterns', 'Glass Harbor', 'Static Hearts', 'Last Ferry'];
+const PLAYLIST = [['Neon Tide', 'Glass Rivers', 'gr'], ['Northern Light', 'Cold Harbour', 'ch'], ['Velvet Road', 'Broken Lanterns', 'bl']];
+const COVERS = {
+  gr: 'linear-gradient(160deg,#2b3270 0%,#8d6f9e 55%,#f3c9d6 100%)',
+  ch: 'linear-gradient(160deg,#0f3b4a 0%,#2f7f86 60%,#bfe6d8 100%)',
+  bl: 'linear-gradient(160deg,#4a1f0f 0%,#c0632b 55%,#f5d38a 100%)',
+};
+const cover = (cls, key = 'gr') => `<div class="${cls}" style="background:${COVERS[key]}"></div>`;
+const mosaic = cls => `<div class="${cls} mos">${['gr', 'ch', 'bl', 'gr'].map(k => `<i style="background:${COVERS[k]}"></i>`).join('')}</div>`;
+const controls = (playing, collection) => collection
+  ? `<div class="sp-ctrls"><span class="sp-skip sp-shuffle${playing ? ' on' : ''}" aria-label="Shuffle">${ico('shuffle')}</span><span class="sp-skip">${ico('prev', 'fill')}</span><span class="sp-play">${ico(playing ? 'pause' : 'play', 'fill')}</span><span class="sp-skip">${ico('next', 'fill')}</span><span class="sp-skip"></span></div>`
+  : `<span class="sp-play">${ico(playing ? 'pause' : 'play', 'fill')}</span>`;
+const now = (title, pos, total) => `<div class="sp-now">${title ? `Now playing · <b>${title}</b> · ${pos} of ${total}` : `${total} songs · 15 min`}</div>`;
+const LYRICS = {
+  'Neon Tide': ['[Verse 1]', 'Streetlights hum a borrowed tune', 'Your jacket smells of rain and June', 'We count the cars like falling stars', 'And call the empty highway ours'],
+  'Paper Lanterns': ['[Verse 1]', 'Paper lanterns on the water', 'Carry wishes we forgot', 'Every light a little louder', 'Than the dark it never caught', '[Chorus]', 'Let them drift, let them drift'],
+  'Northern Light': ['[Verse 1]', 'North of every map we folded', 'There’s a light that keeps its word', 'Cold enough to make it honest', 'Loud enough to still be heard'],
+};
+const inlineLyrics = (title, follow = true) => LYRICS[title] ? `<div class="trk-lyrics">${LYRICS[title].map((l, i) => l.startsWith('[') ? `<i>${l}</i>` : `<span class="${i === 2 ? 'lit' : ''}">${l}</span>`).join('')}${follow ? '' : '<span class="follow">↓ Follow</span>'}</div>` : '';
+const trackList = (rows, current) => `<div class="sec-h">Songs</div><div class="tracks">${rows.map(([t, sub], i) => `<div class="trk${i === current ? ' on' : ''}">${i === current ? '<span class="eq"><i></i><i></i><i></i></span>' : `<span class="n">${i + 1}</span>`}<span class="tt">${t}${sub ? `<small>${sub}</small>` : ''}</span><span class="d">3:00</span></div>`).join('')}</div>`;
+const lyricsBlock = (title, follow = true) => `<div class="sec-h">Lyrics · ${title}</div>${inlineLyrics(title, follow).replace('trk-lyrics', 'trk-lyrics pv')}`;
+const songHead = `${cover('sp-cover')}<div class="sp-title">Neon Tide</div><div class="sp-sub">Glass Rivers · Mara Lind</div>`;
+const S = {
+  'song-open': () => `<div class="sp share-bg">${songHead}${controls(false, false)}<div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:0%"></span></span><span class="seek-knob" style="left:calc(0% - 14px)"></span></div><div class="fp-times"><span>0:00</span><span>3:00</span></div>${LYR}${FOOT}</div>`,
+  'song-playing': () => `<div class="sp share-bg">${songHead}${controls(true, false)}<div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:30%"></span></span><span class="seek-knob" style="left:calc(30% - 14px)"></span></div><div class="fp-times"><span>0:54</span><span>3:00</span></div>${LYR}${FOOT}</div>`,
+  'song-ended': () => `<div class="sp share-bg">${songHead}<span class="sp-again">${ico('replay')}Play again</span><div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:100%"></span></span><span class="seek-knob" style="left:calc(100% - 14px)"></span></div><div class="fp-times"><span>3:00</span><span>3:00</span></div>${LYR}${FOOT}</div>`,
+  'album-open': () => `<div class="sp share-bg">${cover('sp-cover sm')}<div class="sp-title">Glass Rivers</div><div class="sp-sub">Mara Lind · Album</div>${now('Neon Tide', 1, 5)}${controls(false, true)}<div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:0%"></span></span><span class="seek-knob" style="left:calc(0% - 14px)"></span></div><div class="fp-times"><span>0:00</span><span>3:00</span></div>${lyricsBlock('Neon Tide')}${trackList(ALBUM.map(t => [t]), -1)}${FOOT}</div>`,
+  'album-lyrics': () => `<div class="sp share-bg collapsed"><div class="mini-head">${cover('mh-cover')}<div><b>Paper Lanterns</b><small>Glass Rivers · 2 of 5</small></div></div>${controls(true, true)}<div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:30%"></span></span><span class="seek-knob" style="left:calc(30% - 14px)"></span></div><div class="fp-times"><span>0:54</span><span>3:00</span></div>${lyricsBlock('Paper Lanterns')}${trackList(ALBUM.map(t => [t]), 1)}${FOOT}</div>`,
+  'album-scrolled': () => `<div class="sp share-bg scrolled">${inlineLyrics('Paper Lanterns', false).replace('trk-lyrics', 'trk-lyrics pv tail')}${trackList(ALBUM.map(t => [t]), 1)}${FOOT}</div><span class="follow-pill">↓ Follow</span>
+     <div class="stick"><div class="player"><span class="cv-mini"></span><span class="meta"><b>Paper Lanterns</b><small>Glass Rivers · 2 of 5</small></span><span class="pp">${ico('pause', 'fill')}</span><span class="skip">${ico('next', 'fill')}</span><span class="line"></span></div></div>`,
+  'playlist-playing': () => `<div class="sp share-bg">${mosaic('sp-cover sm')}<div class="sp-title">Late Drive</div><div class="sp-sub">Playlist · 3 songs</div>${now('Northern Light', 2, 3)}${controls(true, true)}<div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:30%"></span></span><span class="seek-knob" style="left:calc(30% - 14px)"></span></div><div class="fp-times"><span>0:54</span><span>3:00</span></div>${lyricsBlock('Northern Light')}${trackList(PLAYLIST.map(([t, a]) => [t, a]), 1)}${FOOT}</div>`,
+};
+document.querySelectorAll('[data-after]').forEach(el => { el.innerHTML = `<div class="app">${S[el.dataset.after]()}</div>`; });
+const DESK = {
+  song: () => `${cover('sp-cover')}<div class="col"><div class="sp-title">Neon Tide</div><div class="sp-sub">Glass Rivers · Mara Lind</div>${controls(true, false)}<div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:30%"></span></span><span class="seek-knob" style="left:calc(30% - 14px)"></span></div><div class="fp-times"><span>0:54</span><span>3:00</span></div>${LYR}</div>`,
+  album: () => `<div class="col">${cover('sp-cover')}<div class="sp-title">Glass Rivers</div><div class="sp-sub">Mara Lind · Album</div>${now('Paper Lanterns', 2, 5)}${controls(true, true)}<div class="seek"><span class="seek-hit"></span><span class="seek-track"><span class="seek-fill" style="width:30%"></span></span><span class="seek-knob" style="left:calc(30% - 14px)"></span></div><div class="fp-times"><span>0:54</span><span>3:00</span></div></div><div class="col lyr"><div class="lyr-head">Lyrics · Paper Lanterns</div>${inlineLyrics('Paper Lanterns')}</div><div class="col">${trackList(ALBUM.map(t => [t]), 1)}</div>`,
+};
+document.querySelectorAll('[data-desk]').forEach(el => {
+  el.innerHTML = `<div class="dapp share-bg ${el.dataset.desk}">${DESK[el.dataset.desk]()}${FOOT}</div>`;
+  const fit = () => el.style.setProperty('--dw', String(el.clientWidth));
+  fit(); if (window.ResizeObserver) new ResizeObserver(fit).observe(el);
+});
+</script>
+</body>
+</html>
