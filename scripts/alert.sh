@@ -71,8 +71,8 @@ CURL_CREDENTIALS="$(curl_credentials_config "$SMTP_USER" "$SMTP_PASSWORD")" || {
     exit 1
 }
 
-# `wait "$!"` collects the credential write: if it did not reach the end
-# (curl gone before reading it), the send does not count as sent.
+# `wait "$!"` collects the credential write: a write that failed (curl closed
+# the pipe first) does not count as sent.
 if ! CURL_OUTPUT="$(curl --silent --show-error --fail \
     --ssl-reqd \
     --url "smtp://${SMTP_HOST}:${SMTP_PORT}" \

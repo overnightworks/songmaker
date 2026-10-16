@@ -31,9 +31,10 @@ VALID_ENV = {
     "SMTP_PASSWORD": "correct-horse-battery-staple",
 }
 
-# Characters that are glob syntax to the shell: a redaction that treats the
-# password as a pattern instead of as text leaves such a password readable.
-GLOB_PASSWORDS = ["dummy[x]pw", "star*pw", "what?pw"]
+# Passwords the shell reads as glob syntax (a bracket expression, an escaping
+# backslash): a redaction that treats the password as a pattern instead of as
+# text leaves each of them readable.
+GLOB_PASSWORDS = ["dummy[x]pw", "digits[0-9]pw", "back\\slash"]
 
 
 def _write_env_file(path: Path, values: dict[str, str]) -> Path:
@@ -348,8 +349,8 @@ def test_failing_credentials_producer_never_reports_sent(
     assert not args_file.exists(), "curl must not start without its credentials"
 
 
-def test_credentials_that_curl_never_read_do_not_count_as_sent(tmp_path: Path) -> None:
-    # Larger than a pipe holds, so the write only finishes if curl reads it.
+def test_failed_credential_write_does_not_count_as_sent(tmp_path: Path) -> None:
+    # Larger than a pipe holds, so the write fails once curl exits unread.
     password_larger_than_a_pipe_buffer = "x" * 200_000
 
     result = _run_alert(
