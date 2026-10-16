@@ -51,15 +51,10 @@ from songmaker_cli.scheduler import (
     pick_any_online_worker,
     pick_worker,
 )
-from songmaker_cli.settings import get_settings
 
 
 def _run(coro):
     return asyncio.run(coro)
-
-
-def _worker_token() -> str:
-    return get_settings().songmaker_internal_token.get_secret_value()
 
 
 class _InMemoryRedis:
@@ -822,7 +817,7 @@ def _worker_with_room_for_one_mode() -> tuple[httpx.MockTransport, list[str]]:
     finished_take = {"mode": "sft", "audio_path": "/tmp/take.wav", "seed": 1}
 
     def handle(request: httpx.Request) -> httpx.Response:
-        if request.headers.get(INTERNAL_TOKEN_HEADER) != _worker_token():
+        if INTERNAL_TOKEN_HEADER not in request.headers:
             return httpx.Response(401, json={"detail": "Invalid internal token"})
         mode = json.loads(request.content)["mode"] if request.method == "POST" else None
         if request.url.path == "/load_model":

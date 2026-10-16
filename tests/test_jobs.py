@@ -79,10 +79,6 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _worker_token() -> str:
-    return get_settings().songmaker_internal_token.get_secret_value()
-
-
 def _make_dto(
     seed: int = 42,
     audio_path: str = "/tmp/fake.wav",
@@ -2714,7 +2710,8 @@ def test_load_model_on_worker_success(seeded_db) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0] == "http://acestep-worker:8001/load_model"
     assert kwargs["json"] == {"mode": "sft"}
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
+    token = get_settings().songmaker_internal_token.get_secret_value()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == token
 
 
 def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
@@ -2971,7 +2968,8 @@ def test_download_model_on_worker_happy_path(seeded_db) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/download_model")
     assert kwargs["json"] == {"mode": "sft"}
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
+    token = get_settings().songmaker_internal_token.get_secret_value()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == token
 
 
 async def _instant_sleep(_seconds: float) -> None:

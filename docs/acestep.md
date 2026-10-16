@@ -435,7 +435,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `WORKER_PORT` | 8001 | Port the worker's FastAPI app listens on |
 | `REDIS_URL` | (required) | Redis URL for heartbeat publishing |
 | `CONTROL_PLANE_URL` | None | Songmaker web URL for worker registration. If unset, registration is skipped. |
-| `SONGMAKER_INTERNAL_TOKEN` | None | Shared secret for control-plane auth. Empty/None disables registration. |
+| `SONGMAKER_INTERNAL_TOKEN` | (required, non-empty) | Shared secret for control-plane auth. The worker refuses to start without it, and every route except `/health` checks it in the `X-Internal-Token` header (see "How Songmaker Uses ACE-Step"). |
 | `VRAM_BUDGET_GB` | 24.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. Lower values (e.g. 22 on a 24 GB card) cause ACE-Step to auto-fall-back to CPU VAE decode during xl-turbo generation, which is ~100x slower than GPU — raise the budget if the admin panel shows very slow xl-turbo generations at ~0% GPU util. |
 | `GPU_ID` | None | CUDA device index passed deterministically to the inner process as `CUDA_VISIBLE_DEVICES` |
 | `NVIDIA_VISIBLE_DEVICES` | Compose: `0` | Host GPU exposed to the worker by the explicit NVIDIA container runtime |
