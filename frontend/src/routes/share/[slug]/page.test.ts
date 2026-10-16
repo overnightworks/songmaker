@@ -185,7 +185,7 @@ describe('shared album page', () => {
 			})
 		});
 		await vi.waitFor(() => {
-			expect(target.querySelector('.header-title')?.textContent).toBe('Recovered album');
+			expect(target.querySelector('h1')?.textContent).toBe('Recovered album');
 		});
 	});
 
@@ -202,7 +202,7 @@ describe('shared album page', () => {
 		document.body.appendChild(target);
 		component = mount(Page, { target });
 
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 		expect(target.textContent).not.toContain('Unpicked');
 	});
 
@@ -213,13 +213,12 @@ describe('shared album page', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[0].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		expect(audioPlayer.current?.lyrics).toBeNull();
 
-		document.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await vi.waitFor(() => expect(document.querySelector('.lyrics-synced')).not.toBeNull());
 		audioPlayer.currentTime = 7.5;
 		await tick();
@@ -237,15 +236,14 @@ describe('shared album page', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track-row')[1].click();
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[1].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		audio.fire('ended');
 		await tick();
-		document.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 
-		const rows = () => target.querySelectorAll<HTMLButtonElement>('.track-row');
+		const rows = () => target.querySelectorAll<HTMLButtonElement>('.queue-row');
 		expect(rows()[1].classList).toContain('current');
 		await vi.waitFor(() => expect(document.querySelector('.play-again')).not.toBeNull());
 		expect(document.querySelector('.play-again')?.textContent).toContain('Play again');
@@ -272,10 +270,10 @@ describe('shared album page', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelector('.header-cover img')).not.toBeNull());
-		const img = target.querySelector<HTMLImageElement>('.header-cover img');
+		await vi.waitFor(() => expect(target.querySelector('.cover-art img')).not.toBeNull());
+		const img = target.querySelector<HTMLImageElement>('.cover-art img');
 		expect(img?.getAttribute('src')).toContain('variant=detail');
-		expect(img?.getAttribute('alt')).toBe('Album Shared album');
+		expect(img?.getAttribute('alt')).toBe('');
 	});
 
 	it('hides a broken cover instead of leaving a dead image', async () => {
@@ -293,33 +291,24 @@ describe('shared album page', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelector('.header-cover img')).not.toBeNull());
+		await vi.waitFor(() => expect(target.querySelector('.cover-art img')).not.toBeNull());
 		target.querySelector('img')?.dispatchEvent(new Event('error'));
 		await tick();
-		expect(target.querySelector('.header-cover img')).toBeNull();
-		expect(target.querySelector('.header-title')?.textContent).toBe('Shared album');
+		expect(target.querySelector('.cover-art img')).toBeNull();
+		expect(target.querySelector('h1')?.textContent).toBe('Shared album');
 	});
 
-	it('opens Now Playing showing the manifest queue', async () => {
+	it('1374_rule_2 opens the player page with its manifest queue', async () => {
 		mockFetch
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[0].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
-
-		target.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
-		await tick();
-		// jsdom's stubbed matchMedia matches every query, so Now Playing always
-		// renders its stacked (mobile) layout here — open the queue sheet to
-		// reach the same NowPlayingQueue content the desktop layout renders
-		// inline.
-		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
-		await tick();
 
 		expect(target.querySelector('.now-playing')).not.toBeNull();
 		const queueTitles = Array.from(target.querySelectorAll('.queue-title')).map(
@@ -335,40 +324,35 @@ describe('shared album page', () => {
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[0].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
-		target.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await tick();
-		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
 		await tick();
 
 		expect(target.querySelector('.cover-meta')?.textContent).not.toContain('Take');
 		expect(target.querySelectorAll('.queue-take')).toHaveLength(0);
 	});
 
-	// The app collapses --player-height to 0 under its full Now Playing surface
-	// (issue #140). A share listener keeps their bar and the room it takes:
-	// the public page has no docked panel and no second player to reconcile.
-	it('keeps the transport bar, and the room it takes, under its Now Playing surface', async () => {
+	it('1374_rule_2 keeps the player in the page without a modal or an always-visible bar', async () => {
 		mockFetch
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album })
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 
-		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[0].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
-		target.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await tick();
 
 		const surface = target.querySelector('.now-playing');
 		expect(surface).not.toBeNull();
-		expect(surface?.getAttribute('aria-modal')).toBe('true');
-		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(surface?.classList.contains('page')).toBe(true);
+		expect(surface?.getAttribute('aria-modal')).toBeNull();
+		expect(target.querySelector('.player-bar')).toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBeUndefined();
 	});
 });

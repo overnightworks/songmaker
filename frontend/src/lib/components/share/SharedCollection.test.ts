@@ -4,7 +4,9 @@ import {
 	PLAYING_MARK_LABEL,
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
+	TRANSPORT_PLAY_LABEL,
+	SONG_NEXT_LABEL,
+	SONG_PREVIOUS_LABEL
 } from '$lib/constants';
 import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '$lib/constants/now-playing';
 import { SHARE_NO_AUDIO_NOTICE } from '$lib/constants/share';
@@ -142,18 +144,21 @@ describe('SharedCollection page root', () => {
 	});
 
 	it('shows an album cover on a shared album and falls back cleanly without one', async () => {
-		const withCover = await renderShare({ cover: DETAIL_COVER });
-		const image = withCover.querySelector<HTMLImageElement>('.header-cover img');
+		const withCover = await renderShare({
+			cover: DETAIL_COVER,
+			tracks: [sharedTrack('e1', 'Tide')]
+		});
+		const image = withCover.querySelector<HTMLImageElement>('.cover-art img');
 		expect(image?.src).toContain('/covers/detail.jpg');
-		expect(image?.alt).toBe('Album Open Windows');
+		expect(image?.alt).toBe('');
 
 		if (mounted) await unmount(mounted);
 		mounted = undefined;
 		withCover.remove();
 
-		const withoutCover = await renderShare();
-		expect(withoutCover.querySelector('.header-cover img')).toBeNull();
-		expect(withoutCover.querySelector('.header-cover-initials')?.textContent).toBe('OW');
+		const withoutCover = await renderShare({ tracks: [sharedTrack('e1', 'Tide')] });
+		expect(withoutCover.querySelector('.cover-art img')).toBeNull();
+		expect(withoutCover.querySelector('h1')?.textContent).toBe('Open Windows');
 	});
 
 	it('shows a shared playlist upload, mosaic, and fallback through the shared cover tile', async () => {
@@ -282,11 +287,11 @@ describe('SharedCollection track rows', () => {
 		}
 	);
 
-	it('dims the header play circle of a share without audio', async () => {
-		const target = await renderShare();
+	it('dims the header play circle of a playlist without audio', async () => {
+		const target = await renderShare({ kind: 'playlist' });
 
 		expect(
-			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')).disabled
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')).disabled
 		).toBe(true);
 	});
 });
@@ -481,4 +486,117 @@ describe('SharedCollection player page (#1391)', () => {
 			expect(target.textContent).not.toContain('No lyrics');
 		}
 	);
+});
+
+describe('Shared album player page', () => {
+	it('1374_rule_2 A6 shows No lyrics for the staged first song', async () => {
+		stubLayout(true);
+		const target = await renderShare({ tracks: [sharedTrack('first', 'Tide')] });
+		expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
+		expect(target.querySelector('.lyrics-heading')?.textContent).toBe('Lyrics · Tide');
+		expect(target.querySelector('.lyrics-empty')?.textContent).toBe('No lyrics');
+		expect(target.querySelector('.now-playing-line')?.textContent).toBe(
+			'Now playing · Tide · 1 of 1'
+		);
+		expect(audioPlayer.current).toBeNull();
+	});
+
+	it('1374_rule_5 B5 lists and stages only playable songs', async () => {
+		stubLayout(false);
+		const target = await renderShare({
+			tracks: [
+				sharedTrack('silent', 'Unpicked', { audioUrl: null, lyrics: 'Private words' }),
+				sharedTrack('first', 'Tide', { lyrics: 'Public words' })
+			]
+		});
+		expect(
+			Array.from(target.querySelectorAll('.queue-title')).map((row) => row.textContent)
+		).toEqual(['Tide']);
+		expect(target.querySelector('.np-page-lyrics')?.textContent).toContain('Public words');
+		expect(target.textContent).not.toContain('Unpicked');
+		expect(target.textContent).not.toContain('Private words');
+		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		await tick();
+		expect(audioPlayer.current?.songTitle).toBe('Tide');
+	});
+
+	it.each([{ tracks: [] }, { tracks: [sharedTrack('silent', 'Unpicked', { audioUrl: null })] }])(
+		'1374_rule_2 B6 shows only the title and notice when no song is playable (%j)',
+		async ({ tracks }) => {
+			const target = await renderShare({ tracks });
+			expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
+			expect(target.querySelector('[role="status"]')?.textContent).toBe(SHARE_NO_AUDIO_NOTICE);
+			expect(target.querySelector('.now-playing, .np-lyrics, .np-queue')).toBeNull();
+			expect(audioPlayer.current).toBeNull();
+		}
+	);
+
+	it('1374_rule_14 C3 seeking before Play readies song 1 paused', async () => {
+		stubLayout(true);
+		const target = await renderShare({
+			tracks: [sharedTrack('first', 'Tide'), sharedTrack('second', 'Ebb')]
+		});
+		const slider = target.querySelector<HTMLInputElement>('.seek-input');
+		if (!slider) throw new Error('Expected the album seek slider');
+		slider.value = '45';
+		slider.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		expect(audioPlayer.current?.songTitle).toBe('Tide');
+		expect(audioPlayer.currentTime).toBe(45);
+		expect(audioPlayer.transport).toBe('paused');
+		expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL)).toBeDefined();
+	});
+
+	it('1374_rule_2 C1 skips from the staged song to song 2 and back', async () => {
+		stubLayout(false);
+		const target = await renderShare({
+			tracks: [sharedTrack('first', 'Tide'), sharedTrack('second', 'Ebb')]
+		});
+		expect(getByRoleButton(target, SONG_PREVIOUS_LABEL).disabled).toBe(true);
+		expect(getByRoleButton(target, SONG_NEXT_LABEL).disabled).toBe(false);
+		getByRoleButton(target, SONG_NEXT_LABEL).click();
+		await tick();
+		expect(audioPlayer.current?.songTitle).toBe('Ebb');
+		expect(getByRoleButton(target, SONG_NEXT_LABEL).disabled).toBe(true);
+		getByRoleButton(target, SONG_PREVIOUS_LABEL).click();
+		await tick();
+		expect(audioPlayer.current?.songTitle).toBe('Tide');
+		expect(target.querySelectorAll('h1')).toHaveLength(1);
+		expect(target.querySelector('h1')?.textContent).toBe('Open Windows');
+	});
+
+	it.each([true, false])(
+		'1374_rule_2 F1 shows no editing or source affordances (stacked: %s)',
+		async (stacked) => {
+			stubLayout(stacked);
+			const target = await renderShare({ tracks: [sharedTrack('first', 'Tide')] });
+			expect(target.querySelector('.queue-heading')?.textContent).toBe('Songs');
+			expect(
+				target.querySelector('.queue-take, .from-link, .go-to-song, [data-icon="pencil"]')
+			).toBeNull();
+			expect(buttonNames(target).some((name) => /edit|go to song|take/i.test(name))).toBe(false);
+			expect(
+				Array.from(target.querySelectorAll('a')).map((link) => link.getAttribute('href'))
+			).toEqual(['/']);
+		}
+	);
+
+	it('1374_rule_5 B2 B3 changes the marked song and pauses its playing row', async () => {
+		stubLayout(false);
+		const target = await renderShare({
+			tracks: [sharedTrack('first', 'Tide'), sharedTrack('second', 'Ebb', { lyrics: 'Ebb words' })]
+		});
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[1].click();
+		await tick();
+		audioPlayer.status = 'playing';
+		await tick();
+		expect(target.querySelector('.queue-row.current .queue-title')?.textContent).toBe('Ebb');
+		expect(target.querySelector('.now-playing-line')?.textContent).toBe(
+			'Now playing · Ebb · 2 of 2'
+		);
+		expect(target.querySelector('.np-page-lyrics')?.textContent).toContain('Ebb words');
+		target.querySelector<HTMLButtonElement>('.queue-row.current')?.click();
+		await tick();
+		expect(audioPlayer.transport).toBe('paused');
+	});
 });

@@ -14,7 +14,8 @@
 		cues,
 		whisperText,
 		emptyLabel,
-		position
+		position,
+		songTitle
 	}: {
 		lyrics: string | null;
 		cues: WhisperCue[] | null;
@@ -23,6 +24,8 @@
 		// Where the take stands, in seconds; null while nothing is sung, so no
 		// line lights and the box stays where it is.
 		position: number | null;
+		// Names the song above its words where several songs share one page.
+		songTitle?: string;
 	} = $props();
 
 	let container: HTMLDivElement | undefined = $state();
@@ -179,7 +182,9 @@
 </script>
 
 <div class="np-lyrics">
-	<p class="lyrics-heading">{NOW_PLAYING_LYRICS_ROW_LABEL}</p>
+	<p class="lyrics-heading">
+		{songTitle ? `${NOW_PLAYING_LYRICS_ROW_LABEL} · ${songTitle}` : NOW_PLAYING_LYRICS_ROW_LABEL}
+	</p>
 	{#if hasLyrics}
 		<div
 			class="lyrics"
