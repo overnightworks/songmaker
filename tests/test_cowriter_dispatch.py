@@ -40,8 +40,7 @@ from agent_providers.tool_loop import (
     ToolOutcome,
 )
 from agent_providers.tools import openai_tool_schemas
-from conftest import override_provider_runtime
-from webauth.dependencies import AuthenticatedUser
+from conftest import make_authenticated_user, override_provider_runtime
 
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter import routing
@@ -256,7 +255,7 @@ def test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
 
     transport = Transport()
     monkeypatch.setattr(dispatch, transport_factory, lambda **_kwargs: transport)
-    user = AuthenticatedUser(id="owner", username="owner", role="user", is_active=True)
+    user = make_authenticated_user("owner")
 
     async def collect():
         with factory() as session:

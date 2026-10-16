@@ -21,6 +21,7 @@ from agent_providers.events import (
 )
 from agent_providers.tool_loop import ToolOutcome
 from agent_providers.tools import anthropic_tool_schemas
+from conftest import make_authenticated_user
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.cowriter import tools as cowriter_tools
@@ -147,7 +148,7 @@ def _turn_arguments(
     user: AuthenticatedUser | None = None,
 ) -> dict[str, object]:
     bound_session = session or MagicMock()
-    bound_user = user or AuthenticatedUser(id="u", username="u", role="user", is_active=True)
+    bound_user = user or make_authenticated_user("u")
     return {
         "api_key": "test-key",
         "system": "system",
@@ -349,7 +350,7 @@ def test_claude_api_tool_loop_persists_an_owned_write_and_refuses_a_foreign_one(
     ]))
     second = _FakeStream(["complete"], _AssistantMessage([_TextBlock("complete")]))
     _install_anthropic(monkeypatch, _FakeClient([first, second]))
-    user = AuthenticatedUser(id="owner", username="owner", role="user", is_active=True)
+    user = make_authenticated_user("owner")
     with factory() as session:
         events = asyncio.run(_events(**_turn_arguments(session, user)))
     with factory() as session:
