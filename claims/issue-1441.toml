@@ -1,8 +1,0 @@
-claim_id = "a356f9a5038c48dfb74e1427bae187b1"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "73df88fdc65e5de8ab14bf08ba4cd05aa0635584"
-branch = "claude/issue-1441-home-library-address-owner"
-scope = ["frontend/e2e/auth-flows.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/library-continue.spec.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/share/SharedFooter.svelte", "frontend/src/lib/routes/addresses.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/stores/railSearch.ts", "frontend/src/routes/(library)/+page.svelte", "frontend/src/routes/(library)/album/[slug]/+page.svelte", "frontend/src/routes/(library)/album/[slug]/[song]/+page.svelte", "frontend/src/routes/(library)/album/[slug]/[song]/take/[n]/+page.svelte", "frontend/src/routes/(library)/playlist/[slug]/+page.svelte", "frontend/src/routes/login/page.test.ts", "frontend/src/routes/setup/+page.svelte"]
-opened_commit = "d59c6b3ba2c1df59a12e4a49cb62fe0353a0c22e"
-whole_reason = "one owner for the Home and Library addresses: addresses.ts, every runtime destination that names them, the e2e helpers, and the two e2e flows that change with them"
