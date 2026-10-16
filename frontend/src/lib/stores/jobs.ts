@@ -213,7 +213,7 @@ async function refreshedWhileOnline(
 	while (get(offline)) {
 		await backOnline();
 		if (!stillWaiting()) return;
-		await requestSongRefresh(songId);
+		await requestSongRefresh(songId); // NOSONAR(S9382) each refresh happens only after the connection came back from the previous wait
 	}
 }
 
