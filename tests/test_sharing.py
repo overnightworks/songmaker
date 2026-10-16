@@ -1479,12 +1479,13 @@ def test_shared_generation_of_a_wav_only_take_has_no_audio_url_and_logs_nothing_
     slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
     unauthed = web_client(sharing_app.app, cookies={})
 
+    caplog.clear()
     with caplog.at_level(logging.WARNING):
         response = unauthed.get(f"/shared/gen/{slug}")
 
     assert response.status_code == 200
     assert response.json()["audio_url"] is None
-    assert caplog.records == []
+    assert [record for record in caplog.records if record.levelno >= logging.WARNING] == []
 
 
 def test_shared_generation_manifest_names_the_take_without_resolving_its_stored_path(
