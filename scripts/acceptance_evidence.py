@@ -176,26 +176,11 @@ def _claims_from_module(
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        markers = [
-            decorator for decorator in node.decorator_list if _looks_like_acceptance(decorator)
-        ]
-        if not markers:
-            continue
         location = f"{source.relative_to(project_root)}:{node.lineno}"
-        if not node.name.startswith("test_"):
-            raise AcceptanceEvidenceError(f"{location} acceptance marker is not on test_*")
-        if len(markers) != 1:
-            raise AcceptanceEvidenceError(f"{location} has duplicate acceptance markers")
-        marker = markers[0]
-        if not _is_direct_marker(marker):
-            raise AcceptanceEvidenceError(f"{location} acceptance marker must be direct")
-        assert isinstance(marker, ast.Call)
-        if len(marker.args) != 1 or marker.keywords:
-            raise AcceptanceEvidenceError(f"{location} acceptance marker needs one literal ID")
-        argument = marker.args[0]
-        if not isinstance(argument, ast.Constant) or not isinstance(argument.value, str):
-            raise AcceptanceEvidenceError(f"{location} acceptance marker ID must be literal")
-        identifier = argument.value
+        marker = _acceptance_marker(node, location)
+        if marker is None:
+            continue
+        identifier = _literal_acceptance_id(marker, location)
         if identifier in claimed_ids:
             raise AcceptanceEvidenceError(f"acceptance {identifier} has duplicate test claims")
         claimed_ids.add(identifier)
@@ -203,20 +188,47 @@ def _claims_from_module(
         relative = source.relative_to(project_root).as_posix()
         claims.append(AcceptanceClaim(f"{relative}::{node.name}", identifier))
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Attribute)
-            and node.attr == "acceptance"
-            and id(node) not in accepted_attributes
-        ):
+        if _is_indirect_acceptance_reference(node, accepted_attributes):
             location = f"{source.relative_to(project_root)}:{node.lineno}"
             raise AcceptanceEvidenceError(f"{location} acceptance marker is not direct top-level")
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "acceptance"
-        ):
-            location = f"{source.relative_to(project_root)}:{node.lineno}"
-            raise AcceptanceEvidenceError(f"{location} acceptance marker is not direct top-level")
+
+
+def _acceptance_marker(
+    node: ast.FunctionDef | ast.AsyncFunctionDef, location: str
+) -> ast.Call | None:
+    markers = [decorator for decorator in node.decorator_list if _looks_like_acceptance(decorator)]
+    if not markers:
+        return None
+    if not node.name.startswith("test_"):
+        raise AcceptanceEvidenceError(f"{location} acceptance marker is not on test_*")
+    if len(markers) != 1:
+        raise AcceptanceEvidenceError(f"{location} has duplicate acceptance markers")
+    marker = markers[0]
+    if not _is_direct_marker(marker):
+        raise AcceptanceEvidenceError(f"{location} acceptance marker must be direct")
+    assert isinstance(marker, ast.Call)
+    return marker
+
+
+def _literal_acceptance_id(marker: ast.Call, location: str) -> str:
+    if len(marker.args) != 1 or marker.keywords:
+        raise AcceptanceEvidenceError(f"{location} acceptance marker needs one literal ID")
+    argument = marker.args[0]
+    if not isinstance(argument, ast.Constant) or not isinstance(argument.value, str):
+        raise AcceptanceEvidenceError(f"{location} acceptance marker ID must be literal")
+    return argument.value
+
+
+def _is_indirect_acceptance_reference(node: ast.AST, accepted_attributes: set[int]) -> bool:
+    if isinstance(node, ast.Attribute):
+        return node.attr == "acceptance" and id(node) not in accepted_attributes
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "acceptance"
+    )
+
+
 def _claims_with_proof_kinds(
     claims: tuple[AcceptanceClaim, ...], acceptances: tuple[AcceptanceEntry, ...]
 ) -> tuple[AcceptanceClaim, ...]:
@@ -325,7 +337,7 @@ def _write_report(output: Path, report: dict[str, Any]) -> None:
         json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
-    temporary.replace(output)  # NOSONAR CLI-only output path.
+    temporary.replace(output)  # NOSONAR(S8707) The operator names the report path on the CLI.
 
 
 def parse_arguments() -> argparse.Namespace:

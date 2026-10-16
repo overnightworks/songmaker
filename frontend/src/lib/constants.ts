@@ -20,6 +20,9 @@ export const PASSWORD_TOO_SHORT_MESSAGE = `Password must be at least ${PASSWORD_
 // share failure, since the link exists and only the copy step didn't.
 export const SHARE_BUTTON_COPY_FAILED_TOAST =
 	'Shared — copy the link manually, clipboard write failed';
+export const SHARE_BUTTON_COPIED_TOAST = 'Link copied to clipboard';
+export const SHARE_BUTTON_UNSHARED_TOAST = 'Sharing disabled';
+export const SHARE_BUTTON_FAILED_TOAST = 'Share failed';
 
 export const SHARE_LINK_COPIED_TOAST = 'Link copied';
 export const SHARE_LINK_COPY_FAILED_TOAST = 'Copy failed';
@@ -635,6 +638,8 @@ export const THEME_SWITCH_TO_DARK_LABEL = 'Dark theme';
 export const COLLECTION_MENU_LABEL = 'More';
 export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
 export const COLLECTION_MENU_SHARE_LABEL = 'Share';
+export const COLLECTION_MENU_SHARE_ON_HINT = 'on';
+export const COLLECTION_MENU_SHARE_OFF_HINT = 'off';
 export const COLLECTION_MENU_DELETE_LABEL = 'Delete';
 export const COLLECTION_MENU_COVER_LABEL = 'Cover';
 export const COLLECTION_MENU_COVER_HINT = 'upload · suggest';

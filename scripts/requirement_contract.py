@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import binascii
 import hashlib
 import json
 import re
@@ -274,7 +273,7 @@ def read_approval_witness(project_root: Path, revision: Revision) -> ApprovalWit
         )
     try:
         body = base64.b64decode(encoded_body, validate=True)
-    except (binascii.Error, ValueError, UnicodeEncodeError) as error:
+    except ValueError as error:
         raise RequirementContractError(
             f"{revision.witness_location} has invalid body_base64"
         ) from error
@@ -418,6 +417,27 @@ def _lineage_tip(document: str, lineage: tuple[Revision, ...]) -> Revision:
     by_digest = {revision.content_sha256: revision for revision in lineage}
     if len(by_digest) != len(lineage):
         raise RequirementContractError(f"requirement {document} repeats a revision")
+    _reject_unresolvable_predecessors(document, lineage, by_digest)
+    _reject_cycles(document, lineage, by_digest)
+    successor_counts = Counter(
+        revision.predecessor for revision in lineage if revision.predecessor != GENESIS
+    )
+    if branch := next((digest for digest, count in successor_counts.items() if count > 1), None):
+        raise RequirementContractError(f"requirement {document} branches after {branch}")
+    tips = set(by_digest) - set(successor_counts)
+    if len(tips) != 1:
+        raise RequirementContractError(f"requirement {document} has multiple tips {sorted(tips)}")
+    tip = by_digest[tips.pop()]
+    if len(_active_line(tip, by_digest)) != len(lineage):
+        raise RequirementContractError(
+            f"requirement {document} has multiple tips outside its active line"
+        )
+    return tip
+
+
+def _reject_unresolvable_predecessors(
+    document: str, lineage: tuple[Revision, ...], by_digest: dict[str, Revision]
+) -> None:
     for revision in lineage:
         if revision.predecessor == revision.content_sha256:
             raise RequirementContractError(
@@ -428,6 +448,11 @@ def _lineage_tip(document: str, lineage: tuple[Revision, ...]) -> Revision:
                 f"requirement {document} revision {revision.content_sha256} has unknown "
                 f"predecessor {revision.predecessor}"
             )
+
+
+def _reject_cycles(
+    document: str, lineage: tuple[Revision, ...], by_digest: dict[str, Revision]
+) -> None:
     for revision in lineage:
         visited: set[str] = set()
         cursor = revision
@@ -436,26 +461,15 @@ def _lineage_tip(document: str, lineage: tuple[Revision, ...]) -> Revision:
                 raise RequirementContractError(f"requirement {document} has a cycle")
             visited.add(cursor.content_sha256)
             cursor = by_digest[cursor.predecessor]
-    successor_counts = Counter(
-        revision.predecessor for revision in lineage if revision.predecessor != GENESIS
-    )
-    if branch := next((digest for digest, count in successor_counts.items() if count > 1), None):
-        raise RequirementContractError(f"requirement {document} branches after {branch}")
-    tips = set(by_digest) - set(successor_counts)
-    if len(tips) != 1:
-        raise RequirementContractError(f"requirement {document} has multiple tips {sorted(tips)}")
-    tip = by_digest[tips.pop()]
-    visited = set()
+
+
+def _active_line(tip: Revision, by_digest: dict[str, Revision]) -> set[str]:
+    line = {tip.content_sha256}
     cursor = tip
     while cursor.predecessor != GENESIS:
-        visited.add(cursor.content_sha256)
         cursor = by_digest[cursor.predecessor]
-    visited.add(cursor.content_sha256)
-    if len(visited) != len(lineage):
-        raise RequirementContractError(
-            f"requirement {document} has multiple tips outside its active line"
-        )
-    return tip
+        line.add(cursor.content_sha256)
+    return line
 
 
 def _verify_witness_shelf(project_root: Path, revisions: tuple[Revision, ...]) -> None:
@@ -604,7 +618,7 @@ def _read_json_object(content: bytes, location: Path) -> dict[str, Any]:
             object_pairs_hook=unique_object,
             parse_constant=reject_constant,
         )
-    except (json.JSONDecodeError, RecursionError, ValueError) as error:
+    except (RecursionError, ValueError) as error:
         raise RequirementContractError(f"{location} is unreadable JSON: {error}") from error
     if not isinstance(parsed, dict):
         raise RequirementContractError(f"{location} must contain one JSON object")

@@ -56,25 +56,35 @@ To: ${ALERT_EMAIL_TO}
 ${BODY}
 "
 
-# The credentials reach curl on file descriptor 3 as a --config file
-# instead of as a --user argument: anything in argv is world-readable in
-# `ps` and /proc for as long as the send lasts. The here-string keeps them
-# off this host's disk entirely (see curl_credentials_config for the
+# The credentials reach curl through a pipe as a --config file instead of
+# as a --user argument: anything in argv is world-readable in `ps` and
+# /proc for as long as the send lasts (argv only carries the /dev/fd path).
+# They are built first, in a variable of this shell that is never exported,
+# so a failing producer stops the send here instead of running on in the
+# background where nothing checks its status. The process substitution then
+# only writes that variable into the pipe from a forked copy of this shell:
+# the credentials stay off this host's disk, and no other process gets them
+# in its arguments or its environment (see curl_credentials_config for the
 # quoting rule curl applies to what it reads there).
-CURL_CREDENTIALS="$(curl_credentials_config "$SMTP_USER" "$SMTP_PASSWORD")"
+CURL_CREDENTIALS="$(curl_credentials_config "$SMTP_USER" "$SMTP_PASSWORD")" || {
+    echo "alert.sh: could not build the SMTP credentials; refusing to pretend this sent" >&2
+    exit 1
+}
 
+# `wait "$!"` collects the credential write: a write that failed (curl closed
+# the pipe first) does not count as sent.
 if ! CURL_OUTPUT="$(curl --silent --show-error --fail \
     --ssl-reqd \
     --url "smtp://${SMTP_HOST}:${SMTP_PORT}" \
     --mail-from "$SMTP_USER" \
     --mail-rcpt "$ALERT_EMAIL_TO" \
-    --config /dev/fd/3 \
-    --upload-file - 3<<<"$CURL_CREDENTIALS" <<<"$MESSAGE" 2>&1)"; then
+    --config <(printf '%s' "$CURL_CREDENTIALS") \
+    --upload-file - <<<"$MESSAGE" 2>&1 && wait "$!")"; then
     # Defense in depth: curl does not echo back credentials on a protocol
     # error, but scrub the password from whatever it did print before this
     # line reaches the journal, in case a future curl version ever changes
     # what an error message includes.
-    CURL_OUTPUT="${CURL_OUTPUT//$SMTP_PASSWORD/[REDACTED]}"
+    CURL_OUTPUT="${CURL_OUTPUT//"$SMTP_PASSWORD"/[REDACTED]}"
     echo "alert.sh: SMTP send to $SMTP_HOST:$SMTP_PORT failed: $CURL_OUTPUT" >&2
     exit 1
 fi

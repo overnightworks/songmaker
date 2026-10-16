@@ -28,12 +28,14 @@
 # mounts.
 owner_home() {
     getent passwd "$(id -un)" | cut -d: -f6
+    return
 }
 
 resolve_mirror_dir() {
     local project_root="$1" install_home="$2"
     "$project_root/scripts/mirror_agent_cli_credentials.py" \
         --print-mirror-dir --project-root "$project_root" --home "$install_home"
+    return
 }
 
 # Installing from a throwaway worktree would point ExecStart there forever; the
@@ -89,7 +91,7 @@ refuse_silent_takeover() {
     while IFS= read -r line; do
         found=1
         case "$mode" in
-            command) case "$line" in "$expected"|"$expected "*) continue ;; esac ;;
+            command) case "$line" in "$expected"|"$expected "*) continue ;; *) ;; esac ;;
             *)       [[ "$line" != "$expected" ]] || continue ;;
         esac
         installed="$line"

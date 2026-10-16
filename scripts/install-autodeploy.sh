@@ -137,7 +137,8 @@ command -v jq >/dev/null || {
 # choke on; this only has to protect sed's own substitution syntax, not
 # systemd's parsing of the result.
 sed_escape_replacement() {
-    printf '%s' "$1" | sed -e 's/[\&#]/\\&/g'
+    local replacement="$1"
+    printf '%s' "$replacement" | sed -e 's/[\&#]/\\&/g'
 }
 
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
