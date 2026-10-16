@@ -1,0 +1,8 @@
+claim_id = "e9209030cb204a1dbf0b89019ade3fe5"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "4d6fb2cd387fe3282f16ceaf444a8439b9c31905"
+branch = "claude/issue-1481-s6f-shell-scripts-sonar"
+scope = ["scripts/agent-cli-paths.sh", "scripts/alert-config.sh", "scripts/alert.sh", "scripts/backup.sh", "scripts/check_agent_cli_mounts.sh", "scripts/download_models.sh", "scripts/install-autodeploy.sh", "scripts/install-autostart.sh", "scripts/install-cli-credentials-mirror.sh", "scripts/restore.sh"]
+opened_commit = "c600e9ef14d09d048283a48714f4da6092faf511"
+whole_reason = "One analyser's findings across the shell scripts, proven by one copy measure."
