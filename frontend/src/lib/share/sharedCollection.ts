@@ -34,6 +34,7 @@ export interface SharedTrack {
 	durationSec: number | null;
 	lyrics: string | null;
 	cues: WhisperCue[] | null;
+	cover?: AlbumCoverUrls | null;
 }
 
 export interface SharedCollectionView {
@@ -58,7 +59,8 @@ function sharedTrack(
 	key: string,
 	title: string,
 	subtitle: string | null,
-	media: SharedTakeMedia
+	media: SharedTakeMedia,
+	cover: AlbumCoverUrls | null = null
 ): SharedTrack {
 	return {
 		key,
@@ -67,7 +69,8 @@ function sharedTrack(
 		audioUrl: media.audio_url,
 		durationSec: media.audio_duration,
 		lyrics: media.lyrics,
-		cues: media.whisper_cues
+		cues: media.whisper_cues,
+		cover
 	};
 }
 
@@ -94,7 +97,7 @@ export function fromSharedPlaylist(payload: SharedPlaylistPayload): SharedCollec
 		cover: payload.cover ?? null,
 		playlistCovers: payload.album_covers,
 		tracks: payload.entries.map((entry) =>
-			sharedTrack(entry.entry_id, entry.song_title, entry.artist, entry)
+			sharedTrack(entry.entry_id, entry.song_title, entry.artist, entry, entry.album_cover ?? null)
 		)
 	};
 }

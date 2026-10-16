@@ -238,10 +238,15 @@ class SharedPlaylistEntryResponse(BaseModel):
     audio_duration: float | None
     lyrics: str | None
     whisper_cues: list[WhisperCue] | None
+    album_cover: AlbumCoverUrls | None = None
 
     @classmethod
     def from_orm(
-        cls, entry: PlaylistEntry, *, audio_url: str | None,
+        cls,
+        entry: PlaylistEntry,
+        *,
+        audio_url: str | None,
+        album_cover: AlbumCoverUrls | None,
     ) -> SharedPlaylistEntryResponse:
         generation = entry.generation
         if generation is None:
@@ -259,6 +264,7 @@ class SharedPlaylistEntryResponse(BaseModel):
             audio_duration=media.audio_duration,
             lyrics=media.lyrics,
             whisper_cues=media.whisper_cues,
+            album_cover=album_cover,
         )
 
 

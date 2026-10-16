@@ -246,7 +246,6 @@ class SharedGenerationResponse(BaseModel):
     artist: str
     album_title: str
     generation_number: int
-    seed: int | None
     audio_url: str | None
     generation_id: str | None
     audio_duration: float | None

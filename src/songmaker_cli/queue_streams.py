@@ -592,7 +592,12 @@ def public_queue_stream_manifest(
     snapshot: QueueStreamManifestResponse,
 ) -> QueueStreamManifestResponse:
     return snapshot.model_copy(
-        update={"tracks": [track.model_copy(update={"lyrics": None}) for track in snapshot.tracks]}
+        update={
+            "tracks": [
+                track.model_copy(update={"lyrics": None, "seed": None, "mp3_path": ""})
+                for track in snapshot.tracks
+            ]
+        }
     )
 
 
