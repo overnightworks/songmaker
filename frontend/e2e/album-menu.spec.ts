@@ -42,9 +42,10 @@ const VIEWPORT_HEIGHT_PX = 844;
  * logged-out public album page 0 on both, since opening the ⋯ asks the API
  * nothing. Shared budget, sized from the costliest flow the same way
  * playlist-address.spec.ts's is. The Edit details flow opens an album of its
- * own, with no songs, and adds its one save.
+ * own, with no songs, and adds its one save. The Share row flow adds a share,
+ * an unshare and a share: 16 on desktop locally, with a cold open of 13.
  */
-const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 15;
+const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 17;
 
 type CollectionKind = 'album' | 'playlist';
 
