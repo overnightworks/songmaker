@@ -13,6 +13,7 @@ import {
 } from '$lib/constants';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { queued, running } from '$lib/test-utils/generate-states';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -36,25 +37,6 @@ import { cancelGeneration, generate, type GenerateState } from '$lib/stores/gene
 import GenerateButton from './GenerateButton.svelte';
 import generateButtonSource from './GenerateButton.svelte?raw';
 
-const running: Extract<GenerateState, { kind: 'generating' }> = {
-	kind: 'generating',
-	jobId: 'job1',
-	phase: 'Rendering',
-	takeCounter: 'Take 1 of 2',
-	progress: 36,
-	readout: '36% · ~1:40',
-	ended: false,
-	reconnecting: false,
-	offline: false
-};
-const queued: Extract<GenerateState, { kind: 'queued' }> = {
-	kind: 'queued',
-	jobId: 'job1',
-	label: 'Queued #3',
-	reason: 'Waiting for LoRA training on this GPU.',
-	reconnecting: false,
-	offline: false
-};
 let component: ReturnType<typeof mount>;
 
 beforeEach(() => {

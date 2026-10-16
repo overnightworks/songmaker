@@ -8,6 +8,7 @@ import { visibleSettingsSections } from '$lib/settingsSections';
 import { currentUser } from '$lib/stores/auth';
 import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
+import { makeAuthUser } from '$lib/test-utils/factories';
 import { createComponentMount, requireElement } from './rail-test-fixtures';
 
 vi.mock('$app/navigation', async () =>
@@ -34,9 +35,6 @@ import RailSettings from './RailSettings.svelte';
 // routes; the mock only needs a plain, freely-assignable URL.
 const pageState = page as unknown as { url: URL };
 
-const ADMIN = { id: 'u1', username: 'felix', role: 'admin' as const };
-const USER = { id: 'u2', username: 'jane', role: 'user' as const };
-
 const { render, cleanup } = createComponentMount(RailSettings);
 
 /** Flushes a `page.url` mutation through to the component, the same way
@@ -56,7 +54,7 @@ function itemLabels(target: HTMLElement): string[] {
 beforeEach(() => {
 	localStorage.clear();
 	pageState.url = new URL('https://songmaker.test/');
-	currentUser.set(ADMIN);
+	currentUser.set(makeAuthUser({ role: 'admin' }));
 });
 
 afterEach(async () => {
@@ -133,7 +131,7 @@ describe('RailSettings', () => {
 	});
 
 	it('omits admin-only sections for a non-admin', async () => {
-		currentUser.set(USER);
+		currentUser.set(makeAuthUser());
 		pageState.url = new URL('https://songmaker.test/settings/generation');
 		const target = await render();
 		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Legal']);

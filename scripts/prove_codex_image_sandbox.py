@@ -20,7 +20,9 @@ WEB_SERVICE = "songmaker-web"
 DEFAULT_WEB_PROFILE = "songmaker-web"
 DEFAULT_DOCKER_PROFILE = "docker-default"
 EMPTY_CAPABILITY_MASK = "0000000000000000"
-SANDBOX_ROOT = f"/tmp/{CODEX_SANDBOX_PROOF_DIRECTORY}"
+SANDBOX_TEMP_DIRECTORY = "/tmp"  # NOSONAR(S5443) Web container path pinned by its AppArmor profile.
+SANDBOX_ROOT = f"{SANDBOX_TEMP_DIRECTORY}/{CODEX_SANDBOX_PROOF_DIRECTORY}"
+OUTSIDE_CODEX_HOME = f"{SANDBOX_TEMP_DIRECTORY}/outside-codex-home"
 SANDBOX_CODEX_HOME = f"{SANDBOX_ROOT}/{CODEX_HOME_DIRECTORY_NAME}"
 SANDBOX_WORKDIR = f"{SANDBOX_ROOT}/workdir"
 CODEX_BINARY = "/usr/local/bin/codex"
@@ -65,7 +67,7 @@ fi
 _SANDBOX_ASSERTIONS = f"""set -eu
 : > "$CODEX_HOME/allowed"
 {refused_write_probe("/app/songmaker-sandbox-write-probe")}\
-{refused_write_probe("/tmp/outside-codex-home")}\
+{refused_write_probe(OUTSIDE_CODEX_HOME)}\
 test "$(awk '/^NoNewPrivs:/ {{ print $2 }}' /proc/self/status)" = 1
 test "$(awk '/^CapEff:/ {{ print $2 }}' /proc/self/status)" = "{EMPTY_CAPABILITY_MASK}"
 """ + """/app/.venv/bin/python - <<'PY'
