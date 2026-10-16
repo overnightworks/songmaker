@@ -76,8 +76,11 @@
 #     pinned commit out locally. A pin change is also a base-image input
 #     (BASE_IMAGE_INPUT_PATHS). Both git fetches of a tick run under
 #     GIT_FETCH_TIMEOUT_SECONDS: a hung fetch would hold the flock forever and
-#     never reach the consecutive-failure ALERT. A SIGKILLed fetch can leave a
-#     git lock file behind; clearing it is manual (docs/architecture.md).
+#     never reach the consecutive-failure ALERT. Each fetch runs in a process
+#     group of its own that is killed outright once git has exited, so a
+#     transport that ignores TERM cannot outlive the tick. A SIGKILLed fetch
+#     can leave a git lock file behind; clearing it is manual
+#     (docs/architecture.md).
 #
 # Per CLAUDE.md: NEVER wrap `docker compose up --build --wait` in `timeout`.
 # A cold-cache rebuild can take 8-15 minutes; the systemd unit has no
@@ -234,14 +237,37 @@ safe_git() {
 
 # The only network-facing git commands of a tick, so the only ones with a
 # deadline. `timeout` cannot run the shell function above, but it can run the
-# same scrubbed command; it keeps its own process group, so the TERM and the
-# later KILL reach git's transport children too. Builds stay unbounded.
+# same scrubbed command. It stops supervising once git itself has exited, so a
+# transport child that ignored the TERM would live on with nobody to KILL it,
+# holding git's output pipe and with it the whole tick. The fetch therefore
+# gets a process group of its own (setsid), its output goes to a file that no
+# survivor can keep a reader waiting on, and the group is killed outright as
+# soon as `timeout` returns. A background job of a non-interactive shell leads
+# no group, so setsid runs in place and $! is the id of the group it creates.
+# Prints git's combined output and returns its exit status. Builds stay
+# unbounded.
 # Usage: safe_git_fetch <repository> <git fetch arguments...>
 safe_git_fetch() {
     local repository="$1"
     shift
-    timeout --kill-after="$GIT_FETCH_KILL_GRACE_SECONDS" "$GIT_FETCH_TIMEOUT_SECONDS" \
-        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@"
+    local output_file fetch_group fetch_exit_code
+    if ! output_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.git-fetch.XXXXXX" 2>&1)"; then
+        printf 'cannot create a temporary file for the fetch output: %s' "$output_file"
+        return 1
+    fi
+    setsid timeout --kill-after="$GIT_FETCH_KILL_GRACE_SECONDS" "$GIT_FETCH_TIMEOUT_SECONDS" \
+        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@" >"$output_file" 2>&1 &
+    fetch_group=$!
+    if wait "$fetch_group"; then
+        fetch_exit_code=0
+    else
+        fetch_exit_code=$?
+    fi
+    # Nothing left to kill is the normal case, hence the ignored status.
+    kill -KILL -- "-$fetch_group" 2>/dev/null || true
+    cat "$output_file"
+    rm -f "$output_file"
+    return "$fetch_exit_code"
 }
 
 # Resolve the real git ADMIN directory instead of assuming $REPO_ROOT/.git
@@ -311,8 +337,9 @@ fi
 # tick (the superproject's and the ACE-Step pin's) get this deadline; a
 # timeout is a counted refusal like any other failed fetch. The default is
 # several times the longest healthy fetch measured on this host (about 12 s
-# for a pin over HTTPS). Once TERM has had the grace period to be honoured,
-# git is killed.
+# for a pin over HTTPS). At the deadline the whole fetch process group gets
+# TERM; whatever is still running after the grace period, or once git has
+# exited, gets KILL (see safe_git_fetch).
 GIT_FETCH_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS:-120}"
 GIT_FETCH_KILL_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS:-5}"
 if ! [[ "$GIT_FETCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
@@ -323,6 +350,18 @@ if ! [[ "$GIT_FETCH_KILL_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS must be a positive integer, got '$GIT_FETCH_KILL_GRACE_SECONDS'"
     exit 1
 fi
+# The one place that reads what `timeout` leaves in $? when it cut a command
+# short. 124 is its own status for a deadline it enforced. 137 is a SIGKILL:
+# `timeout` sends one when TERM was not honoured within the grace period, but an
+# outside kill (the OOM killer) ends a command the same way, so 137 is named
+# as a kill and never claimed as a timeout. Prints nothing for any other status.
+# Usage: describe_timeout_status <exit status of the timed command>
+describe_timeout_status() {
+    case "$1" in
+        124) printf 'timed out' ;;
+        137) printf 'was killed by SIGKILL' ;;
+    esac
+}
 # Bounds the container-readiness wait of step 10 only; the image build in
 # step 9 stays deliberately unbounded, because a cold-cache build takes
 # 8-15 minutes by design. Without a bound, one service that can never
@@ -485,7 +524,7 @@ base_images_need_build() {
         return 0
     fi
 
-    if ! changed_base_inputs="$(safe_git diff --name-only "$deployed_sha..$candidate_sha" -- "${BASE_IMAGE_INPUT_PATHS[@]}" 2>&1)"; then
+    if ! changed_base_inputs="$(safe_git diff --ignore-submodules=none --name-only "$deployed_sha..$candidate_sha" -- "${BASE_IMAGE_INPUT_PATHS[@]}" 2>&1)"; then
         log_err "cannot compare base image inputs between deployed $deployed_sha and candidate $candidate_sha: $changed_base_inputs"
         return 2
     fi
@@ -844,16 +883,17 @@ compose_config_refusal() {
 }
 
 # A fetch that failed or overran its deadline is a counted refusal like every
-# other tick that could not deploy. Exit 124 is `timeout`'s own status for an
-# honoured TERM, 137 the forced KILL after the grace period.
+# other tick that could not deploy. The deadline is enforced by safe_git_fetch.
 fail_tick_after_fetch_failure() {
     local description="$1"
     local fetch_exit_code="$2"
     local fetch_output="$3"
     local reason="$4"
-    if ((fetch_exit_code == 124 || fetch_exit_code == 137)); then
-        log_err "$description timed out after ${GIT_FETCH_TIMEOUT_SECONDS}s (exit $fetch_exit_code): $fetch_output"
-        fail_tick "$reason (timed out)"
+    local termination
+    termination="$(describe_timeout_status "$fetch_exit_code")"
+    if [[ -n "$termination" ]]; then
+        log_err "$description $termination (exit $fetch_exit_code, deadline ${GIT_FETCH_TIMEOUT_SECONDS}s): $fetch_output"
+        fail_tick "$reason ($termination)"
     fi
     log_err "$description failed (exit $fetch_exit_code): $fetch_output"
     fail_tick "$reason"
@@ -891,7 +931,7 @@ fetch_acestep_pin() {
     fi
 
     # A bare `cat-file -e <sha>` would accept an object of any type.
-    if safe_git -C "$submodule_dir" cat-file -e "$pinned_sha^{commit}"; then
+    if safe_git -C "$submodule_dir" cat-file -e "$pinned_sha^{commit}" 2>/dev/null; then
         return 0
     fi
 
@@ -940,7 +980,7 @@ checkout_acestep_pin() {
 remote_check_status() {
     local commit_sha="$1"
     local commit_timestamp="$2"
-    local check_runs gh_error gh_stderr_file lookup_exit
+    local check_runs gh_error gh_stderr_file lookup_exit termination
     if ! command -v gh >/dev/null 2>&1; then
         printf '%s' "GitHub CLI (gh) is unavailable on PATH"
         return 1
@@ -957,8 +997,9 @@ remote_check_status() {
         lookup_exit=$?
         gh_error="$(<"$gh_stderr_file")"
         rm -f "$gh_stderr_file"
-        if ((lookup_exit == 124)); then
-            printf '%s' 'check-run lookup timed out'
+        termination="$(describe_timeout_status "$lookup_exit")"
+        if [[ -n "$termination" ]]; then
+            printf 'check-run lookup %s' "$termination"
         else
             printf '%s' "$gh_error"
         fi

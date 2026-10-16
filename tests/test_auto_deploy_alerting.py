@@ -19,6 +19,7 @@ import stat
 import subprocess
 import time
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 import pytest
@@ -43,7 +44,7 @@ PRUNE_TIMEOUT_SECONDS = 1
 ACESTEP_SUBMODULE_PATH = "vendor/acestep"
 GIT_FETCH_TIMEOUT_SECONDS = 30
 GIT_FETCH_KILL_GRACE_SECONDS = 1
-HUNG_FETCH_TIMEOUT_SECONDS = 1
+HUNG_FETCH_TIMEOUT_SECONDS = 3
 # Long enough that a fetch which is not killed is unmistakable, and shorter
 # than the tick's own ceiling so the failure is an assertion, not a timeout.
 HUNG_TRANSPORT_SECONDS = 40
@@ -143,9 +144,43 @@ def _has_commit(repository: Path, commit_sha: str) -> bool:
     ).returncode == 0
 
 
+def _stops_running(process_id: int, within_seconds: float = 5.0) -> bool:
+    """A killed process takes a moment to die; a zombie awaiting its reaper is dead."""
+
+    def is_running() -> bool:
+        try:
+            stat_line = Path(f"/proc/{process_id}/stat").read_text()
+        except FileNotFoundError:
+            return False
+        return stat_line.rsplit(")", 1)[1].split()[0] != "Z"
+
+    deadline = time.monotonic() + within_seconds
+    while is_running() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return not is_running()
+
+
 def _write_executable(path: Path, body: str) -> None:
     path.write_text(body)
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+class FailingTransport(Enum):
+    """What a fetch's transport child does instead of serving objects.
+
+    Each value runs before the transport lingers, so a fetch that is not cut
+    short stays at it for HUNG_TRANSPORT_SECONDS.
+    """
+
+    HANGS = ""
+    HANGS_IGNORING_TERM = "trap '' TERM\n"
+    KILLS_ITS_GIT = (
+        "git_pid=$PPID\n"
+        'while [[ "$(</proc/$git_pid/comm)" != git ]]; do\n'
+        "    read -r _ _ _ git_pid _ </proc/$git_pid/stat\n"
+        "done\n"
+        'kill -KILL "$git_pid"\n'
+    )
 
 
 class AcestepFork:
@@ -198,6 +233,7 @@ class Checkout:
         self._after_check_lookup_script: Path | None = None
         self._bin = tmp_path / "bin"
         self._bin.mkdir()
+        self._failing_transport_pid_file = tmp_path / "failing-transport.pid"
         self._system_bin_without_jq: Path | None = None
         self._jq_path_filter: Path | None = None
         self._clock_file = tmp_path / "clock.txt"
@@ -297,6 +333,11 @@ class Checkout:
     def refuse_compose_config(self, refusal: ComposeConfigRefusal) -> None:
         """Make `docker compose config --quiet` fail the way compose itself does."""
         self._compose_config_refusal = refusal
+        self._write_docker_stub()
+
+    def satisfy_compose_config(self) -> None:
+        """Stand in for the operator adding the missing variable to .env."""
+        self._compose_config_refusal = None
         self._write_docker_stub()
 
     def set_prometheus_ready_exit_code(self, exit_code: int) -> None:
@@ -616,19 +657,20 @@ class Checkout:
             text=True,
         ))
 
-    def make_fetches_hang(self, repository: Path) -> None:
-        """Make every fetch from this repository's origin outlast its deadline.
+    def make_fetches_fail(self, repository: Path, transport: FailingTransport) -> None:
+        """Make every fetch from this repository's origin run the failing transport.
 
         The script runs git with a scrubbed environment and an absolute binary,
         so neither PATH nor GIT_SSH_COMMAND can slow it down; the repository's
         own remote.origin.uploadpack setting is the one seam it still honours.
         """
-        hung_transport = self._bin / "hung-upload-pack"
+        upload_pack = self._bin / "failing-upload-pack"
         _write_executable(
-            hung_transport,
-            f"#!/bin/bash\nexec sleep {HUNG_TRANSPORT_SECONDS}\n",
+            upload_pack,
+            f"#!/bin/bash\necho $$ >{self._failing_transport_pid_file}\n"
+            f"{transport.value}exec sleep {HUNG_TRANSPORT_SECONDS}\n",
         )
-        _git(repository, "config", "remote.origin.uploadpack", str(hung_transport))
+        _git(repository, "config", "remote.origin.uploadpack", str(upload_pack))
 
     def make_fetches_work_again(self, repository: Path) -> None:
         _git(repository, "config", "--unset", "remote.origin.uploadpack")
@@ -720,6 +762,10 @@ class Checkout:
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=self.root, text=True,
         ).strip()
+
+    @property
+    def failing_transport_pid(self) -> int:
+        return int(self._failing_transport_pid_file.read_text())
 
     @property
     def acestep_head(self) -> str:
@@ -899,12 +945,15 @@ def test_an_invalid_compose_configuration_refuses_before_the_job_guard_and_the_p
     assert set(checkout.docker_calls.splitlines()) == {"compose config --quiet"}
 
 
+@pytest.mark.parametrize("pin_moves", [False, True], ids=["pin unchanged", "pin moves"])
 def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_before_any_build(
-    tmp_path: Path,
+    acestep_checkout: Checkout, acestep_fork: AcestepFork, pin_moves: bool,
 ) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
+    """defect:#1479 -- a variable the selected commit newly requires refuses the tick after
+    the fast-forward and before any build; a pin change in that commit is already checked
+    out by then, so the refusal strands no submodule, and the tick after the variable is
+    supplied deploys."""
+    checkout = acestep_checkout
     deployed_before = checkout.deployed_sha_file.read_text()
     checkout.set_base_images_present(False)
     checkout.refuse_compose_config(
@@ -919,6 +968,11 @@ def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_b
         "    environment:\n"
         f"      GF_SECURITY_ADMIN_PASSWORD: {REQUIRED_GRAFANA_PASSWORD}\n",
     )
+    expected_pin = checkout.acestep_head
+    if pin_moves:
+        expected_pin = acestep_fork.commit()
+        acestep_fork.push()
+        checkout.move_main_forward_with_acestep_pin(expected_pin)
 
     fast_forward_tick = checkout.tick()
 
@@ -928,10 +982,19 @@ def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_b
     assert GRAFANA_PASSWORD_REFUSAL in checkout.journal
     assert checkout.build_and_recreate_calls == []
     assert checkout.deployed_sha_file.read_text() == deployed_before
+    assert checkout.acestep_head == expected_pin
+    assert checkout.uncommitted_changes == ""
 
     checkout.tick()
 
     assert "refuses the stack configuration before pull" in checkout.journal
+
+    checkout.satisfy_compose_config()
+    repaired_tick = checkout.tick()
+
+    assert repaired_tick.returncode == 0
+    assert checkout.deployed_sha_file.read_text() == checkout.head
+    assert checkout.acestep_head == expected_pin
 
 
 def test_green_checks_allow_the_fetched_commit_to_fast_forward_and_deploy(tmp_path: Path) -> None:
@@ -1030,9 +1093,21 @@ def _base_builds(checkout: Checkout) -> list[str]:
     ]
 
 
+@pytest.mark.parametrize(
+    "submodule_ignore_setting",
+    [
+        pytest.param(None, id="no ignore setting"),
+        pytest.param("diff.ignoreSubmodules", id="diff.ignoreSubmodules=all"),
+        pytest.param(f"submodule.{ACESTEP_SUBMODULE_PATH}.ignore", id="submodule ignore=all"),
+    ],
+)
 def test_a_changed_acestep_pin_is_checked_out_and_rebuilds_the_bases(
-    acestep_checkout: Checkout, acestep_fork: AcestepFork,
+    acestep_checkout: Checkout, acestep_fork: AcestepFork, submodule_ignore_setting: str | None,
 ) -> None:
+    """defect:#1479 cell 1 -- a pin change in the selected commit is fetched, checked
+    out and rebuilds both bases before compose build, whatever diff ignores of submodules."""
+    if submodule_ignore_setting is not None:
+        _git(acestep_checkout.root, "config", submodule_ignore_setting, "all")
     new_pin = acestep_fork.commit()
     acestep_fork.push()
     acestep_checkout.move_main_forward_with_acestep_pin(new_pin)
@@ -1055,6 +1130,8 @@ def test_a_changed_acestep_pin_is_checked_out_and_rebuilds_the_bases(
 def test_an_unfetchable_pin_refuses_the_tick_until_it_can_be_fetched(
     acestep_checkout: Checkout, acestep_fork: AcestepFork,
 ) -> None:
+    """defect:#1479 cells 3, 4 -- a pin the fork does not serve refuses three ticks in a
+    row with one ALERT and moves nothing; once served, the next tick deploys."""
     head_before = acestep_checkout.head
     pin_before = acestep_checkout.acestep_head
     deployed_before = acestep_checkout.deployed_sha_file.read_text()
@@ -1083,6 +1160,8 @@ def test_an_unfetchable_pin_refuses_the_tick_until_it_can_be_fetched(
 def test_an_uninitialised_submodule_refuses_the_tick(
     tmp_path: Path, acestep_fork: AcestepFork,
 ) -> None:
+    """defect:#1479 cell 5 -- an uninitialised vendor/acestep is refused by name, and
+    nothing is fetched into the superproject under the submodule's name."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.add_acestep_submodule(acestep_fork, initialised=False)
@@ -1107,22 +1186,38 @@ def test_an_uninitialised_submodule_refuses_the_tick(
     assert not _has_commit(checkout.root, new_pin)
 
 
-@pytest.mark.parametrize("hung_fetch", ["superproject", "acestep pin"])
-def test_a_hung_fetch_times_out_and_counts_as_a_refusal(
-    acestep_checkout: Checkout, acestep_fork: AcestepFork, hung_fetch: str,
+@pytest.mark.parametrize(
+    ("transport", "journal_wording"),
+    [
+        pytest.param(FailingTransport.HANGS, "timed out", id="hangs"),
+        pytest.param(FailingTransport.HANGS_IGNORING_TERM, "timed out", id="hangs ignoring TERM"),
+        pytest.param(FailingTransport.KILLS_ITS_GIT, "was killed by SIGKILL", id="kills its git"),
+    ],
+)
+@pytest.mark.parametrize("failing_fetch", ["superproject", "acestep pin"])
+def test_a_fetch_that_cannot_finish_is_a_counted_refusal_that_leaves_no_process_behind(
+    acestep_checkout: Checkout,
+    acestep_fork: AcestepFork,
+    failing_fetch: str,
+    transport: FailingTransport,
+    journal_wording: str,
 ) -> None:
+    """defect:#1479 cell 10 -- a fetch that hangs, whose transport ignores TERM, or whose
+    git is SIGKILLed is cut off within the deadline with everything it started, counts as
+    a refusal worded as what happened, and the next healthy tick recovers."""
     new_pin = acestep_fork.commit()
     acestep_fork.push()
     acestep_checkout.move_main_forward_with_acestep_pin(new_pin)
     head_before = acestep_checkout.head
     pin_before = acestep_checkout.acestep_head
     deployed_before = acestep_checkout.deployed_sha_file.read_text()
-    hung_repository = (
-        acestep_checkout.root
-        if hung_fetch == "superproject"
-        else acestep_checkout.root / ACESTEP_SUBMODULE_PATH
-    )
-    acestep_checkout.make_fetches_hang(hung_repository)
+    if failing_fetch == "superproject":
+        failing_repository = acestep_checkout.root
+        failing_description = f"git fetch origin main in {acestep_checkout.root}"
+    else:
+        failing_repository = acestep_checkout.root / ACESTEP_SUBMODULE_PATH
+        failing_description = f"fetching the {ACESTEP_SUBMODULE_PATH} pin {new_pin}"
+    acestep_checkout.make_fetches_fail(failing_repository, transport)
     acestep_checkout.git_fetch_timeout_seconds = HUNG_FETCH_TIMEOUT_SECONDS
 
     started = time.monotonic()
@@ -1131,14 +1226,15 @@ def test_a_hung_fetch_times_out_and_counts_as_a_refusal(
 
     assert result.returncode == 0
     assert elapsed < HUNG_TICK_CEILING_SECONDS
-    assert "timed out" in acestep_checkout.journal
+    assert _stops_running(acestep_checkout.failing_transport_pid)
+    assert f"{failing_description} {journal_wording}" in acestep_checkout.journal
     assert acestep_checkout.failure_count_file.read_text() == "1"
     assert acestep_checkout.build_and_recreate_calls == []
     assert acestep_checkout.deployed_sha_file.read_text() == deployed_before
     assert acestep_checkout.head == head_before
     assert acestep_checkout.acestep_head == pin_before
 
-    acestep_checkout.make_fetches_work_again(hung_repository)
+    acestep_checkout.make_fetches_work_again(failing_repository)
     acestep_checkout.git_fetch_timeout_seconds = GIT_FETCH_TIMEOUT_SECONDS
     recovered = acestep_checkout.tick()
 
@@ -1150,6 +1246,8 @@ def test_a_hung_fetch_times_out_and_counts_as_a_refusal(
 def test_an_unchanged_acestep_pin_does_not_rebuild_the_bases(
     acestep_checkout: Checkout, acestep_fork: AcestepFork,
 ) -> None:
+    """defect:#1479 cell 2 -- main moving with the pin unchanged builds no base and
+    never asks the fork."""
     acestep_fork.make_unreachable()
     acestep_checkout.move_main_forward()
 
@@ -1164,6 +1262,8 @@ def test_an_unchanged_acestep_pin_does_not_rebuild_the_bases(
 def test_a_red_newest_commit_with_a_bad_pin_does_not_block_the_green_predecessor(
     acestep_checkout: Checkout, acestep_fork: AcestepFork,
 ) -> None:
+    """defect:#1479 cell 7 -- the step-2 fetch does not recurse into submodules, so a
+    bad pin in a red newest commit cannot keep the green predecessor from deploying."""
     acestep_checkout.move_main_forward()
     green_predecessor = acestep_checkout.remote_main_sha()
     acestep_checkout.move_main_forward_with_acestep_pin(acestep_fork.commit())
