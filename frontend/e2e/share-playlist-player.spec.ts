@@ -243,22 +243,32 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 	realPlaylist
 }) => {
 	await page.goto(realPlaylist.url);
-	await startStream(page, realPlaylist, () => row(page, 2).click());
+	await startStream(page, realPlaylist, () => control(page, 'Play').click());
+	await selected(page, 1);
+	await currentCover(page, realCover(realPlaylist, 1));
+	await page.evaluate(() => {
+		Math.random = () => 0;
+	});
 	const classic = page.waitForResponse(
 		(response) =>
-			new URL(response.url()).pathname === realPlaylist.payload.entries[1].audio_url &&
+			new URL(response.url()).pathname === realPlaylist.payload.entries[0].audio_url &&
 			response.ok()
 	);
 	await control(page, 'Shuffle').click();
-	expect((await classic).status()).toBe(206);
+	const classicResponse = await classic;
+	expect(classicResponse.status()).toBe(206);
+	expect(await classicResponse.finished()).toBeNull();
 	await expect(control(page, 'Disable shuffle')).toHaveAttribute('aria-pressed', 'true');
-	await expect(row(page, 2)).toHaveAttribute('aria-current', 'true');
-	await expect(row(page, 2).locator('.queue-subtitle')).toHaveText(albumTitle(2));
-	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(2));
-	await currentCover(page, realCover(realPlaylist, 2));
+	await expect(page.locator('.queue-title')).not.toHaveText([1, 2, 3].map(songTitle));
+	await selected(page, 1);
+	for (const position of [1, 2, 3]) {
+		await expect(row(page, position).locator('.queue-subtitle')).toHaveText(albumTitle(position));
+	}
+	await currentCover(page, realCover(realPlaylist, 1));
 	await startStream(page, realPlaylist, () => control(page, 'Disable shuffle').click());
 	await expect(page.locator('.queue-title')).toHaveText([1, 2, 3].map(songTitle));
-	await selected(page, 2);
+	await selected(page, 1);
+	await currentCover(page, realCover(realPlaylist, 1));
 });
 
 async function finishAndReplay(page: Page) {
@@ -350,7 +360,9 @@ test('1374_rule_10 P11: missing words and failed covers recover on the next song
 	await scroll(page, 'bottom');
 	await expect(bar(page).locator('.track-cover')).toHaveText('J1');
 	await row(page, 2).click();
+	await selected(page, 2);
 	await scroll(page, 'bottom');
+	await expect(bar(page)).toBeVisible();
 	await expect(bar(page).locator('.track-cover img')).toHaveCount(0);
 	await expect(bar(page).locator('.track-cover')).toHaveText('J2');
 	await row(page, 3).click();
