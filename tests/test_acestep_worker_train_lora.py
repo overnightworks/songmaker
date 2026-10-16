@@ -181,55 +181,6 @@ def test_train_lora_requires_loaded_mode(tmp_path: Path) -> None:
     assert resp.status_code == 409
 
 
-def test_gpu_hold_endpoints_require_the_internal_token(tmp_path: Path) -> None:
-    deps = _make_deps(tmp_path)
-    app = create_app(deps)
-    with TestClient(app) as client:
-        headers = {"X-Internal-Token": "wrong"}
-        assert client.post("/gpu_hold/reserve", headers=headers).status_code == 401
-        assert (
-            client.post("/gpu_hold/renew", json={"token": "token"}, headers=headers).status_code
-            == 401
-        )
-        assert (
-            client.post("/gpu_hold/release", json={"token": "token"}, headers=headers).status_code
-            == 401
-        )
-        payload = _training_request_payload(
-            mode="sft",
-            dataset_dir=str(deps.shared_audio_root),
-            output_dir=str(deps.shared_audio_root / "output"),
-            hold_token="token",
-        )
-        assert client.post("/tasks/train_lora", json=payload, headers=headers).status_code == 401
-        assert client.post("/gpu_hold/reserve").status_code == 422
-        assert client.post("/gpu_hold/renew", json={"token": "token"}).status_code == 422
-        assert client.post("/gpu_hold/release", json={"token": "token"}).status_code == 422
-        assert client.post("/tasks/train_lora", json=payload).status_code == 422
-        empty_headers = {"X-Internal-Token": ""}
-        assert client.post("/gpu_hold/reserve", headers=empty_headers).status_code == 401
-        assert (
-            client.post(
-                "/gpu_hold/renew",
-                json={"token": "token"},
-                headers=empty_headers,
-            ).status_code
-            == 401
-        )
-        assert (
-            client.post(
-                "/gpu_hold/release",
-                json={"token": "token"},
-                headers=empty_headers,
-            ).status_code
-            == 401
-        )
-        assert (
-            client.post("/tasks/train_lora", json=payload, headers=empty_headers).status_code
-            == 401
-        )
-
-
 def test_gpu_hold_endpoints_accept_only_the_current_token(tmp_path: Path) -> None:
     deps = _make_deps(tmp_path)
     app = create_app(deps)

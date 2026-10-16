@@ -135,7 +135,7 @@ def test_fake_worker_emits_epoch_progress_and_an_adapter_result(tmp_path: Path) 
             headers=headers,
         )
         assert task.status_code == 200
-        stream = client.get(f"/tasks/{task.json()['task_id']}/stream")
+        stream = client.get(f"/tasks/{task.json()['task_id']}/stream", headers=headers)
 
     assert stream.status_code == 200
     events = _events(stream.text)

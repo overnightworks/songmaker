@@ -216,7 +216,10 @@ class _WorkerRoutes:
         self,
         x_internal_token: str = Header(..., alias="X-Internal-Token"),
     ) -> None:
-        if not hmac.compare_digest(x_internal_token, self._deps.internal_token):
+        if not hmac.compare_digest(
+            x_internal_token.encode(),
+            self._deps.internal_token.encode(),
+        ):
             raise HTTPException(status_code=401, detail="Invalid internal token")
 
     def health(self) -> HealthResponse:
@@ -595,20 +598,13 @@ async def _task_event_source(task_store: TaskStore, task_id: str) -> AsyncIterat
 
 
 def build_router(deps: WorkerDeps) -> APIRouter:
-    router = APIRouter()
     routes = _WorkerRoutes(deps)
-    _register_worker_routes(router, routes)
+    router = APIRouter(dependencies=[Depends(routes.verify_internal_token)])
+    _register_protected_routes(router, routes)
     return router
 
 
-def _register_worker_routes(router: APIRouter, routes: _WorkerRoutes) -> None:
-    authenticated = [Depends(routes.verify_internal_token)]
-    router.add_api_route(
-        "/health",
-        routes.health,
-        methods=["GET"],
-        responses={503: {"description": "Worker is not ready or its GPU is unavailable"}},
-    )
+def _register_protected_routes(router: APIRouter, routes: _WorkerRoutes) -> None:
     router.add_api_route("/loaded_models", routes.loaded_models, methods=["GET"])
     router.add_api_route(
         "/load_model",
@@ -638,14 +634,12 @@ def _register_worker_routes(router: APIRouter, routes: _WorkerRoutes) -> None:
         "/generate",
         routes.generate,
         methods=["POST"],
-        dependencies=authenticated,
         responses={409: {"description": "GPU is held or the requested model is not loaded"}},
     )
     router.add_api_route(
         "/gpu_hold/reserve",
         routes.reserve_hold,
         methods=["POST"],
-        dependencies=authenticated,
         responses={409: {"description": "GPU is busy or already held"}},
     )
     router.add_api_route(
@@ -653,7 +647,6 @@ def _register_worker_routes(router: APIRouter, routes: _WorkerRoutes) -> None:
         routes.renew_hold,
         methods=["POST"],
         status_code=204,
-        dependencies=authenticated,
         responses={409: {"description": GPU_HOLD_REJECTED_DETAIL}},
     )
     router.add_api_route(
@@ -661,20 +654,13 @@ def _register_worker_routes(router: APIRouter, routes: _WorkerRoutes) -> None:
         routes.release_hold,
         methods=["POST"],
         status_code=204,
-        dependencies=authenticated,
         responses={409: {"description": "GPU hold token is invalid or owned by training"}},
     )
-    router.add_api_route(
-        "/gpu_hold/handover",
-        routes.hold_handover,
-        methods=["POST"],
-        dependencies=authenticated,
-    )
+    router.add_api_route("/gpu_hold/handover", routes.hold_handover, methods=["POST"])
     router.add_api_route(
         "/tasks/train_lora",
         routes.train_lora,
         methods=["POST"],
-        dependencies=authenticated,
         responses={
             409: {"description": "GPU hold or requested model is unavailable"},
             422: {"description": "Training request is invalid"},
@@ -730,8 +716,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app(deps: WorkerDeps) -> FastAPI:
-    app = FastAPI(title=f"acestep-worker:{deps.worker_id}", lifespan=lifespan)
+    app = FastAPI(
+        title=f"acestep-worker:{deps.worker_id}",
+        lifespan=lifespan,
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
     app.state.deps = deps
+    app.add_api_route(
+        "/health",
+        _WorkerRoutes(deps).health,
+        methods=["GET"],
+        responses={503: {"description": "Worker is not ready or its GPU is unavailable"}},
+    )
     app.include_router(build_router(deps))
     return app
 

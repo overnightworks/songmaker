@@ -24,8 +24,10 @@ an LRU cache of loaded models and exposes:
 | POST | `/download_model` | Download a model variant, returns `{task_id}` |
 | GET | `/tasks/{id}` | Current task snapshot |
 | GET | `/tasks/{id}/stream` | SSE: `progress`/`done`/`error` events; a generate task's `progress` event also carries its `phase` (`writing`/`rendering`), and `progress` is the fraction within that phase |
-| GET | `/loaded_models` | Current state for heartbeat |
-| GET | `/health` | Liveness |
+| GET | `/loaded_models` | Loaded models, pinned set and available modes (no in-tree caller; the heartbeat is published by the worker itself) |
+| GET | `/health` | Liveness (the only route without the internal token) |
+
+Every route except `GET /health` needs the `X-Internal-Token` header: a missing header answers 422, a wrong or empty token 401. The routes sit on one router that carries the token check, so a new route is protected by default. `/health` stays open because the Compose healthcheck calls it headerless; the FastAPI `/docs`, `/redoc` and `/openapi.json` routes are switched off.
 
 Workers self-register with the web container at startup
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
@@ -433,7 +435,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `WORKER_PORT` | 8001 | Port the worker's FastAPI app listens on |
 | `REDIS_URL` | (required) | Redis URL for heartbeat publishing |
 | `CONTROL_PLANE_URL` | None | Songmaker web URL for worker registration. If unset, registration is skipped. |
-| `SONGMAKER_INTERNAL_TOKEN` | None | Shared secret for control-plane auth. Empty/None disables registration. |
+| `SONGMAKER_INTERNAL_TOKEN` | (required, non-empty) | Shared secret for control-plane auth. The worker refuses to start without it, and every route except `/health` checks it in the `X-Internal-Token` header (see "How Songmaker Uses ACE-Step"). |
 | `VRAM_BUDGET_GB` | 24.0 | VRAM budget in GB. Passed to the ACE-Step subprocess as `MAX_CUDA_VRAM`. Lower values (e.g. 22 on a 24 GB card) cause ACE-Step to auto-fall-back to CPU VAE decode during xl-turbo generation, which is ~100x slower than GPU — raise the budget if the admin panel shows very slow xl-turbo generations at ~0% GPU util. |
 | `GPU_ID` | None | CUDA device index passed deterministically to the inner process as `CUDA_VISIBLE_DEVICES` |
 | `NVIDIA_VISIBLE_DEVICES` | Compose: `0` | Host GPU exposed to the worker by the explicit NVIDIA container runtime |

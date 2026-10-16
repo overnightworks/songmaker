@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from collections.abc import Iterable
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -9,7 +11,9 @@ from unittest.mock import MagicMock
 import fakeredis.aioredis
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.routing import BaseRoute
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
@@ -28,11 +32,19 @@ from acestep_worker.wrapper import (
     read_queue_depth,
 )
 
-_INTERNAL_HEADERS = {"X-Internal-Token": "test-internal-token"}
+_INTERNAL_TOKEN_HEADER = "X-Internal-Token"
+_INTERNAL_TOKEN = "test-internal-token"
+_INTERNAL_HEADERS = {_INTERNAL_TOKEN_HEADER: _INTERNAL_TOKEN}
+_OPEN_OPERATION = ("GET", "/health")
+_FRAMEWORK_PATHS = ["/docs", "/docs/oauth2-redirect", "/redoc", "/openapi.json"]
 
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _worker_client(app: FastAPI) -> TestClient:
+    return TestClient(app, headers=_INTERNAL_HEADERS)
 
 
 def _make_deps(
@@ -88,7 +100,7 @@ def _make_deps(
         registration=None,
         checkpoint_dir=tmp_path,
         audio_output_dir=tmp_path / "audio",
-        internal_token="test-internal-token",
+        internal_token=_INTERNAL_TOKEN,
         generate_runner=fake_generate_runner,
     )
     deps.heartbeat = HeartbeatLoop(
@@ -104,6 +116,111 @@ async def _state_for_test(deps: WorkerDeps) -> dict[str, Any]:
         "loaded": deps.cache.loaded_modes(),
         "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
     }
+
+
+def _served_operations(routes: Iterable[BaseRoute]) -> list[tuple[str, str]]:
+    operations: list[tuple[str, str]] = []
+    for route in routes:
+        included_router = getattr(route, "original_router", None)
+        if included_router is not None:
+            operations.extend(_served_operations(included_router.routes))
+        else:
+            operations.extend((method, route.path) for method in sorted(route.methods))
+    return operations
+
+
+_SERVED_OPERATIONS = _served_operations(create_app(_make_deps(Path("unused"))[0]).routes)
+_PROTECTED_OPERATIONS = [
+    operation for operation in _SERVED_OPERATIONS if operation != _OPEN_OPERATION
+]
+_OPERATION_IDS = [f"{method} {path}" for method, path in _PROTECTED_OPERATIONS]
+
+
+@pytest.fixture
+def recorded_process_kills(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, int]]:
+    kills: list[tuple[int, int]] = []
+    monkeypatch.setattr("acestep_worker.wrapper.os.kill", lambda pid, sig: kills.append((pid, sig)))
+    return kills
+
+
+@pytest.fixture
+def headerless_client(
+    tmp_path: Path,
+    recorded_process_kills: list[tuple[int, int]],
+) -> TestClient:
+    deps, _ = _make_deps(tmp_path)
+    return TestClient(create_app(deps))
+
+
+def _call_operation(
+    client: TestClient,
+    method: str,
+    path: str,
+    token: bytes | None,
+) -> httpx.Response:
+    headers = [] if token is None else [(_INTERNAL_TOKEN_HEADER.encode(), token)]
+    return client.request(method, re.sub(r"\{\w+\}", "ghost", path), json={}, headers=headers)
+
+
+def _complains_about_missing_token(response: httpx.Response) -> bool:
+    return response.status_code == 422 and any(
+        error["loc"] == ["header", _INTERNAL_TOKEN_HEADER] for error in response.json()["detail"]
+    )
+
+
+def test_enumeration_reaches_operations_on_the_app_and_on_included_routers() -> None:
+    assert {_OPEN_OPERATION, ("POST", "/generate")} <= set(_SERVED_OPERATIONS)
+
+
+@pytest.mark.parametrize(("method", "path"), _PROTECTED_OPERATIONS, ids=_OPERATION_IDS)
+def test_every_worker_operation_but_health_asks_for_the_internal_token(
+    headerless_client: TestClient,
+    method: str,
+    path: str,
+) -> None:
+    response = _call_operation(headerless_client, method, path, token=None)
+
+    assert _complains_about_missing_token(response)
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        pytest.param(b"wrong-token", id="wrong"),
+        pytest.param(b"", id="empty"),
+        pytest.param("t\u00f6ken".encode(), id="non-ascii"),
+    ],
+)
+@pytest.mark.parametrize(("method", "path"), _PROTECTED_OPERATIONS, ids=_OPERATION_IDS)
+def test_every_worker_operation_but_health_refuses_a_wrong_token(
+    headerless_client: TestClient,
+    method: str,
+    path: str,
+    token: bytes,
+) -> None:
+    response = _call_operation(headerless_client, method, path, token)
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(("method", "path"), _PROTECTED_OPERATIONS, ids=_OPERATION_IDS)
+def test_every_worker_operation_but_health_accepts_the_right_token(
+    headerless_client: TestClient,
+    method: str,
+    path: str,
+) -> None:
+    response = _call_operation(headerless_client, method, path, _INTERNAL_TOKEN.encode())
+
+    assert response.status_code != 401
+    assert not _complains_about_missing_token(response)
+
+
+@pytest.mark.parametrize("path", _FRAMEWORK_PATHS)
+def test_worker_does_not_serve_the_framework_documentation_routes(
+    headerless_client: TestClient,
+    path: str,
+) -> None:
+    assert headerless_client.get(path).status_code == 404
 
 
 def test_format_sse_payload() -> None:
@@ -225,7 +342,7 @@ def test_build_state_payload_carries_gpu_healthy_true_by_default(
 def test_loaded_models_initial(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.get("/loaded_models")
     assert resp.status_code == 200
     body = resp.json()
@@ -244,7 +361,7 @@ def test_loaded_models_reports_vram_measured_true_with_a_reader(tmp_path: Path) 
         vram_reader=lambda: VramStats(used_gb=15.3, total_gb=24.0),
     )
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.get("/loaded_models")
     body = resp.json()
     assert body["vram_measured"] is True
@@ -258,7 +375,7 @@ def test_loaded_models_with_downloaded_mode(tmp_path: Path) -> None:
     (sft_dir / "model.safetensors").write_bytes(b"x")
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.get("/loaded_models")
     assert "sft" in resp.json()["available_modes"]
 
@@ -266,7 +383,7 @@ def test_loaded_models_with_downloaded_mode(tmp_path: Path) -> None:
 def test_load_model_success(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.post("/load_model", json={"mode": "sft"})
     assert resp.status_code == 200
     body = resp.json()
@@ -277,7 +394,7 @@ def test_load_model_success(tmp_path: Path) -> None:
 def test_load_model_unknown_mode(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.post("/load_model", json={"mode": "ghost"})
     assert resp.status_code == 400
 
@@ -286,7 +403,7 @@ def test_load_model_capacity_error(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     deps.cache._sizes["huge"] = 100.0
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.post("/load_model", json={"mode": "huge"})
     assert resp.status_code == 409
 
@@ -313,7 +430,7 @@ def test_load_model_subprocess_start_error_returns_502(tmp_path: Path) -> None:
         unloader=unloader,
     )
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.post("/load_model", json={"mode": "sft"})
     assert resp.status_code == 502
     detail = resp.json()["detail"]
@@ -324,7 +441,7 @@ def test_load_model_subprocess_start_error_returns_502(tmp_path: Path) -> None:
 def test_evict_model(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
         resp = client.post("/evict_model", json={"mode": "sft"})
     assert resp.status_code == 200
@@ -336,37 +453,13 @@ def test_evict_model(tmp_path: Path) -> None:
 def test_generate_answers_an_unloaded_mode_the_way_the_scheduler_recognizes(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.post(
             "/generate",
             json={"mode": "sft", "config": {"prompt": "test", "lyrics": ""}},
-            headers=_INTERNAL_HEADERS,
         )
     assert resp.status_code == 409
     assert resp.json()["detail"] == MODE_NOT_LOADED_DETAIL.format(mode="sft")
-
-
-@pytest.mark.parametrize(
-    ("headers", "status_code"),
-    [
-        pytest.param({}, 422, id="missing-token"),
-        pytest.param({"X-Internal-Token": "wrong-token"}, 401, id="wrong-token"),
-    ],
-)
-def test_generate_rejects_requests_without_the_internal_token(
-    tmp_path: Path,
-    headers: dict[str, str],
-    status_code: int,
-) -> None:
-    deps, _ = _make_deps(tmp_path)
-    app = create_app(deps)
-    with TestClient(app) as client:
-        response = client.post(
-            "/generate",
-            json={"mode": "sft", "config": {"prompt": "test", "lyrics": ""}},
-            headers=headers,
-        )
-    assert response.status_code == status_code
 
 
 def test_generate_acquisition_serializes_with_hold_reservation(
@@ -420,17 +513,15 @@ def test_generate_acquisition_serializes_with_hold_reservation(
 def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         assert client.post("/load_model", json={"mode": "sft"}).status_code == 200
         reserve = client.post(
             "/gpu_hold/reserve",
-            headers={"X-Internal-Token": "test-internal-token"},
         )
         assert reserve.status_code == 200
         resp = client.post(
             "/generate",
             json={"mode": "sft", "config": {"prompt": "test", "lyrics": ""}},
-            headers=_INTERNAL_HEADERS,
         )
     assert resp.status_code == 409
     assert resp.json()["detail"] == "GPU is held for LoRA training"
@@ -439,14 +530,13 @@ def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> Non
 def test_generate_returns_a_task_that_starts_loading_its_model(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
         resp = client.post(
             "/generate",
             json={"mode": "sft", "config": {"prompt": "test", "lyrics": ""}},
-            headers=_INTERNAL_HEADERS,
         )
-        task = client.get(f"/tasks/{resp.json()['task_id']}", headers=_INTERNAL_HEADERS)
+        task = client.get(f"/tasks/{resp.json()['task_id']}")
     assert resp.status_code == 200
     assert resp.json()["task_id"].startswith("gen-")
     assert task.json()["phase"] == "loading_model"
@@ -495,11 +585,9 @@ def test_generate_passes_the_full_config_through_losslessly(tmp_path: Path) -> N
     deps.generate_runner = capturing_runner
     app = create_app(deps)
     payload = _full_ace_step_config_payload()
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
-        resp = client.post(
-            "/generate", json={"mode": "sft", "config": payload}, headers=_INTERNAL_HEADERS
-        )
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
 
     assert resp.status_code == 200
     assert len(received) == 1
@@ -513,11 +601,9 @@ def test_generate_rejects_an_unrecognized_config_field(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
     payload = {**_full_ace_step_config_payload(), "audio_duraton": 91}
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
-        resp = client.post(
-            "/generate", json={"mode": "sft", "config": payload}, headers=_INTERNAL_HEADERS
-        )
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
     assert resp.status_code == 422
 
 
@@ -528,11 +614,9 @@ def test_generate_rejects_a_missing_required_config_field(tmp_path: Path) -> Non
     app = create_app(deps)
     payload = _full_ace_step_config_payload()
     del payload["lyrics"]
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
-        resp = client.post(
-            "/generate", json={"mode": "sft", "config": payload}, headers=_INTERNAL_HEADERS
-        )
+        resp = client.post("/generate", json={"mode": "sft", "config": payload})
     assert resp.status_code == 422
 
 
@@ -558,7 +642,7 @@ def test_download_model_returns_task_id(tmp_path: Path) -> None:
 
     wrapper_module.start_download = fake_start  # type: ignore[assignment]
     try:
-        with TestClient(app) as client:
+        with _worker_client(app) as client:
             resp = client.post("/download_model", json={"mode": "sft"})
     finally:
         wrapper_module.start_download = original_start  # type: ignore[assignment]
@@ -569,7 +653,7 @@ def test_download_model_returns_task_id(tmp_path: Path) -> None:
 def test_get_task_unknown(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.get("/tasks/ghost")
     assert resp.status_code == 404
 
@@ -577,12 +661,11 @@ def test_get_task_unknown(tmp_path: Path) -> None:
 def test_get_task_known(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
         gen = client.post(
             "/generate",
             json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
-            headers=_INTERNAL_HEADERS,
         )
         task_id = gen.json()["task_id"]
         for _ in range(20):
@@ -596,7 +679,7 @@ def test_get_task_known(tmp_path: Path) -> None:
 def test_stream_task_unknown(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.get("/tasks/ghost/stream")
     assert resp.status_code == 404
 
@@ -604,12 +687,11 @@ def test_stream_task_unknown(tmp_path: Path) -> None:
 def test_stream_task_yields_done(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
         gen = client.post(
             "/generate",
             json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
-            headers=_INTERNAL_HEADERS,
         )
         task_id = gen.json()["task_id"]
         for _ in range(20):
@@ -1015,7 +1097,7 @@ def test_lifespan_swallows_registration_exception_on_shutdown(tmp_path: Path) ->
 def test_pin_model_success(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
         resp = client.post("/pin_model", json={"mode": "sft"})
         assert resp.status_code == 200
@@ -1028,7 +1110,7 @@ def test_pin_model_success(tmp_path: Path) -> None:
 def test_pin_model_not_loaded_returns_409(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.post("/pin_model", json={"mode": "sft"})
     assert resp.status_code == 409
     assert "Cannot pin" in resp.json()["detail"]
@@ -1037,7 +1119,7 @@ def test_pin_model_not_loaded_returns_409(tmp_path: Path) -> None:
 def test_unpin_model_success(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
         client.post("/pin_model", json={"mode": "sft"})
         resp = client.post("/unpin_model", json={"mode": "sft"})
@@ -1049,7 +1131,7 @@ def test_unpin_model_success(tmp_path: Path) -> None:
 def test_unpin_unknown_mode_returns_200(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         resp = client.post("/unpin_model", json={"mode": "sft"})
     assert resp.status_code == 200
 
@@ -1057,37 +1139,28 @@ def test_unpin_unknown_mode_returns_200(tmp_path: Path) -> None:
 # ── D4 wrapper: /restart endpoint ────────────────────────────────
 
 
-def test_restart_endpoint_schedules_sigterm(tmp_path: Path) -> None:
+def test_restart_endpoint_schedules_sigterm(
+    tmp_path: Path,
+    recorded_process_kills: list[tuple[int, int]],
+) -> None:
     import os as _os
-
-    from acestep_worker import wrapper as wrapper_module
 
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
 
-    kill_calls: list[tuple[int, int]] = []
+    with _worker_client(app) as client:
+        resp = client.post("/restart")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["status"] == "restarting"
+        assert body["pid"] == _os.getpid()
+        for _ in range(20):
+            if recorded_process_kills:
+                break
+            _run(_asyncio_sleep(0.05))
 
-    def fake_kill(pid: int, sig: int) -> None:
-        kill_calls.append((pid, sig))
-
-    original_kill = _os.kill
-    wrapper_module.os.kill = fake_kill  # type: ignore[assignment]
-    try:
-        with TestClient(app) as client:
-            resp = client.post("/restart")
-            body = resp.json()
-            assert resp.status_code == 200
-            assert body["status"] == "restarting"
-            assert body["pid"] == _os.getpid()
-            for _ in range(20):
-                if kill_calls:
-                    break
-                _run(_asyncio_sleep(0.05))
-    finally:
-        wrapper_module.os.kill = original_kill  # type: ignore[assignment]
-
-    assert len(kill_calls) == 1
-    assert kill_calls[0][0] == _os.getpid()
+    assert len(recorded_process_kills) == 1
+    assert recorded_process_kills[0][0] == _os.getpid()
 
 
 async def _asyncio_sleep(seconds: float) -> None:
@@ -1134,12 +1207,12 @@ def test_generate_acquires_and_releases_refcount(tmp_path: Path) -> None:
             async with httpx.AsyncClient(
                 transport=transport,
                 base_url="http://test",
+                headers=_INTERNAL_HEADERS,
             ) as client:
                 await client.post("/load_model", json={"mode": "sft"})
                 resp = await client.post(
                     "/generate",
                     json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
-                    headers=_INTERNAL_HEADERS,
                 )
                 assert resp.status_code == 200
                 for _ in range(50):
@@ -1185,12 +1258,12 @@ def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
             async with httpx.AsyncClient(
                 transport=transport,
                 base_url="http://test",
+                headers=_INTERNAL_HEADERS,
             ) as client:
                 await client.post("/load_model", json={"mode": "sft"})
                 resp = await client.post(
                     "/generate",
                     json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
-                    headers=_INTERNAL_HEADERS,
                 )
                 assert resp.status_code == 200
                 for _ in range(50):
@@ -1205,7 +1278,7 @@ def test_generate_releases_refcount_on_runner_exception(tmp_path: Path) -> None:
 def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
-    with TestClient(app) as client:
+    with _worker_client(app) as client:
         client.post("/load_model", json={"mode": "sft"})
 
         async def hold():
