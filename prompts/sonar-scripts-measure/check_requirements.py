@@ -54,7 +54,7 @@ def _arguments() -> argparse.Namespace:
 
 
 def _git(project_root: Path, *arguments: str) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(  # NOSONAR Fixed Git argv is shell-free.
+    return subprocess.run(
         ["git", *arguments], cwd=project_root, check=False, capture_output=True
     )
 

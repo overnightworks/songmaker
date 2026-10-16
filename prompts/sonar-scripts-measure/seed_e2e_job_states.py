@@ -99,7 +99,7 @@ def add_take(
     """Write one take's audio file and its generation row on ``version_id``."""
     generation_id = str(uuid.uuid4())
     dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
-    dst.write_bytes(mp3_bytes)  # NOSONAR Uses validated audio path.
+    dst.write_bytes(mp3_bytes)
     return create_generation(
         session,
         song_id=song_id,

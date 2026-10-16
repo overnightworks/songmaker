@@ -325,7 +325,7 @@ def _write_report(output: Path, report: dict[str, Any]) -> None:
         json.dumps(report, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
-    temporary.replace(output)  # NOSONAR CLI-only output path.
+    temporary.replace(output)
 
 
 def parse_arguments() -> argparse.Namespace:
