@@ -142,13 +142,17 @@ async function guardDirtyNavigation(
 	action: () => void | Promise<void>,
 	beforeAsking: () => void = () => undefined
 ): Promise<void> {
+	const accepted = async () => {
+		cancelPendingPlayIntent();
+		await action();
+	};
 	if (get(draftHasUnversionedChanges)) {
 		beforeAsking();
 		closeSidebar();
-		pendingDirtyNavigation.set(action);
+		pendingDirtyNavigation.set(accepted);
 		return;
 	}
-	await action();
+	await accepted();
 }
 
 // The rail context (and every other "song open" entry point — search hits,
@@ -665,10 +669,7 @@ function onLanding(landing: Landing, landedState: unknown): void {
 	const state = libraryHistoryEntry(landedState);
 	let songPutBack = false;
 	void guardDirtyNavigation(
-		() => {
-			cancelPendingPlayIntent();
-			return songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state);
-		},
+		() => (songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state)),
 		() => {
 			putTheSongBackOverTheLanding();
 			songPutBack = true;

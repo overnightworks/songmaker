@@ -4,6 +4,9 @@ import {
 	makeSong as song
 } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
+import { goto } from '$app/navigation';
+import { fakePage, holdRouteLoads, reportedNavigations } from '$lib/test-utils/app-navigation';
+import { discardDraft, editLyrics, setDraftLyrics } from '$lib/stores/editor';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -64,13 +67,15 @@ import {
 	librarySurface,
 	openSongAddress,
 	resetLibraryContextForTests,
-	snapshotLibraryHistory
+	snapshotLibraryHistory,
+	writeLibraryHistory
 } from '$lib/stores/libraryContext';
 import {
 	mountAddressRoute,
 	pressBack,
 	pressForward,
-	pushHistoryEntry
+	pushHistoryEntry,
+	reloadLibraryPage
 } from '$lib/test-utils/library-history';
 import { installHistoryController } from '$lib/history/historyController';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
@@ -149,7 +154,14 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import songRowSource from './SongRow.svelte?raw';
-import { initNavigation, persistLibraryHistory, selectSong } from '$lib/stores/navigation';
+import {
+	followAppPageLink,
+	initNavigation,
+	openRailSearchTarget,
+	pendingDirtyNavigation,
+	persistLibraryHistory,
+	selectSong
+} from '$lib/stores/navigation';
 import {
 	pendingStart,
 	playAlbum,
@@ -1177,29 +1189,120 @@ describe('AlbumDetailView song row', () => {
 				expect(playAlbumSong).not.toHaveBeenCalled();
 			});
 
-			it('1354_rule_11: opens nothing when another address takes over the workspace before the takes arrive', async () => {
-				const read = holdRead();
-				const target = await renderSongs();
+			it.each(['link', 'search'] as const)(
+				'defect:#1386: withdraws a pending tap on an accepted %s while the destination route loads',
+				async (way) => {
+					const read = holdRead();
+					const target = await renderSongs();
+					prepareAlbumHistory();
+					boxOf(target, 'Ebb').click();
+					await tick();
+					const releaseRoute = holdRouteLoads();
+					onTestFinished(releaseRoute);
+					vi.mocked(goto).mockClear();
 
-				boxOf(target, 'Ebb').click();
-				await tick();
-				let resolveDestination!: (value: ReturnType<typeof songsPage>) => void;
-				vi.mocked(fetchSongs).mockReturnValueOnce(
-					new Promise((resolve) => {
-						resolveDestination = resolve;
-					})
-				);
-				mountAddressRoute('/album/a-local/destination');
-				const navigation = openSongAddress('a-local', 'destination');
-				await tick();
-				read.answer('archived-only');
-				await afterPendingMicrotasks();
+					if (way === 'link') {
+						followAppPageLink(new MouseEvent('click', { cancelable: true }), '/');
+					} else {
+						void openRailSearchTarget({ kind: 'page', href: '/playlists' });
+					}
+					await vi.waitFor(() => expect(goto).toHaveBeenCalled());
+					expect(fakePage.url.pathname).not.toBe(way === 'link' ? '/' : '/playlists');
+					read.answer('archived-only');
+					await afterPendingMicrotasks();
 
-				expect(selectSong).not.toHaveBeenCalled();
-				expect(playAlbumSong).not.toHaveBeenCalled();
-				resolveDestination(songsPage([]));
-				await expect(navigation).resolves.toBe('unknown-song');
-			});
+					expect(selectSong).not.toHaveBeenCalled();
+					expect(playAlbumSong).not.toHaveBeenCalled();
+					releaseRoute();
+					await vi.waitFor(() =>
+						expect(location.pathname).toBe(way === 'link' ? '/' : '/playlists')
+					);
+				}
+			);
+
+			it.each([
+				['Cancel', 'archived-only'],
+				['Cancel', 'playable'],
+				['Leave', 'archived-only'],
+				['Leave', 'playable'],
+				['clean', 'archived-only']
+			] as const)(
+				'defect:#1386: Back mounts an address before the guard, then %s with %s takes',
+				async (choice, outcome) => {
+					const read = holdRead();
+					const target = await renderSongs();
+					let addressResolution: Promise<string> | undefined;
+					const resolveLandedAddress = () => {
+						if (location.pathname === '/album/a-local/destination') {
+							expect(get(pendingDirtyNavigation)).toBeNull();
+							addressResolution = openSongAddress('a-local', 'destination');
+						}
+					};
+					window.addEventListener('popstate', resolveLandedAddress);
+					onTestFinished(() => window.removeEventListener('popstate', resolveLandedAddress));
+					prepareAlbumHistory();
+					const state = snapshotLibraryHistory(1);
+					await writeLibraryHistory(state, '/album/a-local/destination', 'push');
+					selectedSongId.set('s-tide');
+					const current = snapshotLibraryHistory(2);
+					const currentUrl = libraryHistoryUrl(current);
+					await writeLibraryHistory(current, currentUrl, 'push');
+					await reloadLibraryPage();
+					let resolveDestination!: (value: ReturnType<typeof songsPage>) => void;
+					vi.mocked(fetchSongs).mockReturnValue(
+						new Promise((resolve) => {
+							resolveDestination = resolve;
+						})
+					);
+					onTestFinished(() => {
+						resolveDestination(songsPage([]));
+						discardDraft();
+						pendingDirtyNavigation.set(null);
+					});
+					if (choice !== 'clean') setDraftLyrics('unsaved verse');
+					boxOf(target, 'Ebb').click();
+					await tick();
+
+					await pressBack();
+					expect(addressResolution).toBeDefined();
+					expect(reportedNavigations).toContainEqual({
+						type: 'popstate',
+						pathname: '/album/a-local/destination'
+					});
+					if (choice !== 'clean') {
+						const leave = get(pendingDirtyNavigation);
+						expect(leave).not.toBeNull();
+						expect(location.pathname).toBe(currentUrl);
+						pendingDirtyNavigation.set(null);
+						if (choice === 'Leave') {
+							discardDraft();
+							await leave?.();
+							await vi.waitFor(() => expect(location.pathname).toBe('/album/a-local/destination'));
+						} else {
+							expect(get(editLyrics)).toBe('unsaved verse');
+						}
+					}
+					read.answer(outcome);
+					if (choice === 'Cancel') await expectTapOutcome(outcome);
+					else {
+						await afterPendingMicrotasks();
+						expect(selectSong).not.toHaveBeenCalled();
+						expect(playAlbumSong).not.toHaveBeenCalled();
+					}
+					resolveDestination(
+						songsPage([
+							song({
+								id: 's-destination',
+								album_id: 'a-local',
+								slug: 'destination',
+								generation_count: 0
+							})
+						])
+					);
+					await expect(addressResolution).resolves.toBe('found');
+					expect(get(selectedSongId)).toBe(choice === 'Cancel' ? 's-tide' : 's-destination');
+				}
+			);
 
 			it('keeps the newer tap when the older read answers last', async () => {
 				const answers = new Map<string, () => void>();

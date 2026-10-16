@@ -41,7 +41,6 @@ import {
 	upsertSongInList
 } from '$lib/stores/libraryData';
 import {
-	cancelPendingPlayIntent,
 	ensureGenerationsLoaded,
 	selectedAlbumId,
 	selectedGenerationId,
@@ -471,7 +470,6 @@ async function resolveMountedAddress<Verdict extends string>(
 ): Promise<Verdict | 'found'> {
 	const mountedUrl = mountedRouteUrl();
 	if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
-	cancelPendingPlayIntent();
 	let resolved: ResolvedAddress | Verdict;
 	try {
 		resolved = await resolveParams();
