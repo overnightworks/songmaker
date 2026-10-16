@@ -1,5 +1,6 @@
 import {
 	historyEntry,
+	mountAddressRoute,
 	historyLength,
 	landOnStandingEntry,
 	pressBack,
@@ -41,11 +42,11 @@ import {
 	captureLibraryScroll,
 	currentLibraryHistoryState,
 	detailTab,
-	isLibraryHistoryState,
 	libraryHistoryStepsLanded,
 	libraryScrollAnchor,
 	librarySurface,
 	openPlaylistAddress,
+	openLibraryAddress,
 	openSongAddress,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
@@ -946,6 +947,8 @@ describe('Back and Forward across an app page', () => {
 	// first one reached lands unheard on the wall.
 	it('shows the wall two quick Backs from Settings reached once the library listens', async () => {
 		let stopNavigation = initNavigation();
+		mountAddressRoute(LIBRARY_ROUTE_PATH);
+		await openLibraryAddress();
 		await openAlbum('a1');
 		await goto(resolve(SETTINGS));
 		stampNavigatedEntry('link');
@@ -965,6 +968,8 @@ describe('Back and Forward across an app page', () => {
 	it('shows the song one Back from Settings reached once, however the library listens after', async () => {
 		fetchSong.mockResolvedValue(song({ ...navigableSongDefaults(), slug: 's1' }));
 		let stopNavigation = initNavigation();
+		mountAddressRoute(LIBRARY_ROUTE_PATH);
+		await openLibraryAddress();
 		await openAlbum('a1');
 		await selectSong('s1');
 		await goto(resolve(SETTINGS));
@@ -988,6 +993,8 @@ describe('Back and Forward across an app page', () => {
 	// left, so Settings opened over it writes that scroll into its entry.
 	it('Back from Settings opened over the wall shows the wall at the scroll it was left at', async () => {
 		onTestFinished(initNavigation());
+		mountAddressRoute(LIBRARY_ROUTE_PATH);
+		await openLibraryAddress();
 		captureLibraryScroll(480);
 
 		await openAppPage(SETTINGS);
@@ -1812,24 +1819,17 @@ describe('initNavigation', () => {
 	// raced an *unknown* address (nothing else ever writes for it) and always
 	// won once the live stream's own bootstrap finished, replacing the
 	// intended 404 overlay with a crossing `goto('/')` back to the wall.
-	it('does not seed a default root entry on an address route, leaving its own resolver the only writer', () => {
-		replaceHistoryEntry('/album/ghost');
-
-		const cleanup = initNavigation();
-
-		expect(vi.mocked(goto)).not.toHaveBeenCalled();
-		expect(historyEntry()).toBeNull();
-		cleanup();
-	});
-
-	it('still seeds a default root entry on a genuinely cold "/" visit', async () => {
-		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
-
-		const cleanup = initNavigation();
-
-		await vi.waitFor(() => expect(isLibraryHistoryState(historyEntry())).toBe(true));
-		cleanup();
-	});
+	it.each([LIBRARY_ROUTE_PATH, '/album/ghost'])(
+		'1354_rule_31: leaves %s to its address resolver without seeding history',
+		async (path) => {
+			replaceHistoryEntry(path);
+			const cleanup = initNavigation();
+			await Promise.resolve();
+			expect(historyEntry()).toBeNull();
+			expect(location.pathname).toBe(path);
+			cleanup();
+		}
+	);
 });
 
 // Browser or phone Back has already moved the address when the library hears
@@ -2026,9 +2026,11 @@ describe('full Now Playing owns one history entry', () => {
 
 	let stopNavigation: () => void = () => undefined;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		nowPlayingDockable.set(false);
 		stopNavigation = initNavigation();
+		mountAddressRoute(LIBRARY_ROUTE_PATH);
+		await openLibraryAddress();
 	});
 
 	afterEach(() => {

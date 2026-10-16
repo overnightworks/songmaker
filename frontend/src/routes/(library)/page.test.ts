@@ -1,4 +1,4 @@
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { historyEntry, historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
@@ -11,6 +11,7 @@ import { browserReportsOnline } from '$lib/test-utils/network';
 import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
+import * as libraryContext from '$lib/stores/libraryContext';
 import { libraryRootState, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
@@ -42,9 +43,17 @@ vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation'
 // e2e/album-address.spec.ts for the real router). What this file can and
 // does pin is that `goto` is called with the right path and options, and
 // what the page renders while it waits or fails.
-vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
-);
+vi.mock('$app/navigation', async () => {
+	const navigation = (await import('$lib/test-utils/app-navigation')).fakeAppNavigation();
+	return {
+		...navigation,
+		goto: vi.fn(async (...args: Parameters<typeof navigation.goto>) => {
+			// A route crossing unmounts this leaf before the destination URL is exposed.
+			for (const app of mounted.splice(0)) await unmount(app);
+			await navigation.goto(...args);
+		})
+	};
+});
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/songs', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/songs')>()),
@@ -183,6 +192,16 @@ afterEach(() => {
 });
 
 describe('/ with no ?song= query', () => {
+	it('1354_rule_31: resolves the Library entry without adding a Back step', async () => {
+		coldTabAt('');
+		const length = historyLength();
+		openAddress();
+		await vi.waitFor(() =>
+			expect(historyEntry()).toMatchObject({ surface: 'browse', songId: null })
+		);
+		expect(historyLength()).toBe(length);
+	});
+
 	it('renders nothing and leaves the workspace reachable', async () => {
 		coldTabAt('');
 
@@ -195,6 +214,23 @@ describe('/ with no ?song= query', () => {
 });
 
 describe('a legacy /?song= address redirects', () => {
+	it.each(['?song=' + SONG_ID, `?song=${SONG_ID}&gen=${GENERATION_ID}`])(
+		'1354_rule_31: preserves %s while legacy resolution waits',
+		async (query) => {
+			coldTabAt(query);
+			const openLibrary = vi.spyOn(libraryContext, 'openLibraryAddress');
+			api.fetchSong.mockReturnValue(new Promise(() => {}));
+			try {
+				const target = openAddress();
+				await vi.waitFor(() => expect(target.textContent).toContain('Loading song'));
+				expect(location.search).toBe(query);
+				expect(openLibrary).not.toHaveBeenCalled();
+			} finally {
+				openLibrary.mockRestore();
+			}
+		}
+	);
+
 	it('resolves the id and replaces the address with the canonical song address', async () => {
 		api.fetchSong.mockResolvedValue(
 			song({

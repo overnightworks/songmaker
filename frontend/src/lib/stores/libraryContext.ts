@@ -54,6 +54,7 @@ import {
 	pendingTakeRoutePath,
 	playlistRoutePath,
 	PLAYLISTS_ROUTE_PATH,
+	LIBRARY_ROUTE_PATH,
 	songRoutePath,
 	takeRoutePath
 } from '$lib/routes/addresses';
@@ -668,6 +669,23 @@ function playlistAddressState(playlistId: string): LibraryHistoryState {
 		surface: 'detail',
 		collection: { kind: 'playlist', id: playlistId }
 	};
+}
+
+// The Library page owns its initial entry, just like the Playlists page.
+// A matching browse entry keeps its collection, query, sort and scroll;
+// a foreign entry is replaced in place without adding a Back step.
+export function openLibraryAddress(): Promise<'found'> {
+	return resolveMountedAddress<never>(() =>
+		Promise.resolve({
+			routePath: LIBRARY_ROUTE_PATH,
+			historyOpens: () => {
+				const state = currentLibraryHistoryState();
+				return isLibraryHistoryState(state) && state.surface === 'browse' && state.songId === null;
+			},
+			addressState: () => ({ ...libraryRootState(), surface: 'browse' }),
+			shown: () => get(librarySurface) === 'browse' && get(selectedSongId) === null
+		})
+	);
 }
 
 // The entry point of the /playlists route (#1402). The address names no

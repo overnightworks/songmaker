@@ -1,8 +1,10 @@
 import { tick } from 'svelte';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	holdLibraryHistoryUntilRouterStarts,
 	libraryHistoryEntry,
+	openLibraryAddress,
 	libraryHistoryStepsLanded,
 	loadLibraryHistoryPageForTests,
 	type LibraryHistoryState
@@ -150,13 +152,14 @@ export function standingHistoryEntry(): HistoryEntry | null {
 // starts it on a fresh tab -- the page's entry stamped, the history controller
 // installed and the library's landing handler attached, the shell's own layers
 // followed and Escape listened for; the returned function stops it.
-function startLibraryHistory(): () => void {
-	replaceHistoryEntry('/');
+async function startLibraryHistory(): Promise<() => void> {
+	mountAddressRoute(LIBRARY_ROUTE_PATH);
 	resetHistoryControllerForTests();
 	const uninstallHistoryController = installHistoryController();
 	const stopFollowingShellLayers = followShellLayers();
 	const stopListening = listenForGlobalEscape();
 	const stopNavigation = initNavigation();
+	await openLibraryAddress();
 	return () => {
 		stopNavigation();
 		stopListening();
@@ -168,7 +171,7 @@ function startLibraryHistory(): () => void {
 
 async function expectHistoryOn(entry: HistoryEntry | null): Promise<void> {
 	await vi.waitFor(() => expect(standingHistoryEntry()).toEqual(entry));
-	expect(location.pathname).toBe('/');
+	expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 }
 
 async function expectLayerEntryAbove(page: HistoryEntry | null): Promise<HistoryEntry> {
@@ -176,7 +179,7 @@ async function expectLayerEntryAbove(page: HistoryEntry | null): Promise<History
 		expect(standingHistoryEntry()?.layer).toBeDefined();
 		expect(standingHistoryEntry()?.id).toBeGreaterThan(page?.id ?? Number.NEGATIVE_INFINITY);
 	});
-	expect(location.pathname).toBe('/');
+	expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 	return standingHistoryEntry() as HistoryEntry;
 }
 
@@ -209,8 +212,8 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 		let below: HistoryEntry | null;
 		let layerEntry: HistoryEntry;
 
-		beforeEach(() => {
-			stopLibraryHistory = startLibraryHistory();
+		beforeEach(async () => {
+			stopLibraryHistory = await startLibraryHistory();
 		});
 
 		afterEach(() => stopLibraryHistory());
