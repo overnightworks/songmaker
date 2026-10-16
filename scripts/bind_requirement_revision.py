@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import signal
 import stat
@@ -80,7 +81,7 @@ def _supervise(raw_arguments: list[str]) -> int:
         str(guard_read),
     ]
     try:
-        process = subprocess.Popen(  # NOSONAR Fixed worker uses shell-free argv.
+        process = subprocess.Popen(  # NOSONAR(S8705) Re-runs this script with its own argv.
             command,
             cwd=Path.cwd(),
             env=os.environ.copy(),
@@ -144,20 +145,10 @@ def _start_parent_guard(descriptor: int | None) -> bool:
         return False
 
     def watch() -> None:
-        try:
-            while os.read(descriptor, 1):
-                pass
-        except OSError:
-            pass
-        finally:
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
-        try:
+        with contextlib.suppress(OSError), os.fdopen(descriptor, "rb", buffering=0) as guard:
+            guard.read()
+        with contextlib.suppress(ProcessLookupError):
             os.killpg(os.getpgrp(), signal.SIGKILL)
-        except ProcessLookupError:
-            pass
 
     threading.Thread(target=watch, name="requirement-bind-parent-guard", daemon=True).start()
     return True
