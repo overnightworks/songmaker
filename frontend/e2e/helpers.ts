@@ -316,6 +316,35 @@ export function appBar(page: Page): Locator {
 	return page.getByRole('banner');
 }
 
+// The wall's head names its count once every album has loaded. The full list
+// lands as one change that sets the wall back to the scroll the app last
+// heard of, so a scroll made before it can be undone by it.
+export async function expectLibraryWallLoaded(page: Page): Promise<void> {
+	await expect(
+		workspace(page).getByRole('heading', { name: new RegExp(`^${RAIL_LIBRARY_LABEL} · \\d+$`) })
+	).toBeVisible();
+}
+
+// Scrolls the wall halfway down and answers where it then stands, once the
+// wall has reported that scroll: the app keeps it from that report.
+export async function scrollWallHalfway(page: Page): Promise<number> {
+	const target = await workspace(page)
+		.locator('.library-wall .wall-body')
+		.evaluate(
+			(body) =>
+				new Promise<number>((resolve) => {
+					const halfway = Math.round((body.scrollHeight - body.clientHeight) / 2);
+					if (halfway <= 0) return resolve(0);
+					body.addEventListener('scroll', () => resolve(Math.round(body.scrollTop)), {
+						once: true
+					});
+					body.scrollTop = halfway;
+				})
+		);
+	expect(target, 'the seeded wall scrolls').toBeGreaterThan(0);
+	return target;
+}
+
 /** Back to the wall through the word LIBRARY, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	const rail = await openRailNav(page, shell);

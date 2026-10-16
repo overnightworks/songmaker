@@ -40,6 +40,8 @@ import {
 	containing,
 	csrfHeaders,
 	FlowGuard,
+	expectLibraryWallLoaded,
+	scrollWallHalfway,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openLibraryWall,
@@ -544,33 +546,6 @@ function wallBody(page: Page): Locator {
 
 function wallScrollTop(page: Page): Promise<number> {
 	return wallBody(page).evaluate((body) => Math.round(body.scrollTop));
-}
-
-// The wall's head names its count once every album has loaded. The full list
-// lands as one change that sets the wall back to the scroll the app last
-// heard of, so a scroll made before it can be undone by it.
-async function expectLibraryWallLoaded(page: Page): Promise<void> {
-	await expect(
-		workspace(page).getByRole('heading', { name: new RegExp(`^${RAIL_LIBRARY_LABEL} · \\d+$`) })
-	).toBeVisible();
-}
-
-// Scrolls the wall halfway down and answers where it then stands, once the
-// wall has reported that scroll: the app keeps it from that report.
-async function scrollWallHalfway(page: Page): Promise<number> {
-	const target = await wallBody(page).evaluate(
-		(body) =>
-			new Promise<number>((resolve) => {
-				const halfway = Math.round((body.scrollHeight - body.clientHeight) / 2);
-				if (halfway <= 0) return resolve(0);
-				body.addEventListener('scroll', () => resolve(Math.round(body.scrollTop)), {
-					once: true
-				});
-				body.scrollTop = halfway;
-			})
-	);
-	expect(target, 'the seeded wall scrolls').toBeGreaterThan(0);
-	return target;
 }
 
 // A fresh playlist, opened from the Playlists page the way a person does: one

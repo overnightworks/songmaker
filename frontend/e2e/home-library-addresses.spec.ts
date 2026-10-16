@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import {
 	FlowGuard,
+	expectLibraryWallLoaded,
+	scrollWallHalfway,
 	LIBRARY_PATH,
 	LIBRARY_URL,
 	HOME_URL,
@@ -33,25 +35,34 @@ for (const retainCollection of [false, true]) {
 				await openLibraryWall(page, shellOf(testInfo));
 				await expect(album.locator('..')).toHaveClass(/selected/);
 			}
-			await expect(wall.getByRole('heading')).toContainText(/\d+/);
+			await expectLibraryWallLoaded(page);
+			const scrolled = await scrollWallHalfway(page);
 			const tiles = wall.locator('.tile-grid .wall-tile-body');
-			await tiles.last().scrollIntoViewIfNeeded();
-			await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-			const scrolled = await body.evaluate((element) => Math.round(element.scrollTop));
-			await tiles.last().click();
+			const bounds = await body.evaluate((element) => {
+				const { top, bottom } = element.getBoundingClientRect();
+				return { top, bottom };
+			});
+			const visibleTile = await tiles.evaluateAll((elements, bounds) => {
+				return elements.findIndex((element) => {
+					const tile = element.getBoundingClientRect();
+					return tile.top >= bounds.top && tile.bottom <= bounds.bottom;
+				});
+			}, bounds);
+			expect(visibleTile, 'a wall tile is fully in view').toBeGreaterThanOrEqual(0);
+			await tiles.nth(visibleTile).click();
 			await expect(page).toHaveURL(/\/album\//);
 
 			await page.goBack();
 
 			await expect(page).toHaveURL(LIBRARY_URL);
-			await expect(wall).toBeVisible();
+			await expectLibraryWallLoaded(page);
 			await expect
 				.poll(() => body.evaluate((element) => Math.round(element.scrollTop)))
 				.toBe(scrolled);
 			if (retainCollection) await expect(album.locator('..')).toHaveClass(/selected/);
 			const length = await page.evaluate(() => history.length);
 			await page.reload();
-			await expect(wall).toBeVisible();
+			await expectLibraryWallLoaded(page);
 			await expect
 				.poll(() => body.evaluate((element) => Math.round(element.scrollTop)))
 				.toBe(scrolled);
