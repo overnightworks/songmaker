@@ -54,40 +54,80 @@ async function render(props: Partial<NowPlayingQueueProps> = {}) {
 }
 
 describe('NowPlayingQueue', () => {
-	it.each([undefined, new Map<string, string>()])(
-		'1374_rule_10 keeps subtitles with entry ids after reorder and leaves missing subtitles empty (%s)',
-		async (missingSubtitles) => {
-			const first = item({ key: 'entry-first', songTitle: 'Tide' });
-			const second = item({ key: 'entry-second', songTitle: 'Ebb' });
-			const third = item({ key: 'entry-third', songTitle: 'Shore' });
-			const subtitles = new Map([
-				['entry-first', 'Night Drive'],
-				['entry-second', 'Daybreak']
+	it('1374_rule_10 keeps subtitle wrappers with entry ids after reorder and preserves missing-key share rows', async () => {
+		const first = item({ key: 'entry-first', songTitle: 'Tide' });
+		const second = item({ key: 'entry-second', songTitle: 'Ebb' });
+		const third = item({ key: 'entry-third', songTitle: 'Shore' });
+		const subtitles = new Map([
+			['entry-first', 'Night Drive'],
+			['entry-second', 'Daybreak']
+		]);
+		const { setQueue } = await render({
+			queue: { items: [first, second, third], currentIndex: 0, upNext: null },
+			subtitleByEntryId: subtitles,
+			showTakeLabel: false
+		});
+		setQueue({ items: [third, second, first], currentIndex: 2, upNext: null });
+		await tick();
+		const rows = target.querySelectorAll('.queue-row');
+		expect(rows[0]).toHaveAccessibleName(/^Shore/);
+		expect(Array.from(rows[0].children, (child) => child.tagName)).toEqual([
+			'SPAN',
+			'SPAN',
+			'SPAN'
+		]);
+		expect(Array.from(rows[0].children, (child) => child.classList[0])).toEqual([
+			'queue-position',
+			'queue-title',
+			'queue-duration'
+		]);
+		expect(rows[0].querySelector('.queue-label')).toBeNull();
+		expect(rows[0].querySelector('.queue-subtitle')).toBeNull();
+		expect(rows[1]).toHaveAccessibleName(/^Ebb Daybreak/);
+		expect(rows[2]).toHaveAccessibleName(/^Tide Night Drive/);
+		expect(rows[0].querySelector('.queue-title')?.textContent).toBe('Shore');
+		expect(rows[1].querySelector('.queue-title')?.textContent).toBe('Ebb');
+		expect(rows[1].querySelector('.queue-subtitle')?.textContent).toBe('Daybreak');
+		for (const [index, title, subtitle] of [
+			[1, 'Ebb', 'Daybreak'],
+			[2, 'Tide', 'Night Drive']
+		] as const) {
+			const label = rows[index].querySelector(':scope > .queue-label');
+			expect(label).not.toBeNull();
+			expect(Array.from(label?.children ?? [], (child) => child.classList[0])).toEqual([
+				'queue-title',
+				'queue-subtitle'
 			]);
-			const { setQueue } = await render({
-				queue: { items: [first, second, third], currentIndex: 0, upNext: null },
-				subtitleByEntryId: subtitles,
-				showTakeLabel: false
-			});
-			setQueue({ items: [third, second, first], currentIndex: 2, upNext: null });
-			await tick();
-			const rows = target.querySelectorAll('.queue-row');
-			expect(rows[0]).toHaveAccessibleName(/^Shore/);
-			expect(rows[0].querySelector('.queue-subtitle')).toBeNull();
-			expect(rows[1]).toHaveAccessibleName(/^Ebb Daybreak/);
-			expect(rows[2]).toHaveAccessibleName(/^Tide Night Drive/);
-			expect(rows[0].querySelector('.queue-title')?.textContent).toBe('Shore');
-			expect(rows[1].querySelector('.queue-title')?.textContent).toBe('Ebb');
-			expect(rows[1].querySelector('.queue-subtitle')?.textContent).toBe('Daybreak');
-			expect(rows[1].querySelector('.queue-title .queue-subtitle')).toBeNull();
-			if (mounted) await unmount(mounted);
-			mounted = undefined;
-			await render({ subtitleByEntryId: missingSubtitles });
-			expect(target.querySelector('.queue-title')?.textContent).toBe('Tide');
-			expect(target.querySelector('.queue-subtitle')).toBeNull();
-			expect(target.querySelector('.queue-row')).toHaveAccessibleName(/^Tide/);
+			expect(label?.children[0].textContent).toBe(title);
+			expect(label?.children[1].textContent).toBe(subtitle);
 		}
-	);
+	});
+
+	it.each([
+		['no map', undefined],
+		['empty map', new Map<string, string>()],
+		['missing key in populated map', new Map([['other-entry', 'Daybreak']])]
+	])('1374_rule_10 preserves original row children with %s', async (_, subtitleByEntryId) => {
+		await render({ subtitleByEntryId });
+		const row = target.querySelector('.queue-row');
+		expect(row).not.toBeNull();
+		expect(Array.from(row?.children ?? [], (child) => child.tagName)).toEqual([
+			'SPAN',
+			'SPAN',
+			'SPAN',
+			'SPAN'
+		]);
+		expect(Array.from(row?.children ?? [], (child) => child.classList[0])).toEqual([
+			'queue-position',
+			'queue-title',
+			'queue-take',
+			'queue-duration'
+		]);
+		expect(row?.querySelector('.queue-label')).toBeNull();
+		expect(row?.querySelector('.queue-subtitle')).toBeNull();
+		expect(row?.querySelector(':scope > .queue-title')?.textContent).toBe('Tide');
+		expect(row).toHaveAccessibleName(/^Tide/);
+	});
 
 	it('1374_rule_5 names an album list Songs and keeps row names starting with the title', async () => {
 		await render({

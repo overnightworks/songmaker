@@ -91,12 +91,14 @@
 						<span class="queue-position" aria-hidden="true"
 							>{index === queue.currentIndex ? '' : index + 1}</span
 						>
-						<span class="queue-label">
-							<span class="queue-title">{item.songTitle}</span>
-							{#if subtitleByEntryId?.get(item.key)}
+						{#if subtitleByEntryId?.get(item.key)}
+							<span class="queue-label">
+								<span class="queue-title">{item.songTitle}</span>
 								<span class="queue-subtitle">{subtitleByEntryId.get(item.key)}</span>
-							{/if}
-						</span>
+							</span>
+						{:else}
+							<span class="queue-title">{item.songTitle}</span>
+						{/if}
 						{#if showTakeLabel}
 							<span class="queue-take">
 								{nowPlayingTakeLabel(item.versionNumber, item.generationNumber)}
