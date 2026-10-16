@@ -1846,6 +1846,7 @@ def test_successful_train_submit_wins_a_simultaneous_job_renewal_failure() -> No
 
 
 def test_race_owner_cancelled_while_awaiting_its_cancelled_operation_ends_cancelled() -> None:
+    """defect:#1509 -- cancelling the race owner while it awaited the operation was swallowed."""
     from songmaker_cli.jobs.lora_training import _race_with_renewal
 
     async def exercise() -> None:

@@ -192,6 +192,8 @@ class _CancelsItsRunnerOnComplete(TaskStore):
 def test_run_download_ends_cancelled_when_cancelled_while_stopping_its_progress_poll(
     tmp_path: Path,
 ) -> None:
+    """defect:#1509 -- cancelling the runner while it stops its poll child was swallowed."""
+
     async def go() -> None:
         store = _CancelsItsRunnerOnComplete()
         task_id = await store.create("download")

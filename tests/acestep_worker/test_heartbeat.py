@@ -156,6 +156,8 @@ def test_stop_handles_externally_cancelled_task() -> None:
 
 
 def test_stop_ends_cancelled_when_cancelled_while_waiting_for_the_loop() -> None:
+    """defect:#1509 -- cancelling stop() while it waited for the loop was swallowed."""
+
     async def go():
         publishing = asyncio.Event()
         finish_publishing = asyncio.Event()

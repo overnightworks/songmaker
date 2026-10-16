@@ -1326,6 +1326,8 @@ _CHILD_CANCELLERS = [
 
 @pytest.mark.parametrize("cancel_child", _CHILD_CANCELLERS)
 def test_cancelling_a_child_returns_once_the_child_has_ended_cancelled(cancel_child) -> None:
+    """defect:#1509 -- the owner's own cancellation of its child still ends cleanly."""
+
     async def go() -> bool:
         child = await _start_child_cleaning_up_after_cancel()
         owner = asyncio.create_task(cancel_child(child.task))
@@ -1341,6 +1343,8 @@ def test_cancelling_a_child_returns_once_the_child_has_ended_cancelled(cancel_ch
 def test_owner_cancelled_while_waiting_for_its_cancelled_child_ends_cancelled(
     cancel_child,
 ) -> None:
+    """defect:#1509 -- cancelling the owner while it waited for its child was swallowed."""
+
     async def go() -> None:
         child = await _start_child_cleaning_up_after_cancel()
         owner = asyncio.create_task(cancel_child(child.task))
