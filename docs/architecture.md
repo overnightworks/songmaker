@@ -750,9 +750,10 @@ A tap on a row plays it; a tap on the playing row pauses or resumes it. Once the
 player's transport leaves `.shared-page`'s view (one `IntersectionObserver` in
 `SharedCollection.svelte`, re-attached after every song change), the
 `TransportBarFrame` shows without its Now Playing pill, and a tap on it
-scrolls back up to the player. A shared playlist still composes
-`CollectionHeaderFrame` (read-only, no `…` menu), `TransportBarFrame`, and
-`NowPlayingFrame` with a queue-only right panel until #1374 slice 7.
+scrolls back up to the player without adding a history entry. Shared playlists
+use this same page surface (#1455), with the playlist mosaic (or its uploaded
+cover), a playable-song count, and each song’s album name beneath its queue
+title. The bar follows the current song’s album cover.
 Every share page ends in `SharedFooter.svelte`: "Powered by" and
 `LegalLinks.svelte`, the one owner of the Impressum · Datenschutz ·
 Nutzungsbedingungen links the sign-in page uses too, opening its

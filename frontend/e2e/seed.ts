@@ -178,7 +178,7 @@ export interface SeededLibrary {
 	/** Also the album's address: an album id is its slug (issue #269). */
 	albumId: string;
 	albumShareUrl: string;
-	/** A shared playlist, the one public collection that still opens as the old header and list. */
+	/** A shared playlist that opens directly as the page player. */
 	playlistShareUrl: string;
 	/** Its take is the album pick — played from the album row, added to a playlist by hand. */
 	pickedSongTitle: string;
