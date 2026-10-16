@@ -2,9 +2,7 @@ import {
 	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_ART_INITIAL_COUNT,
 	DAY_LABEL_TODAY,
-	DAY_LABEL_YESTERDAY,
-	PLACE_KIND_PLAYLIST_LABEL,
-	PLACE_LINE_SEPARATOR
+	DAY_LABEL_YESTERDAY
 } from '$lib/constants';
 
 const DAY_MS = 86_400_000;
@@ -23,13 +21,6 @@ function pluralize(count: number, noun: string): string {
 
 export function songCountLabel(songCount: number): string {
 	return pluralize(songCount, 'song');
-}
-
-/** A place tile's second line: a playlist says so first ("Playlist · 14 songs"), an album is just the detail. */
-export function placeLine(kind: 'album' | 'playlist', detail: string): string {
-	return kind === 'playlist'
-		? `${PLACE_KIND_PLAYLIST_LABEL}${PLACE_LINE_SEPARATOR}${detail}`
-		: detail;
 }
 
 export function titleInitials(title: string): string {

@@ -164,6 +164,10 @@ them; the song carries its title, share and song menu instead. `Rail`
 renders the block only when the layout hands it an `account`. Choosing
 Settings in the account menu while `/settings` is already on screen only
 closes the menu.
+In the LIBRARY and PLAYLISTS groups the word is a link to the group's own list
+page (`/`, `/playlists`) and the caret beside it is the only fold control
+(#1354 rule 40); there is no "All albums" row. On its own page a group is
+the current page and opens, as drawn in `docs/design/navigation.html`.
 `RailLibraryGroup.svelte` is the LIBRARY group: it
 loads every album route-independently (`ensureAllAlbumsLoaded`, #304) and
 lists all of them, each expandable one level into its own tracks (a
@@ -178,15 +182,19 @@ time it becomes shown — a navigation, Back, a reload, its group opening, a
 search clearing — once the group has finished opening, and not again while it
 stays shown. The open album's row and its
 selected track pre-expand automatically on entry without overriding a later
-manual collapse; the LIBRARY group's own title does not yet navigate (planned
-for a later slice). There is no Studio/Listen mode split and no third library
+manual collapse. There is no Studio/Listen mode split and no third library
 tab for
 Shared. `LibraryWall.svelte` (the main-area library browser) shows Continue
 (`LibraryContinue.svelte`: up to six places from `/api/library/listen`, so
-only places the musician listened in) above one wall of albums and playlists together, with no filter chips (#1102;
-state (g) of `docs/design/album-browsing.html` as blessed 27.09.2026 for
-#1071, rewritten by #1354). The wall's heading row holds
-one switch, A–Z · Last played; a first visit opens in A–Z and the choice is
+only places the musician listened in) above one wall of albums alone
+(`kind="library"`; the Playlists page mounts the same component as
+`kind="playlists"` for a wall of playlists alone), with no filter chips
+(#1102; state (g) of `docs/design/album-browsing.html` as blessed 27.09.2026
+for #1071, rewritten by #1354 rules 7 and 9). The head line reads the page
+name and its count once loaded ("Library · 12"), then holds the + New menu and
+one switch, A–Z · Last played; an empty wall says so in one line that points
+to + New ("No albums yet. + New makes one.", "No playlists yet. + New makes
+one."), and the rail's groups stay with 0 items. A first visit opens in A–Z and the choice is
 remembered on this device (`libraryWallOrder` in `stores/ui.ts`; a stored
 order it does not know, such as an earlier Recent or Added, opens in A–Z),
 never re-sorting Continue. A–Z compares titles ignoring case and accents and
@@ -200,7 +208,7 @@ holds these comparators and the Last played ranking; the wall and the rail's
 albums and playlists (desktop rail and phone drawer) all ask it, so the switch
 reorders both at once. Each tile's second line follows the order: the size
 under A–Z, the last listen under Last played (the size for a place never
-listened in), a playlist's line starting "Playlist ·". The
+listened in). The
 wall sorts the complete set from the same route-independent loader the rail
 uses (`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset,
 which history navigation (Back and Forward, an address, returning to the

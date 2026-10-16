@@ -41,7 +41,7 @@ import {
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
-	RAIL_LIBRARY_LABEL,
+	PLAYLISTS_PAGE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
@@ -485,11 +485,11 @@ const NOW_PLAYING_ORIGINS: {
 	openFromRow: (page: Page, request: APIRequestContext) => Promise<NowPlayingOrigin>;
 }[] = [
 	{
-		name: 'a playlist opened from the wall',
+		name: 'a playlist opened from the Playlists page',
 		openFromRow: async (page, request) => {
 			const playlist = await seedPlaylist(request, readSeededLibrary());
 			const [playing] = playlist.songTitles;
-			await page.goto('/');
+			await page.goto('/playlists');
 			await workspace(page)
 				.locator('.library-wall .tile-grid')
 				.locator('.wall-tile-body')
@@ -511,7 +511,7 @@ const NOW_PLAYING_ORIGINS: {
 			return {
 				playing,
 				origin,
-				cameFrom: workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL }),
+				cameFrom: workspace(page).getByRole('heading', { name: PLAYLISTS_PAGE_LABEL }),
 				opensOnTakeSheet: false
 			};
 		}

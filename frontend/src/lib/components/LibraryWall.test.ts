@@ -190,7 +190,7 @@ describe('LibraryWall', () => {
 			playlist({ id: 'p-local', entry_count: 2, share_slug: null })
 		]);
 
-		const root = await render();
+		const root = await render('playlists');
 
 		await vi.waitFor(() => expect(fetchPlaylists).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
@@ -198,20 +198,21 @@ describe('LibraryWall', () => {
 		);
 	});
 
-	it('opens in A–Z, the switch offering only A–Z and Last played: albums and playlists together by title, each line giving the size', async () => {
+	it('#1354 rule 7: shows only albums, A–Z, under one head line reading Library · 3, each line giving the size', async () => {
 		seedWall();
 
 		const root = await render();
 
 		expect(orderChoices(root).map(choiceLabel)).toEqual(['A–Z', 'Last played']);
 		expect(pressedOrder(root)).toEqual(['A–Z']);
-		expect(tileTitles(root)).toEqual([
-			'nachtstrom',
-			'Night drive',
-			'Sonne für Andrea',
-			'Sonnenlauf'
-		]);
-		expect(tileLines(root)).toEqual(['1 song', 'Playlist · 14 songs', '5 songs', '7 songs']);
+		expect(tileTitles(root)).toEqual(['nachtstrom', 'Sonne für Andrea', 'Sonnenlauf']);
+		expect(tileLines(root)).toEqual(['1 song', '5 songs', '7 songs']);
+		await vi.waitFor(() =>
+			expect(root.querySelector('.wall-titlebar h1')?.getAttribute('aria-label')).toBe(
+				'Library · 3'
+			)
+		);
+		expect(root.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Sort albums');
 	});
 
 	describe('with the clock on a Sunday noon in Berlin', () => {
@@ -244,21 +245,11 @@ describe('LibraryWall', () => {
 			orderButton(root, 'Last played').click();
 
 			await vi.waitFor(() =>
-				expect(tileTitles(root)).toEqual([
-					'Sonne für Andrea',
-					'Night drive',
-					'nachtstrom',
-					'Sonnenlauf'
-				])
+				expect(tileTitles(root)).toEqual(['Sonne für Andrea', 'nachtstrom', 'Sonnenlauf'])
 			);
 			expect(fetchLibraryListen).toHaveBeenCalledWith({ offset: 0, limit: 200 });
 			expect(pressedOrder(root)).toEqual(['Last played']);
-			expect(tileLines(root)).toEqual([
-				'today 05:47',
-				'Playlist · yesterday 23:40',
-				'Thu 20:31',
-				'20 Sep'
-			]);
+			expect(tileLines(root)).toEqual(['today 05:47', 'Thu 20:31', '20 Sep']);
 			expect(continueTitles(root)).toEqual(['nachtstrom']);
 		});
 
@@ -301,7 +292,7 @@ describe('LibraryWall', () => {
 
 		expect(pressedOrder(reopened)).toEqual(['Last played']);
 		await vi.waitFor(() => expect(tileTitles(reopened)[0]).toBe('Sonnenlauf'));
-		expect(tileLines(reopened).slice(1)).toEqual(['1 song', 'Playlist · 14 songs', '5 songs']);
+		expect(tileLines(reopened).slice(1)).toEqual(['1 song', '5 songs']);
 	});
 
 	it.each([
@@ -318,7 +309,7 @@ describe('LibraryWall', () => {
 		failReload();
 		await tick();
 
-		expect(tileTitles(root)).toHaveLength(4);
+		expect(tileTitles(root)).toHaveLength(3);
 		expect(root.querySelector('[role="alert"]')).toBeNull();
 	});
 
@@ -381,7 +372,7 @@ describe('LibraryWall', () => {
 				album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }]
 			})
 		]);
-		const root = await render();
+		const root = await render('playlists');
 
 		expect(
 			root.querySelector<HTMLImageElement>('img[alt="Playlist cover for Night Drive"]')?.src
@@ -398,29 +389,31 @@ describe('LibraryWall', () => {
 				album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }]
 			})
 		]);
-		const root = await render();
+		const root = await render('playlists');
 
 		expect(root.querySelector('.playlist-cover')).not.toBeNull();
 		expect(root.querySelector('.playlist-cover img')?.getAttribute('loading')).toBe('lazy');
 	});
 
-	it('opens the matching collection through the navigation store', async () => {
+	it.each([
+		{
+			wall: 'library' as const,
+			tile: 'Open album Local Album',
+			opens: { kind: 'album', id: 'a-local' }
+		},
+		{
+			wall: 'playlists' as const,
+			tile: 'Open playlist Night Drive',
+			opens: { kind: 'playlist', id: 'p-local' }
+		}
+	])('opens the matching collection from the $wall wall', async ({ wall, tile, opens }) => {
 		playlistList.set([playlist({ id: 'p-local', entry_count: 2, share_slug: null })]);
-		const root = await render();
-		const albumTile = root.querySelector<HTMLButtonElement>(
-			'[aria-label="Open album Local Album"]'
-		);
-		const playlistTile = root.querySelector<HTMLButtonElement>(
-			'[aria-label="Open playlist Night Drive"]'
-		);
+		const root = await render(wall);
 
-		albumTile?.click();
+		root.querySelector<HTMLButtonElement>(`[aria-label="${tile}"]`)?.click();
 		await tick();
-		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-local' });
 
-		playlistTile?.click();
-		await tick();
-		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p-local' });
+		expect(get(openCollection)).toEqual(opens);
 	});
 });
 
@@ -484,13 +477,13 @@ describe('the Playlists page wall', () => {
 		expect(pressedOrder(library)).toEqual(['Last played']);
 	});
 
-	it('says so when there is no playlist yet, and still offers New in Library', async () => {
+	it('#1354 rule 9: says so in one line when there is no playlist yet, and still offers New in Library', async () => {
 		emptyLibrary();
 		const root = await render('playlists');
 
 		const menu = await openNewMenu(root);
 
-		expect(root.querySelector('.wall-body')?.textContent).toContain('No playlists yet.');
+		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(NO_PLAYLISTS);
 		expect([...menu.querySelectorAll('button')].map((item) => item.textContent?.trim())).toEqual([
 			'Album',
 			'Playlist'
@@ -502,7 +495,7 @@ describe('the Playlists page wall', () => {
 			failing: 'the albums',
 			fail: () =>
 				libraryBrowse.update((state) => ({ ...state, status: 'error' as const, error: 'down' })),
-			says: 'No playlists yet.'
+			says: NO_PLAYLISTS
 		},
 		{
 			failing: 'the playlists',
@@ -521,6 +514,8 @@ describe('the Playlists page wall', () => {
 });
 
 const NEW_LABEL = 'New album or playlist';
+const NO_ALBUMS = 'No albums yet. + New makes one.';
+const NO_PLAYLISTS = 'No playlists yet. + New makes one.';
 
 type NewKind = { choice: 'Album' | 'Playlist'; card: string; close: string; field: string };
 
@@ -590,13 +585,14 @@ function emptyLibrary(): void {
 }
 
 describe('LibraryWall + New', () => {
-	it('stands on the Library title line with its plus, even with no album yet, over an empty wall that says so', async () => {
+	it('#1354 rule 9: stands on the Library title line with its plus, even with no album yet, over an empty wall that says so in one line', async () => {
 		emptyLibrary();
+		playlistList.set([playlist({ id: 'p-road', title: 'Road Trip', share_slug: null })]);
 		const root = await render();
 
 		expect(newButton(root).textContent).toContain('New');
 		expect(newButton(root).querySelector('svg')).not.toBeNull();
-		expect(root.querySelector('.wall-body')?.textContent).toContain('No albums yet.');
+		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(NO_ALBUMS);
 	});
 
 	it('opens New in Library offering Album and Playlist, each with its icon', async () => {
@@ -654,7 +650,7 @@ describe('LibraryWall + New', () => {
 		expect(newCard(root, NEW_ALBUM)).toBeNull();
 	});
 
-	it('Playlist makes a named playlist there and opens it', async () => {
+	it('#1354 rule 7: Playlist makes a named playlist there and opens it, leaving the album wall as it was', async () => {
 		const root = await render();
 		const card = await chooseNew(root, NEW_PLAYLIST);
 
@@ -663,7 +659,7 @@ describe('LibraryWall + New', () => {
 
 		expect(createPlaylist).toHaveBeenCalledWith('Road Trip');
 		expect(newCard(root, NEW_PLAYLIST)).toBeNull();
-		expect(tileTitles(root)).toContain('Road Trip');
+		expect(tileTitles(root)).toEqual(['Local Album']);
 	});
 
 	it.each([

@@ -18,9 +18,19 @@ import {
 	NEW_PLACE_CREATE_LABEL,
 	NEW_PLAYLIST_CARD_LABEL,
 	NEW_PLAYLIST_CLOSE_LABEL,
-	NEW_PLAYLIST_NAME_LABEL
+	NEW_PLAYLIST_NAME_LABEL,
+	PLAYLISTS_WALL_EMPTY,
+	RAIL_LIBRARY_LABEL,
+	RAIL_PLAYLISTS_LABEL
 } from '../src/lib/constants';
-import { boundingBoxes, FlowGuard, shellOf, workspace } from './helpers';
+import {
+	boundingBoxes,
+	FlowGuard,
+	nameStartingWith,
+	openRailNav,
+	shellOf,
+	workspace
+} from './helpers';
 
 /**
  * Sized before the first CI measurement from the cold wall open (auth, the
@@ -143,4 +153,23 @@ test('+ New makes a named playlist from the Library head and opens it', async ({
 
 	await expect(page).toHaveURL(/\/playlist\//);
 	await expect(workspace(page).getByRole('heading', { name })).toBeVisible();
+});
+
+test('#1354 rule 9: an empty account reads one line on the Library and one on Playlists, offers + New on both and keeps both rail groups', async ({
+	page
+}, testInfo) => {
+	await answerTheLibraryEmpty(page);
+
+	for (const { address, line } of [
+		{ address: '/', line: LIBRARY_WALL_EMPTY },
+		{ address: '/playlists', line: PLAYLISTS_WALL_EMPTY }
+	]) {
+		await page.goto(address);
+
+		await expect(workspace(page).locator('.wall-body .empty')).toHaveText(line);
+		await expect(newButton(page)).toBeVisible();
+		const rail = await openRailNav(page, shellOf(testInfo));
+		for (const group of [RAIL_LIBRARY_LABEL, RAIL_PLAYLISTS_LABEL])
+			await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
+	}
 });

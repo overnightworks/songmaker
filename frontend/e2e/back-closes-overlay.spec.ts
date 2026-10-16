@@ -10,6 +10,7 @@ import {
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
 	playlistEntryOverflowLabel,
+	PLAYLISTS_PAGE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
@@ -327,7 +328,7 @@ async function expectReached(page: Page, pages: Pages, reached: LibraryPage): Pr
 		return;
 	}
 	await expect(pages.wall).toBeVisible();
-	await expect(page).toHaveURL(/\/$/);
+	await expect(page).toHaveURL(/\/playlists$/);
 }
 
 function backReaches(reached: LibraryPage): OverlayRow['afterwards'] {
@@ -414,8 +415,10 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		leave: async (page) => {
 			await openLibraryWall(page, 'mobile');
 		},
-		expectLeft: async (_page, pages) => {
-			await expect(pages.wall).toBeVisible();
+		expectLeft: async (page) => {
+			await expect(
+				workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })
+			).toBeVisible();
 		},
 		afterwards: backReaches('playlist')
 	},
@@ -550,18 +553,18 @@ async function scrollWallHalfway(page: Page): Promise<number> {
 	return target;
 }
 
-// A fresh playlist, opened from the wall the way a person does: one entry for
-// the wall, one for the playlist.
+// A fresh playlist, opened from the Playlists page the way a person does: one
+// entry for the page, one for the playlist.
 async function openSeededPlaylist(
 	page: Page,
 	request: APIRequestContext
 ): Promise<{ playlist: SeededPlaylist; pages: Pages }> {
 	const playlist = await seedPlaylist(request, readSeededLibrary());
 	const surface = workspace(page);
-	await page.goto('/');
-	const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+	await page.goto('/playlists');
+	const wall = surface.getByRole('heading', { name: PLAYLISTS_PAGE_LABEL });
 	await expect(wall).toBeVisible();
-	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: playlist.title }).click();
+	await wallTileNamed(page, playlist.title).click();
 	const playlistHeading = surface.getByRole('heading', { name: playlist.title });
 	await expect(playlistHeading).toBeVisible();
 	await expect(page).toHaveURL(/\/playlist\//);

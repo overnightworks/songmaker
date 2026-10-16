@@ -6,7 +6,6 @@ import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	LIBRARY_RETRY_LABEL,
 	PLAYING_MARK_LABEL,
-	RAIL_ALL_ALBUMS_LABEL,
 	RAIL_LIBRARY_LOAD_ERROR,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
@@ -63,7 +62,6 @@ vi.mock('$lib/api/client', async () => {
 });
 
 import RailLibraryGroup from './RailLibraryGroup.svelte';
-import { RAIL_ALL_ALBUMS_ITEM_CLASS, RAIL_ITEM_SELECTOR } from './rail-item-selector';
 
 const { render, cleanup } = createComponentMount(RailLibraryGroup);
 
@@ -110,7 +108,8 @@ function showAlbumDetail(albumId: string): void {
 }
 
 describe('RailLibraryGroup', () => {
-	it('shows the LIBRARY group with its icon and the current album count, collapsed with no album open', async () => {
+	it('shows the LIBRARY group with its icon and the current album count, collapsed with an album page elsewhere', async () => {
+		librarySurface.set('detail');
 		const target = await render();
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
 		expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
@@ -118,14 +117,48 @@ describe('RailLibraryGroup', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 	});
 
-	it('toggles the LIBRARY group without navigating when its label is clicked', async () => {
+	it('#1354 rule 40: the arrow folds the LIBRARY group without navigating', async () => {
 		librarySurface.set('detail');
 		const target = await render();
-		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		requireElement<HTMLSpanElement>(toggle, '.group-title').click();
+		const arrow = requireElement<HTMLButtonElement>(target, 'button.disclose');
+		arrow.click();
 		await tick();
-		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(arrow.getAttribute('aria-expanded')).toBe('true');
 		expect(get(librarySurface)).toBe('detail');
+	});
+
+	it('#1354 rule 40: the word Library opens the album covers and leaves the fold alone', async () => {
+		librarySurface.set('detail');
+		const target = await render();
+		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+		expect(word.getAttribute('href')).toBe('/');
+		expect(word.textContent).toContain('Library');
+
+		word.click();
+		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
+	});
+
+	it('#1354 rule 40 (D1): on the Library page its group is the current page and unfolded, until the arrow folds it', async () => {
+		const target = await render();
+		const arrow = requireElement<HTMLButtonElement>(target, 'button.disclose');
+		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+		expect(arrow.getAttribute('aria-expanded')).toBe('true');
+		expect(word.getAttribute('aria-current')).toBe('page');
+
+		arrow.click();
+		await tick();
+		expect(arrow.getAttribute('aria-expanded')).toBe('false');
+		expect(word.getAttribute('aria-current')).toBe('page');
+
+		librarySurface.set('detail');
+		await tick();
+		expect(word.hasAttribute('aria-current')).toBe(false);
+	});
+
+	it('#1354 rule 40: the Library list carries no All albums row', async () => {
+		const target = await render();
+		expect(target.textContent).not.toContain('All albums');
+		expect(target.querySelectorAll('.album-list > li')).toHaveLength(1);
 	});
 
 	it('loads every album on mount regardless of the current route', async () => {
@@ -194,31 +227,6 @@ describe('RailLibraryGroup', () => {
 		expect(
 			requireElement<HTMLButtonElement>(target, '.album-label').getAttribute('aria-expanded')
 		).toBe('true');
-	});
-
-	it('puts All albums first and returns to the wall with the group closed', async () => {
-		librarySurface.set('detail');
-		const target = await render();
-		const groupToggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		groupToggle.click();
-		await tick();
-
-		const allAlbums = requireElement<HTMLButtonElement>(
-			target,
-			'.album-list > li:first-child button'
-		);
-		expect(allAlbums.classList.contains(RAIL_ALL_ALBUMS_ITEM_CLASS)).toBe(true);
-		expect(RAIL_ITEM_SELECTOR).toContain(`.${RAIL_ALL_ALBUMS_ITEM_CLASS}`);
-		expect(allAlbums.textContent).toContain(RAIL_ALL_ALBUMS_LABEL);
-		expect(allAlbums.textContent).toContain('1');
-
-		allAlbums.click();
-		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
-		await tick();
-		expect(
-			requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
-		).toBe('false');
-		expect(localStorage.getItem('songmaker.rail-library-open')).toBe('false');
 	});
 
 	it('shows each album cover in the rail and keeps initials as its fallback', async () => {
@@ -529,14 +537,12 @@ describe('RailLibraryGroup', () => {
 		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
 		await tick();
 
-		const allAlbums = requireElement(target, `.${RAIL_ALL_ALBUMS_ITEM_CLASS}`);
-		expect(allAlbums.querySelector('.row-meta')).toBeNull();
 		expect(target.querySelector('.meta')).toBeNull();
 
 		fetchAlbums.mockResolvedValueOnce(albumsPage({ items: [] }));
 		reportResourceStreamReachable(true);
 
-		await vi.waitFor(() => expect(allAlbums.querySelector('.row-meta')?.textContent).toBe('0'));
+		await vi.waitFor(() => expect(target.querySelector('.meta')?.textContent).toBe('0'));
 	});
 
 	it('while no strip shows, loads again on a bounded backoff and then names the failure with its Retry', async () => {

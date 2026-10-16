@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { openCollection } from '$lib/stores/collection';
 	import { albumWhoseSongsShow, librarySurface } from '$lib/stores/libraryContext';
 	import {
@@ -21,13 +21,12 @@
 	import {
 		compareAlbumTracks,
 		openAlbum,
-		openLibraryWall,
+		openRailSearchTarget,
 		selectSong
 	} from '$lib/stores/navigation';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_RETRY_LABEL,
-		RAIL_ALL_ALBUMS_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
 		RAIL_LIBRARY_LABEL,
 		RAIL_LIBRARY_NAV_LABEL
@@ -36,11 +35,7 @@
 	import { titleInitials } from '$lib/utils/format';
 	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
-	import {
-		RAIL_ALBUM_ITEM_CLASS,
-		RAIL_ALL_ALBUMS_ITEM_CLASS,
-		revealOpenRailItem
-	} from './rail-item-selector';
+	import { RAIL_ALBUM_ITEM_CLASS, revealOpenRailItem } from './rail-item-selector';
 
 	// Local to this component rather than promoted to constants.ts: nothing
 	// else reads this key, matching how RailGroup's own groupId is already
@@ -66,6 +61,8 @@
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
+	// The Library page itself: its group is current and unfolded there (#1354 D1).
+	const onLibraryPage = $derived(surface === 'browse' && currentSongId === null);
 	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadFailure = $derived($allAlbumsLoadFailure);
@@ -109,27 +106,6 @@
 	// an open playlist in the sibling PLAYLISTS group is never affected (the
 	// two groups do not share a slot).
 	let expandedAlbumId: string | null = $state(null);
-	let libraryGroupMount = $state(0);
-
-	function persistLibraryOpen(value: boolean): void {
-		try {
-			localStorage.setItem(LIBRARY_OPEN_STORAGE_KEY, String(value));
-		} catch {
-			// The disclosure remains usable when browser storage is unavailable.
-		}
-	}
-
-	function closeLibraryGroupForWall(): void {
-		persistLibraryOpen(false);
-		libraryGroupMount = untrack(() => libraryGroupMount) + 1;
-	}
-
-	// The wall already is the library's album view. Recreate just this
-	// persisted disclosure after entering it so RailGroup reads the closed
-	// value; an album detail still uses its rising expandTrigger below.
-	$effect(() => {
-		if (surface === 'browse') closeLibraryGroupForWall();
-	});
 
 	// Edge-triggered like RailGroup's own expandTrigger idiom (see its comment):
 	// previousShownAlbumId is a plain variable, not $state, so this effect only
@@ -185,11 +161,6 @@
 		void openAlbum(albumId);
 	}
 
-	function openAllAlbums(): void {
-		closeLibraryGroupForWall();
-		void openLibraryWall();
-	}
-
 	function trackMeta(song: SongItem): string {
 		if (song.generation_count === 0) return RAIL_CONTEXT_NO_TAKES;
 		const takes = `${song.generation_count} take${song.generation_count !== 1 ? 's' : ''}`;
@@ -221,122 +192,101 @@
 	</svg>
 {/snippet}
 
-{#key libraryGroupMount}
-	<RailGroup
-		label={RAIL_LIBRARY_LABEL}
-		groupId="rail-library-group"
-		storageKey={LIBRARY_OPEN_STORAGE_KEY}
-		count={albumCount}
-		expandTrigger={isAlbumDetail || loadFailure !== null || filtering}
-		{icon}
-	>
-		{#snippet children(groupOpen: boolean)}
-			<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
-				{#if loadFailure !== null}
-					<div class="rail-load-error">
-						<p class="rail-status" role="alert">{loadFailure}</p>
-						<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
-							{LIBRARY_RETRY_LABEL}
-						</button>
-					</div>
-				{/if}
-				<ul class="album-list">
-					{#if !filtering}
-						<li>
-							<button type="button" class={RAIL_ALL_ALBUMS_ITEM_CLASS} onclick={openAllAlbums}>
-								<svg
-									class="caret"
-									width="10"
-									height="10"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="3"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									aria-hidden="true"
-								>
-									<polyline points="9 6 15 12 9 18" />
-								</svg>
-								<span class="row-title">{RAIL_ALL_ALBUMS_LABEL}</span>
-								{#if albumCount !== undefined}
-									<span class="row-meta">{albumCount}</span>
+<RailGroup
+	label={RAIL_LIBRARY_LABEL}
+	groupId="rail-library-group"
+	storageKey={LIBRARY_OPEN_STORAGE_KEY}
+	count={albumCount}
+	expandTrigger={onLibraryPage || isAlbumDetail || loadFailure !== null || filtering}
+	page={{
+		href: resolve('/'),
+		current: onLibraryPage,
+		open: () => void openRailSearchTarget({ kind: 'page', href: '/' })
+	}}
+	{icon}
+>
+	{#snippet children(groupOpen: boolean)}
+		<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
+			{#if loadFailure !== null}
+				<div class="rail-load-error">
+					<p class="rail-status" role="alert">{loadFailure}</p>
+					<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
+						{LIBRARY_RETRY_LABEL}
+					</button>
+				</div>
+			{/if}
+			<ul class="album-list">
+				{#each visibleAlbums as album (album.id)}
+					{@const expanded = isAlbumExpanded(album.id) || hasMatchingSong(album.id)}
+					{@const current = album.id === shownAlbumId}
+					<li>
+						<button
+							type="button"
+							class={RAIL_ALBUM_ITEM_CLASS}
+							aria-current={current ? 'page' : undefined}
+							use:revealOpenRailItem={current && groupOpen && !filtering}
+							aria-expanded={expanded}
+							aria-controls={`rail-library-album-${album.id}`}
+							onclick={() => openAlbumFromRail(album.id)}
+						>
+							<svg
+								class="caret"
+								class:open={expanded}
+								width="10"
+								height="10"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="3"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<polyline points="9 6 15 12 9 18" />
+							</svg>
+							<span class="album-art">
+								{#if album.cover?.card}
+									<img src={album.cover.card} alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`} />
+								{:else}
+									<span aria-hidden="true">{titleInitials(album.title)}</span>
 								{/if}
-							</button>
-						</li>
-					{/if}
-					{#each visibleAlbums as album (album.id)}
-						{@const expanded = isAlbumExpanded(album.id) || hasMatchingSong(album.id)}
-						{@const current = album.id === shownAlbumId}
-						<li>
-							<button
-								type="button"
-								class={RAIL_ALBUM_ITEM_CLASS}
-								aria-current={current ? 'page' : undefined}
-								use:revealOpenRailItem={current && groupOpen && !filtering}
-								aria-expanded={expanded}
-								aria-controls={`rail-library-album-${album.id}`}
-								onclick={() => openAlbumFromRail(album.id)}
-							>
-								<svg
-									class="caret"
-									class:open={expanded}
-									width="10"
-									height="10"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="3"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									aria-hidden="true"
-								>
-									<polyline points="9 6 15 12 9 18" />
-								</svg>
-								<span class="album-art">
-									{#if album.cover?.card}
-										<img src={album.cover.card} alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`} />
-									{:else}
-										<span aria-hidden="true">{titleInitials(album.title)}</span>
-									{/if}
-								</span>
-								<span class="row-title">{album.title}</span>
-								<span class="row-meta">{album.song_count}</span>
-							</button>
-							<div
-								class="album-songs"
-								data-open={expanded}
-								inert={!expanded}
-								id={`rail-library-album-${album.id}`}
-							>
-								<div class="album-songs-content">
-									{#if expanded}
-										<ul>
-											{#each [...visibleSongsForAlbum(album.id)].sort(compareAlbumTracks) as song (song.id)}
-												<li>
-													<button
-														type="button"
-														class="row row-sub2"
-														class:row-active={song.id === currentSongId}
-														onclick={() => onTrackClick(song)}
-													>
-														<PlayingMark current={isSongCurrent(song.id)} />
-														<span class="row-title">{song.title}</span>
-														<span class="row-meta">{trackMeta(song)}</span>
-													</button>
-												</li>
-											{/each}
-										</ul>
-									{/if}
-								</div>
+							</span>
+							<span class="row-title">{album.title}</span>
+							<span class="row-meta">{album.song_count}</span>
+						</button>
+						<div
+							class="album-songs"
+							data-open={expanded}
+							inert={!expanded}
+							id={`rail-library-album-${album.id}`}
+						>
+							<div class="album-songs-content">
+								{#if expanded}
+									<ul>
+										{#each [...visibleSongsForAlbum(album.id)].sort(compareAlbumTracks) as song (song.id)}
+											<li>
+												<button
+													type="button"
+													class="row row-sub2"
+													class:row-active={song.id === currentSongId}
+													onclick={() => onTrackClick(song)}
+												>
+													<PlayingMark current={isSongCurrent(song.id)} />
+													<span class="row-title">{song.title}</span>
+													<span class="row-meta">{trackMeta(song)}</span>
+												</button>
+											</li>
+										{/each}
+									</ul>
+								{/if}
 							</div>
-						</li>
-					{/each}
-				</ul>
-			</nav>
-		{/snippet}
-	</RailGroup>
-{/key}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		</nav>
+	{/snippet}
+</RailGroup>
 
 <style>
 	.album-list {
@@ -405,26 +355,6 @@
 		text-transform: none;
 		letter-spacing: normal;
 		border-left: 3px solid transparent;
-	}
-
-	.all-albums {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		padding: 8px 16px 8px 32px;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font: inherit;
-		font-size: 0.8rem;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.all-albums:hover {
-		background: var(--surface-hover);
-		color: var(--text);
 	}
 
 	.album-label {
