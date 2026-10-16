@@ -29,6 +29,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
+from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.scheduler import (
     WORKER_STREAM_WENT_SILENT,
     AllWorkersHeld,
@@ -816,6 +817,8 @@ def _worker_with_room_for_one_mode() -> tuple[httpx.MockTransport, list[str]]:
     finished_take = {"mode": "sft", "audio_path": "/tmp/take.wav", "seed": 1}
 
     def handle(request: httpx.Request) -> httpx.Response:
+        if INTERNAL_TOKEN_HEADER not in request.headers:
+            return httpx.Response(401, json={"detail": "Invalid internal token"})
         mode = json.loads(request.content)["mode"] if request.method == "POST" else None
         if request.url.path == "/load_model":
             evicted = [held for held in loaded if held != mode]

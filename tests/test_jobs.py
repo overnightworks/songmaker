@@ -45,6 +45,7 @@ from songmaker_cli.db.queries import (
     register_worker,
     update_job_status,
 )
+from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.jobs import (
     GenerationContext,
     _apply_cover_overrides,
@@ -71,6 +72,7 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
+from songmaker_cli.settings import get_settings
 
 
 def _run(coro):
@@ -2708,6 +2710,8 @@ def test_load_model_on_worker_success(seeded_db) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0] == "http://acestep-worker:8001/load_model"
     assert kwargs["json"] == {"mode": "sft"}
+    token = get_settings().songmaker_internal_token.get_secret_value()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == token
 
 
 def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
@@ -2964,6 +2968,8 @@ def test_download_model_on_worker_happy_path(seeded_db) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/download_model")
     assert kwargs["json"] == {"mode": "sft"}
+    token = get_settings().songmaker_internal_token.get_secret_value()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == token
 
 
 async def _instant_sleep(_seconds: float) -> None:
