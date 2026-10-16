@@ -30,11 +30,12 @@ export interface SharedTrack {
 	key: string;
 	title: string;
 	subtitle: string | null;
+	albumTitle: string | null;
 	audioUrl: string | null;
 	durationSec: number | null;
 	lyrics: string | null;
 	cues: WhisperCue[] | null;
-	cover?: AlbumCoverUrls | null;
+	cover: AlbumCoverUrls | null;
 }
 
 export interface SharedCollectionView {
@@ -60,12 +61,14 @@ function sharedTrack(
 	title: string,
 	subtitle: string | null,
 	media: SharedTakeMedia,
-	cover: AlbumCoverUrls | null = null
+	cover: AlbumCoverUrls | null = null,
+	albumTitle: string | null = null
 ): SharedTrack {
 	return {
 		key,
 		title,
 		subtitle,
+		albumTitle,
 		audioUrl: media.audio_url,
 		durationSec: media.audio_duration,
 		lyrics: media.lyrics,
@@ -97,7 +100,14 @@ export function fromSharedPlaylist(payload: SharedPlaylistPayload): SharedCollec
 		cover: payload.cover ?? null,
 		playlistCovers: payload.album_covers,
 		tracks: payload.entries.map((entry) =>
-			sharedTrack(entry.entry_id, entry.song_title, entry.artist, entry, entry.album_cover ?? null)
+			sharedTrack(
+				entry.entry_id,
+				entry.song_title,
+				entry.artist,
+				entry,
+				entry.album_cover ?? null,
+				entry.album_title
+			)
 		)
 	};
 }
@@ -140,21 +150,6 @@ export function playableTracks(tracks: SharedTrack[]): SharedTrack[] {
 	);
 }
 
-// The header's byline, one string per collection kind — pure so the
-// collection surface never has to branch on `kind` itself. A public listener
-// never sees the internal take number (issue #119): a shared take's byline
-// reads the same as a shared song's.
-export function collectionSubtitle(view: SharedCollectionView): string {
-	if (view.kind === 'playlist') {
-		const count = playableTracks(view.tracks).length;
-		return `${count} track${count !== 1 ? 's' : ''}`;
-	}
-	if (view.kind === 'take' || view.kind === 'song') {
-		return [view.artist, view.albumTitle].filter(Boolean).join(' · ');
-	}
-	return [view.artist, view.year].filter(Boolean).join(' · ');
-}
-
 const SHARE_GENERATION_NUMBER = 1;
 const SHARE_MODEL_MODE = 'sft';
 
@@ -168,7 +163,10 @@ export function trackPlaybackInfo(
 	collection: SharedCollectionView,
 	track: SharedTrack
 ): PlaybackInfo {
-	const albumTitle = collection.kind === 'album' ? collection.title : (collection.albumTitle ?? '');
+	const albumTitle =
+		collection.kind === 'album'
+			? collection.title
+			: (track.albumTitle ?? collection.albumTitle ?? '');
 	const artist = collection.kind === 'playlist' ? (track.subtitle ?? '') : collection.artist;
 	const generation: GenerationItem = {
 		id: track.key,

@@ -2,7 +2,6 @@
 // they never drift with the logged-in app's NowPlaying copy in
 // constants/now-playing.ts and constants.ts (one owner per label).
 
-export const SHARE_NOW_PLAYING_SHEET_LABEL = 'Now playing';
 export const SHARE_NOW_PLAYING_NO_LYRICS = 'No lyrics';
 export const SHARE_NO_AUDIO_NOTICE = 'No audio available yet.';
 
@@ -17,4 +16,8 @@ export function shareAlbumSubtitle(artist: string): string {
 
 export function shareNowPlayingLine(songTitle: string, position: number, total: number): string {
 	return `Now playing${SHARE_SEPARATOR}${songTitle}${SHARE_SEPARATOR}${position} of ${total}`;
+}
+
+export function sharePlaylistSubtitle(count: number): string {
+	return `Playlist${SHARE_SEPARATOR}${count} song${count === 1 ? '' : 's'}`;
 }

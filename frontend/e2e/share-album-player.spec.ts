@@ -421,11 +421,16 @@ test.describe('rights and neighbours', () => {
 			refusalsExpectedOn: [{ path: '/shared/', statuses: [404] }]
 		});
 
-		await page.goto(`${new URL(MOCK_URL).origin}/share/no-such-share-1443`);
-
-		await expect(page.getByRole('heading', { level: 1 })).toHaveText(/not found/i);
-		guard.assertClean();
-		await context.close();
+		try {
+			await page.goto(`${new URL(MOCK_URL).origin}/share/no-such-share-1443`);
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(/not found/i);
+		} finally {
+			try {
+				guard.assertClean();
+			} finally {
+				await context.close();
+			}
+		}
 	});
 
 	test('1374_rule_2 F3: the footer legal links still open', async ({ visitor }) => {
@@ -435,16 +440,6 @@ test.describe('rights and neighbours', () => {
 		await page.getByRole('button', { name: 'Impressum' }).click();
 
 		await expect(page.getByRole('dialog', { name: 'Legal information' })).toBeVisible();
-	});
-
-	test('1374_rule_2 F5: a shared playlist still renders the old header and list', async ({
-		visitor
-	}) => {
-		await visitor.page.goto(readSeededLibrary().playlistShareUrl);
-
-		await expect(visitor.page.locator('.collection-header')).toBeVisible();
-		await expect(visitor.page.locator('.track-row').first()).toBeVisible();
-		await expect(visitor.page.locator('.now-playing.page')).toHaveCount(0);
 	});
 });
 

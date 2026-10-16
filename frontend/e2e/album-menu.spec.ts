@@ -147,9 +147,7 @@ test('the playlist ⋯ opens fully on screen, under its own row of actions', asy
 	await expectMenuFullyOnScreen(page, header);
 });
 
-test('the public playlist page keeps its actions on their own row', async ({
-	browser
-}, testInfo) => {
+test('the public playlist opens with the page-player order', async ({ browser }, testInfo) => {
 	const library = readSeededLibrary();
 	const { isMobile, hasTouch } = testInfo.project.use;
 	const visitor = await browser.newContext({
@@ -161,15 +159,27 @@ test('the public playlist page keeps its actions on their own row', async ({
 	const sharePage = await visitor.newPage();
 	const shareGuard = new FlowGuard(sharePage);
 
-	await sharePage.goto(library.playlistShareUrl);
-
-	await expectActionRowUnderCoverAndTitle(
-		sharePage.locator('.collection-header'),
-		'playlist',
-		await sharePage.locator('.header-title').innerText()
-	);
-	shareGuard.assertClean();
-	await visitor.close();
+	try {
+		await sharePage.goto(library.playlistShareUrl);
+		await expect(sharePage.locator('.queue-row').first()).toBeVisible();
+		await sharePage.evaluate(() => document.fonts.ready);
+		const boxes = await boundingBoxes(
+			sharePage.getByRole('heading', { level: 1 }),
+			sharePage.locator('.now-playing-line'),
+			sharePage.locator('.now-playing.page .transport'),
+			sharePage.locator('.lyrics-heading'),
+			sharePage.getByRole('heading', { name: 'Songs', exact: true })
+		);
+		for (let index = 1; index < boxes.length; index++)
+			expect(boxes[index].y).toBeGreaterThan(boxes[index - 1].y);
+		await expect(sharePage.locator('.collection-header')).toHaveCount(0);
+	} finally {
+		try {
+			shareGuard.assertClean();
+		} finally {
+			await visitor.close();
+		}
+	}
 });
 
 async function openEditDetails(page: Page, header: Locator): Promise<Locator> {

@@ -11,7 +11,7 @@ import {
 	RAIL_NAV_LABEL
 } from '../src/lib/constants';
 import { BASE_URL } from './seed';
-import { LIBRARY_PATH } from './helpers';
+import { FlowGuard, LIBRARY_PATH } from './helpers';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -158,18 +158,31 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 			.filter({ hasText: albumTitle });
 		await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
 
-		const publicContext = await browser.newContext({ storageState: undefined });
+		const publicContext = await browser.newContext({
+			storageState: undefined,
+			viewport: page.viewportSize(),
+			isMobile: Boolean(isMobile),
+			hasTouch: Boolean(isMobile)
+		});
 		try {
 			// A shared album, song or take opens as the player, its big cover the album's (#1391).
 			for (const share of [albumShare, songShare, takeShare]) {
 				const publicPage = await publicContext.newPage();
-				await publicPage.goto(share.share_url);
-				await expect(publicPage.locator('.now-playing.page .cover-art img')).toBeVisible();
-				await expect(publicPage.locator('.now-playing.page .cover-art img')).toHaveAttribute(
-					'src',
-					/\/shared\/(((song|gen)\/)?[^/]+\/(album-)?)cover\?/
-				);
-				await publicPage.close();
+				const guard = new FlowGuard(publicPage);
+				try {
+					await publicPage.goto(share.share_url);
+					await expect(publicPage.locator('.now-playing.page .cover-art img')).toBeVisible();
+					await expect(publicPage.locator('.now-playing.page .cover-art img')).toHaveAttribute(
+						'src',
+						/\/shared\/(((song|gen)\/)?[^/]+\/(album-)?)cover\?/
+					);
+				} finally {
+					try {
+						guard.assertClean();
+					} finally {
+						await publicPage.close();
+					}
+				}
 			}
 		} finally {
 			await publicContext.close();
@@ -207,20 +220,28 @@ test('a shared playlist replaces its upload with the current mosaic and disappea
 		await putPlaylistCover(page, playlist.id);
 		const share = await postJson<ShareResult>(page, `/api/playlists/${playlist.id}/share`, {});
 
-		const publicContext = await browser.newContext({ storageState: undefined });
+		const publicContext = await browser.newContext({
+			storageState: undefined,
+			viewport: page.viewportSize(),
+			isMobile: Boolean(isMobile),
+			hasTouch: Boolean(isMobile)
+		});
+		const publicPage = await publicContext.newPage();
+		const guard = new FlowGuard(publicPage, {
+			refusalsExpectedOn: [{ path: '/shared/playlist/', statuses: [404] }]
+		});
 		try {
-			const publicPage = await publicContext.newPage();
 			await publicPage.goto(share.share_url);
-			await expect(publicPage.locator('.header-cover .playlist-cover-image')).toHaveAttribute(
+			await expect(publicPage.locator('.cover-art .playlist-cover-image')).toHaveAttribute(
 				'src',
 				/\/shared\/playlist\/[^/]+\/cover\?variant=card&v=/
 			);
 
 			await deletePlaylistCover(page, playlist.id);
 			await publicPage.reload();
-			await expect(publicPage.locator('.header-cover .playlist-cover-image')).toHaveCount(0);
-			await expect(publicPage.locator('.header-cover .playlist-cover-cell')).toHaveCount(4);
-			await expect(publicPage.locator('.header-cover .playlist-cover-cell img')).toHaveCount(1);
+			await expect(publicPage.locator('.cover-art .playlist-cover-image')).toHaveCount(0);
+			await expect(publicPage.locator('.cover-art .playlist-cover-cell')).toHaveCount(4);
+			await expect(publicPage.locator('.cover-art .playlist-cover-cell img')).toHaveCount(1);
 
 			const unshare = await page.request.delete(`/api/playlists/${playlist.id}/share`, {
 				headers: await csrfHeaders(page)
@@ -228,9 +249,13 @@ test('a shared playlist replaces its upload with the current mosaic and disappea
 			expect(unshare.ok(), `Playlist unshare failed: ${await unshare.text()}`).toBeTruthy();
 			await publicPage.reload();
 			await expect(publicPage.getByRole('heading', { name: 'Playlist not found' })).toBeVisible();
-			await expect(publicPage.locator('.header-cover')).toHaveCount(0);
+			await expect(publicPage.locator('.cover-art')).toHaveCount(0);
 		} finally {
-			await publicContext.close();
+			try {
+				guard.assertClean();
+			} finally {
+				await publicContext.close();
+			}
 		}
 	} finally {
 		try {
@@ -277,8 +302,9 @@ test('a shared song shows Play and its words in one screen at every phone height
 			isMobile: Boolean(isMobile),
 			hasTouch: Boolean(isMobile)
 		});
+		const publicPage = await publicContext.newPage();
+		const guard = new FlowGuard(publicPage);
 		try {
-			const publicPage = await publicContext.newPage();
 			for (const screen of PHONE_SCREENS) {
 				await publicPage.setViewportSize(screen);
 				await publicPage.goto(share.share_url);
@@ -298,7 +324,11 @@ test('a shared song shows Play and its words in one screen at every phone height
 				).toEqual({ play: true, words: true, wordsTall: true });
 			}
 		} finally {
-			await publicContext.close();
+			try {
+				guard.assertClean();
+			} finally {
+				await publicContext.close();
+			}
 		}
 	} finally {
 		await deleteOwnedAlbum(page, album.id);
