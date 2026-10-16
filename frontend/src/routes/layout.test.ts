@@ -49,7 +49,8 @@ import {
 	libraryRootState,
 	librarySurface,
 	loadLibraryHistoryPageForTests,
-	resetLibraryContextForTests
+	resetLibraryContextForTests,
+	openLibraryAddress
 } from '$lib/stores/libraryContext';
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetNavigationForTests } from '$lib/stores/navigation';
@@ -947,6 +948,7 @@ describe('a reload over the phone Now Playing', () => {
 			return USER;
 		});
 		await goto(resolve(HOME_ROUTE_PATH));
+		await openLibraryAddress();
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });
@@ -964,6 +966,7 @@ describe('signing out on the phone', () => {
 		resetNavigationForTests();
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
+		await openLibraryAddress();
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		let replacedLayer: string | undefined;
 		const documentLoads = {
@@ -998,6 +1001,7 @@ describe('a session lost behind the open phone drawer', () => {
 		resetNavigationForTests();
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
+		await openLibraryAddress();
 		const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
 		standInForDocumentLoadsForTests(documentLoads);
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));

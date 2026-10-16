@@ -54,6 +54,7 @@ import {
 	pendingTakeRoutePath,
 	playlistRoutePath,
 	PLAYLISTS_ROUTE_PATH,
+	LIBRARY_ROUTE_PATH,
 	songRoutePath,
 	takeRoutePath
 } from '$lib/routes/addresses';
@@ -670,6 +671,23 @@ function playlistAddressState(playlistId: string): LibraryHistoryState {
 	};
 }
 
+// The Library page owns its initial entry, just like the Playlists page.
+// A matching browse entry keeps its collection, query, sort and scroll;
+// a foreign entry is replaced in place without adding a Back step.
+export function openLibraryAddress(): Promise<'found'> {
+	return resolveMountedAddress<never>(() =>
+		Promise.resolve({
+			routePath: LIBRARY_ROUTE_PATH,
+			historyOpens: () => {
+				const state = currentLibraryHistoryState();
+				return isLibraryHistoryState(state) && libraryWallShows(state.surface, state.songId);
+			},
+			addressState: () => ({ ...libraryRootState(), surface: 'browse' }),
+			shown: () => libraryWallShows(get(librarySurface), get(selectedSongId))
+		})
+	);
+}
+
 // The entry point of the /playlists route (#1402). The address names no
 // resource of its own, so there is nothing to look up and no verdict to
 // state; the route still resolves through the frame every address route
@@ -688,6 +706,10 @@ export function openPlaylistsAddress(): Promise<'found'> {
 function historyAlreadyOpensPlaylists(): boolean {
 	const state = currentLibraryHistoryState();
 	return isLibraryHistoryState(state) && playlistsWallShows(state.surface, state.songId);
+}
+
+function libraryWallShows(surface: LibrarySurface, songId: string | null): boolean {
+	return surface === 'browse' && songId === null;
 }
 
 // An open song stands in front of every surface, the Playlists wall included.

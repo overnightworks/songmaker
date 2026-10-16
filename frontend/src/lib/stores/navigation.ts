@@ -673,32 +673,11 @@ function onLanding(landing: Landing, landedState: unknown): void {
 	);
 }
 
-// A cold tab's history entry carries no LibraryHistoryState until something
-// writes one -- this seeds a fresh root entry for that case, but only on a
-// plain `/` visit, which is the one library workspace path with no address
-// route of its own to resolve one instead. Every other library path
-// (`/playlists`, `/album/<slug>` and every segment deeper, `/playlist/<slug>`)
-// is owned by its own leaf page, which calls the matching openXAddress and
-// writes the real entry once resolution lands -- found or, honestly, not.
-// Racing this seed against that resolution used to cost more than a redundant
-// write: found and not-yet-written are indistinguishable to
-// isLibraryHistoryState, so on an *unknown* address (nothing else ever
-// writes) this branch would unconditionally win the race once the live
-// stream's own bootstrap finished, replacing the honest 404 overlay with a
-// crossing `goto('/')` back to the wall -- discovered against a real stack
-// (playlist-address.spec.ts, issue #286), not caught by jsdom, whose harness
-// mounts only the `(library)` group layout and never exercises this one.
-//
-// A legacy `/?song=<uuid>` (or `&gen=<uuid>`) query used to be read and
-// applied right here; since issue #284, (library)/+page.svelte owns that
-// instead -- it resolves the ids and redirects onto the canonical song/take
-// address before this ever runs, so there is nothing left for this branch to
-// special-case.
+// Each address page resolves its own initial Library entry. Navigation
+// restores an existing song context and owns subsequent history landings.
 export function initNavigation(): () => void {
 	const existing = currentLibraryHistoryState();
-	if (!isLibraryHistoryState(existing)) {
-		if (window.location.pathname === '/') void replaceLibraryHistory();
-	} else if (existing.songId) {
+	if (isLibraryHistoryState(existing) && existing.songId) {
 		void loadSongContext(existing.songId);
 	}
 

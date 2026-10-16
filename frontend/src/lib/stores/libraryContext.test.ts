@@ -102,7 +102,7 @@ import {
 } from '$lib/history/historyController';
 import { holdLayer } from '$lib/stores/layers';
 import { fakePage, holdRouteLoads } from '$lib/test-utils/app-navigation';
-import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
+import { albumRoutePath, songRoutePath, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 
 import {
 	applyLibraryHistory,
@@ -118,6 +118,8 @@ import {
 	openAlbumAddress,
 	openPlaylistAddress,
 	openPlaylistsAddress,
+	openLibraryAddress,
+	libraryScrollAnchor,
 	openSongAddress,
 	openTakeAddress,
 	resolveLegacySongQueryAddress,
@@ -1682,6 +1684,112 @@ describe('openPlaylistAddress', () => {
 
 		expect(fetchPlaylists).not.toHaveBeenCalled();
 	});
+});
+
+describe('openLibraryAddress (1354_rule_31)', () => {
+	it.each(['browse', 'playlists'] as const)(
+		'resolves a cold address when %s is shown without adding an entry',
+		async (surface) => {
+			mountAddressRoute(LIBRARY_ROUTE_PATH);
+			librarySurface.set(surface);
+			const length = historyLength();
+
+			await expect(openLibraryAddress()).resolves.toBe('found');
+
+			expect(historyEntry()).toEqual(libraryRootState());
+			expect(get(librarySurface)).toBe('browse');
+			expect(get(selectedSongId)).toBeNull();
+			expect(historyLength()).toBe(length);
+		}
+	);
+
+	it.each([
+		{ ...libraryRootState(), surface: 'playlists' as const },
+		{ ...libraryRootState(), songId: 's9' },
+		{ foreign: true }
+	])('replaces a foreign entry in place: %j', async (entry) => {
+		mountAddressRoute(LIBRARY_ROUTE_PATH, entry);
+		librarySurface.set('playlists');
+		const length = historyLength();
+
+		await openLibraryAddress();
+
+		expect(historyEntry()).toEqual(libraryRootState());
+		expect(historyLength()).toBe(length);
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
+		expect(get(librarySurface)).toBe('browse');
+	});
+
+	it.each(['browse', 'playlists'] as const)(
+		'keeps a matching rich entry when %s was shown',
+		async (surface) => {
+			const left = {
+				...libraryRootState(),
+				query: 'Tide',
+				sort: 'title' as const,
+				scrollAnchor: 320
+			};
+			mountAddressRoute(LIBRARY_ROUTE_PATH, left);
+			await applyLibraryHistory(left);
+			librarySurface.set(surface);
+
+			await openLibraryAddress();
+
+			expect(historyEntry()).toEqual(left);
+			expect(get(searchQuery)).toBe(left.query);
+			expect(get(librarySort)).toBe(left.sort);
+			expect(get(libraryScrollAnchor)).toBe(left.scrollAnchor);
+		}
+	);
+
+	it.each(
+		[false, true].flatMap((withCollection) =>
+			['address', 'hydration'].map((first) => ({ withCollection, first }))
+		)
+	)(
+		'keeps rich browse state with collection=$withCollection when $first finishes first',
+		async ({ withCollection, first }) => {
+			const left: LibraryHistoryState = {
+				...libraryRootState(),
+				query: 'Tide',
+				sort: 'title',
+				scrollAnchor: 320,
+				albumOffset: 1,
+				collection: withCollection ? { kind: 'album', id: 'a9' } : null
+			};
+			mountAddressRoute(LIBRARY_ROUTE_PATH, left);
+			librarySurface.set('playlists');
+			albumList.set([album({ id: 'a9' })]);
+			const releases: Array<() => void> = [];
+			fetchAlbums.mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						releases.push(() => resolve(emptyPage([album({ id: 'a9' })])));
+					})
+			);
+			const address = openLibraryAddress();
+			await vi.waitFor(() => expect(releases).toHaveLength(1));
+			const hydration = hydrateLibraryFromHistory();
+			await vi.waitFor(() => expect(releases).toHaveLength(2));
+			if (first === 'address') {
+				releases[0]();
+				await address;
+				releases[1]();
+				await hydration;
+			} else {
+				releases[1]();
+				await hydration;
+				releases[0]();
+				await address;
+			}
+			expect(historyEntry()).toEqual(left);
+			expect(get(librarySurface)).toBe('browse');
+			expect(get(openCollection)).toEqual(left.collection);
+			expect(get(searchQuery)).toBe(left.query);
+			expect(get(librarySort)).toBe(left.sort);
+			expect(get(libraryScrollAnchor)).toBe(left.scrollAnchor);
+		}
+	);
 });
 
 describe('openPlaylistsAddress', () => {
