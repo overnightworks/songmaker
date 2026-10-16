@@ -103,10 +103,12 @@ type NumberList = list[int]
     ],
 )
 def test_translates_python_annotation_to_typescript(annotation: object, typescript: str) -> None:
+    """defect:#1499 -- each supported Python annotation becomes its TypeScript type."""
     assert generate_types._py_type_to_ts(annotation) == typescript
 
 
 def test_refuses_an_annotation_without_a_typescript_counterpart() -> None:
+    """defect:#1499 -- an annotation with no TypeScript counterpart raises TypeScriptTypeError."""
     with pytest.raises(generate_types.TypeScriptTypeError, match="unsupported Python annotation"):
         generate_types._py_type_to_ts(bytes)
 

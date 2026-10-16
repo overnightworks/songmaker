@@ -116,6 +116,7 @@ def test_a_path_that_is_not_a_checkout_is_refused_as_such(
     tmp_path: Path,
     lock_directory: LockDirectory,
 ) -> None:
+    """defect:#1499 -- a path that is not a git checkout is refused as not a checkout."""
     path = make_path(tmp_path, lock_directory)
 
     with pytest.raises(CheckoutError, match="is not a git checkout"):
@@ -123,10 +124,12 @@ def test_a_path_that_is_not_a_checkout_is_refused_as_such(
 
 
 def test_the_main_checkout_has_no_other_main_checkout(main_checkout: Path) -> None:
+    """defect:#1499 -- the main checkout itself reports no other main checkout."""
     assert main_checkout_elsewhere(main_checkout) is None
 
 
 def test_a_linked_worktree_names_its_main_checkout(
     main_checkout: Path, linked_worktree: Path,
 ) -> None:
+    """defect:#1499 -- a linked worktree names the main checkout it belongs to."""
     assert main_checkout_elsewhere(linked_worktree) == main_checkout.resolve()

@@ -47,4 +47,5 @@ def test_committed_fixture_file_matches_current_generator_output():
     ids=["ascii digits", "fullwidth digits fold to ascii", "other scripts keep their digits"],
 )
 def test_only_ascii_digits_are_spelled_out(lyric, normalized):
+    """defect:#1499 -- only ascii digits are spelled out; other scripts keep their digits."""
     assert golden.normalize_lyrics_token(lyric) == normalized
