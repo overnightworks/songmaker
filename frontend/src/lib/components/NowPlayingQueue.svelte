@@ -25,7 +25,8 @@
 		skippedComplete = true,
 		windowEnded = false,
 		showTakeLabel = true,
-		heading
+		heading,
+		subtitleByEntryId
 	}: {
 		queue: QueueViewModel;
 		// The name of what is playing, or null for the library pool, whose own
@@ -46,6 +47,7 @@
 		showTakeLabel?: boolean;
 		// Names the list when it is not the player's "Queue" (a shared album's "Songs").
 		heading?: string;
+		subtitleByEntryId?: ReadonlyMap<string, string>;
 	} = $props();
 
 	const shownHeading = $derived(heading ?? nowPlayingQueueHeading(contextLabel));
@@ -89,7 +91,14 @@
 						<span class="queue-position" aria-hidden="true"
 							>{index === queue.currentIndex ? '' : index + 1}</span
 						>
-						<span class="queue-title">{item.songTitle}</span>
+						{#if subtitleByEntryId?.get(item.key)}
+							<span class="queue-label">
+								<span class="queue-title">{item.songTitle}</span>
+								<span class="queue-subtitle">{subtitleByEntryId.get(item.key)}</span>
+							</span>
+						{:else}
+							<span class="queue-title">{item.songTitle}</span>
+						{/if}
 						{#if showTakeLabel}
 							<span class="queue-take">
 								{nowPlayingTakeLabel(item.versionNumber, item.generationNumber)}
@@ -209,12 +218,22 @@
 		color: var(--text-subtle);
 		font-size: 0.72rem;
 	}
+	.queue-label,
 	.queue-title {
 		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+	.queue-label > span {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.queue-subtitle {
+		color: var(--text-subtle);
+		font-size: 0.72rem;
 	}
 	.queue-take {
 		flex-shrink: 0;
