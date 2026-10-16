@@ -34,7 +34,7 @@ const NO_LOGIN: ModelsTaskRoute = {
 	reason: { code: 'cli_login_not_configured', message: 'CLI is not signed in.' },
 	models: []
 };
-const NO_IMAGE_TOOL: ModelsTaskRoute = {
+const NO_IMAGE_TOOL_ROUTE: ModelsTaskRoute = {
 	ready: false,
 	reason: { code: 'no_image_tool', message: 'no image tool' },
 	models: []
@@ -62,7 +62,12 @@ function provider(
 
 const CLAUDE_ON_CLI = provider('claude', 'Claude', READY_CLI, { ...NO_KEY });
 const GROK_WITHOUT_KEY = provider('grok', 'Grok', NO_LOGIN, NO_KEY);
-const CODEX_WITHOUT_IMAGE_TOOL = provider('codex', 'Codex', NO_IMAGE_TOOL, NO_IMAGE_TOOL);
+const CODEX_WITHOUT_IMAGE_TOOL = provider(
+	'codex',
+	'Codex',
+	NO_IMAGE_TOOL_ROUTE,
+	NO_IMAGE_TOOL_ROUTE
+);
 
 let mounted: ReturnType<typeof mount> | undefined;
 

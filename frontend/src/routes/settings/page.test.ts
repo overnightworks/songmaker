@@ -3,15 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
 import { currentUser } from '$lib/stores/auth';
+import { makeAuthUser } from '$lib/test-utils/factories';
 import { clearPointer, setPointer } from '$lib/test-utils/hitbox';
 
 const navigation = vi.hoisted(() => ({ goto: vi.fn() }));
 vi.mock('$app/navigation', () => navigation);
 
 import SettingsPage from './+page.svelte';
-
-const ADMIN = { id: 'u1', username: 'felix', role: 'admin' as const };
-const USER = { id: 'u2', username: 'jane', role: 'user' as const };
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -37,7 +35,7 @@ function rowLabels(target: HTMLElement): string[] {
 
 beforeEach(() => {
 	navigation.goto.mockReset();
-	currentUser.set(ADMIN);
+	currentUser.set(makeAuthUser({ role: 'admin' }));
 });
 
 afterEach(async () => {
@@ -74,7 +72,7 @@ describe('settings index on the phone', () => {
 	});
 
 	it('hides the admin-only sections from a non-admin', async () => {
-		currentUser.set(USER);
+		currentUser.set(makeAuthUser());
 		const target = await render();
 
 		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Legal']);
@@ -100,8 +98,8 @@ describe('settings index on the desktop', () => {
 	beforeEach(() => setPointer('fine'));
 
 	it.each([
-		{ viewer: 'an admin', user: ADMIN },
-		{ viewer: 'a non-admin', user: USER }
+		{ viewer: 'an admin', user: makeAuthUser({ role: 'admin' }) },
+		{ viewer: 'a non-admin', user: makeAuthUser() }
 	])(
 		'redirects $viewer straight into Generation, the first section they can see, and shows no list',
 		async ({ user }) => {

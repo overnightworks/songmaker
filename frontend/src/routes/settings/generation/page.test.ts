@@ -1,13 +1,12 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { PresetItem } from '$lib/api/types';
+import type { AuthUser, PresetItem } from '$lib/api/types';
 import { currentUser } from '$lib/stores/auth';
+import { makeAuthUser } from '$lib/test-utils/factories';
 
 import GenerationSettingsPage from './+page.svelte';
 
-const ADMIN = { id: 'u1', username: 'felix', role: 'admin' as const };
-const USER = { id: 'u2', username: 'jane', role: 'user' as const };
 const INSTANCE_DEFAULTS_PATH = '/api/settings/generation-defaults';
 const PRESETS_PATH = '/api/settings/presets';
 const MODEL = 'turbo';
@@ -67,7 +66,7 @@ function stubApi(failing: ReadonlySet<string>): StubbedApi {
 }
 
 async function openPageAs(
-	user: typeof ADMIN | typeof USER,
+	user: AuthUser,
 	failing: ReadonlySet<string> = new Set()
 ): Promise<OpenedPage> {
 	currentUser.set(user);
@@ -103,8 +102,8 @@ async function saveNewPreset(target: HTMLElement, name: string): Promise<void> {
 
 describe('generation settings', () => {
 	it.each([
-		['a non-admin', USER],
-		['an administrator', ADMIN]
+		['a non-admin', makeAuthUser()],
+		['an administrator', makeAuthUser({ role: 'admin' })]
 	])('reads the instance generation defaults for %s', async (_role, user) => {
 		const { requested } = await openPageAs(user);
 
@@ -112,7 +111,7 @@ describe('generation settings', () => {
 	});
 
 	it("a non-admin's preset merges the instance defaults", async () => {
-		const { target, savedPresets } = await openPageAs(USER);
+		const { target, savedPresets } = await openPageAs(makeAuthUser());
 
 		await saveNewPreset(target, 'Warm');
 
@@ -125,7 +124,10 @@ describe('generation settings', () => {
 	});
 
 	it('tells an administrator when the global generation defaults cannot be read', async () => {
-		const { target } = await openPageAs(ADMIN, new Set([INSTANCE_DEFAULTS_PATH]));
+		const { target } = await openPageAs(
+			makeAuthUser({ role: 'admin' }),
+			new Set([INSTANCE_DEFAULTS_PATH])
+		);
 
 		await vi.waitFor(() =>
 			expect(target.querySelector('.error')?.textContent).toBe('Failed to load generation defaults')

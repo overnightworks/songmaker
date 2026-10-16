@@ -1,3 +1,4 @@
+import { documentLoads } from '$lib/test-utils/document-loads';
 import { makeHealthResponse } from '$lib/test-utils/factories';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
@@ -85,8 +86,6 @@ function mockError(status: number, detail: string = '') {
 		json: () => Promise.resolve({ detail })
 	});
 }
-
-const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
 
 beforeEach(() => {
 	mockFetch.mockReset();

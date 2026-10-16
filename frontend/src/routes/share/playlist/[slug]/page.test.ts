@@ -39,7 +39,7 @@ class FakeAudio {
 	}
 }
 
-const playlist = {
+const sharedPlaylist = {
 	title: 'Shared playlist',
 	album_covers: [],
 	entries: [
@@ -71,7 +71,7 @@ function manifest(windowed: boolean): QueueStreamManifest {
 		windowed,
 		skipped: [],
 		skipped_complete: true,
-		tracks: playlist.entries.map((entry, index) => ({
+		tracks: sharedPlaylist.entries.map((entry, index) => ({
 			key: entry.entry_id,
 			index,
 			entry_id: entry.entry_id,
@@ -132,7 +132,7 @@ afterEach(async () => {
 
 describe('shared playlist page', () => {
 	it('1374_rule_5 shows each entry with its album', async () => {
-		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist });
+		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => sharedPlaylist });
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });
@@ -146,7 +146,7 @@ describe('shared playlist page', () => {
 		'1374_rule_7 a playlist %s stops at its last song and Play again starts song 1',
 		async (mode) => {
 			mockFetch
-				.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist })
+				.mockResolvedValueOnce({ ok: true, status: 200, json: async () => sharedPlaylist })
 				.mockResolvedValue({
 					ok: mode === 'stream',
 					status: mode === 'stream' ? 200 : 503,
