@@ -56,7 +56,6 @@ import {
 	boundingBoxes,
 	containing,
 	csrfHeaders,
-	expectPlaybackAdvances,
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	MOBILE_VIEWPORT,
@@ -689,7 +688,7 @@ test(
 			const [played, other] =
 				index % 2 === 0 ? [firstTrack, secondTrack] : [secondTrack, firstTrack];
 			const row = songBox(played.songTitle);
-			await guard.abandoningTakes(index === 0 ? [] : albumTakes, async () => {
+			await guard.abandoningTakes(index === 0 ? [] : albumTakes, played.audioPath, async () => {
 				await tapRowEdge(
 					row,
 					row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
@@ -700,7 +699,6 @@ test(
 					songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 				).toHaveCount(0);
 				await expect(albumHeading).toBeVisible();
-				await expectPlaybackAdvances(page);
 			});
 		}
 
@@ -725,6 +723,10 @@ test(
 			.click();
 		const heldTwice = playlistEntryRows(page).filter({ hasText: playlist.songTitles[0] });
 		await expect(heldTwice).toHaveCount(2);
+		const heldTwiceTake = library.albumTracks.find(
+			({ songTitle }) => songTitle === playlist.songTitles[0]
+		);
+		if (!heldTwiceTake) throw new Error('Expected the first playlist song to be in the album');
 
 		// A playlist row plays from either edge, and only the copy that plays is marked.
 		const pause = page
@@ -735,7 +737,7 @@ test(
 			['bottom', 0, 1]
 		] as const) {
 			const row = heldTwice.nth(played);
-			await guard.abandoningTakes(albumTakes, async () => {
+			await guard.abandoningTakes(albumTakes, heldTwiceTake.audioPath, async () => {
 				await tapRowEdge(
 					row,
 					row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
@@ -746,7 +748,6 @@ test(
 				await expect(
 					heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 				).toHaveCount(0);
-				await expectPlaybackAdvances(page);
 			});
 		}
 	}

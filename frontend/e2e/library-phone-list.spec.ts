@@ -3,7 +3,6 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
-	expectPlaybackAdvances,
 	FlowGuard,
 	LIBRARY_PATH,
 	LIBRARY_URL,
@@ -167,11 +166,10 @@ test(
 		);
 		await screenshot(page, 'playing');
 		const playerBar = page.locator('.player-bar');
-		await guard.abandoningTakes(takePathsOf(playable.id), async () => {
+		await guard.abandoningTakes(takePathsOf(playable.id), secondTrack.audioPath, async () => {
 			await playerBar.getByRole('button', { name: 'Next', exact: true }).click();
 			await expect(playerBar).toContainText(secondTrack.title);
 			expect((await secondAudioResponse).ok()).toBe(true);
-			await expectPlaybackAdvances(page);
 		});
 		await pause.click();
 		await expect(play).toBeVisible();
@@ -209,14 +207,13 @@ test(
 		);
 		await row(page, last.title).scrollIntoViewIfNeeded();
 		const bottomBefore = await scroll.evaluate((el) => el.scrollTop);
-		await guard.abandoningTakes(takePathsOf(playable.id), async () => {
+		await guard.abandoningTakes(takePathsOf(playable.id), takePathsOf(last.id)[0], async () => {
 			await row(page, last.title)
 				.getByRole('button', { name: `Play ${last.title}`, exact: true })
 				.click();
 			await expect(
 				row(page, last.title).getByRole('button', { name: `Pause ${last.title}`, exact: true })
 			).toBeVisible();
-			await expectPlaybackAdvances(page);
 		});
 		await expect(page).toHaveURL(LIBRARY_URL);
 		expect(await scroll.evaluate((el) => el.scrollTop)).toBe(bottomBefore);
@@ -303,12 +300,11 @@ test(
 		});
 		await play.click();
 		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
-		await guard.abandoningTakes(takePathsOf(playable.id), async () => {
+		await guard.abandoningTakes(takePathsOf(playable.id), secondTrack.audioPath, async () => {
 			await page.locator('.player-bar').getByRole('button', { name: 'Next', exact: true }).click();
 			await expect
 				.poll(async () => new URL((await playingAudioState(page)).src).pathname)
 				.toBe(secondTrack.audioPath);
-			await expectPlaybackAdvances(page);
 		});
 		await row(page, playable.title)
 			.getByRole('button', { name: `Pause ${playable.title}`, exact: true })

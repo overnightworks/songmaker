@@ -5,6 +5,8 @@ import {
 	type BrowserContext,
 	type Locator,
 	type Page,
+	type Request,
+	type Response,
 	type TestInfo
 } from '@playwright/test';
 import {
@@ -511,6 +513,10 @@ export function playingAudioState(page: Page): Promise<PlayingAudioState> {
 
 // How far the tapped take must play on before the tap counts as played.
 const PLAYBACK_PROGRESS_SECONDS = 0.3;
+// How long a cancelled successor take has to arrive in full after all; a take
+// that crawls in over a throttled link is not a failure, a take that never
+// comes is.
+const SUCCESSOR_REFETCH_TIMEOUT_MS = 30_000;
 
 /**
  * Passes once the media element the app last started has played on from where
@@ -519,9 +525,11 @@ const PLAYBACK_PROGRESS_SECONDS = 0.3;
  * playing, or the one it just left, does not pass. Position alone proves
  * nothing, because on the continuous deck `currentTime` is the position in the
  * whole stream and a tap on a take the deck already holds is a seek that moves
- * it without a frame played.
+ * it without a frame played. It does not fit a load with a start position
+ * (`pendingRecoverySeek` in `audioPlayer.svelte.ts`): that load seeks, so its
+ * first frames are a jump rather than a play-on from where it stood.
  */
-export async function expectPlaybackAdvances(page: Page): Promise<void> {
+async function expectPlaybackAdvances(page: Page): Promise<void> {
 	const { time: startedAt } = await playingAudioState(page);
 	await expect
 		.poll(async () => {
@@ -582,6 +590,17 @@ function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
 	return refusal.path.endsWith('/') ? pathname.startsWith(refusal.path) : pathname === refusal.path;
 }
 
+const BYTE_RANGE_SERVED = /^bytes (\d+)-(\d+)\/(\d+)$/;
+
+// The deck resumes a cancelled take with a range request from where the cancel
+// cut it (`continuousDeck.ts`), and a range answer that stops short, like the
+// one-byte reads seen beside it, completes nothing: only the answer that
+// reaches the end of the take does.
+function reachesTheEndOfTheTake(response: Response): boolean {
+	const served = BYTE_RANGE_SERVED.exec(response.headers()['content-range'] ?? '');
+	return served === null || Number(served[2]) + 1 === Number(served[3]);
+}
+
 /**
  * Fails the flow on a rate-limited or failed response, on a browser console
  * error, and on an uncaught page exception — and counts what the flow costs
@@ -590,9 +609,15 @@ function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
 export class FlowGuard {
 	private readonly failures: string[] = [];
 	private readonly takesBeingAbandoned = new Set<string>();
+	private readonly completingResponses = new WeakSet<Request>();
+	private successorPath: string | undefined;
+	private abortedSuccessorUrls: string[] = [];
 	private apiRequests = 0;
 
-	constructor(page: Page, options: FlowGuardOptions = {}) {
+	constructor(
+		private readonly page: Page,
+		options: FlowGuardOptions = {}
+	) {
 		const refusalsExpectedOn = options.refusalsExpectedOn ?? [];
 		const losesNetworkOnPurpose = options.losesNetworkOnPurpose ?? false;
 		const refusalIsExpected = (url: string, status: number): boolean => {
@@ -617,7 +642,7 @@ export class FlowGuard {
 			const cutOffOnPurpose =
 				isClosedOnPurpose(request.url()) ||
 				isSentAsThePageLeaves(request.url()) ||
-				this.takesBeingAbandoned.has(new URL(request.url()).pathname);
+				this.forgivesAbandonedTake(request.url());
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
@@ -626,9 +651,18 @@ export class FlowGuard {
 		});
 		page.on('response', (response) => {
 			const status = response.status();
+			if (response.ok() && reachesTheEndOfTheTake(response)) {
+				this.completingResponses.add(response.request());
+			}
 			if (refusalIsExpected(response.url(), status)) return;
 			if (status === 429 || status >= 500) {
 				this.failures.push(`${status} from ${response.url()}`);
+			}
+		});
+		page.on('requestfinished', (request) => {
+			const completedTake = this.completingResponses.has(request);
+			if (completedTake && new URL(request.url()).pathname === this.successorPath) {
+				this.abortedSuccessorUrls = [];
 			}
 		});
 		page.on('console', (message) => {
@@ -647,21 +681,46 @@ export class FlowGuard {
 	}
 
 	/**
-	 * Runs the step that leaves these takes — a tap or a Next that repicks the
-	 * queue — and forgives, for exactly as long as it runs, the aborted downloads
-	 * of those takes: the player cancels the download of every take it drops or
-	 * asks for anew, which Chromium reports as an aborted request whether or not
-	 * the whole take had arrived, and a look-ahead it had only just started can
-	 * fall to the same tap. The step ends with the proof that the successor plays,
-	 * so an abort after it, or of any other take, still fails the flow.
+	 * Runs the step that leaves these takes for `successorPath` — a tap or a Next
+	 * that repicks the queue — and forgives, for exactly as long as it runs, the
+	 * aborted downloads of those takes: the player cancels the download of every
+	 * take it drops or asks for anew, which Chromium reports as an aborted request
+	 * whether or not the whole take had arrived, and a look-ahead it had only just
+	 * started can fall to the same tap. The abort of the successor itself is
+	 * forgiven only once a later request for it has finished and reached the end
+	 * of the take, because the deck keeps the audio of a cancelled download and
+	 * playback can go on from it without the take ever arriving. The step ends
+	 * with the proof that the successor plays, so an abort after it, or of any
+	 * other take, still fails the flow.
 	 */
-	async abandoningTakes(audioPaths: readonly string[], step: () => Promise<void>): Promise<void> {
-		for (const audioPath of audioPaths) this.takesBeingAbandoned.add(audioPath);
+	async abandoningTakes(
+		abandonedPaths: readonly string[],
+		successorPath: string,
+		step: () => Promise<void>
+	): Promise<void> {
+		for (const audioPath of abandonedPaths) this.takesBeingAbandoned.add(audioPath);
+		this.successorPath = successorPath;
 		try {
 			await step();
+			await expectPlaybackAdvances(this.page);
+			await expect
+				.poll(() => this.abortedSuccessorUrls, {
+					message: 'the successor take was cancelled and never fetched in full afterwards',
+					timeout: SUCCESSOR_REFETCH_TIMEOUT_MS
+				})
+				.toEqual([]);
 		} finally {
-			for (const audioPath of audioPaths) this.takesBeingAbandoned.delete(audioPath);
+			for (const audioPath of abandonedPaths) this.takesBeingAbandoned.delete(audioPath);
+			this.successorPath = undefined;
+			this.abortedSuccessorUrls = [];
 		}
+	}
+
+	private forgivesAbandonedTake(url: string): boolean {
+		const pathname = new URL(url).pathname;
+		if (!this.takesBeingAbandoned.has(pathname)) return false;
+		if (pathname === this.successorPath) this.abortedSuccessorUrls.push(url);
+		return true;
 	}
 
 	get apiRequestCount(): number {
