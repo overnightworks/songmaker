@@ -50,11 +50,11 @@ import {
 import { followPlaybackForResume } from '$lib/stores/playbackResume';
 import { recordPlaybackEvent, startPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { documentLoads } from '$lib/test-utils/document-loads';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 
 const AUTH_ME_PATH = '/api/auth/me';
 const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
-const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
 
 beforeEach(() => {
 	mockFetchMe.mockReset();

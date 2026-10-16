@@ -107,13 +107,14 @@ TS_MODEL_NAMES: dict[str, str] = {
     "WorkerInfo": "WorkerInfoItem",
 }
 
+NULLABLE_REPAINT_MODE = "RepaintMode | null"
 FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
     ("GenerationItem", "scores"): "TrackScores | null",
     ("GenerationItem", "generation_params"): "GenerationParams | null",
-    ("GenerationParams", "repaint_mode"): "RepaintMode | null",
-    ("RepaintTaskParams", "repaint_mode"): "RepaintMode | null",
+    ("GenerationParams", "repaint_mode"): NULLABLE_REPAINT_MODE,
+    ("RepaintTaskParams", "repaint_mode"): NULLABLE_REPAINT_MODE,
     ("VersionItem", "generation_params"): "VersionGenerationParams | null",
-    ("VersionGenerationParams", "repaint_mode"): "RepaintMode | null",
+    ("VersionGenerationParams", "repaint_mode"): NULLABLE_REPAINT_MODE,
     ("SongItem", "generation_params"): "VersionGenerationParams | null",
     ("SongItem", "best_scores"): "TrackScores | null",
     ("PresetItem", "params"): "VersionGenerationParams",
@@ -388,6 +389,21 @@ def _ts_name(model: type[BaseModel]) -> str:
     return TS_MODEL_NAMES.get(model.__name__, model.__name__)
 
 
+TS_PRIMITIVE_TYPES: dict[Any, str] = {
+    str: "string",
+    int: "number",
+    float: "number",
+    bool: "boolean",
+    dict: "Record<string, unknown>",
+    type(None): "null",
+    object: "unknown",
+}
+
+
+def _is_union(annotation: Any) -> bool:
+    return get_origin(annotation) in (UnionType, Union)
+
+
 def _py_type_to_ts(annotation: Any) -> str:
     if isinstance(annotation, TypeAliasType):
         return _py_type_to_ts(annotation.__value__)
@@ -395,40 +411,51 @@ def _py_type_to_ts(annotation: Any) -> str:
     if origin is Annotated:
         return _py_type_to_ts(get_args(annotation)[0])
     if origin is list:
-        (inner,) = get_args(annotation)
-        while get_origin(inner) is Annotated:
-            inner = get_args(inner)[0]
-        inner_type = _py_type_to_ts(inner)
-        if get_origin(inner) in (UnionType, Union):
-            inner_type = f"({inner_type})"
-        return f"{inner_type}[]"
+        return _list_to_ts(annotation)
     if origin is dict:
-        arguments = get_args(annotation)
-        if not arguments:
-            return "Record<string, unknown>"
-        return f"Record<{_py_type_to_ts(arguments[0])}, {_py_type_to_ts(arguments[1])}>"
-    if origin in (UnionType, Union):
-        arguments = get_args(annotation)
-        non_none = [argument for argument in arguments if argument is not type(None)]
-        if len(arguments) == 2 and len(non_none) == 1:
-            return f"{_py_type_to_ts(non_none[0])} | null"
-        return " | ".join(_py_type_to_ts(argument) for argument in arguments)
+        return _dict_to_ts(annotation)
+    if _is_union(annotation):
+        return _union_to_ts(annotation)
     if origin is Literal:
-        return " | ".join(
-            repr(argument) if isinstance(argument, str) else str(argument)
-            for argument in get_args(annotation)
-        )
-    type_map: dict[Any, str] = {
-        str: "string",
-        int: "number",
-        float: "number",
-        bool: "boolean",
-        dict: "Record<string, unknown>",
-        type(None): "null",
-        object: "unknown",
-    }
-    if annotation in type_map:
-        return type_map[annotation]
+        return _literal_to_ts(annotation)
+    return _plain_type_to_ts(annotation)
+
+
+def _list_to_ts(annotation: Any) -> str:
+    (inner,) = get_args(annotation)
+    while get_origin(inner) is Annotated:
+        inner = get_args(inner)[0]
+    inner_type = _py_type_to_ts(inner)
+    if _is_union(inner):
+        inner_type = f"({inner_type})"
+    return f"{inner_type}[]"
+
+
+def _dict_to_ts(annotation: Any) -> str:
+    arguments = get_args(annotation)
+    if not arguments:
+        return "Record<string, unknown>"
+    return f"Record<{_py_type_to_ts(arguments[0])}, {_py_type_to_ts(arguments[1])}>"
+
+
+def _union_to_ts(annotation: Any) -> str:
+    arguments = get_args(annotation)
+    non_none = [argument for argument in arguments if argument is not type(None)]
+    if len(arguments) == 2 and len(non_none) == 1:
+        return f"{_py_type_to_ts(non_none[0])} | null"
+    return " | ".join(_py_type_to_ts(argument) for argument in arguments)
+
+
+def _literal_to_ts(annotation: Any) -> str:
+    return " | ".join(
+        repr(argument) if isinstance(argument, str) else str(argument)
+        for argument in get_args(annotation)
+    )
+
+
+def _plain_type_to_ts(annotation: Any) -> str:
+    if annotation in TS_PRIMITIVE_TYPES:
+        return TS_PRIMITIVE_TYPES[annotation]
     if _is_model(annotation):
         return _ts_name(annotation)
     if isinstance(annotation, type) and issubclass(annotation, Enum):

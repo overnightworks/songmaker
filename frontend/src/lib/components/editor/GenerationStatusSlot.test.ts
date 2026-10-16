@@ -10,6 +10,7 @@ import {
 } from '$lib/test-utils/hitbox';
 import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { queued, running } from '$lib/test-utils/generate-states';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
@@ -24,27 +25,6 @@ vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 import { cancelGeneration, type GenerateState } from '$lib/stores/generateAction';
 import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 import generationStatusSlotSource from './GenerationStatusSlot.svelte?raw';
-
-const running: Extract<GenerateState, { kind: 'generating' }> = {
-	kind: 'generating',
-	jobId: 'job1',
-	phase: 'Rendering',
-	takeCounter: 'Take 1 of 2',
-	progress: 36,
-	readout: '36% · ~1:40',
-	ended: false,
-	reconnecting: false,
-	offline: false
-};
-
-const queued: Extract<GenerateState, { kind: 'queued' }> = {
-	kind: 'queued',
-	jobId: 'job1',
-	label: 'Queued #3',
-	reason: 'Waiting for LoRA training on this GPU.',
-	reconnecting: false,
-	offline: false
-};
 
 const reconnecting: Extract<GenerateState, { kind: 'generating' }> = {
 	...running,

@@ -19,7 +19,8 @@ DECLARATIONS = re.compile(
     r'''\b(?P<property>border(?:-[a-z]+)*-radius|font-size|box-shadow)\s*:\s*(?P<value>[^;{}"'`]+)''',
     re.IGNORECASE,
 )
-DIMENSIONS = re.compile(r"(?<![\w-])(-?(?:\d*\.)?\d+)([a-z%]*)", re.IGNORECASE)
+DIMENSIONS = re.compile(r"(?<![\w-])(-?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)", re.IGNORECASE)
+IMPORTANT = re.compile(r"!important\b", re.IGNORECASE)
 TOKEN = re.compile(r"var\(\s*--[\w-]+\s*\)", re.IGNORECASE)
 RESET_VALUES = {"none", "inherit", "initial", "unset", "revert", "revert-layer"}
 FONT_KEYWORDS = {"xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large",
@@ -33,11 +34,20 @@ class Finding:
     literal: str
 
 
+Sites = list[tuple[Path, list[Finding]]]
+
+
 def without_comments(text: str, *, javascript: bool) -> str:
     pattern = f"{QUOTED}|(?P<comment>{COMMENTS}" + (r"|//[^\n]*" if javascript else "") + ")"
     text = re.sub(pattern, lambda m: re.sub(r"[^\n]", " ", m[0]) if m["comment"] else m[0],
                   text, flags=re.DOTALL)
     return re.sub(COMMENTS, lambda m: re.sub(r"[^\n]", " ", m[0]), text, flags=re.DOTALL)
+
+
+# Not one re.sub: a pattern that eats the space before the flag backtracks polynomially (S8786).
+def without_important(value: str) -> str:
+    *kept, last = IMPORTANT.split(value)
+    return "".join(part.rstrip() for part in kept) + last
 
 
 def findings(text: str, suffix: str) -> list[Finding]:
@@ -50,7 +60,7 @@ def findings(text: str, suffix: str) -> list[Finding]:
              for m in COLORS.finditer(text)]
     for match in DECLARATIONS.finditer(text):
         kind = match["property"].lower()
-        value = re.sub(r"\s*!important\b", "", match["value"], flags=re.IGNORECASE).strip()
+        value = without_important(match["value"]).strip()
         dimensions = DIMENSIONS.findall(TOKEN.sub("", value))
         if kind.startswith("border-"):
             forbidden = any(unit.lower() == "px" for _, unit in dimensions)
@@ -67,36 +77,58 @@ def findings(text: str, suffix: str) -> list[Finding]:
     return sorted(found, key=lambda finding: finding.line)
 
 
-def check(source: Path, baseline: Path, *, update: bool) -> int:
+def style_sources(source: Path) -> list[Path]:
     paths = sorted(path for path in source.rglob("*")
                    if path.suffix in {".svelte", ".ts", ".css"} and path.name != "app.css"
                    and not path.name.endswith((".test.ts", ".spec.ts")))
     if not source.is_dir() or not paths:
         raise ValueError(f"No frontend source files found in {source}")
-    sites = [(path.relative_to(source), findings(path.read_text(), path.suffix)) for path in paths]
-    counts = Counter(finding.kind for _, entries in sites for finding in entries)
-    total = counts.total()
-    previous = baseline.read_text().strip() if baseline.exists() else None
+    return paths
+
+
+def read_baseline(baseline: Path) -> str | None:
+    if not baseline.exists():
+        return None
+    return baseline.read_text().strip()  # NOSONAR(S8707) Operator-named CLI path.
+
+
+def baseline_limit(previous: str | None, baseline: Path, total: int, *, update: bool) -> int:
     if previous is None and update:
-        limit = total
-    elif previous is None or not previous.isdecimal():
+        return total
+    if previous is None or not previous.isdecimal():
         raise ValueError(f"Expected one nonnegative count in {baseline}; initialize with --update")
-    else:
-        limit = int(previous)
+    return int(previous)
+
+
+def print_summary(sites: Sites, counts: Counter[str], limit: int) -> None:
     for path, entries in sites:
         if entries:
             print(f"{path}: {len(entries)} style literals")
-    print(f"Style literals: {total} (limit {limit}); "
+    print(f"Style literals: {counts.total()} (limit {limit}); "
           + ", ".join(f"{kind}={count}" for kind, count in sorted(counts.items())))
+
+
+def print_locations(sites: Sites) -> None:
+    print("Style literals increased; replace literals with tokens before updating baseline.")
+    print("Current locations (the count-only baseline does not identify which are new):")
+    for path, entries in sites:
+        for entry in entries:
+            print(f"{path}:{entry.line}: {entry.kind}: {entry.literal}")
+
+
+def check(source: Path, baseline: Path, *, update: bool) -> int:
+    sites = [(path.relative_to(source), findings(path.read_text(), path.suffix))
+             for path in style_sources(source)]
+    counts = Counter(finding.kind for _, entries in sites for finding in entries)
+    total = counts.total()
+    previous = read_baseline(baseline)
+    limit = baseline_limit(previous, baseline, total, update=update)
+    print_summary(sites, counts, limit)
     if total > limit:
-        print("Style literals increased; replace literals with tokens before updating baseline.")
-        print("Current locations (the count-only baseline does not identify which are new):")
-        for path, entries in sites:
-            for entry in entries:
-                print(f"{path}:{entry.line}: {entry.kind}: {entry.literal}")
+        print_locations(sites)
         return 1
     if update and (previous is None or total < limit):
-        baseline.write_text(f"{total}\n")
+        baseline.write_text(f"{total}\n")  # NOSONAR(S8707) Operator-named CLI path.
         print("Updated style literal baseline.")
     return 0
 

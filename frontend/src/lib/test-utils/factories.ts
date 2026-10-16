@@ -1,4 +1,5 @@
 import type {
+	AuthUser,
 	SongItem,
 	HealthResponse,
 	GenerationItem,
@@ -9,6 +10,10 @@ import type {
 	SongSummaryResponse,
 	VersionItem
 } from '$lib/api/types';
+
+export function makeAuthUser(overrides: Partial<AuthUser> = {}): AuthUser {
+	return { id: 'u1', username: 'felix', role: 'user', ...overrides };
+}
 
 export function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 	return {
