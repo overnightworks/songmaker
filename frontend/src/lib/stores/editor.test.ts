@@ -46,6 +46,7 @@ import {
 	versionLoadUndoOutstanding
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
+import { toasts } from '$lib/stores/toast';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
 type VersionLoad = ReturnType<typeof loadVersionAsDraft>;
@@ -100,6 +101,21 @@ describe('editGenParams dirty tracking', () => {
 });
 
 describe('loadSongData', () => {
+	it('defect:#940 S9383 shows a toast when the versions cannot be loaded, and the song still opens at once', async () => {
+		const { fetchVersions } = await import('$lib/api/client');
+		toasts.set([]);
+		vi.mocked(fetchVersions).mockRejectedValueOnce(new Error('connection dropped'));
+
+		loadSongData(makeSong({ ...songDefaults, id: 's1', lyrics: 'opens at once' }));
+
+		expect(get(editLyrics)).toBe('opens at once');
+		await vi.waitFor(() =>
+			expect(get(toasts)).toEqual([
+				expect.objectContaining({ message: 'Could not load versions', type: 'error' })
+			])
+		);
+	});
+
 	it('sets all edit fields', () => {
 		loadSongData(
 			makeSong({

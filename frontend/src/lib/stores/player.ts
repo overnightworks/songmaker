@@ -669,6 +669,34 @@ function libraryQueueStart(
 	return opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts;
 }
 
+type LibraryPoolQueueResult = Awaited<ReturnType<typeof fetchLibraryPoolQueue>>;
+
+// A failed fetch is reported here; null tells the caller to stop, whether the
+// start was superseded or the failure is already on screen.
+async function fetchLibraryTakeQueueOrReport(
+	requested: GenerationItem,
+	opts: LibraryTakeStart,
+	play: { seq: number; signal: AbortSignal }
+): Promise<LibraryPoolQueueResult | null> {
+	try {
+		const queue = await fetchLibraryPoolQueue({
+			startGenerationId: requested.id,
+			...librarySnapshotOpts(),
+			signal: play.signal
+		});
+		return playStartIsCurrent(play.seq) ? queue : null;
+	} catch (err) {
+		if (!playStartIsCurrent(play.seq)) return null;
+		reportLibraryTakeStartFailure(
+			requested,
+			opts,
+			isEmptyPoolError(err) ? 'empty' : 'error',
+			libraryStreamFailureToast(err)
+		);
+		return null;
+	}
+}
+
 // A take row never plays alone (#1187 P6): when the pool holds only the
 // tapped take, as it does before anything is picked, the row's song names the
 // album the queue continues through instead.
@@ -676,7 +704,7 @@ async function playLibraryFromGeneration(
 	gen: GenerationItem,
 	opts: LibraryTakeStart = {}
 ): Promise<void> {
-	const { seq, signal } = beginPlayStart();
+	const play = beginPlayStart();
 	setQueueContext({ type: 'library' });
 	// A restore waits as album and playlist restores do, with the transport
 	// free to take a Play for the take it brings back.
@@ -685,24 +713,8 @@ async function playLibraryFromGeneration(
 	clearWindowEnd();
 	let requested = gen;
 	for (;;) {
-		let queue;
-		try {
-			queue = await fetchLibraryPoolQueue({
-				startGenerationId: requested.id,
-				...librarySnapshotOpts(),
-				signal
-			});
-		} catch (err) {
-			if (!playStartIsCurrent(seq)) return;
-			reportLibraryTakeStartFailure(
-				requested,
-				opts,
-				isEmptyPoolError(err) ? 'empty' : 'error',
-				libraryStreamFailureToast(err)
-			);
-			return;
-		}
-		if (!playStartIsCurrent(seq)) return;
+		const queue = await fetchLibraryTakeQueueOrReport(requested, opts, play);
+		if (!queue) return;
 		const takes = queue.takes.map(poolTakeToPlaybackInfo);
 		const continuation = opts.keepPlaying ? currentTakeAtPosition() : null;
 		const startGeneration = continuation?.generation ?? requested;
