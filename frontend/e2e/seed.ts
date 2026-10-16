@@ -29,7 +29,7 @@ export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
 
 const CSRF_COOKIE = 'csrf_token';
 // The app's own take address (`audioUrlOf` in `services/audioPlayer.svelte.ts`).
-const AUDIO_PATH_PREFIX = '/audio/';
+export const AUDIO_PATH_PREFIX = '/audio/';
 const CSRF_HEADER = 'x-csrf-token';
 
 const ALBUM_ARTIST = 'E2E Ensemble';

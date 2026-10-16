@@ -27,7 +27,7 @@ import {
 	LIBRARY_ROUTE_PATH,
 	libraryRouteShape
 } from '../src/lib/routes/addresses';
-import { BASE_URL } from './seed';
+import { AUDIO_PATH_PREFIX, BASE_URL } from './seed';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -196,6 +196,15 @@ function isClosedOnPurpose(url: string): boolean {
 // so the abort loses nothing.
 function isSentAsThePageLeaves(url: string): boolean {
 	return new URL(url).pathname === PLAYBACK_DIAGNOSTICS_PATH;
+}
+
+// The player drops the take it is still loading when it moves to another one:
+// the continuous deck cancels the take's download, a media element the request
+// of the source it leaves. Whether the whole take had arrived by then is a race
+// no flow owns, and a take that fails to play fails the flow's own playback
+// checks.
+function isDroppedByThePlayer(url: string): boolean {
+	return new URL(url).pathname.startsWith(AUDIO_PATH_PREFIX);
 }
 
 const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_EVENT_STREAM_PATH;
@@ -556,12 +565,16 @@ export class FlowGuard {
 		});
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
-			// Chromium reports a stream the client cancelled in flight, and a send
-			// the leaving page cut off, as a failed request with exactly this error, indistinguishable from any other
-			// intentional client-side abort. Every other reason still fails the
-			// flow, including a 429 or 5xx on the same path (handled below).
+			// Chromium reports a stream the client cancelled in flight, a send the
+			// leaving page cut off and a take the player dropped for the next one
+			// as a failed request with exactly this error, indistinguishable from
+			// any other intentional client-side abort. Every other reason still
+			// fails the flow, including a 429 or 5xx on the same path (handled
+			// below).
 			const cutOffOnPurpose =
-				isClosedOnPurpose(request.url()) || isSentAsThePageLeaves(request.url());
+				isClosedOnPurpose(request.url()) ||
+				isSentAsThePageLeaves(request.url()) ||
+				isDroppedByThePlayer(request.url());
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
