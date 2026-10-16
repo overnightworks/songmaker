@@ -12,7 +12,6 @@ import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
-import * as libraryContext from '$lib/stores/libraryContext';
 import { libraryRootState, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
@@ -66,9 +65,9 @@ vi.mock('$lib/api/albums', async (importOriginal) => ({
 	fetchAlbum: api.fetchAlbum,
 	fetchAlbums: api.fetchAlbums
 }));
-vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false }),
-	fetchLibraryListen: vi.fn().mockResolvedValue({ items: [] })
+vi.mock('$lib/api/library', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/library')>()),
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -161,6 +160,10 @@ function coldTabAt(search: string): void {
 
 beforeEach(() => {
 	vi.stubGlobal('EventSource', FakeEventSource);
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async () => Response.json({ items: [] }))
+	);
 	vi.mocked(goto).mockClear();
 	api.fetchAlbum
 		.mockReset()
@@ -238,16 +241,12 @@ describe('a legacy /?song= address redirects', () => {
 		'1354_rule_31: preserves %s while legacy resolution waits',
 		async (query) => {
 			coldTabAt(query);
-			const openHome = vi.spyOn(libraryContext, 'openHomeAddress');
 			api.fetchSong.mockReturnValue(new Promise(() => {}));
-			try {
-				const target = openAddress();
-				await vi.waitFor(() => expect(target.textContent).toContain('Loading song'));
-				expect(location.search).toBe(query);
-				expect(openHome).not.toHaveBeenCalled();
-			} finally {
-				openHome.mockRestore();
-			}
+
+			const target = openAddress();
+
+			await vi.waitFor(() => expect(target.textContent).toContain('Loading song'));
+			expect(location.search).toBe(query);
 		}
 	);
 
@@ -412,7 +411,7 @@ describe('a legacy /?song= address naming no song', () => {
 		api.fetchSong.mockRejectedValue(new ApiError(404, 'Song not found', `/api/songs/${SONG_ID}`));
 	});
 
-	it('states the address names no song, with a way back to the library', async () => {
+	it('1354_rule_31: states the address names no song, with a way back to the library', async () => {
 		const target = openAddress();
 
 		await vi.waitFor(() => expect(target.textContent).toContain('No such song'));

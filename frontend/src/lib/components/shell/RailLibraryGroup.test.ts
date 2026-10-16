@@ -157,7 +157,7 @@ describe('RailLibraryGroup', () => {
 	});
 
 	it.each(['home', 'playlists'] as const)(
-		'#1506: the word Library is not the current page while %s shows',
+		'1354_rule_31: the word Library is not the current page while %s shows',
 		async (surface) => {
 			librarySurface.set(surface);
 			const target = await render();

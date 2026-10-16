@@ -27,9 +27,9 @@ vi.mock('$lib/stores/resourceSync', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/resourceSync')>()),
 	retryResourceSync
 }));
-vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false }),
-	fetchLibraryListen: vi.fn().mockResolvedValue({ items: [] })
+vi.mock('$lib/api/library', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/library')>()),
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -58,6 +58,10 @@ function streamLive(): void {
 }
 
 beforeEach(() => {
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async () => Response.json({ items: [] }))
+	);
 	retryResourceSync.mockClear();
 	resetResourceSyncForTests();
 	resetLibraryContextForTests();
@@ -78,6 +82,7 @@ afterEach(() => {
 	resetResourceSyncForTests();
 	resetConnectivityForTests();
 	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
 
 describe('the library workspace', () => {
@@ -159,7 +164,7 @@ describe('the library workspace', () => {
 
 	// #1506: Home's own surface, which shows no album page even while an album
 	// stays the rail context behind it.
-	it('shows Home alone on the Home surface, also while an album stays the rail context', async () => {
+	it('1354_rule_31: shows Home alone on the Home surface, also while an album stays the rail context', async () => {
 		streamLive();
 		openCollection.set({ kind: 'album', id: 'anfield' });
 		librarySurface.set('home');
@@ -173,7 +178,7 @@ describe('the library workspace', () => {
 		expect(target.textContent).not.toContain(ALBUM_TITLE);
 	});
 
-	it('shows the wall of albums, without Continue, on the Library surface', async () => {
+	it('1354_rule_31: shows the wall of albums, without Continue, on the Library surface', async () => {
 		streamLive();
 		librarySurface.set('browse');
 

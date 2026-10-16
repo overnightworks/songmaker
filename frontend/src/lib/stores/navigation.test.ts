@@ -284,7 +284,7 @@ function crossingWrite(replaceState: boolean) {
 }
 
 describe('isLibraryWorkspacePath', () => {
-	it('is the Home and Library paths, the Playlists page and every album, song, and playlist address', () => {
+	it('1354_rule_31: is the Home and Library paths, the Playlists page and every album, song, and playlist address', () => {
 		expect(isLibraryWorkspacePath(HOME_ROUTE_PATH)).toBe(true);
 		expect(isLibraryWorkspacePath(LIBRARY_ROUTE_PATH)).toBe(true);
 		expect(isLibraryWorkspacePath('/playlists')).toBe(true);
@@ -577,7 +577,7 @@ function openPlaylistsBySearch(): Promise<void> {
 	return openRailSearchTarget({ kind: 'page', href: '/playlists' });
 }
 
-describe('the Playlists page (#1402)', () => {
+describe('the library pages opened over a collection', () => {
 	let stopNavigation: () => void;
 
 	beforeEach(() => {
@@ -586,202 +586,164 @@ describe('the Playlists page (#1402)', () => {
 
 	afterEach(() => stopNavigation());
 
-	it('opens from its search hit over a fresh entry at its own address, Back and Forward stepping between it and the album below', async () => {
-		await openAlbum('a1');
-		const length = historyLength();
-
-		await openPlaylistsBySearch();
-
-		expect(location.pathname).toBe('/playlists');
-		expect(get(librarySurface)).toBe('playlists');
-		expect(historyEntry()).toMatchObject({
-			surface: 'playlists',
-			collection: { kind: 'album', id: 'a1' }
-		});
-		expect(historyLength()).toBe(length + 1);
-
-		await pressBack();
-
-		expect(location.pathname).toBe('/album/a1');
-		expect(get(librarySurface)).toBe('detail');
-
-		await pressForward();
-
-		expect(location.pathname).toBe('/playlists');
-		expect(get(librarySurface)).toBe('playlists');
-	});
-
-	it.each([
-		{ over: 'the Library wall', shows: 'its top', open: openLibraryWall, scrolled: 0 },
-		{ over: 'itself', shows: 'where it was', open: openPlaylistsBySearch, scrolled: 640 }
-	])('opened over $over shows $shows', async ({ open, scrolled }) => {
-		await open();
-		captureLibraryScroll(640);
-
-		await openPlaylistsBySearch();
-
-		expect(get(libraryScrollAnchor)).toBe(scrolled);
-		expect(historyEntry().scrollAnchor).toBe(scrolled);
-	});
-
-	it('defect:#1402 opened over a scrolled Library wall keeps the wall scrolled for Back', async () => {
-		await openLibraryWall();
-		captureLibraryScroll(640);
-
-		await openPlaylistsBySearch();
-		await pressBack();
-		await libraryHistoryStepsLanded();
-
-		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
-		expect(get(libraryScrollAnchor)).toBe(640);
-	});
-
-	it('defect:#1402 chosen in the phone drawer leaves no drawer entry behind, so Forward returns to it', async () => {
-		await openAlbum('a1');
-		toggleSidebar();
-		await libraryHistoryStepsLanded();
-
-		await openPlaylistsBySearch();
-		await libraryHistoryStepsLanded();
-		expect(get(sidebarOpen)).toBe(false);
-
-		await pressBack();
-		await libraryHistoryStepsLanded();
-		expect(location.pathname).toBe('/album/a1');
-
-		await pressForward();
-		await libraryHistoryStepsLanded();
-		expect(location.pathname).toBe('/playlists');
-	});
-});
-
-// #1506: Home is a library page of its own at `/`, which the brand opens; the
-// Library is the wall at `/library`.
-describe('Home (#1506)', () => {
-	let stopNavigation: () => void;
-
-	beforeEach(() => {
-		stopNavigation = initNavigation();
-	});
-
-	afterEach(() => stopNavigation());
-
-	async function startOnHome(): Promise<void> {
-		mountAddressRoute(HOME_ROUTE_PATH);
-		await openHomeAddress();
-	}
-
-	it('opens over a fresh entry at its own address, Back and Forward stepping between it and the album below', async () => {
-		await openAlbum('a1');
-		const length = historyLength();
-
-		await openHome();
-
-		expect(location.pathname).toBe(HOME_ROUTE_PATH);
-		expect(get(librarySurface)).toBe('home');
-		expect(historyEntry()).toMatchObject({
-			surface: 'home',
-			collection: { kind: 'album', id: 'a1' }
-		});
-		expect(historyLength()).toBe(length + 1);
-
-		await pressBack();
-
-		expect(location.pathname).toBe(albumRoutePath('a1'));
-		expect(get(librarySurface)).toBe('detail');
-
-		await pressForward();
-
-		expect(location.pathname).toBe(HOME_ROUTE_PATH);
-		expect(get(librarySurface)).toBe('home');
-	});
-
-	it('steps Home, the Library and an album one entry each through Back and Forward (H2, H3)', async () => {
-		await startOnHome();
-		const length = historyLength();
-
-		await openLibraryWall();
-		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
-		expect(historyEntry().surface).toBe('browse');
-		await openAlbum('a1');
-		expect(historyLength()).toBe(length + 2);
-
-		await pressBack();
-		expect([location.pathname, get(librarySurface)]).toEqual([LIBRARY_ROUTE_PATH, 'browse']);
-		await pressBack();
-		expect([location.pathname, get(librarySurface)]).toEqual([HOME_ROUTE_PATH, 'home']);
-		await pressForward();
-		expect([location.pathname, get(librarySurface)]).toEqual([LIBRARY_ROUTE_PATH, 'browse']);
-		await pressForward();
-		expect([location.pathname, get(librarySurface)]).toEqual([albumRoutePath('a1'), 'detail']);
-		expect(historyLength()).toBe(length + 2);
-	});
-
-	it.each([
-		{ over: 'the Library wall', shows: 'its top', open: openLibraryWall, scrolled: 0 },
-		{ over: 'itself', shows: 'where it was', open: openHome, scrolled: 640 }
-	])('opened over $over shows $shows', async ({ open, scrolled }) => {
-		await open();
-		captureLibraryScroll(640);
-
-		await openHome();
-
-		expect(get(libraryScrollAnchor)).toBe(scrolled);
-		expect(historyEntry().scrollAnchor).toBe(scrolled);
-	});
-
-	it('opened over a scrolled Library wall keeps the wall scrolled for Back', async () => {
-		await openLibraryWall();
-		captureLibraryScroll(640);
-
-		await openHome();
-		await pressBack();
-		await libraryHistoryStepsLanded();
-
-		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
-		expect(get(libraryScrollAnchor)).toBe(640);
-	});
-
-	// R1' for the entry a Back lands on: a tab whose history was written before
-	// the switch holds the Library wall's `{browse}` at `/`, which is Home now.
-	it.each([
-		{ name: 'an empty one', collection: null },
+	// #1402 (search opens the Playlists page) and #1506 (the brand opens Home):
+	// each takes its own address over a fresh entry, and the Library is the wall
+	// at `/library`.
+	describe.each([
 		{
-			name: 'one that keeps an album as the rail context',
-			collection: { kind: 'album' as const, id: 'a9' }
+			page: 'the Playlists page',
+			criterion: '#1402',
+			address: '/playlists',
+			surface: 'playlists',
+			open: openPlaylistsBySearch
+		},
+		{
+			page: 'Home',
+			criterion: '1354_rule_31:',
+			address: HOME_ROUTE_PATH,
+			surface: 'home',
+			open: openHome
 		}
-	])(
-		'shows Home when Back lands on $name from before the switch, leaving the address alone',
-		async ({ collection }) => {
-			fetchAlbum.mockResolvedValue(album({ id: 'a9' }));
-			replaceHistoryEntry(HOME_ROUTE_PATH, {
-				...libraryRootState(),
-				collection,
-				scrollAnchor: 320
-			});
-			pushHistoryEntry(albumRoutePath('a1'), {
-				library: {
-					...libraryRootState(),
-					surface: 'detail',
-					collection: { kind: 'album', id: 'a1' },
-					index: 1
-				}
-			});
+	] as const)('$page', ({ criterion, address, surface, open }) => {
+		it(`${criterion} opens over a fresh entry at its own address, Back and Forward stepping between it and the album below`, async () => {
+			await openAlbum('a1');
 			const length = historyLength();
-			vi.mocked(goto).mockClear();
 
+			await open();
+
+			expect(location.pathname).toBe(address);
+			expect(get(librarySurface)).toBe(surface);
+			expect(historyEntry()).toMatchObject({
+				surface,
+				collection: { kind: 'album', id: 'a1' }
+			});
+			expect(historyLength()).toBe(length + 1);
+
+			await pressBack();
+
+			expect(location.pathname).toBe(albumRoutePath('a1'));
+			expect(get(librarySurface)).toBe('detail');
+
+			await pressForward();
+
+			expect(location.pathname).toBe(address);
+			expect(get(librarySurface)).toBe(surface);
+		});
+
+		it.each([
+			{ over: 'the Library wall', shows: 'its top', first: openLibraryWall, scrolled: 0 },
+			{ over: 'itself', shows: 'where it was', first: open, scrolled: 640 }
+		])(`${criterion} opened over $over shows $shows`, async ({ first, scrolled }) => {
+			await first();
+			captureLibraryScroll(640);
+
+			await open();
+
+			expect(get(libraryScrollAnchor)).toBe(scrolled);
+			expect(historyEntry().scrollAnchor).toBe(scrolled);
+		});
+
+		it(`${criterion} opened over a scrolled Library wall keeps the wall scrolled for Back`, async () => {
+			await openLibraryWall();
+			captureLibraryScroll(640);
+
+			await open();
 			await pressBack();
 			await libraryHistoryStepsLanded();
 
-			await vi.waitFor(() => expect(get(librarySurface)).toBe('home'));
-			expect(location.pathname).toBe(HOME_ROUTE_PATH);
-			expect(historyEntry()).toMatchObject({ surface: 'home', collection, scrollAnchor: 0 });
-			expect(get(openCollection)).toEqual(collection);
-			expect(get(libraryScrollAnchor)).toBe(0);
-			expect(historyLength()).toBe(length);
-			expect(goto).not.toHaveBeenCalled();
+			expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
+			expect(get(libraryScrollAnchor)).toBe(640);
+		});
+	});
+
+	describe('the Playlists page (#1402)', () => {
+		it('defect:#1402 chosen in the phone drawer leaves no drawer entry behind, so Forward returns to it', async () => {
+			await openAlbum('a1');
+			toggleSidebar();
+			await libraryHistoryStepsLanded();
+
+			await openPlaylistsBySearch();
+			await libraryHistoryStepsLanded();
+			expect(get(sidebarOpen)).toBe(false);
+
+			await pressBack();
+			await libraryHistoryStepsLanded();
+			expect(location.pathname).toBe('/album/a1');
+
+			await pressForward();
+			await libraryHistoryStepsLanded();
+			expect(location.pathname).toBe('/playlists');
+		});
+	});
+
+	describe('Home (#1506)', () => {
+		async function startOnHome(): Promise<void> {
+			mountAddressRoute(HOME_ROUTE_PATH);
+			await openHomeAddress();
 		}
-	);
+
+		it('1354_rule_31: steps Home, the Library and an album one entry each through Back and Forward (H2, H3)', async () => {
+			await startOnHome();
+			const length = historyLength();
+
+			await openLibraryWall();
+			expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
+			expect(historyEntry().surface).toBe('browse');
+			await openAlbum('a1');
+			expect(historyLength()).toBe(length + 2);
+
+			await pressBack();
+			expect([location.pathname, get(librarySurface)]).toEqual([LIBRARY_ROUTE_PATH, 'browse']);
+			await pressBack();
+			expect([location.pathname, get(librarySurface)]).toEqual([HOME_ROUTE_PATH, 'home']);
+			await pressForward();
+			expect([location.pathname, get(librarySurface)]).toEqual([LIBRARY_ROUTE_PATH, 'browse']);
+			await pressForward();
+			expect([location.pathname, get(librarySurface)]).toEqual([albumRoutePath('a1'), 'detail']);
+			expect(historyLength()).toBe(length + 2);
+		});
+
+		// R1' for the entry a Back lands on: a tab whose history was written before
+		// the switch holds the Library wall's `{browse}` at `/`, which is Home now.
+		it.each([
+			{ name: 'an empty one', collection: null },
+			{
+				name: 'one that keeps an album as the rail context',
+				collection: { kind: 'album' as const, id: 'a9' }
+			}
+		])(
+			'1354_R1prime: shows Home when Back lands on $name from before the switch, leaving the address alone',
+			async ({ collection }) => {
+				fetchAlbum.mockResolvedValue(album({ id: 'a9' }));
+				replaceHistoryEntry(HOME_ROUTE_PATH, {
+					...libraryRootState(),
+					collection,
+					scrollAnchor: 320
+				});
+				pushHistoryEntry(albumRoutePath('a1'), {
+					library: {
+						...libraryRootState(),
+						surface: 'detail',
+						collection: { kind: 'album', id: 'a1' },
+						index: 1
+					}
+				});
+				const length = historyLength();
+				vi.mocked(goto).mockClear();
+
+				await pressBack();
+				await libraryHistoryStepsLanded();
+
+				await vi.waitFor(() => expect(get(librarySurface)).toBe('home'));
+				expect(location.pathname).toBe(HOME_ROUTE_PATH);
+				expect(historyEntry()).toMatchObject({ surface: 'home', collection, scrollAnchor: 0 });
+				expect(get(openCollection)).toEqual(collection);
+				expect(get(libraryScrollAnchor)).toBe(0);
+				expect(historyLength()).toBe(length);
+				expect(goto).not.toHaveBeenCalled();
+			}
+		);
+	});
 });
 
 // The open song's address names it by slug (issue #275). A rename changes
@@ -1157,7 +1119,7 @@ describe.each([
 	['openAlbum', () => openAlbum('a1')],
 	['openPlaylist', () => openPlaylist('p1')],
 	['openLibraryWall', () => openLibraryWall()],
-	['openHome', () => openHome()],
+	['1354_rule_40: openHome', () => openHome()],
 	['the Playlists page from search', () => openPlaylistsBySearch()]
 ])('%s closes the rail drawer', (_name, action) => {
 	it('closes an open drawer instead of leaving it over the new surface', async () => {
@@ -1605,26 +1567,16 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
-	it('defers Home the same way', async () => {
+	it.each([
+		{ title: '1354_rule_40: defers Home the same way', open: openHome },
+		{ title: 'defers the Playlists page from search the same way', open: openPlaylistsBySearch }
+	])('$title', async ({ open }) => {
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await openHome();
-
-		expect(get(selectedSongId)).toBe('s1');
-		expect(get(librarySurface)).toBe('detail');
-		expect(get(pendingDirtyNavigation)).not.toBeNull();
-	});
-
-	it('defers the Playlists page from search the same way', async () => {
-		await openAlbum('a1');
-		await selectSong('s1');
-		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
-		setDraftLyrics('unsaved edit');
-
-		await openPlaylistsBySearch();
+		await open();
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(librarySurface)).toBe('detail');
@@ -2924,7 +2876,7 @@ describe('overlays outside the library', () => {
 });
 
 describe('openRailSearchTarget', () => {
-	it('uses the Library action for the Library page target', async () => {
+	it('1354_rule_31: uses the Library action for the Library page target', async () => {
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		selectedSongId.set('s1');
 		librarySurface.set('detail');

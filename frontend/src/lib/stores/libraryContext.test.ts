@@ -614,7 +614,7 @@ describe('applyLibraryHistory', () => {
 });
 
 describe('hydrateLibraryFromHistory', () => {
-	it('replaces history after hydrate so a deleted playlist is not replayed', async () => {
+	it('1354_rule_31: replaces history after hydrate so a deleted playlist is not replayed', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		replaceHistoryEntry('/', {
 			...libraryRootState(),
@@ -770,24 +770,25 @@ describe('libraryHistoryUrl', () => {
 	});
 
 	it.each([
-		['browse', LIBRARY_ROUTE_PATH],
-		['home', HOME_ROUTE_PATH]
+		{
+			surface: 'browse',
+			retains: 'an album',
+			collection: albumSnapshot('anfield'),
+			path: LIBRARY_ROUTE_PATH
+		},
+		{
+			surface: 'home',
+			retains: 'an album',
+			collection: albumSnapshot('anfield'),
+			path: HOME_ROUTE_PATH
+		},
+		{ surface: 'home', retains: 'nothing', collection: null, path: HOME_ROUTE_PATH }
 	] as const)(
-		'addresses the %s surface itself while an album is only the rail context',
-		(surface, path) => {
-			expect(
-				libraryHistoryUrl({
-					...libraryRootState(),
-					surface,
-					collection: { kind: 'album', id: 'anfield' }
-				})
-			).toBe(path);
+		'1354_rule_31: addresses the $surface surface itself, with $retains as the rail context',
+		({ surface, collection, path }) => {
+			expect(libraryHistoryUrl({ ...libraryRootState(), surface, collection })).toBe(path);
 		}
 	);
-
-	it('addresses Home by its own path with nothing retained', () => {
-		expect(libraryHistoryUrl({ ...libraryRootState(), surface: 'home' })).toBe(HOME_ROUTE_PATH);
-	});
 
 	it('addresses an open playlist by its slug, not its id', () => {
 		playlistList.set([playlistItem({ title: 'P', share_slug: null, slug: 'friday-night' })]);
@@ -801,7 +802,7 @@ describe('libraryHistoryUrl', () => {
 		).toBe('/playlist/friday-night');
 	});
 
-	it('falls back to the library while the open playlist is not yet in playlistList', () => {
+	it('1354_rule_31: falls back to the library while the open playlist is not yet in playlistList', () => {
 		expect(
 			libraryHistoryUrl({
 				...libraryRootState(),
@@ -978,7 +979,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// navigation that disagrees with that stale belief tears the workspace
 	// down mid-session. This is the pairing #265's S7 had to get right for
 	// removing ensureLibraryWorkspaceRoute to be safe.
-	it('crosses through goto when the target is the Library and the write starts from a non-library route', async () => {
+	it('1354_rule_31: crosses through goto when the target is the Library and the write starts from a non-library route', async () => {
 		replaceHistoryEntry('/settings/voices');
 
 		await writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'push');
@@ -1841,7 +1842,7 @@ describe.each(SURFACE_ADDRESSES)('$name (1354_rule_31)', ({ open, path, surface:
 // a history from before the switch holds `{browse}` entries at `/`. The
 // address decides: they read as Home, in whichever order the route and the
 // stream's hydration finish, and nothing carries the tab to `/library`.
-describe('an entry from before Home had its own address (R1′)', () => {
+describe('1354_R1prime: an entry from before Home had its own address', () => {
 	const staleEntry = (collection: LibraryHistoryState['collection']): LibraryHistoryState => ({
 		...libraryRootState(),
 		query: 'Tide',
@@ -1852,19 +1853,11 @@ describe('an entry from before Home had its own address (R1′)', () => {
 	});
 
 	it.each([
-		{ name: 'an empty one', collection: null },
-		{ name: 'one that keeps an album as the rail context', collection: albumSnapshot('a9') }
-	])('reads $name at Home as the Home entry, keeping all but the wall scroll', ({ collection }) => {
-		const stale = staleEntry(collection);
-		mountAddressRoute(HOME_ROUTE_PATH, stale);
-
-		expect(historyEntry()).toEqual({ ...stale, surface: 'home', scrollAnchor: 0 });
-	});
-
-	it.each([
+		{ name: 'an empty one', stale: staleEntry(null) },
+		{ name: 'one that keeps an album as the rail context', stale: staleEntry(albumSnapshot('a9')) },
 		{ name: 'a song-bearing one', stale: { ...staleEntry(null), songId: 's9' } },
 		{ name: 'a take-bearing one', stale: { ...staleEntry(null), songId: 's9', generationId: 'g9' } }
-	])('keeps the song of $name, which the legacy address then redirects', ({ stale }) => {
+	])('reads $name at Home as the Home entry, keeping all but the wall scroll', ({ stale }) => {
 		mountAddressRoute(HOME_ROUTE_PATH, stale);
 
 		expect(historyEntry()).toEqual({ ...stale, surface: 'home', scrollAnchor: 0 });

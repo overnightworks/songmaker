@@ -415,7 +415,7 @@ describe('app shell', () => {
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
-	it('acts as the Home link when the mobile-strip brand is clicked', async () => {
+	it('1354_rule_40: acts as the Home link when the mobile-strip brand is clicked', async () => {
 		librarySurface.set('detail');
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
@@ -930,7 +930,7 @@ describe('a reload over the phone Now Playing', () => {
 			surface: 'browse'
 		}
 	] as const)(
-		'stays on $page the sign-in redirect lands on',
+		'1354_rule_31: stays on $page the sign-in redirect lands on',
 		async ({ address, openAddress, surface }) => {
 			resetLibraryContextForTests();
 			const playlist = {
@@ -1149,7 +1149,7 @@ describe('the live library stream', () => {
 		['a song address', '/album/anfield/stadion-lauf-a'],
 		['a playlist address', '/playlist/friday-night'],
 		['the Playlists page', '/playlists']
-	])('runs on %s', async (_name, path) => {
+	])('1354_rule_31: runs on %s', async (_name, path) => {
 		await renderLayout(path);
 		expect(liveStream.start).toHaveBeenCalled();
 	});
@@ -1196,7 +1196,7 @@ describe('the library route group', () => {
 	const routesDir = join(process.cwd(), 'src/routes');
 	const libraryGroupDir = join(routesDir, '(library)');
 
-	it('owns the workspace mount for every library address', () => {
+	it('1354_rule_31: owns the workspace mount for every library address', () => {
 		expect(readdirSync(libraryGroupDir).sort()).toEqual([
 			'+layout.svelte',
 			'+page.svelte',

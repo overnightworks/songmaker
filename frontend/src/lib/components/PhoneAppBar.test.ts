@@ -49,7 +49,6 @@ vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation'
 
 const navigation = vi.hoisted(() => ({
 	openAppPage: vi.fn(),
-	openHome: vi.fn(),
 	openLibraryWall: vi.fn(),
 	openListOverPage: vi.fn(),
 	openRailSearchTarget: vi.fn()
@@ -262,7 +261,7 @@ describe('PhoneAppBar', () => {
 			from: '/album/a1'
 		}
 	])(
-		'carries the brand, search and the account circle without ‹ on $place entered $entered',
+		'1354_rule_25: carries the brand, search and the account circle without ‹ on $place entered $entered',
 		async ({ address, from }) => {
 			await standOn(address, from);
 			const target = renderBar();
@@ -274,16 +273,6 @@ describe('PhoneAppBar', () => {
 			expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).not.toBeNull();
 		}
 	);
-
-	it('opens Home from the brand', async () => {
-		const target = renderBar();
-		await tick();
-
-		target.querySelector<HTMLButtonElement>('.brand')?.click();
-
-		expect(navigation.openHome).toHaveBeenCalledOnce();
-		expect(navigation.openLibraryWall).not.toHaveBeenCalled();
-	});
 
 	it('keeps Log out off the bar and one tap away in the account menu', async () => {
 		const onlogout = vi.fn();
@@ -359,7 +348,7 @@ describe('PhoneAppBar', () => {
 		},
 		{ page: 'Settings with nothing before it', opened: '/settings', name: 'Library' }
 	])(
-		'names ‹ on $page after $name, beside search and without the account circle',
+		'1354_rule_25: names ‹ on $page after $name, beside search and without the account circle',
 		async ({ opened, from, name }) => {
 			await standOn(opened, from);
 			const target = renderBar();

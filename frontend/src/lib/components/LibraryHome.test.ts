@@ -4,17 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LibraryListenItem } from '$lib/api/library';
 import { HOME_PAGE_LABEL, LIBRARY_NEW_MENU_LABEL } from '$lib/constants';
 
-const fetchLibraryListen = vi.fn();
-
-vi.mock('$lib/api/library', () => ({
-	fetchLibraryListen: (...args: unknown[]) => fetchLibraryListen(...args)
-}));
-vi.mock('$lib/stores/navigation', () => ({
-	openAlbum: vi.fn(),
-	openPlaylist: vi.fn(),
-	selectSong: vi.fn()
-}));
-
 import LibraryHome from './LibraryHome.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -32,12 +21,16 @@ const listened: LibraryListenItem = {
 };
 
 beforeEach(() => {
-	fetchLibraryListen.mockReset().mockResolvedValue({ items: [listened] });
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async () => Response.json({ items: [listened] }))
+	);
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	vi.unstubAllGlobals();
 });
 
 async function render(): Promise<HTMLElement> {

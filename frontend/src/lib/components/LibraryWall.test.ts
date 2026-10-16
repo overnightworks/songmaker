@@ -236,7 +236,7 @@ describe('LibraryWall', () => {
 		expect(root.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Sort albums');
 	});
 
-	it('#1506: shows no Continue, and reads no listens until Last played is chosen', async () => {
+	it('1354_rule_31: shows no Continue, and reads no listens until Last played is chosen', async () => {
 		seedWall();
 
 		const root = await render();
@@ -257,7 +257,7 @@ describe('LibraryWall', () => {
 			vi.unstubAllEnvs();
 		});
 
-		it('orders Last played by the listens of every place and names the last listen', async () => {
+		it('1354_rule_31: orders Last played by the listens of every place and names the last listen', async () => {
 			seedWall();
 			const everyPlace = [
 				place('album', 'a-fuer', 'Sonne für Andrea', '2026-09-27T03:47:00Z'),

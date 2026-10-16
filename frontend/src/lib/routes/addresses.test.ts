@@ -53,11 +53,11 @@ describe('library route addresses', () => {
 		['/playlists', 'playlists'],
 		['/playlists/friday-night', 'external'],
 		['/settings/voices', 'external']
-	])('classifies %s as %s', (pathname, shape) => {
+	])('1354_rule_31: classifies %s as %s', (pathname, shape) => {
 		expect(libraryRouteShape(pathname)).toBe(shape);
 	});
 
-	it('classifies the legacy song query address by its path alone, as Home', () => {
+	it('1354_rule_31: classifies the legacy song query address by its path alone, as Home', () => {
 		const { pathname } = new URL(legacySongRoutePath('s1', 'g1'), 'http://localhost');
 		expect(libraryRouteShape(pathname)).toBe('home');
 	});
