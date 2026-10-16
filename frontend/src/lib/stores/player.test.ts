@@ -996,6 +996,35 @@ describe('canPlay predicates', () => {
 		expect(canPlayNextSong(cur, [s1, s2], { type: 'album', albumId: 'a1' })).toBe(false);
 	});
 
+	it.each([
+		['archived', { is_archived: true }],
+		['without a file', { mp3_path: '' }]
+	])(
+		'1354_rule_11: canPlayNextSong and canPlayPrevSong skip a neighbour whose loaded takes are %s',
+		(_, takeFault) => {
+			const current = makeSong({ ...queuedSongDefaults(), generation_count: 1 });
+			const neighbour = makeSong({
+				...queuedSongDefaults(),
+				id: 's2',
+				track_number: 2,
+				generation_count: 1,
+				generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', ...takeFault })]
+			});
+			const playing = {
+				generation: makeGen(genDefaults),
+				songId: 's1',
+				songTitle: '',
+				artist: '',
+				albumTitle: '',
+				lyrics: null
+			};
+			const album = { type: 'album' as const, albumId: 'a1' };
+
+			expect(canPlayNextSong(playing, [current, neighbour], album)).toBe(false);
+			expect(canPlayPrevSong(playing, [current, neighbour], album)).toBe(false);
+		}
+	);
+
 	it('canPlayPrevSong skips songs with zero generations', () => {
 		const s1 = makeSong({ ...queuedSongDefaults(), generation_count: 0, generations: [] });
 		const s2 = makeSong({ ...queuedSongDefaults(), id: 's2' });
@@ -2613,6 +2642,28 @@ describe('playAlbum start track', () => {
 
 		expect(get(toasts)).toEqual([]);
 		expect(get(playStartNotice)).toBe('idle');
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
+			expect.anything()
+		);
+	});
+
+	it('1354_rule_11: skips a track whose take has no file, as the server does', async () => {
+		const fileless = makeSong({
+			...queuedSongDefaults(),
+			generations: [makeGen({ ...genDefaults, id: 'g1', mp3_path: '' })]
+		});
+		const playable = makeSong({
+			...queuedSongDefaults(),
+			id: 's2',
+			title: 'Two',
+			track_number: 2,
+			generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', mp3_path: 'a1/s2.mp3' })]
+		});
+		songList.set([fileless, playable]);
+
+		await playAlbum('a1');
+
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({ generation: expect.objectContaining({ id: 'g2' }) }),
 			expect.anything()

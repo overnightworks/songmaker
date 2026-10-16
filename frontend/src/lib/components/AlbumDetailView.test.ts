@@ -65,6 +65,7 @@ const archiveAlbum = vi.fn();
 const unarchiveAlbum = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();
 const createSong = vi.fn();
+const fetchSong = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
@@ -79,7 +80,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		restoreAlbum: vi.fn(),
 		archiveAlbum: (...args: unknown[]) => archiveAlbum(...args),
 		unarchiveAlbum: (...args: unknown[]) => unarchiveAlbum(...args),
-		createSong: (...args: unknown[]) => createSong(...args)
+		createSong: (...args: unknown[]) => createSong(...args),
+		fetchSong: (...args: unknown[]) => fetchSong(...args)
 	};
 });
 vi.mock('$lib/api/songs', () => ({
@@ -165,6 +167,7 @@ beforeEach(() => {
 	vi.mocked(addToast).mockReset();
 	vi.mocked(selectSong).mockReset();
 	createSong.mockReset();
+	fetchSong.mockReset().mockRejectedValue(new Error('not mocked'));
 	vi.mocked(playAlbum).mockReset();
 	vi.mocked(playAlbumSong).mockReset();
 	setShuffle(false);
@@ -452,6 +455,7 @@ describe('AlbumDetailView header', () => {
 		]
 	])('dims play on an album %s, and a tap keeps the running queue', async (_, songs) => {
 		setShuffle(true);
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', has_playable_take: false })]);
 		songList.set(songs);
 		const running = { type: 'library' as const, index: 3 };
 		queueContext.set(running);
@@ -469,6 +473,38 @@ describe('AlbumDetailView header', () => {
 		expect(get(queueContext)).toBe(running);
 		expect(get(shuffleEnabled)).toBe(true);
 	});
+
+	it.each([
+		['the server says nothing is playable', false, 'unloaded'],
+		['its loaded songs hold only archived takes (defect:#1386)', true, 'loaded']
+	])(
+		'1354_rule_11: dims play on an album with takes but nothing to hear, because %s',
+		async (_, serverSaysPlayable, songsState) => {
+			albumList.set([
+				album({ id: 'a-local', title: 'Night Drive', has_playable_take: serverSaysPlayable })
+			]);
+			const archivedOnly = song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generation_count: 1,
+				generations: [generation({ song_id: 's-local', is_archived: true })]
+			});
+			if (songsState === 'loaded') {
+				vi.mocked(fetchSongs).mockResolvedValueOnce(songsPage([archivedOnly]));
+				await loadSongsForAlbum('a-local');
+			} else {
+				songList.set([archivedOnly]);
+			}
+			const target = await renderDetail();
+
+			const circle = getByRoleButton(
+				requireElement(target, '.collection-header'),
+				collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+			);
+			expect(circle.disabled).toBe(true);
+		}
+	);
 
 	it('keeps pause on the circle of a playing album whose songs have no takes', async () => {
 		songList.set([
@@ -856,20 +892,64 @@ describe('AlbumDetailView song row', () => {
 		const target = await renderSongs();
 
 		boxOf(target, 'Tide').click();
-		await tick();
 
-		expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide');
+		await vi.waitFor(() =>
+			expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide')
+		);
 		expect(selectSong).not.toHaveBeenCalled();
 		expect(getByRoleHeading(target, 'Night Drive')).not.toBeNull();
+	});
+
+	describe('a tap on a song whose takes are not loaded yet (defect:#1386)', () => {
+		it.each([
+			['only archived takes', [true, true], 'editor'],
+			['a playable take', [true, false], 'player']
+		])('1354_rule_11: reads the takes first, then chooses by %s', async (_, archived, outcome) => {
+			fetchSong.mockResolvedValue(
+				song({
+					id: 's-ebb',
+					album_id: 'a-local',
+					album_title: 'Night Drive',
+					title: 'Ebb',
+					generation_count: 2,
+					generations: archived.map((is_archived, i) =>
+						generation({ id: `g${i}`, song_id: 's-ebb', is_archived })
+					)
+				})
+			);
+			const target = await renderSongs();
+
+			boxOf(target, 'Ebb').click();
+
+			if (outcome === 'editor')
+				await vi.waitFor(() => expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-ebb'));
+			else
+				await vi.waitFor(() =>
+					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
+				);
+			expect(fetchSong).toHaveBeenCalledExactlyOnceWith('s-ebb');
+			expect(vi.mocked(outcome === 'editor' ? playAlbumSong : selectSong)).not.toHaveBeenCalled();
+		});
+
+		it('takes the play path when the takes cannot be read, so the player says so', async () => {
+			fetchSong.mockRejectedValue(new Error('offline'));
+			const target = await renderSongs();
+
+			boxOf(target, 'Ebb').click();
+
+			await vi.waitFor(() =>
+				expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
+			);
+			expect(selectSong).not.toHaveBeenCalled();
+		});
 	});
 
 	it('opens a song with no take yet in the song editor on a tap (#1354 rule 23)', async () => {
 		const target = await renderSongs();
 
 		boxOf(target, 'Fresh').click();
-		await tick();
 
-		expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-fresh');
+		await vi.waitFor(() => expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-fresh'));
 		expect(playAlbumSong).not.toHaveBeenCalled();
 	});
 

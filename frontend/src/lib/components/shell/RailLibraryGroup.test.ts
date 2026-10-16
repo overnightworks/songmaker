@@ -308,6 +308,34 @@ describe('RailLibraryGroup', () => {
 		expect(meta).toEqual(['—', '3 takes · pick']);
 	});
 
+	it('1354_rule_11: shows nothing to hear for a track of only archived takes, and no pick for an archived one', async () => {
+		showAlbumDetail('a1');
+		songList.set([
+			song({
+				id: 's1',
+				title: 'Tide',
+				track_number: 1,
+				generation_count: 1,
+				generations: [generation({ id: 'g1', is_picked: true, is_archived: true })]
+			}),
+			song({
+				id: 's2',
+				title: 'Ebb',
+				track_number: 2,
+				generation_count: 2,
+				generations: [
+					generation({ id: 'g2', is_picked: true, is_archived: true }),
+					generation({ id: 'g3' })
+				]
+			})
+		]);
+		const target = await render();
+		const meta = Array.from(target.querySelectorAll('.row-sub2 .row-meta')).map(
+			(el) => el.textContent
+		);
+		expect(meta).toEqual(['—', '2 takes']);
+	});
+
 	it('selects a track when its row is clicked', async () => {
 		showAlbumDetail('a1');
 		songList.set([
