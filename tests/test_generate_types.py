@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -77,11 +78,37 @@ def test_check_detects_seeded_route_models_and_accepts_generated_types(
     )
 
 
-def test_generates_parenthesized_discriminated_union_list() -> None:
-    assert (
-        generate_types._py_type_to_ts(list[DiscriminatedHit])
-        == "(DiscriminatedAlbumHit | DiscriminatedSongHit)[]"
-    )
+class Flavor(Enum):
+    SWEET = "sweet"
+    SOUR = "sour"
+
+
+type NumberList = list[int]
+
+
+@pytest.mark.parametrize(
+    ("annotation", "typescript"),
+    [
+        (list[DiscriminatedHit], "(DiscriminatedAlbumHit | DiscriminatedSongHit)[]"),
+        (str | None, "string | null"),
+        (int | str, "number | string"),
+        (list[Annotated[int, Field(ge=0)]], "number[]"),
+        (Annotated[bool, Field()], "boolean"),
+        (dict[str, float], "Record<string, number>"),
+        (dict, "Record<string, unknown>"),
+        (Literal["draft", 3], "'draft' | 3"),
+        (Flavor, "'sweet' | 'sour'"),
+        (NumberList, "number[]"),
+        (SeededChild, "SeededChild"),
+    ],
+)
+def test_translates_python_annotation_to_typescript(annotation: object, typescript: str) -> None:
+    assert generate_types._py_type_to_ts(annotation) == typescript
+
+
+def test_refuses_an_annotation_without_a_typescript_counterpart() -> None:
+    with pytest.raises(generate_types.TypeScriptTypeError, match="unsupported Python annotation"):
+        generate_types._py_type_to_ts(bytes)
 
 
 def test_generates_shared_repaint_mode_alias() -> None:

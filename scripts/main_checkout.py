@@ -30,16 +30,18 @@ class CheckoutError(Exception):
 
 def main_checkout_elsewhere(project_root: Path) -> Path | None:
     """The main checkout when ``project_root`` is a linked worktree of it, else ``None``."""
+    not_a_checkout = CheckoutError(f"{project_root} is not a git checkout")
+    if not project_root.is_dir():
+        raise not_a_checkout
     try:
         common_dir = subprocess.run(
-            ["git", "-C", str(project_root), "rev-parse", "--path-format=absolute",
-             "--git-common-dir"],
-            capture_output=True, text=True, check=False,
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=project_root, capture_output=True, text=True, check=False,
         )
     except OSError as exc:
         raise CheckoutError("git is needed to tell the main checkout from a worktree") from exc
     if common_dir.returncode != 0:
-        raise CheckoutError(f"{project_root} is not a git checkout")
+        raise not_a_checkout
     main_checkout = Path(common_dir.stdout.strip()).resolve().parent
     return None if main_checkout == project_root.resolve() else main_checkout
 

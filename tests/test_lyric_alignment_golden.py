@@ -39,3 +39,12 @@ def test_committed_fixture_file_matches_current_generator_output():
         "alignments": golden.compute_golden_alignments(),
         "fixtures": golden.compute_golden_ratios(),
     }
+
+
+@pytest.mark.parametrize(
+    ("lyric", "normalized"),
+    [("42", "zweiundvierzig"), ("３", "drei"), ("٣", "٣")],
+    ids=["ascii digits", "fullwidth digits fold to ascii", "other scripts keep their digits"],
+)
+def test_only_ascii_digits_are_spelled_out(lyric, normalized):
+    assert golden.normalize_lyrics_token(lyric) == normalized
