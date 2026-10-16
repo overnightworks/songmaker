@@ -1,0 +1,7 @@
+claim_id = "7213d014acfa4e6b9e35417882223542"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "52d6ac7b32cdecd460b3d90c5170143b90b828f4"
+branch = "claude/issue-1457-library-pins-use-constant"
+scope = ["frontend/src/lib/stores/navigation.test.ts", "frontend/src/routes/layout.test.ts"]
+opened_commit = "37f60fa028575db131a4e1316194e5442d9212dc"
