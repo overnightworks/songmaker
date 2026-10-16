@@ -61,6 +61,7 @@ import {
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
+	observePlayingAudio,
 	ONLY_IN_SHELL,
 	openLibraryWall,
 	openPlaylistsPage,
@@ -68,6 +69,7 @@ import {
 	playlistEntryRows,
 	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
+	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	workspace,
 	type Shell,
 	LIBRARY_PATH,
@@ -662,11 +664,13 @@ test(
 	'a phone row answers a tap on its edge, and a take held twice marks one row',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }, testInfo) => {
+		test.setTimeout(SUCCESSOR_TAKES_TEST_TIMEOUT_MS);
 		const shell = shellOf(testInfo);
 		const library = readSeededLibrary();
 		const surface = workspace(page);
 		const albumHeading = surface.getByRole('heading', { name: library.albumTitle });
 
+		await observePlayingAudio(page);
 		await page.goto(LIBRARY_PATH);
 		await surface
 			.locator('.library-wall .tile-grid')
@@ -677,22 +681,27 @@ test(
 
 		// An album row plays its song from each edge and keeps the album page
 		// (#1354 rule 22); taking two songs in turn shows every edge's tap land.
+		// A tap repicks the queue: the player drops the takes it leaves and asks for
+		// the tapped one anew, any of them possibly still arriving.
 		const songBox = (title: string) => surface.locator('.song-row').filter({ hasText: title });
 		const [firstTrack, secondTrack] = library.albumTracks;
+		const albumTakes = library.albumTracks.map((track) => track.audioPath);
 		for (const [index, edge] of (['top', 'bottom', 'left', 'right'] as const).entries()) {
 			const [played, other] =
 				index % 2 === 0 ? [firstTrack, secondTrack] : [secondTrack, firstTrack];
 			const row = songBox(played.songTitle);
-			await tapRowEdge(
-				row,
-				row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
-				edge
-			);
-			await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-			await expect(
-				songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-			).toHaveCount(0);
-			await expect(albumHeading).toBeVisible();
+			await guard.abandoningTakes(index === 0 ? [] : albumTakes, played.audioPath, async () => {
+				await tapRowEdge(
+					row,
+					row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
+					edge
+				);
+				await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+				await expect(
+					songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+				).toHaveCount(0);
+				await expect(albumHeading).toBeVisible();
+			});
 		}
 
 		// Adding the album puts the playlist's first take in it a second time.
@@ -716,6 +725,10 @@ test(
 			.click();
 		const heldTwice = playlistEntryRows(page).filter({ hasText: playlist.songTitles[0] });
 		await expect(heldTwice).toHaveCount(2);
+		const heldTwiceTake = library.albumTracks.find(
+			({ songTitle }) => songTitle === playlist.songTitles[0]
+		);
+		if (!heldTwiceTake) throw new Error('Expected the first playlist song to be in the album');
 
 		// A playlist row plays from either edge, and only the copy that plays is marked.
 		const pause = page
@@ -726,16 +739,18 @@ test(
 			['bottom', 0, 1]
 		] as const) {
 			const row = heldTwice.nth(played);
-			await tapRowEdge(
-				row,
-				row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
-				edge
-			);
-			await expect(pause).toBeVisible();
-			await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-			await expect(
-				heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-			).toHaveCount(0);
+			await guard.abandoningTakes(albumTakes, heldTwiceTake.audioPath, async () => {
+				await tapRowEdge(
+					row,
+					row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
+					edge
+				);
+				await expect(pause).toBeVisible();
+				await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+				await expect(
+					heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+				).toHaveCount(0);
+			});
 		}
 	}
 );
@@ -1038,9 +1053,9 @@ async function listenInSeededAlbum(page: Page): Promise<void> {
 	expect(listen.status()).toBe(200);
 }
 
-test('#1354 rule 7: the Library lists albums only, opens in A–Z, re-sorts by Last played with the last listen on each line, keeps the choice across a reload and leaves Continue alone', async ({
+test('1354_rule_7 1354_rule_13: the Library keeps phone counts and desktop listen timestamps under Last played, keeps the choice across reload and leaves Continue alone', async ({
 	page
-}) => {
+}, testInfo) => {
 	const surface = workspace(page);
 	const orders = surface.getByRole('group', { name: LIBRARY_WALL_ORDER_GROUP_LABEL });
 	const choice = (order: LibraryWallOrder) =>
@@ -1073,13 +1088,17 @@ test('#1354 rule 7: the Library lists albums only, opens in A–Z, re-sorts by L
 	// The seeded album holds the newest listen.
 	await choice('played').click();
 	await expect(tiles.first()).toContainText(library.albumTitle);
-	await expect(firstLine).toHaveText(/^today \d\d:\d\d$/);
+	await expect(firstLine).toHaveText(
+		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
+	);
 	await expect(continueTiles).toHaveText(continueOrder);
 
 	await page.reload();
 	await expect(choice('played')).toHaveAttribute('aria-pressed', 'true');
 	await expect(tiles.first()).toContainText(library.albumTitle);
-	await expect(firstLine).toHaveText(/^today \d\d:\d\d$/);
+	await expect(firstLine).toHaveText(
+		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
+	);
 	await expect(continueTiles).toHaveText(continueOrder);
 });
 

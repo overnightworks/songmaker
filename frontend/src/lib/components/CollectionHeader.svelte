@@ -8,16 +8,7 @@
 	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '$lib/constants';
 	import { songCountLabel } from '$lib/utils/format';
 	import { historyLayerState } from '$lib/stores/layers';
-	import {
-		pendingStart,
-		playbackSource,
-		playStartNotice,
-		setShuffle,
-		stopStartAwaitingNetwork,
-		transportOfTheStart,
-		waitingStartOf
-	} from '$lib/stores/player';
-	import { audioPlayer, type TransportState } from '$lib/services/audioPlayer.svelte';
+	import { collectionTransport, toggleOrStartCollection, setShuffle } from '$lib/stores/player';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -147,22 +138,7 @@
 		editingDetails.set(false);
 	}
 
-	// The queue names where the music comes from; while that is this very
-	// collection, the circle is its pause and resume rather than a fresh start.
-	const queueIsThisCollection = $derived(
-		audioPlayer.current !== null &&
-			$playbackSource?.kind === kind &&
-			$playbackSource.id === collectionId
-	);
-	// A start of this album that waits for the network is the queue to come:
-	// the circle shows its wait as the bar does, and a tap withdraws it (#1330).
-	const startWaitsHere = $derived(
-		kind === 'album' && waitingStartOf($playStartNotice, $pendingStart)?.albumId === collectionId
-	);
-	const circleTransport: TransportState = $derived.by(() => {
-		if (startWaitsHere) return transportOfTheStart(null, $playStartNotice, 'idle');
-		return queueIsThisCollection ? audioPlayer.transport : 'idle';
-	});
+	const collectionState = $derived($collectionTransport(kind, collectionId));
 
 	// The circle plays the collection in order from the top, so it turns the
 	// player's shuffle off, and the player's shuffle control shows that order;
@@ -173,9 +149,7 @@
 	// passes no onplay, which dims the circle unless this collection is the
 	// queue, so no tap there reaches the listener's shuffle setting.
 	function onCircle(): void {
-		if (startWaitsHere) stopStartAwaitingNetwork();
-		else if (queueIsThisCollection) audioPlayer.toggle();
-		else startFromTheTop();
+		toggleOrStartCollection(kind, collectionId, onplay ? startFromTheTop : null);
 	}
 
 	function startFromTheTop(): void {
@@ -249,8 +223,8 @@
 	{initials}
 	{artFill}
 	{kind}
-	transport={circleTransport}
-	onplay={onplay || queueIsThisCollection || startWaitsHere ? onCircle : null}
+	transport={collectionState.transport}
+	onplay={onplay || collectionState.current || collectionState.waiting ? onCircle : null}
 	{titleArea}
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}

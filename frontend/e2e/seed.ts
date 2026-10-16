@@ -1167,3 +1167,76 @@ export async function ageSessionPastAbsoluteLimit(sessionId: string): Promise<vo
 		throw new Error(`Ageing session ${sessionId} failed: ${detail}`, { cause: err });
 	}
 }
+
+export interface PhoneLibraryFixture {
+	albums: Array<{ id: string; title: string; count: number }>;
+	playlist: { id: string; title: string };
+	tracks: Record<string, Array<{ title: string; audioPath: string }>>;
+}
+
+/** A fresh account's 43 albums, including unheard, archived-only and unpicked music. */
+export async function seedPhoneLibrary(
+	api: APIRequestContext,
+	credentials: Credentials
+): Promise<PhoneLibraryFixture> {
+	const seed = await SeedApi.login(api, credentials);
+	const albums: PhoneLibraryFixture['albums'] = [];
+	const tracks: PhoneLibraryFixture['tracks'] = {};
+	// Repeated MPEG frames keep the real tone sounding throughout transport assertions.
+	const tone = readFileSync(TAKE_FIXTURE);
+	const audio = Buffer.concat(Array.from({ length: 40 }, () => tone));
+	for (let index = 0; index < 43; index++) {
+		const title = `E2E Phone ${String(index).padStart(2, '0')}${index === 41 ? ' The Extraordinarily Long Album Title That Keeps Going' : ''}`;
+		const album = await seed.postJson<CreatedResource>('/api/albums', { title });
+		const count = index === 2 ? 2 : [1, 41, 42].includes(index) ? 1 : 0;
+		albums.push({ id: album.id, title, count });
+		if (!count) continue;
+		tracks[album.id] = [];
+		for (let trackIndex = 0; trackIndex < count; trackIndex++) {
+			const songTitle = `E2E Phone Song ${index} ${trackIndex + 1}`;
+			const song = await seed.postJson<CreatedResource>('/api/songs', {
+				title: songTitle,
+				album_id: album.id
+			});
+			const take = await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
+				mp3: { name: 'phone-proof.mp3', mimeType: 'audio/mpeg', buffer: audio }
+			});
+			tracks[album.id].push({ title: songTitle, audioPath: AUDIO_PATH_PREFIX + take.mp3_path });
+			if (index === 1) {
+				await execWithStdin(
+					'docker',
+					[
+						...COMPOSE_ARGS,
+						'exec',
+						'-T',
+						'postgres',
+						'psql',
+						'-U',
+						postgresUser(),
+						'-d',
+						postgresDatabase(),
+						'-v',
+						'ON_ERROR_STOP=1',
+						'-v',
+						`take_id=${take.id}`
+					],
+					{ cwd: REPO_ROOT },
+					Buffer.from(
+						"UPDATE generations SET is_archived = true, archived_at = now() WHERE id = :'take_id';"
+					)
+				);
+			}
+		}
+	}
+	const title = 'E2E Phone Playlist With An Extraordinarily Long Name That Keeps Going';
+	const playlist = await seed.postJson<CreatedResource>('/api/playlists', { title });
+	return { albums, playlist: { id: playlist.id, title }, tracks };
+}
+
+export async function archivePhoneLibrary(
+	api: APIRequestContext,
+	fixture: PhoneLibraryFixture
+): Promise<void> {
+	const seed = await SeedApi.fromSession(api);
+	for (const album of fixture.albums) await seed.postJson(`/api/albums/${album.id}/archive`, {});
+}

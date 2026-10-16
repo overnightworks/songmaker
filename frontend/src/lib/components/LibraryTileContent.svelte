@@ -1,9 +1,12 @@
 <script lang="ts">
 	import type { AlbumCoverUrls } from '$lib/api/types';
 	import { titleInitials } from '$lib/utils/format';
+	import PlayingMark from './PlayingMark.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
 
 	interface Props {
+		presentation?: 'cover' | 'row';
+		current?: boolean;
 		title: string;
 		subtitle: string;
 		coverAlt: string;
@@ -13,6 +16,8 @@
 	}
 
 	let {
+		presentation = 'cover',
+		current = false,
 		title,
 		subtitle,
 		coverAlt,
@@ -22,7 +27,7 @@
 	}: Props = $props();
 </script>
 
-<span class="tile-cover">
+<span class="tile-cover" class:row={presentation === 'row'}>
 	{#if coverUrl}
 		<img src={coverUrl} alt={coverAlt} draggable="false" loading="lazy" decoding="async" />
 	{:else if playlistCovers}
@@ -35,9 +40,11 @@
 		>
 	{/if}
 </span>
-<span class="tile-meta">
+<span class="tile-meta" class:row={presentation === 'row'} class:current>
 	<span class="tile-title">{title}</span>
-	<span class="tile-subtitle">{subtitle}</span>
+	<span class="tile-subtitle"
+		>{#if presentation === 'row'}<PlayingMark {current} />{/if}{subtitle}</span
+	>
 </span>
 
 <style>
@@ -99,5 +106,34 @@
 		white-space: nowrap;
 		font-size: var(--tile-subtitle-size, 0.68rem);
 		color: var(--text-subtle);
+	}
+
+	.tile-cover.row {
+		width: 42px;
+		height: 42px;
+		flex: none;
+		border-radius: 3px;
+		--tile-initials-size: 0.85rem;
+		--playlist-initials-min: 14px;
+	}
+	.tile-meta.row {
+		flex: 1;
+		padding: 0;
+		gap: 2px;
+		--tile-title-size: 0.95rem;
+		--tile-subtitle-size: 0.78rem;
+	}
+	.row .tile-title {
+		font-family: var(--font-body);
+		font-weight: 600;
+		letter-spacing: normal;
+	}
+	.row.current .tile-title {
+		color: var(--accent);
+	}
+	.row .tile-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 5px;
 	}
 </style>

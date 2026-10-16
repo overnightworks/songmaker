@@ -3,7 +3,12 @@ import {
 	replaceHistoryEntry,
 	standingHistoryEntry
 } from '$lib/test-utils/library-history';
-import { makeAlbum as album, makePlaylist as playlist } from '$lib/test-utils/factories';
+import {
+	makeAlbum as album,
+	makePlaylist as playlist,
+	makeSong,
+	makeGeneration
+} from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -12,12 +17,24 @@ import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection } from '$lib/stores/collection';
-import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
+import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { toasts } from '$lib/stores/toast';
-import { ApiError } from '$lib/api/fetch';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import {
+	playAlbum,
+	setShuffle,
+	shuffleEnabled,
+	queueContext,
+	pendingStart,
+	playStartNotice,
+	toggleOrStartCollection
+} from '$lib/stores/player';
+import { fetchSong } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { LIBRARY_WALL_PLAYED_PAGE_SIZE } from '$lib/constants';
 
 const fetchPlaylists = vi.fn();
@@ -83,6 +100,16 @@ async function unmountAll(): Promise<void> {
 
 afterEach(async () => {
 	await unmountAll();
+	const waiting = get(pendingStart);
+	if (waiting) toggleOrStartCollection('album', waiting.albumId, null);
+	queueContext.set({ type: 'library' });
+	setShuffle(false);
+	audioPlayer.current = null;
+	audioPlayer.status = 'idle';
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+	songList.set([]);
+	albumSongsLoad.set({});
 	Reflect.deleteProperty(document, 'visibilityState');
 	resetConnectivityForTests();
 	resetLibraryContextForTests();
@@ -723,3 +750,138 @@ for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 		]
 	});
 }
+
+function phoneViewport(): void {
+	vi.stubGlobal('matchMedia', () => ({
+		matches: true,
+		addEventListener: () => undefined,
+		removeEventListener: () => undefined
+	}));
+}
+
+it.each([
+	{ label: 'unloaded playable', flag: true, loaded: false, archived: false, expected: true },
+	{ label: 'unloaded archived-only', flag: false, loaded: false, archived: true, expected: false },
+	{
+		label: 'loaded archived-only overrides stale flag',
+		flag: true,
+		loaded: true,
+		archived: true,
+		expected: false
+	},
+	{
+		label: 'unpicked playable overrides stale flag',
+		flag: false,
+		loaded: true,
+		archived: false,
+		expected: true
+	}
+])(
+	'1354_rule_11: $label uses the playability owner',
+	async ({ flag, loaded, archived, expected }) => {
+		phoneViewport();
+		albumList.set([album({ id: 'proof', title: 'Proof', has_playable_take: flag })]);
+		if (loaded) {
+			songList.set([
+				makeSong({
+					album_id: 'proof',
+					generations: [makeGeneration({ is_archived: archived, is_picked: false })]
+				})
+			]);
+			albumSongsLoad.set({ proof: 'idle' });
+		}
+		const root = await render();
+		expect(root.querySelector('[aria-label="Play Proof"]') !== null).toBe(expected);
+		expect(root.querySelector('.tile-subtitle')).toHaveTextContent('1 song');
+	}
+);
+
+it.each(['library', 'playlists'] as const)(
+	'1354_rule_13: phone %s keeps counts under both orders',
+	async (kind) => {
+		phoneViewport();
+		seedWall();
+		const root = await render(kind);
+		const counts = tileLines(root);
+		fetchLibraryListen.mockResolvedValue({
+			items: [
+				place(
+					kind === 'library' ? 'album' : 'playlist',
+					kind === 'library' ? 'a-sonne' : 'p-night',
+					'Recently played',
+					new Date().toISOString()
+				)
+			]
+		});
+		orderButton(root, 'Last played').click();
+		await tick();
+		await vi.waitFor(() =>
+			expect(tileTitles(root)[0]).toBe(kind === 'library' ? 'Sonnenlauf' : 'Night drive')
+		);
+		expect(tileLines(root).toSorted()).toEqual(counts.toSorted());
+		if (kind === 'playlists') expect(root.querySelector('.row-play')).toBeNull();
+	}
+);
+
+it('1354_rule_10: opening album B keeps the mark and Pause on queue source A', async () => {
+	phoneViewport();
+	albumList.set([
+		album({ id: 'a', title: 'Album A', has_playable_take: true }),
+		album({ id: 'b', title: 'Album B', has_playable_take: true })
+	]);
+	queueContext.set({ type: 'album', albumId: 'a' });
+	audioPlayer.current = {
+		generation: makeGeneration(),
+		songId: 's',
+		songTitle: 'Song',
+		artist: 'Artist',
+		albumTitle: 'Album A',
+		lyrics: null
+	};
+	audioPlayer.status = 'playing';
+	const root = await render();
+	getByRoleButton(root, 'Open album Album B').click();
+	await tick();
+	expect(get(openCollection)).toMatchObject({ kind: 'album', id: 'b' });
+	expect(root.querySelector('[aria-label="Pause Album A"]')).not.toBeNull();
+	expect(root.querySelector('[aria-label="Play Album B"]')).not.toBeNull();
+	const marks = root.querySelectorAll('[role="img"][aria-label="Playing"]');
+	expect(marks).toHaveLength(1);
+	expect(marks[0].closest('.library-row')).toHaveTextContent('Album A');
+});
+
+it('1354_rule_10: the row withdraws an album start waiting for the network', async () => {
+	phoneViewport();
+	albumList.set([album({ id: 'waiting', title: 'Waiting', has_playable_take: true })]);
+	songList.set([
+		makeSong({ id: 'waiting-song', album_id: 'waiting', generations: [], generation_count: 1 })
+	]);
+	reportResourceStreamReachable(false);
+	vi.mocked(fetchSong).mockRejectedValueOnce(
+		new NetworkError('/api/songs/waiting-song', new TypeError('Failed to fetch'))
+	);
+	await playAlbum('waiting');
+	expect(get(playStartNotice)).toBe('awaiting-network');
+	const root = await render();
+	const control = root.querySelector<HTMLButtonElement>('.row-play');
+	if (!control) throw new Error('Expected the waiting album transport');
+	control.click();
+	await tick();
+	expect(get(pendingStart)).toBeNull();
+	expect(get(playStartNotice)).toBe('idle');
+	expect(root.querySelector('.row-play')).toHaveAccessibleName('Play Waiting');
+});
+
+it('1354_rule_43: the phone row starts an album and leaves Shuffle on', async () => {
+	phoneViewport();
+	albumList.set([album({ id: 'shuffle', title: 'Shuffle', has_playable_take: true })]);
+	songList.set([
+		makeSong({ id: 'shuffle-song', album_id: 'shuffle', generations: [makeGeneration()] })
+	]);
+	albumSongsLoad.set({ shuffle: 'idle' });
+	setShuffle(true);
+	const root = await render();
+	getByRoleButton(root, 'Play Shuffle').click();
+	await tick();
+	expect(get(shuffleEnabled)).toBe(true);
+});
