@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin · Models — Fassung 2 mit Scoring-CLI/API</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<title>Admin · Models — Fassung 2 mit Scoring-CLI/API, Entwurf VRAM (#1500)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Oswald:wght@400;500&family=Open+Sans:wght@400;600&display=swap">
 <style>
 	:root {
 		--paper: #f6f5f8;
@@ -198,7 +198,7 @@
 	/* ── state frames (App-UI: Englisch) ─────────────────────── */
 	.states {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
 		gap: 1.5rem;
 		align-items: start;
 	}
@@ -864,6 +864,314 @@
 	@media (prefers-reduced-motion: reduce) {
 		* { transition: none !important; animation: none !important; }
 	}
+
+	/* ── #1500 · VRAM und Kapazität (Entwurf, wartet auf die Freigabe) ─────
+	   Gestrichelt umrandet = neu in diesem Entwurf. Alles ohne Rand steht heute so in der App. */
+	.is-new { outline: 2px dashed var(--violet); outline-offset: 3px; border-radius: 2px; }
+	.proposed-tag.flush { margin-left: 0; }
+	.decision .after-list { margin-top: .8rem; }
+	.decision code, .state-note code { overflow-wrap: anywhere; }
+	.legend-new { display: inline-block; padding: 0 .35rem; outline: 2px dashed var(--violet); outline-offset: 1px; }
+
+	/* Worker-Karte — WorkerPoolPanel.svelte, in der Bildsprache dieser Seite */
+	.wgrid.single { grid-template-columns: minmax(0, 38rem); }
+	.wgrid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+		gap: 1.1rem;
+		align-items: start;
+	}
+
+	.wcard {
+		border: 1px solid var(--rule);
+		border-left: 3px solid var(--good);
+		border-radius: 4px;
+		background: var(--panel);
+		padding: .7rem .85rem .85rem;
+		display: flex;
+		flex-direction: column;
+		gap: .4rem;
+		min-width: 0;
+	}
+	.wcard.loading { border-left-color: var(--warn-ink); }
+	.wcard.offline { border-left-color: var(--rule-strong); background: var(--panel-sunk); }
+
+	.wcard-head { display: flex; align-items: baseline; gap: .1rem .5rem; flex-wrap: wrap; margin-bottom: .15rem; }
+	.wcard-head .wid { font-family: ui-monospace, monospace; font-size: .78rem; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+	.wcard-head .meta { font-size: .72rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
+	.wdot { font-size: .8rem; line-height: 1; }
+	.wdot.ok { color: var(--good); }
+	.wdot.loading { color: var(--warn-ink); }
+	.wdot.off { color: var(--muted); }
+
+	.wrow { display: grid; grid-template-columns: 4.6rem minmax(0, 1fr); gap: .6rem; align-items: baseline; font-size: .8rem; }
+	.wrow .k {
+		font-family: "Barlow Condensed", system-ui, sans-serif;
+		text-transform: uppercase;
+		letter-spacing: .07em;
+		font-size: .7rem;
+		color: var(--muted);
+	}
+	.wrow .v { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
+	.wrow .v.dim { color: var(--muted); }
+	.wrow.full { grid-template-columns: minmax(0, 1fr); }
+	.wrow .sub { display: block; font-size: .7rem; line-height: 1.35; color: var(--muted); margin-top: .1rem; }
+
+	.vram { display: flex; flex-direction: column; gap: .25rem; }
+	.vram-bar {
+		height: 8px;
+		border-radius: 2px;
+		border: 1px solid var(--rule-strong);
+		background: var(--panel-sunk);
+		overflow: hidden;
+	}
+	.vram-bar i { display: block; height: 100%; background: var(--ink-soft); }
+	.vram-bar.est i { background: repeating-linear-gradient(135deg, var(--ink-soft) 0 3px, transparent 3px 6px); }
+	.vram-bar.unknown { border-style: dashed; background: none; }
+	.vram-text { font-size: .82rem; font-variant-numeric: tabular-nums; }
+	.vram-text .free { color: var(--muted); font-size: .74rem; margin-left: .45rem; }
+	.vram-text.unknown { color: var(--muted); display: inline-flex; align-items: center; gap: .35rem; }
+	.vram-text.unknown .ring { width: .7rem; height: .7rem; border: 1px solid var(--rule-strong); border-radius: 50%; display: inline-block; }
+
+	.wacts { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-top: .3rem; }
+	.wacts .sel { min-width: 8.2rem; font-size: .76rem; padding: .22rem .45rem; }
+	.act {
+		border: 1px solid var(--rule-strong);
+		border-radius: 3px;
+		background: var(--panel-sunk);
+		color: var(--ink);
+		font-family: "IBM Plex Sans", system-ui, sans-serif;
+		font-size: .72rem;
+		padding: .24rem .6rem;
+		cursor: default;
+	}
+	.act.dis { opacity: .4; }
+	.act.danger { color: var(--bad-ink); }
+
+	.wfail {
+		margin-top: .45rem;
+		padding: .5rem .65rem .6rem;
+		border-left: 3px solid var(--bad-ink);
+		background: color-mix(in srgb, var(--bad-bg) 60%, transparent);
+		display: flex;
+		flex-direction: column;
+		gap: .3rem;
+	}
+	.wfail .row-error { margin: 0; line-height: 1.4; overflow-wrap: anywhere; }
+
+	.callout {
+		margin: .4rem 0 0;
+		padding-left: .6rem;
+		border-left: 2px solid var(--violet);
+		font-size: .76rem;
+		line-height: 1.4;
+		color: var(--ink-soft);
+	}
+	.callout b { color: var(--ink); }
+
+	.phone.p390 { width: 390px; box-sizing: border-box; }
+	.states-390 { grid-template-columns: repeat(auto-fill, minmax(min(390px, 100%), 390px)); justify-content: start; gap: 1.25rem; }
+	.phone.p390 .ph-body .wcard { box-shadow: none; }
+
+	/* Songseite — die Formen aus song-page-phone.html und vocabulary.html, mit deren Tokens (app.css) */
+	.sp {
+		--action: #7a18c0;
+		--on-action: #fff;
+		--bg: #f4f4f6;
+		--surface: #ffffff;
+		--border: #d0d0d4;
+		--text: #1a1a1e;
+		--text-muted: #555;
+		--text-subtle: #555;
+		--text-disabled: #9a9a9a;
+		--text-light: #333;
+		--header-bg: #f0f0f2;
+		--score-good: #1e7a1e;
+		--score-ok: #b07000;
+		--score-bad: #c02020;
+		--sp-display: "Oswald", Impact, sans-serif;
+		--sp-body: "Open Sans", Arial, sans-serif;
+		--hitbox: 44px;
+		font-family: var(--sp-body);
+		font-size: 15px;
+		line-height: 1.35;
+		color: var(--text);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) .sp {
+			--action: #b45cf5;
+			--on-action: #111;
+			--bg: #0d0d0d;
+			--surface: #111;
+			--border: #333;
+			--text: #e0e0e0;
+			--text-muted: #888;
+			--text-subtle: #888;
+			--text-disabled: #555;
+			--text-light: #ccc;
+			--header-bg: #0a0a0a;
+			--score-good: #4f4;
+			--score-ok: #f0a030;
+			--score-bad: #f44;
+		}
+	}
+
+	:root[data-theme="dark"] .sp {
+		--action: #b45cf5;
+		--on-action: #111;
+		--bg: #0d0d0d;
+		--surface: #111;
+		--border: #333;
+		--text: #e0e0e0;
+		--text-muted: #888;
+		--text-subtle: #888;
+		--text-disabled: #555;
+		--text-light: #ccc;
+		--header-bg: #0a0a0a;
+		--score-good: #4f4;
+		--score-ok: #f0a030;
+		--score-bad: #f44;
+	}
+
+	.sp-frame {
+		box-sizing: border-box;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		box-shadow: var(--shadow);
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.sp-phone { width: 390px; max-width: 100%; }
+	.sp-desk { width: 100%; max-width: 860px; --h: 32px; --fs: .8rem; }
+	.sp-phone { --h: var(--hitbox); --fs: 1rem; }
+
+	.sp-ic { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+	.sp-ic.sm { width: 16px; height: 16px; }
+
+	.sp-icb { width: var(--hitbox); height: var(--hitbox); flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+
+	.sp-appbar { height: 46px; flex: none; display: flex; align-items: center; padding: 0 .1rem; background: var(--header-bg); border-bottom: 1px solid var(--border); }
+	.sp-appbar b { flex: 1; min-width: 0; padding: 0 .3rem; font-family: var(--sp-display); font-weight: 500; font-size: 1.2rem; letter-spacing: .3px; }
+
+	.sp-tabs { flex: none; display: flex; gap: 2px; padding: 0 .55rem; background: var(--header-bg); border-bottom: 1px solid var(--border); }
+	.sp-tabs > span { min-height: var(--hitbox); padding: 0 1rem; display: inline-flex; align-items: center; gap: .4rem; border-bottom: 2px solid transparent; color: var(--text-muted); font-family: var(--sp-display); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+	.sp-tabs > span.active { color: var(--action); border-color: var(--action); }
+	.sp-tabs .count { color: var(--text-disabled); font-size: .78rem; }
+	.sp-tabs .active .count { color: var(--action); }
+	.sp-ring { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--score-ok); flex: none; }
+
+	.sp-body { display: flex; flex-direction: column; gap: .75rem; padding: .75rem; }
+	.sp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .7rem .4rem; display: flex; flex-direction: column; gap: .05rem; min-width: 0; }
+	.sp-card .lbl { font-size: .72rem; color: var(--text-subtle); }
+	.sp-card .summary { font-size: .85rem; color: var(--text); overflow-wrap: anywhere; }
+	.sp-field { display: flex; flex-direction: column; gap: .3rem; }
+	.sp-field .label { font-family: var(--sp-display); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+	.sp-textbox { padding: .55rem .8rem; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; font-size: .92rem; line-height: 1.45; }
+
+	.sp-actionbar { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; padding: 6px .5rem 6px .75rem; background: var(--header-bg); border-top: 1px solid var(--border); min-width: 0; }
+	.sp-gen { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; min-width: 0; }
+
+	.sp-btn {
+		flex: 1;
+		min-width: 0;
+		height: var(--h);
+		padding: 0 1.5rem;
+		border: 1px solid var(--action);
+		border-radius: 4px;
+		background: var(--action);
+		color: var(--on-action);
+		font-family: var(--sp-display);
+		font-size: var(--fs);
+		letter-spacing: .5px;
+		text-transform: uppercase;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: .45rem;
+		cursor: default;
+	}
+	.sp-btn.failed { background: none; border-color: var(--score-bad); color: var(--score-bad); }
+
+	.sp-prog {
+		flex: 1;
+		min-width: 0;
+		position: relative;
+		height: var(--h);
+		border: 1px solid var(--score-ok);
+		border-radius: 4px;
+		background: var(--surface);
+		overflow: hidden;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--text);
+		font-family: var(--sp-display);
+		font-size: calc(var(--fs) * .93);
+		letter-spacing: .5px;
+	}
+	.sp-prog .fill { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--score-ok) 20%, transparent); }
+	.sp-prog .t { position: relative; padding: 0 .4rem; text-align: center; }
+	.sp-x { width: var(--hitbox); height: var(--hitbox); flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); }
+
+	.sp-fail {
+		flex: 0 0 100%;
+		min-width: 0;
+		min-height: var(--hitbox);
+		display: flex;
+		align-items: center;
+		gap: .2rem;
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		font-size: .8rem;
+		line-height: 1.4;
+		color: var(--score-bad);
+		text-align: left;
+		overflow: hidden;
+	}
+	.sp-fail.is-new { outline-offset: -2px; padding-left: .45rem; }
+	.sp-fail .msg { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.sp-fail .chev { width: var(--hitbox); height: var(--hitbox); flex: none; display: inline-flex; align-items: center; justify-content: center; }
+	.sp-fail.open { align-items: flex-start; padding-bottom: .35rem; }
+	.sp-fail.open .msg { white-space: normal; overflow: visible; text-overflow: clip; padding-top: 13px; overflow-wrap: anywhere; }
+
+	.sp-deskhead { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .6rem .9rem; padding: .7rem .9rem; background: var(--header-bg); border-bottom: 1px solid var(--border); }
+	.sp-cover { width: 3.4rem; height: 3.4rem; flex: none; border-radius: 4px; background: linear-gradient(135deg, var(--action), #2b2545); }
+	.sp-ident { flex: 1 1 9rem; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
+	.sp-ident b { font-family: var(--sp-display); font-weight: 500; font-size: 1.25rem; letter-spacing: .3px; }
+	.sp-ident small { font-size: .72rem; color: var(--text-subtle); }
+	.sp-views { display: inline-flex; gap: .9rem; align-items: center; min-height: var(--h); font-family: var(--sp-display); font-size: .8rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+	.sp-deskhead .sp-gen { flex: 0 1 21rem; max-width: 100%; border-left: 1px solid var(--border); padding-left: .9rem; }
+	.sp-pane { display: flex; flex-direction: column; gap: .6rem; padding: .75rem .9rem .9rem; }
+
+	.sp-slot { display: flex; flex-direction: column; gap: .4rem; padding: .2rem .25rem .6rem .7rem; background: var(--surface); border: 1px dashed var(--border); border-radius: 6px; }
+	.sp-slot-head { display: flex; align-items: center; gap: .5rem; }
+	.sp-slot-title { flex: 1; min-width: 0; font-family: var(--sp-display); letter-spacing: .4px; font-size: .85rem; color: var(--text-muted); }
+	.sp-slot-title b { font-weight: 500; color: var(--score-ok); }
+	.sp-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-right: .45rem; }
+	.sp-bar span { display: block; height: 100%; background: var(--score-ok); }
+	.sp-line { font-size: .78rem; color: var(--text-muted); padding-right: .45rem; }
+
+	.sp-vh { font-family: var(--sp-display); font-size: 11px; letter-spacing: .5px; color: var(--text-subtle); }
+	.sp-takes { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+	.sp-take { display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem; font-size: 15px; }
+	.sp-take + .sp-take { border-top: 1px solid var(--border); }
+	.sp-take .play { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: .6rem; color: var(--text); flex: none; }
+	.sp-take .tl { flex: 1; min-width: 0; }
+	.sp-take .dur { font-size: .75rem; color: var(--text-subtle); }
+	.sp-score { display: inline-flex; align-items: center; gap: .25rem; font-family: var(--sp-display); font-size: .95rem; }
+	.sp-score i { width: 8px; height: 8px; flex: none; display: block; }
+	.sp-score.ok { color: var(--score-ok); }
+	.sp-score.ok i { border: 2px solid var(--score-ok); border-radius: 50%; }
+	.sp-score.bad { color: var(--score-bad); }
+	.sp-score.bad i { background: var(--score-bad); }
+
+	.sp-crop-label { font-size: .72rem; color: var(--muted); margin: 0 0 .3rem; }
 </style>
 </head>
 <body>
@@ -877,6 +1185,12 @@
 	<code>docs/design/navigation.html</code>. Warum-Notizen auf Deutsch (für den Operator), alle
 	Beschriftungen im Mockup auf Englisch, weil die App englisch ist. Fassung 1 steht unten als
 	Historie.
+</p>
+<p class="freeze-note">
+	<strong>Entwurf für #1500, noch nicht gesegnet:</strong> Der Abschnitt
+	<a href="#vram">„Neu · #1500 — VRAM und Kapazität"</a> weiter unten zeichnet die gerulten Zeilen
+	aus #916 (VRAM je Worker, Ablehnung vor dem Start, „Loading model…" als Stufe) am Desktop und
+	bei 390&nbsp;px. Alles darüber ist die gesegnete Fassung 2 und unverändert.
 </p>
 <div class="wrap">
 	<header>
@@ -1386,6 +1700,580 @@
 					</div>
 				</div>
 			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+		<symbol id="sp-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v3.6"/><path d="M12 16.8v.1"/></symbol>
+		<symbol id="sp-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+		<symbol id="sp-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+		<symbol id="sp-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+		<symbol id="sp-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+	</svg>
+
+	<section class="decisions" id="vram">
+		<h2>Neu · #1500 — VRAM und Kapazität<span class="proposed-tag">New — awaiting blessing</span></h2>
+
+		<div class="decision">
+			<h3>Warum — Operator-Ruling vom 20.09.2026 (#916), Bild für #1500</h3>
+			<p class="quote">
+				Der Musiker konnte nicht sehen, ob genug Platz auf der GPU ist und wie viel wirklich
+				belegt ist; ein Modell wurde geladen, die Generierung scheiterte an fehlendem VRAM, das
+				Auto-Laden endete in „unexpected error". Er soll vorher wissen, ob es passt, und sonst
+				sofort einen benannten Grund lesen.
+			</p>
+			<p class="quote">
+				ich will das Modell laden können … die Berechnung ist knapp auf meiner Karte, aber bei
+				der richtigen Songlänge … geht es
+			</p>
+			<p class="ruling">Was dieser Abschnitt zeigt — Zeile für Zeile der fünf gerulten Sätze aus #916:</p>
+			<ul>
+				<li><strong>Zeile 1 — Worker-Karte (h), (i), (m), (n):</strong> belegt / gesamt, „~" bei
+					Schätzung, ein eigener Zustand „unbekannt", das geladene Modell in derselben Karte.
+					<strong>LOAD bleibt immer bedienbar</strong> — auch wenn der Platz laut Rechnung
+					nicht reicht; es gibt keine Ablehnung und keine Warnung am Knopf.</li>
+				<li><strong>Zeile 2 — Generate wird sofort abgelehnt (j), (o):</strong> mit Grund und
+					Abhilfe, an der Stelle, an der ein gescheiterter Lauf heute schon spricht. Nicht
+					gezeigt, weil es nicht vorkommen darf: ein Take, der Minuten später scheitert.</li>
+				<li><strong>Zeile 3 — „Loading model…" als eigene Stufe (k), (p), (q);</strong> ein
+					Fehlschlag beim Laden nennt den 409-Text des Workers (l), (r).</li>
+				<li><strong>Zeile 4 — Budget für ACE-Step:</strong> kein Bildinhalt, der Musiker sieht
+					nichts davon. Gehört in die Bau-Slices, nicht in dieses Bild.</li>
+				<li><strong>Zeile 5 — Rechte:</strong> keine neue Fläche, kein neuer Schalter. Die Zahlen
+					stehen für dieselben Nutzer wie heute auf der Admin-Seite.</li>
+			</ul>
+			<p class="ruling after-list">Was der Code-Check am 16.10.2026 gegenüber dem Issue-Text zurechtrückt:</p>
+			<ul>
+				<li><strong>Die Worker-Karten stehen heute im Tab „ACE-Step"</strong>, nicht im Tab „Models"
+					(<code class="loc">routes/settings/users/+page.svelte</code>: <code>WorkerPoolPanel</code>
+					und <code>ModelRegistryPanel</code> hängen unter <code>tab === 'acestep'</code>). Der
+					Models-Tab oben auf dieser Seite ist die Aufgaben-Tabelle und bleibt unberührt. Die Karte
+					zeigt die VRAM-Zeile heute schon, aber nur, wenn die Zahlen da sind; sie ist sonst weg.</li>
+				<li><strong>Ohne NVML ist die Zahl eine Schätzung, nicht „unbekannt":</strong> der Worker
+					meldet dann die Größen der geladenen Modelle gegen das Budget mit
+					<code>vram_measured = false</code> (<code>model_cache._current_usage</code>). Wirklich
+					unbekannt ist nur: kein Heartbeat (Worker offline) oder ein Worker-Build ohne VRAM-Felder.</li>
+				<li><strong>Die Form für „Generate scheitert" gibt es schon</strong> (<code>song-page-phone.html</code>
+					3b/3c, <code>vocabulary.html</code> §1): der Knopf behält sein Wort und ist der Retry, der
+					Satz steht darunter. Abgelehnt und gescheitert sehen gleich aus; sie unterscheiden sich
+					darin, was fehlt — bei der Ablehnung wurde nichts angenommen.</li>
+			</ul>
+			<p class="after-list">
+				<strong>So lesen:</strong> <span class="legend-new">gestrichelt umrandet</span> ist neu in
+				diesem Entwurf. Alles ohne Rand steht heute so in der App. Beschriftungen im Mockup sind
+				Englisch; die Sätze der Ablehnung und des Ladens stehen so, wie sie auf dem Bildschirm
+				stünden. Die Zahlen sind Beispiele.
+			</p>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Das Bild — VRAM, Desktop<span class="proposed-tag">New — awaiting blessing</span></h2>
+
+		<div class="states">
+			<article class="state wide">
+				<div class="state-head"><h3>(h) Worker-Karte · vier Zustände der VRAM-Zeile</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Die Karte ist die von heute (Loaded, Status, Queue, Last seen, Load/Pin/Evict/Restart);
+					neu ist die VRAM-Zeile. Die Form trägt den Zustand zuerst, nicht die Farbe:
+					<strong>gemessen</strong> = voller Balken und „18.5 / 24.0 GB" mit dem, was frei ist;
+					<strong>geschätzt</strong> = schraffierter Balken, „~" und „est." — der Worker liest keine
+					GPU und rechnet nur die geladenen Modelle zusammen, deshalb nennt die Zeile kein „frei";
+					<strong>lädt gerade</strong> = gemessen, Load gesperrt wie heute;
+					<strong>unbekannt</strong> = leerer, gestrichelter Balken und ein Ring, mit dem Grund.
+					Eine Anlage hat meist eine Karte pro GPU; hier stehen vier Zustände nebeneinander.
+				</p>
+
+				<div class="screen">
+					<div class="screen-top"><span>Settings › Admin › <strong>ACE-Step</strong></span><span>Admin</span></div>
+					<div class="screen-body">
+						<h4 class="screen-title">Worker Pool</h4>
+						<div class="wgrid">
+							<div class="wcard">
+								<div class="wcard-head"><span class="wdot ok">●</span><span class="wid">songmaker-acestep-worker-0</span><span class="meta">GPU 0 • 24 GB</span></div>
+								<div class="wrow"><span class="k">Loaded</span><span class="v">turbo (~6 GB est.)</span></div>
+								<div class="wrow"><span class="k">Status</span><span class="v">Idle</span></div>
+								<div class="wrow"><span class="k">Queue</span><span class="v">0 jobs</span></div>
+								<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar"><i style="width:77%"></i></span><span class="vram-text">18.5 / 24.0 GB<span class="free">5.5 GB free</span></span></span></div>
+								<div class="wrow"><span class="k">Last seen</span><span class="v">2s ago</span></div>
+								<div class="wacts">
+									<span class="sel">xl-turbo<span class="caret">⌄</span></span>
+									<button class="act is-new">Load</button>
+									<button class="act">Pin turbo</button>
+									<button class="act">Evict turbo</button>
+									<button class="act danger">Restart</button>
+								</div>
+								<p class="callout"><b>Gemessen, knapp.</b> xl-turbo ist ~12 GB, frei sind 5.5 GB — und
+									<b>LOAD bleibt bedienbar</b>, ohne Warnung, ohne Ablehnung (Zeile 1).</p>
+							</div>
+
+							<div class="wcard">
+								<div class="wcard-head"><span class="wdot ok">●</span><span class="wid">songmaker-acestep-worker-1</span><span class="meta">GPU 1 • 24 GB</span></div>
+								<div class="wrow"><span class="k">Loaded</span><span class="v">turbo (~6 GB est.)</span></div>
+								<div class="wrow"><span class="k">Status</span><span class="v">Idle</span></div>
+								<div class="wrow"><span class="k">Queue</span><span class="v">0 jobs</span></div>
+								<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar est"><i style="width:25%"></i></span><span class="vram-text">~6.0 / 24.0 GB est.</span><span class="sub">No GPU reading — the sizes of the loaded models, not a measurement</span></span></div>
+								<div class="wrow"><span class="k">Last seen</span><span class="v">3s ago</span></div>
+								<div class="wacts">
+									<span class="sel">Load model…<span class="caret">⌄</span></span>
+									<button class="act dis">Load</button>
+									<button class="act">Pin turbo</button>
+									<button class="act">Evict turbo</button>
+									<button class="act danger">Restart</button>
+								</div>
+								<p class="callout"><b>Geschätzt.</b> Der Worker meldet Zahlen, aber keine Messung:
+									„~", „est.", schraffiert — und kein „frei".</p>
+							</div>
+
+							<div class="wcard loading">
+								<div class="wcard-head"><span class="wdot loading">⚠</span><span class="wid">songmaker-acestep-worker-2</span><span class="meta">GPU 2 • 24 GB</span></div>
+								<div class="wrow"><span class="k">Loaded</span><span class="v dim">(none)</span></div>
+								<div class="wrow"><span class="k">Status</span><span class="v">Loading xl-turbo… (12s elapsed) ⏳</span></div>
+								<div class="wrow"><span class="k">Log</span><span class="v dim">Loading DiT checkpoint…</span></div>
+								<div class="wrow"><span class="k">Queue</span><span class="v">1 jobs</span></div>
+								<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar"><i style="width:38%"></i></span><span class="vram-text">9.1 / 24.0 GB<span class="free">14.9 GB free</span></span></span></div>
+								<div class="wrow"><span class="k">Last seen</span><span class="v">1s ago</span></div>
+								<div class="wacts">
+									<span class="sel off">Load model…<span class="caret">⌄</span></span>
+									<button class="act dis">Load</button>
+									<button class="act danger">Restart</button>
+								</div>
+								<p class="callout"><b>Lädt gerade.</b> Die Zahl steigt mit; Load ist gesperrt, solange
+									geladen wird — wie heute.</p>
+							</div>
+
+							<div class="wcard offline">
+								<div class="wcard-head"><span class="wdot off">✗</span><span class="wid">songmaker-acestep-worker-3</span><span class="meta">GPU 3 • 24 GB</span></div>
+								<div class="wrow full"><span class="v dim">Offline — last registered 4m ago</span></div>
+								<div class="wrow full"><span class="v dim">Can't restart — no worker process is running to ask. Restart the container running worker "songmaker-acestep-worker-3" directly.</span></div>
+								<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar unknown"></span><span class="vram-text unknown"><span class="ring" aria-hidden="true"></span>unknown</span><span class="sub">No heartbeat — nothing to read. A worker build without VRAM fields reads the same.</span></span></div>
+								<div class="wacts">
+									<span class="sel off">Load model…<span class="caret">⌄</span></span>
+									<button class="act dis">Load</button>
+									<button class="act danger dis">Restart</button>
+								</div>
+								<p class="callout"><b>Unbekannt.</b> Die Zeile bleibt stehen und sagt es, statt zu
+									verschwinden: ein fehlender Wert ist eine Antwort, kein Loch.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(i) Worker-Karte · der Worker sagt trotzdem nein</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Laden bleibt möglich (Zeile 1) — und wenn der Worker es dann doch nicht schafft, steht
+					sein Satz <strong>in der Karte</strong>, wörtlich. Heute landet derselbe Satz nur in einem
+					Toast, der nach Sekunden weg ist, und der direkte Ladeweg verpackt ihn zusätzlich in
+					„Worker returned 409: {"detail": …}" (Folgearbeit 2 in #916). Es gibt kein „Retry": LOAD
+					erneut zu drücken ist der Versuch, wie Generate im gescheiterten Zustand.
+				</p>
+
+				<div class="screen">
+					<div class="screen-top"><span>Settings › Admin › <strong>ACE-Step</strong></span><span>Admin</span></div>
+					<div class="screen-body">
+						<h4 class="screen-title">Worker Pool</h4>
+						<div class="wgrid single">
+							<div class="wcard">
+								<div class="wcard-head"><span class="wdot ok">●</span><span class="wid">songmaker-acestep-worker-0</span><span class="meta">GPU 0 • 24 GB</span></div>
+								<div class="wrow"><span class="k">Loaded</span><span class="v">turbo (~6 GB est.)</span></div>
+								<div class="wrow"><span class="k">Status</span><span class="v">Idle</span></div>
+								<div class="wrow"><span class="k">Queue</span><span class="v">0 jobs</span></div>
+								<div class="wrow"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar"><i style="width:77%"></i></span><span class="vram-text">18.5 / 24.0 GB<span class="free">5.5 GB free</span></span></span></div>
+								<div class="wrow"><span class="k">Last seen</span><span class="v">2s ago</span></div>
+								<div class="wacts">
+									<span class="sel">xl-turbo<span class="caret">⌄</span></span>
+									<button class="act">Load</button>
+									<button class="act">Unpin turbo</button>
+									<button class="act">Evict turbo</button>
+									<button class="act danger">Restart</button>
+								</div>
+								<div class="wfail is-new">
+									<span class="st bad"><span class="mark">✕</span>Load failed</span>
+									<p class="row-error">Cannot fit 12.0GB (estimated, not yet loaded) on top of 18.5GB already in use (measured) within a 24.0GB budget: evicting every eligible model still leaves 18.5GB in use (loaded=['turbo'], in_use={}, pinned=['turbo'])</p>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(j) Generate · sofort abgelehnt, mit Grund und Abhilfe</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Der Musiker drückt Generate; der Worker prüft vor dem Annehmen (Zeile 2) und die Antwort
+					steht sofort da. Es ist die Form des gescheiterten Laufs: Knopf in Fehlerfarbe, sein
+					Wort „Generate" bleibt (erneut drücken <em>ist</em> der Retry), der Satz darunter. Auf
+					diesem schmalen Cluster beginnt die Ablehnung aufgeklappt — zugeklappt wäre die Abhilfe
+					abgeschnitten (Frage 6). Was fehlt, ist der Beweis, dass nichts lief: kein Statusfeld,
+					kein neuer Take, kein „Queued". Der Satz stünde auf Deutsch so da: „Nicht genug freier
+					GPU-Speicher: 3,1 GB frei, gebraucht ~5 GB. Kürzere Dauer wählen oder andere Last auf der
+					GPU beenden."
+				</p>
+
+				<div class="sp sp-frame sp-desk">
+					<div class="sp-deskhead">
+						<span class="sp-cover" aria-hidden="true"></span>
+						<span class="sp-ident"><b>AMIF</b><small>Night Drive · v8 draft · XL-TURBO · 4:45 · ×2</small></span>
+						<span class="sp-views"><span>Co-writer</span><span>Recipe</span></span>
+						<div class="sp-gen">
+							<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
+							<button class="sp-fail open is-new" type="button" aria-expanded="true" aria-label="Hide the full reason"><span class="msg">Not enough free GPU memory: 3.1 GB free, ~5 GB needed. Choose a shorter duration or stop other load on the GPU.</span><span class="chev" aria-hidden="true"><svg class="sp-ic sm"><use href="#sp-up"/></svg></span></button>
+						</div>
+					</div>
+					<div class="sp-pane">
+						<div class="sp-vh">v7 · 4 takes</div>
+						<div class="sp-takes">
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 4</span><span class="dur">2:58</span><span class="sp-score bad"><i></i>34</span></div>
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 3</span><span class="dur">3:02</span><span class="sp-score ok"><i></i>58</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(k) Generate · „Loading model…" als eigene Stufe</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Ist kein Modell geladen, bleibt Auto-Laden das Verhalten (Zeile 3). Die Reihenfolge der
+					Stufen: Queued → <strong>Loading model…</strong> → Writing → Rendering → Saving take. Die
+					Stufe steht an zwei Stellen, wie jede andere: im Knopf und im Statusfeld über den Takes.
+					Sie hat <strong>weder Prozent noch Restzeit</strong> — Laden dauert, so lange das Modell
+					und der Cache brauchen, nicht so lange wie der Take; so verhält sich die Seite schon heute.
+					Der Balken bleibt leer, × bricht ab.
+				</p>
+
+				<div class="sp sp-frame sp-desk">
+					<div class="sp-deskhead">
+						<span class="sp-cover" aria-hidden="true"></span>
+						<span class="sp-ident"><b>AMIF</b><small>Night Drive · v8 draft · XL-TURBO · 3:00 · ×2</small></span>
+						<span class="sp-views"><span>Co-writer</span><span>Recipe</span></span>
+						<div class="sp-gen">
+							<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><span class="t">Take 1 of 2 · <span class="is-new">Loading model…</span></span></div>
+							<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
+						</div>
+					</div>
+					<div class="sp-pane">
+						<div class="sp-slot">
+							<div class="sp-slot-head">
+								<span class="sp-slot-title">v8 · <b class="is-new">Loading model…</b></span>
+								<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
+							</div>
+							<div class="sp-bar" role="progressbar" aria-valuenow="0"><span style="width:0"></span></div>
+							<div class="sp-line">Take 1 of 2</div>
+						</div>
+						<div class="sp-vh">v7 · 4 takes</div>
+						<div class="sp-takes">
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 4</span><span class="dur">2:58</span><span class="sp-score bad"><i></i>34</span></div>
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 3</span><span class="dur">3:02</span><span class="sp-score ok"><i></i>58</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(l) Generate · das Laden scheitert — der 409-Text des Workers</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Das Statusfeld verschwindet (es zeigt nur Läufe), der Knopf nennt den Satz des Workers
+					<strong>wörtlich</strong> — nicht „unexpected error" (Zeile 3). Gleiche Form wie (j);
+					nur der Satz ist ein anderer, und er gehört dem Worker, nicht diesem Bild: er ist
+					technisch, wie der Worker ihn heute schreibt (<code>model_cache._capacity_error</code>).
+					Dass der Satz wörtlich kommt, ist gerult (Zeile 3); sein Wortlaut ist nicht Teil dieser Freigabe.
+				</p>
+
+				<div class="sp sp-frame sp-desk">
+					<div class="sp-deskhead">
+						<span class="sp-cover" aria-hidden="true"></span>
+						<span class="sp-ident"><b>AMIF</b><small>Night Drive · v8 draft · XL-TURBO · 3:00 · ×2</small></span>
+						<span class="sp-views"><span>Co-writer</span><span>Recipe</span></span>
+						<div class="sp-gen">
+							<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
+							<button class="sp-fail open is-new" type="button" aria-expanded="true" aria-label="Hide the full reason"><span class="msg">Cannot fit 12.0GB (estimated, not yet loaded) on top of 18.5GB already in use (measured) within a 24.0GB budget: evicting every eligible model still leaves 18.5GB in use (loaded=['turbo'], in_use={}, pinned=['turbo'])</span><span class="chev" aria-hidden="true"><svg class="sp-ic sm"><use href="#sp-up"/></svg></span></button>
+						</div>
+					</div>
+					<div class="sp-pane">
+						<div class="sp-vh">v7 · 4 takes</div>
+						<div class="sp-takes">
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 4</span><span class="dur">2:58</span><span class="sp-score bad"><i></i>34</span></div>
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 3</span><span class="dur">3:02</span><span class="sp-score ok"><i></i>58</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<h2>Das Bild — VRAM, 390 px<span class="proposed-tag">New — awaiting blessing</span></h2>
+
+		<div class="states states-390">
+			<article class="state">
+				<div class="state-head"><h3>(m) Worker-Karten, gestapelt · gemessen und geschätzt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Die Karten stapeln sich wie die Zeilen oben in (f); die VRAM-Zeile behält ihre Form und
+					bricht nur um. Nichts wird gekürzt: „frei" und der Grund der Schätzung stehen da.
+				</p>
+
+				<div class="phone p390">
+					<div class="ph-top"><span>Settings › Admin › <strong>ACE-Step</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="wcard">
+							<div class="wcard-head"><span class="wdot ok">●</span><span class="wid">songmaker-acestep-worker-0</span><span class="meta">GPU 0 • 24 GB</span></div>
+							<div class="wrow"><span class="k">Loaded</span><span class="v">turbo (~6 GB est.)</span></div>
+							<div class="wrow"><span class="k">Status</span><span class="v">Idle</span></div>
+							<div class="wrow"><span class="k">Queue</span><span class="v">0 jobs</span></div>
+							<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar"><i style="width:77%"></i></span><span class="vram-text">18.5 / 24.0 GB<span class="free">5.5 GB free</span></span></span></div>
+							<div class="wrow"><span class="k">Last seen</span><span class="v">2s ago</span></div>
+							<div class="wacts">
+								<span class="sel">xl-turbo<span class="caret">⌄</span></span>
+								<button class="act is-new">Load</button>
+								<button class="act">Pin turbo</button>
+								<button class="act">Evict turbo</button>
+								<button class="act danger">Restart</button>
+							</div>
+							<p class="callout"><b>Gemessen, knapp.</b> LOAD bleibt bedienbar.</p>
+						</div>
+
+						<div class="wcard">
+							<div class="wcard-head"><span class="wdot ok">●</span><span class="wid">songmaker-acestep-worker-1</span><span class="meta">GPU 1 • 24 GB</span></div>
+							<div class="wrow"><span class="k">Loaded</span><span class="v">turbo (~6 GB est.)</span></div>
+							<div class="wrow"><span class="k">Status</span><span class="v">Idle</span></div>
+							<div class="wrow"><span class="k">Queue</span><span class="v">0 jobs</span></div>
+							<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar est"><i style="width:25%"></i></span><span class="vram-text">~6.0 / 24.0 GB est.</span><span class="sub">No GPU reading — the sizes of the loaded models, not a measurement</span></span></div>
+							<div class="wrow"><span class="k">Last seen</span><span class="v">3s ago</span></div>
+							<div class="wacts">
+								<span class="sel">Load model…<span class="caret">⌄</span></span>
+								<button class="act dis">Load</button>
+								<button class="act">Pin turbo</button>
+								<button class="act">Evict turbo</button>
+								<button class="act danger">Restart</button>
+							</div>
+							<p class="callout"><b>Geschätzt.</b> „~", „est.", schraffiert, kein „frei".</p>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(n) Worker-Karten, gestapelt · lädt, unbekannt, Ladefehler</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Dieselben drei Zustände wie in (h) und (i): lädt gerade, unbekannt (ohne Heartbeat),
+					und die Karte, in der der Worker das Laden abgelehnt hat — sein Satz steht unter den
+					Knöpfen, vollständig.
+				</p>
+
+				<div class="phone p390">
+					<div class="ph-top"><span>Settings › Admin › <strong>ACE-Step</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="wcard loading">
+							<div class="wcard-head"><span class="wdot loading">⚠</span><span class="wid">songmaker-acestep-worker-2</span><span class="meta">GPU 2 • 24 GB</span></div>
+							<div class="wrow"><span class="k">Loaded</span><span class="v dim">(none)</span></div>
+							<div class="wrow"><span class="k">Status</span><span class="v">Loading xl-turbo… (12s elapsed) ⏳</span></div>
+							<div class="wrow"><span class="k">Queue</span><span class="v">1 jobs</span></div>
+							<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar"><i style="width:38%"></i></span><span class="vram-text">9.1 / 24.0 GB<span class="free">14.9 GB free</span></span></span></div>
+							<div class="wacts">
+								<span class="sel off">Load model…<span class="caret">⌄</span></span>
+								<button class="act dis">Load</button>
+								<button class="act danger">Restart</button>
+							</div>
+						</div>
+
+						<div class="wcard offline">
+							<div class="wcard-head"><span class="wdot off">✗</span><span class="wid">songmaker-acestep-worker-3</span><span class="meta">GPU 3 • 24 GB</span></div>
+							<div class="wrow full"><span class="v dim">Offline — last registered 4m ago</span></div>
+							<div class="wrow is-new"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar unknown"></span><span class="vram-text unknown"><span class="ring" aria-hidden="true"></span>unknown</span><span class="sub">No heartbeat — nothing to read</span></span></div>
+							<div class="wacts">
+								<span class="sel off">Load model…<span class="caret">⌄</span></span>
+								<button class="act dis">Load</button>
+								<button class="act danger dis">Restart</button>
+							</div>
+						</div>
+
+						<div class="wcard">
+							<div class="wcard-head"><span class="wdot ok">●</span><span class="wid">songmaker-acestep-worker-0</span><span class="meta">GPU 0 • 24 GB</span></div>
+							<div class="wrow"><span class="k">Loaded</span><span class="v">turbo (~6 GB est.)</span></div>
+							<div class="wrow"><span class="k">VRAM</span><span class="v vram"><span class="vram-bar"><i style="width:77%"></i></span><span class="vram-text">18.5 / 24.0 GB<span class="free">5.5 GB free</span></span></span></div>
+							<div class="wacts">
+								<span class="sel">xl-turbo<span class="caret">⌄</span></span>
+								<button class="act">Load</button>
+								<button class="act">Unpin turbo</button>
+								<button class="act">Evict turbo</button>
+							</div>
+							<div class="wfail is-new">
+								<span class="st bad"><span class="mark">✕</span>Load failed</span>
+								<p class="row-error">Cannot fit 12.0GB (estimated, not yet loaded) on top of 18.5GB already in use (measured) within a 24.0GB budget: evicting every eligible model still leaves 18.5GB in use (loaded=['turbo'], in_use={}, pinned=['turbo'])</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(o) Generate · sofort abgelehnt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Die Edit-Seite, Blick auf die Generate-Leiste: dieselbe Form wie 3c in
+					<code>song-page-phone.html</code>. Der Satz kommt <strong>aufgeklappt</strong>, weil die
+					Abhilfe sonst hinter dem Auslassungszeichen steht (Frage 6). Takes bleibt „(4)" und ohne
+					Ring — nichts läuft, nichts wurde angenommen. Darunter, klein: dieselbe Ablehnung
+					zugeklappt, wie ein gescheiterter Lauf sie heute zeigt.
+				</p>
+
+				<div class="sp sp-frame sp-phone">
+					<header class="sp-appbar"><span class="sp-icb"><svg class="sp-ic"><use href="#sp-menu"/></svg></span><b>AMIF</b></header>
+					<nav class="sp-tabs" aria-label="Song tabs"><span class="active">Edit</span><span>Co-writer</span><span>Takes <span class="count">(4)</span></span></nav>
+					<div class="sp-body">
+						<div class="sp-card"><span class="lbl">Recipe</span><span class="summary">XL-TURBO · 4:45 · 96 BPM · A minor · ×2</span></div>
+						<div class="sp-field"><span class="label">Style</span><div class="sp-textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+					</div>
+					<div class="sp-actionbar">
+						<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
+						<button class="sp-fail open is-new" type="button" aria-expanded="true" aria-label="Hide the full reason"><span class="msg">Not enough free GPU memory: 3.1 GB free, ~5 GB needed. Choose a shorter duration or stop other load on the GPU.</span><span class="chev" aria-hidden="true"><svg class="sp-ic sm"><use href="#sp-up"/></svg></span></button>
+					</div>
+				</div>
+
+				<div class="sp sp-frame sp-phone">
+					<div class="sp-actionbar">
+						<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
+						<button class="sp-fail" type="button" aria-expanded="false" aria-label="Show the full reason"><span class="msg">Not enough free GPU memory: 3.1 GB free, ~5 GB needed. Choose a shorter duration or stop other load on the GPU.</span><span class="chev" aria-hidden="true"><svg class="sp-ic sm"><use href="#sp-down"/></svg></span></button>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(p) Edit · „Loading model…" im Knopf</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Der Knopf trägt die Stufe, wie er heute Prozent und Restzeit trägt: „Take 1 of 2 ·
+					Loading model…", × bricht ab. Der Takes-Tab zeigt den Ring — ein Lauf ist unterwegs.
+					Kein Prozent, keine Restzeit, der Balken leer.
+				</p>
+
+				<div class="sp sp-frame sp-phone">
+					<header class="sp-appbar"><span class="sp-icb"><svg class="sp-ic"><use href="#sp-menu"/></svg></span><b>AMIF</b></header>
+					<nav class="sp-tabs" aria-label="Song tabs"><span class="active">Edit</span><span>Co-writer</span><span>Takes <span class="count">(4)</span><span class="sp-ring" aria-hidden="true"></span></span></nav>
+					<div class="sp-body">
+						<div class="sp-card"><span class="lbl">Recipe</span><span class="summary">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span></div>
+						<div class="sp-field"><span class="label">Style</span><div class="sp-textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+					</div>
+					<div class="sp-actionbar">
+						<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><span class="t">Take 1 of 2 · <span class="is-new">Loading model…</span></span></div>
+						<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(q) Takes · „Loading model…" im Statusfeld</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Dieselbe Stufe im Statusfeld über den Takes (<code>song-page-phone.html</code> Frame 4).
+					Es ist ein eigener Zustand zwischen „Queued" und „Writing", kein Wartezustand mit
+					anderem Namen: er hat ein Wort, aber keine Zahl.
+				</p>
+
+				<div class="sp sp-frame sp-phone">
+					<header class="sp-appbar"><span class="sp-icb"><svg class="sp-ic"><use href="#sp-menu"/></svg></span><b>AMIF</b></header>
+					<nav class="sp-tabs" aria-label="Song tabs"><span>Edit</span><span>Co-writer</span><span class="active">Takes <span class="count">(4)</span><span class="sp-ring" aria-hidden="true"></span></span></nav>
+					<div class="sp-body">
+						<div class="sp-slot">
+							<div class="sp-slot-head">
+								<span class="sp-slot-title">v8 · <b class="is-new">Loading model…</b></span>
+								<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
+							</div>
+							<div class="sp-bar" role="progressbar" aria-valuenow="0"><span style="width:0"></span></div>
+							<div class="sp-line">Take 1 of 2</div>
+						</div>
+						<div class="sp-vh">v7 · 4 takes</div>
+						<div class="sp-takes">
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 4</span><span class="dur">2:58</span><span class="sp-score bad"><i></i>34</span></div>
+							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 3</span><span class="dur">3:02</span><span class="sp-score ok"><i></i>58</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(r) Edit · das Laden scheitert</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
+				<p class="state-note">
+					Der Knopf sagt, was der Worker gesagt hat — der ganze Satz, aufgeklappt, wie in (l).
+					Das Statusfeld ist weg, der Ring ist weg. Ein Tippen auf die Zeile klappt sie zu,
+					ein Tippen auf Generate ist der nächste Versuch.
+				</p>
+
+				<div class="sp sp-frame sp-phone">
+					<header class="sp-appbar"><span class="sp-icb"><svg class="sp-ic"><use href="#sp-menu"/></svg></span><b>AMIF</b></header>
+					<nav class="sp-tabs" aria-label="Song tabs"><span class="active">Edit</span><span>Co-writer</span><span>Takes <span class="count">(4)</span></span></nav>
+					<div class="sp-body">
+						<div class="sp-card"><span class="lbl">Recipe</span><span class="summary">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span></div>
+						<div class="sp-field"><span class="label">Style</span><div class="sp-textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+					</div>
+					<div class="sp-actionbar">
+						<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
+						<button class="sp-fail open is-new" type="button" aria-expanded="true" aria-label="Hide the full reason"><span class="msg">Cannot fit 12.0GB (estimated, not yet loaded) on top of 18.5GB already in use (measured) within a 24.0GB budget: evicting every eligible model still leaves 18.5GB in use (loaded=['turbo'], in_use={}, pinned=['turbo'])</span><span class="chev" aria-hidden="true"><svg class="sp-ic sm"><use href="#sp-up"/></svg></span></button>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="decisions">
+		<div class="decision">
+			<h3>Offene Fragen für die Freigabe (#1500)</h3>
+			<p>
+				Neun Stellen, an denen das Bild etwas entscheidet, das der Operator noch nicht gerult hat.
+				Jede steht mit meiner Empfehlung da; nach der Freigabe wird das Bild eingefroren und die
+				Bau-Slices werden geschnitten.
+			</p>
+			<ul>
+				<li><strong>1 · Welcher Tab?</strong> Die Worker-Karten stehen im Tab „ACE-Step" (dort liegt auch
+					die Model-Registry), nicht im Tab „Models". Gezeichnet ist es dort, wo es heute lebt.
+					Alternative: ein VRAM-Block unter der Aufgaben-Tabelle im Models-Tab. <em>Empfehlung:
+					bleibt im ACE-Step-Tab</em> — der Models-Tab gehört den Provider-Routen (#844), und nichts
+					verschiebt sich.</li>
+				<li><strong>2 · „frei" und der Balken.</strong> Gerult ist „belegt / gesamt". Das Bild fügt in
+					der gemessenen Zeile „5.5 GB free" und einen Balken hinzu, weil die Ablehnung in „frei"
+					spricht (3,1 GB frei). Bei Schätzung steht kein „frei". <em>Empfehlung: behalten</em> —
+					es ist abgeleitet, keine neue Zahl.</li>
+				<li><strong>3 · Unbekannt ist selten.</strong> Ohne NVML meldet der Worker eine Schätzung („~"),
+					nicht „unbekannt". Unbekannt = kein Heartbeat oder ein Build ohne VRAM-Felder. Der
+					Issue-Text bündelt „kein Heartbeat oder kein NVML" in einem Zustand.
+					<em>Empfehlung: so wie gezeichnet bestätigen.</em></li>
+				<li><strong>4 · Laden und der Worker-Satz.</strong> LOAD ist nie vom Platz gesperrt und trägt
+					keine Warnung. Der Worker lehnt heute ein Laden trotzdem ab, wenn die Rechnung nicht
+					aufgeht (<code>model_cache.load</code>) — das spricht gegen „Laden immer möglich", wenn die
+					Prüfung bleibt. <em>Empfehlung: der Bau-Slice nimmt die Platz-Ablehnung aus dem Laden
+					heraus; ein 409 bleibt nur für ein Modell, das größer als das ganze Budget ist, und für
+					echte GPU-Fehler.</em> Der Satz in (i) ist der von heute.</li>
+				<li><strong>5 · Wo spricht ein gescheitertes Laden von der Admin-Seite?</strong> Heute in einem
+					Toast, mit der Hülle „Worker returned 409: {…}". Das Bild setzt den Satz in die Karte,
+					ohne Hülle (Folgearbeit 2 in #916). <em>Empfehlung: in die Karte</em> — „ein Fehler mit
+					Fläche gehört auf diese Fläche" (<code>vocabulary.html</code> §7).</li>
+				<li><strong>6 · Ablehnung aufgeklappt oder zugeklappt?</strong> Gescheiterte Läufe kommen heute
+					zugeklappt (eine Zeile, Chevron). Bei einer Ablehnung wäre die Abhilfe ab „Choose a
+					shorter…" abgeschnitten (390 px, siehe die kleine Zeile unter (o)).
+					<em>Empfehlung: Ablehnung und Ladefehler kommen aufgeklappt</em>; zuklappen bleibt ein
+					Tippen. Es ist dieselbe Form, nur der Anfangszustand ist ein anderer.</li>
+				<li><strong>7 · Zahlen für jeden Musiker.</strong> Die Ablehnung nennt „3.1 GB free, ~5 GB
+					needed" jedem, der Generate drückt; die Admin-Seite sehen heute nur Admins. Zeile 5 sagt
+					„keine Geheimnisse, keine neuen Rechte". <em>Empfehlung: Zahlen im Satz für alle</em> —
+					ohne sie ist die Abhilfe „kürzere Dauer" blind.</li>
+				<li><strong>8 · Eigene Warteschlange.</strong> Läuft schon ein Auftrag, belegt er die GPU; ein
+					zweiter Auftrag steht heute als „Queued #n". Würde die Ablehnung gegen den
+					<em>momentan</em> freien Platz prüfen, wäre die Warteschlange tot.
+					<em>Empfehlung: geprüft wird gegen den Platz, der frei wäre, wenn die eigene Warteschlange
+					durch ist</em> — abgelehnt wird nur, was auch dann nicht passt. Das ist Backend, aber
+					der Musiker sieht den Unterschied.</li>
+				<li><strong>9 · Nichts vor dem Drücken.</strong> Der Wunsch sagt „vorher wissen, ob es passt".
+					Gerult ist: vor dem Annehmen ablehnen, nicht Generate vorab sperren oder neben dem Knopf
+					warnen. Das Bild hat darum nichts am Knopf, bevor er gedrückt wird; die Zahlen stehen auf
+					der Admin-Seite. <em>Empfehlung: so lassen</em>, bis die Nutzung zeigt, dass ein Vorab-Hinweis fehlt.</li>
+			</ul>
 		</div>
 	</section>
 
