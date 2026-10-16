@@ -436,11 +436,14 @@ in place of the title, where title, subtitle and year change together;
 Cover opens the album's cover editor (`AlbumCoverEditor`) in place of the
 cover, which owns upload, suggestions and removal. Playlist entries are
 Share playlist · Upload… · Remove cover (only when a cover is set) · Save
-offline · Rename · Delete playlist. The Share row embeds the existing
-`ShareButton` component as its control (same toggle/clipboard/toast logic,
-not reimplemented); a playlist's Rename forwards to the same `EditableTitle`
-click affordance the title itself uses (`EditableTitle` exposes an
-imperative `startEdit()` via `bind:this` for exactly this). Under the title
+offline · Rename · Delete playlist. The Share row is a 44 px menu row that
+shows its state ("on"/"off", a link or share icon, `aria-pressed`); it and
+`ShareButton` both call the one toggle, `createShareToggle` in
+`stores/shareToggle.svelte.ts` (unshare, share and copy the link, toasts, the
+busy guard), so none of it is reimplemented; a playlist's Rename forwards to
+the same `EditableTitle` click affordance the title itself uses
+(`EditableTitle` exposes an imperative `startEdit()` via `bind:this` for
+exactly this). Under the title
 the header reads how many songs the page lists; it carries no breadcrumb and
 no shuffle, because shuffle is the player's (#1354 rule 24), and its Play
 turns that shuffle off to play from the top. Every song box on both pages is

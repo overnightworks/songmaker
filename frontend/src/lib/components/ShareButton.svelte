@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ShareResult } from '$lib/api/types';
-	import { addToast } from '$lib/stores/toast';
-	import { SHARE_BUTTON_COPY_FAILED_TOAST, SONG_SHARE_LABEL } from '$lib/constants';
+	import { SONG_SHARE_LABEL } from '$lib/constants';
+	import { createShareToggle } from '$lib/stores/shareToggle.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -13,30 +13,7 @@
 	}
 
 	let { iconOnly = false, isShared, shareSlug, onshare, onunshare }: Props = $props();
-	let busy = $state(false);
-
-	async function toggle(): Promise<void> {
-		if (busy) return;
-		busy = true;
-		try {
-			if (isShared) {
-				await onunshare();
-				addToast('Sharing disabled', 'success');
-			} else {
-				const result = await onshare();
-				try {
-					await navigator.clipboard.writeText(result.share_url);
-					addToast('Link copied to clipboard', 'success');
-				} catch {
-					addToast(SHARE_BUTTON_COPY_FAILED_TOAST, 'success');
-				}
-			}
-		} catch {
-			addToast('Share failed', 'error');
-		} finally {
-			busy = false;
-		}
-	}
+	const shareToggle = createShareToggle(() => ({ isShared, shareSlug, onshare, onunshare }));
 </script>
 
 <button
@@ -46,11 +23,11 @@
 	data-hitbox={iconOnly ? 'frequent' : undefined}
 	aria-label={iconOnly ? SONG_SHARE_LABEL : undefined}
 	aria-pressed={iconOnly ? isShared : undefined}
-	onclick={toggle}
-	disabled={busy}
-	title={isShared ? `Shared: /share/${shareSlug ?? ''}` : 'Share'}
+	onclick={shareToggle.toggle}
+	disabled={shareToggle.busy}
+	title={shareToggle.sharedTooltip ?? 'Share'}
 >
-	{#if isShared}<Icon name="link" size={14} />{:else}<Icon name="share" size={14} />{/if}
+	<Icon name={shareToggle.iconName} size={14} />
 </button>
 
 <style>

@@ -16,11 +16,13 @@
 		COLLECTION_MENU_SAVE_OFFLINE_LABEL,
 		COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL,
 		COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL,
-		COLLECTION_MENU_SHARE_LABEL
+		COLLECTION_MENU_SHARE_LABEL,
+		COLLECTION_MENU_SHARE_OFF_HINT,
+		COLLECTION_MENU_SHARE_ON_HINT
 	} from '$lib/constants';
+	import { createShareToggle } from '$lib/stores/shareToggle.svelte';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
-	import ShareButton from './ShareButton.svelte';
 	import ShareDialog from './ShareDialog.svelte';
 
 	interface Props {
@@ -82,6 +84,13 @@
 		kind === 'album' ? COLLECTION_MENU_DELETE_LABEL : `${COLLECTION_MENU_DELETE_LABEL} ${kind}`
 	);
 
+	const shareToggle = createShareToggle(() => ({
+		isShared,
+		shareSlug,
+		onshare: shareAndWarnIfIncomplete,
+		onunshare
+	}));
+
 	let popover: MenuPopover | undefined = $state();
 	let missingTakeSongs: UnplayableSongSummary[] = $state([]);
 
@@ -109,6 +118,10 @@
 	function closeLeavingFocusToForm(action: () => void): void {
 		runAndClose(action, false);
 	}
+
+	function runLeavingMenuOpen(action: () => void): void {
+		action();
+	}
 </script>
 
 {#snippet actionRow(
@@ -116,22 +129,27 @@
 	action: () => void,
 	icon?: string,
 	hint?: string,
-	close: (action: () => void) => void = runAndClose
+	close: (action: () => void) => void = runAndClose,
+	pressed?: boolean,
+	tooltip?: string
 )}
-	<button class="menu-item" onclick={() => close(action)}>
+	<button class="menu-item" aria-pressed={pressed} title={tooltip} onclick={() => close(action)}>
 		{#if icon}<Icon name={icon} size={14} />{/if}
 		{label}
 		{#if hint}<span class="menu-item-hint" aria-hidden="true">{hint}</span>{/if}
 	</button>
 {/snippet}
 
-{#snippet shareRow(icon?: string)}
-	<div class="menu-row">
-		<span class="menu-row-label"
-			>{#if icon}<Icon name={icon} size={14} />{/if}{shareLabel}</span
-		>
-		<ShareButton {isShared} {shareSlug} onshare={shareAndWarnIfIncomplete} {onunshare} />
-	</div>
+{#snippet shareRow()}
+	{@render actionRow(
+		shareLabel,
+		shareToggle.toggle,
+		shareToggle.iconName,
+		isShared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT,
+		runLeavingMenuOpen,
+		isShared,
+		shareToggle.sharedTooltip
+	)}
 {/snippet}
 
 <div class="collection-menu">
@@ -167,7 +185,7 @@
 			{#if onaddtoplaylist}
 				{@render actionRow(COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, onaddtoplaylist, 'list-plus')}
 			{/if}
-			{@render shareRow('share')}
+			{@render shareRow()}
 			{#if onarchive}
 				{@render actionRow(COLLECTION_MENU_ARCHIVE_LABEL, onarchive, 'archive')}
 			{/if}
@@ -218,22 +236,6 @@
 		border-bottom: 1px solid var(--border);
 		margin-bottom: 0.25rem;
 		overflow-wrap: anywhere;
-	}
-
-	.menu-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		padding: 0.25rem 0.6rem;
-	}
-
-	.menu-row-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.87rem;
-		color: var(--text);
 	}
 
 	.menu-item {

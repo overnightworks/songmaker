@@ -5,7 +5,6 @@ vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
 import { get } from 'svelte/store';
 import {
-	COLLECTION_MENU_COVER_HINT,
 	COLLECTION_MENU_LABEL,
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
@@ -14,6 +13,7 @@ import {
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { albumList } from '$lib/stores/libraryData';
 import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { makeAlbum, makeGeneration } from '$lib/test-utils/factories';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import CollectionHeader from './CollectionHeader.svelte';
@@ -301,7 +301,7 @@ describe('CollectionHeader', () => {
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('names the object first in the menu and lists the album rows in their order', async () => {
+	it('915_C3: names the object first in the menu and lists the album rows in their order', async () => {
 		const target = await render({
 			...detailsEditingAlbum(),
 			coverEditor: fakeCoverEditor(),
@@ -310,10 +310,7 @@ describe('CollectionHeader', () => {
 		});
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
-		const rows = Array.from(menu.querySelectorAll('.menu-item, .menu-row-label')).map((el) =>
-			el.textContent?.replace(COLLECTION_MENU_COVER_HINT, '').trim()
-		);
-		expect(rows).toEqual([
+		expect(menuRowLabels(menu)).toEqual([
 			'Edit details',
 			'Cover',
 			'Curate',
@@ -328,14 +325,14 @@ describe('CollectionHeader', () => {
 		const props = { ...baseProps(), kind: 'playlist' as const, coverUrl: 'https://x/cover.jpg' };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
-			el.textContent?.trim()
-		);
-		expect(items).toEqual(['Upload…', 'Remove cover', 'Rename', 'Delete playlist']);
-		const removeItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Remove cover'
-		);
-		removeItem?.click();
+		expect(menuRowLabels(menu)).toEqual([
+			'Share playlist',
+			'Upload…',
+			'Remove cover',
+			'Rename',
+			'Delete playlist'
+		]);
+		menuRow(menu, 'Remove cover').click();
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
 	});
 
@@ -391,18 +388,20 @@ describe('CollectionHeader', () => {
 		const props = { ...baseProps(), kind: 'playlist' as const, onsaveoffline: vi.fn() };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		expect(menu.querySelector('.menu-row-label')?.textContent).toBe('Share playlist');
-		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
-			el.textContent?.trim()
-		);
-		expect(items).toEqual(['Upload…', 'Save offline', 'Rename', 'Delete playlist']);
+		expect(menuRowLabels(menu)).toEqual([
+			'Share playlist',
+			'Upload…',
+			'Save offline',
+			'Rename',
+			'Delete playlist'
+		]);
 	});
 
-	it('shares via the embedded ShareButton and copies the link, without duplicating the logic', async () => {
+	it('shares from the Share row and copies the link, without duplicating the logic', async () => {
 		const props = baseProps();
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		requireElement<HTMLButtonElement>(menu, '.share-btn').click();
+		menuRow(menu, 'Share').click();
 		await vi.waitFor(() => expect(props.onshare).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
 			expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://x/y')
@@ -473,14 +472,9 @@ describe('CollectionHeader', () => {
 	it('opens the details editor in place of the title from Edit details, and its close ends it', async () => {
 		const target = await render(detailsEditingAlbum());
 		const menu = await openCollectionMenu(target);
-		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
-		expect(items.map((el) => el.textContent?.trim())).toEqual([
-			'Edit details',
-			'Add to playlist',
-			'Delete'
-		]);
+		expect(menuRowLabels(menu)).toEqual(['Edit details', 'Add to playlist', 'Share', 'Delete']);
 
-		items.find((el) => el.textContent?.trim() === 'Edit details')?.click();
+		menuRow(menu, 'Edit details').click();
 		await tick();
 
 		const titles = requireElement(target, '.header-titles');
