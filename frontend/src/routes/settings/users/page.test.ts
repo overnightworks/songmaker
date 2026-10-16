@@ -644,6 +644,21 @@ describe('admin settings compact layout', () => {
 	});
 });
 
+function typeInto(form: HTMLFormElement, placeholder: string, value: string): void {
+	const input = requireElement<HTMLInputElement>(form, `input[placeholder="${placeholder}"]`);
+	input.value = value;
+	input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+async function submitCreate(target: HTMLElement): Promise<HTMLFormElement> {
+	const form = requireElement<HTMLFormElement>(target, '.create-form');
+	typeInto(form, 'Username', 'jane');
+	typeInto(form, 'Password', 'example-password');
+	form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+	await flush();
+	return form;
+}
+
 describe('admin sessions, revokes and the errors they leave', () => {
 	const KIM_SESSION: SessionItem = { ...SESSION, id: 's2', user_id: 'u3', username: 'kim' };
 	const USERS_TAB_REFUSAL = 'Cannot remove the last admin';
@@ -705,21 +720,6 @@ describe('admin sessions, revokes and the errors they leave', () => {
 		if (!disable) throw new Error(`Expected a Disable button for ${username}`);
 		disable.click();
 		await flush();
-	}
-
-	function typeInto(form: HTMLFormElement, placeholder: string, value: string): void {
-		const input = requireElement<HTMLInputElement>(form, `input[placeholder="${placeholder}"]`);
-		input.value = value;
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-	}
-
-	async function submitCreate(target: HTMLElement): Promise<HTMLFormElement> {
-		const form = requireElement<HTMLFormElement>(target, '.create-form');
-		typeInto(form, 'Username', 'jane');
-		typeInto(form, 'Password', 'example-password');
-		form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-		await flush();
-		return form;
 	}
 
 	it.each([true, false])(
@@ -849,6 +849,229 @@ describe('admin sessions, revokes and the errors they leave', () => {
 		);
 		expect(api.updateUser).not.toHaveBeenCalled();
 	});
+});
+
+describe('admin error ownership (#1447)', () => {
+	function userRow(target: HTMLElement): HTMLElement {
+		const row = Array.from(target.querySelectorAll<HTMLElement>('tbody tr')).find(
+			(el) => el.querySelector('[data-label="Username"]')?.textContent?.trim() === 'jane'
+		);
+		if (!row) throw new Error('Expected jane in the user list');
+		return row;
+	}
+
+	function clickNamed(target: HTMLElement, label: string): void {
+		const button = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
+			(el) => el.textContent?.trim() === label
+		);
+		if (!button) throw new Error(`Expected ${label}`);
+		button.click();
+	}
+
+	async function userAction(target: HTMLElement, action: string): Promise<void> {
+		clickNamed(userRow(target), action);
+		await flush();
+		if (action === 'Reset PW' || action === 'Delete') {
+			const form = requireElement<HTMLFormElement>(target, '.inline-form-row form');
+			const input = requireElement<HTMLInputElement>(form, 'input');
+			input.value = action === 'Delete' ? 'jane' : 'example-password';
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+			form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+			await flush();
+		}
+	}
+
+	it.each([
+		{
+			cause: 'rate limit',
+			failure: new ApiError(429, 'Too Many Requests', '/api/admin/sessions/s1'),
+			message: 'Too many requests. Wait before revoking the session again.'
+		},
+		{
+			cause: 'unreachable server',
+			failure: lostNetwork(),
+			message: 'Could not reach the server. Try revoking the session again when connected.'
+		},
+		{
+			cause: 'unknown failure',
+			failure: new Error('private browser detail'),
+			message: 'Could not revoke the session. Try again.'
+		}
+	])('defect:#920-10 names the revoke cause: $cause', async ({ failure, message }) => {
+		api.forceLogout.mockRejectedValueOnce(failure);
+		const target = await renderPage(true);
+		await selectTab(target, 'sessions');
+		clickNamed(target, 'Revoke');
+		await flush();
+		expect(requireElement(target, '.error').textContent).toBe(message);
+	});
+
+	beforeEach(() => {
+		api.updateUser.mockReset();
+		api.hardDeleteUser.mockReset();
+		api.fetchUserRateLimits.mockReset();
+	});
+
+	const limits = {
+		overrides: [],
+		effective: [{ setting_key: 'generation_rate_limit', value: 10, is_override: false }]
+	};
+	const races = [
+		{ action: 'Disable', tab: 'users', request: 'updateUser' },
+		{ action: 'Promote', tab: 'users', request: 'updateUser' },
+		{ action: 'Reset PW', tab: 'users', request: 'updateUser' },
+		{ action: 'Delete', tab: 'users', request: 'hardDeleteUser' },
+		{ action: 'Revoke', tab: 'sessions', request: 'forceLogout' },
+		{ action: 'Revoke already ended', tab: 'sessions', request: 'forceLogout' },
+		{ action: 'Save Defaults', tab: 'ratelimits', request: 'updateRateLimits' },
+		{ action: 'Save Overrides', tab: 'ratelimits', request: 'updateUserRateLimits' },
+		{ action: 'Clear All', tab: 'ratelimits', request: 'deleteUserRateLimits' },
+		{ action: 'Save Defaults', tab: 'generation', request: 'updateGenerationDefaults' },
+		{ action: 'MODEL ON', tab: 'acestep', request: 'toggleModel' }
+	] as const;
+
+	it.each([
+		...races.flatMap((scenario) =>
+			[false, true].map((returnBeforeReply) => ({
+				...scenario,
+				returnBeforeReply,
+				freshError: false
+			}))
+		),
+		...races
+			.filter(({ tab }) => tab === 'users')
+			.map((scenario) => ({
+				...scenario,
+				returnBeforeReply: true,
+				freshError: true
+			})),
+		{
+			action: 'Create',
+			tab: 'users',
+			request: 'createUser',
+			returnBeforeReply: true,
+			freshError: true
+		} as const
+	])(
+		'defect:#920-11 ignores stale $tab $action completion (return: $returnBeforeReply, fresh error: $freshError)',
+		async ({ action, tab, request, returnBeforeReply, freshError }) => {
+			let rejectRequest!: (reason: unknown) => void;
+			let resolveRequest!: (value: unknown) => void;
+			api[request].mockImplementationOnce(
+				() =>
+					new Promise((resolve, reject) => {
+						resolveRequest = resolve;
+						rejectRequest = reject;
+					})
+			);
+			api.fetchRateLimits.mockResolvedValue({
+				settings: [{ setting_key: 'generation_rate_limit', value: 10 }]
+			});
+			api.fetchUserRateLimits.mockResolvedValue(limits);
+			api.fetchAllModels.mockResolvedValue([{ id: 'model', is_active: true }]);
+			const target = await renderPage(true);
+			await selectTab(target, tab);
+			if (action === 'Create') await submitCreate(target);
+			else if (tab === 'users') await userAction(target, action);
+			else if (action === 'Save Overrides' || action === 'Clear All') {
+				userRow(target).click();
+				await flush();
+				if (action === 'Save Overrides') {
+					const input = requireElement<HTMLInputElement>(target, '.override-row input');
+					input.value = '5';
+					input.dispatchEvent(new Event('input', { bubbles: true }));
+				}
+				requireElement<HTMLElement>(
+					target,
+					action === 'Clear All' ? '.override-actions .clear-btn' : '.override-actions .save-btn'
+				).click();
+			} else clickNamed(target, action === 'Revoke already ended' ? 'Revoke' : action);
+			await flush();
+			await selectTab(target, 'voices');
+			if (returnBeforeReply) await selectTab(target, tab);
+			const freshMessage = 'Cannot remove the last admin';
+			if (freshError) {
+				api.updateUser.mockRejectedValueOnce(serverRefusal(freshMessage));
+				await userAction(target, 'Disable');
+				expect(requireElement(target, '.error').textContent).toBe(freshMessage);
+			}
+			if (action === 'Create') resolveRequest(OTHER_USER);
+			else
+				rejectRequest(
+					action === 'Revoke already ended'
+						? new ApiError(404, 'Not Found', '/api/admin/sessions/s1')
+						: serverRefusal('Action refused')
+				);
+			await flush();
+			if (freshError) expect(requireElement(target, '.error').textContent).toBe(freshMessage);
+			else expect(target.querySelector('.error')).toBeNull();
+			if (!returnBeforeReply) {
+				await selectTab(target, tab);
+				expect(target.querySelector('.error')).toBeNull();
+			}
+		}
+	);
+
+	it.each([
+		{
+			load: 'users',
+			request: 'fetchUsers',
+			start: 'users',
+			tabs: ['users', 'sessions', 'attempts', 'ratelimits']
+		},
+		{ load: 'rateLimits', request: 'fetchRateLimits', start: 'ratelimits', tabs: ['ratelimits'] },
+		{
+			load: 'userLimits',
+			request: 'fetchUserRateLimits',
+			start: 'ratelimits',
+			tabs: ['ratelimits']
+		},
+		{ load: 'cowriter', request: 'fetchCowriterSettings', start: 'models', tabs: ['models'] },
+		{ load: 'cover', request: 'fetchCoverSettings', start: 'models', tabs: ['models'] },
+		{ load: 'scoring', request: 'fetchJudgeSettings', start: 'models', tabs: ['models'] }
+	] as const)(
+		'defect:#920-12 shows $load failures only on their data tabs',
+		async ({ load, request, start, tabs }) => {
+			const message = `${load} unavailable`;
+			api[request].mockRejectedValue(serverRefusal(message));
+			const target = await renderPage(true);
+			await selectTab(target, start);
+			if (load === 'userLimits') {
+				userRow(target).click();
+				await flush();
+			}
+			expect(target.textContent).toContain(message);
+			for (const destination of [
+				'users',
+				'sessions',
+				'attempts',
+				'ratelimits',
+				'models',
+				'voices',
+				'generation',
+				'acestep'
+			]) {
+				await selectTab(target, destination);
+				expect(target.textContent?.includes(message), destination).toBe(
+					(tabs as readonly string[]).includes(destination)
+				);
+			}
+		}
+	);
+
+	it.each(['Disable', 'Promote', 'Reset PW', 'Delete'])(
+		'defect:#920-13 explains a missing account on %s and removes its stale actions',
+		async (action) => {
+			const failure = new ApiError(404, 'Not Found', '/api/admin/users/u2');
+			api.updateUser.mockRejectedValueOnce(failure);
+			api.hardDeleteUser.mockRejectedValueOnce(failure);
+			const target = await renderPage(true);
+			await userAction(target, action);
+			expect(requireElement(target, '.error').textContent).toBe('That account no longer exists.');
+			expect(target.querySelector('.inline-form-row')).toBeNull();
+			expect(target.textContent).not.toContain('jane');
+		}
+	);
 });
 
 describe('admin reads and actions that fail', () => {

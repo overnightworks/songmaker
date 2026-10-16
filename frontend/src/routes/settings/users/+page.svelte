@@ -18,6 +18,7 @@
 		deleteUserRateLimits
 	} from '$lib/api/client';
 	import { describeFailure, isNotFound } from '$lib/api/fetch';
+	import { UserFacingError } from '$lib/api/userFacingError';
 	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import type {
 		UserItem,
@@ -71,6 +72,10 @@
 	} from '$lib/components/ModelsTaskRow.svelte';
 	import {
 		ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
+		ADMIN_ACCOUNT_GONE_MESSAGE,
+		ADMIN_REVOKE_FAILED_MESSAGE,
+		ADMIN_REVOKE_OFFLINE_MESSAGE,
+		ADMIN_REVOKE_RATE_LIMITED_MESSAGE,
 		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
 		ADMIN_VOICES_HEADING,
@@ -137,6 +142,15 @@
 	type AdminTab = (typeof ADMIN_TABS)[number]['id'];
 
 	let tab = $state<AdminTab>('users');
+	let tabVisit = 0;
+
+	function pageErrorReporter(): (message: string) => void {
+		const origin = tab;
+		const visit = tabVisit;
+		return (message) => {
+			if (tab === origin && tabVisit === visit) error = message;
+		};
+	}
 
 	$effect(() => {
 		ensureCompactUiStyles();
@@ -151,6 +165,7 @@
 	}
 
 	function selectTab(next: AdminTab): void {
+		if (tab !== next) tabVisit += 1;
 		tab = next;
 		error = '';
 		if (next === 'ratelimits') {
@@ -249,14 +264,14 @@
 		cover: 'Failed to load cover settings',
 		scoring: 'Failed to load scoring settings'
 	};
-	const PAGE_WIDE_LOADS: readonly AdminLoad[] = [
-		'users',
-		'rateLimits',
-		'userLimits',
-		'cowriter',
-		'cover',
-		'scoring'
-	];
+	const PAGE_WIDE_LOADS = {
+		users: ['users', 'sessions', 'attempts', 'ratelimits'],
+		rateLimits: ['ratelimits'],
+		userLimits: ['ratelimits'],
+		cowriter: ['models'],
+		cover: ['models'],
+		scoring: ['models']
+	} satisfies Partial<Record<AdminLoad, AdminTab[]>>;
 
 	const loadReloads: Record<AdminLoad, ReturnType<typeof reloadWhileUnreachable>> = {
 		users: reloadWhileUnreachable(() => void loadAll()),
@@ -277,7 +292,13 @@
 			>
 	);
 	const pageLoadFailures = $derived([
-		...new Set(PAGE_WIDE_LOADS.flatMap((load) => $loadFailures[load] ?? []))
+		...new Set(
+			(Object.keys(PAGE_WIDE_LOADS) as (keyof typeof PAGE_WIDE_LOADS)[]).flatMap((load) =>
+				(PAGE_WIDE_LOADS[load] as readonly AdminTab[]).includes(tab)
+					? ($loadFailures[load] ?? [])
+					: []
+			)
+		)
 	]);
 
 	function settleLoad(load: AdminLoad): void {
@@ -334,8 +355,9 @@
 	}
 
 	async function handleSaveGlobal() {
+		const reportError = pageErrorReporter();
 		savingGlobal = true;
-		error = '';
+		reportError('');
 		try {
 			const settings: Record<string, number> = {};
 			for (const [key, val] of Object.entries(globalEdits)) {
@@ -345,7 +367,7 @@
 			globalLimits = res.settings;
 			globalEdits = Object.fromEntries(res.settings.map((s) => [s.setting_key, String(s.value)]));
 		} catch (e) {
-			error = describeFailure(e, 'Failed to save');
+			reportError(describeFailure(e, 'Failed to save'));
 		} finally {
 			savingGlobal = false;
 		}
@@ -386,9 +408,10 @@
 	}
 
 	async function handleSaveUserLimits() {
+		const reportError = pageErrorReporter();
 		if (!expandedUserId) return;
 		savingUser = true;
-		error = '';
+		reportError('');
 		try {
 			const settings: Record<string, number> = {};
 			for (const [key, val] of Object.entries(userEdits)) {
@@ -401,22 +424,23 @@
 				userLimitsData = await updateUserRateLimits(expandedUserId, settings);
 			}
 		} catch (e) {
-			error = describeFailure(e, 'Failed to save user limits');
+			reportError(describeFailure(e, 'Failed to save user limits'));
 		} finally {
 			savingUser = false;
 		}
 	}
 
 	async function handleClearUserLimits() {
+		const reportError = pageErrorReporter();
 		if (!expandedUserId) return;
 		savingUser = true;
-		error = '';
+		reportError('');
 		try {
 			await deleteUserRateLimits(expandedUserId);
 			userLimitsData = await fetchUserRateLimits(expandedUserId);
 			userEdits = Object.fromEntries(userLimitsData.effective.map((e) => [e.setting_key, '']));
 		} catch (e) {
-			error = describeFailure(e, 'Failed to clear');
+			reportError(describeFailure(e, 'Failed to clear'));
 		} finally {
 			savingUser = false;
 		}
@@ -711,11 +735,12 @@
 	}
 
 	async function handleCreate() {
+		const reportError = pageErrorReporter();
 		createError = '';
 		creating = true;
 		try {
 			await createUser(newUsername, newPassword, newRole);
-			error = '';
+			reportError('');
 			newUsername = '';
 			newPassword = '';
 			newRole = 'user';
@@ -727,67 +752,88 @@
 		}
 	}
 
-	async function handleToggleActive(user: UserItem) {
+	async function changeUser(userId: string, action: () => Promise<unknown>): Promise<void> {
 		try {
-			await updateUser(user.id, { is_active: !user.is_active });
+			await action();
+		} catch (e) {
+			if (!isNotFound(e)) throw e;
+			users = users.filter((user) => user.id !== userId);
+			throw new UserFacingError(ADMIN_ACCOUNT_GONE_MESSAGE);
+		}
+	}
+
+	async function handleToggleActive(user: UserItem) {
+		const reportError = pageErrorReporter();
+		try {
+			await changeUser(user.id, () => updateUser(user.id, { is_active: !user.is_active }));
 			users = await fetchUsers();
 		} catch (e) {
-			error = describeFailure(e, 'Failed to update user');
+			reportError(describeFailure(e, 'Failed to update user'));
 		}
 	}
 
 	async function handleToggleRole(user: UserItem) {
+		const reportError = pageErrorReporter();
 		const newRoleValue = user.role === 'admin' ? 'user' : 'admin';
 		try {
-			await updateUser(user.id, { role: newRoleValue });
+			await changeUser(user.id, () => updateUser(user.id, { role: newRoleValue }));
 			users = await fetchUsers();
 		} catch (e) {
-			error = describeFailure(e, 'Failed to update role');
+			reportError(describeFailure(e, 'Failed to update role'));
 		}
 	}
 
 	async function handleResetPassword(userId: string) {
+		const reportError = pageErrorReporter();
 		if (!resetPasswordValue || resetPasswordValue.length < PASSWORD_MIN_LENGTH) {
-			error = PASSWORD_TOO_SHORT_MESSAGE;
+			reportError(PASSWORD_TOO_SHORT_MESSAGE);
 			return;
 		}
 		resettingPassword = true;
-		error = '';
+		reportError('');
 		try {
-			await updateUser(userId, { password: resetPasswordValue });
+			await changeUser(userId, () => updateUser(userId, { password: resetPasswordValue }));
 			resetPasswordUserId = null;
 			resetPasswordValue = '';
 		} catch (e) {
-			error = describeFailure(e, 'Failed to reset password');
+			reportError(describeFailure(e, 'Failed to reset password'));
 		} finally {
 			resettingPassword = false;
 		}
 	}
 
 	async function handleHardDelete(userId: string) {
+		const reportError = pageErrorReporter();
 		deleting = true;
-		error = '';
+		reportError('');
 		try {
-			await hardDeleteUser(userId);
+			await changeUser(userId, () => hardDeleteUser(userId));
 			deleteUserId = null;
 			deleteConfirmInput = '';
 			users = await fetchUsers();
 		} catch (e) {
-			error = describeFailure(e, 'Failed to delete user');
+			reportError(describeFailure(e, 'Failed to delete user'));
 		} finally {
 			deleting = false;
 		}
 	}
 
 	async function handleForceLogout(sessionId: string) {
-		error = '';
+		const reportError = pageErrorReporter();
+		reportError('');
 		try {
 			if ((await revokeSession(sessionId)) === 'already-ended') {
-				error = ADMIN_SESSION_ALREADY_ENDED_MESSAGE;
+				reportError(ADMIN_SESSION_ALREADY_ENDED_MESSAGE);
 			}
 			sessions = (await fetchSessions()).items;
 		} catch (e) {
-			error = describeFailure(e, 'Failed');
+			reportError(
+				e instanceof ApiError && e.status === 429
+					? ADMIN_REVOKE_RATE_LIMITED_MESSAGE
+					: describeFailure(e, ADMIN_REVOKE_FAILED_MESSAGE, {
+							offline: ADMIN_REVOKE_OFFLINE_MESSAGE
+						})
+			);
 		}
 	}
 
@@ -821,11 +867,12 @@
 	}
 
 	async function handleToggleModel(modelId: string, currentActive: boolean): Promise<void> {
+		const reportError = pageErrorReporter();
 		try {
 			const updated = await toggleModelApi(modelId, !currentActive);
 			allModels = allModels.map((m) => (m.id === updated.id ? updated : m));
 		} catch {
-			error = 'Failed to toggle model';
+			reportError('Failed to toggle model');
 		}
 	}
 
@@ -835,14 +882,15 @@
 	}
 
 	async function handleSaveGenDefaults(): Promise<void> {
+		const reportError = pageErrorReporter();
 		genSaving = true;
-		error = '';
+		reportError('');
 		try {
 			const cleaned = Object.keys(genEditDefaults).length > 0 ? genEditDefaults : {};
 			genDefaults = await updateGenerationDefaults({ ...genDefaults, [genEditModel]: cleaned });
 			genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
 		} catch {
-			error = 'Failed to save generation defaults';
+			reportError('Failed to save generation defaults');
 		} finally {
 			genSaving = false;
 		}
