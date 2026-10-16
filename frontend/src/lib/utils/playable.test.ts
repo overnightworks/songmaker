@@ -6,8 +6,7 @@ import {
 	bestTake,
 	songHasPlayableTake,
 	songPlayability,
-	songTakesLoaded,
-	type SongPlayability
+	songTakesLoaded
 } from './playable';
 
 const playable = (overrides: Partial<GenerationItem> = {}) => makeGeneration(overrides);
@@ -17,6 +16,8 @@ const fileless = () => makeGeneration({ mp3_path: '' });
 function songWith(generation_count: number, generations: GenerationItem[]) {
 	return makeSong({ generation_count, generations });
 }
+
+type SongPlayability = ReturnType<typeof songPlayability>;
 
 describe('1354_rule_11 song playability (defect:#1386)', () => {
 	it.each<[string, SongPlayability, ReturnType<typeof songWith>]>([

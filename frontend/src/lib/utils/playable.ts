@@ -6,13 +6,13 @@ import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
  * refined once the takes load, so callers never need to re-decide.
  */
 
-export type SongPlayability = 'playable' | 'none' | 'unknown';
+type SongPlayability = 'playable' | 'none' | 'unknown';
 
 export function isPlayableTake(gen: GenerationItem): boolean {
 	return !gen.is_archived && gen.mp3_path !== '';
 }
 
-export function playableTakes(song: SongItem): GenerationItem[] {
+function playableTakes(song: SongItem): GenerationItem[] {
 	return song.generations.filter(isPlayableTake);
 }
 
