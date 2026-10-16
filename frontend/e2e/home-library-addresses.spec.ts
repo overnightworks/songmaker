@@ -550,7 +550,7 @@ for (const cell of BACK_ARROW_CELLS) {
 
 test('1354_R1prime row 10a: a pre-switch {browse} entry at / reads as Home after a reload, adding no entry', async ({
 	page
-}, testInfo) => {
+}) => {
 	const guard = new FlowGuard(page);
 	const library = readSeededLibrary();
 	await watchHistoryWrites(page);
