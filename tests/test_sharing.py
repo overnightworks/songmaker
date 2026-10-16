@@ -706,7 +706,6 @@ class SharedAudioSurface:
     share_path: str
     audio_path: str
     lookup_name: str
-    query_table: str
     seed: Callable | None = None
 
 
@@ -715,8 +714,7 @@ _SHARED_AUDIO_LOOKUP_CONFIGURATIONS = [
         SharedAudioSurface(
             "/api/albums/test_album/share",
             "/shared/{slug}/audio/g1.mp3",
-            "shared_album_audio_filename_is_presented",
-            "generations",
+            "shared_album_take_stored_path",
         ),
         id="album",
     ),
@@ -724,8 +722,7 @@ _SHARED_AUDIO_LOOKUP_CONFIGURATIONS = [
         SharedAudioSurface(
             "/api/songs/s1/share",
             "/shared/song/{slug}/audio/g1.mp3",
-            "shared_song_audio_filename_is_presented",
-            "generations",
+            "shared_song_take_stored_path",
         ),
         id="song",
     ),
@@ -733,8 +730,7 @@ _SHARED_AUDIO_LOOKUP_CONFIGURATIONS = [
         SharedAudioSurface(
             "/api/playlists/pl1/share",
             "/shared/playlist/{slug}/audio/g1.mp3",
-            "shared_playlist_audio_filename_is_presented",
-            "playlist_entries",
+            "shared_playlist_take_stored_path",
             _seed_shared_playlist_audio,
         ),
         id="playlist",
@@ -766,9 +762,9 @@ def test_shared_audio_lookups_run_off_the_event_loop(
     real_lookup = getattr(sharing_api, surface.lookup_name)
     observed_threads: list[int] = []
 
-    def _observing_lookup(db, slug: str, filename: str) -> bool:
+    def _observing_lookup(db, slug: str, generation_id: str) -> str | None:
         observed_threads.append(threading.get_ident())
-        return real_lookup(db, slug, filename)
+        return real_lookup(db, slug, generation_id)
 
     monkeypatch.setattr(sharing_api, surface.lookup_name, _observing_lookup)
 
@@ -792,7 +788,7 @@ def test_shared_audio_lookups_run_off_the_event_loop(
     "surface",
     _SHARED_AUDIO_LOOKUP_CONFIGURATIONS,
 )
-def test_shared_audio_lookups_issue_a_take_lookup_then_one_scalar_filename_query(
+def test_shared_audio_lookups_issue_one_scalar_query_keyed_on_the_take_id(
     sharing_app: TestClient,
     surface: SharedAudioSurface,
 ) -> None:
@@ -813,15 +809,15 @@ def test_shared_audio_lookups_issue_a_take_lookup_then_one_scalar_filename_query
         event.remove(engine, "before_cursor_execute", handle)
 
     assert response.status_code == 200
-    assert len(queries) == 2, f"expected a take lookup and one filename lookup, got {queries}"
-    statement, parameters = queries[1]
+    assert len(queries) == 1, f"expected one membership lookup, got {queries}"
+    statement, parameters = queries[0]
     normalized_statement = " ".join(statement.lower().split())
-    filename_predicate = "generations.mp3_path = ?"
-    assert f"from {surface.query_table}" in normalized_statement
-    assert filename_predicate in normalized_statement
-    filename_predicate_index = normalized_statement.index(filename_predicate)
-    filename_parameter_index = normalized_statement[:filename_predicate_index].count("?")
-    assert parameters[filename_parameter_index] == "admin_user/g1.mp3"
+    take_id_predicate = "generations.id = ?"
+    assert "from generations" in normalized_statement
+    assert take_id_predicate in normalized_statement
+    take_id_predicate_index = normalized_statement.index(take_id_predicate)
+    take_id_parameter_index = normalized_statement[:take_id_predicate_index].count("?")
+    assert parameters[take_id_parameter_index] == "g1"
     assert "versions" not in normalized_statement
 
 
@@ -1157,12 +1153,12 @@ def _audio_urls_in(payload) -> list[str]:
     return []
 
 
-def _add_unshared_take_of_the_same_creator(session) -> None:
+def _add_unshared_take_of_the_same_creator(session, *, mp3_path: str) -> None:
     session.add(Album(id="other_album", title="Other Album", artist="Test Artist"))
     session.add(Song(id="s9", title="Song Nine", album_id="other_album", track_number=1))
     session.add(Generation(
         id="gx", song_id="s9", generation_number=1,
-        mp3_path="admin_user/gx.mp3", is_picked=True,
+        mp3_path=mp3_path, is_picked=True,
     ))
 
 
@@ -1209,14 +1205,19 @@ def test_public_share_stream_carries_no_account_id_and_plays_1374_rule_8(
     assert stream.status_code == 206
 
 
+@pytest.mark.parametrize(
+    "outside_take_stored_path",
+    ["admin_user/gx.mp3", _STORED_AUDIO_PATH],
+    ids=["own_file", "file_of_a_presented_take"],
+)
 @pytest.mark.parametrize("share", _PUBLIC_SHARES, ids=lambda share: share.name)
 def test_public_share_audio_answers_404_for_a_take_outside_the_share_1374_rule_8(
-    sharing_app: TestClient, share: PublicShare,
+    sharing_app: TestClient, share: PublicShare, outside_take_stored_path: str,
 ) -> None:
     with sharing_app.app.state.ctx.db() as session:
-        _add_unshared_take_of_the_same_creator(session)
+        _add_unshared_take_of_the_same_creator(session, mp3_path=outside_take_stored_path)
         session.commit()
-    (sharing_app.app.state.ctx.audio_dir / "admin_user" / "gx.mp3").write_bytes(_AUDIO_BYTES)
+    (sharing_app.app.state.ctx.audio_dir / outside_take_stored_path).write_bytes(_AUDIO_BYTES)
     listener, slug = _open_public_share(sharing_app, share)
 
     outside_take = listener.get(f"{share.audio_path.format(slug=slug)}/gx.mp3")
@@ -1464,6 +1465,26 @@ def test_shared_generation_hides_a_noncanonical_stored_audio_path(
     assert response.status_code == 200
     assert response.json()["audio_url"] is None
     assert unauthed.get(f"/shared/gen/{slug}/audio/g1.mp3").status_code == 404
+
+
+def test_shared_generation_of_a_wav_only_take_has_no_audio_url_and_logs_nothing_1374_rule_8(
+    sharing_app: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with sharing_app.app.state.ctx.db() as session:
+        generation = session.get(Generation, "g1")
+        assert generation is not None
+        generation.mp3_path = ""
+        session.commit()
+    slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
+    unauthed = web_client(sharing_app.app, cookies={})
+
+    with caplog.at_level(logging.WARNING):
+        response = unauthed.get(f"/shared/gen/{slug}")
+
+    assert response.status_code == 200
+    assert response.json()["audio_url"] is None
+    assert caplog.records == []
 
 
 def test_shared_generation_manifest_names_the_take_without_resolving_its_stored_path(

@@ -398,13 +398,13 @@ from songmaker_cli.db.queries.sharing import (
     enable_sharing as enable_sharing,
 )
 from songmaker_cli.db.queries.sharing import (
-    shared_album_audio_filename_is_presented as shared_album_audio_filename_is_presented,
+    shared_album_take_stored_path as shared_album_take_stored_path,
 )
 from songmaker_cli.db.queries.sharing import (
-    shared_playlist_audio_filename_is_presented as shared_playlist_audio_filename_is_presented,
+    shared_playlist_take_stored_path as shared_playlist_take_stored_path,
 )
 from songmaker_cli.db.queries.sharing import (
-    shared_song_audio_filename_is_presented as shared_song_audio_filename_is_presented,
+    shared_song_take_stored_path as shared_song_take_stored_path,
 )
 from songmaker_cli.db.queries.songs import cleanup_song as cleanup_song
 from songmaker_cli.db.queries.songs import (

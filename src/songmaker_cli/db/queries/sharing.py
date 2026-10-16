@@ -67,14 +67,16 @@ def playable_take_filter(
     )
 
 
-def shared_album_audio_filename_is_presented(
+def shared_album_take_stored_path(
     session: Session,
     slug: str,
-    filename: str,
-) -> bool:
-    return _shared_pick_audio_filename_is_presented(
+    generation_id: str,
+) -> str | None:
+    """The stored audio path of the take the public album share presents
+    under this id, or None when the share does not present that take."""
+    return _shared_pick_take_stored_path(
         session,
-        filename,
+        generation_id,
         share_condition=and_(
             Album.share_slug == slug,
             Album.is_shared.is_(True),
@@ -83,14 +85,16 @@ def shared_album_audio_filename_is_presented(
     )
 
 
-def shared_song_audio_filename_is_presented(
+def shared_song_take_stored_path(
     session: Session,
     slug: str,
-    filename: str,
-) -> bool:
-    return _shared_pick_audio_filename_is_presented(
+    generation_id: str,
+) -> str | None:
+    """The stored audio path of the take the public song share presents
+    under this id, or None when the share does not present that take."""
+    return _shared_pick_take_stored_path(
         session,
-        filename,
+        generation_id,
         share_condition=and_(
             Song.share_slug == slug,
             Song.is_shared.is_(True),
@@ -98,13 +102,13 @@ def shared_song_audio_filename_is_presented(
     )
 
 
-def _shared_pick_audio_filename_is_presented(
+def _shared_pick_take_stored_path(
     session: Session,
-    filename: str,
+    generation_id: str,
     *,
     share_condition: ColumnElement[bool],
     album_join: tuple[type[Album], ColumnElement[bool]] | None = None,
-) -> bool:
+) -> str | None:
     """Mirror the picked-or-latest-playable selection in the public share
     page without loading an album graph merely to authorize its audio URL."""
     candidate_generation = aliased(Generation)
@@ -137,7 +141,7 @@ def _shared_pick_audio_filename_is_presented(
         )
         .scalar_subquery()
     )
-    matching_generation_query = (
+    presented_take_query = (
         session.query(Generation.mp3_path)
         .join(Song, Generation.song_id == Song.id)
         .filter(
@@ -155,37 +159,40 @@ def _shared_pick_audio_filename_is_presented(
         )
     )
     if album_join is not None:
-        matching_generation_query = matching_generation_query.join(*album_join)
-    return matching_generation_query.filter(
+        presented_take_query = presented_take_query.join(*album_join)
+    stored_path_row = presented_take_query.filter(
         share_condition,
-        Generation.mp3_path == filename,
-    ).first() is not None
+        Generation.id == generation_id,
+    ).first()
+    return stored_path_row[0] if stored_path_row is not None else None
 
 
-def shared_playlist_audio_filename_is_presented(
+def shared_playlist_take_stored_path(
     session: Session,
     slug: str,
-    filename: str,
-) -> bool:
-    """Whether the public playlist presents this playable entry's audio URL.
+    generation_id: str,
+) -> str | None:
+    """The stored audio path of a playable take the public playlist share
+    presents under this id, or None when it does not.
 
     Unlike album and song shares, a playlist presents every playable entry,
-    rather than choosing a picked or latest fallback generation.
+    rather than choosing a picked or latest fallback generation. An entry
+    whose song was deleted is not presented.
     """
-    matching_filenames = (
-        session.query(PlaylistEntry)
+    stored_path_row = (
+        session.query(Generation.mp3_path)
+        .join(PlaylistEntry, PlaylistEntry.generation_id == Generation.id)
         .join(Playlist, PlaylistEntry.playlist_id == Playlist.id)
-        .join(Generation, PlaylistEntry.generation_id == Generation.id)
-        .with_entities(Generation.mp3_path)
+        .join(Song, Generation.song_id == Song.id)
         .filter(
             Playlist.share_slug == slug,
             Playlist.is_shared.is_(True),
             playable_take_filter(),
-            Generation.mp3_path == filename,
+            Generation.id == generation_id,
         )
         .first()
     )
-    return matching_filenames is not None
+    return stored_path_row[0] if stored_path_row is not None else None
 
 
 def songs_without_playable_take(session: Session, album_id: str) -> list[Song]:

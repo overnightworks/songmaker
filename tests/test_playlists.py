@@ -948,6 +948,25 @@ def test_shared_playlist_audio(tmp_path: Path) -> None:
     assert resp.status_code == 200
 
 
+def test_shared_playlist_stops_presenting_a_deleted_songs_take_1374_rule_9(
+    tmp_path: Path,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
+    login_and_csrf(client, "admin", "admin12345")
+    audio_dir = tmp_path / "audio" / "admin_user"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    (audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    listener = web_client(client.app, cookies={})
+    audio_url = f"/shared/playlist/{slug}/audio/g1.mp3"
+    assert listener.get(audio_url).status_code == 200
+
+    assert client.delete("/api/songs/s1").status_code == 200
+
+    assert listener.get(f"/shared/playlist/{slug}").json()["entries"] == []
+    assert listener.get(audio_url).status_code == 404
+
+
 def test_shared_playlist_not_found(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
     unauthed = web_client(client.app, cookies={})

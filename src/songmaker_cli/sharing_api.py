@@ -70,16 +70,15 @@ from songmaker_cli.covers import (
     resolve_song_cover_file,
     song_cover_file_exists,
 )
-from songmaker_cli.db.models import Album, Generation, Playlist, Song
+from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song
 from songmaker_cli.db.queries import (
     get_album_by_slug,
-    get_generation,
     get_generation_by_slug,
     get_playlist_by_slug,
     get_song_by_slug,
-    shared_album_audio_filename_is_presented,
-    shared_playlist_audio_filename_is_presented,
-    shared_song_audio_filename_is_presented,
+    shared_album_take_stored_path,
+    shared_playlist_take_stored_path,
+    shared_song_take_stored_path,
 )
 from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.queue_streams import (
@@ -188,7 +187,9 @@ def _shared_audio_url(
     return _shared_audio_url_for_take(route, generation)
 
 
-def _shared_audio_url_for_take(route: str, generation) -> str | None:
+def _shared_audio_url_for_take(route: str, generation: Generation) -> str | None:
+    if not generation.mp3_path:
+        return None
     try:
         require_canonical_audio_filename(generation.mp3_path)
     except HTTPException:
@@ -207,14 +208,16 @@ def _stored_filename_of_presented_audio(
     db: Session,
     slug: str,
     filename: str,
-    is_presented: Callable[[Session, str, str], bool],
+    stored_path_of_presented_take: Callable[[Session, str, str], str | None],
 ) -> str:
-    """The stored path behind a public audio name, once the share presents it."""
+    """The stored path behind a public audio name, once the share presents that take."""
     generation_id = _generation_id_of_shared_audio_name(filename)
-    generation = get_generation(db, generation_id) if generation_id else None
-    if generation is None or not is_presented(db, slug, generation.mp3_path):
+    stored_filename = (
+        stored_path_of_presented_take(db, slug, generation_id) if generation_id else None
+    )
+    if stored_filename is None:
         raise HTTPException(404, HTTP_NOT_FOUND)
-    return generation.mp3_path
+    return stored_filename
 
 
 def _shared_audio_file_response(ctx: AppContext, stored_filename: str) -> FileResponse:
@@ -275,8 +278,8 @@ def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) 
             raise HTTPException(404, NOT_FOUND_DETAIL)
         valid_tracks = {
             (entry.id, entry.generation.id)
-            for entry in playlist.entries
-            if entry.generation is not None and is_playable_take(entry.generation)
+            for entry in _presented_playlist_entries(playlist)
+            if is_playable_take(entry.generation)
         }
         if any((track.entry_id, track.generation_id) not in valid_tracks for track in tracks):
             raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
@@ -438,7 +441,7 @@ def get_shared_audio(
 ) -> FileResponse:
     _check_shared_rate_limit(request)
     stored_filename = _stored_filename_of_presented_audio(
-        db, slug, filename, shared_album_audio_filename_is_presented,
+        db, slug, filename, shared_album_take_stored_path,
     )
     return _shared_audio_file_response(ctx, stored_filename)
 
@@ -537,7 +540,7 @@ def get_shared_song_audio(
 ) -> FileResponse:
     _check_shared_rate_limit(request)
     stored_filename = _stored_filename_of_presented_audio(
-        db, slug, filename, shared_song_audio_filename_is_presented,
+        db, slug, filename, shared_song_take_stored_path,
     )
     return _shared_audio_file_response(ctx, stored_filename)
 
@@ -645,7 +648,7 @@ def get_shared_playlist(
     playlist = get_playlist_by_slug(db, slug)
     if not playlist:
         raise HTTPException(404, NOT_FOUND_DETAIL)
-    entries = sorted(playlist.entries, key=lambda e: e.position)
+    entries = _presented_playlist_entries(playlist)
     entry_items = _shared_playlist_entries(ctx, entries, slug)
     cover = _shared_playlist_cover(ctx, playlist, slug)
     album_covers = _shared_playlist_album_covers(ctx, entries, slug) if cover is None else []
@@ -670,7 +673,18 @@ def _shared_playlist_entries(
             album_cover=_shared_entry_album_cover(ctx, entry, slug),
         )
         for entry in entries
-        if entry.generation is not None
+    ]
+
+
+def _presented_playlist_entries(playlist: Playlist) -> list[PlaylistEntry]:
+    """The playlist's entries in order, minus those whose song was deleted.
+
+    The soft-delete filter hides a deleted song, so its take loads without one.
+    """
+    return [
+        entry
+        for entry in sorted(playlist.entries, key=lambda e: e.position)
+        if entry.generation is not None and entry.generation.song is not None
     ]
 
 
@@ -782,10 +796,9 @@ def get_shared_playlist_stream(
     if not playlist:
         raise HTTPException(404, NOT_FOUND_DETAIL)
     sources = []
-    entries = sorted(playlist.entries, key=lambda e: e.position)
-    for entry in entries:
+    for entry in _presented_playlist_entries(playlist):
         gen = entry.generation
-        if gen is None or not is_playable_take(gen):
+        if not is_playable_take(gen):
             continue
         audio_url = _shared_audio_url(
             f"/shared/playlist/{slug}/audio", gen,
@@ -831,7 +844,7 @@ def get_shared_playlist_audio(
 ) -> FileResponse:
     _check_shared_rate_limit(request)
     stored_filename = _stored_filename_of_presented_audio(
-        db, slug, filename, shared_playlist_audio_filename_is_presented,
+        db, slug, filename, shared_playlist_take_stored_path,
     )
     return _shared_audio_file_response(ctx, stored_filename)
 
