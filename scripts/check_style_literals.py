@@ -44,6 +44,7 @@ def without_comments(text: str, *, javascript: bool) -> str:
     return re.sub(COMMENTS, lambda m: re.sub(r"[^\n]", " ", m[0]), text, flags=re.DOTALL)
 
 
+# Not one re.sub: a pattern that eats the space before the flag backtracks polynomially (S8786).
 def without_important(value: str) -> str:
     *kept, last = IMPORTANT.split(value)
     return "".join(part.rstrip() for part in kept) + last

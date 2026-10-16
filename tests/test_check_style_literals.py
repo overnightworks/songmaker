@@ -97,6 +97,7 @@ def test_tokens_resets_and_non_color_hashes_pass(gate, text):
     ],
 )
 def test_important_flag_and_the_space_before_it_are_not_part_of_the_literal(declaration, literal):
+    """defect:#1498 -- the S8786-safe split strips !important and the space before it."""
     assert [found.literal for found in CHECKER["findings"](declaration, ".css")] == [literal]
 
 
@@ -118,6 +119,7 @@ def test_important_flag_and_the_space_before_it_are_not_part_of_the_literal(decl
     ],
 )
 def test_number_shapes_decide_which_dimensions_are_style_literals(declaration, kinds):
+    """defect:#1498 -- the S8786-safe number matching keeps the same dimension shapes."""
     assert [found.kind for found in CHECKER["findings"](declaration, ".css")] == kinds
 
 

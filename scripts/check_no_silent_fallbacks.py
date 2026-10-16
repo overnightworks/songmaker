@@ -330,13 +330,17 @@ def _try_parse(text: str, filename: str) -> ast.AST | None:
         return None
 
 
-def _line_hits(lines: Sequence[str], rel_path: str, rules: Iterable[Rule]) -> list[_Hit]:
-    return [
+def _line_hits(
+    lines: Sequence[str], rel_path: str, rules: Sequence[Rule],
+) -> tuple[list[_Hit], dict[str, int]]:
+    pattern_rules = [rule for rule in rules if rule._compiled is not None]
+    hits = [
         _Hit(rule=rule, rel_path=rel_path, lineno=lineno, line=line)
         for lineno, line in enumerate(lines, start=1)
-        for rule in rules
-        if rule._compiled is not None and rule._compiled.search(line)
+        for rule in pattern_rules
+        if rule._compiled.search(line)
     ]
+    return hits, {rule.name: 1 for rule in pattern_rules}
 
 
 def _tree_hits(
@@ -366,10 +370,8 @@ def _scan_file(
     except (UnicodeDecodeError, OSError):
         return [], counts
     lines = text.splitlines()
-    hits = _line_hits(lines, rel_path, applicable)
-    for rule in applicable:
-        if rule._compiled is not None:
-            counts[rule.name] = 1
+    hits, line_counts = _line_hits(lines, rel_path, applicable)
+    counts.update(line_counts)
     tree = _try_parse(text, rel_path)
     if tree is not None:
         ast_hits, ast_counts = _tree_hits(tree, lines, rel_path, applicable)
