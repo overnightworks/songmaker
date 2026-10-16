@@ -88,7 +88,7 @@ function playlistOfflineMeta(playlistId: string, snapshotId: string): OfflinePla
 
 export function requestPathname(url: string): string {
 	try {
-		return new URL(url, 'http://songmaker.local').pathname; // NOSONAR This synthetic URL is only a parsing base and is never requested.
+		return new URL(url, 'https://songmaker.local').pathname;
 	} catch {
 		const queryStart = url.indexOf('?');
 		const hashStart = url.indexOf('#');
