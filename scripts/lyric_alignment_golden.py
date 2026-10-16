@@ -53,11 +53,13 @@ class RatioFixture(NamedTuple):
     line: str
 
 
+GREETING: Final = "hello there my friend"
+
 FIXTURES: Final[tuple[RatioFixture, ...]] = (
-    RatioFixture("identical short strings", "hello there my friend", "hello there my friend"),
+    RatioFixture("identical short strings", GREETING, GREETING),
     RatioFixture(
         "completely different strings",
-        "hello there my friend",
+        GREETING,
         "the quick brown fox jumps",
     ),
     RatioFixture("empty cue", "", "hello there"),
@@ -121,7 +123,7 @@ VERBATIM_MAX_TOKENS: Final = 2
 
 SECTION_MARKER: Final = re.compile(r"^\[[^\[\]]+\]$")
 CURLY_APOSTROPHES: Final = re.compile("[‘’‛ʼ]")
-DIGITS: Final = re.compile(r"[0-9]+")
+DIGITS: Final = re.compile(r"\d+", re.ASCII)
 
 UMLAUT_SPELLINGS: Final = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue"})
 UNITS: Final = (
@@ -293,45 +295,50 @@ class AlignmentTable:
     def best(self, cell: int) -> float:
         return self.score[self.best_ending(cell)][cell]
 
+    def skip_lyric_word(self, cell: int) -> None:
+        above = cell - self.width
+        skipped = self.best(above) + SKIP_LYRIC_WORD
+        self.set(Ending.LYRIC_GAP, cell, skipped, self.best_ending(above))
+
+    def continue_heard_gap(self, cell: int, open_gap: float, extend_gap: float) -> None:
+        left = cell - 1
+        opened = self.best(left) + open_gap
+        extended = self.score[Ending.HEARD_GAP][left] + extend_gap
+        if extended >= opened:
+            self.set(Ending.HEARD_GAP, cell, extended, Ending.HEARD_GAP)
+        else:
+            self.set(Ending.HEARD_GAP, cell, opened, self.best_ending(left))
+
+    def continue_pair_run(self, cell: int, pair_score: float) -> None:
+        diagonal = cell - self.width - 1
+        continued = self.score[Ending.PAIR][diagonal]
+        broken = self.best(diagonal) + BREAK_PAIR_RUN
+        if continued >= broken:
+            self.set(Ending.PAIR, cell, continued + pair_score, Ending.PAIR)
+        else:
+            self.set(Ending.PAIR, cell, broken + pair_score, self.best_ending(diagonal))
+
 
 def fill_alignment_table(
     lyrics: list[str], heard: list[str], similarity: Callable[[int, int], float]
 ) -> AlignmentTable:
     table = AlignmentTable(len(lyrics), len(heard))
-    width = table.width
     for heard_index in range(len(heard) + 1):
         table.set(Ending.HEARD_GAP, heard_index, 0.0, Ending.HEARD_GAP)
 
     for lyric_index in range(1, len(lyrics) + 1):
-        row = lyric_index * width
         is_outro = lyric_index == len(lyrics)
         open_gap = 0.0 if is_outro else OPEN_HEARD_GAP
         extend_gap = 0.0 if is_outro else EXTEND_HEARD_GAP
 
         for heard_index in range(len(heard) + 1):
-            cell = row + heard_index
-            above = cell - width
-            skipped = table.best(above) + SKIP_LYRIC_WORD
-            table.set(Ending.LYRIC_GAP, cell, skipped, table.best_ending(above))
+            cell = lyric_index * table.width + heard_index
+            table.skip_lyric_word(cell)
             if heard_index == 0:
                 continue
 
-            left = cell - 1
-            opened = table.best(left) + open_gap
-            extended = table.score[Ending.HEARD_GAP][left] + extend_gap
-            if extended >= opened:
-                table.set(Ending.HEARD_GAP, cell, extended, Ending.HEARD_GAP)
-            else:
-                table.set(Ending.HEARD_GAP, cell, opened, table.best_ending(left))
-
-            diagonal = above - 1
-            pair_score = 2 * similarity(lyric_index - 1, heard_index - 1) - 1
-            continued = table.score[Ending.PAIR][diagonal]
-            broken = table.best(diagonal) + BREAK_PAIR_RUN
-            if continued >= broken:
-                table.set(Ending.PAIR, cell, continued + pair_score, Ending.PAIR)
-            else:
-                table.set(Ending.PAIR, cell, broken + pair_score, table.best_ending(diagonal))
+            table.continue_heard_gap(cell, open_gap, extend_gap)
+            table.continue_pair_run(cell, 2 * similarity(lyric_index - 1, heard_index - 1) - 1)
     return table
 
 
@@ -393,6 +400,7 @@ def align_lyrics_to_cues(lyrics: str, cues: tuple[Cue, ...]) -> list[Interval | 
 
 # ── alignment fixtures ──────────────────────────────────────────────
 
+VERSE: Final = "[verse]"
 LINE_1: Final = "the lantern hums quietly tonight"
 LINE_2: Final = "we count the fading city lights"
 LINE_3: Final = "another mile of rusted signs"
@@ -442,7 +450,7 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
     ),
     AlignmentFixture(
         "word path: a repeated chorus line takes its own repeat in order",
-        "\n".join(["[verse]", LINE_1, "[chorus]", CHORUS, "", "[verse]", LINE_3, CHORUS]),
+        "\n".join([VERSE, LINE_1, "[chorus]", CHORUS, "", VERSE, LINE_3, CHORUS]),
         (_sung_cue(2.0, 0.45, f"{LINE_1} {CHORUS} {LINE_3} {CHORUS}"),),
     ),
     AlignmentFixture(
@@ -452,7 +460,7 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
     ),
     AlignmentFixture(
         "word path: section markers and blank lines never take an interval",
-        "\n".join(["[intro]", "", LINE_1, "[verse]", LINE_2]),
+        "\n".join(["[intro]", "", LINE_1, VERSE, LINE_2]),
         (_sung_cue(0.2, 0.4, f"{LINE_1} {LINE_2}"),),
     ),
     AlignmentFixture(

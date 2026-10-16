@@ -19,6 +19,7 @@ nothing when PROJECT_ROOT is the main checkout itself.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,18 +29,25 @@ class CheckoutError(Exception):
     """The question cannot be answered; the message is safe to print."""
 
 
+def _is_enterable_directory(path: Path) -> bool:
+    """Whether git can start in ``path``; unlike ``Path.is_dir``, never raises for a denied path."""
+    return os.path.isdir(path) and os.access(path, os.X_OK)
+
+
 def main_checkout_elsewhere(project_root: Path) -> Path | None:
     """The main checkout when ``project_root`` is a linked worktree of it, else ``None``."""
+    not_a_checkout = CheckoutError(f"{project_root} is not a git checkout")
+    if not _is_enterable_directory(project_root):
+        raise not_a_checkout
     try:
         common_dir = subprocess.run(
-            ["git", "-C", str(project_root), "rev-parse", "--path-format=absolute",
-             "--git-common-dir"],
-            capture_output=True, text=True, check=False,
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=project_root, capture_output=True, text=True, check=False,
         )
     except OSError as exc:
         raise CheckoutError("git is needed to tell the main checkout from a worktree") from exc
     if common_dir.returncode != 0:
-        raise CheckoutError(f"{project_root} is not a git checkout")
+        raise not_a_checkout
     main_checkout = Path(common_dir.stdout.strip()).resolve().parent
     return None if main_checkout == project_root.resolve() else main_checkout
 
