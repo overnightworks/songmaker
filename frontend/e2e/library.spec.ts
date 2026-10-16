@@ -72,6 +72,7 @@ import {
 	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	workspace,
 	type Shell,
+	HOME_PATH,
 	LIBRARY_PATH,
 	LIBRARY_URL
 } from './helpers';
@@ -1053,7 +1054,7 @@ async function listenInSeededAlbum(page: Page): Promise<void> {
 	expect(listen.status()).toBe(200);
 }
 
-test('1354_rule_7 1354_rule_13: the Library keeps phone counts and desktop listen timestamps under Last played, keeps the choice across reload and leaves Continue alone', async ({
+test('1354_rule_7 1354_rule_13 1354_rule_31: the Library keeps phone counts and desktop listen timestamps under Last played and keeps the choice across reload, shows no Continue, and leaves the one on Home alone', async ({
 	page
 }, testInfo) => {
 	const surface = workspace(page);
@@ -1065,6 +1066,10 @@ test('1354_rule_7 1354_rule_13: the Library keeps phone counts and desktop liste
 	const continueTiles = surface.locator('.continue-item .tile-title');
 	const library = readSeededLibrary();
 	await listenInSeededAlbum(page);
+
+	await page.goto(HOME_PATH);
+	await expect(continueTiles.first()).toBeVisible();
+	const continueOrder = await continueTiles.allTextContents();
 
 	await page.goto(LIBRARY_PATH);
 	await expect(orders.getByRole('button')).toHaveText([
@@ -1078,8 +1083,7 @@ test('1354_rule_7 1354_rule_13: the Library keeps phone counts and desktop liste
 		bodies.map((body) => body.getAttribute('aria-label') ?? '')
 	);
 	expect(tileLabels.every((label) => label.startsWith('Open album '))).toBe(true);
-	await expect(continueTiles.first()).toBeVisible();
-	const continueOrder = await continueTiles.allTextContents();
+	await expect(continueTiles).toHaveCount(0);
 	const alphabetical = await tiles.locator('.tile-title').allTextContents();
 	expect(alphabetical).toEqual([...alphabetical].sort(compareTitles));
 	const playedBox = await choice('played').boundingBox();
@@ -1091,7 +1095,7 @@ test('1354_rule_7 1354_rule_13: the Library keeps phone counts and desktop liste
 	await expect(firstLine).toHaveText(
 		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
 	);
-	await expect(continueTiles).toHaveText(continueOrder);
+	await expect(continueTiles).toHaveCount(0);
 
 	await page.reload();
 	await expect(choice('played')).toHaveAttribute('aria-pressed', 'true');
@@ -1099,6 +1103,9 @@ test('1354_rule_7 1354_rule_13: the Library keeps phone counts and desktop liste
 	await expect(firstLine).toHaveText(
 		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
 	);
+	await expect(continueTiles).toHaveCount(0);
+
+	await page.goto(HOME_PATH);
 	await expect(continueTiles).toHaveText(continueOrder);
 });
 

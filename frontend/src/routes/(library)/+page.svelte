@@ -1,6 +1,6 @@
 <script lang="ts">
-	// The Library address resolves its wall and renders nothing here
-	// (issue #1456), except when it still carries the legacy
+	// The Home address resolves Home and renders nothing here (issues #1456,
+	// #1506), except when it still carries the legacy
 	// `?song=<uuid>` (and `?gen=<uuid>`) query a bookmark or a shared link from
 	// before S3/S4 (#275/#281) can hold. That form still worked, but
 	// the address bar kept showing it forever and Back could return to it --
@@ -19,7 +19,7 @@
 	import {
 		currentLibraryHistoryState,
 		isLibraryHistoryState,
-		openLibraryAddress,
+		openHomeAddress,
 		resolveLegacySongQueryAddress
 	} from '$lib/stores/libraryContext';
 	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
@@ -89,7 +89,7 @@
 	async function redirectLegacyAddress(id: string | null, genId: string | null): Promise<void> {
 		const request = ++openRequests;
 		if (!id) {
-			await openLibraryAddress();
+			await openHomeAddress();
 			addressState = 'idle';
 			return;
 		}

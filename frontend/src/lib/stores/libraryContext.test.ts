@@ -102,20 +102,28 @@ import {
 } from '$lib/history/historyController';
 import { holdLayer } from '$lib/stores/layers';
 import { fakePage, holdRouteLoads } from '$lib/test-utils/app-navigation';
-import { albumRoutePath, songRoutePath, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import {
+	albumRoutePath,
+	HOME_ROUTE_PATH,
+	LIBRARY_ROUTE_PATH,
+	songRoutePath
+} from '$lib/routes/addresses';
 
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
 	captureLibraryScroll,
+	currentLibraryHistoryState,
 	detailTab,
 	holdLibraryRestoresUntil,
 	hydrateLibraryFromHistory,
 	isLibraryHistoryState,
 	keepLibraryPageAsLeft,
+	libraryHistoryEntry,
 	libraryHistoryUrl,
 	librarySurface,
 	openAlbumAddress,
+	openHomeAddress,
 	openPlaylistAddress,
 	openPlaylistsAddress,
 	openLibraryAddress,
@@ -140,6 +148,10 @@ function stampedLibrary(library: LibraryHistoryState): App.PageState {
 
 function emptyPage<T>(items: T[] = []) {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: false };
+}
+
+function albumSnapshot(id: string): { kind: 'album'; id: string } {
+	return { kind: 'album', id };
 }
 
 beforeEach(() => {
@@ -464,7 +476,7 @@ describe('applyLibraryHistory', () => {
 		fetchAlbum.mockImplementationOnce(
 			() => new Promise<AlbumItem>((resolve) => (resolveAlbum = resolve))
 		);
-		replaceEntry('/', { library: libraryRootState() });
+		replaceEntry(LIBRARY_ROUTE_PATH, { library: libraryRootState() });
 		const albumState = {
 			...libraryRootState(),
 			surface: 'detail' as const,
@@ -495,7 +507,7 @@ describe('applyLibraryHistory', () => {
 			if (albumId !== 'a1') return { ...emptyPage([listed]), limit: 200 };
 			return new Promise((_, reject) => (refuseSongs = reject));
 		});
-		replaceEntry('/', { library: libraryRootState() });
+		replaceEntry(LIBRARY_ROUTE_PATH, { library: libraryRootState() });
 		const songState = {
 			...libraryRootState(),
 			surface: 'detail' as const,
@@ -613,6 +625,7 @@ describe('hydrateLibraryFromHistory', () => {
 		await hydrateLibraryFromHistory();
 		expect(historyEntry().collection).toBeNull();
 		expect(historyEntry().surface).toBe('browse');
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 	});
 
 	// Regression for issue #281: on a cold tab with no LibraryHistoryState yet,
@@ -756,14 +769,24 @@ describe('libraryHistoryUrl', () => {
 		).toBe('/?song=s1');
 	});
 
-	it('addresses the library itself while an album is only the rail context', () => {
-		expect(
-			libraryHistoryUrl({
-				...libraryRootState(),
-				surface: 'browse',
-				collection: { kind: 'album', id: 'anfield' }
-			})
-		).toBe('/');
+	it.each([
+		['browse', LIBRARY_ROUTE_PATH],
+		['home', HOME_ROUTE_PATH]
+	] as const)(
+		'addresses the %s surface itself while an album is only the rail context',
+		(surface, path) => {
+			expect(
+				libraryHistoryUrl({
+					...libraryRootState(),
+					surface,
+					collection: { kind: 'album', id: 'anfield' }
+				})
+			).toBe(path);
+		}
+	);
+
+	it('addresses Home by its own path with nothing retained', () => {
+		expect(libraryHistoryUrl({ ...libraryRootState(), surface: 'home' })).toBe(HOME_ROUTE_PATH);
 	});
 
 	it('addresses an open playlist by its slug, not its id', () => {
@@ -785,7 +808,7 @@ describe('libraryHistoryUrl', () => {
 				surface: 'detail',
 				collection: { kind: 'playlist', id: 'p1' }
 			})
-		).toBe('/');
+		).toBe(LIBRARY_ROUTE_PATH);
 	});
 
 	// #1402: the Playlists page keeps the playlist open last as the rail
@@ -851,7 +874,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// in the same task; the song's route mounts over it once the router has
 	// loaded it, and a Back then returns to the album.
 	it.each([
-		{ albumWrite: 'push', from: '/', fromState: libraryRootState() },
+		{ albumWrite: 'push', from: LIBRARY_ROUTE_PATH, fromState: libraryRootState() },
 		{
 			albumWrite: 'replace',
 			from: songRoutePath('a2', 's9'),
@@ -886,7 +909,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// entry stands, so a Back pressed while its route still loads returns to
 	// the page underneath instead of stepping past it.
 	it('installs a crossing push queued behind a step back the moment that step lands', async () => {
-		await writeLibraryHistory(libraryRootState(), '/', 'replace');
+		await writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'replace');
 		const leaveMenu = holdLayer('menu', () => undefined);
 		const lengthBefore = historyLength();
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
@@ -898,7 +921,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		expect(historyEntry()).toEqual({ ...albumState, index: 1 });
 		expect(historyLength()).toBe(lengthBefore);
 		await pressBack();
-		expect(location.pathname).toBe('/');
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 		expect(historyEntry()).toEqual(libraryRootState());
 	});
 
@@ -907,7 +930,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// the album. The router writes over whichever entry stands once the route
 	// has loaded, so the mount is issued again over the layer's entry.
 	it("gives a layer opened while the album's route still loads its entry at once, which Back closes and keeps the album", async () => {
-		await writeLibraryHistory(libraryRootState(), '/', 'replace');
+		await writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'replace');
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
 		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
 		const album = standingHistoryEntry();
@@ -946,8 +969,8 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	);
 
 	// The one pairing that used to fail silently before 'external' became its
-	// own shape: a write landing on '/' (openLibraryWall's target, or
-	// openPlaylist's own '/' fallback before a playlist's slug is known) from
+	// own shape: a write landing on the Library (openLibraryWall's target, or
+	// openPlaylist's own fallback before a playlist's slug is known) from
 	// a non-library route both satisfied `!isAlbumRoutePath &&
 	// !isPlaylistRoutePath`, so the two were indistinguishable and the write
 	// took the cheap same-shape branch, which leaves the router mounting
@@ -955,12 +978,12 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// navigation that disagrees with that stale belief tears the workspace
 	// down mid-session. This is the pairing #265's S7 had to get right for
 	// removing ensureLibraryWorkspaceRoute to be safe.
-	it('crosses through goto when the target is "/" and the write starts from a non-library route', async () => {
+	it('crosses through goto when the target is the Library and the write starts from a non-library route', async () => {
 		replaceHistoryEntry('/settings/voices');
 
-		await writeLibraryHistory(libraryRootState(), '/', 'push');
+		await writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'push');
 
-		expect(goto).toHaveBeenCalledWith('/', {
+		expect(goto).toHaveBeenCalledWith(LIBRARY_ROUTE_PATH, {
 			replaceState: false,
 			noScroll: true,
 			keepFocus: true,
@@ -1686,18 +1709,64 @@ describe('openPlaylistAddress', () => {
 	});
 });
 
-describe('openLibraryAddress (1354_rule_31)', () => {
-	it.each(['browse', 'playlists'] as const)(
+const SURFACE_ADDRESSES = [
+	{
+		name: 'openLibraryAddress',
+		open: openLibraryAddress,
+		path: LIBRARY_ROUTE_PATH,
+		surface: 'browse'
+	},
+	{ name: 'openHomeAddress', open: openHomeAddress, path: HOME_ROUTE_PATH, surface: 'home' }
+] as const;
+
+// Resolves the address and the live stream's hydration of the same entry, each
+// held on its own album read, and lets them finish in the order named.
+async function finishAddressAndHydration(
+	open: () => Promise<unknown>,
+	first: 'address' | 'hydration'
+): Promise<void> {
+	albumList.set([album({ id: 'a9' })]);
+	const releases: Array<() => void> = [];
+	fetchAlbums.mockImplementation(
+		() =>
+			new Promise((resolve) => {
+				releases.push(() => resolve(emptyPage([album({ id: 'a9' })])));
+			})
+	);
+	const address = open();
+	await vi.waitFor(() => expect(releases).toHaveLength(1));
+	const hydration = hydrateLibraryFromHistory();
+	await vi.waitFor(() => expect(releases).toHaveLength(2));
+	const inOrder =
+		first === 'address'
+			? [
+					[releases[0], address],
+					[releases[1], hydration]
+				]
+			: [
+					[releases[1], hydration],
+					[releases[0], address]
+				];
+	for (const [release, finished] of inOrder) {
+		(release as () => void)();
+		await finished;
+	}
+}
+
+describe.each(SURFACE_ADDRESSES)('$name (1354_rule_31)', ({ open, path, surface: own }) => {
+	const root: LibraryHistoryState = { ...libraryRootState(), surface: own };
+
+	it.each([own, 'playlists'] as const)(
 		'resolves a cold address when %s is shown without adding an entry',
-		async (surface) => {
-			mountAddressRoute(LIBRARY_ROUTE_PATH);
-			librarySurface.set(surface);
+		async (shown) => {
+			mountAddressRoute(path);
+			librarySurface.set(shown);
 			const length = historyLength();
 
-			await expect(openLibraryAddress()).resolves.toBe('found');
+			await expect(open()).resolves.toBe('found');
 
-			expect(historyEntry()).toEqual(libraryRootState());
-			expect(get(librarySurface)).toBe('browse');
+			expect(historyEntry()).toEqual(root);
+			expect(get(librarySurface)).toBe(own);
 			expect(get(selectedSongId)).toBeNull();
 			expect(historyLength()).toBe(length);
 		}
@@ -1705,35 +1774,30 @@ describe('openLibraryAddress (1354_rule_31)', () => {
 
 	it.each([
 		{ ...libraryRootState(), surface: 'playlists' as const },
-		{ ...libraryRootState(), songId: 's9' },
+		{ ...libraryRootState(), surface: own, songId: 's9' },
 		{ foreign: true }
 	])('replaces a foreign entry in place: %j', async (entry) => {
-		mountAddressRoute(LIBRARY_ROUTE_PATH, entry);
+		mountAddressRoute(path, entry);
 		librarySurface.set('playlists');
 		const length = historyLength();
 
-		await openLibraryAddress();
+		await open();
 
-		expect(historyEntry()).toEqual(libraryRootState());
+		expect(historyEntry()).toEqual(root);
 		expect(historyLength()).toBe(length);
-		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
-		expect(get(librarySurface)).toBe('browse');
+		expect(location.pathname).toBe(path);
+		expect(get(librarySurface)).toBe(own);
 	});
 
-	it.each(['browse', 'playlists'] as const)(
+	it.each([own, 'playlists'] as const)(
 		'keeps a matching rich entry when %s was shown',
-		async (surface) => {
-			const left = {
-				...libraryRootState(),
-				query: 'Tide',
-				sort: 'title' as const,
-				scrollAnchor: 320
-			};
-			mountAddressRoute(LIBRARY_ROUTE_PATH, left);
+		async (shown) => {
+			const left = { ...root, query: 'Tide', sort: 'title' as const, scrollAnchor: 320 };
+			mountAddressRoute(path, left);
 			await applyLibraryHistory(left);
-			librarySurface.set(surface);
+			librarySurface.set(shown);
 
-			await openLibraryAddress();
+			await open();
 
 			expect(historyEntry()).toEqual(left);
 			expect(get(searchQuery)).toBe(left.query);
@@ -1744,50 +1808,115 @@ describe('openLibraryAddress (1354_rule_31)', () => {
 
 	it.each(
 		[false, true].flatMap((withCollection) =>
-			['address', 'hydration'].map((first) => ({ withCollection, first }))
+			(['address', 'hydration'] as const).map((first) => ({ withCollection, first }))
 		)
 	)(
-		'keeps rich browse state with collection=$withCollection when $first finishes first',
+		'keeps rich state with collection=$withCollection when $first finishes first',
 		async ({ withCollection, first }) => {
 			const left: LibraryHistoryState = {
-				...libraryRootState(),
+				...root,
 				query: 'Tide',
 				sort: 'title',
 				scrollAnchor: 320,
 				albumOffset: 1,
 				collection: withCollection ? { kind: 'album', id: 'a9' } : null
 			};
-			mountAddressRoute(LIBRARY_ROUTE_PATH, left);
+			mountAddressRoute(path, left);
 			librarySurface.set('playlists');
-			albumList.set([album({ id: 'a9' })]);
-			const releases: Array<() => void> = [];
-			fetchAlbums.mockImplementation(
-				() =>
-					new Promise((resolve) => {
-						releases.push(() => resolve(emptyPage([album({ id: 'a9' })])));
-					})
-			);
-			const address = openLibraryAddress();
-			await vi.waitFor(() => expect(releases).toHaveLength(1));
-			const hydration = hydrateLibraryFromHistory();
-			await vi.waitFor(() => expect(releases).toHaveLength(2));
-			if (first === 'address') {
-				releases[0]();
-				await address;
-				releases[1]();
-				await hydration;
-			} else {
-				releases[1]();
-				await hydration;
-				releases[0]();
-				await address;
-			}
+
+			await finishAddressAndHydration(open, first);
+
 			expect(historyEntry()).toEqual(left);
-			expect(get(librarySurface)).toBe('browse');
+			expect(location.pathname).toBe(path);
+			expect(get(librarySurface)).toBe(own);
 			expect(get(openCollection)).toEqual(left.collection);
 			expect(get(searchQuery)).toBe(left.query);
 			expect(get(librarySort)).toBe(left.sort);
 			expect(get(libraryScrollAnchor)).toBe(left.scrollAnchor);
+		}
+	);
+});
+
+// R1' (#1354 rule 31, #1506): `/` was the Library wall until Home took it, so
+// a history from before the switch holds `{browse}` entries at `/`. The
+// address decides: they read as Home, in whichever order the route and the
+// stream's hydration finish, and nothing carries the tab to `/library`.
+describe('an entry from before Home had its own address (R1′)', () => {
+	const staleEntry = (collection: LibraryHistoryState['collection']): LibraryHistoryState => ({
+		...libraryRootState(),
+		query: 'Tide',
+		sort: 'title',
+		albumOffset: 1,
+		scrollAnchor: 320,
+		collection
+	});
+
+	it.each([
+		{ name: 'an empty one', collection: null },
+		{ name: 'one that keeps an album as the rail context', collection: albumSnapshot('a9') }
+	])('reads $name at Home as the Home entry, keeping all but the wall scroll', ({ collection }) => {
+		const stale = staleEntry(collection);
+		mountAddressRoute(HOME_ROUTE_PATH, stale);
+
+		expect(historyEntry()).toEqual({ ...stale, surface: 'home', scrollAnchor: 0 });
+	});
+
+	it.each([
+		{ name: 'a song-bearing one', stale: { ...staleEntry(null), songId: 's9' } },
+		{ name: 'a take-bearing one', stale: { ...staleEntry(null), songId: 's9', generationId: 'g9' } }
+	])('keeps the song of $name, which the legacy address then redirects', ({ stale }) => {
+		mountAddressRoute(HOME_ROUTE_PATH, stale);
+
+		expect(historyEntry()).toEqual({ ...stale, surface: 'home', scrollAnchor: 0 });
+	});
+
+	it.each([
+		{ surface: 'detail' as const, collection: albumSnapshot('a9'), pathname: '/album/a9' },
+		{ surface: 'playlists' as const, collection: null, pathname: '/playlists' },
+		{ surface: 'home' as const, collection: null, pathname: HOME_ROUTE_PATH },
+		{ surface: 'browse' as const, collection: null, pathname: LIBRARY_ROUTE_PATH }
+	])('leaves a $surface entry at $pathname as it was written', ({ pathname, ...written }) => {
+		const entry = { ...staleEntry(null), ...written };
+		mountAddressRoute(pathname, entry);
+
+		expect(historyEntry()).toEqual(entry);
+	});
+
+	it('leaves an entry the library did not write alone', () => {
+		mountAddressRoute(HOME_ROUTE_PATH, { foreign: true });
+
+		expect(libraryHistoryEntry()).toEqual({ foreign: true });
+	});
+
+	it('reads a write held behind a step back as written, while the address still reads Home', async () => {
+		mountAddressRoute(HOME_ROUTE_PATH, { ...libraryRootState(), surface: 'home' });
+		const leaveMenu = holdLayer('menu', () => undefined);
+		leaveMenu();
+
+		void writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'push');
+
+		expect(currentLibraryHistoryState()).toEqual(libraryRootState());
+	});
+
+	it.each(
+		[null, albumSnapshot('a9')].flatMap((collection) =>
+			(['address', 'hydration'] as const).map((first) => ({ collection, first }))
+		)
+	)(
+		'stays at Home with collection=$collection when $first finishes first',
+		async ({ collection, first }) => {
+			const stale = staleEntry(collection);
+			mountAddressRoute(HOME_ROUTE_PATH, stale);
+			const length = historyLength();
+
+			await finishAddressAndHydration(openHomeAddress, first);
+
+			expect(location.pathname).toBe(HOME_ROUTE_PATH);
+			expect(historyEntry()).toEqual({ ...stale, surface: 'home', scrollAnchor: 0 });
+			expect(get(librarySurface)).toBe('home');
+			expect(get(openCollection)).toEqual(collection);
+			expect(get(libraryScrollAnchor)).toBe(0);
+			expect(historyLength()).toBe(length);
 		}
 	);
 });

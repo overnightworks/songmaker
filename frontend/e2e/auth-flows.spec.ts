@@ -812,10 +812,11 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	await attachShot(page, testInfo, 'auth-signed-out-cookie-refused');
 });
 
-// The phone's account circle lives on the Library (#1354 rule 25), so the
-// phone signs out there. The account menu belongs to the phone shell.
+// The phone's account circle lives on Home, where every sign-in lands, and on
+// the Library (#1354 rule 25), so the phone signs out from either. The account
+// menu belongs to the phone shell.
 test(
-	'signing out from the open account menu on the Library, Back returns to the Library, which asks for sign-in again',
+	'signing out from the open account menu on Home, Back returns to Home, which asks for sign-in again',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }, testInfo) => {
 		await page.addInitScript(recordAppHistorySteps, APP_HISTORY_STEPS_KEY);
@@ -826,7 +827,7 @@ test(
 		await forgetAppHistorySteps(page);
 		await page.goBack();
 
-		// Not an empty Library, and not the account menu's entry stepped through:
+		// Not an empty Home, and not the account menu's entry stepped through:
 		// the door, which brings the person back to Home.
 		await expect(page).toHaveURL((url) => isSignInFor(url, HOME_PATH));
 		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
@@ -836,8 +837,10 @@ test(
 );
 
 // The wide window signs out from its rail beside the song; the phone's account
-// circle lives on the Library (#1354 rule 25), so the phone walks on to the
-// Library through its drawer, the take still playing, and signs out there.
+// circle lives on Home and the Library (#1354 rule 25), so the phone walks on to
+// the Library through its drawer, the take still playing, and signs out there.
+// The door then brings it back to `/library`, which it names in `redirect`;
+// Home, where every sign-in lands, needs no parameter.
 test(
 	'signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again',
 	{ tag: PLAYS_A_TAKE_TAG },
@@ -865,6 +868,9 @@ test(
 		await page.goBack();
 
 		await expect(page).toHaveURL((url) => isSignInFor(url, leftFrom));
+		if (shell === 'mobile') {
+			expect(new URL(page.url()).search).toBe(`?${SESSION_LOST_REDIRECT_PARAM}=%2Flibrary`);
+		}
 		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 		await expect(transportControls(page)).toHaveCount(0);
 		await attachShot(page, testInfo, 'auth-signed-out-while-playing');

@@ -519,6 +519,8 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 	title: 'A–Z',
 	played: 'Last played'
 };
+// Home's head, and what a page's ‹ calls it (#1354 rules 25 and 31).
+export const HOME_PAGE_LABEL = 'Home';
 export const LIBRARY_PAGE_LABEL = 'Library';
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
 // Each page's head reads its name and count as one heading ('Library · 12').

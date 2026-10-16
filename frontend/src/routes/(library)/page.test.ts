@@ -9,6 +9,7 @@ import type { AlbumItem, SongItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { browserReportsOnline } from '$lib/test-utils/network';
 import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import * as libraryContext from '$lib/stores/libraryContext';
@@ -66,7 +67,8 @@ vi.mock('$lib/api/albums', async (importOriginal) => ({
 	fetchAlbums: api.fetchAlbums
 }));
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false }),
+	fetchLibraryListen: vi.fn().mockResolvedValue({ items: [] })
 }));
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -192,13 +194,12 @@ afterEach(() => {
 });
 
 describe('/ with no ?song= query', () => {
-	it('1354_rule_31: resolves the Library entry without adding a Back step', async () => {
+	it('1354_rule_31: resolves the Home entry at / without adding a Back step', async () => {
 		coldTabAt('');
 		const length = historyLength();
 		openAddress();
-		await vi.waitFor(() =>
-			expect(historyEntry()).toMatchObject({ surface: 'browse', songId: null })
-		);
+		await vi.waitFor(() => expect(historyEntry()).toMatchObject({ surface: 'home', songId: null }));
+		expect(location.pathname).toBe(HOME_ROUTE_PATH);
 		expect(historyLength()).toBe(length);
 	});
 
@@ -215,13 +216,14 @@ describe('/ with no ?song= query', () => {
 
 describe('an empty legacy song query', () => {
 	it.each(['?song=', '?song=&gen=' + GENERATION_ID])(
-		'1354_rule_31: shows the Library wall without fetching a song for %s',
+		'1354_rule_31: shows Home without fetching a song for %s',
 		async (query) => {
 			coldTabAt(query);
 			const target = openAddress();
 
 			await vi.waitFor(() => {
-				expect(target.querySelector('.library-wall')).not.toBeNull();
+				expect(target.querySelector('.library-home')).not.toBeNull();
+				expect(target.querySelector('.library-wall')).toBeNull();
 				expect(target.querySelector('.address-overlay')).toBeNull();
 				expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
 				expect(location.search).toBe('');
@@ -236,15 +238,15 @@ describe('a legacy /?song= address redirects', () => {
 		'1354_rule_31: preserves %s while legacy resolution waits',
 		async (query) => {
 			coldTabAt(query);
-			const openLibrary = vi.spyOn(libraryContext, 'openLibraryAddress');
+			const openHome = vi.spyOn(libraryContext, 'openHomeAddress');
 			api.fetchSong.mockReturnValue(new Promise(() => {}));
 			try {
 				const target = openAddress();
 				await vi.waitFor(() => expect(target.textContent).toContain('Loading song'));
 				expect(location.search).toBe(query);
-				expect(openLibrary).not.toHaveBeenCalled();
+				expect(openHome).not.toHaveBeenCalled();
 			} finally {
-				openLibrary.mockRestore();
+				openHome.mockRestore();
 			}
 		}
 	);
@@ -416,7 +418,7 @@ describe('a legacy /?song= address naming no song', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('No such song'));
 		expect(target.querySelector('[role="alert"]')).not.toBeNull();
 		const back = requireElement(target, 'a.address-action');
-		expect(back.getAttribute('href')).toBe('/');
+		expect(back.getAttribute('href')).toBe(LIBRARY_ROUTE_PATH);
 	});
 
 	it('never navigates away -- the query address stays, honestly 404ing in place', async () => {
