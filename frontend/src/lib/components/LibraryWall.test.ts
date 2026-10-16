@@ -3,7 +3,12 @@ import {
 	replaceHistoryEntry,
 	standingHistoryEntry
 } from '$lib/test-utils/library-history';
-import { makeAlbum as album, makePlaylist as playlist } from '$lib/test-utils/factories';
+import {
+	makeAlbum as album,
+	makePlaylist as playlist,
+	makeSong,
+	makeGeneration
+} from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -12,7 +17,7 @@ import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection } from '$lib/stores/collection';
-import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
+import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
@@ -83,6 +88,9 @@ async function unmountAll(): Promise<void> {
 
 afterEach(async () => {
 	await unmountAll();
+	vi.unstubAllGlobals();
+	songList.set([]);
+	albumSongsLoad.set({});
 	Reflect.deleteProperty(document, 'visibilityState');
 	resetConnectivityForTests();
 	resetLibraryContextForTests();
@@ -723,3 +731,75 @@ for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 		]
 	});
 }
+
+function phoneViewport(): void {
+	vi.stubGlobal('matchMedia', () => ({
+		matches: true,
+		addEventListener: () => undefined,
+		removeEventListener: () => undefined
+	}));
+}
+
+it.each([
+	{ label: 'unloaded playable', flag: true, loaded: false, archived: false, expected: true },
+	{ label: 'unloaded archived-only', flag: false, loaded: false, archived: true, expected: false },
+	{
+		label: 'loaded archived-only overrides stale flag',
+		flag: true,
+		loaded: true,
+		archived: true,
+		expected: false
+	},
+	{
+		label: 'unpicked playable overrides stale flag',
+		flag: false,
+		loaded: true,
+		archived: false,
+		expected: true
+	}
+])(
+	'1354_rule_11: $label uses the playability owner',
+	async ({ flag, loaded, archived, expected }) => {
+		phoneViewport();
+		albumList.set([album({ id: 'proof', title: 'Proof', has_playable_take: flag })]);
+		if (loaded) {
+			songList.set([
+				makeSong({
+					album_id: 'proof',
+					generations: [makeGeneration({ is_archived: archived, is_picked: false })]
+				})
+			]);
+			albumSongsLoad.set({ proof: 'idle' });
+		}
+		const root = await render();
+		expect(root.querySelector('[aria-label="Play Proof"]') !== null).toBe(expected);
+		expect(root.querySelector('.tile-subtitle')).toHaveTextContent('1 song');
+	}
+);
+
+it.each(['library', 'playlists'] as const)(
+	'1354_rule_13: phone %s keeps counts under both orders',
+	async (kind) => {
+		phoneViewport();
+		seedWall();
+		const root = await render(kind);
+		const counts = tileLines(root);
+		fetchLibraryListen.mockResolvedValue({
+			items: [
+				place(
+					kind === 'library' ? 'album' : 'playlist',
+					kind === 'library' ? 'a-sonne' : 'p-night',
+					'Recently played',
+					new Date().toISOString()
+				)
+			]
+		});
+		orderButton(root, 'Last played').click();
+		await tick();
+		await vi.waitFor(() =>
+			expect(tileTitles(root)[0]).toBe(kind === 'library' ? 'Sonnenlauf' : 'Night drive')
+		);
+		expect(tileLines(root).toSorted()).toEqual(counts.toSorted());
+		if (kind === 'playlists') expect(root.querySelector('.row-play')).toBeNull();
+	}
+);

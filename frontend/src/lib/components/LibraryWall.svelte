@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
-	import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
+	import {
+		albumList,
+		allAlbumsLoad,
+		ensureAllAlbumsLoaded,
+		songList,
+		albumSongsLoad
+	} from '$lib/stores/libraryData';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { playbackSource, playAlbum } from '$lib/stores/player';
+	import { albumHasPlayableTake } from '$lib/utils/playable';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import { historyLayerState } from '$lib/stores/layers';
 	import {
@@ -16,6 +25,7 @@
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import {
+		inLibraryOrder,
 		lastPlayedByPlace,
 		lastPlayedOf,
 		libraryPlaceOrder,
@@ -25,6 +35,7 @@
 	import { activityTimeLabel, songCountLabel } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
+		LIBRARY_NARROW_MEDIA,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
 		LIBRARY_NEW_ALBUM_LABEL,
 		LIBRARY_NEW_FACE,
@@ -46,13 +57,13 @@
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
 	import LibraryContinue from './LibraryContinue.svelte';
+	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import NewAlbumCard from './NewAlbumCard.svelte';
 	import NewPlaylistCard from './NewPlaylistCard.svelte';
 
 	type NewPlaceKind = 'album' | 'playlist';
-	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
 	type WallKind = 'library' | 'playlists';
@@ -94,13 +105,24 @@
 
 	let labelledAt = $state(new Date());
 
-	const wallItems = $derived.by(() => {
-		const items: WallItem[] =
-			kind === 'library'
-				? albums.map((item) => ({ type: 'album' as const, item }))
-				: playlists.map((item) => ({ type: 'playlist' as const, item }));
-		return items.sort($libraryPlaceOrder);
+	let narrow = $state(false);
+	$effect(() => {
+		if (typeof window.matchMedia !== 'function') return;
+		const media = window.matchMedia(LIBRARY_NARROW_MEDIA);
+		const sync = () => {
+			narrow = media.matches;
+		};
+		sync();
+		media.addEventListener('change', sync);
+		return () => media.removeEventListener('change', sync);
 	});
+	const songsByAlbum = $derived(Map.groupBy($songList, (song) => song.album_id));
+	const wallItems = $derived(
+		kind === 'library'
+			? inLibraryOrder('album', albums, $libraryPlaceOrder)
+			: inLibraryOrder('playlist', playlists, $libraryPlaceOrder)
+	);
+	const placeType = $derived(kind === 'library' ? 'album' : 'playlist');
 	const loadStatuses = $derived(
 		kind === 'library' ? [browseState.status] : [playlistStatus.status]
 	);
@@ -141,15 +163,34 @@
 		if (browseEl) browseEl.scrollTop = restoredScroll;
 	});
 
-	function sizeLabel(wallItem: WallItem): string {
-		return songCountLabel(
-			wallItem.type === 'album' ? wallItem.item.song_count : wallItem.item.entry_count
+	function sizeLabel(item: AlbumItem | PlaylistItem): string {
+		return songCountLabel('song_count' in item ? item.song_count : item.entry_count);
+	}
+
+	function tileDetail(item: AlbumItem | PlaylistItem): string {
+		const lastPlayed =
+			order === 'played' ? lastPlayedOf($lastPlayedByPlace, { type: placeType, item }) : undefined;
+		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(item);
+	}
+
+	function isCurrent(id: string): boolean {
+		return (
+			audioPlayer.current !== null && $playbackSource?.kind === 'album' && $playbackSource.id === id
 		);
 	}
 
-	function tileDetail(wallItem: WallItem): string {
-		const lastPlayed = order === 'played' ? lastPlayedOf($lastPlayedByPlace, wallItem) : undefined;
-		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(wallItem);
+	function rowPlay(item: AlbumItem | PlaylistItem): (() => void) | undefined {
+		if (
+			!('song_count' in item) ||
+			!albumHasPlayableTake(item, songsByAlbum.get(item.id) ?? [], {
+				songsComplete: $albumSongsLoad[item.id] === 'idle'
+			})
+		)
+			return undefined;
+		return () => {
+			if (isCurrent(item.id)) audioPlayer.toggle();
+			else void playAlbum(item.id);
+		};
 	}
 
 	// A failed read keeps what is on screen, and only an empty wall names it
@@ -261,39 +302,41 @@
 		{/if}
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
-				{#each wallItems as wallItem (wallItem.type + wallItem.item.id)}
+				{#each wallItems as item (placeType + item.id)}
+					{@const content = {
+						title: item.title,
+						coverAlt: `${placeType === 'album' ? ALBUM_COVER_ALT_TYPE : 'Playlist cover for'} ${item.title}`,
+						coverUrl: item.cover?.card ?? null,
+						fill: 'colors' in item ? usableAlbumPrimary(item.colors) : null,
+						playlistCovers: 'album_covers' in item ? item.album_covers : null
+					}}
+					{@const onopen = () => (kind === 'library' ? openAlbum(item.id) : openPlaylist(item.id))}
 					<div
 						class="wall-tile"
-						class:selected={currentCollection?.kind === wallItem.type &&
-							currentCollection.id === wallItem.item.id}
+						class:phone={narrow}
+						class:selected={currentCollection?.kind === placeType &&
+							currentCollection.id === item.id}
 					>
-						<button
-							type="button"
-							class="wall-tile-body"
-							onclick={() =>
-								wallItem.type === 'album'
-									? openAlbum(wallItem.item.id)
-									: openPlaylist(wallItem.item.id)}
-							aria-label={`Open ${wallItem.type} ${wallItem.item.title}`}
-						>
-							{#if wallItem.type === 'album'}
-								<LibraryTileContent
-									title={wallItem.item.title}
-									subtitle={tileDetail(wallItem)}
-									coverAlt={`${ALBUM_COVER_ALT_TYPE} ${wallItem.item.title}`}
-									coverUrl={wallItem.item.cover?.card ?? null}
-									fill={usableAlbumPrimary(wallItem.item.colors)}
-								/>
-							{:else}
-								<LibraryTileContent
-									title={wallItem.item.title}
-									subtitle={tileDetail(wallItem)}
-									coverAlt={`Playlist cover for ${wallItem.item.title}`}
-									coverUrl={wallItem.item.cover?.card ?? null}
-									playlistCovers={wallItem.item.album_covers}
-								/>
-							{/if}
-						</button>
+						{#if narrow}
+							<LibraryRow
+								{...content}
+								subtitle={sizeLabel(item)}
+								openLabel={`Open ${placeType} ${item.title}`}
+								{onopen}
+								onplay={rowPlay(item)}
+								current={placeType === 'album' && isCurrent(item.id)}
+								playing={isCurrent(item.id) && audioPlayer.status === 'playing'}
+							/>
+						{:else}
+							<button
+								type="button"
+								class="wall-tile-body"
+								onclick={onopen}
+								aria-label={`Open ${placeType} ${item.title}`}
+							>
+								<LibraryTileContent {...content} subtitle={tileDetail(item)} />
+							</button>
+						{/if}
 					</div>
 				{/each}
 			</div>
@@ -480,6 +523,12 @@
 		background: var(--surface);
 	}
 
+	.wall-tile.phone {
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+	}
+
 	.wall-tile.selected {
 		box-shadow: inset 0 0 0 2px var(--accent);
 	}
@@ -542,7 +591,8 @@
 		}
 
 		.tile-grid {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0;
 		}
 	}
 </style>

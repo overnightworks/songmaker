@@ -1038,9 +1038,9 @@ async function listenInSeededAlbum(page: Page): Promise<void> {
 	expect(listen.status()).toBe(200);
 }
 
-test('#1354 rule 7: the Library lists albums only, opens in A–Z, re-sorts by Last played with the last listen on each line, keeps the choice across a reload and leaves Continue alone', async ({
+test('1354_rule_13: the Library keeps phone counts and desktop listen timestamps under Last played, keeps the choice across reload and leaves Continue alone', async ({
 	page
-}) => {
+}, testInfo) => {
 	const surface = workspace(page);
 	const orders = surface.getByRole('group', { name: LIBRARY_WALL_ORDER_GROUP_LABEL });
 	const choice = (order: LibraryWallOrder) =>
@@ -1073,13 +1073,17 @@ test('#1354 rule 7: the Library lists albums only, opens in A–Z, re-sorts by L
 	// The seeded album holds the newest listen.
 	await choice('played').click();
 	await expect(tiles.first()).toContainText(library.albumTitle);
-	await expect(firstLine).toHaveText(/^today \d\d:\d\d$/);
+	await expect(firstLine).toHaveText(
+		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
+	);
 	await expect(continueTiles).toHaveText(continueOrder);
 
 	await page.reload();
 	await expect(choice('played')).toHaveAttribute('aria-pressed', 'true');
 	await expect(tiles.first()).toContainText(library.albumTitle);
-	await expect(firstLine).toHaveText(/^today \d\d:\d\d$/);
+	await expect(firstLine).toHaveText(
+		shellOf(testInfo) === 'mobile' ? SONG_COUNT : /^today \d\d:\d\d$/
+	);
 	await expect(continueTiles).toHaveText(continueOrder);
 });
 

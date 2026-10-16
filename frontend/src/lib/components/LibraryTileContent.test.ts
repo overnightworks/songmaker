@@ -32,7 +32,7 @@ async function render(
 }
 
 describe('LibraryTileContent', () => {
-	it('renders the album cover in its fixed square with meaningful alternative text', async () => {
+	it('1354_rule_13: renders the album cover in its fixed square with meaningful alternative text', async () => {
 		const target = await render('/covers/open-windows.jpg');
 		const cover = target.querySelector<HTMLImageElement>('.tile-cover img');
 
