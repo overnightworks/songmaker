@@ -1,0 +1,7 @@
+claim_id = "a8b1ef3224734a5e92bb7d8946ef23d3"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "4d6fb2cd387fe3282f16ceaf444a8439b9c31905"
+branch = "claude/issue-1480-album-menu-share-row"
+scope = ["frontend/e2e/album-menu.spec.ts", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts"]
+opened_commit = "b5582bf19ddb4cd5fa6eab1568665cb47c3ccf45"
