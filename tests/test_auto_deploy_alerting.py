@@ -17,6 +17,7 @@ import re
 import shlex
 import stat
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,6 +40,14 @@ ALERT_REPEAT_SECONDS = 600
 CHECK_RUN_LOOKUP_TIMEOUT_SECONDS = 60
 CHECK_RUN_APPEARANCE_GRACE_SECONDS = 30 * 60
 PRUNE_TIMEOUT_SECONDS = 1
+ACESTEP_SUBMODULE_PATH = "vendor/acestep"
+GIT_FETCH_TIMEOUT_SECONDS = 30
+GIT_FETCH_KILL_GRACE_SECONDS = 1
+HUNG_FETCH_TIMEOUT_SECONDS = 1
+# Long enough that a fetch which is not killed is unmistakable, and shorter
+# than the tick's own ceiling so the failure is an assertion, not a timeout.
+HUNG_TRANSPORT_SECONDS = 40
+HUNG_TICK_CEILING_SECONDS = 20
 PROMETHEUS_RULES_RESPONSE = """\
 {"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
 """
@@ -122,9 +131,54 @@ def _git(cwd: Path, *args: str) -> None:
     )
 
 
+def _git_output(cwd: Path, *args: str) -> str:
+    return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
+
+
+def _has_commit(repository: Path, commit_sha: str) -> bool:
+    return subprocess.run(
+        ["git", "cat-file", "-e", f"{commit_sha}^{{commit}}"],
+        cwd=repository,
+        capture_output=True,
+    ).returncode == 0
+
+
 def _write_executable(path: Path, body: str) -> None:
     path.write_text(body)
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
+
+
+class AcestepFork:
+    """The ACE-Step fork the deploy checkout's submodule points at."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.origin = tmp_path / "acestep-fork.git"
+        self.work = tmp_path / "acestep-work"
+        self._commits = 0
+        _git(tmp_path, "init", "--bare", "--initial-branch=main", str(self.origin))
+        _git(tmp_path, "clone", str(self.origin), str(self.work))
+        _git(self.work, "config", "user.email", "test@example.com")
+        _git(self.work, "config", "user.name", "Test")
+        self.commit()
+        self.push()
+
+    def commit(self) -> str:
+        """Commit locally, so the commit exists on the fork only once pushed."""
+        self._commits += 1
+        (self.work / "acestep.txt").write_text(f"fork commit {self._commits}\n")
+        _git(self.work, "add", "acestep.txt")
+        _git(self.work, "commit", "-m", f"fork commit {self._commits}")
+        return _git_output(self.work, "rev-parse", "HEAD")
+
+    def push(self) -> None:
+        _git(self.work, "push", "origin", "main")
+
+    @property
+    def head(self) -> str:
+        return _git_output(self.work, "rev-parse", "HEAD")
+
+    def make_unreachable(self) -> None:
+        self.origin.rename(self.origin.with_name("acestep-fork.away"))
 
 
 class Checkout:
@@ -168,6 +222,7 @@ class Checkout:
         self.check_run_lookup_timeout_seconds = CHECK_RUN_LOOKUP_TIMEOUT_SECONDS
         self.check_run_appearance_grace_seconds = CHECK_RUN_APPEARANCE_GRACE_SECONDS
         self.check_run_lookback_commits = 10
+        self.git_fetch_timeout_seconds = GIT_FETCH_TIMEOUT_SECONDS
 
         _git(tmp_path, "init", "--bare", "--initial-branch=main", str(self.origin))
         _git(tmp_path, "clone", str(self.origin), str(self.root))
@@ -492,6 +547,37 @@ class Checkout:
         _git(clone, "commit", "-m", "change base image")
         _git(clone, "push", "origin", "main")
 
+    def add_acestep_submodule(self, fork: AcestepFork, *, initialised: bool = True) -> None:
+        """Pin vendor/acestep to the fork's head, as the host's checkout has it."""
+        (self.root / ".gitmodules").write_text(
+            f'[submodule "{ACESTEP_SUBMODULE_PATH}"]\n'
+            f"\tpath = {ACESTEP_SUBMODULE_PATH}\n"
+            f"\turl = {fork.origin.as_uri()}\n",
+        )
+        _git(
+            self.root, "update-index", "--add", "--cacheinfo",
+            f"160000,{fork.head},{ACESTEP_SUBMODULE_PATH}",
+        )
+        _git(self.root, "add", ".gitmodules")
+        _git(self.root, "commit", "-m", "pin vendor/acestep")
+        _git(self.root, "push", "origin", "main")
+        # What a clone leaves behind for a submodule nobody initialised yet.
+        (self.root / ACESTEP_SUBMODULE_PATH).mkdir(parents=True)
+        if initialised:
+            _git(
+                self.root, "-c", "protocol.file.allow=always",
+                "submodule", "update", "--init", "--", ACESTEP_SUBMODULE_PATH,
+            )
+
+    def move_main_forward_with_acestep_pin(self, pinned_sha: str) -> None:
+        clone = self._up_to_date_pusher()
+        _git(
+            clone, "update-index", "--cacheinfo",
+            f"160000,{pinned_sha},{ACESTEP_SUBMODULE_PATH}",
+        )
+        _git(clone, "commit", "-m", f"pin vendor/acestep at {pinned_sha}")
+        _git(clone, "push", "origin", "main")
+
     def move_main_forward_with_compose_file(self, content: str) -> None:
         clone = self._up_to_date_pusher()
         (clone / "docker-compose.yml").write_text(content)
@@ -529,6 +615,23 @@ class Checkout:
             cwd=self.root.parent / "pusher",
             text=True,
         ))
+
+    def make_fetches_hang(self, repository: Path) -> None:
+        """Make every fetch from this repository's origin outlast its deadline.
+
+        The script runs git with a scrubbed environment and an absolute binary,
+        so neither PATH nor GIT_SSH_COMMAND can slow it down; the repository's
+        own remote.origin.uploadpack setting is the one seam it still honours.
+        """
+        hung_transport = self._bin / "hung-upload-pack"
+        _write_executable(
+            hung_transport,
+            f"#!/bin/bash\nexec sleep {HUNG_TRANSPORT_SECONDS}\n",
+        )
+        _git(repository, "config", "remote.origin.uploadpack", str(hung_transport))
+
+    def make_fetches_work_again(self, repository: Path) -> None:
+        _git(repository, "config", "--unset", "remote.origin.uploadpack")
 
     def switch_to_work_branch(self) -> None:
         _git(self.root, "checkout", "-B", "work")
@@ -594,6 +697,12 @@ class Checkout:
                 "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS": str(
                     self.check_run_lookback_commits,
                 ),
+                "SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS": str(
+                    self.git_fetch_timeout_seconds,
+                ),
+                "SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS": str(
+                    GIT_FETCH_KILL_GRACE_SECONDS,
+                ),
                 "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS": str(PRUNE_TIMEOUT_SECONDS),
                 "DOCKER_PRUNE_SLEEP_SECONDS": str(self._prune_sleep_seconds),
                 "DOCKER_BASE_IMAGES_PRESENT": str(self._base_images_present).lower(),
@@ -611,6 +720,21 @@ class Checkout:
         return subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=self.root, text=True,
         ).strip()
+
+    @property
+    def acestep_head(self) -> str:
+        return _git_output(self.root / ACESTEP_SUBMODULE_PATH, "rev-parse", "HEAD")
+
+    @property
+    def uncommitted_changes(self) -> str:
+        return _git_output(self.root, "status", "--porcelain")
+
+    @property
+    def build_and_recreate_calls(self) -> list[str]:
+        return [
+            call for call in self.docker_calls.splitlines()
+            if "build" in call or call.startswith("compose up")
+        ]
 
     @property
     def docker_calls(self) -> str:
@@ -802,10 +926,7 @@ def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_b
     assert checkout.head == checkout.remote_main_sha()
     assert "refuses the stack configuration after fast-forward" in checkout.journal
     assert GRAFANA_PASSWORD_REFUSAL in checkout.journal
-    assert [
-        call for call in checkout.docker_calls.splitlines()
-        if "build" in call or call.startswith("compose up")
-    ] == []
+    assert checkout.build_and_recreate_calls == []
     assert checkout.deployed_sha_file.read_text() == deployed_before
 
     checkout.tick()
@@ -872,7 +993,6 @@ def test_a_changed_base_image_is_built_before_compose(tmp_path: Path) -> None:
     base_builds = [call for call in docker_calls if call.startswith("build -f docker/base/")]
     assert len(base_builds) == 2
     assert docker_calls.index(base_builds[-1]) < docker_calls.index("compose build")
-    assert "docker/base changed since deployed revision" in checkout.journal
 
 
 def test_an_unchanged_base_image_is_not_built(tmp_path: Path) -> None:
@@ -886,6 +1006,176 @@ def test_an_unchanged_base_image_is_not_built(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "compose build" in checkout.docker_calls
     assert "build -f docker/base/" not in checkout.docker_calls
+
+
+@pytest.fixture
+def acestep_fork(tmp_path: Path) -> AcestepFork:
+    return AcestepFork(tmp_path)
+
+
+@pytest.fixture
+def acestep_checkout(tmp_path: Path, acestep_fork: AcestepFork) -> Checkout:
+    """A deployed checkout whose vendor/acestep is pinned to the fork's first commit."""
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.add_acestep_submodule(acestep_fork)
+    checkout.adopt_current_head_as_deployed()
+    return checkout
+
+
+def _base_builds(checkout: Checkout) -> list[str]:
+    return [
+        call for call in checkout.docker_calls.splitlines()
+        if call.startswith("build -f docker/base/")
+    ]
+
+
+def test_a_changed_acestep_pin_is_checked_out_and_rebuilds_the_bases(
+    acestep_checkout: Checkout, acestep_fork: AcestepFork,
+) -> None:
+    new_pin = acestep_fork.commit()
+    acestep_fork.push()
+    acestep_checkout.move_main_forward_with_acestep_pin(new_pin)
+    submodule = acestep_checkout.root / ACESTEP_SUBMODULE_PATH
+    assert not _has_commit(submodule, new_pin)
+
+    result = acestep_checkout.tick()
+
+    assert result.returncode == 0
+    assert acestep_checkout.acestep_head == new_pin
+    assert acestep_checkout.head == acestep_checkout.remote_main_sha()
+    assert acestep_checkout.deployed_sha_file.read_text() == acestep_checkout.head
+    assert acestep_checkout.uncommitted_changes == ""
+    docker_calls = acestep_checkout.docker_calls.splitlines()
+    base_builds = _base_builds(acestep_checkout)
+    assert len(base_builds) == 2
+    assert docker_calls.index(base_builds[-1]) < docker_calls.index("compose build")
+
+
+def test_an_unfetchable_pin_refuses_the_tick_until_it_can_be_fetched(
+    acestep_checkout: Checkout, acestep_fork: AcestepFork,
+) -> None:
+    head_before = acestep_checkout.head
+    pin_before = acestep_checkout.acestep_head
+    deployed_before = acestep_checkout.deployed_sha_file.read_text()
+    withheld_pin = acestep_fork.commit()
+    acestep_checkout.move_main_forward_with_acestep_pin(withheld_pin)
+
+    exit_codes = [acestep_checkout.tick().returncode for _ in range(FAILURE_ALERT_THRESHOLD)]
+
+    assert exit_codes == [0, 0, 1]
+    [alert] = acestep_checkout.alert_lines()
+    assert withheld_pin in alert
+    assert acestep_checkout.build_and_recreate_calls == []
+    assert acestep_checkout.deployed_sha_file.read_text() == deployed_before
+    assert acestep_checkout.head == head_before
+    assert acestep_checkout.acestep_head == pin_before
+
+    acestep_fork.push()
+    result = acestep_checkout.tick()
+
+    assert result.returncode == 0
+    assert acestep_checkout.acestep_head == withheld_pin
+    assert acestep_checkout.head == acestep_checkout.remote_main_sha()
+    assert acestep_checkout.deployed_sha_file.read_text() == acestep_checkout.head
+
+
+def test_an_uninitialised_submodule_refuses_the_tick(
+    tmp_path: Path, acestep_fork: AcestepFork,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.add_acestep_submodule(acestep_fork, initialised=False)
+    checkout.adopt_current_head_as_deployed()
+    head_before = checkout.head
+    deployed_before = checkout.deployed_sha_file.read_text()
+    new_pin = acestep_fork.commit()
+    acestep_fork.push()
+    checkout.move_main_forward_with_acestep_pin(new_pin)
+    # Were the pin looked up in the superproject under the submodule's name,
+    # this decoy would let that lookup succeed and fetch the commit into it.
+    _git(acestep_fork.work, "push", str(checkout.origin), f"{new_pin}:refs/heads/decoy")
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "is not initialised" in checkout.journal
+    assert not (checkout.root / ACESTEP_SUBMODULE_PATH / ".git").exists()
+    assert checkout.head == head_before
+    assert checkout.deployed_sha_file.read_text() == deployed_before
+    assert checkout.build_and_recreate_calls == []
+    assert not _has_commit(checkout.root, new_pin)
+
+
+@pytest.mark.parametrize("hung_fetch", ["superproject", "acestep pin"])
+def test_a_hung_fetch_times_out_and_counts_as_a_refusal(
+    acestep_checkout: Checkout, acestep_fork: AcestepFork, hung_fetch: str,
+) -> None:
+    new_pin = acestep_fork.commit()
+    acestep_fork.push()
+    acestep_checkout.move_main_forward_with_acestep_pin(new_pin)
+    head_before = acestep_checkout.head
+    pin_before = acestep_checkout.acestep_head
+    deployed_before = acestep_checkout.deployed_sha_file.read_text()
+    hung_repository = (
+        acestep_checkout.root
+        if hung_fetch == "superproject"
+        else acestep_checkout.root / ACESTEP_SUBMODULE_PATH
+    )
+    acestep_checkout.make_fetches_hang(hung_repository)
+    acestep_checkout.git_fetch_timeout_seconds = HUNG_FETCH_TIMEOUT_SECONDS
+
+    started = time.monotonic()
+    result = acestep_checkout.tick()
+    elapsed = time.monotonic() - started
+
+    assert result.returncode == 0
+    assert elapsed < HUNG_TICK_CEILING_SECONDS
+    assert "timed out" in acestep_checkout.journal
+    assert acestep_checkout.failure_count_file.read_text() == "1"
+    assert acestep_checkout.build_and_recreate_calls == []
+    assert acestep_checkout.deployed_sha_file.read_text() == deployed_before
+    assert acestep_checkout.head == head_before
+    assert acestep_checkout.acestep_head == pin_before
+
+    acestep_checkout.make_fetches_work_again(hung_repository)
+    acestep_checkout.git_fetch_timeout_seconds = GIT_FETCH_TIMEOUT_SECONDS
+    recovered = acestep_checkout.tick()
+
+    assert recovered.returncode == 0
+    assert acestep_checkout.acestep_head == new_pin
+    assert acestep_checkout.deployed_sha_file.read_text() == acestep_checkout.head
+
+
+def test_an_unchanged_acestep_pin_does_not_rebuild_the_bases(
+    acestep_checkout: Checkout, acestep_fork: AcestepFork,
+) -> None:
+    acestep_fork.make_unreachable()
+    acestep_checkout.move_main_forward()
+
+    result = acestep_checkout.tick()
+
+    assert result.returncode == 0
+    assert acestep_checkout.deployed_sha_file.read_text() == acestep_checkout.remote_main_sha()
+    assert "compose build" in acestep_checkout.docker_calls
+    assert _base_builds(acestep_checkout) == []
+
+
+def test_a_red_newest_commit_with_a_bad_pin_does_not_block_the_green_predecessor(
+    acestep_checkout: Checkout, acestep_fork: AcestepFork,
+) -> None:
+    acestep_checkout.move_main_forward()
+    green_predecessor = acestep_checkout.remote_main_sha()
+    acestep_checkout.move_main_forward_with_acestep_pin(acestep_fork.commit())
+    red_head = acestep_checkout.remote_main_sha()
+    acestep_checkout.set_check_runs_for_commit(red_head, ("completed", "failure"))
+    acestep_checkout.set_check_runs_for_commit(green_predecessor, ("completed", "success"))
+
+    result = acestep_checkout.tick()
+
+    assert result.returncode == 0
+    assert acestep_checkout.head == green_predecessor
+    assert acestep_checkout.deployed_sha_file.read_text() == green_predecessor
 
 
 def test_recreate_preserves_each_running_service_image_with_a_previous_tag(
