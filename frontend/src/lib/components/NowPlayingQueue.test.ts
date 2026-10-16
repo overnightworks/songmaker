@@ -76,10 +76,14 @@ describe('NowPlayingQueue', () => {
 			expect(rows[0].querySelector('.queue-subtitle')).toBeNull();
 			expect(rows[1]).toHaveAccessibleName(/^Ebb Daybreak/);
 			expect(rows[2]).toHaveAccessibleName(/^Tide Night Drive/);
-			expect(rows[1].querySelector('.queue-title')?.textContent?.trim()).toBe('Ebb Daybreak');
+			expect(rows[0].querySelector('.queue-title')?.textContent).toBe('Shore');
+			expect(rows[1].querySelector('.queue-title')?.textContent).toBe('Ebb');
+			expect(rows[1].querySelector('.queue-subtitle')?.textContent).toBe('Daybreak');
+			expect(rows[1].querySelector('.queue-title .queue-subtitle')).toBeNull();
 			if (mounted) await unmount(mounted);
 			mounted = undefined;
 			await render({ subtitleByEntryId: missingSubtitles });
+			expect(target.querySelector('.queue-title')?.textContent).toBe('Tide');
 			expect(target.querySelector('.queue-subtitle')).toBeNull();
 			expect(target.querySelector('.queue-row')).toHaveAccessibleName(/^Tide/);
 		}

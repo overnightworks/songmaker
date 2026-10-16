@@ -91,8 +91,8 @@
 						<span class="queue-position" aria-hidden="true"
 							>{index === queue.currentIndex ? '' : index + 1}</span
 						>
-						<span class="queue-title">
-							<span>{item.songTitle}</span>
+						<span class="queue-label">
+							<span class="queue-title">{item.songTitle}</span>
 							{#if subtitleByEntryId?.get(item.key)}
 								<span class="queue-subtitle">{subtitleByEntryId.get(item.key)}</span>
 							{/if}
@@ -216,6 +216,7 @@
 		color: var(--text-subtle);
 		font-size: 0.72rem;
 	}
+	.queue-label,
 	.queue-title {
 		flex: 1;
 		min-width: 0;
@@ -223,7 +224,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	.queue-title > span {
+	.queue-label > span {
 		display: block;
 		overflow: hidden;
 		text-overflow: ellipsis;
