@@ -1,0 +1,7 @@
+claim_id = "728f43d7ca664306969fc2a417b8626b"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "d495a8bf06ad45bf05bcf7d75c19774bdfd34d88"
+branch = "claude/issue-1444-sonar-s2187-playlist-picker"
+scope = ["frontend/src/lib/components/PlaylistPicker.test.ts", "sonar-project.properties"]
+opened_commit = "7930cab944257352b4d6eff06ff37614af4d7daa"
