@@ -333,14 +333,14 @@ def _try_parse(text: str, filename: str) -> ast.AST | None:
 def _line_hits(
     lines: Sequence[str], rel_path: str, rules: Sequence[Rule],
 ) -> tuple[list[_Hit], dict[str, int]]:
-    pattern_rules = [rule for rule in rules if rule._compiled is not None]
+    pattern_rules = [(rule, rule._compiled) for rule in rules if rule._compiled is not None]
     hits = [
         _Hit(rule=rule, rel_path=rel_path, lineno=lineno, line=line)
         for lineno, line in enumerate(lines, start=1)
-        for rule in pattern_rules
-        if rule._compiled.search(line)
+        for rule, pattern in pattern_rules
+        if pattern.search(line)
     ]
-    return hits, {rule.name: 1 for rule in pattern_rules}
+    return hits, {rule.name: 1 for rule, _ in pattern_rules}
 
 
 def _tree_hits(
