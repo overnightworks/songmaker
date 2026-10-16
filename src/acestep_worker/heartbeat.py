@@ -132,10 +132,7 @@ class HeartbeatLoop:
     async def stop(self) -> None:
         self._stop_event.set()
         if self._task is not None:
-            try:
-                await self._task
-            except asyncio.CancelledError:  # NOSONAR Shutdown accepts a cancelled heartbeat.
-                pass
+            await asyncio.wait({self._task})
             self._task = None
 
     async def shutdown(self) -> None:

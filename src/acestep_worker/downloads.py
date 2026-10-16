@@ -114,10 +114,7 @@ async def run_download(
         await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
     finally:
         progress_task.cancel()
-        try:
-            await progress_task
-        except asyncio.CancelledError:  # NOSONAR The owner cancels this child during cleanup.
-            pass
+        await asyncio.wait({progress_task})
 
 
 _background_tasks: set[asyncio.Task[None]] = set()

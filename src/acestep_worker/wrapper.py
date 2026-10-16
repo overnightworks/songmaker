@@ -165,13 +165,17 @@ async def _release_gpu_hold_handover(deps: WorkerDeps, token: str) -> None:
         deps.gpu_hold_handover_tasks.pop(token, None)
 
 
+async def _await_cancelled_child(child: asyncio.Task[None]) -> None:
+    await asyncio.wait({child})
+    if not child.cancelled():
+        child.result()
+
+
 async def _cancel_gpu_hold_renewal(renew_task: asyncio.Task[None]) -> None:
     if not renew_task.done():
         renew_task.cancel()
     try:
-        await renew_task
-    except asyncio.CancelledError:  # NOSONAR The owner cancels its renewal child.
-        pass
+        await _await_cancelled_child(renew_task)
     except Exception:
         log.exception("GPU hold renewal failed while its owner cleaned up")
 
@@ -571,10 +575,7 @@ async def _cancel_training_task(training_task: asyncio.Task[None]) -> None:
     if training_task.done():
         return
     training_task.cancel()
-    try:
-        await training_task
-    except asyncio.CancelledError:  # NOSONAR The parent owns this child task.
-        pass
+    await _await_cancelled_child(training_task)
 
 
 async def _clean_up_train_lora_run(

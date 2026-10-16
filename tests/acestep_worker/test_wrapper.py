@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Iterable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -25,6 +25,8 @@ from acestep_worker.models import GenerateRequest, GenerationTaskResult, WorkerT
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
     WorkerDeps,
+    _cancel_gpu_hold_renewal,
+    _cancel_training_task,
     _format_sse,
     build_router,
     create_app,
@@ -1288,3 +1290,65 @@ def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
         resp = client.post("/evict_model", json={"mode": "sft"})
         assert resp.status_code == 409
         assert "in use" in resp.json()["detail"]
+
+
+@dataclass
+class _ChildCleaningUpAfterCancel:
+    task: asyncio.Task[None]
+    cancel_seen: asyncio.Event
+    finish_cleanup: asyncio.Event
+
+
+async def _start_child_cleaning_up_after_cancel() -> _ChildCleaningUpAfterCancel:
+    started = asyncio.Event()
+    cancel_seen = asyncio.Event()
+    finish_cleanup = asyncio.Event()
+
+    async def run() -> None:
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancel_seen.set()
+            await finish_cleanup.wait()
+            raise
+
+    task = asyncio.create_task(run())
+    await started.wait()
+    return _ChildCleaningUpAfterCancel(task, cancel_seen, finish_cleanup)
+
+
+_CHILD_CANCELLERS = [
+    pytest.param(_cancel_gpu_hold_renewal, id="gpu-hold-renewal"),
+    pytest.param(_cancel_training_task, id="training-task"),
+]
+
+
+@pytest.mark.parametrize("cancel_child", _CHILD_CANCELLERS)
+def test_cancelling_a_child_returns_once_the_child_has_ended_cancelled(cancel_child) -> None:
+    async def go() -> bool:
+        child = await _start_child_cleaning_up_after_cancel()
+        owner = asyncio.create_task(cancel_child(child.task))
+        await child.cancel_seen.wait()
+        child.finish_cleanup.set()
+        await owner
+        return child.task.cancelled()
+
+    assert _run(go())
+
+
+@pytest.mark.parametrize("cancel_child", _CHILD_CANCELLERS)
+def test_owner_cancelled_while_waiting_for_its_cancelled_child_ends_cancelled(
+    cancel_child,
+) -> None:
+    async def go() -> None:
+        child = await _start_child_cleaning_up_after_cancel()
+        owner = asyncio.create_task(cancel_child(child.task))
+        await child.cancel_seen.wait()
+        owner.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await owner
+        child.finish_cleanup.set()
+        await asyncio.wait({child.task})
+
+    _run(go())

@@ -91,6 +91,7 @@ import {
 	type NowPlayingSurfaceKind,
 	type PlaybackSource
 } from '$lib/constants/now-playing';
+import { shuffled } from '$lib/utils/shuffle';
 
 // --- Browsing state ---
 export const selectedAlbumId = writable<string | null>(null);
@@ -334,24 +335,11 @@ function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
 	};
 }
 
-function randomIndex(length: number): number {
-	return Math.floor(Math.random() * length); // NOSONAR S2245: shuffle has no security context.
-}
-
-function shuffled<T>(items: T[]): T[] {
-	const copy = [...items];
-	for (let i = copy.length - 1; i > 0; i--) {
-		const j = randomIndex(i + 1);
-		[copy[i], copy[j]] = [copy[j], copy[i]];
-	}
-	return copy;
-}
-
 function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; startIndex: number } {
 	if (!get(shuffleEnabled) || items.length <= 1) return { items, startIndex };
 	const start = items[startIndex] ?? items[0];
 	const rest = items.filter((_, index) => index !== startIndex);
-	return { items: [start, ...shuffled(rest)], startIndex: 0 };
+	return { items: shuffled([start, ...rest], { keepFirst: true }), startIndex: 0 };
 }
 
 // Where an album start begins: at its first playable song, or at the song the
