@@ -16,6 +16,8 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
 from songmaker_cli.db.models import AuditLog
 from songmaker_cli.db.queries import create_user, create_user_lora
+from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+from songmaker_cli.settings import get_settings
 
 
 @pytest.fixture
@@ -1340,6 +1342,10 @@ def test_load_model_on_worker_queue_unavailable(client: TestClient) -> None:
     assert resp.status_code == 503
 
 
+def _worker_token() -> str:
+    return get_settings().songmaker_internal_token.get_secret_value()
+
+
 def test_evict_model_proxies_to_worker(client: TestClient) -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -1363,6 +1369,7 @@ def test_evict_model_proxies_to_worker(client: TestClient) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0] == "http://example:8001/evict_model"
     assert kwargs["json"] == {"mode": "sft"}
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
 
 
 def test_evict_model_unknown_worker(client: TestClient) -> None:
@@ -1445,6 +1452,7 @@ def test_pin_model_on_worker_success(client: TestClient) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/pin_model")
     assert kwargs["json"] == {"mode": "sft"}
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
 
 
 def test_pin_model_unknown_worker(client: TestClient) -> None:
@@ -1530,8 +1538,9 @@ def test_unpin_model_on_worker_success(client: TestClient) -> None:
             "/api/admin/workers/w1/unpin_model", json={"mode": "sft"},
         )
     assert resp.status_code == 200
-    args, _ = fake_client.post.call_args
+    args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/unpin_model")
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
 
 
 def test_unpin_model_unknown_worker(client: TestClient) -> None:
@@ -1570,8 +1579,9 @@ def test_restart_worker_success(client: TestClient) -> None:
         resp = client.post("/api/admin/workers/w1/restart")
     assert resp.status_code == 200
     assert resp.json()["status"] == "restarting"
-    args, _ = fake_client.post.call_args
+    args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/restart")
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
 
 
 def test_restart_worker_unknown_worker(client: TestClient) -> None:
