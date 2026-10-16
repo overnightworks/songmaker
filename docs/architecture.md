@@ -781,7 +781,8 @@ in both modes — from the stream manifest while one is in play, otherwise
 from the payload's `audio_duration` — and Now Playing follows the lyrics in
 both, because `SharedCollection` hands the frame the playing track's own
 lyrics and cues (`lyricsText`/`lyricsCues`) rather than relying on `info`,
-whose `lyrics` a public stream manifest redacts. A take scored without
+whose `lyrics` a public stream manifest redacts (as it redacts `seed`: a stream track carries `seed: null`
+to a stranger and the real value only to the signed-in owner). A take scored without
 `whisper_cues` renders static lyrics, the same fallback the app uses.
 
 ### Backend (`src/songmaker_cli/`)
