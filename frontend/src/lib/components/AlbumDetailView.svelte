@@ -25,14 +25,11 @@
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
 	import {
-		beginPlayIntent,
 		curateAlbum,
-		ensureGenerationsLoaded,
 		isSongCurrent,
 		playAlbum,
 		playAlbumSong,
-		selectedAlbumId,
-		type PlayIntent
+		selectedAlbumId
 	} from '$lib/stores/player';
 	import { selectSong } from '$lib/stores/navigation';
 	import { historyLayerState, holdOpenWhile } from '$lib/stores/layers';
@@ -53,7 +50,6 @@
 		NEW_SONG_ROW_LABEL,
 		PLACE_LINE_SEPARATOR
 	} from '$lib/constants';
-	import { get } from 'svelte/store';
 	import { titleInitials } from '$lib/utils/format';
 	import { albumHasPlayableTake, songPlayability } from '$lib/utils/playable';
 	import type { SongItem } from '$lib/api/types';
@@ -292,27 +288,10 @@
 		void curateAlbum(currentAlbumId);
 	}
 
-	// A tap on a song plays it in place; a song with nothing to hear has nothing
-	// to play, so the tap opens it in the song editor instead. Its takes are
-	// read first, because the count alone cannot say whether one is playable.
-	// The tap is the person's intent only while it stands: a newer start or
-	// transport action in the player ends it. The standing pathname, unlike
-	// the mounted route, follows shallow navigation and cancelled traversals.
-	let pendingTap: PlayIntent | null = null;
-
-	$effect(() => {
-		void currentAlbumId;
-		return () => pendingTap?.withdraw();
-	});
-
-	async function onSongTap(song: SongItem): Promise<void> {
-		const tap = (pendingTap = beginPlayIntent());
-		const tappedPathname = location.pathname;
-		// A failed read leaves the play path, where the player says it honestly.
-		await ensureGenerationsLoaded(song.id).catch(() => undefined);
-		if (!tap.stands() || location.pathname !== tappedPathname) return;
-		const loaded = get(songList).find((s) => s.id === song.id) ?? song;
-		if (songPlayability(loaded) === 'none') selectSong(song.id);
+	// Unknown takes go straight to the player, which owns loading and cancellation.
+	// Only a song already known to have nothing to hear opens the editor.
+	function onSongTap(song: SongItem): void {
+		if (songPlayability(song) === 'none') selectSong(song.id);
 		else void playAlbumSong(song.album_id, song.id);
 	}
 </script>

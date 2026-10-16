@@ -13,7 +13,7 @@ import {
 } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { albumList } from '$lib/stores/libraryData';
-import { beginPlayIntent, queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import { makeAlbum, makeGeneration } from '$lib/test-utils/factories';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import CollectionHeader from './CollectionHeader.svelte';
@@ -512,27 +512,4 @@ describe('CollectionHeader', () => {
 		await tick();
 		expect(target.querySelector('.editable-title-input')).not.toBeNull();
 	});
-});
-
-describe('header transport while a song tap waits (defect:#1386)', () => {
-	it.each(['playing', 'paused'] as const)(
-		'withdraws the waiting tap when the header changes %s playback',
-		async (status) => {
-			const props = baseProps();
-			queuePlays('album', props.collectionId, status);
-			const target = await render(props);
-			const intent = beginPlayIntent();
-
-			getByRoleButton(
-				target,
-				collectionActionLabel(
-					status === 'playing' ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL,
-					'album'
-				)
-			).click();
-
-			expect(intent.stands()).toBe(false);
-			expect(audioPlayer.status).toBe(status === 'playing' ? 'paused' : 'playing');
-		}
-	);
 });

@@ -4,10 +4,6 @@ import {
 	makeSong as song
 } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
-import { goto } from '$app/navigation';
-import { resolve } from '$app/paths';
-import { fakePage, holdRouteLoads, reportedNavigations } from '$lib/test-utils/app-navigation';
-import { discardDraft, editLyrics, setDraftLyrics } from '$lib/stores/editor';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -59,32 +55,9 @@ import {
 	curationActive,
 	nowPlayingSurface,
 	queueContext,
-	selectedAlbumId,
-	selectedSongId
+	selectedAlbumId
 } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
-import {
-	libraryHistoryUrl,
-	librarySurface,
-	openSongAddress,
-	resetLibraryContextForTests,
-	snapshotLibraryHistory,
-	writeLibraryHistory
-} from '$lib/stores/libraryContext';
-import {
-	mountAddressRoute,
-	pressBack,
-	pressForward,
-	pushHistoryEntry,
-	reloadLibraryPage
-} from '$lib/test-utils/library-history';
-import { installHistoryController } from '$lib/history/historyController';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import {
-	resetResourceSyncForTests,
-	resourceSync,
-	startLibraryResourceSync
-} from '$lib/stores/resourceSync';
 
 const uploadAlbumCover = vi.fn();
 const updateAlbum = vi.fn();
@@ -92,14 +65,11 @@ const archiveAlbum = vi.fn();
 const unarchiveAlbum = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();
 const createSong = vi.fn();
-const fetchSong = vi.fn();
-const fetchAlbums = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return {
 		...actual,
-		fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 		uploadAlbumCover: (...args: unknown[]) => uploadAlbumCover(...args),
 		deleteAlbumCover: vi.fn(),
 		updateAlbum: (...args: unknown[]) => updateAlbum(...args),
@@ -109,20 +79,16 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		restoreAlbum: vi.fn(),
 		archiveAlbum: (...args: unknown[]) => archiveAlbum(...args),
 		unarchiveAlbum: (...args: unknown[]) => unarchiveAlbum(...args),
-		createSong: (...args: unknown[]) => createSong(...args),
-		fetchSong: (...args: unknown[]) => fetchSong(...args)
+		createSong: (...args: unknown[]) => createSong(...args)
 	};
 });
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$lib/api/songs', () => ({
-	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
 vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
-	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args)
 }));
 vi.mock('$lib/stores/toast', () => ({
@@ -148,6 +114,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
+		ensureGenerationsLoaded: vi.fn(),
 		playAlbum: vi.fn(),
 		playAlbumSong: vi.fn()
 	};
@@ -155,16 +122,9 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import songRowSource from './SongRow.svelte?raw';
+import { selectSong } from '$lib/stores/navigation';
 import {
-	followAppPageLink,
-	initNavigation,
-	openRailSearchTarget,
-	openListOverPage,
-	pendingDirtyNavigation,
-	persistLibraryHistory,
-	selectSong
-} from '$lib/stores/navigation';
-import {
+	ensureGenerationsLoaded,
 	pendingStart,
 	playAlbum,
 	playAlbumSong,
@@ -207,7 +167,7 @@ beforeEach(() => {
 	vi.mocked(addToast).mockReset();
 	vi.mocked(selectSong).mockReset();
 	createSong.mockReset();
-	fetchSong.mockReset().mockRejectedValue(new Error('not mocked'));
+	vi.mocked(ensureGenerationsLoaded).mockReset();
 	vi.mocked(playAlbum).mockReset();
 	vi.mocked(playAlbumSong).mockReset();
 	setShuffle(false);
@@ -947,481 +907,47 @@ describe('AlbumDetailView song row', () => {
 
 		boxOf(target, 'Tide').click();
 
-		await vi.waitFor(() =>
-			expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide')
-		);
+		expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide');
 		expect(selectSong).not.toHaveBeenCalled();
 		expect(getByRoleHeading(target, 'Night Drive')).not.toBeNull();
 	});
 
-	describe('a tap on a song whose takes are not loaded yet (defect:#1386)', () => {
-		it.each([
-			['only archived takes', [true, true], 'editor'],
-			['a playable take', [true, false], 'player']
-		])('1354_rule_11: reads the takes first, then chooses by %s', async (_, archived, outcome) => {
-			fetchSong.mockResolvedValue(
-				song({
-					id: 's-ebb',
-					album_id: 'a-local',
-					album_title: 'Night Drive',
-					title: 'Ebb',
-					generation_count: 2,
-					generations: archived.map((is_archived, i) =>
-						generation({ id: `g${i}`, song_id: 's-ebb', is_archived })
-					)
-				})
-			);
+	it.each([
+		['unloaded', 1, [], 'player'],
+		['loaded with archived takes', 1, [generation({ is_archived: true })], 'editor'],
+		['loaded with empty-path takes', 1, [generation({ mp3_path: '' })], 'editor'],
+		['loaded with a playable take', 1, [generation()], 'player'],
+		['without generations', 0, [], 'editor']
+	] as const)(
+		'defect:#1386: a song %s acts immediately without loading takes first',
+		async (_, count, takes, destination) => {
 			const target = await renderSongs();
+			songList.update((songs) =>
+				songs.map((item) =>
+					item.id === 's-ebb' ? { ...item, generation_count: count, generations: [...takes] } : item
+				)
+			);
+			await tick();
 
 			boxOf(target, 'Ebb').click();
 
-			if (outcome === 'editor')
-				await vi.waitFor(() => expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-ebb'));
-			else
-				await vi.waitFor(() =>
-					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
-				);
-			expect(fetchSong).toHaveBeenCalledExactlyOnceWith('s-ebb');
-			expect(vi.mocked(outcome === 'editor' ? playAlbumSong : selectSong)).not.toHaveBeenCalled();
-		});
-
-		describe('with the read still pending', () => {
-			const afterPendingMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve));
-
-			function holdRead(): {
-				answer: (outcome: 'archived-only' | 'playable' | 'fail') => void;
-			} {
-				const settlers: Array<(outcome: 'archived-only' | 'playable' | 'fail') => void> = [];
-				fetchSong.mockImplementation(
-					(id: string) =>
-						new Promise((resolve, reject) => {
-							settlers.push((outcome) =>
-								outcome === 'fail'
-									? reject(new Error('offline'))
-									: resolve(
-											song({
-												id,
-												album_id: 'a-local',
-												album_title: 'Night Drive',
-												generation_count: 1,
-												generations: [
-													generation({
-														id: `g-${id}`,
-														song_id: id,
-														is_archived: outcome === 'archived-only'
-													})
-												]
-											})
-										)
-							);
-						})
-				);
-				return { answer: (outcome) => settlers.forEach((settle) => settle(outcome)) };
+			if (destination === 'editor') {
+				expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-ebb');
+				expect(playAlbumSong).not.toHaveBeenCalled();
+			} else {
+				expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb');
+				expect(selectSong).not.toHaveBeenCalled();
 			}
-
-			async function expectTapOutcome(outcome: 'archived-only' | 'playable'): Promise<void> {
-				if (outcome === 'archived-only') {
-					await vi.waitFor(() => expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-ebb'));
-					expect(playAlbumSong).not.toHaveBeenCalled();
-				} else {
-					await vi.waitFor(() =>
-						expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
-					);
-					expect(selectSong).not.toHaveBeenCalled();
-				}
-			}
-
-			function prepareAlbumHistory(): void {
-				resetLibraryContextForTests();
-				resetLibrarySearchForTests();
-				openCollection.set({ kind: 'album', id: 'a-local' });
-				selectedAlbumId.set('a-local');
-				selectedSongId.set(null);
-				librarySurface.set('detail');
-				const state = snapshotLibraryHistory(0);
-				mountAddressRoute(libraryHistoryUrl(state), state);
-				const stopHistory = installHistoryController();
-				const stopNavigation = initNavigation();
-				onTestFinished(() => {
-					stopNavigation();
-					stopHistory();
-					resetLibraryContextForTests();
-					resetLibrarySearchForTests();
-				});
-			}
-
-			it.each(['archived-only', 'playable'] as const)(
-				'defect:#1386: a pending tap survives same-page history persistence with %s takes',
-				async (outcome) => {
-					const read = holdRead();
-					const target = await renderSongs();
-					prepareAlbumHistory();
-					await tick();
-
-					boxOf(target, 'Ebb').click();
-					await tick();
-					persistLibraryHistory();
-					read.answer(outcome);
-
-					await expectTapOutcome(outcome);
-				}
-			);
-
-			it.each(['archived-only', 'playable'] as const)(
-				'defect:#1386: a pending tap survives resource resync and hydration with %s takes',
-				async (outcome) => {
-					const read = holdRead();
-					const target = await renderSongs();
-					prepareAlbumHistory();
-					const albums = get(albumList);
-					fetchAlbums.mockResolvedValue({
-						items: albums,
-						total: albums.length,
-						offset: 0,
-						limit: 200,
-						has_more: false
-					});
-					vi.mocked(fetchSongs).mockResolvedValue(songsPage(get(songList)));
-					const stream = Object.assign(new EventTarget(), { close: vi.fn() });
-					vi.stubGlobal(
-						'EventSource',
-						vi.fn(function () {
-							return stream;
-						})
-					);
-					onTestFinished(resetResourceSyncForTests);
-					startLibraryResourceSync();
-					stream.dispatchEvent(new MessageEvent('hello', { data: '{"high_water_mark":"0"}' }));
-					await vi.waitFor(() => expect(get(resourceSync).status).toBe('live'));
-
-					boxOf(target, 'Ebb').click();
-					await tick();
-					stream.dispatchEvent(new MessageEvent('resync', { data: '{"high_water_mark":"1"}' }));
-					expect(get(resourceSync).status).toBe('bootstrapping');
-					await vi.waitFor(() => expect(get(resourceSync).status).toBe('live'));
-					read.answer(outcome);
-
-					await expectTapOutcome(outcome);
-				}
-			);
-
-			it('takes the play path when the takes cannot be read, so the player says so', async () => {
-				const read = holdRead();
-				const target = await renderSongs();
-
-				boxOf(target, 'Ebb').click();
-				await tick();
-				expect(playAlbumSong).not.toHaveBeenCalled();
-				expect(selectSong).not.toHaveBeenCalled();
-
-				read.answer('fail');
-
-				await vi.waitFor(() =>
-					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
-				);
-				expect(selectSong).not.toHaveBeenCalled();
-			});
-
-			it.each([
-				['Back', pressBack],
-				['Forward', pressForward]
-			] as const)('defect:#1386: withdraws a pending tap on %s', async (direction, traverse) => {
-				const read = holdRead();
-				const target = await renderSongs();
-				prepareAlbumHistory();
-				fetchAlbums.mockResolvedValue({
-					items: get(albumList),
-					total: 1,
-					offset: 0,
-					limit: 200,
-					has_more: false
-				});
-				vi.mocked(fetchSongs).mockResolvedValue(songsPage(get(songList)));
-				selectedSongId.set('s-tide');
-				const state = snapshotLibraryHistory(1);
-				pushHistoryEntry(libraryHistoryUrl(state), state);
-				if (direction === 'Forward') await pressBack();
-				await tick();
-
-				boxOf(target, 'Ebb').click();
-				await tick();
-				await traverse();
-				read.answer('archived-only');
-				await afterPendingMicrotasks();
-
-				expect(selectSong).not.toHaveBeenCalled();
-				expect(playAlbumSong).not.toHaveBeenCalled();
-			});
-
-			it.each([
-				['the person moves to another album', () => selectedAlbumId.set('a-other')],
-				['the page closes', () => unmount(mounted.splice(0)[0])]
-			])('1354_rule_11: opens nothing when %s before the takes arrive', async (_, leave) => {
-				const read = holdRead();
-				const target = await renderSongs();
-
-				boxOf(target, 'Ebb').click();
-				await tick();
-				await leave();
-				read.answer('archived-only');
-				await afterPendingMicrotasks();
-
-				expect(selectSong).not.toHaveBeenCalled();
-				expect(playAlbumSong).not.toHaveBeenCalled();
-			});
-
-			it('1354_rule_11: leaves the header Play standing when the takes arrive after it started', async () => {
-				const actualPlayer =
-					await vi.importActual<typeof import('$lib/stores/player')>('$lib/stores/player');
-				vi.mocked(playAlbum).mockImplementation(actualPlayer.playAlbum);
-				const read = holdRead();
-				const target = await renderSongs();
-				songList.update((songs) =>
-					songs.map((item) => (item.id === 's-tide' ? { ...item, generation_count: 1 } : item))
-				);
-
-				boxOf(target, 'Ebb').click();
-				await tick();
-				requireElement<HTMLButtonElement>(target, '[aria-label="Play album"]').click();
-				await vi.waitFor(() => expect(audioPlayer.current?.songId).toBe('s-tide'));
-				read.answer('archived-only');
-				await afterPendingMicrotasks();
-
-				expect(audioPlayer.current?.songId).toBe('s-tide');
-				expect(selectSong).not.toHaveBeenCalled();
-				expect(playAlbumSong).not.toHaveBeenCalled();
-			});
-
-			it.each(['direct address', 'raw goto'] as const)(
-				'defect:#1386: drops a pending tap after %s while destination resolution is held',
-				async (way) => {
-					const read = holdRead();
-					const target = await renderSongs();
-					prepareAlbumHistory();
-					boxOf(target, 'Ebb').click();
-					await tick();
-					let resolveDestination!: (value: ReturnType<typeof songsPage>) => void;
-					vi.mocked(fetchSongs).mockReturnValueOnce(
-						new Promise((resolve) => {
-							resolveDestination = resolve;
-						})
-					);
-					onTestFinished(() => resolveDestination(songsPage([])));
-					const destination = '/album/a-local/destination';
-					if (way === 'direct address') mountAddressRoute(destination);
-					else await goto(resolve(destination));
-					const navigation = openSongAddress('a-local', 'destination');
-					await tick();
-					expect(location.pathname).toBe(destination);
-					expect(get(selectedAlbumId)).toBe('a-local');
-					expect(get(selectedSongId)).toBeNull();
-					read.answer('archived-only');
-					await afterPendingMicrotasks();
-
-					expect(selectSong).not.toHaveBeenCalled();
-					expect(playAlbumSong).not.toHaveBeenCalled();
-					resolveDestination(songsPage([]));
-					await expect(navigation).resolves.toBe('unknown-song');
-				}
-			);
-
-			it.each(['/', '/playlists', '/settings'] as const)(
-				'defect:#1386: drops a pending tap after openListOverPage(%s)',
-				async (list) => {
-					const read = holdRead();
-					const target = await renderSongs();
-					prepareAlbumHistory();
-					boxOf(target, 'Ebb').click();
-					await tick();
-
-					await openListOverPage(list);
-					expect(location.pathname).toBe(list);
-					read.answer('archived-only');
-					await afterPendingMicrotasks();
-
-					expect(selectSong).not.toHaveBeenCalled();
-					expect(playAlbumSong).not.toHaveBeenCalled();
-				}
-			);
-
-			it.each(['archived-only', 'playable'] as const)(
-				'defect:#1386: a pending tap survives a query-only change with %s takes',
-				async (outcome) => {
-					const read = holdRead();
-					const target = await renderSongs();
-					prepareAlbumHistory();
-					boxOf(target, 'Ebb').click();
-					await tick();
-					const state = snapshotLibraryHistory(1);
-					await writeLibraryHistory(state, `${location.pathname}?sort=title`, 'replace');
-					expect(location.search).toBe('?sort=title');
-					read.answer(outcome);
-
-					await expectTapOutcome(outcome);
-				}
-			);
-
-			it.each(['link', 'search'] as const)(
-				'defect:#1386: drops a pending tap after an accepted %s changes the standing pathname',
-				async (way) => {
-					const read = holdRead();
-					const target = await renderSongs();
-					prepareAlbumHistory();
-					boxOf(target, 'Ebb').click();
-					await tick();
-					const releaseRoute = holdRouteLoads();
-					onTestFinished(releaseRoute);
-					vi.mocked(goto).mockClear();
-
-					if (way === 'link') {
-						followAppPageLink(new MouseEvent('click', { cancelable: true }), '/');
-					} else {
-						void openRailSearchTarget({ kind: 'page', href: '/playlists' });
-					}
-					await vi.waitFor(() => expect(goto).toHaveBeenCalled());
-					expect(fakePage.url.pathname).not.toBe(way === 'link' ? '/' : '/playlists');
-					if (way === 'link') {
-						releaseRoute();
-						await vi.waitFor(() => expect(location.pathname).toBe('/'));
-					}
-					expect(location.pathname).toBe(way === 'link' ? '/' : '/playlists');
-					read.answer('archived-only');
-					await afterPendingMicrotasks();
-
-					expect(selectSong).not.toHaveBeenCalled();
-					expect(playAlbumSong).not.toHaveBeenCalled();
-					releaseRoute();
-					await vi.waitFor(() =>
-						expect(location.pathname).toBe(way === 'link' ? '/' : '/playlists')
-					);
-				}
-			);
-
-			it.each([
-				['Cancel', 'archived-only'],
-				['Cancel', 'playable'],
-				['Leave', 'archived-only'],
-				['Leave', 'playable'],
-				['clean', 'archived-only']
-			] as const)(
-				'defect:#1386: Back mounts an address before the guard, then %s with %s takes',
-				async (choice, outcome) => {
-					const read = holdRead();
-					const target = await renderSongs();
-					let addressResolution: Promise<string> | undefined;
-					const resolveLandedAddress = () => {
-						if (location.pathname === '/album/a-local/destination') {
-							expect(get(pendingDirtyNavigation)).toBeNull();
-							addressResolution = openSongAddress('a-local', 'destination');
-						}
-					};
-					window.addEventListener('popstate', resolveLandedAddress);
-					onTestFinished(() => window.removeEventListener('popstate', resolveLandedAddress));
-					prepareAlbumHistory();
-					const state = snapshotLibraryHistory(1);
-					await writeLibraryHistory(state, '/album/a-local/destination', 'push');
-					selectedSongId.set('s-tide');
-					const current = snapshotLibraryHistory(2);
-					const currentUrl = libraryHistoryUrl(current);
-					await writeLibraryHistory(current, currentUrl, 'push');
-					await reloadLibraryPage();
-					let resolveDestination!: (value: ReturnType<typeof songsPage>) => void;
-					vi.mocked(fetchSongs).mockReturnValue(
-						new Promise((resolve) => {
-							resolveDestination = resolve;
-						})
-					);
-					onTestFinished(() => {
-						resolveDestination(songsPage([]));
-						discardDraft();
-						pendingDirtyNavigation.set(null);
-					});
-					if (choice !== 'clean') setDraftLyrics('unsaved verse');
-					boxOf(target, 'Ebb').click();
-					await tick();
-
-					await pressBack();
-					expect(addressResolution).toBeDefined();
-					expect(reportedNavigations).toContainEqual({
-						type: 'popstate',
-						pathname: '/album/a-local/destination'
-					});
-					if (choice !== 'clean') {
-						const leave = get(pendingDirtyNavigation);
-						expect(leave).not.toBeNull();
-						expect(location.pathname).toBe(currentUrl);
-						pendingDirtyNavigation.set(null);
-						if (choice === 'Leave') {
-							discardDraft();
-							await leave?.();
-							await vi.waitFor(() => expect(location.pathname).toBe('/album/a-local/destination'));
-						} else {
-							expect(get(editLyrics)).toBe('unsaved verse');
-						}
-					}
-					read.answer(outcome);
-					if (choice === 'Cancel') await expectTapOutcome(outcome);
-					else {
-						await afterPendingMicrotasks();
-						expect(selectSong).not.toHaveBeenCalled();
-						expect(playAlbumSong).not.toHaveBeenCalled();
-					}
-					resolveDestination(
-						songsPage([
-							song({
-								id: 's-destination',
-								album_id: 'a-local',
-								slug: 'destination',
-								generation_count: 0
-							})
-						])
-					);
-					await expect(addressResolution).resolves.toBe('found');
-					expect(get(selectedSongId)).toBe(choice === 'Cancel' ? 's-tide' : 's-destination');
-				}
-			);
-
-			it('keeps the newer tap when the older read answers last', async () => {
-				const answers = new Map<string, () => void>();
-				fetchSong.mockImplementation(
-					(id: string) =>
-						new Promise((resolve) => {
-							answers.set(id, () =>
-								resolve(
-									song({
-										id,
-										album_id: 'a-local',
-										album_title: 'Night Drive',
-										generation_count: 1,
-										generations: [generation({ id: `g-${id}`, song_id: id })]
-									})
-								)
-							);
-						})
-				);
-				const target = await renderSongs();
-
-				boxOf(target, 'Ebb').click();
-				boxOf(target, 'Tide').click();
-				await tick();
-				answers.get('s-tide')?.();
-				await vi.waitFor(() =>
-					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide')
-				);
-				answers.get('s-ebb')?.();
-				await afterPendingMicrotasks();
-
-				expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide');
-			});
-		});
-	});
+			expect(ensureGenerationsLoaded).not.toHaveBeenCalled();
+		}
+	);
 
 	it('opens a song with no take yet in the song editor on a tap (#1354 rule 23)', async () => {
 		const target = await renderSongs();
 
 		boxOf(target, 'Fresh').click();
 
-		await vi.waitFor(() => expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-fresh'));
+		expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-fresh');
 		expect(playAlbumSong).not.toHaveBeenCalled();
 	});
 
