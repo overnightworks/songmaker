@@ -54,7 +54,7 @@ def _arguments() -> argparse.Namespace:
 
 
 def _git(project_root: Path, *arguments: str) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(  # NOSONAR(S8705) Fixed Git subcommands plus a validated SHA.
+    return subprocess.run(
         ["git", *arguments], cwd=project_root, check=False, capture_output=True
     )
 
@@ -133,16 +133,18 @@ def _base_snapshot(project_root: Path, base_revision: str) -> RegistrySnapshot:
 
 
 def verify_temporal_history(project_root: Path, base_revision: str) -> None:
-    if EXACT_GIT_SHA.fullmatch(base_revision) is None or not _git_object_exists(
-        project_root, f"{base_revision}^{{commit}}"
+    exact_match = EXACT_GIT_SHA.fullmatch(base_revision)
+    if exact_match is None or not _git_object_exists(
+        project_root, f"{exact_match[0]}^{{commit}}"
     ):
         raise RequirementContractError(
             f"exact base revision {base_revision!r} is absent or unresolvable"
         )
+    exact_revision = exact_match[0]  # only the validated text reaches Git
     shallow = _git_bytes(project_root, "rev-parse", "--is-shallow-repository")
     if shallow.strip() == b"true":
         raise RequirementContractError("exact base verification refuses a shallow repository")
-    base = _base_snapshot(project_root, base_revision)
+    base = _base_snapshot(project_root, exact_revision)
     current = read_registry_snapshot(project_root)
     if base.schema_version == 1:
         if current.revisions:
