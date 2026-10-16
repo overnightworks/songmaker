@@ -18,6 +18,7 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
@@ -356,6 +357,23 @@ export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'mobile')
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	await expect(page).toHaveURL(LIBRARY_URL);
+}
+
+/** An album through its row in the rail's Library list — behind the drawer on the phone. */
+export async function openAlbumFromRail(
+	page: Page,
+	shell: Shell,
+	albumTitle: string
+): Promise<void> {
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: albumTitle })
+		.getByRole('button', { name: containing(albumTitle) })
+		.click();
 }
 
 /**
