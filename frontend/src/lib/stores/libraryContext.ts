@@ -454,19 +454,25 @@ export function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
 			routePath: albumRoutePath(albumId),
 			historyOpens: () => historyAlreadyOpens(albumId),
 			addressState: () => albumAddressState(albumId),
-			shown: () => albumAlreadyShown(albumId)
+			shown: () => albumAlreadyShown(albumId),
+			restoresListing: true
 		};
 	});
 }
 
 // What an address route resolved its params to: the page's own address,
 // whether history already opens it, the library state that opens it afresh,
-// and whether the library already shows it.
+// whether the library already shows it, and whether applying it restores the
+// listing. An address that names a surface and no resource leaves the listing
+// to the live stream's snapshot, which restores it on every cold tab (an
+// in-app route has it already): its own restore would load the same pages a
+// second time.
 interface ResolvedAddress {
 	readonly routePath: string;
 	readonly historyOpens: () => boolean;
 	readonly addressState: () => LibraryHistoryState;
 	readonly shown: () => boolean;
+	readonly restoresListing: boolean;
 }
 
 // The address the route was mounted under, read as its resolution starts:
@@ -511,7 +517,7 @@ async function showResolvedAddress(address: ResolvedAddress): Promise<void> {
 		? (currentLibraryHistoryState() as LibraryHistoryState)
 		: address.addressState();
 	if (!opened) await writeLibraryHistory(state, address.routePath, 'replace');
-	if (!address.shown()) await applyLibraryHistory(state);
+	if (!address.shown()) await applyLibraryHistory(state, address.restoresListing);
 }
 
 // Both short circuits keep the address from re-asking what the library has
@@ -584,7 +590,8 @@ export function openSongAddress(
 			routePath: songRoutePath(albumId, songSlug),
 			historyOpens: () => historyAlreadyOpensSong(song.id),
 			addressState: () => songAddressState(song, generationId),
-			shown: () => songAlreadyShown(song.id)
+			shown: () => songAlreadyShown(song.id),
+			restoresListing: true
 		};
 	});
 }
@@ -624,7 +631,8 @@ export function openTakeAddress(
 			routePath: takeRoutePath(albumId, songSlug, takeNumber),
 			historyOpens: () => historyAlreadyOpensTake(song.id, generation.id),
 			addressState: () => songAddressState(song, generation.id),
-			shown: () => takeAlreadyShown(song.id, generation.id)
+			shown: () => takeAlreadyShown(song.id, generation.id),
+			restoresListing: true
 		};
 	});
 }
@@ -644,7 +652,8 @@ export function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
 			routePath: playlistRoutePath(slug),
 			historyOpens: () => historyAlreadyOpensPlaylist(playlist.id),
 			addressState: () => playlistAddressState(playlist.id),
-			shown: () => playlistAlreadyShown(playlist.id)
+			shown: () => playlistAlreadyShown(playlist.id),
+			restoresListing: true
 		};
 	});
 }
@@ -711,7 +720,8 @@ function openSurfaceAddress(
 				return isLibraryHistoryState(state) && shows(state.surface, state.songId);
 			},
 			addressState: () => ({ ...libraryRootState(), surface }),
-			shown: () => shows(get(librarySurface), get(selectedSongId))
+			shown: () => shows(get(librarySurface), get(selectedSongId)),
+			restoresListing: false
 		})
 	);
 }
@@ -961,7 +971,10 @@ function applyStands(apply: HistoryApply): boolean {
 	return apply.entry === null || standingPageEntryId() === apply.entry;
 }
 
-export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
+export async function applyLibraryHistory(
+	state: LibraryHistoryState,
+	restoresListing = true
+): Promise<boolean> {
 	const apply = startHistoryApply();
 	if (heldRestores !== null) await heldRestores;
 	if (!applyStands(apply)) return false;
@@ -974,12 +987,14 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	selectedGenerationId.set(state.generationId);
 	await hydrateCollection(state.collection);
 	if (!applyStands(apply)) return false;
-	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
-	if (!applyStands(apply)) return false;
-	if (state.query.trim()) {
-		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
+	if (restoresListing) {
+		await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
+		if (!applyStands(apply)) return false;
+		if (state.query.trim()) {
+			await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
+		}
+		if (!applyStands(apply)) return false;
 	}
-	if (!applyStands(apply)) return false;
 	await hydrateSelectedResources(state, apply);
 	if (!applyStands(apply)) return false;
 	const shownAlbum = albumWhoseSongsShow(state.surface, state.collection);

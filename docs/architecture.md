@@ -347,7 +347,9 @@ or the address is unknown. A cold tab on `/`, `/library` or `/playlists` looks n
 `openHomeAddress`, `openLibraryAddress` and `openPlaylistsAddress` (one private
 `openSurfaceAddress` behind the three) only write the `home`, `browse` or
 `playlists` surface into the restore state, unless the entry a reload came back
-onto already shows it. An entry a tab kept from before #1506, `{browse}` at `/`
+onto already shows it, and they leave the listing to the live stream's snapshot
+(a cold tab loads it once, not once for the address and once more for the
+snapshot). An entry a tab kept from before #1506, `{browse}` at `/`
 (the wall used to stand there), reads as Home: `libraryHistoryEntry` is the one
 reader of every entry, the current one and the one a popstate lands on alike,
 and the address the entry stands at decides what it says (`entryForAddress`),

@@ -1720,38 +1720,27 @@ const SURFACE_ADDRESSES = [
 	{ name: 'openHomeAddress', open: openHomeAddress, path: HOME_ROUTE_PATH, surface: 'home' }
 ] as const;
 
-// Resolves the address and the live stream's hydration of the same entry, each
-// held on its own album read, and lets them finish in the order named.
+// Resolves the address and the live stream's hydration of the same entry,
+// the hydration held on its album read: the address finishes first while it
+// is in flight, or after it has finished.
 async function finishAddressAndHydration(
 	open: () => Promise<unknown>,
 	first: 'address' | 'hydration'
 ): Promise<void> {
 	albumList.set([album({ id: 'a9' })]);
-	const releases: Array<() => void> = [];
+	let releaseHydration!: () => void;
 	fetchAlbums.mockImplementation(
 		() =>
 			new Promise((resolve) => {
-				releases.push(() => resolve(emptyPage([album({ id: 'a9' })])));
+				releaseHydration = () => resolve(emptyPage([album({ id: 'a9' })]));
 			})
 	);
-	const address = open();
-	await vi.waitFor(() => expect(releases).toHaveLength(1));
 	const hydration = hydrateLibraryFromHistory();
-	await vi.waitFor(() => expect(releases).toHaveLength(2));
-	const inOrder =
-		first === 'address'
-			? [
-					[releases[0], address],
-					[releases[1], hydration]
-				]
-			: [
-					[releases[1], hydration],
-					[releases[0], address]
-				];
-	for (const [release, finished] of inOrder) {
-		(release as () => void)();
-		await finished;
-	}
+	await vi.waitFor(() => expect(fetchAlbums).toHaveBeenCalledTimes(1));
+	if (first === 'address') await open();
+	releaseHydration();
+	await hydration;
+	if (first === 'hydration') await open();
 }
 
 describe.each(SURFACE_ADDRESSES)('$name (1354_rule_31)', ({ open, path, surface: own }) => {
@@ -1789,6 +1778,19 @@ describe.each(SURFACE_ADDRESSES)('$name (1354_rule_31)', ({ open, path, surface:
 		expect(location.pathname).toBe(path);
 		expect(get(librarySurface)).toBe(own);
 	});
+
+	it.each(['address', 'hydration'] as const)(
+		'defect:#1506 loads the listing once on a cold tab when the %s finishes first',
+		async (first) => {
+			mountAddressRoute(path);
+
+			await finishAddressAndHydration(open, first);
+
+			expect(fetchAlbums).toHaveBeenCalledTimes(1);
+			expect(fetchSongs).toHaveBeenCalledTimes(1);
+			expect(get(librarySurface)).toBe(own);
+		}
+	);
 
 	it.each([own, 'playlists'] as const)(
 		'keeps a matching rich entry when %s was shown',
