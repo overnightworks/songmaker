@@ -748,7 +748,7 @@ export class ResourceSyncController {
 
 	/** Retry clears every failure it fetches again; a song still waiting out its rate limit stays failed. */
 	private forgetFailuresFetchableNow(): void {
-		for (const songId of [...this.failedSongs.keys()]) {
+		for (const songId of this.failedSongs.keys()) {
 			if (this.isFetchableNow(songId)) this.failedSongs.delete(songId);
 		}
 	}

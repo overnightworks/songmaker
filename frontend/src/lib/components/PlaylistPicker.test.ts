@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import PlaylistPicker from './PlaylistPicker.svelte';
@@ -51,28 +51,30 @@ afterEach(() => {
 	document.body.replaceChildren();
 });
 
-describeBackClosesOverlay({
-	name: 'the playlist picker',
-	render: async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		await tick();
-		return target;
-	},
-	open: picker.open,
-	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
-	afterBack: () => expect(picker.added).toEqual([]),
-	closeWays: [
-		{
-			way: 'choosing a playlist',
-			close: (target) => target.querySelector<HTMLButtonElement>('.picker-item')?.click(),
-			actionSawHistoryAt: () => picker.addSawHistoryAt
+describe('the playlist picker closes on history Back', () => {
+	describeBackClosesOverlay({
+		name: 'the playlist picker',
+		render: async () => {
+			const target = document.createElement('div');
+			document.body.append(target);
+			await tick();
+			return target;
 		},
-		{ way: 'a click outside it', close: () => document.body.click() },
-		{
-			way: 'Escape',
-			close: () =>
-				document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-		}
-	]
+		open: picker.open,
+		isShown: (target) => target.querySelector('[role="dialog"]') !== null,
+		afterBack: () => expect(picker.added).toEqual([]),
+		closeWays: [
+			{
+				way: 'choosing a playlist',
+				close: (target) => target.querySelector<HTMLButtonElement>('.picker-item')?.click(),
+				actionSawHistoryAt: () => picker.addSawHistoryAt
+			},
+			{ way: 'a click outside it', close: () => document.body.click() },
+			{
+				way: 'Escape',
+				close: () =>
+					document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+			}
+		]
+	});
 });
