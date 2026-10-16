@@ -546,12 +546,29 @@ function wallScrollTop(page: Page): Promise<number> {
 	return wallBody(page).evaluate((body) => Math.round(body.scrollTop));
 }
 
-// Scrolls the wall halfway down and answers where it then stands.
+// The wall's head names its count once every album has loaded. The full list
+// lands as one change that sets the wall back to the scroll the app last
+// heard of, so a scroll made before it can be undone by it.
+async function expectLibraryWallLoaded(page: Page): Promise<void> {
+	await expect(
+		workspace(page).getByRole('heading', { name: new RegExp(`^${RAIL_LIBRARY_LABEL} · \\d+$`) })
+	).toBeVisible();
+}
+
+// Scrolls the wall halfway down and answers where it then stands, once the
+// wall has reported that scroll: the app keeps it from that report.
 async function scrollWallHalfway(page: Page): Promise<number> {
-	const target = await wallBody(page).evaluate((body) => {
-		body.scrollTop = Math.round((body.scrollHeight - body.clientHeight) / 2);
-		return Math.round(body.scrollTop);
-	});
+	const target = await wallBody(page).evaluate(
+		(body) =>
+			new Promise<number>((resolve) => {
+				const halfway = Math.round((body.scrollHeight - body.clientHeight) / 2);
+				if (halfway <= 0) return resolve(0);
+				body.addEventListener('scroll', () => resolve(Math.round(body.scrollTop)), {
+					once: true
+				});
+				body.scrollTop = halfway;
+			})
+	);
 	expect(target, 'the seeded wall scrolls').toBeGreaterThan(0);
 	return target;
 }
@@ -703,6 +720,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 		await page.goto(LIBRARY_PATH);
 		await expect(workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 		await expect(wallTileNamed(page, library.albumTitle)).toBeVisible();
+		await expectLibraryWallLoaded(page);
 		const leftAt = await scrollWallHalfway(page);
 		await openVoicesSettings(page, shellOf(testInfo));
 
