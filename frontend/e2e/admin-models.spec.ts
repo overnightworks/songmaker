@@ -31,6 +31,7 @@ import {
 	MODELS_COLUMN_STATUS_LABEL,
 	MODELS_COLUMN_TASK_LABEL,
 	MODELS_HISTORY_TAIL_LABEL,
+	MODELS_LIST_NEEDS_CLI_HINT,
 	MODELS_NO_MODELS_LABEL,
 	MODELS_ROUTE_KEY_NOT_SET_PHRASE,
 	MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
@@ -40,6 +41,7 @@ import {
 	MODELS_TASK_SCORING_LABEL,
 	PROVIDER_ROUTE_API_LABEL,
 	PROVIDER_ROUTE_CLI_LABEL,
+	modelsRouteNotAvailablePhrase,
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
@@ -49,7 +51,8 @@ import { readSeededLibrary } from './seed';
  * What each test costs the API, measured on a green run against the CI recipe:
  * 11 for the table walked at four desktop widths, 24 for the Cover row's save,
  * reload and restore, 46 for the co-writer turn (a cold album open, the song,
- * the chat and the return to the tab), 9 for the phone cards. One ceiling for the file,
+ * the chat and the return to the tab), 9 for the phone cards, SCORING_COST for the
+ * Scoring row's save, reload and restore. One ceiling for the file,
  * the same way `album-address.spec.ts` carries one for its four, with headroom
  * for the retry CI allows. The budget is a ceiling, not a knob: a flow that
  * suddenly needs several more round trips is a regression, so find the extra
@@ -188,13 +191,13 @@ test.afterEach(({}, testInfo) => {
 });
 
 async function attachShot(
-	page: Page,
+	subject: Page | Locator,
 	testInfo: TestInfo,
 	name: string,
 	fullPage = false
 ): Promise<void> {
 	const path = testInfo.outputPath(`${name}.png`);
-	await page.screenshot({ path, fullPage });
+	await subject.screenshot({ path, fullPage });
 	await testInfo.attach(name, { path, contentType: 'image/png' });
 }
 
@@ -399,3 +402,78 @@ test(
 		await attachShot(page, testInfo, 'admin-models-375', true);
 	}
 );
+
+// The Scoring row stands on the route the judge was saved with. This stack has
+// no key and no mounted CLI, so the judge was pinned to CLI at boot (#903):
+// the row must say CLI with the CLI's state, grey API with its reason, and
+// send that route when it saves. A logged-in CLI and its model list cannot
+// exist here; the unit suite pins them against the route statuses (#1473).
+const SCORING_VIEWPORTS = [
+	{ shell: ONLY_IN_SHELL.desktop, viewport: { width: 1440, height: DESKTOP_HEIGHT } },
+	{ shell: ONLY_IN_SHELL.mobile, viewport: PHONE_VIEWPORT }
+] as const;
+const SCORING_API_NOT_AVAILABLE = `${PROVIDER_ROUTE_API_LABEL} · ${modelsRouteNotAvailablePhrase(MODELS_TASK_SCORING_LABEL)}`;
+
+async function expectScoringRowOnItsSavedCliRoute(page: Page, provider: string): Promise<void> {
+	const routes = routeSwitch(page, MODELS_TASK_SCORING_LABEL);
+	await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_CLI_LABEL })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_API_LABEL })).toBeDisabled();
+	await expect(
+		taskRow(page, MODELS_TASK_SCORING_LABEL).getByText(SCORING_API_NOT_AVAILABLE)
+	).toBeVisible();
+	await expect(taskStatus(page, MODELS_TASK_SCORING_LABEL)).toContainText(
+		`${provider} ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
+	);
+	const model = modelSelect(page, MODELS_TASK_SCORING_LABEL);
+	await expect(model).toHaveText(MODELS_NO_MODELS_LABEL);
+	await expect(model).toBeDisabled();
+	await expect(
+		taskRow(page, MODELS_TASK_SCORING_LABEL).getByText(MODELS_LIST_NEEDS_CLI_HINT)
+	).toBeVisible();
+}
+
+for (const { shell, viewport } of SCORING_VIEWPORTS) {
+	test(
+		`at ${viewport.width}px the Scoring row stands on its saved route and saves a change on it`,
+		{ tag: shell },
+		async ({ page }, testInfo) => {
+			await page.setViewportSize(viewport);
+			await openModelsTab(page);
+
+			await expectScoringRowOnItsSavedCliRoute(page, 'Claude');
+			await attachShot(
+				taskRow(page, MODELS_TASK_SCORING_LABEL),
+				testInfo,
+				`scoring-row-${viewport.width}`
+			);
+
+			const providers = providerSelect(page, MODELS_TASK_SCORING_LABEL);
+			const before = await providers.inputValue();
+			try {
+				const saving = page.waitForRequest(
+					(request) => request.method() === 'PUT' && request.url().endsWith('/api/settings/judge')
+				);
+				await providers.selectOption('codex');
+				expect((await saving).postDataJSON()).toEqual({
+					provider: 'codex',
+					route: PROVIDER_ROUTE_CLI_LABEL.toLowerCase(),
+					model: ''
+				});
+				await expectSaved(page, MODELS_TASK_SCORING_LABEL);
+				await expectScoringRowOnItsSavedCliRoute(page, 'Codex');
+
+				await openModelsTab(page);
+				await expect(providerSelect(page, MODELS_TASK_SCORING_LABEL)).toHaveValue('codex');
+				await expectScoringRowOnItsSavedCliRoute(page, 'Codex');
+			} finally {
+				// The judge is instance-wide and outlives the test, so it is put back
+				// through the same control for the next project and spec.
+				await providerSelect(page, MODELS_TASK_SCORING_LABEL).selectOption(before);
+				await expectSaved(page, MODELS_TASK_SCORING_LABEL);
+			}
+		}
+	);
+}

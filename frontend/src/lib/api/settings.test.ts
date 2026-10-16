@@ -41,10 +41,10 @@ describe('settings API contract', () => {
 		],
 		[
 			'judge settings',
-			() => updateJudgeSettings('openai', 'gpt-5'),
+			() => updateJudgeSettings('claude', 'cli', 'claude-sonnet'),
 			'/api/settings/judge',
 			'PUT',
-			{ provider: 'openai', model: 'gpt-5' }
+			{ provider: 'claude', route: 'cli', model: 'claude-sonnet' }
 		],
 		[
 			'cover settings',

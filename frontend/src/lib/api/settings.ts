@@ -81,11 +81,15 @@ export async function fetchJudgeSettings(): Promise<JudgeSettings> {
 	return apiFetch<JudgeSettings>('/api/settings/judge');
 }
 
-export async function updateJudgeSettings(provider: string, model: string): Promise<JudgeSettings> {
+export async function updateJudgeSettings(
+	provider: string,
+	route: 'cli' | 'api',
+	model: string
+): Promise<JudgeSettings> {
 	return apiFetch<JudgeSettings>('/api/settings/judge', {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ provider, model })
+		body: JSON.stringify({ provider, route, model })
 	});
 }
 
