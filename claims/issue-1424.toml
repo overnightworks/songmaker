@@ -1,7 +1,0 @@
-claim_id = "f4a77473c955420480913e885a6c4006"
-agent = "claude-head"
-role = "builder"
-base = "c3216742461cf1a06601fb0c16363149796f89c1"
-branch = "claude-head/issue-1424-mosaic-spec-race"
-scope = ["frontend/e2e/playlist-cover-rail.spec.ts"]
-opened_commit = "24f5e70da91ffacfe11955886be9f68c0df0f9d1"
