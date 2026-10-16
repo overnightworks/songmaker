@@ -213,6 +213,24 @@ describe('/ with no ?song= query', () => {
 	});
 });
 
+describe('an empty legacy song query', () => {
+	it.each(['?song=', '?song=&gen=' + GENERATION_ID])(
+		'1354_rule_31: shows the Library wall without fetching a song for %s',
+		async (query) => {
+			coldTabAt(query);
+			const target = openAddress();
+
+			await vi.waitFor(() => {
+				expect(target.querySelector('.library-wall')).not.toBeNull();
+				expect(target.querySelector('.address-overlay')).toBeNull();
+				expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
+				expect(location.search).toBe('');
+			});
+			expect(api.fetchSong).not.toHaveBeenCalled();
+		}
+	);
+});
+
 describe('a legacy /?song= address redirects', () => {
 	it.each(['?song=' + SONG_ID, `?song=${SONG_ID}&gen=${GENERATION_ID}`])(
 		'1354_rule_31: preserves %s while legacy resolution waits',

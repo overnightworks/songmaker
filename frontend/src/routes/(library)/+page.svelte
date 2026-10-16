@@ -2,8 +2,7 @@
 	// The Library address resolves its wall and renders nothing here
 	// (issue #1456), except when it still carries the legacy
 	// `?song=<uuid>` (and `?gen=<uuid>`) query a bookmark or a shared link from
-	// before S3/S4 (#275/#281) can hold. That form still worked (see the note
-	// on the removed `?song=` branch of initNavigation, in navigation.ts), but
+	// before S3/S4 (#275/#281) can hold. That form still worked, but
 	// the address bar kept showing it forever and Back could return to it --
 	// S6 (issue #284) redirects it onto its canonical song or take address
 	// instead, in place, so a stale bookmark converges to the one address that
@@ -89,7 +88,7 @@
 
 	async function redirectLegacyAddress(id: string | null, genId: string | null): Promise<void> {
 		const request = ++openRequests;
-		if (id === null) {
+		if (!id) {
 			await openLibraryAddress();
 			addressState = 'idle';
 			return;

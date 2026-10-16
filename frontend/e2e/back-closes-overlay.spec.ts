@@ -42,6 +42,7 @@ import {
 	FlowGuard,
 	expectLibraryWallLoaded,
 	scrollWallHalfway,
+	wallBody,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openLibraryWall,
@@ -538,10 +539,6 @@ function wallTiles(page: Page): Locator {
 
 function wallTileNamed(page: Page, title: string): Locator {
 	return wallTiles(page).locator('.wall-tile-body').filter({ hasText: title });
-}
-
-function wallBody(page: Page): Locator {
-	return workspace(page).locator('.library-wall .wall-body');
 }
 
 function wallScrollTop(page: Page): Promise<number> {

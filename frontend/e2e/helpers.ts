@@ -325,22 +325,24 @@ export async function expectLibraryWallLoaded(page: Page): Promise<void> {
 	).toBeVisible();
 }
 
+export function wallBody(page: Page): Locator {
+	return workspace(page).locator('.library-wall .wall-body');
+}
+
 // Scrolls the wall halfway down and answers where it then stands, once the
 // wall has reported that scroll: the app keeps it from that report.
 export async function scrollWallHalfway(page: Page): Promise<number> {
-	const target = await workspace(page)
-		.locator('.library-wall .wall-body')
-		.evaluate(
-			(body) =>
-				new Promise<number>((resolve) => {
-					const halfway = Math.round((body.scrollHeight - body.clientHeight) / 2);
-					if (halfway <= 0) return resolve(0);
-					body.addEventListener('scroll', () => resolve(Math.round(body.scrollTop)), {
-						once: true
-					});
-					body.scrollTop = halfway;
-				})
-		);
+	const target = await wallBody(page).evaluate(
+		(body) =>
+			new Promise<number>((resolve) => {
+				const halfway = Math.round((body.scrollHeight - body.clientHeight) / 2);
+				if (halfway <= 0) return resolve(0);
+				body.addEventListener('scroll', () => resolve(Math.round(body.scrollTop)), {
+					once: true
+				});
+				body.scrollTop = halfway;
+			})
+	);
 	expect(target, 'the seeded wall scrolls').toBeGreaterThan(0);
 	return target;
 }

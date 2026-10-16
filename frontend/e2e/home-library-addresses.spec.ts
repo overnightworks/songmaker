@@ -3,6 +3,7 @@ import {
 	FlowGuard,
 	expectLibraryWallLoaded,
 	scrollWallHalfway,
+	wallBody,
 	LIBRARY_PATH,
 	LIBRARY_URL,
 	HOME_URL,
@@ -22,7 +23,7 @@ for (const retainCollection of [false, true]) {
 			const guard = new FlowGuard(page);
 			const surface = workspace(page);
 			const wall = surface.locator('.library-wall');
-			const body = wall.locator('.wall-body');
+			const body = wallBody(page);
 			const album = wall.getByRole('button', {
 				name: `Open album ${readSeededLibrary().albumTitle}`,
 				exact: true

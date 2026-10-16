@@ -680,10 +680,10 @@ export function openLibraryAddress(): Promise<'found'> {
 			routePath: LIBRARY_ROUTE_PATH,
 			historyOpens: () => {
 				const state = currentLibraryHistoryState();
-				return isLibraryHistoryState(state) && state.surface === 'browse' && state.songId === null;
+				return isLibraryHistoryState(state) && libraryWallShows(state.surface, state.songId);
 			},
 			addressState: () => ({ ...libraryRootState(), surface: 'browse' }),
-			shown: () => get(librarySurface) === 'browse' && get(selectedSongId) === null
+			shown: () => libraryWallShows(get(librarySurface), get(selectedSongId))
 		})
 	);
 }
@@ -706,6 +706,10 @@ export function openPlaylistsAddress(): Promise<'found'> {
 function historyAlreadyOpensPlaylists(): boolean {
 	const state = currentLibraryHistoryState();
 	return isLibraryHistoryState(state) && playlistsWallShows(state.surface, state.songId);
+}
+
+function libraryWallShows(surface: LibrarySurface, songId: string | null): boolean {
+	return surface === 'browse' && songId === null;
 }
 
 // An open song stands in front of every surface, the Playlists wall included.
