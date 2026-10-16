@@ -32,6 +32,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
+    album_ids_with_playable_take,
     count_picked_songs_by_album,
     count_songs_by_album,
     list_place_listens,
@@ -131,6 +132,7 @@ def api_library_search(
         has_more=page.has_more,
         next_cursor=next_cursor,
         picked_counts=picked_counts,
+        playable_album_ids=album_ids_with_playable_take(session, album_ids),
         song_counts=song_counts,
     )
 

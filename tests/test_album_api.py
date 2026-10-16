@@ -49,14 +49,20 @@ def _add_song_with_generation(
     album_id: str,
     is_picked: bool = False,
     is_archived: bool = False,
+    mp3_path: str | None = None,
+    song_deleted_at: datetime | None = None,
 ) -> None:
     session.add(
-        Song(id=song_id, title=song_id, album_id=album_id, track_number=1, slug=song_id),
+        Song(
+            id=song_id, title=song_id, album_id=album_id, track_number=1, slug=song_id,
+            deleted_at=song_deleted_at,
+        ),
     )
     session.add(Version(id=f"v-{song_id}", song_id=song_id, version_number=1, lyrics="l"))
     session.add(Generation(
         id=f"g-{song_id}", song_id=song_id, version_id=f"v-{song_id}",
-        generation_number=1, mp3_path=f"{_ADMIN_USER}/{song_id}.mp3", seed=1,
+        generation_number=1,
+        mp3_path=f"{_ADMIN_USER}/{song_id}.mp3" if mp3_path is None else mp3_path, seed=1,
         is_picked=is_picked, is_archived=is_archived,
     ))
 
@@ -132,7 +138,7 @@ def test_list_albums_computes_picked_count_in_one_aggregate_query(picks_client) 
     with factory() as probe_session:
         engine = probe_session.get_bind()
 
-    queries, handle = _count_queries(engine, "from songs", "join generations")
+    queries, handle = _count_queries(engine, "from songs", "join generations", "is_picked")
     try:
         resp = client.get("/api/albums")
     finally:
@@ -142,6 +148,25 @@ def test_list_albums_computes_picked_count_in_one_aggregate_query(picks_client) 
     assert len(resp.json()["items"]) == 3
     assert len(queries) == 1, (
         f"expected one aggregate pick-count query for all albums, got {len(queries)}: {queries}"
+    )
+
+
+def test_list_albums_computes_has_playable_take_in_one_aggregate_query(picks_client) -> None:
+    """defect:#1430 -- the per-album answer comes from one query per page."""
+    client, factory = picks_client
+    with factory() as probe_session:
+        engine = probe_session.get_bind()
+
+    queries, handle = _count_queries(engine, "distinct songs.album_id", "join generations")
+    try:
+        resp = client.get("/api/albums")
+    finally:
+        event.remove(engine, "before_cursor_execute", handle)
+
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) == 3
+    assert len(queries) == 1, (
+        f"expected one aggregate playable-take query for all albums, got {len(queries)}: {queries}"
     )
 
 
@@ -171,13 +196,14 @@ def test_list_albums_computes_song_count_in_one_aggregate_query(picks_client) ->
     )
     # Fixed budget for GET /api/albums against this fixture: one count(*)
     # for the page total, one SELECT for the page of albums, one aggregate
-    # picked-count query, one aggregate song-count query -- never a query
-    # per album. Pinned alongside the aggregate-only assertion above so a
+    # picked-count query, one aggregate song-count query, one aggregate
+    # playable-take query -- never a query per album. Pinned alongside the
+    # aggregate-only assertion above so a
     # regression on an unrelated relationship shows up here even when the
     # two counted aggregates stay at one query each.
-    assert len(all_queries) == 4, (
-        f"expected exactly 4 queries for GET /api/albums against this fixture "
-        f"(count + page + picked-count aggregate + song-count aggregate), "
+    assert len(all_queries) == 5, (
+        f"expected exactly 5 queries for GET /api/albums against this fixture "
+        f"(count + page + picked-count + song-count + playable-take aggregates), "
         f"got {len(all_queries)}: {all_queries}"
     )
 
@@ -204,6 +230,79 @@ def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> No
     assert resp.status_code == 200
     by_id = {a["id"]: a for a in resp.json()["items"]}
     assert by_id["alb"]["song_count"] == 1
+
+
+def _seed_playable_take_scenarios(session) -> None:
+    session.add(User(
+        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+    ))
+    for album_id in (
+        "no-songs", "songless-song", "only-archived", "only-empty-mp3", "empty-and-archived",
+        "one-playable-among-archived", "only-soft-deleted",
+    ):
+        session.add(Album(id=album_id, title=album_id, artist="A"))
+    session.add(Song(
+        id="bare", title="Bare", album_id="songless-song", track_number=1, slug="bare",
+    ))
+    _add_song_with_generation(
+        session, song_id="arch", album_id="only-archived", is_archived=True,
+    )
+    _add_song_with_generation(session, song_id="blank", album_id="only-empty-mp3", mp3_path="")
+    _add_song_with_generation(
+        session, song_id="blank-arch", album_id="empty-and-archived",
+        mp3_path="", is_archived=True,
+    )
+    _add_song_with_generation(
+        session, song_id="old", album_id="one-playable-among-archived", is_archived=True,
+    )
+    _add_song_with_generation(session, song_id="good", album_id="one-playable-among-archived")
+    _add_song_with_generation(
+        session, song_id="gone", album_id="only-soft-deleted",
+        song_deleted_at=datetime.now(timezone.utc),
+    )
+
+
+_PLAYABLE_TAKE_EXPECTATIONS = {
+    "no-songs": False,
+    "songless-song": False,
+    "only-archived": False,
+    "only-empty-mp3": False,
+    "empty-and-archived": False,
+    "one-playable-among-archived": True,
+    "only-soft-deleted": False,
+}
+
+
+@pytest.fixture
+def playable_take_client(tmp_path: Path):
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playable_take_scenarios)
+    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    return client
+
+
+def test_list_albums_reports_has_playable_take_per_album_1354_rule_11(
+    playable_take_client,
+) -> None:
+    resp = playable_take_client.get("/api/albums")
+    assert resp.status_code == 200
+    reported = {a["id"]: a["has_playable_take"] for a in resp.json()["items"]}
+    assert reported == _PLAYABLE_TAKE_EXPECTATIONS
+
+
+@pytest.mark.parametrize(("album_id", "expected"), _PLAYABLE_TAKE_EXPECTATIONS.items())
+def test_get_album_agrees_with_list_on_has_playable_take_1354_rule_11(
+    playable_take_client, album_id: str, expected: bool,
+) -> None:
+    resp = playable_take_client.get(f"/api/albums/{album_id}")
+    assert resp.status_code == 200
+    assert resp.json()["has_playable_take"] is expected
+
+
+def test_created_album_has_no_playable_take_1354_rule_11(playable_take_client) -> None:
+    client = playable_take_client
+    resp = client.post("/api/albums", json={"title": "Fresh"})
+    assert resp.status_code == 200
+    assert resp.json()["has_playable_take"] is False
 
 
 def _seed_metadata_scenarios(session) -> None:

@@ -12,7 +12,11 @@ from sqlalchemy.orm import Session, joinedload
 from songmaker_cli.db.models import Album, Generation, Song, aware_timestamp
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
-from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
+from songmaker_cli.db.queries.sharing import (
+    disable_sharing,
+    enable_sharing,
+    playable_take_filter,
+)
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
 
@@ -90,6 +94,26 @@ def count_picked_songs_by_album(
         .all()
     )
     return dict(rows)
+
+
+def album_ids_with_playable_take(
+    session: Session, album_ids: Sequence[str],
+) -> set[str]:
+    """Ids among ``album_ids`` that hold at least one playable take.
+
+    "Playable" is decided by sharing.playable_take_filter(), the single
+    owner of that rule. One aggregate query per page -- no per-album loop.
+    """
+    if not album_ids:
+        return set()
+    rows = (
+        session.query(Song.album_id)
+        .join(Generation, Generation.song_id == Song.id)
+        .filter(Song.album_id.in_(album_ids), playable_take_filter())
+        .distinct()
+        .all()
+    )
+    return {album_id for (album_id,) in rows}
 
 
 def count_songs_by_album(
