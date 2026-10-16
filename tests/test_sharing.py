@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event
 from webauth.proxies import TrustedProxies
 
+from songmaker_cli.api_models.playlists import SharedPlaylistEntryResponse
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import COVER_DIRNAME, PLAYLIST_COVER_DIRNAME, SONG_COVER_DIRNAME
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -1651,6 +1652,56 @@ def _add_mosaic_album(session, index: int) -> str:
     return album_id
 
 
+@pytest.mark.parametrize("album_state", ["shared", "unshared", "deleted"])
+def test_shared_playlist_names_each_member_album_without_expanding_cover_access_1374_rule_10(
+    tmp_path: Path, album_state: str,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    with client.app.state.ctx.db() as session:
+        album = session.get(Album, "test_album")
+        assert album is not None
+        album.cover_key = "album.png"
+        album.is_shared = album_state == "shared"
+        if album_state == "deleted":
+            album.deleted_at = datetime.now(timezone.utc)
+        _add_mosaic_album(session, 1)
+        session.commit()
+    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "test_album")
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = web_client(client.app, cookies={})
+
+    response = public.get(f"/shared/playlist/{slug}")
+
+    assert response.status_code == 200
+    entries = response.json()["entries"]
+    assert all(set(entry) == _SHARED_PLAYLIST_ENTRY_KEYS for entry in entries)
+    assert {entry["entry_id"]: entry["album_title"] for entry in entries} == {
+        **dict.fromkeys(["e0", "e1", "e2"], "" if album_state == "deleted" else "Test Album"),
+        "mosaic-entry-1": "Mosaic Album 1",
+    }
+    cover_url = f"/shared/playlist/{slug}/album-cover/test_album?variant=detail&v=album.png"
+    assert public.get(cover_url).status_code == (404 if album_state == "deleted" else 200)
+    assert entries[0]["album_cover"] == (
+        None if album_state == "deleted" else {
+            "card": cover_url.replace("variant=detail", "variant=card"),
+            "detail": cover_url,
+        }
+    )
+
+
+def test_shared_playlist_song_without_album_has_empty_album_title_1374_rule_10() -> None:
+    entry = PlaylistEntry(
+        id="entry", generation=Generation(
+            id="take", generation_number=1, song=Song(title="Song", album=None),
+        ),
+    )
+
+    payload = SharedPlaylistEntryResponse.from_orm(entry, audio_url=None, album_cover=None)
+
+    assert payload.album_title == ""
+
+
 def test_shared_playlist_view_includes_pick_media(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
     login_and_csrf(client, "admin", "admin12345")
@@ -2129,7 +2180,7 @@ _SHARED_GENERATION_KEYS = {
     "generation_id", "audio_duration", "lyrics", "whisper_cues", "album_cover",
 }
 _SHARED_PLAYLIST_ENTRY_KEYS = {
-    "entry_id", "song_title", "artist", "generation_number", "audio_url",
+    "entry_id", "song_title", "album_title", "artist", "generation_number", "audio_url",
     "generation_id", "audio_duration", "lyrics", "whisper_cues", "album_cover",
 }
 

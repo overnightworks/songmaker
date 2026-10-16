@@ -938,6 +938,7 @@ export interface SharedGenerationPayload {
 export interface SharedPlaylistEntryPayload {
 	entry_id: string;
 	song_title: string;
+	album_title: string;
 	artist: string;
 	generation_number: number;
 	audio_url: string | null;

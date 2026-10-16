@@ -715,7 +715,8 @@ by exact-key-set tests in `tests/test_sharing.py`. Album: `title`, `artist`,
 `album_cover`. Take: `title`, `artist`, `album_title`, `generation_number`
 (the tab title "Take N"), `audio_url`, `album_cover`. Playlist: `title`,
 `cover`, `album_covers` (the mosaic) and `entries` (each `entry_id`,
-`song_title`, `artist`, `generation_number`, `audio_url` and `album_cover`,
+`song_title`, `artist`, `album_title` (the entry’s own album title, empty when
+there is no album), `generation_number`, `audio_url` and `album_cover`,
 the entry's own album cover, present only when the file exists and served only
 for albums that are members of the shared playlist). Every `audio_url` names the
 take, `{audio route}/{generation_id}.mp3`, never its stored path, which starts

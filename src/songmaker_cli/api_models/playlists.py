@@ -231,6 +231,7 @@ class ReorderPlaylistEntryRequest(BaseModel):
 class SharedPlaylistEntryResponse(BaseModel):
     entry_id: str
     song_title: str
+    album_title: str
     artist: str
     generation_number: int
     audio_url: str | None
@@ -257,6 +258,7 @@ class SharedPlaylistEntryResponse(BaseModel):
         return cls(
             entry_id=entry.id,
             song_title=song.title if song else "",
+            album_title=album.title if album else "",
             artist=album.artist if album else "",
             generation_number=generation.generation_number,
             audio_url=audio_url,
