@@ -27,7 +27,7 @@ import {
 	LIBRARY_ROUTE_PATH,
 	libraryRouteShape
 } from '../src/lib/routes/addresses';
-import { AUDIO_PATH_PREFIX, BASE_URL } from './seed';
+import { BASE_URL } from './seed';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -196,15 +196,6 @@ function isClosedOnPurpose(url: string): boolean {
 // so the abort loses nothing.
 function isSentAsThePageLeaves(url: string): boolean {
 	return new URL(url).pathname === PLAYBACK_DIAGNOSTICS_PATH;
-}
-
-// The player drops the take it is still loading when it moves to another one:
-// the continuous deck cancels the take's download, a media element the request
-// of the source it leaves. Whether the whole take had arrived by then is a race
-// no flow owns, and a take that fails to play fails the flow's own playback
-// checks.
-function isDroppedByThePlayer(url: string): boolean {
-	return new URL(url).pathname.startsWith(AUDIO_PATH_PREFIX);
 }
 
 const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_EVENT_STREAM_PATH;
@@ -488,6 +479,46 @@ export function containing(title: string): RegExp {
 	return new RegExp(escapeForRegExp(title));
 }
 
+const PLAYING_AUDIO_KEY = 'playingAudio';
+
+export interface PlayingAudioState {
+	time: number;
+	paused: boolean;
+	src: string;
+}
+
+/**
+ * Makes the media element the app last started readable by
+ * `playingAudioState`, without changing how it plays. Call it before the page
+ * loads: the player owns a detached element no locator can reach.
+ */
+export async function observePlayingAudio(page: Page): Promise<void> {
+	await page.addInitScript((key) => {
+		const play = HTMLMediaElement.prototype.play;
+		HTMLMediaElement.prototype.play = function () {
+			Reflect.set(window, key, this);
+			return play.call(this);
+		};
+	}, PLAYING_AUDIO_KEY);
+}
+
+export function playingAudioState(page: Page): Promise<PlayingAudioState> {
+	return page.evaluate((key) => {
+		const audio = Reflect.get(window, key) as HTMLMediaElement | undefined;
+		return { time: audio?.currentTime ?? 0, paused: audio?.paused ?? true, src: audio?.src ?? '' };
+	}, PLAYING_AUDIO_KEY);
+}
+
+/**
+ * How far the media element the app last started has played, 0 while it is
+ * paused: a take the app only marked as playing, or the one it just left,
+ * has not played yet.
+ */
+export async function playedSeconds(page: Page): Promise<number> {
+	const { paused, time } = await playingAudioState(page);
+	return paused ? 0 : time;
+}
+
 export interface RenderedBox {
 	x: number;
 	y: number;
@@ -546,6 +577,7 @@ function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
  */
 export class FlowGuard {
 	private readonly failures: string[] = [];
+	private readonly abandonedTakePaths = new Set<string>();
 	private apiRequests = 0;
 
 	constructor(page: Page, options: FlowGuardOptions = {}) {
@@ -566,15 +598,14 @@ export class FlowGuard {
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
 			// Chromium reports a stream the client cancelled in flight, a send the
-			// leaving page cut off and a take the player dropped for the next one
-			// as a failed request with exactly this error, indistinguishable from
-			// any other intentional client-side abort. Every other reason still
-			// fails the flow, including a 429 or 5xx on the same path (handled
-			// below).
+			// leaving page cut off and a take the flow declared it abandons as a
+			// failed request with exactly this error, indistinguishable from any
+			// other intentional client-side abort. Every other reason still fails
+			// the flow, including a 429 or 5xx on the same path (handled below).
 			const cutOffOnPurpose =
 				isClosedOnPurpose(request.url()) ||
 				isSentAsThePageLeaves(request.url()) ||
-				isDroppedByThePlayer(request.url());
+				this.abandonedTakePaths.has(new URL(request.url()).pathname);
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
@@ -601,6 +632,19 @@ export class FlowGuard {
 		page.on('pageerror', (error) => {
 			this.failures.push(`uncaught page error: ${error.message}`);
 		});
+	}
+
+	/**
+	 * Declares, right before the step that leaves it, a take the flow stops
+	 * loading: the player cancels the download of the take it moves off, which
+	 * Chromium reports as an aborted request whether or not the whole take had
+	 * arrived. From then on an abort on exactly this take's address no longer
+	 * fails the flow; an abort on any other take still does. The declaration
+	 * says nothing about the take the flow moves to, so the flow itself must
+	 * check that the successor plays.
+	 */
+	abandonsTake(audioPath: string): void {
+		this.abandonedTakePaths.add(audioPath);
 	}
 
 	get apiRequestCount(): number {

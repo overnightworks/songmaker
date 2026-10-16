@@ -2,7 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { FlowGuard, LIBRARY_PATH, LIBRARY_URL, ONLY_IN_SHELL, workspace } from './helpers';
+import {
+	FlowGuard,
+	LIBRARY_PATH,
+	LIBRARY_URL,
+	observePlayingAudio,
+	ONLY_IN_SHELL,
+	playedSeconds,
+	playingAudioState,
+	workspace
+} from './helpers';
 import {
 	archivePhoneLibrary,
 	BASE_URL,
@@ -26,13 +35,6 @@ function row(page: Page, title: string): Locator {
 	return workspace(page)
 		.locator('.wall-tile')
 		.filter({ has: page.getByRole('button', { name: `Open album ${title}`, exact: true }) });
-}
-
-async function audioState(page: Page) {
-	return page.evaluate(() => {
-		const audio = Reflect.get(window, 'phoneProofAudio') as HTMLMediaElement | undefined;
-		return { time: audio?.currentTime ?? 0, paused: audio?.paused ?? true, src: audio?.src ?? '' };
-	});
 }
 
 async function expectRows(page: Page): Promise<void> {
@@ -63,14 +65,7 @@ test.beforeEach(async ({ page, request, playwright }) => {
 	fixture = await seedPhoneLibrary(account, credentials);
 	await page.context().clearCookies();
 	await page.context().addCookies((await account.storageState()).cookies);
-	// Observe the public media element without changing its play/pause behaviour.
-	await page.addInitScript(() => {
-		const play = HTMLMediaElement.prototype.play;
-		HTMLMediaElement.prototype.play = function () {
-			Reflect.set(window, 'phoneProofAudio', this);
-			return play.call(this);
-		};
-	});
+	await observePlayingAudio(page);
 });
 
 test.afterEach(async () => {
@@ -151,7 +146,7 @@ test(
 			exact: true
 		});
 		await expect(pause).toBeVisible();
-		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(0);
+		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
 		await expect(page).toHaveURL(LIBRARY_URL);
 		expect(await scroll.evaluate((el) => el.scrollTop)).toBe(before);
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
@@ -168,22 +163,25 @@ test(
 		);
 		await screenshot(page, 'playing');
 		const playerBar = page.locator('.player-bar');
+		guard.abandonsTake(fixture.tracks[playable.id][0].audioPath);
 		await playerBar.getByRole('button', { name: 'Next', exact: true }).click();
 		await expect(playerBar).toContainText(secondTrack.title);
 		expect((await secondAudioResponse).ok()).toBe(true);
-		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(1);
+		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(1);
 		await pause.click();
 		await expect(play).toBeVisible();
-		const paused = await audioState(page);
+		const paused = await playingAudioState(page);
 		expect(paused.paused).toBe(true);
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
 		await play.click();
 		await expect(pause).toBeVisible();
-		const resumed = await audioState(page);
+		const resumed = await playingAudioState(page);
 		expect(resumed.src).toBe(paused.src);
 		expect(resumed.time).toBeGreaterThanOrEqual(paused.time);
 		await expect(playerBar).toContainText(secondTrack.title);
-		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(paused.time + 0.2);
+		await expect
+			.poll(async () => (await playingAudioState(page)).time)
+			.toBeGreaterThan(paused.time + 0.2);
 		await row(page, empty.title).getByRole('button').click();
 		await page.getByRole('button', { name: 'Back to Library', exact: true }).click();
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
@@ -206,12 +204,14 @@ test(
 		);
 		await row(page, last.title).scrollIntoViewIfNeeded();
 		const bottomBefore = await scroll.evaluate((el) => el.scrollTop);
+		guard.abandonsTake(secondTrack.audioPath);
 		await row(page, last.title)
 			.getByRole('button', { name: `Play ${last.title}`, exact: true })
 			.click();
 		await expect(
 			row(page, last.title).getByRole('button', { name: `Pause ${last.title}`, exact: true })
 		).toBeVisible();
+		await expect.poll(() => playedSeconds(page)).toBeGreaterThan(0);
 		await expect(page).toHaveURL(LIBRARY_URL);
 		expect(await scroll.evaluate((el) => el.scrollTop)).toBe(bottomBefore);
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toHaveCount(0);
@@ -296,20 +296,23 @@ test(
 			exact: true
 		});
 		await play.click();
-		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(0);
+		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
+		guard.abandonsTake(fixture.tracks[playable.id][0].audioPath);
 		await page.locator('.player-bar').getByRole('button', { name: 'Next', exact: true }).click();
 		await expect
-			.poll(async () => new URL((await audioState(page)).src).pathname)
+			.poll(async () => new URL((await playingAudioState(page)).src).pathname)
 			.toBe(secondTrack.audioPath);
-		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(1);
+		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(1);
 		await row(page, playable.title)
 			.getByRole('button', { name: `Pause ${playable.title}`, exact: true })
 			.click();
-		const paused = await audioState(page);
+		const paused = await playingAudioState(page);
 		expect(paused.paused).toBe(true);
 		await play.click();
-		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(paused.time + 0.2);
-		expect(new URL((await audioState(page)).src).pathname).toBe(secondTrack.audioPath);
+		await expect
+			.poll(async () => (await playingAudioState(page)).time)
+			.toBeGreaterThan(paused.time + 0.2);
+		expect(new URL((await playingAudioState(page)).src).pathname).toBe(secondTrack.audioPath);
 		await expect(page).toHaveURL(LIBRARY_URL);
 	}
 );
