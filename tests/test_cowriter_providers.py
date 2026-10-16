@@ -1395,10 +1395,7 @@ def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
     )
     assert snapshot.probed_at is not None
 
-    client, factory = admin_client
-    with factory() as session:
-        set_provider_routes(session, {name: "cli" for name in LIVE_CATALOG})
-        session.commit()
+    client, _ = admin_client
     response = client.get("/api/settings/providers")
 
     assert response.status_code == 200
@@ -2047,10 +2044,7 @@ def _pinned_response_body(case: str) -> bytes:
 def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
     admin_client, monkeypatch, case: str,
 ) -> None:
-    client, factory = admin_client
-    with factory() as session:
-        set_provider_routes(session, {"claude": "cli", "grok": "api", "codex": "cli"})
-        session.commit()
+    client, _ = admin_client
     snapshots = _pinned_snapshots(case)
     monkeypatch.setattr(
         "songmaker_cli.provider_status.provider_snapshots", lambda: snapshots,

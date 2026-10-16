@@ -176,9 +176,7 @@ class CoverSettingsResponse(BaseModel):
 
 class ProviderStatusResponse(BaseModel):
     provider: str
-    cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse] = Field(
-        default=None,
-    )
+    cowriter_routes: dict[Literal["cli", "api"], ProviderRouteStatusResponse]
     cover_routes: dict[Literal["cli", "api"], ProviderRouteReadiness]
 
 

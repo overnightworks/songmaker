@@ -868,7 +868,7 @@ Codex CLI route reads its model catalogue from the mounted CLI's
 `codex debug models` JSON output. The settings responses project the selected
 route for legacy callers while also returning route-keyed readiness and
 catalogue snapshots. Judge settings expose `route` and `provider_routes_status`;
-the saved route owns their model list and the provider status's `judge` projection.
+the saved route owns their model list.
 At startup, an absent `judge_route` is pinned once from the saved provider and
 shared provider runtime configuration: Claude (also the unset provider) uses
 API when `ANTHROPIC_API_KEY` is set, otherwise CLI; Grok, Codex, and retired
