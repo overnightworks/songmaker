@@ -56,20 +56,20 @@ To: ${ALERT_EMAIL_TO}
 ${BODY}
 "
 
-# The credentials reach curl on file descriptor 3 as a --config file
-# instead of as a --user argument: anything in argv is world-readable in
-# `ps` and /proc for as long as the send lasts. The here-string keeps them
-# off this host's disk entirely (see curl_credentials_config for the
-# quoting rule curl applies to what it reads there).
-CURL_CREDENTIALS="$(curl_credentials_config "$SMTP_USER" "$SMTP_PASSWORD")"
-
+# The credentials reach curl through a pipe as a --config file instead of
+# as a --user argument: anything in argv is world-readable in `ps` and
+# /proc for as long as the send lasts (argv only carries the /dev/fd path).
+# The process substitution keeps them off this host's disk entirely and
+# runs the function in a forked shell, so no other process gets them in its
+# arguments or its environment (see curl_credentials_config for the quoting
+# rule curl applies to what it reads there).
 if ! CURL_OUTPUT="$(curl --silent --show-error --fail \
     --ssl-reqd \
     --url "smtp://${SMTP_HOST}:${SMTP_PORT}" \
     --mail-from "$SMTP_USER" \
     --mail-rcpt "$ALERT_EMAIL_TO" \
-    --config /dev/fd/3 \
-    --upload-file - 3<<<"$CURL_CREDENTIALS" <<<"$MESSAGE" 2>&1)"; then
+    --config <(curl_credentials_config "$SMTP_USER" "$SMTP_PASSWORD") \
+    --upload-file - <<<"$MESSAGE" 2>&1)"; then
     # Defense in depth: curl does not echo back credentials on a protocol
     # error, but scrub the password from whatever it did print before this
     # line reaches the journal, in case a future curl version ever changes

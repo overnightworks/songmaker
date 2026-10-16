@@ -112,7 +112,8 @@ fi
 # unusual PROJECT_ROOT or INSTALL_USER can never corrupt or misdirect the
 # substitution below.
 sed_escape_replacement() {
-    printf '%s' "$1" | sed -e 's/[\&#]/\\&/g'
+    local replacement="$1"
+    printf '%s' "$replacement" | sed -e 's/[\&#]/\\&/g'
 }
 
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"

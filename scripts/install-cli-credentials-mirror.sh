@@ -129,7 +129,8 @@ done
 # Escape backslash, the sed delimiter (#), and & (which sed would otherwise
 # expand to "whatever matched the pattern" in the replacement text).
 sed_escape_replacement() {
-    printf '%s' "$1" | sed -e 's/[\&#]/\\&/g'
+    local replacement="$1"
+    printf '%s' "$replacement" | sed -e 's/[\&#]/\\&/g'
 }
 
 ESCAPED_PROJECT_ROOT="$(sed_escape_replacement "$PROJECT_ROOT")"
