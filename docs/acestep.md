@@ -24,8 +24,10 @@ an LRU cache of loaded models and exposes:
 | POST | `/download_model` | Download a model variant, returns `{task_id}` |
 | GET | `/tasks/{id}` | Current task snapshot |
 | GET | `/tasks/{id}/stream` | SSE: `progress`/`done`/`error` events; a generate task's `progress` event also carries its `phase` (`writing`/`rendering`), and `progress` is the fraction within that phase |
-| GET | `/loaded_models` | Current state for heartbeat |
-| GET | `/health` | Liveness |
+| GET | `/loaded_models` | Loaded models, pinned set and available modes (no in-tree caller; the heartbeat is published by the worker itself) |
+| GET | `/health` | Liveness (the only route without the internal token) |
+
+Every route except `GET /health` needs the `X-Internal-Token` header: a missing header answers 422, a wrong or empty token 401. The routes sit on one router that carries the token check, so a new route is protected by default. `/health` stays open because the Compose healthcheck calls it headerless; the FastAPI `/docs`, `/redoc` and `/openapi.json` routes are switched off.
 
 Workers self-register with the web container at startup
 (`POST /api/internal/workers/register`) and heartbeat ephemeral state to
