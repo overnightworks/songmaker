@@ -1,8 +1,0 @@
-claim_id = "8c68535a2bee4ea1b4dddd7fb6b8897d"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "ab8e4d045752d83e7698b741c5d1693a43200ec5"
-branch = "claude/issue-1491-one-readiness-vocabulary"
-scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/routes/settings/users/page.test.ts", "plans/issue-532-provider-routes.md", "scripts/dead-symbols.allow", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/settings_api.py", "tests/fixtures/provider_status_capability_missing.json", "tests/fixtures/provider_status_ready.json", "tests/test_api.py", "tests/test_cowriter_providers.py"]
-opened_commit = "1c0f111e56d903f015056cb6f05be32d0f1502aa"
-whole_reason = "One response field's removal across its model, builder, TypeScript mirror, tests, fixtures, the docs and allowlist reason that name it, and the closed plan that still named it."
