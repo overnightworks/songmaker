@@ -1,7 +1,4 @@
 <script lang="ts">
-	import { tick } from 'svelte';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
 	import {
 		COLLECTION_MENU_CLOSE_LABEL,
 		SONG_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -11,6 +8,7 @@
 		SONG_MENU_LABEL
 	} from '$lib/constants';
 	import Icon from '../Icon.svelte';
+	import MenuPopover from '../MenuPopover.svelte';
 
 	interface Props {
 		title: string;
@@ -23,144 +21,44 @@
 
 	let { title, saveDisabled, onsave, onrename, onaddtoplaylist, ondelete }: Props = $props();
 
-	const menuOpen = historyLayerState('song-menu', false);
-	let triggerButton: HTMLButtonElement | undefined = $state();
-	let menu: HTMLDivElement | undefined = $state();
+	let popover: MenuPopover | undefined = $state();
 
-	async function openMenu(): Promise<void> {
-		$menuOpen = true;
-		await tick();
-		if (menu) focusFirstIn(menu);
-	}
-
-	let menuWasOpen = false;
-	$effect(() => {
-		const isOpen = $menuOpen;
-		if (menuWasOpen && !isOpen) refocusIfDropped(triggerButton);
-		menuWasOpen = isOpen;
-	});
-
-	function closeMenu(): void {
-		$menuOpen = false;
-	}
-
-	function toggleMenu(): void {
-		if ($menuOpen) closeMenu();
-		else void openMenu();
-	}
-
-	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!$menuOpen || !menu) return;
-		handleFocusTrapKeydown(menu, event);
-	}
-
-	function runAndClose(action: () => void): void {
-		closeMenu();
+	function runAndClose(action: () => void, restoreFocus = true): void {
+		popover?.close(restoreFocus);
 		action();
 	}
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} />
-
 <div class="song-menu">
-	<button
-		bind:this={triggerButton}
-		class="menu-trigger"
-		data-hitbox="frequent"
-		aria-haspopup="dialog"
-		aria-expanded={$menuOpen}
-		aria-label={SONG_MENU_LABEL}
-		onclick={toggleMenu}
+	<MenuPopover
+		bind:this={popover}
+		layer="song-menu"
+		label={SONG_MENU_LABEL}
+		closeLabel={COLLECTION_MENU_CLOSE_LABEL}
 	>
-		<Icon name="more-horizontal" size={18} />
-	</button>
-	{#if $menuOpen}
-		<div class="menu-backdrop-layer">
-			<button
-				class="menu-backdrop"
-				tabindex="-1"
-				onclick={() => closeMenu()}
-				aria-label={COLLECTION_MENU_CLOSE_LABEL}
-			></button>
-		</div>
-		<div
-			bind:this={menu}
-			class="menu-panel"
-			role="dialog"
-			aria-modal="true"
-			aria-label={SONG_MENU_LABEL}
-			tabindex="-1"
-		>
-			<p class="menu-heading">Song · {title}</p>
-			<button class="menu-item" disabled={saveDisabled} onclick={() => runAndClose(onsave)}>
-				{SONG_MENU_SAVE_LABEL}
-			</button>
-			<button class="menu-item" onclick={() => runAndClose(onrename)}
-				>{SONG_MENU_RENAME_LABEL}</button
-			>
-			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
-				{SONG_MENU_ADD_TO_PLAYLIST_LABEL}
-			</button>
-			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
-				<Icon name="trash" size={14} />
-				{SONG_MENU_DELETE_LABEL}
-			</button>
-		</div>
-	{/if}
+		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
+		<p class="menu-heading">Song · {title}</p>
+		<button class="menu-item" disabled={saveDisabled} onclick={() => runAndClose(onsave)}>
+			<Icon name="check" size={14} />
+			{SONG_MENU_SAVE_LABEL}
+		</button>
+		<!-- The title field takes the focus the closing menu would give back to its trigger. -->
+		<button class="menu-item" onclick={() => runAndClose(onrename, false)}>
+			<Icon name="pencil" size={14} />
+			{SONG_MENU_RENAME_LABEL}
+		</button>
+		<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
+			<Icon name="list-plus" size={14} />
+			{SONG_MENU_ADD_TO_PLAYLIST_LABEL}
+		</button>
+		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
+			<Icon name="trash" size={14} />
+			{SONG_MENU_DELETE_LABEL}
+		</button>
+	</MenuPopover>
 </div>
 
 <style>
-	.song-menu {
-		position: relative;
-	}
-
-	.menu-trigger {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		color: var(--text-muted);
-		padding: 0.4rem;
-	}
-
-	.menu-trigger:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.menu-backdrop-layer {
-		position: fixed;
-		inset: 0;
-		z-index: 300;
-	}
-
-	.menu-backdrop {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		border: 0;
-		background: color-mix(in srgb, var(--bg-deep) 42%, transparent);
-		cursor: default;
-	}
-
-	.menu-panel {
-		position: absolute;
-		top: calc(100% + 0.5rem);
-		left: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 220px;
-		max-width: calc(100vw - 32px);
-		padding: 0.5rem;
-		background: var(--header-bg);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		z-index: 301;
-	}
-
 	.menu-heading {
 		margin: 0;
 		padding: 0.3rem 0.6rem 0.5rem;
@@ -194,7 +92,7 @@
 	}
 
 	.menu-item:disabled {
-		color: var(--text-disabled);
+		opacity: 0.5;
 		cursor: default;
 	}
 

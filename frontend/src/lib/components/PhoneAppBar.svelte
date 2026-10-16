@@ -285,11 +285,6 @@
 		z-index: 200;
 	}
 
-	.mobile-strip :global(.menu-panel) {
-		left: auto;
-		right: 0;
-	}
-
 	.drawer-trigger,
 	.bar-icon {
 		flex: none;

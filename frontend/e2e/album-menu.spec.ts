@@ -21,17 +21,10 @@ import {
 	NEW_ALBUM_TITLE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
-import {
-	boundingBoxes,
-	csrfHeaders,
-	FlowGuard,
-	shellOf,
-	workspace,
-	type RenderedBox
-} from './helpers';
+import { boundingBoxes, csrfHeaders, FlowGuard, shellOf, workspace } from './helpers';
+import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
-const VIEWPORT_MARGIN_PX = 8;
 const LAPTOP_WIDTH_PX = 1280;
 const PHONE_WIDTH_PX = 390;
 const VIEWPORT_HEIGHT_PX = 844;
@@ -68,10 +61,6 @@ test.afterEach(({}, testInfo) => {
 	guard.assertWithinBudget(ALBUM_MENU_FLOW_API_REQUEST_BUDGET);
 });
 
-function bottomOf(box: RenderedBox): number {
-	return box.y + box.height;
-}
-
 async function expectActionRowUnderCoverAndTitle(
 	header: Locator,
 	kind: CollectionKind,
@@ -92,38 +81,12 @@ async function expectActionRowUnderCoverAndTitle(
 	expect(playBox.y).toBeGreaterThanOrEqual(Math.max(bottomOf(cover), bottomOf(titleBox)));
 }
 
-function rightOf(box: RenderedBox): number {
-	return box.x + box.width;
-}
-
 async function expectMenuAtRowEnd(header: Locator): Promise<void> {
 	const [identity, menuTrigger] = await boundingBoxes(
 		header.locator('.header-identity'),
 		header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true })
 	);
 	expect(rightOf(menuTrigger)).toBeCloseTo(rightOf(identity), 0);
-}
-
-function expectInside(inner: RenderedBox, outer: RenderedBox): void {
-	expect(inner.x).toBeGreaterThanOrEqual(outer.x);
-	expect(inner.y).toBeGreaterThanOrEqual(outer.y);
-	expect(rightOf(inner)).toBeLessThanOrEqual(rightOf(outer));
-	expect(bottomOf(inner)).toBeLessThanOrEqual(bottomOf(outer));
-}
-
-async function expectMenuInsideViewport(page: Page, menu: Locator): Promise<void> {
-	const viewport = page.viewportSize();
-	if (!viewport) throw new Error('Expected a fixed viewport to measure against');
-	const [menuBox] = await boundingBoxes(menu);
-	expectInside(menuBox, {
-		x: VIEWPORT_MARGIN_PX,
-		y: VIEWPORT_MARGIN_PX,
-		width: viewport.width - 2 * VIEWPORT_MARGIN_PX,
-		height: viewport.height - 2 * VIEWPORT_MARGIN_PX
-	});
-	const rows = await menu.getByRole('button').all();
-	expect(rows.length).toBeGreaterThan(0);
-	for (const rowBox of await boundingBoxes(...rows)) expectInside(rowBox, menuBox);
 }
 
 async function openMenu(page: Page, header: Locator): Promise<Locator> {

@@ -1,6 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SONG_MENU_SAVE_LABEL } from '$lib/constants';
+import {
+	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
+	SONG_MENU_DELETE_LABEL,
+	SONG_MENU_RENAME_LABEL,
+	SONG_MENU_SAVE_LABEL
+} from '$lib/constants';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import SongMenu from './SongMenu.svelte';
 
@@ -31,31 +36,57 @@ async function renderMenu(overrides: Partial<ReturnType<typeof defaultProps>> = 
 	return { target, props };
 }
 
+function openSongMenu(target: HTMLElement): void {
+	target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+}
+
+function menuItem(target: HTMLElement, label: string): HTMLButtonElement | undefined {
+	return Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+		(el) => el.textContent?.trim() === label
+	);
+}
+
+async function focusSettled(): Promise<void> {
+	await Promise.resolve();
+	await tick();
+}
+
 describe('SongMenu', () => {
-	it('names the song on the first row and lists its actions', async () => {
+	it('names the song on the first row', async () => {
 		const { target } = await renderMenu();
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		openSongMenu(target);
 		await tick();
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Song · Sommerlicht');
 		expect(target.querySelector('.share-btn')).toBeNull();
-		const items = Array.from(target.querySelectorAll('.menu-item')).map((el) =>
-			el.textContent?.trim()
-		);
-		expect(items).toContain('Rename');
-		expect(items).toContain(SONG_MENU_SAVE_LABEL);
-		expect(items).toContain('Add to playlist');
-		expect(items).toContain('Delete song');
+	});
+
+	it('915_C3: lists Save version · Rename · Add to playlist · Delete song, each with an icon, Delete red and last', async () => {
+		const { target } = await renderMenu();
+		openSongMenu(target);
+		await tick();
+		const items = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'));
+		expect(items.map((item) => item.textContent?.trim())).toEqual([
+			SONG_MENU_SAVE_LABEL,
+			SONG_MENU_RENAME_LABEL,
+			SONG_MENU_ADD_TO_PLAYLIST_LABEL,
+			SONG_MENU_DELETE_LABEL
+		]);
+		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
+		expect(items.map((item) => item.classList.contains('destructive'))).toEqual([
+			false,
+			false,
+			false,
+			true
+		]);
 	});
 
 	it.each([true, false])(
 		'enables saving only when the draft is dirty (disabled: %s)',
 		async (saveDisabled) => {
 			const { target, props } = await renderMenu({ saveDisabled });
-			target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+			openSongMenu(target);
 			await tick();
-			const save = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-				(button) => button.textContent?.trim() === SONG_MENU_SAVE_LABEL
-			);
+			const save = menuItem(target, SONG_MENU_SAVE_LABEL);
 			expect(save?.disabled).toBe(saveDisabled);
 			save?.click();
 			await tick();
@@ -64,34 +95,60 @@ describe('SongMenu', () => {
 		}
 	);
 
-	it('runs the action and closes the menu on click', async () => {
-		const { target, props } = await renderMenu();
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+	it.each([
+		{ label: SONG_MENU_SAVE_LABEL, handler: 'onsave' as const },
+		{ label: SONG_MENU_RENAME_LABEL, handler: 'onrename' as const },
+		{ label: SONG_MENU_ADD_TO_PLAYLIST_LABEL, handler: 'onaddtoplaylist' as const },
+		{ label: SONG_MENU_DELETE_LABEL, handler: 'ondelete' as const }
+	])('runs only $handler and closes the menu on $label', async ({ label, handler }) => {
+		const { target, props } = await renderMenu({ saveDisabled: false });
+		openSongMenu(target);
 		await tick();
-		const rename = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Rename'
-		);
-		rename?.click();
+		menuItem(target, label)?.click();
 		await tick();
-		expect(props.onrename).toHaveBeenCalledTimes(1);
+		for (const [name, action] of Object.entries(props)) {
+			if (typeof action === 'function') {
+				expect(action).toHaveBeenCalledTimes(name === handler ? 1 : 0);
+			}
+		}
 		expect(target.querySelector('.menu-panel')).toBeNull();
 	});
 
-	it('closes on Escape without triggering an action', async () => {
+	it('closes on Escape without triggering an action and hands focus back to its trigger', async () => {
 		const { target } = await renderMenu();
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		openSongMenu(target);
 		await tick();
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		await tick();
+		await focusSettled();
 		expect(target.querySelector('.menu-panel')).toBeNull();
+		expect(document.activeElement).toBe(target.querySelector('.menu-trigger'));
 	});
-});
 
-function menuItem(target: HTMLElement, label: string): HTMLButtonElement | undefined {
-	return Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-		(el) => el.textContent?.trim() === label
+	it('1495_S10: leaves focus in the title field once Rename starts editing it', async () => {
+		const titleField = document.createElement('input');
+		document.body.append(titleField);
+		const { target } = await renderMenu({
+			onrename: vi.fn(() => queueMicrotask(() => titleField.focus()))
+		});
+		openSongMenu(target);
+		await tick();
+		menuItem(target, SONG_MENU_RENAME_LABEL)?.click();
+		await focusSettled();
+		expect(document.activeElement).toBe(titleField);
+	});
+
+	it.each([SONG_MENU_ADD_TO_PLAYLIST_LABEL, SONG_MENU_DELETE_LABEL])(
+		'hands focus back to its trigger after %s, for the dialog it opens to take over',
+		async (label) => {
+			const { target } = await renderMenu();
+			openSongMenu(target);
+			await tick();
+			menuItem(target, label)?.click();
+			await focusSettled();
+			expect(document.activeElement).toBe(target.querySelector('.menu-trigger'));
+		}
 	);
-}
+});
 
 let renameSawHistoryAt: number | undefined;
 
