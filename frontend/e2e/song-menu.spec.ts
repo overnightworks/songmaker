@@ -93,7 +93,7 @@ async function onOwnSong(
 	const headers = await csrfHeaders(page);
 	const album = await page.request.post('/api/albums', {
 		headers,
-		data: { title: `Song menu ${Date.now()}`, artist: '' }
+		data: { title: `E2E Song menu ${Date.now()}`, artist: '' }
 	});
 	expect(album.ok()).toBe(true);
 	const { id: albumId } = (await album.json()) as { id: string };
