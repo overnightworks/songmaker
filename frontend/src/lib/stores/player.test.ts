@@ -2790,7 +2790,8 @@ describe('playAlbum start track', () => {
 		});
 
 		afterEach(() => {
-			toggleOrStartCollection('album', 'a1', null);
+			const waiting = get(pendingStart);
+			if (waiting) toggleOrStartCollection('album', waiting.albumId, null);
 			vi.useRealTimers();
 		});
 
@@ -5358,7 +5359,7 @@ describe('collection transport', () => {
 		}
 	);
 
-	it('1354_rule_10: starting a collection leaves shuffle unchanged', () => {
+	it('1354_rule_43: the shared action leaves Shuffle to its caller', () => {
 		setShuffle(true);
 		toggleOrStartCollection('album', 'new', null);
 		expect(get(shuffleEnabled)).toBe(true);

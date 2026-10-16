@@ -522,7 +522,7 @@
 	}
 
 	.wall-tile.selected {
-		box-shadow: inset 0 0 0 2px var(--accent);
+		box-shadow: var(--selected-ring);
 	}
 
 	.wall-tile-body {

@@ -100,7 +100,8 @@ async function unmountAll(): Promise<void> {
 
 afterEach(async () => {
 	await unmountAll();
-	toggleOrStartCollection('album', 'waiting', null);
+	const waiting = get(pendingStart);
+	if (waiting) toggleOrStartCollection('album', waiting.albumId, null);
 	queueContext.set({ type: 'library' });
 	setShuffle(false);
 	audioPlayer.current = null;
@@ -871,7 +872,7 @@ it('1354_rule_10: the row withdraws an album start waiting for the network', asy
 	expect(root.querySelector('.row-play')).toHaveAccessibleName('Play Waiting');
 });
 
-it('1354_rule_10: the phone row starts an album without switching shuffle off', async () => {
+it('1354_rule_43: the phone row starts an album and leaves Shuffle on', async () => {
 	phoneViewport();
 	albumList.set([album({ id: 'shuffle', title: 'Shuffle', has_playable_take: true })]);
 	songList.set([
