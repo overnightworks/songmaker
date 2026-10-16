@@ -19,8 +19,7 @@ import {
 	LIBRARY_NEW_MENU_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_LIBRARY_LABEL,
-	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_SEARCH_LABEL,
+	RAIL_SETTINGS_LABEL,
 	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
 import {
@@ -38,6 +37,7 @@ import {
 	openHome,
 	openLibraryWall,
 	openRailNav,
+	openSettingsFromAccountMenu,
 	openSettingsSection,
 	regainNetwork,
 	scrollWallHalfway,
@@ -50,13 +50,11 @@ import { readSeededLibrary, type SeededLibrary } from './seed';
 
 const CONTINUE_REGION = { name: 'Continue' };
 const SETTINGS_SECTION = 'Voices';
-const SETTINGS_URL = /\/settings\/voices$/;
+const SETTINGS_SECTION_URL = /\/settings\/voices$/;
+const SETTINGS_LIST_URL = /\/settings$/;
 const HISTORY_WRITES_KEY = 'historyWrites';
 const WALL_SIGHTINGS_KEY = 'wallSightings';
 const WALL_SELECTOR = '.library-wall';
-// A rail filter nothing in the seeded library answers to: the only album the
-// rail then lists is the one it keeps open.
-const NO_SUCH_TITLE = 'zz-no-such-title';
 
 const homeHeading = (page: Page) =>
 	workspace(page).getByRole('heading', { name: HOME_PAGE_LABEL, exact: true });
@@ -86,9 +84,20 @@ async function expectAlbumShown(page: Page, library: SeededLibrary): Promise<voi
 	await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
 }
 
-async function expectSettingsShown(page: Page): Promise<void> {
-	await expect(page).toHaveURL(SETTINGS_URL);
-	await expect(page.getByRole('heading', { name: SETTINGS_SECTION })).toBeVisible();
+// The desktop rail opens a Settings section; the phone's account menu opens the
+// Settings list, whose sections are one tap further.
+async function openSettings(page: Page, shell: Shell): Promise<void> {
+	if (shell === 'mobile') await openSettingsFromAccountMenu(page);
+	else await openSettingsSection(page, shell, SETTINGS_SECTION);
+}
+
+async function expectSettingsShown(page: Page, shell: Shell): Promise<void> {
+	const [url, heading] =
+		shell === 'mobile'
+			? [SETTINGS_LIST_URL, RAIL_SETTINGS_LABEL]
+			: [SETTINGS_SECTION_URL, SETTINGS_SECTION];
+	await expect(page).toHaveURL(url);
+	await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 }
 
 async function closeDrawer(page: Page): Promise<void> {
@@ -105,21 +114,16 @@ async function expectLibraryWordCurrent(page: Page, shell: Shell, current: boole
 	if (shell === 'mobile') await closeDrawer(page);
 }
 
-// What the rail lists for a filter nothing answers to: only the album the app
-// keeps open as its context survives it (RailLibraryGroup), so the albums it
-// lists are the albums the page was left holding.
-async function expectRailKeepsOnlyAlbums(
+// The album a page was left holding as its open collection is the one the idle
+// mini-player offers to play; with none open it offers the Library.
+async function expectOpenCollectionNamedByMiniPlayer(
 	page: Page,
-	shell: Shell,
-	albumTitles: readonly string[]
+	albumTitle: string,
+	named: boolean
 ): Promise<void> {
-	const rail = await openRailNav(page, shell);
-	await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(NO_SUCH_TITLE);
-	const albums = rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-		.getByRole('listitem');
-	await expect(albums).toHaveCount(albumTitles.length);
-	for (const title of albumTitles) await expect(albums.filter({ hasText: title })).toHaveCount(1);
+	const miniPlayer = page.getByRole('contentinfo');
+	if (named) await expect(miniPlayer).toContainText(albumTitle, { ignoreCase: true });
+	else await expect(miniPlayer).not.toContainText(albumTitle, { ignoreCase: true });
 }
 
 function recordHistoryWrites(key: string): void {
@@ -191,7 +195,7 @@ async function ageEntryToBrowseAtHome(page: Page, collection: RetainedCollection
 interface AppPage {
 	readonly name: string;
 	open(page: Page, shell: Shell, library: SeededLibrary): Promise<void>;
-	expectStands(page: Page, library: SeededLibrary): Promise<void>;
+	expectStands(page: Page, shell: Shell, library: SeededLibrary): Promise<void>;
 }
 
 const HOME: AppPage = {
@@ -218,17 +222,17 @@ const ALBUM: AppPage = {
 		await page.goto(`/album/${library.albumId}`);
 		await expectAlbumShown(page, library);
 	},
-	expectStands: expectAlbumShown
+	expectStands: (page, _shell, library) => expectAlbumShown(page, library)
 };
 
 const SETTINGS: AppPage = {
 	name: 'Settings',
 	open: async (page, shell, library) => {
 		await LIBRARY.open(page, shell, library);
-		await openSettingsSection(page, shell, SETTINGS_SECTION);
-		await expectSettingsShown(page);
+		await openSettings(page, shell);
+		await expectSettingsShown(page, shell);
 	},
-	expectStands: expectSettingsShown
+	expectStands: (page, shell) => expectSettingsShown(page, shell)
 };
 
 for (const retainCollection of [false, true]) {
@@ -424,7 +428,7 @@ for (const origin of [LIBRARY, ALBUM, SETTINGS]) {
 		await expectHomeShown(page);
 		await page.goBack();
 
-		await origin.expectStands(page, library);
+		await origin.expectStands(page, shell, library);
 		guard.assertClean();
 	});
 }
@@ -473,13 +477,13 @@ for (const origin of [HOME, LIBRARY]) {
 		const library = readSeededLibrary();
 		await origin.open(page, shell, library);
 
-		await openSettingsSection(page, shell, SETTINGS_SECTION);
-		await expectSettingsShown(page);
+		await openSettings(page, shell);
+		await expectSettingsShown(page, shell);
 		await page.goBack();
-		await origin.expectStands(page, library);
+		await origin.expectStands(page, shell, library);
 		await page.goForward();
 
-		await expectSettingsShown(page);
+		await expectSettingsShown(page, shell);
 		guard.assertClean();
 	});
 }
@@ -538,7 +542,7 @@ for (const cell of BACK_ARROW_CELLS) {
 				.getByRole('button', { name: `Back to ${cell.name}`, exact: true })
 				.click();
 
-			await cell.returnsTo.expectStands(page, library);
+			await cell.returnsTo.expectStands(page, 'mobile', library);
 			guard.assertClean();
 		}
 	);
@@ -548,7 +552,7 @@ test('1354_R1prime row 10a: a pre-switch {browse} entry at / reads as Home after
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
-	const shell = shellOf(testInfo);
+	const library = readSeededLibrary();
 	await watchHistoryWrites(page);
 	await page.goto(HOME_PATH);
 	await expectHomeShown(page);
@@ -560,7 +564,7 @@ test('1354_R1prime row 10a: a pre-switch {browse} entry at / reads as Home after
 	await expectHomeShown(page);
 	expect(await historyLength(page)).toBe(length);
 	expect(await addressesWrittenToHistory(page)).not.toContain(LIBRARY_PATH);
-	await expectRailKeepsOnlyAlbums(page, shell, []);
+	await expectOpenCollectionNamedByMiniPlayer(page, library.albumTitle, false);
 	guard.assertClean();
 });
 
@@ -592,7 +596,7 @@ test('1354_R1prime row 10b: a pre-switch {browse} entry at / reached by Back fro
 	guard.assertClean();
 });
 
-test('1354_R1prime row 10c: a pre-switch {browse, album} entry at / reads as Home with no album page and the rail keeping the album', async ({
+test('1354_R1prime row 10c: a pre-switch {browse, album} entry at / reads as Home with no album page and the album kept as the open collection', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -610,8 +614,7 @@ test('1354_R1prime row 10c: a pre-switch {browse, album} entry at / reads as Hom
 	await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toHaveCount(0);
 	expect(await historyLength(page)).toBe(length);
 	expect(await addressesWrittenToHistory(page)).not.toContain(LIBRARY_PATH);
-	await expectRailKeepsOnlyAlbums(page, shell, [library.albumTitle]);
-	if (shell === 'mobile') await closeDrawer(page);
+	await expectOpenCollectionNamedByMiniPlayer(page, library.albumTitle, true);
 	await expectLibraryWordCurrent(page, shell, false);
 	guard.assertClean();
 });
@@ -656,6 +659,12 @@ test(
 	async ({ page, context }) => {
 		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		await page.goto(HOME_PATH);
+		await expectHomeShown(page);
+		// Each page's route code loads when it is first shown, so a session that
+		// "had loaded" both pages has used both before the network goes.
+		await openLibraryWall(page, 'desktop');
+		await expectWallShown(page);
+		await openHome(page, 'desktop');
 		await expectHomeShown(page);
 		await loseNetwork(page, context);
 
