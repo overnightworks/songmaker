@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { WhisperCue } from '$lib/api/types';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '$lib/constants';
 	import {
 		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
@@ -14,12 +13,16 @@
 		lyrics,
 		cues,
 		whisperText,
-		emptyLabel
+		emptyLabel,
+		position
 	}: {
 		lyrics: string | null;
 		cues: WhisperCue[] | null;
 		whisperText: string | null;
 		emptyLabel: string;
+		// Where the take stands, in seconds; null while nothing is sung, so no
+		// line lights and the box stays where it is.
+		position: number | null;
 	} = $props();
 
 	let container: HTMLDivElement | undefined = $state();
@@ -65,7 +68,7 @@
 	// active at a time. The scroll target is derived as a plain index so the
 	// effect below runs on a change of line, not on every playback tick.
 	const activeIndices = $derived(
-		alignedLines ? activeLyricLineIndices(alignedLines, audioPlayer.currentTime) : []
+		alignedLines && position !== null ? activeLyricLineIndices(alignedLines, position) : []
 	);
 	const scrollTargetIndex = $derived(activeIndices.length > 0 ? activeIndices[0] : null);
 	const showUnsyncedNote = $derived(hasLyrics && !hasCues && Boolean(whisperText));

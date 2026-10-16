@@ -70,7 +70,7 @@ from songmaker_cli.covers import (
     resolve_song_cover_file,
     song_cover_file_exists,
 )
-from songmaker_cli.db.models import Album, Playlist, Song
+from songmaker_cli.db.models import Album, Generation, Playlist, Song
 from songmaker_cli.db.queries import (
     get_album_by_slug,
     get_generation_by_slug,
@@ -521,6 +521,18 @@ def get_shared_song_audio(
     return _audio_file_response(audio_path)
 
 
+def _get_presented_generation(db: Session, slug: str) -> Generation | None:
+    """The take a share link presents, or None once it no longer may.
+
+    A take whose song was deleted answers like an unshared one: the
+    soft-delete filter hides that song, so the take loads without it.
+    """
+    gen = get_generation_by_slug(db, slug)
+    if gen is None or gen.song is None:
+        return None
+    return gen
+
+
 @router.get(
     "/shared/gen/{slug}",
     responses={404: {"description": "Shared generation not found"}},
@@ -532,11 +544,11 @@ def get_shared_generation(
     ctx: AppContext = Depends(get_app_context),
 ) -> JSONResponse:
     _check_shared_rate_limit(request)
-    gen = get_generation_by_slug(db, slug)
+    gen = _get_presented_generation(db, slug)
     if not gen:
         raise HTTPException(404, NOT_FOUND_DETAIL)
     media = share_pick_media(gen)
-    album = gen.song.album if gen.song else None
+    album = gen.song.album
     album_cover = None
     if (
         album
@@ -547,9 +559,9 @@ def get_shared_generation(
             f"/shared/gen/{slug}/album-cover", album.cover_key
         )
     response = SharedGenerationResponse(
-        title=gen.song.title if gen.song else "",
-        artist=gen.song.album.artist if gen.song and gen.song.album else "",
-        album_title=gen.song.album.title if gen.song and gen.song.album else "",
+        title=gen.song.title,
+        artist=album.artist if album else "",
+        album_title=album.title if album else "",
         generation_number=gen.generation_number,
         seed=gen.seed,
         audio_url=(
@@ -580,8 +592,8 @@ async def get_shared_generation_album_cover(
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
     def resolve_album() -> Album | None:
-        generation = get_generation_by_slug(db, slug)
-        return generation.song.album if generation and generation.song else None
+        generation = _get_presented_generation(db, slug)
+        return generation.song.album if generation else None
 
     return _shared_cover_response(request, resolve_album, ctx.audio_dir, variant, v)
 
@@ -599,7 +611,7 @@ def get_shared_gen_audio(
 ) -> FileResponse:
     _check_shared_rate_limit(request)
     require_canonical_audio_filename(filename)
-    gen = get_generation_by_slug(db, slug)
+    gen = _get_presented_generation(db, slug)
     if not gen:
         raise HTTPException(404, HTTP_NOT_FOUND)
 

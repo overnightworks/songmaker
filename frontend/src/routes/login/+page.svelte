@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { signInReturnPath } from '$lib/api/fetch';
 	import { APP_NAME, PASSWORD_MIN_LENGTH } from '$lib/constants';
+	import LegalLinks from '$lib/components/LegalLinks.svelte';
 	import { AUTH_ACCOUNT_DISABLED_MESSAGE, AUTH_SESSION_EXPIRED_MESSAGE } from '$lib/constants/auth';
 	import { login, authError, authNotice } from '$lib/stores/auth';
 
@@ -25,6 +26,12 @@
 		}
 	}
 </script>
+
+<!-- Its own title: the page a listener came from (a share link's song)
+	leaves its title on the tab otherwise. -->
+<svelte:head>
+	<title>{APP_NAME}</title>
+</svelte:head>
 
 <div class="login-page">
 	<div class="bg-grid"></div>
@@ -89,9 +96,9 @@
 			</button>
 		</form>
 	</div>
-	<p class="legal-links">
-		<a href="/legal#impressum">Impressum</a> · <a href="/legal#datenschutz">Datenschutz</a>
-	</p>
+	<div class="legal-links">
+		<LegalLinks />
+	</div>
 </div>
 
 <style>
@@ -352,16 +359,6 @@
 		font-size: 0.7rem;
 		position: relative;
 		z-index: 1;
-	}
-
-	.legal-links a {
-		color: var(--text-subtle);
-		text-decoration: none;
-		transition: color 0.2s;
-	}
-
-	.legal-links a:hover {
-		color: var(--text-muted);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

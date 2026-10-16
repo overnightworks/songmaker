@@ -25,13 +25,16 @@ import {
 	transportOffersPause,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
+	type PlayerTenure,
 	type StreamFallbackState,
 	type TransportState
 } from '$lib/services/audioPlayer.svelte';
 import {
+	clearMediaSessionPositionState,
 	type LockScreenTitle,
 	setupMediaSessionHandlers,
-	updateMediaSessionMetadata
+	updateMediaSessionMetadata,
+	updateMediaSessionPlaybackState
 } from '$lib/services/mediaSession';
 import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import {
@@ -324,16 +327,6 @@ function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
 	};
 }
 
-function playGeneration(
-	gen: GenerationItem,
-	song: SongItem,
-	opts: { restart?: boolean } = {}
-): void {
-	clearWindowEnd();
-	clearLibraryQueueSkipFeedback();
-	loadQueueTake(toPlaybackInfo(gen, song), opts);
-}
-
 function randomIndex(length: number): number {
 	return Math.floor(Math.random() * length); // NOSONAR S2245: shuffle has no security context.
 }
@@ -373,6 +366,7 @@ export async function retryLastPlayIntent(): Promise<boolean> {
 
 let playStartSeq = 0;
 let playStartAbort: AbortController | null = null;
+let playStartTenure: PlayerTenure = audioPlayer.tenure;
 
 interface PlayStart {
 	seq: number;
@@ -388,6 +382,7 @@ function beginPlayStart(): PlayStart {
 function openPlayStart(): PlayStart {
 	cancelPlayStart();
 	playStartAbort = new AbortController();
+	playStartTenure = audioPlayer.tenure;
 	return { seq: playStartSeq, signal: playStartAbort.signal };
 }
 
@@ -397,8 +392,12 @@ function cancelPlayStart(): void {
 	retryPlayIntent = null;
 }
 
+// A start lands only while it is the newest one and the player has not
+// changed hands since it began: one begun before a share route took the
+// player, or while the share held it, is not the app's to land once the app
+// holds it again (#1391).
 function playStartIsCurrent(seq: number): boolean {
-	return seq === playStartSeq;
+	return seq === playStartSeq && !audioPlayer.changedHandsSince(playStartTenure);
 }
 
 // Offline, the strip already says why a start could not reach its takes: the
@@ -538,6 +537,7 @@ function loadNativeTake(info: PlaybackInfo, opts: QueueTakeLoad = {}): void {
 // Every take a queue plays goes through here, so the take after it is
 // already loading while this one plays (#1187 P1).
 function loadQueueTake(info: PlaybackInfo, opts: QueueTakeLoad): void {
+	if (!playsTheAppsTakes()) return;
 	if (opts.startAt !== undefined || opts.autoplay !== undefined) {
 		audioPlayer.load(info, { ...opts, restart: opts.restart ?? true });
 	} else if (opts.restart) {
@@ -669,6 +669,34 @@ function libraryQueueStart(
 	return opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts;
 }
 
+type LibraryPoolQueueResult = Awaited<ReturnType<typeof fetchLibraryPoolQueue>>;
+
+// A failed fetch is reported here; null tells the caller to stop, whether the
+// start was superseded or the failure is already on screen.
+async function fetchLibraryTakeQueueOrReport(
+	requested: GenerationItem,
+	opts: LibraryTakeStart,
+	play: { seq: number; signal: AbortSignal }
+): Promise<LibraryPoolQueueResult | null> {
+	try {
+		const queue = await fetchLibraryPoolQueue({
+			startGenerationId: requested.id,
+			...librarySnapshotOpts(),
+			signal: play.signal
+		});
+		return playStartIsCurrent(play.seq) ? queue : null;
+	} catch (err) {
+		if (!playStartIsCurrent(play.seq)) return null;
+		reportLibraryTakeStartFailure(
+			requested,
+			opts,
+			isEmptyPoolError(err) ? 'empty' : 'error',
+			libraryStreamFailureToast(err)
+		);
+		return null;
+	}
+}
+
 // A take row never plays alone (#1187 P6): when the pool holds only the
 // tapped take, as it does before anything is picked, the row's song names the
 // album the queue continues through instead.
@@ -676,7 +704,7 @@ async function playLibraryFromGeneration(
 	gen: GenerationItem,
 	opts: LibraryTakeStart = {}
 ): Promise<void> {
-	const { seq, signal } = beginPlayStart();
+	const play = beginPlayStart();
 	setQueueContext({ type: 'library' });
 	// A restore waits as album and playlist restores do, with the transport
 	// free to take a Play for the take it brings back.
@@ -685,24 +713,8 @@ async function playLibraryFromGeneration(
 	clearWindowEnd();
 	let requested = gen;
 	for (;;) {
-		let queue;
-		try {
-			queue = await fetchLibraryPoolQueue({
-				startGenerationId: requested.id,
-				...librarySnapshotOpts(),
-				signal
-			});
-		} catch (err) {
-			if (!playStartIsCurrent(seq)) return;
-			reportLibraryTakeStartFailure(
-				requested,
-				opts,
-				isEmptyPoolError(err) ? 'empty' : 'error',
-				libraryStreamFailureToast(err)
-			);
-			return;
-		}
-		if (!playStartIsCurrent(seq)) return;
+		const queue = await fetchLibraryTakeQueueOrReport(requested, opts, play);
+		if (!queue) return;
 		const takes = queue.takes.map(poolTakeToPlaybackInfo);
 		const continuation = opts.keepPlaying ? currentTakeAtPosition() : null;
 		const startGeneration = continuation?.generation ?? requested;
@@ -943,13 +955,6 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 		restart: true,
 		resumeAtTrackTime: trackTime
 	});
-}
-
-function queueSongs(): SongItem[] {
-	const ctx = get(queueContext);
-	const songs = get(songList);
-	if (ctx.type === 'album') return songs.filter((s) => s.album_id === ctx.albumId);
-	return songs;
 }
 
 export function canPlayPrevSong(
@@ -1502,7 +1507,7 @@ function takeAfterTheEnd(): PlaybackInfo | null {
 }
 
 function preloadNextTake(): void {
-	audioPlayer.preload(takeAfterCurrent());
+	if (playsTheAppsTakes()) audioPlayer.preload(takeAfterCurrent());
 }
 
 // A step always lands on another place of the playlist, so that place starts
@@ -1524,70 +1529,26 @@ function playNativeTakesInDirection(
 	if (next.kind === 'take') playNativeIndex(ctx, next.index);
 }
 
-function playContextInDirection(ctx: QueueContext, direction: QueueDirection): boolean {
+// Every queue the app plays holds its takes: an album or library start loads
+// its opening take as the queue at once and gathers the rest around it. Only
+// the library context a reload begins with holds none, and nothing plays in
+// it to step from.
+function playContextInDirection(ctx: QueueContext, direction: QueueDirection): void {
 	if (ctx.type === 'playlist') {
 		playPlaylistInDirection(ctx, direction);
-		return true;
-	}
-	if (ctx.takes && ctx.takes.length > 0) {
-		playNativeTakesInDirection(ctx, direction);
-		return true;
-	}
-	return ctx.type === 'library';
-}
-
-async function playSongCandidate(song: SongItem): Promise<boolean> {
-	await ensureGenerationsLoaded(song.id);
-	const fresh = get(songList).find((item) => item.id === song.id);
-	const gen = fresh ? bestGen(fresh) : undefined;
-	if (!gen || !fresh) return false;
-	playGeneration(gen, fresh);
-	return true;
-}
-
-async function playRandomNextSong(songs: SongItem[], currentSongId: string): Promise<void> {
-	const candidates = songs.filter((song) => song.id !== currentSongId && song.generation_count > 0);
-	while (candidates.length > 0) {
-		const index = Math.floor(Math.random() * candidates.length); // NOSONAR S2245: shuffle has no security context.
-		const [next] = candidates.splice(index, 1);
-		if (await playSongCandidate(next)) return;
-	}
-}
-
-async function playAdjacentSong(
-	songs: SongItem[],
-	currentSongId: string,
-	direction: QueueDirection
-): Promise<void> {
-	const currentIndex = songs.findIndex((song) => song.id === currentSongId);
-	for (let offset = 1; offset <= songs.length; offset++) {
-		const song = songs[(currentIndex + direction * offset + songs.length) % songs.length];
-		if (!song || song.id === currentSongId || song.generation_count === 0) continue;
-		if (await playSongCandidate(song)) return;
-	}
-}
-
-export async function playNextSong(): Promise<void> {
-	if (playStreamInDirection(1)) return;
-	const ctx = get(queueContext);
-	if (playContextInDirection(ctx, 1)) return;
-	const current = audioPlayer.current;
-	if (!current) return;
-	const songs = queueSongs();
-	if (get(shuffleEnabled)) {
-		await playRandomNextSong(songs, current.songId);
 		return;
 	}
-	await playAdjacentSong(songs, current.songId, 1);
+	if (ctx.takes && ctx.takes.length > 0) playNativeTakesInDirection(ctx, direction);
 }
 
-export async function playPrevSong(): Promise<void> {
+export function playNextSong(): void {
+	if (playStreamInDirection(1)) return;
+	playContextInDirection(get(queueContext), 1);
+}
+
+export function playPrevSong(): void {
 	if (playStreamInDirection(-1)) return;
-	const ctx = get(queueContext);
-	if (playContextInDirection(ctx, -1)) return;
-	const current = audioPlayer.current;
-	if (!current) return;
-	await playAdjacentSong(queueSongs(), current.songId, -1);
+	playContextInDirection(get(queueContext), -1);
 }
 
 // The album's opening take, which is not always the opening track's:
@@ -1874,10 +1835,10 @@ setupMediaSessionHandlers({
 	pause: pauseFromLockScreen,
 	stop: pauseFromLockScreen,
 	next: () => {
-		void playNextSong();
+		playNextSong();
 	},
 	prev: () => {
-		void playPrevSong();
+		playPrevSong();
 	},
 	seekTo: (seconds) => audioPlayer.seek(seconds)
 });
@@ -1959,7 +1920,7 @@ async function playNextSongOnceRestoredAlbumIsGathered(): Promise<void> {
 		await gathering;
 		if (audioPlayer.current !== ended || audioPlayer.status !== 'idle') return;
 	}
-	await playNextSong();
+	playNextSong();
 }
 
 const recordedListens = new Set<string>();
@@ -2080,14 +2041,33 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onCurrentChange: handleCurrentChange,
 	takeAfter,
 	onTakeSkipped: recordSkippedTake,
-	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
+	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip,
+	onPlayerTaken: letGoOfThePlayer
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);
 
-// A share route owns the player while it swaps in its own callbacks, so
-// share playback is never remembered.
+// A share route owns the player while it swaps in its own callbacks: share
+// playback is never remembered, and no take of the app's loads or sounds in
+// it meanwhile — a share link shows only what was shared (#1391).
 function playsTheAppsTakes(): boolean {
 	return audioPlayer.currentCallbacks === appPlayerCallbacks;
+}
+
+// A share route took the player. Nothing the app still had under way lands
+// in it: a start waiting on the server or the network, a Play pressed while
+// the saved take was on its way, an album still to gather, a take waiting to
+// play on once the network is back. The lock screen stops naming the take
+// the app let go of, and stops saying it plays.
+function letGoOfThePlayer(): void {
+	cancelPlayStart();
+	dropPendingStart();
+	playStartNotice.set('idle');
+	restoredAlbumQueueToGather = null;
+	stopWaitingForReturn?.();
+	stopWaitingForReturn = null;
+	updateMediaSessionMetadata(null);
+	updateMediaSessionPlaybackState('none');
+	clearMediaSessionPositionState();
 }
 
 // The queue a resumed take continues in. A library context without takes is
@@ -2116,19 +2096,20 @@ followPlaybackForResume({
  */
 export async function restoreLastPlayback(): Promise<void> {
 	const saved = savedPlayback();
-	if (saved === null || audioPlayer.current !== null) return;
-	restoreUnderway = true;
+	if (saved === null || !playsTheAppsTakes()) return;
+	const tenure = audioPlayer.tenure;
+	if (!restoreMayLoad(tenure)) return;
+	restoringIn = tenure;
 	try {
-		await restoreSavedPlayback(saved);
+		await restoreSavedPlayback(saved, tenure);
 	} finally {
-		restoreUnderway = false;
-		playWhatWasAskedForIfNothingWasRestored();
+		endRestore(tenure);
 	}
 }
 
-async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
+async function restoreSavedPlayback(saved: SavedPlayback, tenure: PlayerTenure): Promise<void> {
 	const found = await playableSavedTake(saved);
-	if (found === null || audioPlayer.current !== null) return;
+	if (found === null || !restoreMayLoad(tenure)) return;
 	const at = positionWithinTake(saved.position, found.take);
 	const { source } = saved;
 	if (source.type === 'album') {
@@ -2136,18 +2117,33 @@ async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
 	} else if (source.type === 'library') {
 		await restoreLibraryTake(source, found.take, at);
 	} else {
-		await restorePlaylistQueue(source.playlistId, found.take, at);
+		await restorePlaylistQueue(source.playlistId, found.take, at, tenure);
 	}
+}
+
+// A take loaded in the meantime is never replaced. A player that changed
+// hands since the restore began is not the restore's to fill: a share route
+// took it, and once it gives it back, what the restore asked for before is
+// not what the listener came back to (#1391).
+function restoreMayLoad(tenure: PlayerTenure): boolean {
+	return audioPlayer.current === null && !audioPlayer.changedHandsSince(tenure);
 }
 
 // A Play pressed after a reload, before the saved take is back, keeps its
 // intent: the transport reads Pause with its spinner, a second press
 // withdraws it, and the take plays from its saved position once it is back
-// (#1330).
-let restoreUnderway = false;
+// (#1330). The restore under way is named by the tenure it began in and is
+// over once the player changed hands, whatever its request still waits on:
+// a Play pressed in the app after that starts what the transport names
+// (#1391).
+let restoringIn: PlayerTenure | null = null;
+
+function restoreIsUnderway(): boolean {
+	return restoringIn !== null && !audioPlayer.changedHandsSince(restoringIn);
+}
 
 function askForTheRestoringTake(): boolean {
-	if (!restoreUnderway) return false;
+	if (!restoreIsUnderway()) return false;
 	playStartNotice.set(get(playStartNotice) === 'restoring' ? 'idle' : 'restoring');
 	return true;
 }
@@ -2156,9 +2152,17 @@ function askForTheRestoringTake(): boolean {
 // is answered here, so a later one goes to the take itself.
 function restoredStart(resumeAtTrackTime: number): QueueStart {
 	const askedForSound = get(playStartNotice) === 'restoring';
-	restoreUnderway = false;
+	restoringIn = null;
 	if (askedForSound) playStartNotice.set('idle');
 	return { resumeAtTrackTime, autoplay: askedForSound };
+}
+
+// A restore that ends without its take answers the press it kept, unless a
+// newer restore, begun once the app held the player again, keeps it now.
+function endRestore(tenure: PlayerTenure): void {
+	if (restoringIn !== tenure) return;
+	restoringIn = null;
+	playWhatWasAskedForIfNothingWasRestored();
 }
 
 // A saved take that cannot come back leaves the press to start what the
@@ -2235,10 +2239,11 @@ async function playableSavedTake(
 async function restorePlaylistQueue(
 	playlistId: string,
 	take: GenerationItem,
-	at: number
+	at: number,
+	tenure: PlayerTenure
 ): Promise<void> {
 	const playlist = await quietly(() => fetchPlaylist(playlistId));
-	if (playlist === null || audioPlayer.current !== null) return;
+	if (playlist === null || !restoreMayLoad(tenure)) return;
 	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
 	if (index < 0) return;
 	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, {

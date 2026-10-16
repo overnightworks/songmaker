@@ -8,7 +8,8 @@ import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import {
 	audioPlayer,
 	type AudioPlayerCallbacks,
-	type PlaybackInfo
+	type PlaybackInfo,
+	type PlayerTenure
 } from '$lib/services/audioPlayer.svelte';
 import {
 	playableTracks,
@@ -21,6 +22,21 @@ import type { QueueRowItem, QueueViewModel } from '$lib/stores/player';
 export type ShareStreamFetcher = () => Promise<QueueStreamManifest>;
 
 const STREAM_REFRESH_MARGIN_MS = 60_000;
+
+// Where a track starts and whether it sounds at once: Play starts it from
+// the top, a seek before the first Play readies it, paused, where it landed.
+interface TrackStart {
+	autoplay: boolean;
+	startAt?: number;
+}
+
+const FROM_THE_TOP: TrackStart = { autoplay: true };
+
+// Where a track stands in the share's stream.
+interface StreamPlace {
+	manifest: QueueStreamManifest;
+	track: QueueStreamTrackItem;
+}
 
 const NO_CALLBACKS: AudioPlayerCallbacks = {
 	onEnded: null,
@@ -44,6 +60,10 @@ function shuffleKeepingFirst(tracks: SharedTrack[], anchor: SharedTrack | null):
 export class SharePlayback {
 	shuffle = $state(false);
 	windowEnded = $state(false);
+	// The share played to its end: its last track ran out with nothing after
+	// it. The player itself goes back to 0:00 there; the page keeps the end
+	// in view and Play starts the share again from its first track.
+	ended = $state(false);
 
 	private collection: SharedCollectionView | null = null;
 	private baseTracks: SharedTrack[] = [];
@@ -52,6 +72,11 @@ export class SharePlayback {
 	private manifest: QueueStreamManifest | null = $state(null);
 	private fetchStream: ShareStreamFetcher | null = null;
 	private previousCallbacks: AudioPlayerCallbacks = NO_CALLBACKS;
+	// The hold on the player start() was given. Each request that waits on
+	// the server keeps the tenure it began in, never this field: a share that
+	// gave the player back and was started again holds a new one, so nothing
+	// the earlier start asked for lands in the player or the manifest (#1391).
+	private tenure: PlayerTenure | null = null;
 
 	readonly currentTrack = $derived(
 		this.activeIndex >= 0 ? (this.playOrder[this.activeIndex] ?? null) : null
@@ -94,7 +119,11 @@ export class SharePlayback {
 		return { items, currentIndex, upNext };
 	});
 
+	// A share shows only what was shared: whatever the signed-in app was
+	// playing is dropped before the share takes the player over, while the
+	// app's own callbacks still hear that take go.
 	start(collection: SharedCollectionView, fetchStream: ShareStreamFetcher | null): void {
+		audioPlayer.unload();
 		this.collection = collection;
 		this.baseTracks = playableTracks(collection.tracks);
 		this.playOrder = [...this.baseTracks];
@@ -102,6 +131,7 @@ export class SharePlayback {
 		this.manifest = null;
 		this.shuffle = false;
 		this.windowEnded = false;
+		this.ended = false;
 		this.fetchStream = fetchStream;
 		this.previousCallbacks = audioPlayer.swapCallbacks({
 			onEnded: (reason) => {
@@ -109,21 +139,49 @@ export class SharePlayback {
 					this.windowEnded = true;
 					return;
 				}
-				this.next();
+				if (this.canNext) this.next();
+				else this.ended = true;
 			},
 			onPlaybackStarted: () => {
 				this.windowEnded = false;
+				this.ended = false;
 			},
 			onAuthLost: null,
 			onStreamRebuild: this.fetchStream ? () => this.rebuildManifest() : null,
 			onCurrentChange: (current) => this.resyncActiveIndex(current),
 			networkFailureIsAnnounced: () => false
 		});
+		this.tenure = audioPlayer.tenure;
 	}
 
 	stop(): void {
 		audioPlayer.restoreCallbacks(this.previousCallbacks);
 		audioPlayer.unload();
+	}
+
+	// The share's one Play: it starts the first track, pauses or resumes the
+	// one playing, and once the share played to its end starts it again from
+	// its first track.
+	play(): void {
+		if (this.currentTrack && !this.ended) {
+			audioPlayer.toggle();
+			return;
+		}
+		const first = this.playOrder[0];
+		if (first) void this.playTrack(first);
+	}
+
+	// A seek leaves the end: the listener chose where the song stands. Before
+	// the first Play there is nothing to move yet, so the first track is
+	// readied there, paused, and Play starts where the listener put it.
+	seek(seconds: number): void {
+		this.ended = false;
+		if (this.currentTrack) {
+			audioPlayer.seek(seconds);
+			return;
+		}
+		const first = this.playOrder[0];
+		if (first) void this.playTrack(first, { autoplay: false, startAt: seconds });
 	}
 
 	toggle(track: SharedTrack): void {
@@ -167,26 +225,47 @@ export class SharePlayback {
 		if (anchor) void this.playTrack(anchor);
 	}
 
-	private async playTrack(track: SharedTrack): Promise<void> {
+	private async playTrack(track: SharedTrack, start: TrackStart = FROM_THE_TOP): Promise<void> {
 		const collection = this.collection;
-		if (track.audioUrl === null || !collection) return;
-		if (this.canUseStream()) {
-			try {
-				const manifest = await this.ensureManifest();
-				const streamTrack = manifest.tracks.find((t) => this.streamKeyOf(t) === track.key);
-				if (streamTrack) {
-					audioPlayer.loadStream(manifest, streamTrack.index, { autoplay: true });
-					return;
-				}
-			} catch {
-				this.manifest = null;
-			}
+		const tenure = this.tenure;
+		if (track.audioUrl === null || !collection || tenure === null) return;
+		this.ended = false;
+		// Without a stream the track loads in the same task as the press, which
+		// a browser needs to let it sound.
+		const place = this.canUseStream() ? await this.streamPlaceOf(track, tenure) : null;
+		if (!this.stillHolds(tenure)) return;
+		if (place) {
+			audioPlayer.loadStream(place.manifest, place.track.index, {
+				autoplay: start.autoplay,
+				resumeAt: place.track.start_offset + (start.startAt ?? 0)
+			});
+			return;
 		}
 		this.manifest = null;
 		audioPlayer.loadUrl(trackPlaybackInfo(collection, track), track.audioUrl, {
-			autoplay: true,
-			restart: true
+			autoplay: start.autoplay,
+			restart: true,
+			startAt: start.startAt
 		});
+	}
+
+	// Null where the track plays on its own instead: the stream could not be
+	// had, or does not hold it.
+	private async streamPlaceOf(
+		track: SharedTrack,
+		tenure: PlayerTenure
+	): Promise<StreamPlace | null> {
+		try {
+			const manifest = await this.ensureManifest(tenure);
+			const streamTrack = manifest.tracks.find((t) => this.streamKeyOf(t) === track.key);
+			return streamTrack ? { manifest, track: streamTrack } : null;
+		} catch {
+			return null;
+		}
+	}
+
+	private stillHolds(tenure: PlayerTenure): boolean {
+		return !audioPlayer.changedHandsSince(tenure);
 	}
 
 	private advanceClassic(direction: 1 | -1): void {
@@ -200,7 +279,7 @@ export class SharePlayback {
 		return this.fetchStream !== null && !this.shuffle;
 	}
 
-	private async ensureManifest(): Promise<QueueStreamManifest> {
+	private async ensureManifest(tenure: PlayerTenure): Promise<QueueStreamManifest> {
 		if (
 			this.manifest &&
 			Date.parse(this.manifest.expires_at) > Date.now() + STREAM_REFRESH_MARGIN_MS
@@ -209,14 +288,16 @@ export class SharePlayback {
 		}
 		if (!this.fetchStream) throw new Error('Stream unavailable for this share');
 		const manifest = await this.fetchStream();
-		this.manifest = manifest;
+		if (this.stillHolds(tenure)) this.manifest = manifest;
 		return manifest;
 	}
 
 	private async rebuildManifest(): Promise<QueueStreamManifest | null> {
-		if (!this.fetchStream) return null;
+		const tenure = this.tenure;
+		if (!this.fetchStream || tenure === null) return null;
 		try {
 			const fresh = await this.fetchStream();
+			if (!this.stillHolds(tenure)) return null;
 			this.manifest = fresh;
 			return fresh;
 		} catch {

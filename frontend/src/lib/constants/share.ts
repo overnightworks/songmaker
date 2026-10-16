@@ -4,3 +4,4 @@
 
 export const SHARE_NOW_PLAYING_SHEET_LABEL = 'Now playing';
 export const SHARE_NOW_PLAYING_NO_LYRICS = 'No lyrics';
+export const SHARE_NO_AUDIO_NOTICE = 'No audio available yet.';

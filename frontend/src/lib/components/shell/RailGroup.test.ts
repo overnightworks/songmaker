@@ -23,6 +23,7 @@ interface RenderOverrides {
 	icon?: Snippet;
 	count?: number;
 	expandTrigger?: boolean;
+	page?: { href: string; current: boolean; open: () => void };
 }
 
 async function render(overrides: RenderOverrides = {}) {
@@ -159,5 +160,75 @@ describe('RailGroup', () => {
 		count.click();
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+	});
+
+	describe('as a page of its own (#1354 rule 40)', () => {
+		it('#1354 rule 40: the word opens the page and does not fold the group', async () => {
+			const open = vi.fn();
+			const { target } = await render({
+				label: 'Library',
+				page: { href: '/', current: false, open }
+			});
+			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+			const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+			word.dispatchEvent(click);
+			await tick();
+
+			expect(open).toHaveBeenCalledOnce();
+			expect(click.defaultPrevented).toBe(true);
+			expect(word.getAttribute('href')).toBe('/');
+			expect(word.textContent).toContain('Library');
+			expect(
+				requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
+			).toBe('false');
+		});
+
+		it('#1354 rule 40: the arrow only folds, under the group name, and opens no page', async () => {
+			const open = vi.fn();
+			const { target } = await render({
+				label: 'Library',
+				page: { href: '/', current: false, open }
+			});
+			const arrow = requireElement<HTMLButtonElement>(target, 'button.disclose');
+			expect(arrow.getAttribute('aria-label')).toBe('Library');
+			expect(arrow.textContent?.trim()).toBe('');
+
+			arrow.click();
+			await tick();
+			expect(arrow.getAttribute('aria-expanded')).toBe('true');
+			arrow.click();
+			await tick();
+			expect(arrow.getAttribute('aria-expanded')).toBe('false');
+			expect(open).not.toHaveBeenCalled();
+		});
+
+		it('#1354 rule 40: a modified click leaves the browser to open the address elsewhere', async () => {
+			const open = vi.fn();
+			const { target } = await render({ page: { href: '/playlists', current: false, open } });
+			const click = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
+			let preventedByGroup = true;
+			// Last on the way up, so it reads what the group did and then stops jsdom
+			// from trying to leave the document.
+			target.addEventListener('click', (event) => {
+				preventedByGroup = event.defaultPrevented;
+				event.preventDefault();
+			});
+			requireElement<HTMLAnchorElement>(target, 'a.page-link').dispatchEvent(click);
+
+			expect(open).not.toHaveBeenCalled();
+			expect(preventedByGroup).toBe(false);
+		});
+
+		it('#1354 rule 40: marks the word as the current page only on its own page', async () => {
+			const { target, live } = await render({
+				page: { href: '/', current: true, open: vi.fn() }
+			});
+			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+			expect(word.getAttribute('aria-current')).toBe('page');
+
+			live.page = { href: '/', current: false, open: vi.fn() };
+			await tick();
+			expect(word.hasAttribute('aria-current')).toBe(false);
+		});
 	});
 });

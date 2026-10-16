@@ -1,7 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlignmentRequest, AlignmentResult } from '$lib/services/lyricsAlignment.svelte';
 import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '$lib/constants';
 import {
@@ -71,6 +70,7 @@ class FakeAlignmentWorker {
 
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
+let live: MountedLyricsProps;
 
 // jsdom has no scrollTo on elements; define a no-op once so vi.spyOn has a
 // real implementation to wrap, then restoreAllMocks can clean the spy up
@@ -159,8 +159,8 @@ async function scrollBoxThrough(scrollTop: MockInstance<() => number>, positions
 	await tick();
 }
 
-async function singTo(seconds: number) {
-	audioPlayer.currentTime = seconds;
+async function singTo(seconds: number | null) {
+	live.position = seconds;
 	await tick();
 }
 
@@ -184,7 +184,6 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	clearComponentStyles();
-	audioPlayer.currentTime = 0;
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 });
@@ -193,14 +192,18 @@ interface LyricsProps {
 	lyrics: string | null;
 	cues: WhisperCue[] | null;
 	whisperText: string | null;
+	// Where the take stands; a take the test does not place stands at its start.
+	position?: number | null;
 }
+
+type MountedLyricsProps = Required<LyricsProps> & { emptyLabel: string };
 
 // Props the test can change afterwards, as the panel's own props change when
 // the listener moves to another take.
-async function mountLyrics(props: LyricsProps): Promise<LyricsProps> {
+async function mountLyrics(props: LyricsProps): Promise<MountedLyricsProps> {
 	target = document.createElement('div');
 	document.body.append(target);
-	const live = reactiveProps({ emptyLabel: EMPTY_LABEL, ...props });
+	live = reactiveProps({ emptyLabel: EMPTY_LABEL, position: 0, ...props });
 	mounted = mount(NowPlayingLyrics, { target, props: live });
 	await tick();
 	return live;
@@ -272,9 +275,7 @@ describe('NowPlayingLyrics', () => {
 		// text — no line is highlighted, and none is claimed to be sung.
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		audioPlayer.currentTime = 1.5;
-
-		await mountLyrics({ lyrics, cues, whisperText: null });
+		await mountLyrics({ lyrics, cues, whisperText: null, position: 1.5 });
 		expect(target.querySelector('.lyrics-line')).toBeNull();
 		expect(target.querySelector('.lyrics-text')?.textContent).toBe(lyrics);
 
@@ -301,9 +302,8 @@ describe('NowPlayingLyrics', () => {
 	it('highlights the line whose cue interval covers the current playback time', async () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		audioPlayer.currentTime = 1.5;
 
-		await render({ lyrics, cues, whisperText: null });
+		await render({ lyrics, cues, whisperText: null, position: 1.5 });
 
 		const lines = target.querySelectorAll('.lyrics-line');
 		expect(lines[0].classList.contains('active')).toBe(false);
@@ -313,9 +313,8 @@ describe('NowPlayingLyrics', () => {
 	it('highlights each line at its own words when one segment covers both', async () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [sungCue(0, 0.5, `${LINE_1} ${LINE_2}`)];
-		audioPlayer.currentTime = 3;
 
-		await render({ lyrics, cues, whisperText: null });
+		await render({ lyrics, cues, whisperText: null, position: 3 });
 
 		const lines = target.querySelectorAll('.lyrics-line');
 		expect(lines[0].classList.contains('active')).toBe(false);
@@ -325,20 +324,30 @@ describe('NowPlayingLyrics', () => {
 	it('highlights no line while playback is in a gap between cues', async () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 1, LINE_1), cue(2, 3, LINE_2)];
-		audioPlayer.currentTime = 1.5;
 
-		await render({ lyrics, cues, whisperText: null });
+		await render({ lyrics, cues, whisperText: null, position: 1.5 });
 
 		const lines = target.querySelectorAll('.lyrics-line');
 		expect(Array.from(lines).some((line) => line.classList.contains('active'))).toBe(false);
 	});
 
+	it('lights no line while nothing is sung, though the first cue starts at 0:00', async () => {
+		const { scrolls } = layOutSyncedLyrics();
+
+		await render({ ...syncedTake(), position: null });
+
+		expect({
+			lines: target.querySelectorAll('.lyrics-line').length,
+			lit: target.querySelectorAll('.lyrics-line.active').length,
+			scrolls: scrolls.mock.calls.length
+		}).toEqual({ lines: 3, lit: 0, scrolls: 0 });
+	});
+
 	it('lights every line of a cue window at once', async () => {
 		const lyrics = [LINE_1, LINE_2].join('\n');
 		const cues = [cue(0, 6.3, `${LINE_1} ${LINE_2}`)];
-		audioPlayer.currentTime = 3;
 
-		await render({ lyrics, cues, whisperText: null });
+		await render({ lyrics, cues, whisperText: null, position: 3 });
 
 		const lines = target.querySelectorAll('.lyrics-line');
 		expect(Array.from(lines).map((line) => line.classList.contains('active'))).toEqual([
@@ -408,9 +417,8 @@ describe('NowPlayingLyrics', () => {
 		'scrolls the lyrics box to the sung line, $behavior $motion',
 		async ({ reduced, behavior }) => {
 			const { scrolls } = layOutSyncedLyrics(reduced);
-			audioPlayer.currentTime = 2.5;
 
-			await render(syncedTake());
+			await render({ ...syncedTake(), position: 2.5 });
 
 			expect(scrolls.mock.calls).toEqual([[{ top: LINE_3_BELOW_VIEW_PX, behavior }]]);
 		}
@@ -479,8 +487,7 @@ describe('NowPlayingLyrics', () => {
 		'stays where the reader drags its scrollbar $where and offers Follow',
 		async ({ startAt, positions, thenAt }) => {
 			const { scrolls, scrollTop } = layOutSyncedLyrics();
-			audioPlayer.currentTime = startAt;
-			await render(syncedTake());
+			await render({ ...syncedTake(), position: startAt });
 			const scrollsBeforeDrag = scrolls.mock.calls.length;
 
 			await scrollBoxThrough(scrollTop, positions);
@@ -492,6 +499,18 @@ describe('NowPlayingLyrics', () => {
 			}).toEqual({ scrolls: 0, follow: true });
 		}
 	);
+
+	it('stays where it stood and lights no line once the song stops being sung', async () => {
+		const { scrolls } = layOutSyncedLyrics();
+		await render({ ...syncedTake(), position: 2.5 });
+
+		await singTo(null);
+
+		expect({
+			scrolls: scrollTargets(scrolls),
+			lit: target.querySelectorAll('.lyrics-line.active').length
+		}).toEqual({ scrolls: [LINE_3_BELOW_VIEW_PX], lit: 0 });
+	});
 
 	it('Follow brings the sung line back and follows it again', async () => {
 		const { scrolls } = layOutSyncedLyrics();

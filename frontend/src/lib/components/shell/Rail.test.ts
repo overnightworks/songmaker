@@ -274,14 +274,10 @@ describe('Rail', () => {
 	it('scrolls the LIBRARY and PLAYLISTS groups, pinning Settings and the user row below them', async () => {
 		const target = await render();
 		const scroll = requireElement(target, '.rail-scroll');
-		const scrolledToggles = scroll.querySelectorAll(
-			'.rail-group > .disclose-row > button.disclose'
-		);
-		expect(scrolledToggles).toHaveLength(2);
-		expect(scrolledToggles[0]?.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
-		expect(scrolledToggles[1]?.querySelector('.group-title')?.textContent?.trim()).toBe(
-			'Playlists'
-		);
+		const scrolledGroups = scroll.querySelectorAll('.rail-group > .disclose-row');
+		expect(scrolledGroups).toHaveLength(2);
+		expect(scrolledGroups[0]?.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
+		expect(scrolledGroups[1]?.querySelector('.group-title')?.textContent?.trim()).toBe('Playlists');
 		expect(scroll.textContent).not.toContain('Settings');
 
 		const settingsPin = requireElement(target, '.rail-settings-pin');
@@ -381,7 +377,7 @@ describe('Rail', () => {
 		});
 	});
 
-	it('keeps PLAYLISTS open when All albums returns to the wall', async () => {
+	it('keeps PLAYLISTS open when the word Library returns to the wall', async () => {
 		albumList.set([album({ id: 'a1', title: 'Nachtstrom' })]);
 		playlistList.set([playlist({ id: 'p1', title: 'Night Drive', entry_count: 0 })]);
 		setOpenCollection({ kind: 'playlist', id: 'p1' });
@@ -392,7 +388,7 @@ describe('Rail', () => {
 		const playlistPanel = requireElement<HTMLDivElement>(target, '.playlist-songs');
 		expect(playlistPanel.getAttribute('data-open')).toBe('true');
 
-		requireElement<HTMLButtonElement>(target, '.all-albums').click();
+		requireElement<HTMLAnchorElement>(target, 'a.page-link').click();
 		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
 		await tick();
 

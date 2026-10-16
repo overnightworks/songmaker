@@ -24,7 +24,7 @@ from sqlalchemy import event
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME
+from songmaker_cli.constants import COVER_DIRNAME, PLAYLIST_COVER_DIRNAME, SONG_COVER_DIRNAME
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 
@@ -312,6 +312,68 @@ def test_shared_album_after_revoke(sharing_app: TestClient) -> None:
     unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get(f"/shared/{slug}")
     assert resp.status_code == 404
+
+
+# What a shared song or take presents to a stranger, by the path under its link.
+_SHARED_TAKE_ROUTES: dict[str, str] = {
+    "page": "",
+    "audio": "/audio/admin_user/g1.mp3",
+    "album cover": "/album-cover",
+}
+_SHARED_SONG_ROUTES: dict[str, str] = {**_SHARED_TAKE_ROUTES, "song cover": "/cover"}
+
+
+def _give_album_and_song_a_cover(client: TestClient) -> None:
+    ctx = client.app.state.ctx
+    with ctx.db() as session:
+        album = session.get(Album, "test_album")
+        song = session.get(Song, "s1")
+        assert album is not None
+        assert song is not None
+        album.cover_key = "album.png"
+        song.cover_key = "song.png"
+        session.commit()
+    _write_cover_variants(ctx.audio_dir, COVER_DIRNAME, "test_album")
+    _write_cover_variants(ctx.audio_dir, SONG_COVER_DIRNAME, "s1")
+
+
+@pytest.mark.parametrize(
+    ("share_path", "shared_path", "routes"),
+    [
+        ("/api/songs/s1/share", "/shared/song/{slug}", _SHARED_SONG_ROUTES),
+        ("/api/generations/g1/share", "/shared/gen/{slug}", _SHARED_TAKE_ROUTES),
+    ],
+    ids=["song", "take"],
+)
+@pytest.mark.parametrize(
+    "delete_path",
+    ["/api/songs/s1", "/api/albums/test_album"],
+    ids=["song-deleted", "album-deleted"],
+)
+def test_a_share_whose_song_was_deleted_answers_like_an_unshared_link(
+    sharing_app: TestClient,
+    share_path: str,
+    shared_path: str,
+    routes: dict[str, str],
+    delete_path: str,
+) -> None:
+    _give_album_and_song_a_cover(sharing_app)
+    page = shared_path.format(slug=_share_slug(sharing_app, share_path))
+    unauthed = web_client(sharing_app.app, cookies={})
+
+    def presented() -> dict[str, int]:
+        return {
+            name: unauthed.get(f"{page}{suffix}").status_code
+            for name, suffix in routes.items()
+        }
+
+    shared = presented()
+    assert sharing_app.delete(delete_path).status_code == 200
+
+    assert (shared, presented()) == (
+        dict.fromkeys(routes, 200),
+        dict.fromkeys(routes, 404),
+    )
 
 
 # ── Shared audio endpoint ──────────────────────────────────────────

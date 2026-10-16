@@ -196,6 +196,8 @@ export type NowPlayingSurfaceKind = (typeof NOW_PLAYING_SURFACE_KINDS)[number];
 export const NOW_PLAYING_DOCKED_WIDTH_PX = 400;
 export const NOW_PLAYING_EXPAND_LABEL = 'Expand';
 export const NOW_PLAYING_COLLAPSE_LABEL = 'Collapse';
+// Play's face once the playback ran out with nothing after it (#1391).
+export const NOW_PLAYING_PLAY_AGAIN_LABEL = 'Play again';
 
 // Queue-stream skip/progress feedback (QueueStreamFeedback). One owner for
 // this surface's copy, kept alongside the rest of Now Playing's strings.

@@ -135,7 +135,20 @@ export interface AudioPlayerCallbacks {
 	// Only the owner knows whether its page shows the offline strip; a page
 	// without one needs the player's own failure line.
 	networkFailureIsAnnounced: () => boolean;
+	// Another owner took the player: whatever this one still has under way —
+	// a start waiting on the server, a retry waiting on the network — must
+	// not land in it now. An owner that never starts anything late (a share
+	// route) has nothing to drop (#1391).
+	onPlayerTaken?: () => void;
 }
+
+// One owner's unbroken hold on the player, from the handover that gave it the
+// player to the next one. Work an owner started that waits on the server
+// names the tenure it began in and touches the player only while that tenure
+// lasts: an owner that lost the player and got it back holds a new tenure, so
+// nothing it began before lands in the player now (#1391).
+declare const tenureBrand: unique symbol;
+export type PlayerTenure = number & { readonly [tenureBrand]: true };
 
 const NO_CALLBACKS: AudioPlayerCallbacks = {
 	onEnded: null,
@@ -237,6 +250,7 @@ class AudioPlayer {
 	}
 
 	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
+	private heldTenure = 0 as PlayerTenure;
 	private audio: HTMLAudioElement | null = null;
 	private currentUrl: string | null = null;
 	// The next take loads on a second element while the current one plays, so
@@ -351,12 +365,34 @@ class AudioPlayer {
 	// the player with none.
 	swapCallbacks(next: AudioPlayerCallbacks): AudioPlayerCallbacks {
 		const previous = this.callbacks;
-		this.callbacks = next;
+		this.handOver(next);
 		return previous;
 	}
 
 	restoreCallbacks(previous: AudioPlayerCallbacks): void {
-		this.callbacks = previous;
+		this.handOver(previous);
+	}
+
+	// The one way the player changes hands, and so the one place a tenure
+	// ends. The owner it leaves hears so, and only once the new owner holds
+	// it, so whatever the leaving owner drops already finds the player no
+	// longer its own.
+	private handOver(next: AudioPlayerCallbacks): void {
+		const leaving = this.callbacks;
+		if (leaving === next) return;
+		this.callbacks = next;
+		this.heldTenure = (this.heldTenure + 1) as PlayerTenure;
+		leaving.onPlayerTaken?.();
+	}
+
+	// The tenure of whoever holds the player now; work that waits on the
+	// server keeps it and asks changedHandsSince() before it loads.
+	get tenure(): PlayerTenure {
+		return this.heldTenure;
+	}
+
+	changedHandsSince(tenure: PlayerTenure): boolean {
+		return tenure !== this.heldTenure;
 	}
 
 	// Where the browser can append MP3 into one source, a take plays on the

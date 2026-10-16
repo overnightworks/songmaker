@@ -249,7 +249,6 @@ export const COWRITER_DELETE_CONVERSATION_TITLE = 'Delete conversation?';
 export const COWRITER_DELETE_CONVERSATION_WARNING = "This can't be undone.";
 export const DAY_LABEL_TODAY = 'today';
 export const DAY_LABEL_YESTERDAY = 'yesterday';
-export const PLACE_KIND_PLAYLIST_LABEL = 'Playlist';
 export const PLACE_LINE_SEPARATOR = ' · ';
 export const COWRITER_NEW_CONVERSATION_LINE = 'new conversation';
 export const COWRITER_CONVERSATION_SINCE_TEMPLATE = 'conversation since {day}';
@@ -545,17 +544,18 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 	title: 'A–Z',
 	played: 'Last played'
 };
-export const LIBRARY_WALL_HEADING = 'Albums & playlists';
-export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums and playlists';
-export const LIBRARY_WALL_EMPTY = 'No albums yet.';
+export const LIBRARY_PAGE_LABEL = 'Library';
+export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
+// Each page's head reads its name and count as one heading ('Library · 12').
+export function wallHeadingLabel(pageLabel: string, count: number): string {
+	return `${pageLabel} · ${count}`;
+}
+export const LIBRARY_WALL_EMPTY = 'No albums yet. + New makes one.';
 // The Playlists page (#1402): its head, which search names it by too, and the
 // count beside it, read as one heading ('Playlists · 3').
 export const PLAYLISTS_PAGE_LABEL = 'Playlists';
-export function playlistsHeadingLabel(count: number): string {
-	return `${PLAYLISTS_PAGE_LABEL} · ${count}`;
-}
 export const PLAYLISTS_WALL_ORDER_GROUP_LABEL = 'Sort playlists';
-export const PLAYLISTS_WALL_EMPTY = 'No playlists yet.';
+export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New makes one.';
 export const LIBRARY_NEW_FACE = 'New';
 export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
@@ -685,7 +685,6 @@ export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 // every private route, settings included (issue #263).
 export const RAIL_NAV_LABEL = 'Primary';
 export const RAIL_LIBRARY_LABEL = 'Library';
-export const RAIL_ALL_ALBUMS_LABEL = 'All albums';
 export const RAIL_PLAYLISTS_LABEL = 'Playlists';
 export const RAIL_SETTINGS_LABEL = 'Settings';
 // The drawer the compact shell puts the rail in — its accessible name, which
