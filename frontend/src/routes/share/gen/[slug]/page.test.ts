@@ -30,7 +30,6 @@ function sharedTakePayload(media: Record<string, unknown> = {}) {
 		artist: 'Artist',
 		album_title: 'Album',
 		generation_number: 3,
-		seed: 42,
 		audio_url: '/audio/take3.mp3',
 		generation_id: 'g3',
 		audio_duration: TAKE_DURATION_SEC,
