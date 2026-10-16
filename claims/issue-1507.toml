@@ -1,0 +1,8 @@
+claim_id = "f6dc89e5b80e4e8dafd3a54d14342b3b"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "6c4b1f818e7af702da11e719dd303ea06146d418"
+branch = "claude/issue-1507-take-menu-popover"
+scope = ["docs/architecture.md", "docs/design/song-page-phone.html", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/take-menu.spec.ts", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/MenuPopover.test.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/TakesList.test.ts", "frontend/src/lib/components/editor/TakeMenu.svelte", "frontend/src/lib/components/editor/TakeMenu.test.ts"]
+opened_commit = "7198c9b0eb7d150f783ac9d7b7f1d003cbc26f4e"
+whole_reason = "One menu moves onto the shared popover; its unit pins, e2e pins and the picture note move with it."
