@@ -1,8 +1,0 @@
-claim_id = "c451ece5b38943b3b67cdcb15fabfcdd"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "aa0868b86ac3108512cb7bc506bd1de52586624c"
-branch = "claude/issue-1516-test-constants-paydown"
-scope = ["frontend/src/lib/api/client.test.ts", "frontend/src/lib/components/ModelsTaskRow.test.ts", "frontend/src/lib/components/PlaylistPicker.test.ts", "frontend/src/lib/components/editor/GenerateButton.test.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/test-utils", "frontend/src/routes/settings/generation/page.test.ts", "frontend/src/routes/settings/page.test.ts", "frontend/src/routes/share/playlist/[slug]/page.test.ts"]
-opened_commit = "3cf6e7921b4588374afd82991eb6229c307ffe8f"
-whole_reason = "Eight duplicate test constants paid down into shared test-utils in one test-only lane."
