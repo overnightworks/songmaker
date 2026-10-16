@@ -1,0 +1,7 @@
+claim_id = "fce619018c594a6aa44a87288d879321"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "4d6fb2cd387fe3282f16ceaf444a8439b9c31905"
+branch = "claude/issue-1488-p12-waits-for-scroll-end"
+scope = ["frontend/e2e/share-playlist-player.spec.ts"]
+opened_commit = "dbe0a35271a790b21f6b52fdc6d6c768d1f33ed5"
