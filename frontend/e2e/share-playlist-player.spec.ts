@@ -132,20 +132,25 @@ async function screenshot(page: Page, name: string, width: number) {
 	await page.screenshot({ path: `${directory}/playlist-${name}-${width}.png` });
 }
 
-async function startStream(page: Page, playlist: RealPlaylist, start: () => Promise<void>) {
+async function requestStream(page: Page, playlist: RealPlaylist, start: () => Promise<void>) {
 	const manifestResponse = page.waitForResponse(
 		(response) =>
 			response.url().endsWith(`${playlist.api}/stream`) && response.request().method() === 'POST'
-	);
-	const audioResponse = page.waitForResponse(
-		(response) =>
-			/\/shared\/queue-streams\/[^/]+\/audio/.test(response.url()) && response.status() === 206
 	);
 	await start();
 	const manifest = await manifestResponse;
 	expect(manifest.ok()).toBeTruthy();
 	const payload = await manifest.json();
 	expect(payload.tracks).toHaveLength(3);
+	return payload;
+}
+
+async function startStream(page: Page, playlist: RealPlaylist, start: () => Promise<void>) {
+	const audioResponse = page.waitForResponse(
+		(response) =>
+			/\/shared\/queue-streams\/[^/]+\/audio/.test(response.url()) && response.status() === 206
+	);
+	const payload = await requestStream(page, playlist, start);
 	const audio = await audioResponse;
 	expect(new URL(audio.url()).pathname).toBe(payload.stream_url);
 	expect(audio.request().headers()['range']).toMatch(/^bytes=/);
@@ -257,7 +262,7 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 	realPlaylist
 }) => {
 	await page.goto(realPlaylist.url);
-	await startStream(page, realPlaylist, () => control(page, 'Play').click());
+	const initialStream = await startStream(page, realPlaylist, () => control(page, 'Play').click());
 	await selected(page, 1);
 	await currentCover(page, realCover(realPlaylist, 1));
 	await page.evaluate(() => {
@@ -279,7 +284,14 @@ test('1374_rule_5 P6: shuffle preserves the song across stream classic stream', 
 		await expect(row(page, position).locator('.queue-subtitle')).toHaveText(albumTitle(position));
 	}
 	await currentCover(page, realCover(realPlaylist, 1));
-	await startStream(page, realPlaylist, () => control(page, 'Disable shuffle').click());
+	// Chromium can reuse the loaded media for this URL without another audio response.
+	const restoredStream = await requestStream(page, realPlaylist, () =>
+		control(page, 'Disable shuffle').click()
+	);
+	expect(restoredStream.stream_url).toBe(initialStream.stream_url);
+	await expect(control(page, 'Pause')).toBeVisible();
+	const resumedAt = Number(await slider(page).inputValue());
+	await expect.poll(async () => Number(await slider(page).inputValue())).toBeGreaterThan(resumedAt);
 	await expect(page.locator('.queue-title')).toHaveText([1, 2, 3].map(songTitle));
 	await selected(page, 1);
 	await currentCover(page, realCover(realPlaylist, 1));
