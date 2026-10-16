@@ -9,6 +9,7 @@ import {
 	observePlayingAudio,
 	ONLY_IN_SHELL,
 	playingAudioState,
+	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	workspace
 } from './helpers';
 import {
@@ -60,7 +61,7 @@ async function expectRows(page: Page): Promise<void> {
 }
 
 test.beforeEach(async ({ page, request, playwright }) => {
-	test.setTimeout(120_000);
+	test.setTimeout(SUCCESSOR_TAKES_TEST_TIMEOUT_MS);
 	guard = new FlowGuard(page);
 	const credentials = { username: `e2e-phone-${randomUUID()}`, password: randomUUID() };
 	await createAccount(request, credentials.username, credentials.password);

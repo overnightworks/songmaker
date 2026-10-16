@@ -69,6 +69,7 @@ import {
 	playlistEntryRows,
 	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
+	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	workspace,
 	type Shell,
 	LIBRARY_PATH,
@@ -663,6 +664,7 @@ test(
 	'a phone row answers a tap on its edge, and a take held twice marks one row',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }, testInfo) => {
+		test.setTimeout(SUCCESSOR_TAKES_TEST_TIMEOUT_MS);
 		const shell = shellOf(testInfo);
 		const library = readSeededLibrary();
 		const surface = workspace(page);

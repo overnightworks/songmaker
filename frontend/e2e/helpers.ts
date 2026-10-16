@@ -517,6 +517,9 @@ const PLAYBACK_PROGRESS_SECONDS = 0.3;
 // that crawls in over a throttled link is not a failure, a take that never
 // comes is.
 const SUCCESSOR_REFETCH_TIMEOUT_MS = 30_000;
+// The total budget of a test that taps through takes: each tap can wait out a
+// full SUCCESSOR_REFETCH_TIMEOUT_MS, so the budget has to outlast several waits.
+export const SUCCESSOR_TAKES_TEST_TIMEOUT_MS = 120_000;
 
 /**
  * Passes once the media element the app last started has played on from where
@@ -591,14 +594,23 @@ function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
 }
 
 const BYTE_RANGE_SERVED = /^bytes (\d+)-(\d+)\/(\d+)$/;
+const BYTE_RANGE_TO_THE_END = /^bytes=\d+-$/;
 
 // The deck resumes a cancelled take with a range request from where the cancel
-// cut it (`continuousDeck.ts`), and a range answer that stops short, like the
-// one-byte reads seen beside it, completes nothing: only the answer that
-// reaches the end of the take does.
-function reachesTheEndOfTheTake(response: Response): boolean {
+// cut it (`continuousDeck.ts`), and the browser reads a playing element with
+// open-ended ranges too. Only a GET that asked for the take to its end and was
+// answered with the whole take, or with the part from the cut to its last byte,
+// completes it: the player's HEAD probe of the take, the one-byte reads seen
+// beside it, and an answer that names no known end deliver nothing.
+function completesTheTake(response: Response): boolean {
+	const request = response.request();
+	if (request.method() !== 'GET') return false;
+	const asked = request.headers()['range'];
+	if (asked !== undefined && !BYTE_RANGE_TO_THE_END.test(asked)) return false;
+	if (response.status() === 200) return true;
+	if (response.status() !== 206) return false;
 	const served = BYTE_RANGE_SERVED.exec(response.headers()['content-range'] ?? '');
-	return served === null || Number(served[2]) + 1 === Number(served[3]);
+	return served !== null && Number(served[2]) + 1 === Number(served[3]);
 }
 
 /**
@@ -651,7 +663,7 @@ export class FlowGuard {
 		});
 		page.on('response', (response) => {
 			const status = response.status();
-			if (response.ok() && reachesTheEndOfTheTake(response)) {
+			if (completesTheTake(response)) {
 				this.completingResponses.add(response.request());
 			}
 			if (refusalIsExpected(response.url(), status)) return;
