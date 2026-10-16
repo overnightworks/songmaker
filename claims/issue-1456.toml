@@ -1,8 +1,0 @@
-claim_id = "71ec23f3afe6452a824830240bc4a752"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "52d6ac7b32cdecd460b3d90c5170143b90b828f4"
-branch = "claude/issue-1456-library-resolves-own-address"
-scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/routes/(library)/+page.svelte", "frontend/src/routes/(library)/page.test.ts", "frontend/src/routes/layout.test.ts"]
-opened_commit = "6073a897a3a4257f6d5d170694ea4c1df448a72d"
-whole_reason = "the Library page resolves its own address: the library context and navigation stores with their tests, the shared history fixture, the root library page and its test, the layout tests, the addresses e2e spec and the shared wall-scroll e2e helpers it reuses"
