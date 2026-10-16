@@ -25,12 +25,14 @@
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
 	import {
+		beginPlayIntent,
 		curateAlbum,
 		ensureGenerationsLoaded,
 		isSongCurrent,
 		playAlbum,
 		playAlbumSong,
-		selectedAlbumId
+		selectedAlbumId,
+		type PlayIntent
 	} from '$lib/stores/player';
 	import { selectSong } from '$lib/stores/navigation';
 	import { historyLayerState, holdOpenWhile } from '$lib/stores/layers';
@@ -293,22 +295,21 @@
 	// A tap on a song plays it in place; a song with nothing to hear has nothing
 	// to play, so the tap opens it in the song editor instead. Its takes are
 	// read first, because the count alone cannot say whether one is playable.
-	// Only the latest tap on this page is still the person's intent when the
-	// read returns: a newer tap, leaving the album or closing the page ends it.
-	let latestTap = 0;
+	// The tap is the person's intent only while it stands: a newer start or
+	// transport action in the player ends it, and so does leaving the album,
+	// closing the page. Navigation withdraws it through the player as well.
+	let pendingTap: PlayIntent | null = null;
 
 	$effect(() => {
 		void currentAlbumId;
-		return () => {
-			latestTap += 1;
-		};
+		return () => pendingTap?.withdraw();
 	});
 
 	async function onSongTap(song: SongItem): Promise<void> {
-		const thisTap = ++latestTap;
+		const tap = (pendingTap = beginPlayIntent());
 		// A failed read leaves the play path, where the player says it honestly.
 		await ensureGenerationsLoaded(song.id).catch(() => undefined);
-		if (thisTap !== latestTap) return;
+		if (!tap.stands()) return;
 		const loaded = get(songList).find((s) => s.id === song.id) ?? song;
 		if (songPlayability(loaded) === 'none') selectSong(song.id);
 		else void playAlbumSong(song.album_id, song.id);

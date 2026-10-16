@@ -9,6 +9,7 @@
 	import { songCountLabel } from '$lib/utils/format';
 	import { historyLayerState } from '$lib/stores/layers';
 	import {
+		cancelPendingPlayIntent,
 		pendingStart,
 		playbackSource,
 		playStartNotice,
@@ -173,6 +174,7 @@
 	// passes no onplay, which dims the circle unless this collection is the
 	// queue, so no tap there reaches the listener's shuffle setting.
 	function onCircle(): void {
+		cancelPendingPlayIntent();
 		if (startWaitsHere) stopStartAwaitingNetwork();
 		else if (queueIsThisCollection) audioPlayer.toggle();
 		else startFromTheTop();

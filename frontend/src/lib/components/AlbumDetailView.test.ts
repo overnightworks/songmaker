@@ -58,6 +58,8 @@ import {
 	selectedAlbumId
 } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
+import { openSongAddress } from '$lib/stores/libraryContext';
+import { mountAddressRoute } from '$lib/test-utils/library-history';
 
 const uploadAlbumCover = vi.fn();
 const updateAlbum = vi.fn();
@@ -84,6 +86,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchSong: (...args: unknown[]) => fetchSong(...args)
 	};
 });
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$lib/api/songs', () => ({
 	fetchSongs: vi
 		.fn()
@@ -951,11 +954,11 @@ describe('AlbumDetailView song row', () => {
 			function holdRead(): {
 				answer: (outcome: 'archived-only' | 'fail') => void;
 			} {
-				let settle!: (outcome: 'archived-only' | 'fail') => void;
+				const settlers: Array<(outcome: 'archived-only' | 'fail') => void> = [];
 				fetchSong.mockImplementation(
 					(id: string) =>
 						new Promise((resolve, reject) => {
-							settle = (outcome) =>
+							settlers.push((outcome) =>
 								outcome === 'fail'
 									? reject(new Error('offline'))
 									: resolve(
@@ -972,10 +975,11 @@ describe('AlbumDetailView song row', () => {
 													})
 												]
 											})
-										);
+										)
+							);
 						})
 				);
-				return { answer: (outcome) => settle(outcome) };
+				return { answer: (outcome) => settlers.forEach((settle) => settle(outcome)) };
 			}
 
 			it('takes the play path when the takes cannot be read, so the player says so', async () => {
@@ -1010,6 +1014,52 @@ describe('AlbumDetailView song row', () => {
 
 				expect(selectSong).not.toHaveBeenCalled();
 				expect(playAlbumSong).not.toHaveBeenCalled();
+			});
+
+			it('1354_rule_11: leaves the header Play standing when the takes arrive after it started', async () => {
+				const actualPlayer =
+					await vi.importActual<typeof import('$lib/stores/player')>('$lib/stores/player');
+				vi.mocked(playAlbum).mockImplementation(actualPlayer.playAlbum);
+				const read = holdRead();
+				const target = await renderSongs();
+				songList.update((songs) =>
+					songs.map((item) => (item.id === 's-tide' ? { ...item, generation_count: 1 } : item))
+				);
+
+				boxOf(target, 'Ebb').click();
+				await tick();
+				requireElement<HTMLButtonElement>(target, '[aria-label="Play album"]').click();
+				await vi.waitFor(() => expect(audioPlayer.current?.songId).toBe('s-tide'));
+				read.answer('archived-only');
+				await afterPendingMicrotasks();
+
+				expect(audioPlayer.current?.songId).toBe('s-tide');
+				expect(selectSong).not.toHaveBeenCalled();
+				expect(playAlbumSong).not.toHaveBeenCalled();
+			});
+
+			it('1354_rule_11: opens nothing when another address takes over the workspace before the takes arrive', async () => {
+				const read = holdRead();
+				const target = await renderSongs();
+
+				boxOf(target, 'Ebb').click();
+				await tick();
+				let resolveDestination!: (value: ReturnType<typeof songsPage>) => void;
+				vi.mocked(fetchSongs).mockReturnValueOnce(
+					new Promise((resolve) => {
+						resolveDestination = resolve;
+					})
+				);
+				mountAddressRoute('/album/a-local/destination');
+				const navigation = openSongAddress('a-local', 'destination');
+				await tick();
+				read.answer('archived-only');
+				await afterPendingMicrotasks();
+
+				expect(selectSong).not.toHaveBeenCalled();
+				expect(playAlbumSong).not.toHaveBeenCalled();
+				resolveDestination(songsPage([]));
+				await expect(navigation).resolves.toBe('unknown-song');
 			});
 
 			it('keeps the newer tap when the older read answers last', async () => {

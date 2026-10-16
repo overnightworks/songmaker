@@ -365,6 +365,7 @@ type AlbumStart = 'top' | { songId: string };
 let retryPlayIntent: (() => Promise<void>) | null = null;
 
 export async function retryLastPlayIntent(): Promise<boolean> {
+	cancelPendingPlayIntent();
 	const intent = retryPlayIntent;
 	if (!intent) return false;
 	await intent();
@@ -405,6 +406,33 @@ function cancelPlayStart(): void {
 // holds it again (#1391).
 function playStartIsCurrent(seq: number): boolean {
 	return seq === playStartSeq && !audioPlayer.changedHandsSince(playStartTenure);
+}
+
+let pendingPlayIntent: PlayIntent | null = null;
+
+export function cancelPendingPlayIntent(): void {
+	pendingPlayIntent?.withdraw();
+	pendingPlayIntent = null;
+}
+
+export interface PlayIntent {
+	stands(): boolean;
+	withdraw(): void;
+}
+
+// A person's wish to play something that must first wait for a read. It
+// replaces the start before it and stands until a newer start, a transport
+// action or its own withdrawal ends it, so the wait cannot override what the
+// person did meanwhile.
+export function beginPlayIntent(): PlayIntent {
+	const { seq } = beginPlayStart();
+	let withdrawn = false;
+	return (pendingPlayIntent = {
+		stands: () => !withdrawn && playStartIsCurrent(seq),
+		withdraw: () => {
+			withdrawn = true;
+		}
+	});
 }
 
 // Offline, the strip already says why a start could not reach its takes: the
@@ -881,6 +909,7 @@ export function transportOfTheStart(
 
 // The bar's and the header's press withdraw a waiting start altogether.
 export function stopStartAwaitingNetwork(): boolean {
+	cancelPendingPlayIntent();
 	if (!pauseStartAwaitingNetwork()) return false;
 	dropPendingStart();
 	return true;
@@ -906,11 +935,13 @@ function resumePausedStart(): boolean {
 }
 
 function pauseFromLockScreen(): void {
+	cancelPendingPlayIntent();
 	if (pauseStartAwaitingNetwork()) return;
 	audioPlayer.pause();
 }
 
 function playFromLockScreen(): void {
+	cancelPendingPlayIntent();
 	if (resumePausedStart()) return;
 	audioPlayer.play();
 }
@@ -1202,6 +1233,7 @@ export function buildQueueViewModel(
 // keep their own index semantics, so this dispatches to the matching
 // internal player rather than duplicating that logic at the call site.
 export function jumpToQueueIndex(index: number): void {
+	cancelPendingPlayIntent();
 	if (audioPlayer.mode === 'stream') {
 		audioPlayer.seekToStreamTrack(index);
 		return;
@@ -1331,6 +1363,7 @@ const PLAYBACK_FAILED_TOAST = 'Playback failed';
 // A press on the row of the take that offers Pause, a waiting one included,
 // is that Pause, as the bar's is (#1330).
 export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
+	cancelPendingPlayIntent();
 	if (isTakeCurrent(gen) && transportOffersPause(audioPlayer.transport)) {
 		audioPlayer.toggle();
 		return;
@@ -1350,6 +1383,7 @@ type TakeRow = { alreadyLoaded: boolean; start: () => void | Promise<void> };
 // running, and a paused one picks up where it stands rather than starting
 // over. Pausing belongs to a take row's own ▶ and to the transport.
 async function playRow(row: TakeRow): Promise<void> {
+	cancelPendingPlayIntent();
 	if (row.alreadyLoaded) audioPlayer.play();
 	else await row.start();
 }
@@ -1535,11 +1569,13 @@ function playContextInDirection(ctx: QueueContext, direction: QueueDirection): v
 }
 
 export function playNextSong(): void {
+	cancelPendingPlayIntent();
 	if (playStreamInDirection(1)) return;
 	playContextInDirection(get(queueContext), 1);
 }
 
 export function playPrevSong(): void {
+	cancelPendingPlayIntent();
 	if (playStreamInDirection(-1)) return;
 	playContextInDirection(get(queueContext), -1);
 }

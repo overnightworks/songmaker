@@ -97,6 +97,7 @@ import {
 	canPlayNextSong,
 	canPlayPrevSong,
 	clearGenerationSelection,
+	beginPlayIntent,
 	ensureGenerationsLoaded,
 	idlePlayTarget,
 	jumpToQueueIndex,
@@ -5328,5 +5329,38 @@ describe('a share link that takes the player (#1391)', () => {
 
 		expect(lockScreenState.metadata).toBeNull();
 		expect(lockScreenState.playbackState).toBe('none');
+	});
+});
+
+describe('a play intent waiting for a read (defect:#1386)', () => {
+	it('withdrawing an older intent leaves the newer intent standing', () => {
+		const older = beginPlayIntent();
+		const newer = beginPlayIntent();
+		older.withdraw();
+		expect(newer.stands()).toBe(true);
+	});
+
+	it('stands until withdrawn', () => {
+		const intent = beginPlayIntent();
+		expect(intent.stands()).toBe(true);
+
+		intent.withdraw();
+
+		expect(intent.stands()).toBe(false);
+	});
+
+	it.each([
+		['a newer intent', () => void beginPlayIntent()],
+		['a next-song press', () => void playNextSong()],
+		['a queue row', () => jumpToQueueIndex(0)],
+		['a bar play press', () => void retryLastPlayIntent()],
+		['a waiting-start stop', () => void stopStartAwaitingNetwork()],
+		['a previous-song press', () => void playPrevSong()]
+	])('ends when %s begins', (_, newerWish) => {
+		const intent = beginPlayIntent();
+
+		newerWish();
+
+		expect(intent.stands()).toBe(false);
 	});
 });
