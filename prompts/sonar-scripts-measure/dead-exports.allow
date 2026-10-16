@@ -1,0 +1,11 @@
+# Patterns match repository-relative path:export; every exception needs an owner/reason.
+*:*ForTests # Deliberate reset/control seams for isolated tests.
+frontend/src/routes/*:ssr # SvelteKit route configuration.
+frontend/src/routes/*:prerender # SvelteKit route configuration.
+frontend/src/lib/stores/resourceSync.ts:ResourceSyncController # Dependency-injected sync controller: isolated race, reconnect, authorization and bounded-buffer tests without the singleton browser/network owner.
+frontend/src/lib/history/historyController.ts:land # the pure landing reducer is exported for its table tests; its one caller is the controller's own landing listener (#1219).
+frontend/src/lib/history/historyController.ts:allocateEntryId # the id allocator is exported for its tests over an in-memory Storage (#1194).
+frontend/src/lib/history/historyController.ts:landedEntry # the popstate reader is exported for its codec tests (#1194).
+frontend/src/lib/history/historyController.ts:stepBackTo # exported for its first-entry test; layers step back through it inside the controller (#1219), and #1006 H6 (legal) calls it directly.
+frontend/src/lib/services/continuousDeck.ts:ContinuousDeck # the continuous-deck append engine lands ahead of its caller; wired by #1187 M2 (audioPlayer plays a queue through it).
+frontend/src/lib/services/audioPlayer.svelte.ts:STALL_RECOVERY_MS # the stall-check interval is exported so the stall and recovery tests advance the clock by the one value instead of hand copies (#1330); its production reader is the stall watch in the same module.

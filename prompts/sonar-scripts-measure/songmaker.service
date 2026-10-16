@@ -1,0 +1,37 @@
+[Unit]
+Description=Songmaker stack (docker compose up -d) after boot
+After=docker.service songmaker-cli-credentials-mirror.service
+Requires=docker.service songmaker-cli-credentials-mirror.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+# Fires once the unit gives up restarting (after StartLimitBurst is spent
+# within StartLimitIntervalSec above), not on each individual restart
+# attempt — RestartMode=direct below is what makes that true (issue #333).
+OnFailure=songmaker-alert@%n.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# WorkingDirectory and User below are placeholders (this repo's canonical
+# checkout/owner), kept concrete only so `systemd-analyze verify` can check
+# an absolute path. scripts/install-autostart.sh always overwrites both
+# with the real project root and invoking user at install time — copying
+# this file by hand instead of running that script inherits these values
+# as-is, which is very likely wrong for a different checkout or operator.
+WorkingDirectory=/home/felix-hummert/git/songmaker
+ExecStartPre=/home/felix-hummert/git/songmaker/scripts/check_agent_cli_mounts.sh
+ExecStart=/usr/bin/docker compose up -d
+Restart=on-failure
+# Without this, systemd passes through the failed state before EVERY
+# scheduled restart, and OnFailure= above fires each time — up to
+# StartLimitBurst emails for a single boot problem. `direct` restarts
+# straight from the failed attempt, so the unit only ever enters failed
+# once its restart budget is spent, which is the one moment worth an
+# email (issue #333; requires systemd >= 254, this host runs 255).
+RestartMode=direct
+RestartSec=10
+User=felix-hummert
+Group=docker
+
+[Install]
+WantedBy=multi-user.target
