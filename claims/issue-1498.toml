@@ -1,0 +1,8 @@
+claim_id = "43b56a1a1bda44d0b325d83c9df91c7e"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "0366076665efa2046cacb18c3f4185615a3450ae"
+branch = "claude/issue-1498-s6h-checker-scripts-sonar"
+scope = ["scripts/check_dead_symbols.py", "scripts/check_no_silent_fallbacks.py", "scripts/check_root_layout.py", "scripts/check_style_literals.py", "scripts/similar_functions.py", "scripts/vulture_whitelist.py", "tests/test_check_dead_symbols.py", "tests/test_check_no_silent_fallbacks.py", "tests/test_check_root_layout.py", "tests/test_check_style_literals.py", "tests/test_similar_functions.py"]
+opened_commit = "76b34c376899caafd444b94d9dd7dae5e344a275"
+whole_reason = "One Sonar clean-up of the six static-checker scripts and their own tests."
