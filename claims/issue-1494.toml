@@ -1,8 +1,0 @@
-claim_id = "f360beae222448ecb71713d5194000c9"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "011b4d6d4df70c4ad02c0543bffe1790ca9e34c3"
-branch = "claude/issue-1494-reload-stops-after-unmount"
-scope = ["frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts"]
-opened_commit = "f9e12695877d54bb0ddd1d6d515c58cb5b82679d"
-whole_reason = "The reload owner, its test, and the NowPlaying test that exposes the race."
