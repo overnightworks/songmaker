@@ -495,16 +495,15 @@ test('1374_rule_16 P12: 24 rows remain reachable with bounded lyrics at full and
 			await expect(control(page, 'Pause')).toBeVisible();
 			await expect(page.locator('.now-playing-line')).toContainText(`${position} of 24`);
 			await expect(page.locator('.lyrics-line').first()).toBeVisible();
-			const readerScrolled = page
-				.locator('.lyrics')
-				.evaluate(
-					(box) =>
-						new Promise<void>((resolve) =>
-							box.addEventListener('scrollend', () => resolve(), { once: true })
-						)
-				);
+			// A Follow pressed during the smooth PageDown scroll is re-paused by its tail (#1374); wait for the scroll to end first.
+			const readerScrolled = await page.locator('.lyrics').evaluateHandle((box) => ({
+				ended: new Promise<void>((resolve) =>
+					box.addEventListener('scrollend', () => resolve(), { once: true })
+				)
+			}));
 			await page.locator('.lyrics').press('PageDown');
-			await readerScrolled;
+			await readerScrolled.evaluate(({ ended }) => ended);
+			await readerScrolled.dispose();
 			const follow = page.getByRole('button', { name: 'Follow', exact: true });
 			await expect(follow).toBeInViewport({ ratio: 1 });
 			await follow.click();
