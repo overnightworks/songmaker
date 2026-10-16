@@ -1,0 +1,8 @@
+claim_id = "c98bff596b9843ab98badabbbd3e3809"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "0366076665efa2046cacb18c3f4185615a3450ae"
+branch = "claude/issue-916-vram-capacity-models-page"
+scope = ["docs/acestep.md", "docs/design/admin-models.html", "frontend/src/lib/components/ModelRegistryPanel.svelte", "frontend/src/lib/components/WorkerPoolPanel.svelte", "src/acestep_worker/model_cache.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/api_models", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/scheduler.py"]
+opened_commit = "3c2d3af61d45d27842b5027cff750a8e2b87adb8"
+whole_reason = "The ruled capacity sentences share one picture, one worker check and one Models-page row; the picture step comes first and the build is cut after the blessing."
