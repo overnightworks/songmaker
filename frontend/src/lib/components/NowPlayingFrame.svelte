@@ -50,6 +50,7 @@
 		onCoverError,
 		source = null,
 		surface = 'full',
+		transportElement = $bindable(),
 		onclose,
 		onExpand,
 		onCollapse,
@@ -86,6 +87,7 @@
 		collectionHead,
 		songs
 	}: {
+		transportElement?: HTMLDivElement;
 		collectionHead?: { title: string; subtitle: string; nowPlaying: string };
 		songs?: Snippet;
 		info: PlaybackInfo;
@@ -297,7 +299,7 @@
 	control beside it, Play stands alone. -->
 {#snippet transportControls()}
 	{#if hasSideControls}
-		<div class="transport">
+		<div class="transport" bind:this={transportElement}>
 			<div class="transport-side before">
 				{#if onToggleShuffle}
 					<button
@@ -352,7 +354,7 @@
 			</div>
 		</div>
 	{:else}
-		<div class="transport solo">{@render playButton()}</div>
+		<div class="transport solo" bind:this={transportElement}>{@render playButton()}</div>
 	{/if}
 	{#if notice}<p class="waiting-notice" role="status">{notice}</p>{/if}
 {/snippet}
@@ -366,6 +368,20 @@
 		position={sungAt}
 		songTitle={isPage && collectionHead ? info.songTitle : undefined}
 	/>
+{/snippet}
+
+{#snippet pagePlayer()}
+	{#if collectionHead}
+		<div class="cover-meta">
+			<h1 class="cover-title">{collectionHead.title}</h1>
+			<span class="cover-line">{collectionHead.subtitle}</span>
+			<span class="cover-line now-playing-line">{collectionHead.nowPlaying}</span>
+		</div>
+	{:else}
+		{@render coverMeta()}
+	{/if}
+	{@render transportControls()}
+	{@render progress()}
 {/snippet}
 
 <div
@@ -387,28 +403,29 @@
 			<!-- The page reads like the picture a share link promises: the cover,
 				then the song, Play, the slider and the words under it. -->
 			<div class="np-body">
-				{#if !collectionHead}{@render coverArt()}{/if}
-				<section class="np-player-col">
-					{#if collectionHead}<div class="np-page-cover">{@render coverArt()}</div>{/if}
-					{#if collectionHead}
-						<div class="cover-meta">
-							<h1 class="cover-title">{collectionHead.title}</h1>
-							<span class="cover-line">{collectionHead.subtitle}</span>
-							<span class="cover-line now-playing-line">{collectionHead.nowPlaying}</span>
-						</div>
-					{:else}
-						{@render coverMeta()}
-					{/if}
-					{@render transportControls()}
-					{@render progress()}
-					{#if !collectionHead && unplayableNotice === null}
+				{#if stacked}
+					{@render coverArt()}
+					<section class="np-player-col">
+						{@render pagePlayer()}
+						{#if unplayableNotice === null}
+							<div class="np-page-lyrics">{@render lyrics()}</div>
+						{/if}
+						{#if songs}<div class="np-page-songs">{@render songs()}</div>{/if}
+					</section>
+				{:else}
+					{#if !collectionHead}{@render coverArt()}{/if}
+					<section class="np-player-col">
+						{#if collectionHead}<div class="np-page-cover">{@render coverArt()}</div>{/if}
+						{@render pagePlayer()}
+						{#if !collectionHead && unplayableNotice === null}
+							<div class="np-page-lyrics">{@render lyrics()}</div>
+						{/if}
+					</section>
+					{#if collectionHead && unplayableNotice === null}
 						<div class="np-page-lyrics">{@render lyrics()}</div>
 					{/if}
-				</section>
-				{#if collectionHead && unplayableNotice === null}
-					<div class="np-page-lyrics">{@render lyrics()}</div>
+					{#if songs}<div class="np-page-songs">{@render songs()}</div>{/if}
 				{/if}
-				{#if songs}<div class="np-page-songs">{@render songs()}</div>{/if}
 			</div>
 		{:else}
 			<header class="np-header">
@@ -1044,7 +1061,7 @@
 		grid-template-rows: minmax(0, 1fr);
 		text-align: left;
 	}
-	.now-playing.page:not(.stacked):not(.collection) .np-player-col {
+	.now-playing.page:not(.stacked):not(.collection) .np-player-col:has(.np-page-lyrics) {
 		height: var(--share-player-room);
 	}
 	.now-playing.page:not(.stacked):not(.collection) .np-page-lyrics {
@@ -1065,9 +1082,6 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-rows: minmax(0, 1fr) auto auto auto;
-	}
-	.np-page-cover {
-		display: contents;
 	}
 	.now-playing.page.collection:not(.stacked) .np-page-cover {
 		display: block;

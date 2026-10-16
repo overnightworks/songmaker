@@ -11,7 +11,7 @@ import {
 	RAIL_NAV_LABEL
 } from '../src/lib/constants';
 import { BASE_URL } from './seed';
-import { FlowGuard, LIBRARY_PATH } from './helpers';
+import { boundingBoxes, FlowGuard, LIBRARY_PATH } from './helpers';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -343,6 +343,7 @@ for (const kind of ['song', 'gen'] as const) {
 			browser
 		}, info) => {
 			const phone = info.project.name === 'mobile';
+			test.skip(phone && height === 600, 'Phone cell already runs at 844');
 			const viewport = phone ? { width: 390, height: 844 } : { width: 1440, height };
 			const context = await browser.newContext({
 				storageState: undefined,
@@ -404,6 +405,13 @@ for (const kind of ['song', 'gen'] as const) {
 					await expect(page.getByRole('status')).toHaveText('No audio available yet.');
 					await expect(page.locator('.np-page-lyrics')).toHaveCount(0);
 					await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeDisabled();
+					if (!phone) {
+						const [column, progress] = await boundingBoxes(
+							player.locator('.np-player-col'),
+							player.locator('.progress')
+						);
+						expect(column.y + column.height).toBeCloseTo(progress.y + progress.height, 0);
+					}
 				}
 			} finally {
 				try {

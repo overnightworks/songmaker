@@ -118,11 +118,11 @@ async function currentCover(page: Page, cover: string) {
 	await page.setViewportSize({ width: 390, height: 600 });
 	await expect
 		.poll(async () => {
-			const [lyrics, songs] = await boundingBoxes(
-				page.locator('.np-page-lyrics'),
-				page.locator('.np-page-songs')
-			);
-			return songs.y >= lyrics.y + lyrics.height;
+			const [lyrics, songs] = await Promise.all([
+				page.locator('.np-page-lyrics').boundingBox(),
+				page.locator('.np-page-songs').boundingBox()
+			]);
+			return lyrics !== null && songs !== null && songs.y >= lyrics.y + lyrics.height;
 		})
 		.toBe(true);
 	await scroll(page, 'bottom');
@@ -174,6 +174,7 @@ for (const height of [900, 600]) {
 		visitor: page,
 		expectedRefusals
 	}, info) => {
+		test.skip(info.project.name === 'mobile' && height === 600, 'Phone cell already runs at 844');
 		expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 		if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 		await openMock(page);
@@ -513,6 +514,7 @@ for (const height of [900, 600]) {
 		visitor: page,
 		expectedRefusals
 	}, info) => {
+		test.skip(info.project.name === 'mobile' && height === 600, 'Phone cell already runs at 844');
 		expectedRefusals.push({ path: `${PLAYLIST_API}/stream`, statuses: [404] });
 		if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 		await openMock(page, playlistPayload(24));

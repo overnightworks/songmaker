@@ -115,10 +115,32 @@ async function scrollPageTo(page: Page, edge: 'top' | 'bottom'): Promise<void> {
 }
 
 test.describe('before Play', () => {
+	test('1374_rule_11 landscape touch keeps cover left and Play in the first screen', async ({
+		visitor
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'mobile', 'Landscape touch regression');
+		const { page } = visitor;
+		await page.setViewportSize({ width: 844, height: 390 });
+		await openMockAlbum(visitor);
+		const [cover, title, songsBox] = await boundingBoxes(
+			page.locator('.cover-art'),
+			page.getByRole('heading', { level: 1 }),
+			songs(page)
+		);
+		await page.screenshot({ path: testInfo.outputPath('album-landscape-844-390.png') });
+		expect(cover.x + cover.width).toBeLessThanOrEqual(title.x);
+		await expect(control(page, TRANSPORT_PLAY_LABEL)).toBeInViewport({ ratio: 1 });
+		expect(cover.x + cover.width).toBeLessThanOrEqual(songsBox.x);
+	});
+
 	for (const height of [900, 600]) {
 		test(`1374_rule_11 A1 A2 at ${height}: album keeps desktop columns and phone reading order`, async ({
 			visitor
 		}, testInfo) => {
+			test.skip(
+				testInfo.project.name === 'mobile' && height === 600,
+				'Phone cell already runs at 844'
+			);
 			if (testInfo.project.name === 'desktop')
 				await visitor.page.setViewportSize({ width: 1440, height });
 			await openMockAlbum(visitor);
@@ -381,14 +403,18 @@ test.describe('a long album', () => {
 
 	test('1374_rule_14 E3: long lyrics stay in a bounded box and Songs stays reachable', async ({
 		visitor
-	}) => {
+	}, testInfo) => {
 		const albumSongs = mockSongs(3);
 		albumSongs[0].lyrics = LONG_LYRICS;
 		await openMockAlbum(visitor, albumSongs);
 		const { page } = visitor;
 
 		const [lyricsBox] = await boundingBoxes(page.locator('.np-page-lyrics'));
-		expect(lyricsBox.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? LYRICS_BOX_MAX_PX);
+		expect(lyricsBox.height).toBeLessThanOrEqual(
+			testInfo.project.name === 'mobile'
+				? LYRICS_BOX_MAX_PX
+				: (page.viewportSize()?.height ?? LYRICS_BOX_MAX_PX)
+		);
 		const lastRow = songRow(page, mockSongTitle(3));
 		await lastRow.scrollIntoViewIfNeeded();
 		await expect(lastRow).toBeInViewport();
@@ -398,19 +424,26 @@ test.describe('a long album', () => {
 		test(`1374_rule_11 E5 D3 scrolling at ${height} keeps desktop transport and phone return available`, async ({
 			visitor
 		}, testInfo) => {
+			test.skip(
+				testInfo.project.name === 'mobile' && height === 600,
+				'Phone cell already runs at 844'
+			);
 			if (testInfo.project.name === 'desktop')
 				await visitor.page.setViewportSize({ width: 1440, height });
-			await openMockAlbum(visitor, mockSongs(24));
+			await openMockAlbum(visitor, mockSongs(40));
 			const { page } = visitor;
 			const bar = page.locator('footer.player-bar');
 			await control(page, TRANSPORT_PLAY_LABEL).click();
-			await expect(bar).toBeHidden();
 			await control(page, SONG_NEXT_LABEL).click();
-			await expectNowPlayingLine(page, mockSongTitle(2), 2, 24);
+			await expectNowPlayingLine(page, mockSongTitle(2), 2, 40);
 
+			const [transportBox] = await boundingBoxes(control(page, TRANSPORT_PAUSE_LABEL));
 			const history = await page.evaluate(() => window.history.length);
 			await scrollPageTo(page, 'bottom');
 			if (testInfo.project.name === 'desktop') {
+				await expect
+					.poll(() => page.locator(PLAYER_SCROLL_ROOT).evaluate((root) => root.scrollTop))
+					.toBeGreaterThan(transportBox.y + transportBox.height);
 				await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport({ ratio: 1 });
 				await expect(bar).toBeHidden();
 				return;

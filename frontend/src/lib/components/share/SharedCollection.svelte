@@ -8,6 +8,7 @@
 	} from '$lib/share/sharedCollection';
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
 	import {
+		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
 	} from '$lib/constants/now-playing';
@@ -45,8 +46,14 @@
 	const playback = new SharePlayback();
 	let coverFailed = $state(false);
 	let mobileTransport = $state(false);
+	let stackedPlayer = $state(false);
 	let pageElement: HTMLElement | undefined = $state();
+	let transportElement: HTMLDivElement | undefined = $state();
 	let playerOutOfView = $state(false);
+
+	$effect(() =>
+		subscribeCompactLayout((value) => (stackedPlayer = value), NOW_PLAYING_STACKED_MEDIA)
+	);
 
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
@@ -105,12 +112,8 @@
 		}, MOBILE_TRANSPORT_MEDIA);
 	});
 
-	// The transport sits in the keyed branch of the player, which a track
-	// change rebuilds, so the observer follows the current transport.
 	$effect(() => {
-		void stagedTrack?.key;
-		const transport = pageElement?.querySelector('.now-playing.page .transport');
-		if (!isCollection || !pageElement || !transport) {
+		if (!isCollection || !pageElement || !transportElement) {
 			playerOutOfView = false;
 			return;
 		}
@@ -118,7 +121,7 @@
 			([entry]) => (playerOutOfView = !entry.isIntersecting),
 			{ root: pageElement }
 		);
-		observer.observe(transport);
+		observer.observe(transportElement);
 		return () => observer.disconnect();
 	});
 
@@ -177,7 +180,7 @@
 <div
 	class="shared-page player-page"
 	class:collection-page={isCollection}
-	class:bar-room={isCollection && playback.currentTrack !== null}
+	class:bar-room={isCollection && stackedPlayer && playback.currentTrack !== null}
 	bind:this={pageElement}
 >
 	<div class="bg-effects" aria-hidden="true">
@@ -195,6 +198,7 @@
 		/>
 	{:else if stagedInfo}
 		<NowPlayingFrame
+			bind:transportElement
 			surface="page"
 			artwork={view?.kind === 'playlist' ? playlistCover : undefined}
 			{collectionHead}
