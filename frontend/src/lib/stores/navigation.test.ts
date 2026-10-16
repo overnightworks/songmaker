@@ -76,6 +76,7 @@ import {
 import { closeSidebar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
 import { ApiError, NetworkError } from '$lib/api/fetch';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import {
 	API_ERROR_GENERIC_MESSAGE,
 	DIALOG_CANCEL_LABEL,
@@ -280,7 +281,7 @@ function crossingWrite(replaceState: boolean) {
 
 describe('isLibraryWorkspacePath', () => {
 	it('is the home path, the Playlists page and every album, song, and playlist address', () => {
-		expect(isLibraryWorkspacePath('/')).toBe(true);
+		expect(isLibraryWorkspacePath(LIBRARY_ROUTE_PATH)).toBe(true);
 		expect(isLibraryWorkspacePath('/playlists')).toBe(true);
 		expect(isLibraryWorkspacePath('/album/anfield')).toBe(true);
 		expect(isLibraryWorkspacePath('/album/anfield/stadion-lauf-a')).toBe(true);
@@ -2780,7 +2781,7 @@ describe('openRailSearchTarget', () => {
 		librarySurface.set('detail');
 		toggleSidebar();
 
-		await openRailSearchTarget({ kind: 'page', href: '/' });
+		await openRailSearchTarget({ kind: 'page', href: LIBRARY_ROUTE_PATH });
 
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySurface)).toBe('browse');

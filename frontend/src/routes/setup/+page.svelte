@@ -4,6 +4,7 @@
 	import { setupAdmin } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
 	import { APP_NAME, PASSWORD_MIN_LENGTH } from '$lib/constants';
+	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
 	import { currentUser } from '$lib/stores/auth';
 
 	let username = $state('');
@@ -26,7 +27,7 @@
 		try {
 			const user = await setupAdmin(username, password);
 			currentUser.set({ id: user.id, username: user.username, role: user.role });
-			await goto('/');
+			await goto(HOME_ROUTE_PATH);
 		} catch (err) {
 			error = describeFailure(err, 'Setup failed');
 		} finally {

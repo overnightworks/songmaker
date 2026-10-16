@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	albumRoutePath,
+	HOME_ROUTE_PATH,
 	isPlaylistRoutePath,
 	isSongRoutePath,
 	legacySongRoutePath,
+	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	pendingTakeRoutePath,
 	playlistRoutePath,
@@ -38,7 +40,7 @@ describe('library route addresses', () => {
 	});
 
 	it.each([
-		['/', 'root'],
+		[LIBRARY_ROUTE_PATH, 'root'],
 		['/album/', 'external'],
 		['/album/anfield', 'album'],
 		['/album/anfield/tide', 'album-song'],
@@ -63,8 +65,8 @@ describe('legacy song query addresses', () => {
 	});
 
 	it.each([
-		['s1', 'g1', '/?song=s1&gen=g1'],
-		['s1', null, '/?song=s1']
+		['s1', 'g1', `${HOME_ROUTE_PATH}?song=s1&gen=g1`],
+		['s1', null, `${HOME_ROUTE_PATH}?song=s1`]
 	])('builds the legacy fallback route', (songId, generationId, path) => {
 		expect(legacySongRoutePath(songId, generationId)).toBe(path);
 	});

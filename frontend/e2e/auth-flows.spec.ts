@@ -302,11 +302,11 @@ async function submitLogin(page: Page, username: string, password: string): Prom
 
 /**
  * The sign-in page a page without a session sends to: asked to bring the
- * person back to that page, or plainly the door from the Library, where every
- * sign-in lands anyway.
+ * person back to that page, or plainly the door from Home, where every
+ * sign-in lands.
  */
 function isSignInFor(url: URL, address: string): boolean {
-	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? LIBRARY_PATH;
+	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? HOME_PATH;
 	return url.pathname === '/login' && returnTo === address;
 }
 
@@ -827,8 +827,8 @@ test(
 		await page.goBack();
 
 		// Not an empty Library, and not the account menu's entry stepped through:
-		// the door, which brings the person back to the Library.
-		await expect(page).toHaveURL((url) => isSignInFor(url, LIBRARY_PATH));
+		// the door, which brings the person back to Home.
+		await expect(page).toHaveURL((url) => isSignInFor(url, HOME_PATH));
 		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 		expect(await appHistorySteps(page)).toEqual([]);
 		await attachShot(page, testInfo, 'auth-signed-out-back');

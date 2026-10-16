@@ -38,6 +38,7 @@ import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/const
 import {
 	isPlaylistRoutePath,
 	isSongRoutePath,
+	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	PLAYLISTS_ROUTE_PATH
 } from '$lib/routes/addresses';
@@ -262,7 +263,7 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 		await openPlaylist(target.id);
 		return;
 	}
-	if (target.href === '/') {
+	if (target.href === LIBRARY_ROUTE_PATH) {
 		await openLibraryWall();
 		return;
 	}
@@ -380,7 +381,7 @@ async function openPlaylistsWall(): Promise<void> {
 // (#1354 rule 25): until the phone tabs arrive, the Library, which still lists
 // albums and playlists alike, the Playlists page, which a playlist belongs to,
 // and the Settings list.
-export type PageList = '/' | typeof PLAYLISTS_ROUTE_PATH | '/settings';
+export type PageList = typeof LIBRARY_ROUTE_PATH | typeof PLAYLISTS_ROUTE_PATH | '/settings';
 
 // A page's list, written over the page rather than pushed, so the list's own
 // ‹ goes on rather than back to the page it replaced. The Library and the
@@ -391,7 +392,7 @@ export type PageList = '/' | typeof PLAYLISTS_ROUTE_PATH | '/settings';
 // out of a song that comes to open a list asks here, as every other way out
 // of a song does.
 export function openListOverPage(list: PageList): Promise<void> {
-	if (list === '/') {
+	if (list === LIBRARY_ROUTE_PATH) {
 		showLibraryWall();
 		return replaceLibraryHistory();
 	}

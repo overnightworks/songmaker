@@ -8,6 +8,7 @@ import {
 	csrfHeaders,
 	FlowGuard,
 	nameStartingWith,
+	openHome,
 	openLibraryWall,
 	shellOf,
 	workspace,
@@ -133,6 +134,7 @@ test('Continue shows up to six places listened in, follows a listen made elsewhe
 	expect(afterForeground.filter((label) => label?.endsWith(library.albumTitle))).toHaveLength(1);
 	await page.evaluate(() => Reflect.deleteProperty(document, 'visibilityState'));
 
+	await openLibraryWall(page, shell);
 	const surface = workspace(page);
 	await surface
 		.locator('.library-wall .tile-grid')
@@ -155,7 +157,7 @@ test('Continue shows up to six places listened in, follows a listen made elsewhe
 	).toBeVisible();
 	expect((await listenReport).status()).toBe(200);
 
-	await openLibraryWall(page, shell);
+	await openHome(page, shell);
 	await expect(entries.first()).toHaveAttribute('aria-label', seededAlbumOn(listenedSong.title));
 	expect(continueRequests).toBe(3);
 	const afterSpaReturn = await entries.evaluateAll((buttons) =>

@@ -5,6 +5,7 @@ import {
 	RATE_LIMITED_TOAST_MESSAGE,
 	SESSION_LOST_REDIRECT_PARAM
 } from '$lib/constants';
+import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
 import { addToast, toasts } from '$lib/stores/toast';
 import { UserFacingError } from './userFacingError';
 
@@ -162,7 +163,7 @@ function isSessionLostResponse(status: number, path: string): boolean {
 	return status === 401 && !AUTH_ENDPOINTS.has(path);
 }
 
-const SAFE_INTERNAL_PATH_FALLBACK = '/';
+const SAFE_INTERNAL_PATH_FALLBACK = HOME_ROUTE_PATH;
 export const SIGN_IN_PATH = '/login';
 
 // A path of this app starts with exactly one slash. A second slash or a
