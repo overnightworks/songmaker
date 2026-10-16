@@ -12,11 +12,21 @@
 		closeLabel: string;
 		/** Shows the trigger pressed while the menu is closed, e.g. while a choice it made is still open. */
 		pressed?: boolean;
+		/** Draws the trigger as a small face inside its full-size touch target, for a trigger that shares a row with other controls. */
+		hitboxFace?: boolean;
 		trigger: Snippet;
 		children: Snippet;
 	}
 
-	let { layer, label, closeLabel, pressed = false, trigger, children }: Props = $props();
+	let {
+		layer,
+		label,
+		closeLabel,
+		pressed = false,
+		hitboxFace = false,
+		trigger,
+		children
+	}: Props = $props();
 
 	const VIEWPORT_MARGIN_PX = 8;
 	const TRIGGER_GAP_PX = 8;
@@ -107,6 +117,7 @@
 	bind:this={triggerButton}
 	class="menu-trigger"
 	data-hitbox="frequent"
+	data-hitbox-face={hitboxFace ? '' : undefined}
 	aria-haspopup="dialog"
 	aria-expanded={$open}
 	class:pressed
@@ -156,6 +167,21 @@
 		border-color: var(--accent);
 		background: color-mix(in srgb, var(--accent) 12%, transparent);
 		color: var(--accent);
+	}
+
+	.menu-trigger[data-hitbox-face] {
+		padding: 0;
+	}
+
+	.menu-trigger[data-hitbox-face][aria-expanded='true'],
+	.menu-trigger[data-hitbox-face].pressed {
+		background: none;
+	}
+
+	.menu-trigger[data-hitbox-face][aria-expanded='true']::before,
+	.menu-trigger[data-hitbox-face].pressed::before {
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
 	}
 
 	.menu-backdrop-layer {
