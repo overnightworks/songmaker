@@ -559,8 +559,7 @@ def test_claude_api_catalog_is_ready_for_the_cowriter_and_judge(
         item["provider"]: item
         for item in client.get("/api/settings/providers").json()
     }
-    assert providers["claude"]["cowriter"]["state"] == "configured"
-    assert providers["claude"]["judge"]["state"] == "configured"
+    assert providers["claude"]["cowriter_routes"]["api"]["readiness"]["state"] == "ready"
 
 
 @pytest.mark.parametrize(
@@ -1167,20 +1166,14 @@ def _configure_only_these_api_keys(**keys_by_environment: str) -> None:
     })
 
 
-def _status(
-    state: str,
-    *,
-    needs: str | None = None,
-    setup_method: str | None = None,
-    environment_key: str | None = None,
-    missing_dependency: str | None = None,
-) -> dict[str, str | None]:
+def _route_states(cli: str, api: str) -> dict[str, str]:
+    return {"cli": cli, "api": api}
+
+
+def _route_readiness(provider_status: dict) -> dict[str, dict]:
     return {
-        "state": state,
-        "needs": needs,
-        "setup_method": setup_method,
-        "environment_key": environment_key,
-        "missing_dependency": missing_dependency,
+        route: status["readiness"]
+        for route, status in provider_status["cowriter_routes"].items()
     }
 
 
@@ -1218,7 +1211,7 @@ def _stub_cli_runners(
 
 
 @pytest.mark.parametrize(
-    ("keys", "claude_login", "grok_login", "codex_login", "sdk_available", "expected_judges"),
+    ("keys", "claude_login", "grok_login", "codex_login", "sdk_available", "expected_states"),
     [
         (
             {},
@@ -1227,15 +1220,9 @@ def _stub_cli_runners(
             LOGGED_OUT,
             True,
             {
-                "claude": _status(
-                    "unconfigured", needs="api_key",
-                ),
-                "grok": _status(
-                    "unconfigured", needs="api_key",
-                ),
-                "codex": _status(
-                    "unconfigured", needs="api_key",
-                ),
+                "claude": _route_states(cli="not_configured", api="not_configured"),
+                "grok": _route_states(cli="not_configured", api="not_configured"),
+                "codex": _route_states(cli="not_configured", api="not_configured"),
             },
         ),
         (
@@ -1245,13 +1232,9 @@ def _stub_cli_runners(
             CliLogin(logged_in=True, auth_method="chatgpt"),
             True,
             {
-                "claude": _status("unconfigured", needs="api_key"),
-                "grok": _status(
-                    "unconfigured", needs="api_key",
-                ),
-                "codex": _status(
-                    "unconfigured", needs="api_key",
-                ),
+                "claude": _route_states(cli="ready", api="not_configured"),
+                "grok": _route_states(cli="ready", api="not_configured"),
+                "codex": _route_states(cli="ready", api="not_configured"),
             },
         ),
         (
@@ -1261,15 +1244,9 @@ def _stub_cli_runners(
             LOGGED_OUT,
             True,
             {
-                "claude": _status(
-                    "configured", setup_method="api_key",
-                ),
-                "grok": _status(
-                    "configured", setup_method="api_key",
-                ),
-                "codex": _status(
-                    "configured", setup_method="api_key",
-                ),
+                "claude": _route_states(cli="not_configured", api="ready"),
+                "grok": _route_states(cli="not_configured", api="ready"),
+                "codex": _route_states(cli="not_configured", api="ready"),
             },
         ),
         (
@@ -1279,13 +1256,9 @@ def _stub_cli_runners(
             LOGGED_OUT,
             False,
             {
-                "claude": _status("missing_dependency"),
-                "grok": _status(
-                    "unconfigured", needs="api_key",
-                ),
-                "codex": _status(
-                    "unconfigured", needs="api_key",
-                ),
+                "claude": _route_states(cli="not_configured", api="disturbed"),
+                "grok": _route_states(cli="not_configured", api="not_configured"),
+                "codex": _route_states(cli="not_configured", api="not_configured"),
             },
         ),
     ],
@@ -1298,7 +1271,7 @@ def test_provider_status_projects_the_catalog_contract(
     grok_login,
     codex_login,
     sdk_available,
-    expected_judges,
+    expected_states,
 ):
     _configure_only_these_api_keys(**keys)
     monkeypatch.setattr(
@@ -1325,15 +1298,15 @@ def test_provider_status_projects_the_catalog_contract(
     assert response.status_code == 200
     actual = {item["provider"]: item for item in response.json()}
     for provider, item in actual.items():
-        judge = dict(item["judge"])
-        assert judge.pop("probed_at") is not None
-        assert judge == expected_judges[provider]
-        assert set(item["cowriter_routes"]) == {"cli", "api"}
-        assert item["cowriter"]["probed_at"] is not None
+        readiness = _route_readiness(item)
+        assert {route: state["state"] for route, state in readiness.items()} == (
+            expected_states[provider]
+        )
+        assert all(state["probed_at"] is not None for state in readiness.values())
     assert all(count <= 1 for count in calls.values())
 
 
-def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api_key(
+def test_grok_cli_token_readies_the_cli_route_but_not_the_api_route_without_an_api_key(
     admin_client, monkeypatch,
 ):
     override_provider_runtime(xai_api_key=None)
@@ -1359,14 +1332,10 @@ def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api
     statuses = {
         item["provider"]: item for item in client.get("/api/settings/providers").json()
     }
-    grok = statuses["grok"]["cowriter"]
-    assert grok["state"] == "configured"
-    assert grok["setup_method"] == "grok_cli"
-    judge = statuses["grok"]["judge"]
-    assert judge["state"] == "unconfigured"
-    assert judge["needs"] == "api_key"
-    assert judge["setup_method"] is None
-    assert judge["environment_key"] is None
+    grok_routes = statuses["grok"]["cowriter_routes"]
+    assert grok_routes["cli"]["readiness"]["state"] == "ready"
+    assert grok_routes["api"]["readiness"]["state"] == "not_configured"
+    assert grok_routes["api"]["readiness"]["reason"]["code"] == "api_key_not_set"
 
     settings = client.get("/api/settings/cowriter").json()
     assert settings["models_by_provider"]["grok"]
@@ -1394,9 +1363,8 @@ def test_grok_cli_token_configures_the_cowriter_but_not_the_judge_without_an_api
     )
     assert cli_saved.status_code == 200
     assert cli_saved.json()["route"] == "cli"
-    statuses = {item["provider"]: item for item in client.get("/api/settings/providers").json()}
-    assert statuses["grok"]["judge"]["state"] == "configured"
-    assert statuses["grok"]["judge"]["setup_method"] == "grok_cli"
+    grok_cli = cli_saved.json()["provider_routes_status"]["grok"]["cli"]
+    assert grok_cli["readiness"]["state"] == "ready"
 
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
@@ -1435,13 +1403,10 @@ def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
 
     assert response.status_code == 200
     by_provider = {item["provider"]: item for item in response.json()}
-    for surface in ("cowriter", "judge"):
-        status = by_provider[provider][surface]
-        expected = "missing_dependency" if surface == "cowriter" and provider != "claude" else (
-            "unconfigured"
-        )
-        assert status["state"] == expected
-        assert status["probed_at"] is not None
+    readiness = _route_readiness(by_provider[provider])
+    assert readiness["cli"]["state"] == expected_cli_state.value
+    assert readiness["api"]["state"] == "not_configured"
+    assert all(state["probed_at"] is not None for state in readiness.values())
 
 
 @pytest.mark.parametrize("provider", ["grok", "codex"])
@@ -1532,9 +1497,11 @@ def test_provider_status_treats_a_hanging_cli_as_logged_out(admin_client, monkey
     assert response.status_code == 200
     if provider == "claude":
         assert started.is_set()
-    statuses = next(item for item in response.json() if item["provider"] == provider)
-    assert statuses["cowriter"]["state"] != "configured"
-    assert statuses["judge"]["state"] == "unconfigured"
+    readiness = _route_readiness(
+        next(item for item in response.json() if item["provider"] == provider),
+    )
+    assert readiness["cli"]["state"] != "ready"
+    assert readiness["api"]["state"] == "not_configured"
 
 
 def test_models_errors_cover_every_provider_not_only_the_saved_one(
@@ -1784,9 +1751,9 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
     assert grok_cli["capability"] == "tools_available"
     assert grok_cli["reason"] is None
     for provider in providers.json():
-        for surface in ("cowriter", "judge"):
-            assert provider[surface]["state"] == "unverified"
-            assert provider[surface]["probed_at"] is None
+        for route_status in provider["cowriter_routes"].values():
+            assert route_status["readiness"]["state"] == "unverified"
+            assert route_status["readiness"]["probed_at"] is None
     response = client.put(
         "/api/settings/cowriter",
         json={"provider": "grok", "model": ""},
@@ -2126,10 +2093,6 @@ def test_judge_saves_only_models_from_its_selected_route(
         "model"
     ]
     assert client.get("/api/settings/judge").json() == body
-    statuses = {item["provider"]: item for item in client.get("/api/settings/providers").json()}
-    assert statuses[provider]["judge"]["setup_method"] == (
-        "api_key" if route == "api" else f"{provider}_cli"
-    )
     with factory() as session:
         audit = session.query(AuditLog).filter_by(resource_type="judge").one()
         assert f"route={route}" in audit.detail
@@ -2184,24 +2147,43 @@ def test_judge_settings_require_an_admin(admin_client, method):
     assert response.status_code == 403
 
 
-@pytest.mark.parametrize("route", [None, "unknown", ""])
-@pytest.mark.parametrize("path,method", [
-    ("/api/settings/judge", "get"),
-    ("/api/settings/judge", "put"),
-    ("/api/settings/providers", "get"),
-])
-def test_missing_or_invalid_judge_route_is_rejected_without_a_default(
-    admin_client, route, path, method,
-):
-    client, factory = admin_client
+MISSING_OR_INVALID_JUDGE_ROUTES = [None, "unknown", ""]
+
+
+def _store_judge_route(factory, route: str | None) -> None:
     with factory() as session:
         session.query(RateLimitSetting).filter_by(setting_key=SETTING_JUDGE_ROUTE).delete()
         if route is not None:
             set_claude_model(session, SETTING_JUDGE_ROUTE, route)
         session.commit()
+
+
+@pytest.mark.parametrize("route", MISSING_OR_INVALID_JUDGE_ROUTES)
+@pytest.mark.parametrize("path,method", [
+    ("/api/settings/judge", "get"),
+    ("/api/settings/judge", "put"),
+])
+def test_missing_or_invalid_judge_route_is_rejected_without_a_default(
+    admin_client, route, path, method,
+):
+    client, factory = admin_client
+    _store_judge_route(factory, route)
+
     response = client.request(method, path, json={"provider": "grok", "model": ""})
+
     assert response.status_code == 422
     assert "Judge route" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("route", MISSING_OR_INVALID_JUDGE_ROUTES)
+def test_provider_status_is_served_whatever_judge_route_is_stored(admin_client, route):
+    client, factory = admin_client
+    _store_judge_route(factory, route)
+
+    response = client.get("/api/settings/providers")
+
+    assert response.status_code == 200
+    assert {item["provider"] for item in response.json()} == set(LIVE_CATALOG)
 
 
 def test_unknown_judge_route_leaves_the_selection_unchanged(admin_client):

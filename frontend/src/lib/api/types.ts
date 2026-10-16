@@ -704,19 +704,8 @@ export interface ProviderRouteStatusResponse {
 
 export interface ProviderStatus {
 	provider: string;
-	cowriter: ProviderSurfaceStatus;
-	judge: ProviderSurfaceStatus;
 	cowriter_routes?: Record<'cli' | 'api', ProviderRouteStatusResponse>;
 	cover_routes: Record<'cli' | 'api', ProviderRouteReadiness>;
-}
-
-export interface ProviderSurfaceStatus {
-	state: 'unverified' | 'configured' | 'cli_login_needs_api_key' | 'api_key_needs_cli_login' | 'missing_dependency' | 'unconfigured';
-	needs?: 'cli_login' | 'api_key' | null;
-	setup_method?: 'api_key' | 'claude_cli' | 'grok_cli' | 'codex_cli' | null;
-	environment_key?: string | null;
-	missing_dependency?: string | null;
-	probed_at?: string | null;
 }
 
 export interface QueueStreamManifest {

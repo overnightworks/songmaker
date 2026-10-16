@@ -9,7 +9,6 @@ import type {
 	ProviderRouteReadiness,
 	ProviderRouteStatusResponse,
 	ProviderStatus,
-	ProviderSurfaceStatus,
 	SafeRouteReason,
 	SessionItem,
 	UserItem
@@ -153,15 +152,11 @@ const NOT_SIGNED_IN: SafeRouteReason = {
 
 function providerStatus(
 	provider: string,
-	cowriter: ProviderSurfaceStatus,
-	judge: ProviderSurfaceStatus = cowriter,
 	routes: Partial<Record<'cli' | 'api', ProviderRouteStatusResponse>> = {},
 	coverRoutes: Record<'cli' | 'api', ProviderRouteReadiness> = NO_COVER_ROUTES
 ): ProviderStatus {
 	return {
 		provider,
-		cowriter,
-		judge,
 		cowriter_routes: {
 			cli: routes.cli ?? blockedRoute(NOT_SIGNED_IN, 'CLI login'),
 			api: routes.api ?? blockedRoute(KEY_NOT_SET, 'API key')
@@ -170,38 +165,17 @@ function providerStatus(
 	};
 }
 
-const CLAUDE_VIA_CLI: ProviderSurfaceStatus = {
-	state: 'configured',
-	needs: null,
-	setup_method: 'claude_cli',
-	environment_key: null
-};
-const CODEX_VIA_KEY: ProviderSurfaceStatus = {
-	state: 'configured',
-	needs: null,
-	setup_method: 'api_key',
-	environment_key: 'OPENAI_API_KEY'
-};
-const GROK_WITHOUT_KEY: ProviderSurfaceStatus = {
-	state: 'unconfigured',
-	needs: 'api_key',
-	setup_method: null,
-	environment_key: 'XAI_API_KEY'
-};
-
 const PROVIDER_STATUSES: ProviderStatus[] = [
-	providerStatus('claude', CLAUDE_VIA_CLI, CLAUDE_VIA_CLI, {
+	providerStatus('claude', {
 		cli: readyRoute(['claude-sonnet', 'claude-opus-cli']),
 		api: readyRoute(['claude-opus', 'claude-api'])
 	}),
 	providerStatus(
 		'codex',
-		CODEX_VIA_KEY,
-		CODEX_VIA_KEY,
 		{ cli: readyRoute(['gpt-5-codex']), api: readyRoute(['gpt-5.4']) },
 		{ cli: IMAGE_TOOL_READY, api: NO_IMAGE_TOOL }
 	),
-	providerStatus('grok', GROK_WITHOUT_KEY)
+	providerStatus('grok')
 ];
 
 function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSettings {
