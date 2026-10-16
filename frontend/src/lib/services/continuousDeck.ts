@@ -309,7 +309,7 @@ export class ContinuousDeck<Take> {
 				this.requestInFlight = null;
 			}
 			if (failedInARow === DOWNLOAD_ATTEMPTS) {
-				await this.parkDownload(wanted);
+				await this.parkDownload(wanted); // NOSONAR(S9382) parking follows a run of failed downloads, so it must finish before the next attempt
 				failedInARow = 0;
 			}
 		}
@@ -351,7 +351,7 @@ export class ContinuousDeck<Take> {
 	// timeupdate.
 	private async roomAhead(buffer: SourceBuffer, wanted: AbortSignal): Promise<void> {
 		while (this.secondsAhead(buffer) >= SECONDS_BUFFERED_AHEAD)
-			await this.unlessAborted(wanted, firstEventOf(this.ports.element, ['timeupdate', 'seeking']));
+			await this.unlessAborted(wanted, firstEventOf(this.ports.element, ['timeupdate', 'seeking'])); // NOSONAR(S9382) each wait re-checks the buffer, so the next wait depends on the one before
 	}
 
 	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {

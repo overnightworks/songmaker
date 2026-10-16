@@ -572,7 +572,7 @@ export class ResourceSyncController {
 				this.queueBufferedSongs();
 				this.queueRefreshesAwaitingBootstrap();
 				if (this.pendingSongIds.size === 0) break;
-				await this.flushPending(epoch, true);
+				await this.flushPending(epoch, true); // NOSONAR(S9382) a flush can queue more songs, so the next drain must see its result
 			}
 			if (!this.isCurrentEpoch(epoch)) return;
 			if (this.failedSongs.size > 0) {
@@ -692,9 +692,8 @@ export class ResourceSyncController {
 			this.pendingSongIds.clear();
 			const songIds = queued.filter((songId) => this.isFetchableNow(songId));
 			this.retryWhenFetchable(queued.filter((songId) => !this.isFetchableNow(songId)));
-			await runLimited(songIds, RESOURCE_SYNC_FETCH_CONCURRENCY, (songId) =>
-				this.fetchAndApply(songId, epoch)
-			);
+			const fetchSong = (songId: string) => this.fetchAndApply(songId, epoch);
+			await runLimited(songIds, RESOURCE_SYNC_FETCH_CONCURRENCY, fetchSong); // NOSONAR(S9382) the next round must start only after this one finished, so the fetch limit holds
 		}
 	}
 
@@ -984,7 +983,7 @@ async function runLimited<T>(
 			while (next < items.length) {
 				const current = next;
 				next += 1;
-				await worker(items[current]);
+				await worker(items[current]); // NOSONAR(S9382) a worker takes the next item only after its current one finishes, which is the concurrency limit
 			}
 		})
 	);
