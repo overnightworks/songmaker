@@ -1,0 +1,7 @@
+claim_id = "be30e1ba44f4496499d69dc81f34f0f2"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "fab6d5c214110144f6b523f00523aedb0fae3283"
+branch = "claude/issue-1474-s6e-scripts-sonar-measure"
+scope = ["docs/testing.md", "sonar-project.properties"]
+opened_commit = "7012f425980c2042380659670fd0d7784196a797"
