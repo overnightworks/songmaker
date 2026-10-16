@@ -63,7 +63,7 @@
 		margin: 0;
 		padding: 0.3rem 0.6rem 0.5rem;
 		font-family: var(--font-display);
-		font-size: var(--label-font-size);
+		font-size: 0.7rem;
 		letter-spacing: 0.5px;
 		text-transform: uppercase;
 		color: var(--text-subtle);
@@ -79,7 +79,7 @@
 		min-height: var(--hitbox-frequent);
 		padding: 0.5rem 0.6rem;
 		border-radius: var(--btn-radius-sm);
-		font-size: var(--btn-font-size-sm);
+		font-size: 0.87rem;
 		color: var(--text);
 		background: none;
 		border: none;

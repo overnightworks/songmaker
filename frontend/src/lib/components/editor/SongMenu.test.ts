@@ -6,6 +6,7 @@ import {
 	SONG_MENU_RENAME_LABEL,
 	SONG_MENU_SAVE_LABEL
 } from '$lib/constants';
+import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import SongMenu from './SongMenu.svelte';
 
@@ -40,12 +41,6 @@ function openSongMenu(target: HTMLElement): void {
 	target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 }
 
-function menuItem(target: HTMLElement, label: string): HTMLButtonElement | undefined {
-	return Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-		(el) => el.textContent?.trim() === label
-	);
-}
-
 async function focusSettled(): Promise<void> {
 	await Promise.resolve();
 	await tick();
@@ -65,7 +60,7 @@ describe('SongMenu', () => {
 		openSongMenu(target);
 		await tick();
 		const items = Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'));
-		expect(items.map((item) => item.textContent?.trim())).toEqual([
+		expect(menuRowLabels(target)).toEqual([
 			SONG_MENU_SAVE_LABEL,
 			SONG_MENU_RENAME_LABEL,
 			SONG_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -86,9 +81,9 @@ describe('SongMenu', () => {
 			const { target, props } = await renderMenu({ saveDisabled });
 			openSongMenu(target);
 			await tick();
-			const save = menuItem(target, SONG_MENU_SAVE_LABEL);
-			expect(save?.disabled).toBe(saveDisabled);
-			save?.click();
+			const save = menuRow(target, SONG_MENU_SAVE_LABEL);
+			expect(save.disabled).toBe(saveDisabled);
+			save.click();
 			await tick();
 			expect(props.onsave).toHaveBeenCalledTimes(saveDisabled ? 0 : 1);
 			expect(target.querySelector('.menu-panel') !== null).toBe(saveDisabled);
@@ -100,11 +95,11 @@ describe('SongMenu', () => {
 		{ label: SONG_MENU_RENAME_LABEL, handler: 'onrename' as const },
 		{ label: SONG_MENU_ADD_TO_PLAYLIST_LABEL, handler: 'onaddtoplaylist' as const },
 		{ label: SONG_MENU_DELETE_LABEL, handler: 'ondelete' as const }
-	])('runs only $handler and closes the menu on $label', async ({ label, handler }) => {
+	])('1495: runs only $handler and closes the menu on $label', async ({ label, handler }) => {
 		const { target, props } = await renderMenu({ saveDisabled: false });
 		openSongMenu(target);
 		await tick();
-		menuItem(target, label)?.click();
+		menuRow(target, label).click();
 		await tick();
 		for (const [name, action] of Object.entries(props)) {
 			if (typeof action === 'function') {
@@ -132,18 +127,18 @@ describe('SongMenu', () => {
 		});
 		openSongMenu(target);
 		await tick();
-		menuItem(target, SONG_MENU_RENAME_LABEL)?.click();
+		menuRow(target, SONG_MENU_RENAME_LABEL).click();
 		await focusSettled();
 		expect(document.activeElement).toBe(titleField);
 	});
 
 	it.each([SONG_MENU_ADD_TO_PLAYLIST_LABEL, SONG_MENU_DELETE_LABEL])(
-		'hands focus back to its trigger after %s, for the dialog it opens to take over',
+		'1495: hands focus back to its trigger after %s',
 		async (label) => {
 			const { target } = await renderMenu();
 			openSongMenu(target);
 			await tick();
-			menuItem(target, label)?.click();
+			menuRow(target, label).click();
 			await focusSettled();
 			expect(document.activeElement).toBe(target.querySelector('.menu-trigger'));
 		}
@@ -176,7 +171,7 @@ describeBackClosesOverlay({
 		},
 		{
 			way: 'choosing Rename',
-			close: (target) => menuItem(target, 'Rename')?.click(),
+			close: (target) => menuRow(target, SONG_MENU_RENAME_LABEL).click(),
 			actionSawHistoryAt: () => renameSawHistoryAt
 		}
 	]
