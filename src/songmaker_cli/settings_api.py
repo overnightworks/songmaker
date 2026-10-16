@@ -37,8 +37,6 @@ from songmaker_cli.api_models.settings import (
     ProviderRouteReadiness,
     ProviderRouteStatusResponse,
     ProviderStatusResponse,
-    ProviderSurfaceState,
-    ProviderSurfaceStatus,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user, require_admin
@@ -372,32 +370,17 @@ def api_capabilities(
 # ── Provider reachability (shared by Co-Writer and Scoring) ────────
 
 
-@router.get(
-    "/settings/providers",
-    responses={422: {"description": "Stored judge route is invalid"}},
-)
+@router.get("/settings/providers")
 def api_get_provider_status(
     _admin: AuthenticatedUser = Depends(require_admin),
-    session: Session = Depends(get_db_session),
 ) -> list[ProviderStatusResponse]:
     from songmaker_cli.provider_status import provider_snapshots
 
     snapshots = provider_snapshots()
-    routes = get_effective_provider_routes(session)
-    try:
-        judge_route = get_judge_route(session)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
 
     return [
         ProviderStatusResponse(
             provider=name,
-            cowriter=_surface_status_from_snapshot(
-                name, snapshots.get(name), routes[name],
-            ),
-            judge=_surface_status_from_snapshot(
-                name, snapshots.get(name), judge_route,
-            ),
             cowriter_routes=_route_statuses(snapshots.get(name), None),
             cover_routes=_cover_route_readiness(name),
         )
@@ -433,32 +416,6 @@ def _cover_route_readiness(provider: str) -> dict[str, ProviderRouteReadiness]:
             setup_label=route_setup_label(route),
         )
     return readiness
-
-
-def _surface_status_from_snapshot(
-    provider: str,
-    snapshot: "ProviderSnapshot | None",
-    selected_route: str,
-) -> ProviderSurfaceStatus:
-    if snapshot is None:
-        return ProviderSurfaceStatus(state=ProviderSurfaceState.UNVERIFIED)
-    route_status = _route_statuses(snapshot, None)[selected_route]
-    if route_status.readiness.state == "ready":
-        return ProviderSurfaceStatus(
-            state=ProviderSurfaceState.CONFIGURED,
-            setup_method="api_key" if selected_route == "api" else f"{provider}_cli",
-            probed_at=route_status.readiness.probed_at,
-        )
-    if route_status.readiness.state == "not_configured":
-        return ProviderSurfaceStatus(
-            state=ProviderSurfaceState.UNCONFIGURED,
-            needs="api_key" if selected_route == "api" else "cli_login",
-            probed_at=route_status.readiness.probed_at,
-        )
-    return ProviderSurfaceStatus(
-        state=ProviderSurfaceState.MISSING_DEPENDENCY,
-        probed_at=route_status.readiness.probed_at,
-    )
 
 
 def _live_catalogue(provider: str, route: str) -> list[str]:
