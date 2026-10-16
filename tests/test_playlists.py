@@ -944,7 +944,7 @@ def test_shared_playlist_audio(tmp_path: Path) -> None:
     slug = resp.json()["share_slug"]
 
     unauthed = web_client(client.app, cookies={})
-    resp = unauthed.get(f"/shared/playlist/{slug}/audio/admin_user/g1.mp3")
+    resp = unauthed.get(f"/shared/playlist/{slug}/audio/g1.mp3")
     assert resp.status_code == 200
 
 
