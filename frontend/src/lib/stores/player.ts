@@ -893,15 +893,10 @@ export const collectionTransport = derived(
 		(kind: PlaybackSource['kind'], id: string): CollectionTransport => {
 			const current = audioPlayer.current !== null && $source?.kind === kind && $source.id === id;
 			const waiting = kind === 'album' && waitingStartOf($notice, $pending)?.albumId === id;
-			return {
-				current,
-				waiting,
-				transport: waiting
-					? transportOfTheStart(null, $notice, 'idle')
-					: current
-						? audioPlayer.transport
-						: 'idle'
-			};
+			if (waiting) {
+				return { current, waiting, transport: transportOfTheStart(null, $notice, 'idle') };
+			}
+			return { current, waiting, transport: current ? audioPlayer.transport : 'idle' };
 		}
 );
 
