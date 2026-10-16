@@ -20,7 +20,7 @@ DECLARATIONS = re.compile(
     re.IGNORECASE,
 )
 DIMENSIONS = re.compile(r"(?<![\w-])(-?(?:\d+(?:\.\d+)?|\.\d+))([a-z%]*)", re.IGNORECASE)
-IMPORTANT = re.compile(r"(?<!\s)\s*!important\b", re.IGNORECASE)
+IMPORTANT = re.compile(r"!important\b", re.IGNORECASE)
 TOKEN = re.compile(r"var\(\s*--[\w-]+\s*\)", re.IGNORECASE)
 RESET_VALUES = {"none", "inherit", "initial", "unset", "revert", "revert-layer"}
 FONT_KEYWORDS = {"xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large",
@@ -44,6 +44,11 @@ def without_comments(text: str, *, javascript: bool) -> str:
     return re.sub(COMMENTS, lambda m: re.sub(r"[^\n]", " ", m[0]), text, flags=re.DOTALL)
 
 
+def without_important(value: str) -> str:
+    *kept, last = IMPORTANT.split(value)
+    return "".join(part.rstrip() for part in kept) + last
+
+
 def findings(text: str, suffix: str) -> list[Finding]:
     if suffix == ".svelte":
         text = re.sub(r"(<script\b[^>]*>)(.*?)(</script\b[^>]*>)",
@@ -54,7 +59,7 @@ def findings(text: str, suffix: str) -> list[Finding]:
              for m in COLORS.finditer(text)]
     for match in DECLARATIONS.finditer(text):
         kind = match["property"].lower()
-        value = IMPORTANT.sub("", match["value"]).strip()
+        value = without_important(match["value"]).strip()
         dimensions = DIMENSIONS.findall(TOKEN.sub("", value))
         if kind.startswith("border-"):
             forbidden = any(unit.lower() == "px" for _, unit in dimensions)
