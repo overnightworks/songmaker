@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
 import {
-	collectionSubtitle,
 	fromSharedAlbum,
 	fromSharedGeneration,
 	fromSharedPlaylist,
@@ -344,71 +343,5 @@ describe('trackPlaybackInfo', () => {
 
 		expect(info.artist).toBe('Artist');
 		expect(info.albumTitle).toBe('Album');
-	});
-});
-
-describe('collectionSubtitle', () => {
-	function playlistEntry(entryId: string, title: string, audioUrl: string | null) {
-		return {
-			entry_id: entryId,
-			song_title: title,
-			album_title: 'Album',
-			artist: 'Artist',
-			generation_number: 1,
-			audio_url: audioUrl,
-			...media()
-		};
-	}
-
-	it('shows artist and year for an album', () => {
-		const view = fromSharedAlbum({
-			title: 'Album',
-			artist: 'Artist',
-			subtitle: '',
-			year: '2026',
-			songs: []
-		});
-		expect(collectionSubtitle(view)).toBe('Artist · 2026');
-	});
-
-	it('shows the track count for a playlist', () => {
-		const view = fromSharedPlaylist({
-			title: 'Mix',
-			album_covers: [],
-			entries: [playlistEntry('e1', 'First', '/a.mp3'), playlistEntry('e2', 'Second', '/b.mp3')]
-		});
-		expect(collectionSubtitle(view)).toBe('2 tracks');
-	});
-
-	it('excludes unplayable entries from the playlist track count', () => {
-		const view = fromSharedPlaylist({
-			title: 'Mix',
-			album_covers: [],
-			entries: [playlistEntry('e1', 'First', '/a.mp3'), playlistEntry('e2', 'No pick yet', null)]
-		});
-		expect(collectionSubtitle(view)).toBe('1 track');
-	});
-
-	it('shows artist and album for a song', () => {
-		const view = fromSharedSong({
-			title: 'Solo',
-			artist: 'Artist',
-			album_title: 'Album',
-			audio_url: '/a.mp3',
-			...media()
-		});
-		expect(collectionSubtitle(view)).toBe('Artist · Album');
-	});
-
-	it('shows artist and album for a take, never the internal take number', () => {
-		const view = fromSharedGeneration({
-			title: 'Solo',
-			artist: 'Artist',
-			album_title: 'Album',
-			generation_number: 3,
-			audio_url: '/a.mp3',
-			...media()
-		});
-		expect(collectionSubtitle(view)).toBe('Artist · Album');
 	});
 });

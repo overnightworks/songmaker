@@ -150,21 +150,6 @@ export function playableTracks(tracks: SharedTrack[]): SharedTrack[] {
 	);
 }
 
-// The header's byline, one string per collection kind — pure so the
-// collection surface never has to branch on `kind` itself. A public listener
-// never sees the internal take number (issue #119): a shared take's byline
-// reads the same as a shared song's.
-export function collectionSubtitle(view: SharedCollectionView): string {
-	if (view.kind === 'playlist') {
-		const count = playableTracks(view.tracks).length;
-		return `${count} track${count !== 1 ? 's' : ''}`;
-	}
-	if (view.kind === 'take' || view.kind === 'song') {
-		return [view.artist, view.albumTitle].filter(Boolean).join(' · ');
-	}
-	return [view.artist, view.year].filter(Boolean).join(' · ');
-}
-
 const SHARE_GENERATION_NUMBER = 1;
 const SHARE_MODEL_MODE = 'sft';
 
