@@ -1,0 +1,8 @@
+claim_id = "c2480a715f23481aa6f018061119a454"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "888f027475508db68a0f0409444a7b27eb25d8c7"
+branch = "claude/issue-1551-g3-fetch-only-in-transport"
+scope = ["docs/architecture.md", "frontend/eslint.config.js", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/WaveformRangePicker.svelte", "frontend/src/lib/components/WaveformRangePicker.test.ts", "frontend/src/routes/settings/users/+page.svelte"]
+opened_commit = "a08070c52b98846d01c5943b571cd15b88467c22"
+whole_reason = "G3 lands with the last raw fetch sites it would refuse: the lint block, the media helper the waveform picker moves to, and the doc sentence that states the rule."
