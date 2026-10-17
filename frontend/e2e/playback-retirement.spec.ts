@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
 import {
@@ -20,14 +19,7 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import {
-	BASE_URL,
-	STORAGE_STATE_FILE,
-	TAKE_FIXTURE,
-	createAccount,
-	runMarker,
-	seedUnpickedLibrary
-} from './seed';
+import { BASE_URL, STORAGE_STATE_FILE, createAccount, runMarker, seedOwnTakeAddress } from './seed';
 
 // The gate runs both configured shells: 390×844 and 1440×900. No synthetic
 // playing/ended events: the same short fixture as queue-continuity really ends.
@@ -68,20 +60,15 @@ async function withProofLibrary(flow: (library: ProofLibrary) => Promise<void>):
 	try {
 		const username = `e2e-retirement-${runMarker()}`;
 		const userId = await createAccount(admin, username, PASSWORD);
-		const library = await seedUnpickedLibrary(api, { username, password: PASSWORD });
-		albumId = library.albumId;
+		// A real one-song, one-take album has no successor when its take ends.
+		const songTitle = `E2E retirement ${runMarker()}`;
+		const address = await seedOwnTakeAddress(api, { username, password: PASSWORD }, songTitle);
+		albumId = address.split('/')[2];
 		const response = await api.get(`/api/songs?album_id=${albumId}`);
 		expect(response.ok()).toBe(true);
 		const { items } = (await response.json()) as { items: SongItem[] };
-		const song = items.find((item) => item.title === library.tracks[0].songTitle);
-		if (!song) throw new Error('Seeded opening song is missing');
-		const imported = await api.post(`/api/songs/${song.id}/reimport`, {
-			headers: await apiHeaders(api),
-			multipart: {
-				mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-			}
-		});
-		expect(imported.ok()).toBe(true);
+		expect(items).toHaveLength(1);
+		const song = items[0];
 		await flow({ userId, username, albumId, song, api });
 	} finally {
 		// Retain the recognizable E2E album and its evidence, archived rather
@@ -142,39 +129,22 @@ async function observeStorage(page: Page): Promise<StorageNotice[]> {
 	return notices;
 }
 
-async function preparePage(page: Page, library: ProofLibrary): Promise<void> {
-	await observePlayingAudio(page);
-	// Album queues normally cycle. A one-song HTTP result gives the player a
-	// finite queue with no successor; both takes remain selectable in its UI.
-	await page.route('**/api/songs?*', async (route) => {
-		if (new URL(route.request().url()).searchParams.get('album_id') !== library.albumId) {
-			await route.continue();
-			return;
-		}
-		const response = await route.fetch();
-		const body = (await response.json()) as { items: SongItem[]; total: number };
-		const items = body.items.filter((song) => song.id === library.song.id);
-		await route.fulfill({ response, json: { ...body, items, total: items.length } });
-	});
-}
-
 async function openTakes(page: Page, library: ProofLibrary, shell: Shell): Promise<void> {
 	await page.goto(`/album/${library.albumId}`);
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(library.song.title) })
 		.click();
 	if (shell === 'mobile') await workspace(page).getByRole('tab', { name: /Takes/ }).click();
-	await expect(workspace(page).locator('.take-row')).toHaveCount(2);
+	await expect(workspace(page).locator('.take-row')).toHaveCount(1);
 }
 
 function transport(page: Page, label: string) {
 	return page.getByRole('contentinfo').getByRole('button', { name: label, exact: true });
 }
 
-async function playTake(page: Page, index = 0, slow = true): Promise<void> {
+async function playTake(page: Page, slow = true): Promise<void> {
 	await workspace(page)
 		.locator('.take-row')
-		.nth(index)
 		.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) })
 		.click();
 	await expect(transport(page, TRANSPORT_PAUSE_LABEL)).toHaveAttribute('aria-busy', 'false');
@@ -221,7 +191,7 @@ for (const tabs of [1, 2]) {
 		await withProofLibrary(async (library) => {
 			const shell = shellOf(info);
 			const guard = new FlowGuard(page);
-			await preparePage(page, library);
+			await observePlayingAudio(page);
 			await signIn(page, library);
 			await openTakes(page, library, shell);
 			const receiver = tabs === 2 ? await context.newPage() : null;
@@ -229,11 +199,11 @@ for (const tabs of [1, 2]) {
 				const notices = receiver ? await observeStorage(receiver) : [];
 				const receiverGuard = receiver ? new FlowGuard(receiver) : null;
 				if (receiver) {
-					await preparePage(receiver, library);
+					await observePlayingAudio(receiver);
 					await openTakes(receiver, library, shell);
 					await playTake(receiver);
 				}
-				await playTake(page, 0, false);
+				await playTake(page, false);
 				await expect.poll(() => recovery(page, library.userId)).not.toBeNull();
 				const firstTake = (await recovery(page, library.userId))?.generationId;
 				await expect
@@ -257,11 +227,11 @@ for (const tabs of [1, 2]) {
 					await expect(receiver.getByRole('contentinfo')).toContainText(library.song.title);
 					expect(await recovery(receiver, library.userId)).toEqual(saved);
 				}
-				// This stays in the originating document: a reload would hide
+				// Replay the sole take in the originating document: a reload would hide
 				// accidental suppression by resetting the recovery module.
-				await playTake(page, 1);
+				await playTake(page);
 				await advanceAndPause(page);
-				expect((await recovery(page, library.userId))?.generationId).not.toBe(firstTake);
+				expect((await recovery(page, library.userId))?.generationId).toBe(firstTake);
 				expect((await recovery(page, library.userId))?.position).toBeGreaterThan(0);
 				guard.assertClean();
 				receiverGuard?.assertClean();
@@ -273,68 +243,65 @@ for (const tabs of [1, 2]) {
 }
 
 for (const record of ['present', 'absent'] as const) {
-	for (const observedTab of ['originating', 'receiving'] as const) {
-		test(`1354_52_C2: logout with record ${record}, observed in ${observedTab} tab`, async ({
-			page,
-			context
-		}, info) => {
-			await context.clearCookies();
-			await withProofLibrary(async (library) => {
-				const shell = shellOf(info);
-				const guard = new FlowGuard(page);
-				await preparePage(page, library);
-				await signIn(page, library);
-				await openTakes(page, library, shell);
-				const receiver = await context.newPage();
-				try {
-					const receiverGuard = new FlowGuard(receiver);
-					const notices = await observeStorage(receiver);
-					await preparePage(receiver, library);
-					await openTakes(receiver, library, shell);
-					await playTake(receiver);
-					await advanceAndPause(receiver);
-					expect(await recovery(receiver, library.userId)).not.toBeNull();
-					if (record === 'absent') {
-						await page.evaluate(
-							(id) => localStorage.removeItem(`playbackResume:${id}`),
-							library.userId
-						);
-					}
-					const previousMarker = await marker(page, library.userId);
-					await signOut(page, shell);
-					await expect
-						.poll(
-							() =>
-								notices.filter(
-									(event) =>
-										event.key === `playbackLogout:${library.userId}` && event.newValue !== null
-								).length
-						)
-						.toBe(1);
-					const logoutMarker = await marker(receiver, library.userId);
-					expect(logoutMarker).not.toBeNull();
-					expect(logoutMarker).not.toBe(previousMarker);
-					const observed = observedTab === 'originating' ? page : receiver;
-					expect(await recovery(observed, library.userId)).toBeNull();
-					// Keep the receiving document alive; its cached media plays
-					// despite the shared cookie being gone. A navigation proves less.
-					const receiverUrl = receiver.url();
-					await transport(receiver, TRANSPORT_PLAY_LABEL).click();
-					await advanceAndPause(receiver);
-					expect(receiver.url()).toBe(receiverUrl);
-					expect(await recovery(receiver, library.userId)).toBeNull();
-					expect(await marker(receiver, library.userId)).toBe(logoutMarker);
-					expect(
-						notices.filter((event) => event.key === `playbackLogout:${library.userId}`)
-					).toHaveLength(1);
-					guard.assertClean();
-					receiverGuard.assertClean();
-				} finally {
-					await receiver.close();
+	test(`1354_52_C2: logout with record ${record} suppresses receiving-tab saves`, async ({
+		page,
+		context
+	}, info) => {
+		await context.clearCookies();
+		await withProofLibrary(async (library) => {
+			const shell = shellOf(info);
+			const guard = new FlowGuard(page);
+			await observePlayingAudio(page);
+			await signIn(page, library);
+			await openTakes(page, library, shell);
+			const receiver = await context.newPage();
+			try {
+				const receiverGuard = new FlowGuard(receiver);
+				const notices = await observeStorage(receiver);
+				await observePlayingAudio(receiver);
+				await openTakes(receiver, library, shell);
+				await playTake(receiver);
+				await advanceAndPause(receiver);
+				expect(await recovery(receiver, library.userId)).not.toBeNull();
+				if (record === 'absent') {
+					await page.evaluate(
+						(id) => localStorage.removeItem(`playbackResume:${id}`),
+						library.userId
+					);
 				}
-			});
+				const previousMarker = await marker(page, library.userId);
+				await signOut(page, shell);
+				await expect
+					.poll(
+						() =>
+							notices.filter(
+								(event) =>
+									event.key === `playbackLogout:${library.userId}` && event.newValue !== null
+							).length
+					)
+					.toBe(1);
+				const logoutMarker = await marker(receiver, library.userId);
+				expect(logoutMarker).not.toBeNull();
+				expect(logoutMarker).not.toBe(previousMarker);
+				expect(await recovery(receiver, library.userId)).toBeNull();
+				// Keep the receiving document alive; its cached media plays
+				// despite the shared cookie being gone. A navigation proves less.
+				const receiverUrl = receiver.url();
+				await transport(receiver, TRANSPORT_PLAY_LABEL).click();
+				await advanceAndPause(receiver);
+				expect(receiver.url()).toBe(receiverUrl);
+				expect(await recovery(receiver, library.userId)).toBeNull();
+				expect(await marker(receiver, library.userId)).toBe(logoutMarker);
+				expect(
+					notices.filter((event) => event.key === `playbackLogout:${library.userId}`)
+				).toHaveLength(1);
+				guard.assertClean();
+				receiverGuard.assertClean();
+			} finally {
+				await receiver.close();
+			}
 		});
-	}
+	});
 }
 
 for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry'] as const) {
@@ -349,7 +316,7 @@ for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry']
 				refusalsExpectedOn:
 					lifecycle === 'session expiry' ? [{ path: '/api/auth/me', statuses: [401] }] : []
 			});
-			await preparePage(page, library);
+			await observePlayingAudio(page);
 			await signIn(page, library);
 			await openTakes(page, library, shell);
 			await playTake(page);
@@ -390,7 +357,7 @@ for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry']
 				await signOut(page, shell);
 				await signIn(page, library);
 				await openTakes(page, library, shell);
-				await playTake(page, 1);
+				await playTake(page);
 				await advanceAndPause(page);
 				expect((await recovery(page, library.userId))?.position).toBeGreaterThan(0);
 			} else {

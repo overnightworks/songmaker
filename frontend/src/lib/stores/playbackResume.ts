@@ -31,6 +31,10 @@ function storageKey(userId: string): string {
 	return `${STORAGE_KEY_PREFIX}${userId}`;
 }
 
+function logoutMarkerKey(userId: string): string {
+	return `${LOGOUT_KEY_PREFIX}${userId}`;
+}
+
 // A tab can keep playing after logout until its own session check fails.
 // Explicit logout suppresses saves until the next authenticated lifecycle;
 // ordinary queue exhaustion only retires the current record.
@@ -47,7 +51,7 @@ function stopSavingOnLogoutInAnotherTab(): void {
 		if (
 			userId === null ||
 			event.storageArea !== localStorage ||
-			event.key !== `${LOGOUT_KEY_PREFIX}${userId}` ||
+			event.key !== logoutMarkerKey(userId) ||
 			event.newValue === null ||
 			event.newValue === event.oldValue
 		)
@@ -74,7 +78,7 @@ function stopSavingUntilTheUserChanges(): void {
 export function forgetPlaybackResume(userId: string): void {
 	retireCurrentPlaybackResume(userId);
 	if (get(currentUser)?.id === userId) stopSavingUntilTheUserChanges();
-	writeStorage(`${LOGOUT_KEY_PREFIX}${userId}`, crypto.randomUUID());
+	writeStorage(logoutMarkerKey(userId), crypto.randomUUID());
 }
 
 function retireCurrentPlaybackResume(userId: string): void {

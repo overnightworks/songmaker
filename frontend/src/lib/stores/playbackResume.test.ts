@@ -24,13 +24,17 @@ function recordKey(userId: string): string {
 	return `playbackResume:${userId}`;
 }
 
+function logoutKey(userId: string): string {
+	return `playbackLogout:${userId}`;
+}
+
 function storedRecord(userId: string): unknown {
 	return JSON.parse(localStorage.getItem(recordKey(userId)) ?? 'null');
 }
 
 // Deliver the public storage boundary after a remote tab has published logout.
 function logOutInAnotherTab(userId: string, beforeThisTabHears: () => void = () => {}): void {
-	const key = `playbackLogout:${userId}`;
+	const key = logoutKey(userId);
 	const oldValue = localStorage.getItem(key);
 	const newValue = crypto.randomUUID();
 	localStorage.removeItem(recordKey(userId));
@@ -220,7 +224,7 @@ describe('playback resume record', () => {
 		expect(setItem.mock.calls.length + getItem.mock.calls.length).toBe(0);
 	});
 
-	it('a logout in another tab stops this tab saving the record again', () => {
+	it('1354_52_C2: a logout in another tab stops this tab saving the record again', () => {
 		playTake('g-two-tabs');
 
 		logOutInAnotherTab(LISTENER.id, () => playTo(3));
@@ -254,7 +258,7 @@ describe('playback resume record', () => {
 			const element = loadBoundaryTake();
 			expect(savedPoint()).not.toBeNull();
 			if (record === 'absent') localStorage.removeItem(recordKey(LISTENER.id));
-			const key = `playbackLogout:${LISTENER.id}`;
+			const key = logoutKey(LISTENER.id);
 			localStorage.setItem(key, 'previous-logout');
 
 			if (origin === 'originating') forgetPlaybackResume(LISTENER.id);
@@ -275,7 +279,7 @@ describe('playback resume record', () => {
 	it.each([
 		{
 			boundary: 'foreign viewer',
-			key: `playbackLogout:${OTHER_LISTENER.id}`,
+			key: logoutKey(OTHER_LISTENER.id),
 			oldValue: null,
 			newValue: 'logout',
 			session: false
@@ -289,21 +293,21 @@ describe('playback resume record', () => {
 		},
 		{
 			boundary: 'removed marker',
-			key: `playbackLogout:${LISTENER.id}`,
+			key: logoutKey(LISTENER.id),
 			oldValue: 'logout',
 			newValue: null,
 			session: false
 		},
 		{
 			boundary: 'unchanged marker',
-			key: `playbackLogout:${LISTENER.id}`,
+			key: logoutKey(LISTENER.id),
 			oldValue: 'logout',
 			newValue: 'logout',
 			session: false
 		},
 		{
 			boundary: 'session storage',
-			key: `playbackLogout:${LISTENER.id}`,
+			key: logoutKey(LISTENER.id),
 			oldValue: null,
 			newValue: 'logout',
 			session: true
