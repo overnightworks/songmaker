@@ -1,3 +1,4 @@
+import { modifiedClicks } from '$lib/test-utils/modified-clicks';
 import { createRawSnippet, mount, tick, unmount, type Snippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -202,14 +203,7 @@ describe('RailGroup', () => {
 			expect(open).not.toHaveBeenCalled();
 		});
 
-		it.each([
-			{ ctrlKey: true },
-			{ metaKey: true },
-			{ shiftKey: true },
-			{ altKey: true },
-			{ button: 1 },
-			{ button: 2 }
-		])('1354_rule_40: leaves browser handling for %o', async (mouse) => {
+		it.each(modifiedClicks)('1354_rule_40: leaves browser handling for %o', async (mouse) => {
 			const open = vi.fn();
 			const { target } = await render({ page: { href: '/playlists', current: false, open } });
 			const click = new MouseEvent('click', { bubbles: true, cancelable: true, ...mouse });

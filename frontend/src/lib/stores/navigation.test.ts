@@ -1,3 +1,4 @@
+import { modifiedClicks } from '$lib/test-utils/modified-clicks';
 import {
 	historyEntry,
 	mountAddressRoute,
@@ -2917,21 +2918,17 @@ describe('album track neighbors', () => {
 });
 
 describe('1354_rule_40: app page link browser handling', () => {
-	it.each([
-		{ ctrlKey: true },
-		{ metaKey: true },
-		{ shiftKey: true },
-		{ altKey: true },
-		{ button: 1 },
-		{ button: 2 }
-	])('1354_rule_40: preserves the address and default for %o', async (mouse) => {
-		const pathname = location.pathname;
-		const event = new MouseEvent('click', { cancelable: true, ...mouse });
-		followAppPageLink(event, '/settings/voices');
-		await tick();
-		expect(event.defaultPrevented).toBe(false);
-		expect(location.pathname).toBe(pathname);
-	});
+	it.each(modifiedClicks)(
+		'1354_rule_40: preserves the address and default for %o',
+		async (mouse) => {
+			const pathname = location.pathname;
+			const event = new MouseEvent('click', { cancelable: true, ...mouse });
+			followAppPageLink(event, '/settings/voices');
+			await tick();
+			expect(event.defaultPrevented).toBe(false);
+			expect(location.pathname).toBe(pathname);
+		}
+	);
 
 	it('1354_rule_40: a plain click opens the app page and prevents browser navigation', async () => {
 		const event = new MouseEvent('click', { cancelable: true });

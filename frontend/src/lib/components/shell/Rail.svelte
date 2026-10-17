@@ -1,10 +1,12 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { setContext } from 'svelte';
+	import { setRailCollapsed } from '$lib/contexts/rail-collapsed';
+	import { librarySurface } from '$lib/stores/libraryContext';
+	import { selectedSongId } from '$lib/stores/player';
 	import { page } from '$app/state';
-	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
+	import { HOME_ROUTE_PATH, standsOnHomePage } from '$lib/routes/addresses';
 	import { standingPathname } from '$lib/routes/standingAddress';
-	import { followAppPageLink, isPlainPrimaryClick, openHome } from '$lib/stores/navigation';
+	import { followAppPageLink, followPlainClick, openHome } from '$lib/stores/navigation';
 	import { APP_NAME, HOME_PAGE_LABEL, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import { accountInitial } from '$lib/utils/format';
@@ -43,8 +45,12 @@
 	} = $props();
 
 	// Each rail supplies its own state so the phone drawer stays expanded.
-	setContext('rail-collapsed', () => collapsed);
-	const onHome = $derived(standingPathname(page.state) === HOME_ROUTE_PATH);
+	setRailCollapsed(() => collapsed);
+	const onHome = $derived(
+		$librarySurface === 'home' &&
+			$selectedSongId === null &&
+			standsOnHomePage(standingPathname(page.state))
+	);
 
 	const collapseRailLabel = 'Collapse rail';
 	const expandRailLabel = 'Expand rail';
@@ -125,16 +131,13 @@
 
 	<div class="rail-scroll" use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR }}>
 		<a
-			class="home-link"
+			class="home-link rail-page-link"
 			href={HOME_ROUTE_PATH}
 			aria-current={onHome ? 'page' : undefined}
 			title={collapsed ? HOME_PAGE_LABEL : undefined}
-			onclick={(event) => {
-				if (!isPlainPrimaryClick(event)) return;
-				event.preventDefault();
-				void openHome();
-			}}
+			onclick={(event) => followPlainClick(event, openHome)}
 		>
+			<span class="home-fold-spacer" aria-hidden="true"></span>
 			<svg
 				width="14"
 				height="14"
@@ -257,11 +260,17 @@
 		color: var(--text);
 	}
 
-	.home-link[aria-current='page'] {
-		box-shadow: inset 3px 0 0 var(--accent);
-		background: color-mix(in srgb, var(--accent) 22%, transparent);
-		color: color-mix(in srgb, var(--accent) 60%, var(--text));
-		font-weight: 600;
+	.rail :global(.rail-page-link[aria-current='page']) {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+
+	.home-fold-spacer {
+		flex: 0 0 18px;
+	}
+
+	.rail-collapsed .home-fold-spacer {
+		display: none;
 	}
 
 	.rail-collapsed .home-link {
