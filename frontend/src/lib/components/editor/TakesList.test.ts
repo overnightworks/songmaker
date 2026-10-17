@@ -14,6 +14,7 @@ import {
 	TAKES_MOBILE_HINT,
 	TAKES_RETRY_LABEL
 } from '$lib/constants';
+import { menuRow } from '$lib/test-utils/collection-menu';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -161,15 +162,11 @@ const playlist = {
 };
 
 function openTakeMenu(row: HTMLElement): void {
-	row.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+	row.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 }
 
 function clickMenuItem(root: ParentNode, label: string): void {
-	const item = Array.from(root.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
-		(el) => el.textContent?.trim() === label
-	);
-	if (!item) throw new Error(`No take menu item named "${label}"`);
-	item.click();
+	menuRow(root, label).click();
 }
 
 vi.mock('$lib/stores/playlists', async (importOriginal) => {
@@ -838,7 +835,7 @@ describe('TakesList', () => {
 	it("names the take on the row's menu, without also playing it", async () => {
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
-		row?.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+		row?.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 3');
 		expect(playTake).not.toHaveBeenCalled();
@@ -951,7 +948,7 @@ describe('TakesList', () => {
 		expect(play).not.toBeNull();
 		expect(play?.contains(row?.querySelector('.pick-btn') ?? null)).toBe(false);
 		expect(play?.contains(row?.querySelector('.keep-btn') ?? null)).toBe(false);
-		expect(play?.contains(row?.querySelector('.overflow-btn') ?? null)).toBe(false);
+		expect(play?.contains(row?.querySelector('.menu-trigger') ?? null)).toBe(false);
 		play?.click();
 		await tick();
 		expect(pick).not.toHaveBeenCalled();
@@ -1012,7 +1009,7 @@ describe('TakesList', () => {
 		async (pointer) => {
 			setPointer(pointer);
 			const { target } = await render();
-			for (const selector of ['.play-btn', '.pick-btn', '.keep-btn', '.overflow-btn']) {
+			for (const selector of ['.play-btn', '.pick-btn', '.keep-btn', '.menu-trigger']) {
 				const button = target.querySelector<HTMLButtonElement>(selector);
 				if (!button) throw new Error(`Expected ${selector}`);
 				expect(minSquarePx(button, selector)).toEqual({
@@ -1073,7 +1070,7 @@ describe('TakesList archived takes', () => {
 
 		openTakeMenu(archivedRow);
 		await tick();
-		expect(archivedRow.querySelector('.overflow-menu')).not.toBeNull();
+		expect(archivedRow.querySelector('.menu-panel')).not.toBeNull();
 		clickMenuItem(archivedRow, TAKE_PLAYLIST_LABEL);
 		await tick();
 
@@ -1295,12 +1292,12 @@ describe('Escape yields to the take overflow menu before any global shortcut', (
 		const { target } = await render();
 		target
 			.querySelector<HTMLElement>('.take-row')
-			?.querySelector<HTMLButtonElement>('.overflow-btn')
+			?.querySelector<HTMLButtonElement>('.menu-trigger')
 			?.click();
 		await tick();
-		expect(target.querySelector('.overflow-menu')).not.toBeNull();
+		expect(target.querySelector('.menu-panel')).not.toBeNull();
 		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		await tick();
-		expect(target.querySelector('.overflow-menu')).toBeNull();
+		expect(target.querySelector('.menu-panel')).toBeNull();
 	});
 });
