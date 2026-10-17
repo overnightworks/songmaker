@@ -126,6 +126,7 @@ class PlaceListen:
     played_at: datetime
     song: Song | None
     song_number: int | None
+    entry_id: str | None = None
 
     @property
     def place_type(self) -> str:
@@ -206,7 +207,7 @@ def _playlist_listens(
 ) -> list[PlaceListen]:
     live_song_place = _first_live_place_per_song(viewer_id, owner_id)
     query = (
-        session.query(Playlist, Song, live_song_place.c.song_number)
+        session.query(Playlist, Song, live_song_place.c.song_number, live_song_place.c.entry_id)
         .options(
             selectinload(Playlist.entries)
             .joinedload(PlaylistEntry.generation)
@@ -226,8 +227,8 @@ def _playlist_listens(
         .limit(limit)
     )
     return [
-        _listen(playlist, playlist.last_played_at, song, song_number)
-        for playlist, song, song_number in query.all()
+        _listen(playlist, playlist.last_played_at, song, song_number, entry_id)
+        for playlist, song, song_number, entry_id in query.all()
     ]
 
 
@@ -274,15 +275,19 @@ def _song_number_in_album() -> ScalarSelect[int]:
 def _first_live_place_per_song(viewer_id: str, owner_id: str | None) -> Subquery:
     """Each song a live entry of the viewer's playlists holds, at its first such place."""
     live_entries = _numbered_live_entries(viewer_id, owner_id)
-    return (
-        select(
-            live_entries.c.playlist_id,
-            live_entries.c.song_id,
-            func.min(live_entries.c.place).label("song_number"),
-        )
-        .group_by(live_entries.c.playlist_id, live_entries.c.song_id)
-        .subquery()
-    )
+    ranked_entries = select(
+        live_entries,
+        func.row_number().over(
+            partition_by=(live_entries.c.playlist_id, live_entries.c.song_id),
+            order_by=live_entries.c.place,
+        ).label("rank"),
+    ).subquery()
+    return select(
+        ranked_entries.c.playlist_id,
+        ranked_entries.c.song_id,
+        ranked_entries.c.entry_id,
+        ranked_entries.c.place.label("song_number"),
+    ).where(ranked_entries.c.rank == 1).subquery()
 
 
 def _numbered_live_entries(viewer_id: str, owner_id: str | None) -> Subquery:
@@ -295,6 +300,7 @@ def _numbered_live_entries(viewer_id: str, owner_id: str | None) -> Subquery:
     return visible_albums(
         select(
             PlaylistEntry.playlist_id,
+            PlaylistEntry.id.label("entry_id"),
             Generation.song_id,
             func.row_number().over(
                 partition_by=PlaylistEntry.playlist_id,
@@ -379,9 +385,11 @@ def _newest_own_message_per_song(viewer_id: str) -> Select:
 
 def _listen(
     place: Album | Playlist, played_at: datetime, song: Song | None, song_number: int | None,
+    entry_id: str | None = None,
 ) -> PlaceListen:
     return PlaceListen(
         place=place, played_at=_in_utc(played_at), song=song, song_number=song_number,
+        entry_id=entry_id,
     )
 
 

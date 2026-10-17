@@ -138,6 +138,7 @@ class LibraryListenItem(BaseModel):
     song_id: str | None = None
     song_title: str | None = None
     song_number: int | None = None
+    entry_id: str | None = None
     played_at: str
 
     @classmethod
@@ -161,6 +162,7 @@ class LibraryListenItem(BaseModel):
             song_id=song.id if song else None,
             song_title=song.title if song else None,
             song_number=listen.song_number,
+            entry_id=listen.entry_id,
             played_at=listen.played_at.isoformat(),
         )
 
