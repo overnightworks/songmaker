@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin · Models — Fassung 2 mit Scoring-CLI/API, Entwurf VRAM (#1500)</title>
+<title>Admin · Models — Fassung 2 mit Scoring-CLI/API</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Oswald:wght@400;500&family=Open+Sans:wght@400;600&display=swap">
 <style>
 	:root {
@@ -198,7 +198,7 @@
 	/* ── state frames (App-UI: Englisch) ─────────────────────── */
 	.states {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
 		gap: 1.5rem;
 		align-items: start;
 	}
@@ -869,8 +869,8 @@
 	   Gestrichelt umrandet = neu mit #1500. Alles ohne Rand steht heute so in der App. */
 	.is-new { outline: 2px dashed var(--violet); outline-offset: 3px; border-radius: 2px; }
 	.proposed-tag.flush { margin-left: 0; }
-	.decision .after-list { margin-top: .8rem; }
-	.decision code, .state-note code { overflow-wrap: anywhere; }
+	.vram-part .after-list { margin-top: .8rem; }
+	.vram-part .decision code, .vram-part .state-note code { overflow-wrap: anywhere; }
 	.legend-new { display: inline-block; padding: 0 .35rem; outline: 2px dashed var(--violet); outline-offset: 1px; }
 
 	/* Worker-Karte — WorkerPoolPanel.svelte, in der Bildsprache dieser Seite */
@@ -970,6 +970,7 @@
 	.callout b { color: var(--ink); }
 
 	.phone.p390 { width: 390px; box-sizing: border-box; }
+	.states.vram-states { grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); }
 	.states-390 { grid-template-columns: repeat(auto-fill, minmax(min(390px, 100%), 390px)); justify-content: start; gap: 1.25rem; }
 	.phone.p390 .ph-body .wcard { box-shadow: none; }
 
@@ -1247,7 +1248,8 @@
 	ist der eingefrorene Bildbesitzer für die gerulten Zeilen aus #916 am Desktop und bei 390&nbsp;px:
 	die Worker-Karte mit VRAM-Zeile und der Liste „Models on this GPU", und auf der Songseite
 	„Waiting for GPU…", „Loading model…", „zu lang für die GPU" und „nicht verfügbar". Änderungen
-	daran brauchen eine neue Freigabe. Alles darüber ist die gesegnete Fassung 2 und unverändert.
+	daran brauchen eine neue Freigabe. Die Frames von Fassung 2 darüber sind unverändert; die Seite
+	lädt zusätzlich die Schriften der Songseite (Oswald, Open Sans) für die #1500-Frames.
 </p>
 <div class="wrap">
 	<header>
@@ -1770,7 +1772,7 @@
 		<symbol id="sp-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
 	</svg>
 
-	<section class="decisions" id="vram">
+	<section class="decisions vram-part" id="vram">
 		<h2>Neu · #1500 — VRAM und Kapazität<span class="proposed-tag">Blessed 17.10.2026 · #1500</span></h2>
 
 		<div class="decision">
@@ -1814,8 +1816,9 @@
 			<ul>
 				<li><strong>Zeile 1 — Worker-Karte (h), (i), (m), (n):</strong> belegt / gesamt, „~" bei
 					Schätzung, ein eigener Zustand „unbekannt", die geladenen Modelle als Liste in derselben
-					Karte. <strong>LOAD bleibt immer bedienbar</strong> — auch wenn der Platz laut Rechnung
-					nicht reicht; es gibt keine Ablehnung und keine Warnung am Knopf.</li>
+					Karte. <strong>LOAD wird nie wegen des Platzes gesperrt</strong> — auch wenn der Platz laut
+					Rechnung nicht reicht; es gibt keine Ablehnung und keine Warnung am Knopf. Gesperrt ist
+					Load nur, solange geladen wird oder der Worker offline ist (h), (n).</li>
 				<li><strong>Zeile 2 — Speicherfehler und Warten (j), (l), (o), (q).</strong> Die Zeile lautet
 					seit dem 17.10.2026: <em>an out-of-memory failure is caught and says "too long" in plain
 					words as soon as it happens; nothing that generates today is refused.</em> Es gibt keine
@@ -1855,10 +1858,10 @@
 
 	<hr class="rule">
 
-	<section class="decisions">
+	<section class="decisions vram-part">
 		<h2>Das Bild — VRAM, Desktop<span class="proposed-tag">Blessed 17.10.2026 · #1500</span></h2>
 
-		<div class="states">
+		<div class="states vram-states">
 			<article class="state wide">
 				<div class="state-head"><h3>(h) Worker-Karte · vier Zustände der VRAM-Zeile, ein Modell geladen</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
 				<p class="state-note">
@@ -2153,10 +2156,10 @@
 
 	<hr class="rule">
 
-	<section class="decisions">
+	<section class="decisions vram-part">
 		<h2>Das Bild — VRAM, 390 px<span class="proposed-tag">Blessed 17.10.2026 · #1500</span></h2>
 
-		<div class="states states-390">
+		<div class="states vram-states states-390">
 			<article class="state">
 				<div class="state-head"><h3>(m) Worker-Karten, gestapelt · ein Modell, gemessen und geschätzt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
 				<p class="state-note">
@@ -2387,7 +2390,7 @@
 
 	<hr class="rule">
 
-	<section class="decisions">
+	<section class="decisions vram-part">
 		<div class="decision">
 			<h3>Entschieden am 17.10.2026 (#1500)</h3>
 			<p>
@@ -2399,7 +2402,8 @@
 				<li><strong>2 · „frei" und der Balken.</strong> „free" steht da, für Admins.</li>
 				<li><strong>3 · Unbekannt ist selten.</strong> So wie gezeichnet: Schätzung ohne NVML, „unknown"
 					nur ohne Heartbeat oder bei einem Build ohne VRAM-Felder.</li>
-				<li><strong>4 · Laden und der Worker-Satz.</strong> Load ist nie gesperrt.</li>
+				<li><strong>4 · Laden und der Worker-Satz.</strong> Load wird nie wegen des Platzes gesperrt;
+					gesperrt ist es nur, solange geladen wird oder der Worker offline ist — so wie gezeichnet.</li>
 				<li><strong>5 · Wo spricht ein gescheitertes Laden?</strong> In der Karte, als <em>Last error</em> (i), (n).</li>
 				<li><strong>6 · Aufgeklappt oder zugeklappt?</strong> Hinfällig: die Zeilen sind kurz.</li>
 				<li><strong>7 · Zahlen für jeden Musiker?</strong> Nein — Zahlen nur für Admins.</li>
