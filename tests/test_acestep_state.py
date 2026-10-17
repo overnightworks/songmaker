@@ -166,9 +166,9 @@ def test_state_from_dict_reads_vram_measured(
     assert state.vram_measured is expected
 
 
-@pytest.mark.acceptance("S15-04")
 @pytest.mark.parametrize("has_error", [False, True])
 def test_last_error_reader_preserves_pair(redis, event_loop, has_error: bool) -> None:
+    """S15-04: Last error reader preserves pair."""
     from songmaker_cli.admin_api import _state_from_dict
 
     payload = {"loaded": [], "gpu_healthy": True}

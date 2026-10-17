@@ -413,9 +413,9 @@ def test_load_model_unknown_mode(tmp_path: Path) -> None:
     assert resp.status_code == 400
 
 
-@pytest.mark.acceptance("S15-01")
 @pytest.mark.parametrize("status", [409, 502])
 def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> None:
+    """S15-01: Load model last error matches response."""
     from acestep_worker.subprocess_runner import SubprocessStartError
     from songmaker_cli.acestep_state import read_worker_state
 
@@ -504,8 +504,8 @@ def last_error_worker(tmp_path: Path):
     return worker
 
 
-@pytest.mark.acceptance("S15-02")
 def test_generate_last_error_matches_task_snapshot(last_error_worker) -> None:
+    """S15-02: Generate last error matches task snapshot."""
     async def go():
         async with last_error_worker() as (client, _, generate_then_publish):
             await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
@@ -513,11 +513,11 @@ def test_generate_last_error_matches_task_snapshot(last_error_worker) -> None:
     _run(go())
 
 
-@pytest.mark.acceptance("S15-03")
 @pytest.mark.parametrize("success", ["load", "generate"])
 def test_last_error_survives_success_and_is_replaced(
     tmp_path: Path, success: str, last_error_worker,
 ) -> None:
+    """S15-03: Last error survives success and is replaced."""
     async def go():
         async with last_error_worker() as (client, publish_pair, generate_then_publish):
             first = await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
@@ -985,8 +985,8 @@ def test_default_generate_runner_reports_acestep_cause_verbatim(
     assert snap.error == cause
 
 
-@pytest.mark.acceptance("S15-04")
 def test_build_state_payload(tmp_path: Path) -> None:
+    """S15-04: Build state payload."""
     from acestep_worker.wrapper import build_state_payload
 
     deps, redis = _make_deps(tmp_path)

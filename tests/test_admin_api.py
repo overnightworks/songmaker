@@ -1117,11 +1117,11 @@ def test_list_workers_propagates_loading_last_log_line(client: TestClient) -> No
     assert state["loading_last_log_line"] == "vllm: loading shard 3/4"
 
 
-@pytest.mark.acceptance("S15-04")
 @pytest.mark.parametrize("heartbeat_kind", ["error", "fresh", "legacy", "missing"])
 def test_list_workers_last_error_transport(
     client: TestClient, tmp_path: Path, heartbeat_kind: str,
 ) -> None:
+    """S15-04: List workers last error transport."""
     import asyncio
     import json
 
@@ -1180,9 +1180,9 @@ def test_list_workers_last_error_transport(
         assert state["last_error_at"] == expected_at
 
 
-@pytest.mark.acceptance("S15-06")
 @pytest.mark.parametrize("role", ["anonymous", "user", "admin"])
 def test_last_error_worker_list_requires_admin(client: TestClient, role: str) -> None:
+    """S15-06: Last error worker list requires admin."""
     import asyncio
     import json
 
@@ -1205,10 +1205,10 @@ def test_last_error_worker_list_requires_admin(client: TestClient, role: str) ->
     assert (sentinel in response.text) is (role == "admin")
 
 
-@pytest.mark.acceptance("S15-06")
 def test_last_error_stays_out_of_public_and_musician_paths(
     client: TestClient, mock_arq_pool,
 ) -> None:
+    """S15-06: Last error stays out of public and musician paths."""
     import asyncio
     import json
     from unittest.mock import AsyncMock
