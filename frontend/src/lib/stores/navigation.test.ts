@@ -1521,7 +1521,7 @@ describe('1354_rule_32: cold song Back', () => {
 			}
 			expect(location.pathname).toBe('/album/a1');
 			expect(get(selectedSongId)).toBeNull();
-			expect(history.length).toBe(length);
+			expect(history).toHaveLength(length);
 		}
 	);
 });

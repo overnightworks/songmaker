@@ -544,8 +544,14 @@ test.describe('song page at phone width', () => {
 				try {
 					await cold.setViewportSize({ width: 390, height: 844 });
 					await cold.goto(address);
-					await cold.getByRole('textbox', { name: /^Lyrics/ }).fill(UNSAVED_DRAFT_LINE);
-					const length = await cold.evaluate(() => history.length);
+					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
+					await expect(coldLyrics).toHaveValue(savedLyrics);
+					await coldLyrics.fill(UNSAVED_DRAFT_LINE);
+					await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE);
+					const readHistoryIndex = () =>
+						(window as unknown as { navigation: { currentEntry: { index: number } } }).navigation
+							.currentEntry.index;
+					const index = await cold.evaluate(readHistoryIndex);
 					await cold
 						.locator('.mobile-strip')
 						.getByRole('button', { name: expectedName, exact: true })
@@ -557,7 +563,7 @@ test.describe('song page at phone width', () => {
 						.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 						.click();
 					await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
-					expect(await cold.evaluate(() => history.length)).toBe(length);
+					expect(await cold.evaluate(readHistoryIndex)).toBe(index);
 				} finally {
 					await cold.close();
 				}

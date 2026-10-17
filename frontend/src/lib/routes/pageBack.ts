@@ -4,11 +4,11 @@ import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,
 	isPlaylistRoutePath,
-	isSongRoutePath,
 	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	playlistRoutePath,
 	PLAYLISTS_ROUTE_PATH,
+	songAlbumRoutePath,
 	songRoutePath
 } from '$lib/routes/addresses';
 import type { StandingPage } from '$lib/routes/standingAddress';
@@ -16,7 +16,7 @@ import { visibleRailSearchPages } from '$lib/stores/railSearch';
 
 const LIBRARY_HREF = LIBRARY_ROUTE_PATH;
 const PLAYLISTS_HREF = PLAYLISTS_ROUTE_PATH;
-const SETTINGS_HREF = '/settings';
+export const SETTINGS_HREF = '/settings';
 // Home and the lists the app opens on, which carry the brand and the account
 // circle instead of ‹ wherever they were opened from.
 const PLACE_LISTS: ReadonlySet<string> = new Set([HOME_ROUTE_PATH, LIBRARY_HREF, PLAYLISTS_HREF]);
@@ -91,8 +91,6 @@ export function backTargetName(
 	const target =
 		below !== null
 			? new URL(below).pathname
-			: isSongRoutePath(pathname)
-				? pathname.slice(0, pathname.indexOf('/', '/album/'.length))
-				: listOfPage(pathname);
+			: (songAlbumRoutePath(pathname) ?? listOfPage(pathname));
 	return pageName(target, titles);
 }

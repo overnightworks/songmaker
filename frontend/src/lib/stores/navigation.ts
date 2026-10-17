@@ -1,4 +1,4 @@
-import { listOfPage } from '$lib/routes/pageBack';
+import { listOfPage, SETTINGS_HREF } from '$lib/routes/pageBack';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { get, writable } from 'svelte/store';
@@ -334,7 +334,7 @@ export function leaveForLogout(logout: () => void | Promise<void>): Promise<void
 // re-opening it is a no-op that still refreshes its history entry.
 export function openCollectionEntry(collection: OpenCollection): void {
 	if (get(selectedSongId) !== null) {
-		backToCollection();
+		void backToCollection();
 		return;
 	}
 	if (collection.kind === 'album') void openAlbum(collection.id);
@@ -414,7 +414,7 @@ function openListOverPage(list: PageList): Promise<void> {
 export function stepBackFromPage(pathname: string): Promise<void> {
 	if (isSongRoutePath(pathname)) return stepBackOr(backToCollection);
 	const list = listOfPage(pathname);
-	if (list === '/settings') return stepBackOrGoTo(list);
+	if (list === SETTINGS_HREF) return stepBackOrGoTo(list);
 	return stepBackOr(() => openListOverPage(list));
 }
 
