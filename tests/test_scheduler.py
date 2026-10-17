@@ -476,9 +476,9 @@ def test_consume_task_stream_empty_error_is_a_protocol_error_for_both_task_kinds
     consume,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """An empty 'error' field carries no cause, so it must not be relayed
+    """defect:#1569: An empty 'error' field carries no cause, so it must not be relayed
     as one, for either task kind: the worker always sends text, and the job
-    layer shows the message verbatim. Download previously diverged here,
+    layer logs the cause and chooses the task-specific message. Download diverged here,
     raising ``WorkerTaskFailed('')`` instead — issue #227 unifies both
     consumers on the shared ``_consume_task_stream`` implementation."""
     worker = _make_picked()
