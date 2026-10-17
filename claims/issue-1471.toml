@@ -1,0 +1,8 @@
+claim_id = "0c3a6ffafc7a4760b85a18c7be04f17b"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "95a2f8e9b3f6810ef81f541fa0271c565fc0a912"
+branch = "claude/issue-1471-agent-providers-0-1-3"
+scope = ["CLAUDE.md", "README.md", "docs/architecture.md", "docs/security.md", "docs/testing.md", "pyproject.toml", "src/songmaker_cli/constants.py", "tests/fixtures/codex-imagegen-real-stream.jsonl", "tests/test_cover_suggestion_job.py", "uv.lock"]
+opened_commit = "51cc599beb4aac468972f290c3baec6af549f6c3"
+whole_reason = "One provider patch integration must keep the executable pin, lock, current-pin documentation, security contract, musician text and host regression fixture consistent in the same landing."
