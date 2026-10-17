@@ -1,7 +1,0 @@
-claim_id = "9b8f72fabf8141ecb50b89c0fa65c2ac"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "0366076665efa2046cacb18c3f4185615a3450ae"
-branch = "claude/issue-1500-vram-picture"
-scope = ["docs/design/README.md", "docs/design/admin-models.html"]
-opened_commit = "c40c6bdc976daf4ed05cc42f56ef75f914fd2dc4"
