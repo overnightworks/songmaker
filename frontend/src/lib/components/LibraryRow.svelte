@@ -9,6 +9,7 @@
 		transportButtonLabel,
 		type TransportState
 	} from '$lib/services/audioPlayer.svelte';
+	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
@@ -16,6 +17,8 @@
 		openLabel: string;
 		onopen: () => void;
 		onplay?: () => void;
+		// The caller names the place its trailing action opens; the row stays generic.
+		edit?: { label: string; onclick: () => void };
 		transport?: TransportState;
 		selected?: boolean;
 		lightUp?: boolean;
@@ -25,6 +28,7 @@
 		openLabel,
 		onopen,
 		onplay,
+		edit,
 		transport = 'idle',
 		selected = false,
 		lightUp = false,
@@ -59,6 +63,10 @@
 			onclick={onplay}
 		>
 			<TransportButtonIcon face={transportButtonFace(transport)} size={20} />
+		</button>
+	{:else if edit}
+		<button type="button" class="row-editor" aria-label={edit.label} onclick={edit.onclick}>
+			<Icon name="pencil" size={20} />
 		</button>
 	{:else}
 		<span class="row-play-spacer" aria-hidden="true"></span>
@@ -108,6 +116,7 @@
 		text-align: left;
 		cursor: pointer;
 	}
+	.row-editor,
 	.row-play,
 	.row-play-spacer {
 		display: grid;
@@ -120,6 +129,7 @@
 		background: transparent;
 		color: var(--text);
 	}
+	.row-editor,
 	.row-play {
 		cursor: pointer;
 	}
