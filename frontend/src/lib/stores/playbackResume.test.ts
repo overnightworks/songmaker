@@ -3,7 +3,12 @@ import { flushSync } from 'svelte';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { currentUser } from '$lib/stores/auth';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { followPlaybackForResume, savedPlayback, type ResumeQueueSource } from './playbackResume';
+import {
+	followPlaybackForResume,
+	forgetPlaybackResume,
+	savedPlayback,
+	type ResumeQueueSource
+} from './playbackResume';
 
 const LISTENER = { id: 'u-listener', username: 'listener', role: 'user' as const };
 const OTHER_LISTENER = { id: 'u-other', username: 'other', role: 'user' as const };
@@ -23,14 +28,55 @@ function storedRecord(userId: string): unknown {
 	return JSON.parse(localStorage.getItem(recordKey(userId)) ?? 'null');
 }
 
-// Another tab's logout removes the record; this tab hears of it only later,
-// as a storage event, and may have ticked in between.
+// Deliver the public storage boundary after a remote tab has published logout.
 function logOutInAnotherTab(userId: string, beforeThisTabHears: () => void = () => {}): void {
-	const key = recordKey(userId);
+	const key = `playbackLogout:${userId}`;
 	const oldValue = localStorage.getItem(key);
-	localStorage.removeItem(key);
+	const newValue = crypto.randomUUID();
+	localStorage.removeItem(recordKey(userId));
+	localStorage.setItem(key, newValue);
 	beforeThisTabHears();
-	window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue: null }));
+	window.dispatchEvent(
+		new StorageEvent('storage', {
+			key,
+			oldValue,
+			newValue,
+			storageArea: localStorage
+		})
+	);
+}
+
+// jsdom has no media engine. Replace only its unimplemented platform methods;
+// drive the real player's public load/pause API and the element's event boundary.
+function loadBoundaryTake(): HTMLAudioElement {
+	vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+	vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+	const song = makeSong();
+	audioPlayer.load(
+		{
+			generation: makeGeneration({ song_id: song.id }),
+			songId: song.id,
+			songTitle: song.title,
+			artist: song.artist,
+			albumTitle: song.album_title,
+			lyrics: null
+		},
+		{ autoplay: false }
+	);
+	audioPlayer.pause();
+	flushSync();
+	const element = audioPlayer.getElement();
+	if (!element) throw new Error('Public load did not create an audio element');
+	return element;
+}
+
+function advanceBoundaryTake(element: HTMLAudioElement): void {
+	element.currentTime = 9;
+	element.dispatchEvent(new Event('timeupdate'));
+	flushSync();
+	audioPlayer.pause();
+	flushSync();
+	setPageVisibility('hidden');
 }
 
 function savedPoint(userId = LISTENER.id): { generationId: string; position: number } | null {
@@ -72,6 +118,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	audioPlayer.destroy();
 	vi.restoreAllMocks();
 	currentUser.set(null);
 	audioPlayer.current = null;
@@ -186,7 +233,7 @@ describe('playback resume record', () => {
 		expect(storedRecord(LISTENER.id)).toBeNull();
 	});
 
-	it('saves again once the user signs in anew after a logout in another tab', () => {
+	it('1354_52_C3: saves again once the user signs in anew after a logout in another tab', () => {
 		playTake('g-signed-in-again');
 		logOutInAnotherTab(LISTENER.id);
 
@@ -195,6 +242,88 @@ describe('playback resume record', () => {
 
 		expect(savedPoint()).toEqual({ generationId: 'g-signed-in-again', position: 9 });
 	});
+
+	it.each([
+		{ record: 'present', origin: 'originating' },
+		{ record: 'absent', origin: 'originating' },
+		{ record: 'present', origin: 'receiving' },
+		{ record: 'absent', origin: 'receiving' }
+	])(
+		'1354_52_C2: $origin tab suppresses saves with current record $record',
+		({ record, origin }) => {
+			const element = loadBoundaryTake();
+			expect(savedPoint()).not.toBeNull();
+			if (record === 'absent') localStorage.removeItem(recordKey(LISTENER.id));
+			const key = `playbackLogout:${LISTENER.id}`;
+			localStorage.setItem(key, 'previous-logout');
+
+			if (origin === 'originating') forgetPlaybackResume(LISTENER.id);
+			else logOutInAnotherTab(LISTENER.id);
+			const marker = localStorage.getItem(key);
+			expect(marker).not.toBeNull();
+			expect(marker).not.toBe('previous-logout');
+			advanceBoundaryTake(element);
+			expect(savedPoint()).toBeNull();
+			expect(localStorage.getItem(key)).toBe(marker);
+			if (origin === 'originating') {
+				forgetPlaybackResume(LISTENER.id);
+				expect(localStorage.getItem(key)).not.toBe(marker);
+			}
+		}
+	);
+
+	it.each([
+		{
+			boundary: 'foreign viewer',
+			key: `playbackLogout:${OTHER_LISTENER.id}`,
+			oldValue: null,
+			newValue: 'logout',
+			session: false
+		},
+		{
+			boundary: 'current-record retirement',
+			key: recordKey(LISTENER.id),
+			oldValue: 'record',
+			newValue: null,
+			session: false
+		},
+		{
+			boundary: 'removed marker',
+			key: `playbackLogout:${LISTENER.id}`,
+			oldValue: 'logout',
+			newValue: null,
+			session: false
+		},
+		{
+			boundary: 'unchanged marker',
+			key: `playbackLogout:${LISTENER.id}`,
+			oldValue: 'logout',
+			newValue: 'logout',
+			session: false
+		},
+		{
+			boundary: 'session storage',
+			key: `playbackLogout:${LISTENER.id}`,
+			oldValue: null,
+			newValue: 'logout',
+			session: true
+		}
+	])(
+		'1354_52_C3: $boundary does not suppress this viewer',
+		({ key, oldValue, newValue, session }) => {
+			const element = loadBoundaryTake();
+			window.dispatchEvent(
+				new StorageEvent('storage', {
+					key,
+					oldValue,
+					newValue,
+					storageArea: session ? sessionStorage : localStorage
+				})
+			);
+			advanceBoundaryTake(element);
+			expect(savedPoint()?.position).toBe(9);
+		}
+	);
 
 	it('saves nothing without a signed-in user', () => {
 		currentUser.set(null);
