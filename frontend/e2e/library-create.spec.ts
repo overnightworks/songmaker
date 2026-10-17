@@ -242,10 +242,13 @@ test.describe('1354_rule_14 the Library and Playlists heads', () => {
 
 				await openNewCardFromMenu(page, LIBRARY_NEW_ALBUM_LABEL);
 
-				await expect(
-					workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL })
-				).toBeVisible();
+				const card = workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL });
+				await expect(card).toBeVisible();
+				const head = workspace(page).getByRole('heading', { level: 1 });
+				const [headBox, cardBox] = await boundingBoxes(head, card);
+				expect(cardBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height);
 				await page.keyboard.press('Escape');
+				await expect(card).toBeHidden();
 			}
 		}
 	);

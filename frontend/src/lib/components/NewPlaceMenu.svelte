@@ -85,6 +85,10 @@
 		min-width: 0;
 	}
 
+	.new-place-slot :global(.new-place) {
+		margin-bottom: 0;
+	}
+
 	.new-face {
 		display: inline-flex;
 		align-items: center;

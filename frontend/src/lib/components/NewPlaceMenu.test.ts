@@ -191,10 +191,9 @@ describe('1354_rule_14 915_C1 NewPlaceMenu', () => {
 			await fillAndCreate(card, kind.name);
 			await vi.waitFor(() => expect(get(openCollection)).toEqual(kind.opened));
 
-			expect(fetchStub).toHaveBeenCalledWith(
-				kind.endpoint,
-				expect.objectContaining({ method: 'POST' })
-			);
+			const request = fetchStub.mock.calls.find(([path]) => path === kind.endpoint)?.[1];
+			expect(request.method).toBe('POST');
+			expect(JSON.parse(request.body)).toMatchObject({ title: kind.name });
 			expect(newCard(root, kind)).toBeNull();
 		}
 	);
@@ -223,7 +222,7 @@ describe('1354_rule_14 915_C1 NewPlaceMenu', () => {
 });
 
 describeBackClosesOverlay({
-	name: 'the New in Library menu',
+	name: '1354_rule_14 the New in Library menu',
 	render,
 	open: async (target) => {
 		await openNewMenu(target);
@@ -236,7 +235,7 @@ describeBackClosesOverlay({
 
 for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 	describeBackClosesOverlay({
-		name: `the ${kind.card} card`,
+		name: `1354_rule_14 the ${kind.card} card`,
 		render,
 		open: async (target) => {
 			await chooseNew(target, kind);

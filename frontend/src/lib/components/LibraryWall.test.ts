@@ -443,7 +443,7 @@ describe('the Playlists page wall', () => {
 		]);
 	}
 
-	it('shows only playlists, A–Z, under one head line reading Playlists · 2 with the sort switch and + New', async () => {
+	it('915_C1: shows only playlists, A–Z, under one head line reading Playlists · 2 with the sort switch and + New', async () => {
 		seedPlaylists();
 
 		const root = await render('playlists');
