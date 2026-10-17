@@ -211,10 +211,20 @@ holds these comparators and the Last played ranking; the wall and the rail's
 albums and playlists (desktop rail and phone drawer) all ask it, so the switch
 reorders both at once. Each tile's second line follows the order: the size
 under A–Z, the last listen under Last played (the size for a place never
-listened in). The
-wall sorts the complete set from the same route-independent loader the rail
-uses (`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset,
-which history navigation (Back and Forward, an address, returning to the
+listened in). Back or ‹ from an album's or a playlist's page lands the wall at
+the scroll its entry kept, and on the phone the row of the place just left
+lights up once (#1354 rule 12): `setLibrarySurface` remembers the place when the
+wall replaces its page, `takePlaceReturnedFrom` hands it to the one showing of
+the wall, and the first `LibraryRow` to show that place tints it for a moment (a
+still tint under `prefers-reduced-motion`) and reports it lit, which spends the
+light for that showing, so a remount of the row never repeats it. The light
+also follows the rail's Library link, and Back from a song page lights that
+song's album. The desktop tiles land the same way without the light. The wall
+moves `scrollTop` only when it is not already at the anchor, so the anchor its
+own scroll reports never cuts into a momentum scroll. The wall sorts the
+complete set from the same route-independent loader the rail uses
+(`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset, which
+history navigation (Back and Forward, an address, returning to the
 wall) and a live stream reconnect run, reads only the first album page; once
 a surface asked for every album, that page refreshes the albums it holds and
 the rest stay (`resetAlbumList`), so neither surface shrinks to one page and

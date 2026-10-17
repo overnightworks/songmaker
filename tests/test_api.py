@@ -3257,13 +3257,17 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A job stuck at "running" must not be polled forever -- the stream's
+    """defect:fix/stream-deadline-test-timing -- the deadline may elapse before the
+    first poll returns, so the stream owes no frame; it owes an end.
+
+    A job stuck at "running" must not be polled forever -- the stream's
     own lifetime deadline closes it, letting the frontend's already-handled
     EventSource reconnect (jobs.ts) pick it back up."""
     import asyncio
+    import json
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, get_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "JOB_STREAM_CONNECTION_SECONDS", 0.05)
@@ -3276,15 +3280,17 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
         session.commit()
         job_id = job.id
 
-    async def _drain_until_closed() -> int:
-        frame_count = 0
-        async for _frame in _job_event_generator(ctx, job_id):
-            frame_count += 1
-        return frame_count
+    async def _drain_until_closed() -> list[dict]:
+        return [
+            json.loads(frame.removeprefix("data: "))
+            async for frame in _job_event_generator(ctx, job_id)
+        ]
 
-    frame_count = asyncio.run(asyncio.wait_for(_drain_until_closed(), timeout=5))
+    frames = asyncio.run(asyncio.wait_for(_drain_until_closed(), timeout=5))
 
-    assert frame_count >= 1
+    assert {frame["status"] for frame in frames} <= {"running"}
+    with ctx.db() as session:
+        assert get_job(session, job_id).status == "running"
 
 
 def test_stream_job_lease_is_acquired_and_released_around_the_stream(

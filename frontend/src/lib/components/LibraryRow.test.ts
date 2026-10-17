@@ -1,10 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import LibraryRow from './LibraryRow.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
 afterEach(async () => {
+	vi.useRealTimers();
 	if (mounted) await unmount(mounted);
 	document.body.replaceChildren();
 	audioPlayer.status = 'idle';
@@ -82,3 +83,34 @@ it('1354_rule_11: a row without a playable action has only its open button', asy
 	expect(document.body).toHaveTextContent('0 songs');
 	expect(document.querySelector('.row-play-spacer')).toHaveAttribute('aria-hidden', 'true');
 });
+
+it.each([
+	{ asked: true, litFirst: true, reports: 1 },
+	{ asked: false, litFirst: false, reports: 0 }
+])(
+	'1354_rule_12: a row asked to light up ($asked) is lit at first, reports it and settles for good',
+	async ({ asked, litFirst, reports }) => {
+		vi.useFakeTimers();
+		let reported = 0;
+		mounted = mount(LibraryRow, {
+			target: document.body,
+			props: {
+				title: 'Album',
+				subtitle: '3 songs',
+				coverAlt: 'Cover',
+				openLabel: 'Open album Album',
+				onopen: () => undefined,
+				lightUp: asked,
+				onlit: () => reported++
+			}
+		});
+		await tick();
+		const row = document.querySelector('.library-row');
+		expect(row?.classList.contains('lit')).toBe(litFirst);
+		expect(reported).toBe(reports);
+
+		await vi.advanceTimersByTimeAsync(10_000);
+
+		expect(row?.classList.contains('lit')).toBe(false);
+	}
+);

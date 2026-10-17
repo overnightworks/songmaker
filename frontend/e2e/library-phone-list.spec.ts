@@ -3,13 +3,16 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	expectLibraryWallLoaded,
 	FlowGuard,
 	LIBRARY_PATH,
 	LIBRARY_URL,
 	observePlayingAudio,
 	ONLY_IN_SHELL,
 	playingAudioState,
+	scrollWallHalfway,
 	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
+	wallBody,
 	workspace
 } from './helpers';
 import {
@@ -318,5 +321,188 @@ test(
 			.toBeGreaterThan(paused.time + 0.2);
 		expect(new URL((await playingAudioState(page)).src).pathname).toBe(secondTrack.audioPath);
 		await expect(page).toHaveURL(LIBRARY_URL);
+	}
+);
+
+const LIGHT_UPS_KEY = '__rowLightUps';
+const LIGHT_UP_ANIMATION_SUFFIX = 'light-up';
+const SCROLL_LANDING_TOLERANCE_PX = 1;
+
+interface LightUps {
+	marked: string[];
+	animated: string[];
+}
+
+// Records every moment a phone row is marked as the place just returned from,
+// and every animation that marking starts, for the page's whole document.
+async function watchLightUps(page: Page): Promise<void> {
+	await page.evaluate(
+		({ key, animation }) => {
+			const seen: LightUps = { marked: [], animated: [] };
+			Reflect.set(window, key, seen);
+			const titleOf = (element: Element) => element.querySelector('.tile-title')?.textContent ?? '';
+			const isLit = (element: Element) =>
+				element.classList.contains('library-row') && element.classList.contains('lit');
+			new MutationObserver((records) => {
+				for (const record of records) {
+					const target = record.target as Element;
+					const wasLit = (record.oldValue ?? '').split(' ').includes('lit');
+					if (isLit(target) && !wasLit) seen.marked.push(titleOf(target));
+				}
+			}).observe(document.body, {
+				subtree: true,
+				attributes: true,
+				attributeOldValue: true,
+				attributeFilter: ['class']
+			});
+			document.addEventListener(
+				'animationstart',
+				(event) => {
+					if (event.animationName.endsWith(animation))
+						seen.animated.push(titleOf(event.target as Element));
+				},
+				true
+			);
+		},
+		{ key: LIGHT_UPS_KEY, animation: LIGHT_UP_ANIMATION_SUFFIX }
+	);
+}
+
+function lightUps(page: Page): Promise<LightUps> {
+	return page.evaluate((key) => Reflect.get(window, key) as LightUps, LIGHT_UPS_KEY);
+}
+
+async function expectLandedAt(page: Page, scrollTop: number): Promise<void> {
+	const landed = await wallBody(page).evaluate((body) => body.scrollTop);
+	expect(Math.abs(landed - scrollTop)).toBeLessThanOrEqual(SCROLL_LANDING_TOLERANCE_PX);
+}
+
+// The phone turned to landscape swaps the rows for tiles, and turned back
+// swaps them again: the row that lit once is a new row by then.
+async function turnPhoneToLandscapeAndBack(page: Page): Promise<void> {
+	const portrait = page.viewportSize();
+	if (!portrait) throw new Error('Expected a viewport to turn');
+	await page.setViewportSize({ width: portrait.height, height: portrait.width });
+	await expect(workspace(page).locator('.library-row')).toHaveCount(0);
+	await page.setViewportSize(portrait);
+	await expect(workspace(page).locator('.library-row')).toHaveCount(fixture.albums.length);
+	await expectRows(page);
+}
+
+const RETURN_CELLS = [
+	{ name: 'bottom album, ‹', where: 'bottom', via: 'chevron', reducedMotion: false, turns: false },
+	{
+		name: 'bottom album, the phone Back',
+		where: 'bottom',
+		via: 'back',
+		reducedMotion: false,
+		turns: false
+	},
+	{ name: 'middle album, ‹', where: 'middle', via: 'chevron', reducedMotion: false, turns: false },
+	{
+		name: 'bottom album, ‹, reduced motion',
+		where: 'bottom',
+		via: 'chevron',
+		reducedMotion: true,
+		turns: false
+	},
+	{
+		name: 'bottom album, ‹, the phone turned to landscape and back',
+		where: 'bottom',
+		via: 'chevron',
+		reducedMotion: false,
+		turns: true
+	}
+] as const;
+
+for (const cell of RETURN_CELLS) {
+	test(
+		`1354_rule_12: S4 ${cell.name} lands the list exactly and the album lights up once`,
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const album = fixture.albums[cell.where === 'bottom' ? 42 : 21];
+			if (cell.reducedMotion) await page.emulateMedia({ reducedMotion: 'reduce' });
+			await page.goto(LIBRARY_PATH);
+			await expectLibraryWallLoaded(page);
+			await expectRows(page);
+			if (cell.where === 'middle') await scrollWallHalfway(page);
+			else await row(page, album.title).scrollIntoViewIfNeeded();
+			const wall = await wallBody(page).evaluate((body) => ({
+				before: body.scrollTop,
+				end: body.scrollHeight - body.clientHeight
+			}));
+			if (cell.where === 'bottom') expect(wall.end - wall.before).toBeLessThanOrEqual(1);
+			else expect(wall.before).toBeGreaterThan(0);
+			await watchLightUps(page);
+			await row(page, album.title)
+				.getByRole('button', { name: `Open album ${album.title}`, exact: true })
+				.click();
+			await expect(
+				workspace(page).getByRole('heading', { name: album.title, exact: true })
+			).toBeVisible();
+
+			if (cell.via === 'back') await page.goBack();
+			else await page.getByRole('button', { name: 'Back to Library', exact: true }).click();
+
+			await expect(page).toHaveURL(LIBRARY_URL);
+			const lit = workspace(page).locator('.library-row.lit');
+			await expect(lit).toHaveCount(1);
+			await expect(lit).toContainText(album.title);
+			const motion = await lit.evaluate((element) => {
+				const style = getComputedStyle(element);
+				return { animation: style.animationName, background: style.backgroundColor };
+			});
+			if (cell.reducedMotion) {
+				expect(motion.animation).toBe('none');
+				expect(motion.background).not.toBe('rgba(0, 0, 0, 0)');
+			} else {
+				expect(motion.animation).toContain(LIGHT_UP_ANIMATION_SUFFIX);
+			}
+			await screenshot(page, cell.name);
+			await expectLandedAt(page, wall.before);
+
+			await expect(lit).toHaveCount(0);
+			await expectLandedAt(page, wall.before);
+			if (cell.turns) {
+				await turnPhoneToLandscapeAndBack(page);
+				await expect(lit).toHaveCount(0);
+			}
+			await wallBody(page).evaluate((body) => (body.scrollTop -= 200));
+			await page.getByRole('button', { name: 'Last played', exact: true }).click();
+			await page.getByRole('button', { name: 'A–Z', exact: true }).click();
+			await expectRows(page);
+			const seen = await lightUps(page);
+			expect(seen.marked).toEqual([album.title]);
+			expect(seen.animated).toEqual(cell.reducedMotion ? [] : [album.title]);
+		}
+	);
+}
+
+test(
+	'1354_rule_12: D1 desktop returns to its tiles where they were left, with no row lit',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const album = fixture.albums[21];
+		await page.goto(LIBRARY_PATH);
+		await expectLibraryWallLoaded(page);
+		await expect(workspace(page).locator('.wall-tile')).toHaveCount(43);
+		await row(page, album.title).scrollIntoViewIfNeeded();
+		const before = await wallBody(page).evaluate((body) => body.scrollTop);
+		expect(before).toBeGreaterThan(0);
+		await watchLightUps(page);
+		await row(page, album.title)
+			.getByRole('button', { name: `Open album ${album.title}`, exact: true })
+			.click();
+		await expect(
+			workspace(page).getByRole('heading', { name: album.title, exact: true })
+		).toBeVisible();
+
+		await page.goBack();
+
+		await expect(page).toHaveURL(LIBRARY_URL);
+		await expect(row(page, album.title)).toBeVisible();
+		await expectLandedAt(page, before);
+		await expect(workspace(page).locator('.library-row, .lit')).toHaveCount(0);
+		expect((await lightUps(page)).marked).toEqual([]);
 	}
 );

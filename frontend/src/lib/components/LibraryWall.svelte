@@ -18,8 +18,12 @@
 		playlistLoad,
 		loadPlaylists
 	} from '$lib/stores/playlists';
-	import { openCollection } from '$lib/stores/collection';
-	import { captureLibraryScroll, libraryScrollAnchor } from '$lib/stores/libraryContext';
+	import { openCollection, type OpenCollection } from '$lib/stores/collection';
+	import {
+		captureLibraryScroll,
+		libraryScrollAnchor,
+		takePlaceReturnedFrom
+	} from '$lib/stores/libraryContext';
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
@@ -60,6 +64,8 @@
 	import MenuPopover from './MenuPopover.svelte';
 	import NewAlbumCard from './NewAlbumCard.svelte';
 	import NewPlaylistCard from './NewPlaylistCard.svelte';
+
+	const SCROLL_RESTORE_TOLERANCE_PX = 1;
 
 	type NewPlaceKind = 'album' | 'playlist';
 	// The Library wall of albums alone, or the Playlists page's wall of
@@ -102,6 +108,14 @@
 	const restoredScroll = $derived($libraryScrollAnchor);
 
 	let labelledAt = $state(new Date());
+
+	// The light is one event of this showing of the wall: the row that lights
+	// spends it, so a remount of that row (the width crossing the phone
+	// boundary, the list refilling) does not light it again.
+	let placeToLight = $state.raw<OpenCollection | null>(takePlaceReturnedFrom());
+	function spendLight(): void {
+		placeToLight = null;
+	}
 
 	let narrow = $state(false);
 	$effect(() => {
@@ -165,9 +179,13 @@
 		labelledAt = new Date();
 	});
 
+	// The wall's own scroll reports come back through the anchor; writing one
+	// back would cut into a momentum scroll, so only a different anchor moves it.
 	$effect(() => {
 		void wallItems.length;
-		if (browseEl) browseEl.scrollTop = restoredScroll;
+		if (!browseEl) return;
+		if (Math.abs(browseEl.scrollTop - restoredScroll) >= SCROLL_RESTORE_TOLERANCE_PX)
+			browseEl.scrollTop = restoredScroll;
 	});
 
 	function sizeLabel(item: AlbumItem | PlaylistItem): string {
@@ -314,6 +332,8 @@
 							{...content}
 							{selected}
 							subtitle={sizeLabel(item)}
+							lightUp={placeToLight?.kind === placeType && placeToLight.id === item.id}
+							onlit={spendLight}
 							openLabel={`Open ${placeType} ${item.title}`}
 							{onopen}
 							onplay={rowPlay(item)}
