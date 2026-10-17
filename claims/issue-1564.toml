@@ -1,8 +1,0 @@
-claim_id = "46d21262284f405f83d526f43642d0bf"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "14d628eb56c05ba5cc204d52bf796d46f601701b"
-branch = "claude/issue-1564-bar-album-link"
-scope = ["frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/TransportBarFrame.test.ts"]
-opened_commit = "633fef3189500c4d175389119d24ce6014c6cc3b"
-whole_reason = "the desktop bar's album link lives in the app bar and, only if its layout needs it, the shared frame; both carry their tests"
