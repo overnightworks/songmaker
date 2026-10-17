@@ -712,8 +712,8 @@ and no `import()` or `import.meta`; `eslint.config.js` enforces it (#925 G2).
 
 Only `lib/api/fetch.ts` calls global `fetch`; other modules reach the server
 through a `lib/api` function. The named exceptions are
-`lib/services/audioPlayer.svelte.ts` and `lib/services/continuousDeck.ts` for
-media reads, `lib/services/playbackDiagnostics.ts` for its keepalive diagnostics
+`lib/services/audioPlayer.svelte.ts` for media reads (it hands the deck its fetch
+function), `lib/services/playbackDiagnostics.ts` for its keepalive diagnostics
 beacon, and `service-worker.ts` for its cache. Tests may stub the network
 boundary. `eslint.config.js` enforces this, including `window.fetch`,
 `globalThis.fetch` and `self.fetch` (#925 G3).

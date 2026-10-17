@@ -705,8 +705,8 @@ describe('fetchMediaBytes', () => {
 		expect(new Uint8Array(await fetchMediaBytes('/audio/a'))).toEqual(bytes);
 	});
 
-	it.each([401, 429, 503])(
-		'925_M2_M2: a %i refuses media without app reactions',
+	it.each([401, 404, 429])(
+		'925_M2_M1: a %i refuses media without app reactions',
 		async (status) => {
 			const told: string[] = [];
 			onTestFinished(
