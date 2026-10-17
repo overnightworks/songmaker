@@ -1,8 +1,0 @@
-claim_id = "c7f4e33d21da40689b0a4ff64b5afeed"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "79e2c6ef5d158fd95d45eebc5b42f56ce46afe88"
-branch = "claude/issue-1555-e2e-api-budget"
-scope = [".github/workflows/e2e.yml", "docker/docker-compose.ci.yml", "frontend/e2e/README.md", "frontend/e2e/library.spec.ts", "scripts/e2e_rate_window.py", "tests/test_e2e_rate_window.py"]
-opened_commit = "f5c8fc2f136c54eb698a4bf93ed6c4f698ff1220"
-whole_reason = "E2E stack budget, its CI measurement step, its doc and the rail test move together: the budget is sized from the step's number"
