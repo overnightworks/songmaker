@@ -61,7 +61,7 @@ import {
 	ADMIN_TABS_LABEL,
 	HITBOX_FREQUENT_PX,
 	RAIL_DRAWER_OPEN_LABEL,
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	SESSION_LOST_REDIRECT_PARAM,
 	TRANSPORT_PAUSE_LABEL,
@@ -535,7 +535,7 @@ function albumMarkerOf(albumAddress: string): string {
 /** The account's own album in the rail's LIBRARY group, opened to show it. */
 async function albumInRail(page: Page, shell: Shell, albumAddress: string): Promise<Locator> {
 	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
 	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 	return rail
 		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })

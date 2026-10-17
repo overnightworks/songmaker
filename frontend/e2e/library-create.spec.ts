@@ -41,8 +41,8 @@ import {
 	newSongCardLabel,
 	PLAYLISTS_WALL_EMPTY,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-	RAIL_LIBRARY_LABEL,
-	RAIL_PLAYLISTS_LABEL,
+	LIBRARY_PAGE_LABEL,
+	PLAYLISTS_PAGE_LABEL,
 	RATE_LIMITED_TOAST_MESSAGE
 } from '../src/lib/constants';
 import {
@@ -223,7 +223,7 @@ test('1354_rule_9 an empty account reads one line on the Library and one on Play
 
 		await expect(workspace(page).locator('.wall-body .empty')).toHaveText(emptyLine);
 		const rail = await openRailNav(page, shellOf(testInfo));
-		for (const group of [RAIL_LIBRARY_LABEL, RAIL_PLAYLISTS_LABEL])
+		for (const group of [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL])
 			await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
 	}
 

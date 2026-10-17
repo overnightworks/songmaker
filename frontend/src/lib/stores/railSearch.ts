@@ -7,7 +7,7 @@ import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import {
 	LIBRARY_SEARCH_DEBOUNCE_MS,
 	PLAYLISTS_PAGE_LABEL,
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
 import { LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
@@ -87,7 +87,7 @@ const SETTINGS_PAGE_GLYPH = '⚙';
 // The library's own pages, before the Settings sections: the Library, and the
 // Playlists page (#1402), whose hit is also what names a playlist's ‹.
 const LIBRARY_PAGES: readonly RailSearchPage[] = [
-	{ label: RAIL_LIBRARY_LABEL, href: LIBRARY_ROUTE_PATH, section: null, glyph: LIBRARY_PAGE_GLYPH },
+	{ label: LIBRARY_PAGE_LABEL, href: LIBRARY_ROUTE_PATH, section: null, glyph: LIBRARY_PAGE_GLYPH },
 	{
 		label: PLAYLISTS_PAGE_LABEL,
 		href: PLAYLISTS_ROUTE_PATH,

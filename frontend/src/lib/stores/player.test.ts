@@ -175,7 +175,7 @@ import {
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
-import { PLAYLIST_LOADING_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
+import { PLAYLIST_LOADING_LABEL, LIBRARY_PAGE_LABEL } from '$lib/constants';
 
 const genDefaults = {
 	mp3_path: 'a1/song_v1.mp3',
@@ -3555,7 +3555,7 @@ describe('idlePlayTarget', () => {
 			'none: falls back to the named library target',
 			null,
 			loaded,
-			{ type: 'library', label: RAIL_LIBRARY_LABEL }
+			{ type: 'library', label: LIBRARY_PAGE_LABEL }
 		],
 		[
 			'album: names the open album',
@@ -3592,7 +3592,7 @@ describe('idlePlayTarget', () => {
 			'playlist: falls back to the library target when the detail failed to load',
 			{ kind: 'playlist' as const, id: 'p1' },
 			{ playlist: null, listedPlaylist, playlistLoading: false },
-			{ type: 'library', label: RAIL_LIBRARY_LABEL }
+			{ type: 'library', label: LIBRARY_PAGE_LABEL }
 		]
 	])('%s', (_name, collection, playlistState, expected) => {
 		const target = idlePlayTarget({ collection, albums, ...playlistState });

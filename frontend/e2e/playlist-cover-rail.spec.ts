@@ -9,11 +9,10 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_NAV_LABEL,
-	RAIL_PLAYLISTS_LABEL,
-	RAIL_PLAYLISTS_NAV_LABEL,
-	RAIL_SEARCH_CLEAR_LABEL
+	PLAYLISTS_PAGE_LABEL,
+	RAIL_PLAYLISTS_NAV_LABEL
 } from '../src/lib/constants';
-import { openPlaylistsPage } from './helpers';
+import { openPlaylistsPage, openRailNav } from './helpers';
 import { BASE_URL } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -37,16 +36,6 @@ async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
 	const response = await page.request.post(url, { headers: await csrfHeaders(page), data });
 	expect(response.ok(), `POST ${url} failed: ${await response.text()}`).toBeTruthy();
 	return (await response.json()) as T;
-}
-
-// Reaching the Playlists page through search leaves its query in the rail's
-// field, and the rail's groups hidden behind it.
-async function showRailGroupsAfterPageSearch(page: Page, isMobile: boolean): Promise<void> {
-	if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-	await page
-		.getByRole('navigation', { name: RAIL_NAV_LABEL })
-		.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL })
-		.click();
 }
 
 async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void> {
@@ -138,7 +127,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
 					.getByRole('navigation', { name: RAIL_NAV_LABEL })
 			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-		const playlistsGroup = rail.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true });
+		const playlistsGroup = rail.getByRole('button', { name: PLAYLISTS_PAGE_LABEL, exact: true });
 		const collapsedMosaicRow = rail
 			.locator('#rail-playlists-group li')
 			.filter({ hasText: playlistTitle });
@@ -186,14 +175,14 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			'src',
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
 		);
-		await showRailGroupsAfterPageSearch(page, isMobile);
+		await openRailNav(page, isMobile ? 'mobile' : 'desktop');
 		const refreshedRail = isMobile
 			? page
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
 					.getByRole('navigation', { name: RAIL_NAV_LABEL })
 			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 		const refreshedPlaylistsGroup = refreshedRail.getByRole('button', {
-			name: RAIL_PLAYLISTS_LABEL,
+			name: PLAYLISTS_PAGE_LABEL,
 			exact: true
 		});
 		if ((await refreshedPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
@@ -229,14 +218,14 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 
 		await openPlaylistsPage(page, isMobile ? 'mobile' : 'desktop');
 		await expect(wallPlaylistTile.locator('.playlist-cover-cell')).toHaveCount(4);
-		await showRailGroupsAfterPageSearch(page, isMobile);
+		await openRailNav(page, isMobile ? 'mobile' : 'desktop');
 		const restoredRail = isMobile
 			? page
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
 					.getByRole('navigation', { name: RAIL_NAV_LABEL })
 			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 		const restoredPlaylistsGroup = restoredRail.getByRole('button', {
-			name: RAIL_PLAYLISTS_LABEL,
+			name: PLAYLISTS_PAGE_LABEL,
 			exact: true
 		});
 		if ((await restoredPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
