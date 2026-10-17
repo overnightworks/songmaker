@@ -39,6 +39,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.dependencies import AuthenticatedUser  # noqa: E402
+from worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
 from acestep_engine.errors import AudioDownloadError  # noqa: E402
 from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -11,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import fakeredis.aioredis
 import httpx
 import pytest
+from worker_http_peer import TransportFailure, WorkerReply, WorkerScenario
 
-from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
@@ -23,13 +24,11 @@ from songmaker_cli.acestep_state import (
 )
 from songmaker_cli.constants import (
     ACESTEP_SSE_CONNECT_TIMEOUT_SECONDS,
-    ACESTEP_SSE_READ_TIMEOUT_SECONDS,
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.scheduler import (
     WORKER_STREAM_WENT_SILENT,
     AllWorkersHeld,
@@ -491,79 +490,55 @@ def test_consume_task_stream_empty_error_is_a_protocol_error_for_both_task_kinds
     assert any("empty 'error'" in r.message for r in caplog.records)
 
 
-def test_consume_task_stream_reconnects_on_transport_drop() -> None:
-    worker = _make_picked()
+def test_consume_task_stream_reconnects_on_transport_drop(generation_worker_peer) -> None:
+    """S5-D, L9: A dropped connection reconnects to the same real completed task."""
+    async def exercise() -> None:
+        scenario = WorkerScenario(stream_answers=(TransportFailure(httpx.ConnectError, "refused"),))
+        async with generation_worker_peer(scenario) as peer:
+            result = await dispatch_generation_on_worker(
+                worker=_make_picked(loaded=[]), ace_config=_make_ace_config(), target_mode="sft",
+                options=DispatchOptions(
+                    transport=peer.transport, max_sse_reconnects=2,
+                    initial_reconnect_backoff_seconds=0.0, max_reconnect_backoff_seconds=0.0,
+                ),
+            )
+            assert Path(result.audio_path).is_file()
+            assert [kind for kind, _ in peer.requests] == ["load", "submit", "stream", "stream"]
 
-    bad_client = _make_stream_client(httpx.ConnectError("refused"))
+    _run(exercise())
 
-    good_events = [
-        (
-            "done",
-            {
-                "task_id": "g",
-                "result": {
-                    "mode": "sft",
-                    "audio_path": "/x.wav",
-                    "seed": 1,
-                },
-            },
+
+def test_consume_task_stream_gives_up_after_max_reconnects(generation_worker_peer) -> None:
+    """S5-A/D, L10: The transport boundary exhausts exactly the existing retry budget."""
+    async def exercise() -> None:
+        scenario = WorkerScenario(
+            stream_answers=(TransportFailure(httpx.ConnectError, "refused"),) * 3,
         )
-    ]
-    good_client = _make_stream_client(good_events)
+        async with generation_worker_peer(scenario) as peer:
+            with pytest.raises(httpx.ConnectError, match="refused"):
+                await consume_task_stream(_make_picked(), "gen-1", options=DispatchOptions(
+                    transport=peer.transport, max_sse_reconnects=2,
+                    initial_reconnect_backoff_seconds=0.0, max_reconnect_backoff_seconds=0.0,
+                ))
+            assert [kind for kind, _ in peer.requests] == ["stream"] * 3
 
-    clients = iter([bad_client, good_client])
-
-    def _factory(*args, **kwargs):
-        return next(clients)
-
-    options = DispatchOptions(
-        max_sse_reconnects=2,
-        initial_reconnect_backoff_seconds=0.0,
-        max_reconnect_backoff_seconds=0.0,
-    )
-    with patch("songmaker_cli.scheduler.httpx.AsyncClient", side_effect=_factory):
-        result = _run(consume_task_stream(worker, "gen-1", options=options))
-    assert result.seed == 1
+    _run(exercise())
 
 
-def test_consume_task_stream_gives_up_after_max_reconnects() -> None:
-    worker = _make_picked()
+def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_worker_peer) -> None:
+    """S5-A/D, L10: A read timeout is a stream failure without a reconnect."""
+    async def exercise() -> None:
+        scenario = WorkerScenario(
+            stream_answers=(TransportFailure(httpx.ReadTimeout, "stream went silent"),),
+        )
+        async with generation_worker_peer(scenario) as peer:
+            with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
+                await consume_task_stream(_make_picked(), "gen-1", options=DispatchOptions(
+                    transport=peer.transport,
+                ))
+            assert [kind for kind, _ in peer.requests] == ["stream"]
 
-    def _factory(*args, **kwargs):
-        return _make_stream_client(httpx.ConnectError("refused"))
-
-    options = DispatchOptions(
-        max_sse_reconnects=2,
-        initial_reconnect_backoff_seconds=0.0,
-        max_reconnect_backoff_seconds=0.0,
-    )
-    with patch("songmaker_cli.scheduler.httpx.AsyncClient", side_effect=_factory):
-        operation = consume_task_stream(worker, "gen-1", options=options)
-        with pytest.raises(httpx.ConnectError):
-            _run(operation)
-
-
-def test_consume_task_stream_fails_when_worker_stream_goes_silent() -> None:
-    worker = _make_picked()
-    client = _make_stream_client(httpx.ReadTimeout("stream went silent"))
-
-    with patch(
-        "songmaker_cli.scheduler.httpx.AsyncClient",
-        return_value=client,
-    ) as async_client:
-        operation = consume_task_stream(worker, "gen-1")
-        with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
-            _run(operation)
-
-    timeout = async_client.call_args.kwargs["timeout"]
-    assert timeout.read == ACESTEP_SSE_READ_TIMEOUT_SECONDS
-    assert async_client.call_count == 1
-    assert client.stream.call_count == 1
-    client.__aexit__.assert_awaited_once()
-    client.stream.return_value.__aexit__.assert_awaited_once()
-
-
-# ── dispatch_generation ────────────────────────────────────────────
+    _run(exercise())
 
 
 def _make_ace_config():
@@ -811,98 +786,116 @@ def test_ensure_loaded_posts_when_missing() -> None:
     assert kwargs["json"] == {"mode": "sft"}
 
 
-def _worker_with_room_for_one_mode() -> tuple[httpx.MockTransport, list[str]]:
-    loaded: list[str] = []
-    real_loads: list[str] = []
-    finished_take = {"mode": "sft", "audio_path": "/tmp/take.wav", "seed": 1}
-
-    def handle(request: httpx.Request) -> httpx.Response:
-        if INTERNAL_TOKEN_HEADER not in request.headers:
-            return httpx.Response(401, json={"detail": "Invalid internal token"})
-        mode = json.loads(request.content)["mode"] if request.method == "POST" else None
-        if request.url.path == "/load_model":
-            evicted = [held for held in loaded if held != mode]
-            if mode not in loaded:
-                loaded[:] = [mode]
-                real_loads.append(mode)
-            return httpx.Response(200, json={"loaded": loaded, "evicted": evicted})
-        if request.url.path == "/generate":
-            if mode not in loaded:
-                detail = MODE_NOT_LOADED_DETAIL.format(mode=mode)
-                return httpx.Response(409, json={"detail": detail})
-            return httpx.Response(200, json={"task_id": "t1"})
-        stream = _build_sse_response(
-            ("progress", {"progress": 0.5, "phase": AceStepPhase.RENDERING}),
-            ("done", {"result": finished_take}),
-        )
-        return httpx.Response(200, content=stream, headers={"content-type": "text/event-stream"})
-
-    return httpx.MockTransport(handle), real_loads
-
-
-def _route_worker_requests_to(monkeypatch, transport: httpx.MockTransport) -> None:
-    real_client = httpx.AsyncClient
-    monkeypatch.setattr(
-        "songmaker_cli.scheduler.httpx.AsyncClient",
-        lambda *args, **kwargs: real_client(*args, transport=transport, **kwargs),
-    )
-
-
-def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(monkeypatch) -> None:
-    transport, real_loads = _worker_with_room_for_one_mode()
-    _route_worker_requests_to(monkeypatch, transport)
+def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
+    generation_worker_peer,
+) -> None:
+    """S5-D, L3/L9: Later takes reuse the loaded model over the real worker protocol."""
     admitted_cold = _make_picked(loaded=[])
     phases_per_take: list[list[AceStepPhase]] = []
 
-    async def run_job(take_count: int) -> None:
-        for _ in range(take_count):
-            phases: list[AceStepPhase] = []
-            phases_per_take.append(phases)
-            await dispatch_generation_on_worker(
-                worker=admitted_cold,
-                ace_config=_make_ace_config(),
-                target_mode="sft",
-                on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
-            )
+    async def run_job() -> None:
+        async with generation_worker_peer() as peer:
+            for _ in range(3):
+                phases: list[AceStepPhase] = []
+                phases_per_take.append(phases)
+                result = await dispatch_generation_on_worker(
+                    worker=admitted_cold,
+                    ace_config=_make_ace_config(),
+                    target_mode="sft",
+                    on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
+                    options=DispatchOptions(transport=peer.transport),
+                )
+                assert Path(result.audio_path).is_file()
+            assert [mode for kind, mode in peer.requests if kind == "load"] == ["sft"]
 
-    _run(run_job(take_count=3))
-
-    assert real_loads == ["sft"]
-    assert phases_per_take == [
-        [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
-        [AceStepPhase.RENDERING],
-        [AceStepPhase.RENDERING],
-    ]
+    _run(run_job())
+    assert [phases.count(AceStepPhase.LOADING_MODEL) for phases in phases_per_take] == [1, 0, 0]
 
 
-def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(monkeypatch) -> None:
-    transport, real_loads = _worker_with_room_for_one_mode()
-    _route_worker_requests_to(monkeypatch, transport)
+def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
+    generation_worker_peer,
+) -> None:
+    """S5-D, L3/L9: A real one-model cache evicts and the next take reloads once."""
     sft_job_view = _make_picked(loaded=[])
     turbo_job_view = _make_picked(loaded=[])
     sft_phases_per_take: list[list[AceStepPhase]] = []
 
-    async def take(view, mode: str, phases: list[AceStepPhase]) -> GenerationTaskResultDTO:
-        return await dispatch_generation_on_worker(
-            worker=view,
-            ace_config=_make_ace_config(),
-            target_mode=mode,
-            on_progress=lambda phase, _fraction: phases.append(phase),
-        )
-
     async def run_two_jobs_whose_takes_alternate() -> None:
-        for _ in range(2):
-            sft_phases_per_take.append([])
-            await take(sft_job_view, "sft", sft_phases_per_take[-1])
-            await take(turbo_job_view, "turbo", [])
+        async with generation_worker_peer() as peer:
+            for _ in range(2):
+                sft_phases_per_take.append([])
+                for view, mode, phases in (
+                    (sft_job_view, "sft", sft_phases_per_take[-1]),
+                    (turbo_job_view, "turbo", []),
+                ):
+                    result = await dispatch_generation_on_worker(
+                        worker=view, ace_config=_make_ace_config(), target_mode=mode,
+                        on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
+                        options=DispatchOptions(transport=peer.transport),
+                    )
+                    assert Path(result.audio_path).is_file()
+            assert [mode for kind, mode in peer.requests if kind == "load"] == [
+                "sft", "turbo", "sft", "turbo",
+            ]
 
     _run(run_two_jobs_whose_takes_alternate())
+    assert [phases.count(AceStepPhase.LOADING_MODEL) for phases in sft_phases_per_take] == [1, 1]
 
-    assert real_loads == ["sft", "turbo", "sft", "turbo"]
-    assert sft_phases_per_take == [
-        [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
-        [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
-    ]
+
+@pytest.mark.parametrize(
+    "error_type", [httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout],
+)
+def test_generation_worker_peer_replays_transport_answers(generation_worker_peer, error_type):
+    """S5-A/D, L3/L9: The shared transport scripts failures and survives client exits."""
+    async def exercise():
+        failure = TransportFailure(error_type, "peer transport failure")
+        recovered = WorkerReply(200, "recovered")
+        scenario = WorkerScenario(
+            load_answers=(failure, recovered), submit_answers=(failure, recovered),
+            stream_answers=(failure, recovered),
+        )
+        async with generation_worker_peer(scenario) as peer:
+            for path in ("/load_model", "/generate", "/tasks/t1/stream"):
+                for fails in (True, False):
+                    async with httpx.AsyncClient(transport=peer.transport) as client:
+                        if fails:
+                            with pytest.raises(error_type, match="peer transport failure"):
+                                await client.get("http://worker" + path)
+                        else:
+                            response = await client.get("http://worker" + path)
+                            assert response.text == "recovered"
+        async with httpx.AsyncClient(transport=peer.transport) as client:
+            with pytest.raises(RuntimeError, match="Worker peer is closed"):
+                await client.get("http://worker/load_model")
+        assert not peer.deps.heartbeat.is_running
+
+    _run(exercise())
+
+
+@pytest.mark.parametrize("stop_early", [False, True], ids=["normal", "stopped-worker"])
+def test_generation_worker_peer_releases_resources(generation_worker_peer, db_factory, stop_early):
+    """S5-D, L9/L10: Normal and deliberately stopped workers release tasks and sockets."""
+    async def exercise():
+        async with generation_worker_peer(db_factory=db_factory) as peer:
+            address = peer.socket.getsockname()
+            worker = await admit_generation_worker(
+                target_mode="sft", redis=peer.redis, db_factory=db_factory,
+            )
+            result = await dispatch_generation_on_worker(
+                worker=worker, ace_config=_make_ace_config(), target_mode="sft",
+            )
+            assert Path(result.audio_path).is_file()
+            if stop_early:
+                await peer.stop_server()
+        assert not peer.deps.heartbeat.is_running
+        assert peer.deps.cache.loaded_modes() == []
+        assert all(task.done() for task in peer.generation_tasks)
+        assert peer.server_task.done()
+        with socket.socket() as reused:
+            reused.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            reused.bind(address)
+
+    _run(exercise())
 
 
 def test_submit_generation_returns_task_id() -> None:

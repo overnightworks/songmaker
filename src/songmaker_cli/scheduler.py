@@ -150,6 +150,7 @@ class DispatchOptions:
     sse_read_timeout_seconds: float = ACESTEP_SSE_READ_TIMEOUT_SECONDS
     initial_reconnect_backoff_seconds: float = 1.0
     max_reconnect_backoff_seconds: float = 30.0
+    transport: httpx.AsyncBaseTransport | None = None
 
 
 async def _list_online_workers(
@@ -284,7 +285,9 @@ async def _load_model(
         target_mode,
     )
     await _maybe_invoke(on_progress, AceStepPhase.LOADING_MODEL, 0.0)
-    async with httpx.AsyncClient(timeout=options.load_model_timeout_seconds) as client:
+    async with httpx.AsyncClient(
+        timeout=options.load_model_timeout_seconds, transport=options.transport,
+    ) as client:
         resp = await client.post(
             f"{worker.base_url}/load_model",
             json={"mode": target_mode},
@@ -304,7 +307,9 @@ async def _submit_generation(
     options: DispatchOptions,
 ) -> str:
     config_payload = asdict(ace_config) if is_dataclass(ace_config) else dict(ace_config)
-    async with httpx.AsyncClient(timeout=options.generate_submit_timeout_seconds) as client:
+    async with httpx.AsyncClient(
+        timeout=options.generate_submit_timeout_seconds, transport=options.transport,
+    ) as client:
         resp = await client.post(
             f"{worker.base_url}/generate",
             json={"mode": target_mode, "config": config_payload},
@@ -366,7 +371,7 @@ async def _worker_task_events(
         pool=options.sse_connect_timeout_seconds,
     )
     async with (
-        httpx.AsyncClient(timeout=timeout) as client,
+        httpx.AsyncClient(timeout=timeout, transport=options.transport) as client,
         client.stream(
             "GET",
             f"{worker.base_url}/tasks/{task_id}/stream",
