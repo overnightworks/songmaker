@@ -970,7 +970,7 @@
 	.callout b { color: var(--ink); }
 
 	.phone.p390 { width: 390px; box-sizing: border-box; }
-	.states.vram-states { grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); }
+	.states.vram-states:not(.states-390) { grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); }
 	.states-390 { grid-template-columns: repeat(auto-fill, minmax(min(390px, 100%), 390px)); justify-content: start; gap: 1.25rem; }
 	.phone.p390 .ph-body .wcard { box-shadow: none; }
 
@@ -1818,7 +1818,8 @@
 					Schätzung, ein eigener Zustand „unbekannt", die geladenen Modelle als Liste in derselben
 					Karte. <strong>LOAD wird nie wegen des Platzes gesperrt</strong> — auch wenn der Platz laut
 					Rechnung nicht reicht; es gibt keine Ablehnung und keine Warnung am Knopf. Gesperrt ist
-					Load nur, solange geladen wird oder der Worker offline ist (h), (n).</li>
+					Load nur, solange geladen wird, der Worker offline ist oder im Auswahlfeld noch kein
+					Modell gewählt ist, so wie gezeichnet (h), (n).</li>
 				<li><strong>Zeile 2 — Speicherfehler und Warten (j), (l), (o), (q).</strong> Die Zeile lautet
 					seit dem 17.10.2026: <em>an out-of-memory failure is caught and says "too long" in plain
 					words as soon as it happens; nothing that generates today is refused.</em> Es gibt keine
@@ -2403,7 +2404,8 @@
 				<li><strong>3 · Unbekannt ist selten.</strong> So wie gezeichnet: Schätzung ohne NVML, „unknown"
 					nur ohne Heartbeat oder bei einem Build ohne VRAM-Felder.</li>
 				<li><strong>4 · Laden und der Worker-Satz.</strong> Load wird nie wegen des Platzes gesperrt;
-					gesperrt ist es nur, solange geladen wird oder der Worker offline ist — so wie gezeichnet.</li>
+					gesperrt ist es nur, solange geladen wird, der Worker offline ist oder im Auswahlfeld noch
+					kein Modell gewählt ist — so wie gezeichnet.</li>
 				<li><strong>5 · Wo spricht ein gescheitertes Laden?</strong> In der Karte, als <em>Last error</em> (i), (n).</li>
 				<li><strong>6 · Aufgeklappt oder zugeklappt?</strong> Hinfällig: die Zeilen sind kurz.</li>
 				<li><strong>7 · Zahlen für jeden Musiker?</strong> Nein — Zahlen nur für Admins.</li>
