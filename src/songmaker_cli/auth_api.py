@@ -150,7 +150,7 @@ def login(
         ip_address=ip, user_agent=ua,
     )
     prune_sessions(
-        sessions, config.session_cache, user.id, get_settings().max_concurrent_sessions_per_user,
+        sessions, user.id, get_settings().max_concurrent_sessions_per_user,
     )
     db.commit()
 
@@ -179,7 +179,7 @@ def logout(
     config: WebAuthConfig = Depends(web_auth_config),
     sessions: DatabaseSessionRecordStore = Depends(_session_record_store),
 ) -> StatusResponse:
-    end_session(sessions, config.session_cache, session_id=session_id, user_id=current_user.id)
+    end_session(sessions, session_id=session_id)
     db.commit()
 
     clear_session_cookies(response, config)

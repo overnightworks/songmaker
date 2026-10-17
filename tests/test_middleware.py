@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -11,7 +10,6 @@ from conftest import install_app_context, make_fake_redis, stored_hash, web_clie
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.config import install_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.dependencies import AuthenticatedUser
 
@@ -31,7 +29,7 @@ def _db(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 
 
-def _build_auth_app(_db, redis=None, *, without_session_cache=False):
+def _build_auth_app(_db, redis=None):
     from songmaker_cli.app_context import AppContext, get_db_session
 
     if redis is None:
@@ -42,13 +40,6 @@ def _build_auth_app(_db, redis=None, *, without_session_cache=False):
     )
     app = FastAPI()
     install_app_context(app, ctx)
-    if without_session_cache:
-        from songmaker_cli.app_context import build_web_auth_config
-        from songmaker_cli.settings import Settings
-
-        install_web_auth_config(app, replace(
-            build_web_auth_config(ctx, Settings()), session_cache=None,
-        ))
 
     @app.get("/protected")
     def protected(
@@ -278,7 +269,7 @@ def test_auth_transaction_commits_renewal_and_audit_together(_db, commit_fails) 
         record.user_agent = "Old/1.0"
         db.commit()
 
-    app = _build_auth_app(_db, without_session_cache=True)
+    app = _build_auth_app(_db)
     cookie = f"{DEFAULT_SESSION_COOKIE_NAME}={sign_session_id(sid, _TEST_SECRET)}"
     request = Request({
         "type": "http", "app": app, "method": "GET", "path": "/protected",
@@ -334,7 +325,7 @@ def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_
         original_name = record.user.username
         db.commit()
 
-    app = _build_auth_app(_db, without_session_cache=True)
+    app = _build_auth_app(_db)
 
     @app.get("/no-commit")
     def no_commit(
@@ -362,3 +353,32 @@ def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_
         assert {entry.action for entry in db.query(AuditLog).all()} == {
             "session_ip_change", "session_ua_change",
         }
+
+
+def test_failed_session_renewal_refuses_authentication(_db) -> None:
+    """defect:#1590: a vanished row makes touch return False and auth return 401."""
+    from sqlalchemy import event
+    from starlette.requests import Request
+
+    from songmaker_cli.db.models import UserSession
+
+    sid = _make_user_and_session(_db)
+    app = _build_auth_app(_db)
+    cookie = f"{DEFAULT_SESSION_COOKIE_NAME}={sign_session_id(sid, _TEST_SECRET)}"
+    request = Request({
+        "type": "http", "app": app, "method": "GET", "path": "/protected",
+        "headers": [(b"cookie", cookie.encode())], "client": ("192.0.2.1", 1234),
+    })
+    engine = _db.kw["bind"]
+
+    def remove_before_renewal(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("UPDATE USER_SESSIONS"):
+            conn.execute(UserSession.__table__.delete().where(UserSession.id == sid))
+
+    event.listen(engine, "before_cursor_execute", remove_before_renewal)
+    try:
+        with pytest.raises(HTTPException) as refusal:
+            get_current_user(request)
+        assert refusal.value.status_code == 401
+    finally:
+        event.remove(engine, "before_cursor_execute", remove_before_renewal)

@@ -153,15 +153,13 @@ def reset_password(
     username: Annotated[str, Parameter(help="Username to reset")],
 ) -> None:
     """Reset a user's password (asked twice) and end all its sessions (needs local DB access)."""
-    from redis.exceptions import RedisError
     from webauth.session_ending import end_user_sessions
 
     from songmaker_cli.api_models.auth import chosen_rule_refusal
-    from songmaker_cli.app_context import build_password_hasher, build_session_cache
+    from songmaker_cli.app_context import build_password_hasher
     from songmaker_cli.auth_stores import DatabaseSessionRecordStore
     from songmaker_cli.db.engine import init_db, resolve_database_url
     from songmaker_cli.db.queries import get_user_by_username, update_user
-    from songmaker_cli.redis_client import create_redis
     from songmaker_cli.settings import get_settings
 
     password = _ask_password("Password: ")
@@ -172,7 +170,7 @@ def reset_password(
         _exit_with_error(refusal)
 
     factory = init_db(resolve_database_url())
-    with factory() as session, create_redis(get_settings().redis_url) as redis:
+    with factory() as session:
         user = get_user_by_username(session, username)
         if not user:
             _exit_with_error(f"user '{username}' not found")
@@ -180,11 +178,7 @@ def reset_password(
         sessions = DatabaseSessionRecordStore(
             session, session_max_age_seconds=get_settings().session_max_age_seconds,
         )
-        try:
-            ended = end_user_sessions(sessions, build_session_cache(redis), user.id)
-        except RedisError:
-            session.rollback()
-            _exit_with_error("the session cache is unreachable, so nothing was changed")
+        ended = end_user_sessions(sessions, user.id)
         session.commit()
         print(f"Password reset for '{username}' (role={user.role}); {_sessions_ended(ended)}")
 

@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
-from redis import Redis
+from sqlalchemy import event
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.app_context import build_password_hasher
@@ -105,12 +105,11 @@ RESET_USERNAME = "alice"
 OLD_PASSWORD = "old-Passw0rd"
 NEW_PASSWORD = "fresh-Passw0rd"
 OLD_PASSWORD_HASH = stored_hash(OLD_PASSWORD)
-CLOSED_REDIS_URL = "redis://127.0.0.1:1/0"
 
 
 @pytest.fixture
 def served_app(tmp_path: Path, monkeypatch) -> TestClient:
-    """A running app whose database and session cache the CLI reaches as well."""
+    """A running app whose database the CLI reaches as well."""
 
     def seed_alice(session) -> None:
         session.add(User(username=RESET_USERNAME, password_hash=OLD_PASSWORD_HASH, role="admin"))
@@ -118,9 +117,6 @@ def served_app(tmp_path: Path, monkeypatch) -> TestClient:
     client, factory = make_test_app(tmp_path, seed_db=seed_alice)
     monkeypatch.setattr("songmaker_cli.db.engine.resolve_database_url", lambda: "sqlite://")
     monkeypatch.setattr("songmaker_cli.db.engine.init_db", lambda _url: factory)
-    monkeypatch.setattr(
-        "songmaker_cli.redis_client.create_redis", lambda _url: client.app.state.ctx.redis,
-    )
     return client
 
 
@@ -208,24 +204,46 @@ def test_reset_password_invalidates_a_replayed_host_session_cookie(served_app) -
     assert replay_after.get("/api/auth/me").status_code == 401
 
 
-def test_reset_password_changes_nothing_when_the_session_cache_is_unreachable(
-    served_app, capsys, monkeypatch,
+@pytest.mark.parametrize("failure", ["delete", "commit"])
+def test_reset_password_db_failure_leaves_password_and_sessions_unchanged(
+    served_app, capsys, failure,
 ) -> None:
-    login_and_csrf(served_app, RESET_USERNAME, OLD_PASSWORD)
-    monkeypatch.setattr(
-        "songmaker_cli.redis_client.create_redis", lambda _url: Redis.from_url(CLOSED_REDIS_URL),
-    )
+    """defect:#1590: reset rolls back both changes when deletion or commit fails."""
+    from datetime import datetime, timedelta, timezone
 
-    with pytest.raises(SystemExit) as exit_info:
-        _reset_password(NEW_PASSWORD)
+    from songmaker_cli.db.queries import create_session
 
-    assert exit_info.value.code == 1
-    assert capsys.readouterr().out == (
-        "Error: the session cache is unreachable, so nothing was changed\n"
+    factory = served_app.app.state.ctx.db
+    with factory() as db:
+        user = db.query(User).filter_by(username=RESET_USERNAME).one()
+
+        session_id = create_session(
+            db, user.id, datetime.now(timezone.utc) + timedelta(days=1),
+        ).id
+        db.commit()
+
+    def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("DELETE FROM USER_SESSIONS"):
+            raise RuntimeError("Reset DB failure")
+
+    def fail_commit(session):
+        raise RuntimeError("Reset DB failure")
+
+    target, event_name, listener = (
+        (factory.kw["bind"], "after_cursor_execute", fail_after_delete)
+        if failure == "delete" else (factory, "before_commit", fail_commit)
     )
+    event.listen(target, event_name, listener)
+    try:
+        with pytest.raises(RuntimeError, match="Reset DB failure"):
+            _reset_password(NEW_PASSWORD)
+    finally:
+        event.remove(target, event_name, listener)
+
+    assert capsys.readouterr().out == ""
     assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
-    assert _session_count(served_app) == 1
-    assert served_app.get("/api/auth/me").status_code == 200
+    with factory() as db:
+        assert [record.id for record in db.query(UserSession).all()] == [session_id]
 
 
 @pytest.mark.parametrize(
