@@ -86,7 +86,7 @@
 	import { pageBelowStandingPage, stepBackOr } from '$lib/history/historyController';
 	import { standingPathname } from '$lib/routes/standingAddress';
 	import { historyLayerState } from '$lib/stores/layers';
-	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
+	import { inertWhileAddressOverlay } from '$lib/stores/libraryAddressOverlay';
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import { openHome, openListOverPage } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
@@ -133,17 +133,6 @@
 	// the way, carries its own bar instead of ‹.
 	function goBack(): void {
 		void stepBackOr(() => openListOverPage(listOfPage(location.pathname)));
-	}
-
-	// The song's controls wait while its address page still shows an overlay,
-	// exactly as the workspace under it does (`(library)/+layout.svelte`): the
-	// dialogs they open mount inside that inert workspace, where nothing can
-	// take the focus or a tap (#1531). Driven by `toggleAttribute` for the same
-	// reason as there: jsdom has no `inert` property for a bound attribute.
-	function inertWhileAddressOverlay(element: HTMLElement): () => void {
-		return libraryAddressOverlayActive.subscribe((active) => {
-			element.toggleAttribute('inert', active);
-		});
 	}
 
 	function closeSearch(): void {

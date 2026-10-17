@@ -219,7 +219,7 @@ function isInert(element: Element | null): boolean {
 }
 
 describe('PhoneAppBar', () => {
-	it('offers five song slots with named touch actions, search and inline rename', async () => {
+	it('defect:#1531: offers five song slots with named touch actions, search and inline rename', async () => {
 		const onrename = vi.fn(async () => undefined);
 		phoneAppBar.set(songBar(onrename));
 		const target = renderBar();

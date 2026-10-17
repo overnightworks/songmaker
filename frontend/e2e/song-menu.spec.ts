@@ -89,8 +89,7 @@ async function onOwnSong(
 	page: Page,
 	title: string,
 	width: number,
-	flow: (ids: { songId: string; albumId: string }) => Promise<void>,
-	{ awaitTitle = true } = {}
+	flow: (ids: { songId: string; albumId: string }) => Promise<void>
 ): Promise<void> {
 	await page.setViewportSize({ width, height: VIEWPORT_HEIGHT_PX });
 	const headers = await csrfHeaders(page);
@@ -108,9 +107,7 @@ async function onOwnSong(
 		expect(created.ok()).toBe(true);
 		const song = (await created.json()) as { id: string; slug: string };
 		await page.goto(`/album/${albumId}/${song.slug}`);
-		// The title is inert, and so out of the accessibility tree, until the song's address has resolved (#1531).
-		if (awaitTitle)
-			await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+		await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 		await flow({ songId: song.id, albumId });
 	} finally {
 		const archived = await page.request.post(`/api/albums/${albumId}/archive`, { headers });
@@ -154,11 +151,13 @@ const isLibrarySongListing = (url: URL): boolean =>
 async function holdSongListingRereads(page: Page): Promise<{ release: () => void }> {
 	let release!: () => void;
 	const released = new Promise<void>((resolve) => (release = resolve));
+	const libraryListingAnswered = page.waitForResponse((response) =>
+		isLibrarySongListing(new URL(response.url()))
+	);
 	let reads = 0;
 	await page.route(isAlbumSongListing, async (route) => {
 		reads += 1;
-		if (reads === 1)
-			await page.waitForResponse((response) => isLibrarySongListing(new URL(response.url())));
+		if (reads === 1) await libraryListingAnswered;
 		else await released;
 		await route.continue();
 	});
@@ -293,26 +292,20 @@ test(
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		const listing = await holdSongListingRereads(page);
-		await onOwnSong(
-			page,
-			TITLES[1],
-			390,
-			async () => {
-				const trigger = appBar(page).getByLabel(SONG_MENU_LABEL, { exact: true });
-				await expect(trigger).toBeVisible();
-				await expect(page.getByText(SONG_RESOLVING_TEXT, { exact: true })).toBeVisible();
-				const [triggerBox] = await boundingBoxes(trigger);
-				await page.mouse.click(
-					triggerBox.x + triggerBox.width / 2,
-					triggerBox.y + triggerBox.height / 2
-				);
-				await expect(page.getByRole('dialog', { name: SONG_MENU_LABEL })).toBeHidden();
+		await onOwnSong(page, TITLES[1], 390, async () => {
+			const trigger = appBar(page).getByLabel(SONG_MENU_LABEL, { exact: true });
+			await expect(trigger).toBeVisible();
+			await expect(page.getByText(SONG_RESOLVING_TEXT, { exact: true })).toBeVisible();
+			const [triggerBox] = await boundingBoxes(trigger);
+			await page.mouse.click(
+				triggerBox.x + triggerBox.width / 2,
+				triggerBox.y + triggerBox.height / 2
+			);
+			await expect(page.getByRole('dialog', { name: SONG_MENU_LABEL })).toBeHidden();
 
-				listing.release();
-				await openDeleteConfirm(page, TITLES[1]);
-			},
-			{ awaitTitle: false }
-		);
+			listing.release();
+			await openDeleteConfirm(page, TITLES[1]);
+		});
 	}
 );
 
