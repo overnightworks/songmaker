@@ -185,11 +185,12 @@
 		return `${total.toFixed(0)} GB`;
 	}
 
+	function isWorkerLoading(worker: WorkerInfoItem): boolean {
+		return !!worker.state?.target_loading || loadingByWorker.has(worker.identity.id);
+	}
+
 	function isCardBusy(worker: WorkerInfoItem): boolean {
-		if (worker.state?.target_loading) return true;
-		if (worker.state?.training_hold_seconds != null) return true;
-		if (loadingByWorker.has(worker.identity.id)) return true;
-		return false;
+		return isWorkerLoading(worker) || worker.state?.training_hold_seconds != null;
 	}
 
 	async function handleLoad(workerId: string): Promise<void> {
@@ -294,6 +295,8 @@
 				{@const busy = isCardBusy(worker)}
 				{@const trackedJob = loadingByWorker.get(worker.identity.id)}
 				{@const offline = worker.status === 'offline'}
+				{@const loadingMode = worker.state?.target_loading ?? trackedJob?.mode ?? null}
+				{@const loading = isWorkerLoading(worker) || !!busyAction[worker.identity.id]}
 				<div class="card" class:busy>
 					<div class="card-header">
 						<span class={statusClass(worker.status)}>{statusIcon(worker.status)}</span>
@@ -340,22 +343,22 @@
 						</div>
 					{/if}
 
-					{#if worker.state && !offline}
-						<WorkerModelsList
-							loaded={worker.state.loaded}
-							pinned={worker.state.pinned ?? []}
-							isPinDisabled={(mode) => busy || !!busyAction[`${worker.identity.id}:pin:${mode}`]}
-							isUnloadDisabled={(mode) => busy || !!busyAction[`${worker.identity.id}:${mode}`]}
-							onTogglePin={(mode, pinned) => handleTogglePin(worker.identity.id, mode, pinned)}
-							onUnload={(mode) => handleEvict(worker.identity.id, mode)}
-						/>
-					{/if}
+					<WorkerModelsList
+						loaded={worker.state?.loaded ?? []}
+						{offline}
+						{loadingMode}
+						pinned={worker.state?.pinned ?? []}
+						isPinDisabled={(mode) => busy || !!busyAction[`${worker.identity.id}:pin:${mode}`]}
+						isUnloadDisabled={(mode) => busy || !!busyAction[`${worker.identity.id}:${mode}`]}
+						onTogglePin={(mode, pinned) => handleTogglePin(worker.identity.id, mode, pinned)}
+						onUnload={(mode) => handleEvict(worker.identity.id, mode)}
+					/>
 
-					<div class="card-actions">
+					<div class="load-row">
 						<select
 							class="mode-select"
 							bind:value={selectedMode[worker.identity.id]}
-							disabled={busy || offline || availableModes.length === 0}
+							disabled={loading || offline || availableModes.length === 0}
 						>
 							<option value="" disabled selected>Load model…</option>
 							{#each availableModes as mode (mode)}
@@ -365,13 +368,14 @@
 						<button
 							class="action-btn"
 							onclick={() => handleLoad(worker.identity.id)}
-							disabled={busy ||
+							disabled={loading ||
 								offline ||
-								!selectedMode[worker.identity.id] ||
-								busyAction[worker.identity.id]}
+								!availableModes.includes(selectedMode[worker.identity.id])}
 						>
 							{busyAction[worker.identity.id] ? 'Loading…' : 'Load'}
 						</button>
+					</div>
+					<div class="card-actions">
 						<button
 							class="action-btn danger"
 							onclick={() => handleRestart(worker.identity.id)}
@@ -512,12 +516,17 @@
 		word-break: break-all;
 	}
 
+	.load-row,
 	.card-actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.4rem;
 		margin-top: 0.6rem;
 		max-width: 100%;
+	}
+
+	.load-row .mode-select {
+		flex: 0 1 8.2rem;
 	}
 
 	.mode-select {

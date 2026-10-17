@@ -2,21 +2,17 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkerPoolResponse } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
-import { lostNetwork } from '$lib/test-utils/network';
 import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-
-const api = vi.hoisted(() => ({
-	listWorkers: vi.fn()
-}));
-
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
-	return { ...actual, ...api };
-});
-
 import WorkerPoolPanel from './WorkerPoolPanel.svelte';
+
+let poolResponse: WorkerPoolResponse;
+let poolFailure: Response | Error | undefined;
+
+function fetchWorkers(): Promise<Response> {
+	if (poolFailure instanceof Error) return Promise.reject(poolFailure);
+	return Promise.resolve(poolFailure ?? Response.json(poolResponse));
+}
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -58,19 +54,22 @@ function workerPool(vramMeasured: boolean | null): WorkerPoolResponse {
 	};
 }
 
-async function renderVramPool(pool: WorkerPoolResponse): Promise<HTMLElement> {
-	api.listWorkers.mockResolvedValue(pool);
+async function renderWorkerPool(
+	pool = poolResponse,
+	availableModes = ['sft', 'turbo']
+): Promise<HTMLElement> {
+	poolResponse = pool;
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(WorkerPoolPanel, { target, props: { availableModes: ['sft', 'turbo'] } });
-	await tick();
-	await Promise.resolve();
-	await tick();
+	mounted = mount(WorkerPoolPanel, { target, props: { availableModes } });
+	await vi.waitFor(() => expect(target.querySelector('.card, .panel-error')).not.toBeNull());
 	return target;
 }
 
 beforeEach(() => {
-	api.listWorkers.mockReset();
+	poolFailure = undefined;
+	poolResponse = { workers: [] };
+	vi.stubGlobal('fetch', fetchWorkers);
 });
 
 afterEach(async () => {
@@ -102,17 +101,6 @@ function offlineWorkerPool(lastRegisterAt: string): WorkerPoolResponse {
 	};
 }
 
-async function renderOffline(lastRegisterAt: string): Promise<HTMLElement> {
-	api.listWorkers.mockResolvedValue(offlineWorkerPool(lastRegisterAt));
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted = mount(WorkerPoolPanel, { target, props: { availableModes: [] } });
-	await tick();
-	await Promise.resolve();
-	await tick();
-	return target;
-}
-
 describe('WorkerPoolPanel with no heartbeat', () => {
 	it('defect:#1567 names how long the worker has been gone instead of just "no heartbeat"', async () => {
 		// The GPU worker's container sat on "Created" for five days without
@@ -120,15 +108,15 @@ describe('WorkerPoolPanel with no heartbeat', () => {
 		// heartbeat)" told the operator nothing about how long that had been
 		// true; last_register_at was already on the wire and unused.
 		const sixDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString();
-		const target = await renderOffline(sixDaysAgo);
+		const target = await renderWorkerPool(offlineWorkerPool(sixDaysAgo), []);
 
 		expect(target.textContent).toContain('last registered');
 		expect(target.textContent).toContain('6d ago');
 		expect(target.querySelector('.card-row')?.textContent).not.toContain('no heartbeat');
 	});
 
-	it('explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
-		const target = await renderOffline(new Date().toISOString());
+	it('defect:#1593 explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
+		const target = await renderWorkerPool(offlineWorkerPool(new Date().toISOString()), []);
 
 		const restartButton = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
 			(button) => button.textContent?.includes('Restart')
@@ -181,24 +169,6 @@ function heartbeatingButOfflineWorkerPool(
 	};
 }
 
-async function renderHeartbeatingButOffline(
-	gpuHealthy: boolean | null,
-	gpuHealthDetail: string | null
-): Promise<HTMLElement> {
-	api.listWorkers.mockResolvedValue(heartbeatingButOfflineWorkerPool(gpuHealthy, gpuHealthDetail));
-	const target = document.createElement('div');
-	document.body.append(target);
-	// Non-empty availableModes on purpose: the mode-select must be disabled
-	// because this worker is offline, not merely because there is nothing
-	// to select. An empty list here would let a regression in the offline
-	// guard hide behind an unrelated "no models" disablement.
-	mounted = mount(WorkerPoolPanel, { target, props: { availableModes: ['sft', 'turbo'] } });
-	await tick();
-	await Promise.resolve();
-	await tick();
-	return target;
-}
-
 describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 	// Issue #367: a worker whose GPU has gone away keeps heartbeating just
 	// fine, so the API correctly marks it "offline" while state stays
@@ -206,7 +176,9 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 	// status icon and the row text must agree, and nothing must be
 	// clickable.
 	it('defect:#1573 names the GPU failure from the heartbeat and disables every action', async () => {
-		const target = await renderHeartbeatingButOffline(false, 'Driver/library version mismatch');
+		const target = await renderWorkerPool(
+			heartbeatingButOfflineWorkerPool(false, 'Driver/library version mismatch')
+		);
 
 		expect(target.textContent).toContain('GPU unavailable — Driver/library version mismatch');
 		expect(target.textContent).not.toContain('Idle');
@@ -223,8 +195,8 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 		expect(select?.disabled).toBe(true);
 	});
 
-	it('names an old worker build that never learned to report GPU health', async () => {
-		const target = await renderHeartbeatingButOffline(null, null);
+	it('defect:#1593 names an old worker build that never learned to report GPU health', async () => {
+		const target = await renderWorkerPool(heartbeatingButOfflineWorkerPool(null, null));
 
 		expect(target.textContent).toContain('GPU health not reported');
 		expect(target.textContent).toContain('container running worker');
@@ -282,24 +254,13 @@ function trainingWorkerPool(): WorkerPoolResponse {
 	return pool;
 }
 
-async function renderOnline(): Promise<HTMLElement> {
-	api.listWorkers.mockResolvedValue(onlineWorkerPool());
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted = mount(WorkerPoolPanel, { target, props: { availableModes: ['sft', 'turbo'] } });
-	await tick();
-	await Promise.resolve();
-	await tick();
-	return target;
-}
-
 describe('WorkerPoolPanel with a healthy online worker', () => {
 	// The counter-proof to the offline-guard tests above: nothing about
 	// this change may make a genuinely healthy worker's actions
 	// unreachable. Without this, a guard that fails "always disabled" would
 	// pass every offline test and still be a regression.
 	it('defect:#1573 leaves Load, Keep loaded, Unload, and Restart usable', async () => {
-		const target = await renderOnline();
+		const target = await renderWorkerPool(onlineWorkerPool());
 
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
 		if (!select) throw new Error('Expected a mode-select to be rendered');
@@ -321,14 +282,8 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 		expect(restartButton.disabled).toBe(false);
 	});
 
-	it('shows a held online worker as training with the remaining lease', async () => {
-		api.listWorkers.mockResolvedValue(trainingWorkerPool());
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted = mount(WorkerPoolPanel, { target, props: { availableModes: ['sft'] } });
-		await tick();
-		await Promise.resolve();
-		await tick();
+	it('defect:#1593 shows a held online worker as training with the remaining lease', async () => {
+		const target = await renderWorkerPool(trainingWorkerPool(), ['sft']);
 
 		expect(target.textContent).toContain('Training (12s remaining)');
 		expect(target.textContent).not.toContain('Idle');
@@ -362,7 +317,7 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 			state.vram_used_gb = used;
 			state.target_loading = loading ? 'turbo' : null;
 			pool.workers[0].status = loading ? 'loading' : 'online';
-			const target = await renderVramPool(pool);
+			const target = await renderWorkerPool(pool);
 			const row = target.querySelector('[role="group"][aria-label="VRAM"]');
 			expect(row).toHaveTextContent(
 				`${measured === false ? '~' : ''}${used.toFixed(1)} / 24.0 GB${measured === false ? ' est.' : ''}`
@@ -411,7 +366,7 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 				if (missing !== 'total') state.vram_used_gb = null;
 				if (missing !== 'used') state.vram_total_gb = null;
 			}
-			const target = await renderVramPool(pool);
+			const target = await renderWorkerPool(pool);
 			const row = target.querySelector('[role="group"][aria-label="VRAM"]');
 			expect(row).toHaveTextContent('unknown');
 			expect(row).toHaveTextContent(reason);
@@ -422,45 +377,40 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 });
 
 describe('WorkerPoolPanel failures', () => {
-	async function renderPanel(): Promise<HTMLElement> {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted = mount(WorkerPoolPanel, { target, props: { availableModes: [] } });
-		await tick();
-		await Promise.resolve();
-		await tick();
-		return target;
-	}
-
 	it.each([
 		{
 			failure: 'a server reason',
-			err: new ApiError(503, 'Worker registry is locked', '/api/admin/workers'),
+			err: Response.json({ detail: 'Worker registry is locked' }, { status: 503 }),
 			shown: 'Worker registry is locked'
 		},
-		{ failure: 'a lost network with no strip', err: lostNetwork(), shown: WORKER_POOL_LOAD_FAILED }
-	])('names $failure without browser text', async ({ err, shown }) => {
-		api.listWorkers.mockRejectedValue(err);
-		const target = await renderPanel();
+		{
+			failure: 'a lost network with no strip',
+			err: new TypeError('Failed to fetch'),
+			shown: WORKER_POOL_LOAD_FAILED
+		}
+	])('defect:#1593 names $failure without browser text', async ({ err, shown }) => {
+		poolFailure = err;
+		const target = await renderWorkerPool(poolResponse, []);
 
 		expect(target.querySelector('.panel-error')?.textContent).toBe(shown);
 		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 
-	it('under the offline strip keeps its workers with no wording of its own and polls again once back online', async () => {
+	it('defect:#1593 under the offline strip keeps its workers with no wording of its own and polls again once back online', async () => {
 		vi.useFakeTimers();
-		api.listWorkers.mockResolvedValue(offlineWorkerPool('2026-09-01T10:00:00Z'));
-		const target = await renderPanel();
+		poolResponse = offlineWorkerPool('2026-09-01T10:00:00Z');
+		const target = await renderWorkerPool(poolResponse, []);
 		await vi.advanceTimersByTimeAsync(0);
 
 		reportResourceStreamReachable(false);
-		api.listWorkers.mockRejectedValue(lostNetwork());
+		poolFailure = new TypeError('Failed to fetch');
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(target.querySelector('.card')).not.toBeNull();
 		expect(target.querySelector('.banner-error')).toBeNull();
 		expect(target.textContent).not.toContain(WORKER_POOL_REFRESH_FAILED);
 
-		api.listWorkers.mockResolvedValue(workerPool(true));
+		poolFailure = undefined;
+		poolResponse = workerPool(true);
 		reportResourceStreamReachable(true);
 		await vi.advanceTimersByTimeAsync(0);
 
@@ -484,7 +434,7 @@ describe('WorkerPoolPanel model rows', () => {
 	}
 
 	it.each([0, 1, 3])('defect:#1573 renders %i model rows from the heartbeat', async (count) => {
-		const target = await renderVramPool(modelsPool(count));
+		const target = await renderWorkerPool(modelsPool(count));
 		const list = target.querySelector('[aria-label="Models on this GPU"]');
 		expect(list).not.toBeNull();
 		expect(list).toHaveTextContent('Models on this GPU');
@@ -500,7 +450,9 @@ describe('WorkerPoolPanel model rows', () => {
 			);
 			expect(row?.querySelector(`[aria-label="Unload ${model.mode}"]`)).toBeEnabled();
 		}
-		expect(target.textContent?.match(/Keep loaded — never unloaded to make room/g)).toHaveLength(1);
+		expect(
+			target.textContent?.match(/Keep loaded — never unloaded to make room/g) ?? []
+		).toHaveLength(count > 0 ? 1 : 0);
 		expect(target.textContent).not.toContain('Loaded:');
 		expect(target.textContent).not.toMatch(/\b(?:Pin|Unpin|Evict)\b/);
 	});
@@ -516,13 +468,14 @@ describe('WorkerPoolPanel model rows', () => {
 		'defect:#1573 $action with $count models targets its model, waits for refresh, and handles refusal=$refused',
 		async ({ action, mode, label, kept, refused, count }) => {
 			const pool = modelsPool(count);
-			const target = await renderVramPool(pool);
+			const target = await renderWorkerPool(pool);
 			let finish!: (response: Response) => void;
 			const request = new Promise<Response>((resolve) => {
 				finish = resolve;
 			});
 			const requests: { path: string; method?: string; body: unknown }[] = [];
 			vi.stubGlobal('fetch', (path: string, init: RequestInit) => {
+				if (path === '/api/admin/workers') return fetchWorkers();
 				requests.push({ path, method: init.method, body: JSON.parse(String(init.body)) });
 				return request;
 			});
@@ -549,7 +502,7 @@ describe('WorkerPoolPanel model rows', () => {
 			state.pinned = kept
 				? state.pinned?.filter((pin) => pin !== mode)
 				: [...(state.pinned ?? []), mode];
-			if (!refused) api.listWorkers.mockResolvedValue(updated);
+			if (!refused) poolResponse = updated;
 			finish(
 				Response.json(refused ? { detail: 'Worker returned 409' } : {}, {
 					status: refused ? 502 : 200
@@ -592,10 +545,182 @@ describe('WorkerPoolPanel model rows', () => {
 			if (!state) throw new Error('Expected a heartbeat');
 			if (busy === 'loading') state.target_loading = 'base';
 			else state.training_hold_seconds = 12;
-			const target = await renderVramPool(pool);
+			const target = await renderWorkerPool(pool);
 			const buttons = target.querySelectorAll('[aria-label="Models on this GPU"] button');
 			expect(buttons).toHaveLength(6);
 			for (const button of buttons) expect(button).toBeDisabled();
+		}
+	);
+});
+
+describe('WorkerPoolPanel load row', () => {
+	it.each([
+		{
+			name: 'idle',
+			loaded: false,
+			loading: false,
+			offline: false,
+			heartbeat: true,
+			expected: 'No model loaded'
+		},
+		{
+			name: 'empty loading',
+			loaded: false,
+			loading: true,
+			offline: false,
+			heartbeat: true,
+			expected: 'None yet — xl-turbo is loading.'
+		},
+		{
+			name: 'loaded loading',
+			loaded: true,
+			loading: true,
+			offline: false,
+			heartbeat: true,
+			expected: 'sft'
+		},
+		{
+			name: 'offline without state',
+			loaded: false,
+			loading: false,
+			offline: true,
+			heartbeat: false,
+			expected: 'Unknown while the worker is offline.'
+		},
+		{
+			name: 'offline with stale models',
+			loaded: true,
+			loading: true,
+			offline: true,
+			heartbeat: true,
+			expected: 'Unknown while the worker is offline.'
+		}
+	])('S19-1 S19-2 shows an honest $name list above its load row', async (scenario) => {
+		const pool = onlineWorkerPool();
+		const worker = pool.workers[0];
+		if (!worker.state) throw new Error('Expected heartbeat');
+		worker.state.loaded = scenario.loaded ? worker.state.loaded : [];
+		worker.state.target_loading = scenario.loading ? 'xl-turbo' : null;
+		if (!scenario.heartbeat) worker.state = null;
+		worker.status = scenario.offline ? 'offline' : scenario.loading ? 'loading' : 'online';
+		const target = await renderWorkerPool(pool);
+		const list = target.querySelector('[aria-label="Models on this GPU"]');
+		expect(list).toHaveTextContent('Models on this GPU');
+		expect(list).toHaveTextContent(scenario.expected);
+		expect(list?.querySelectorAll('[role="switch"]')).toHaveLength(
+			scenario.loaded && !scenario.offline ? 1 : 0
+		);
+		if (scenario.offline || !scenario.loaded) expect(list).not.toHaveTextContent('Keep loaded');
+		if (scenario.offline) expect(list).not.toHaveTextContent('sft');
+		const row = list?.nextElementSibling;
+		expect(row?.querySelector('select')).not.toBeNull();
+		expect(row?.querySelector('button')).toHaveTextContent('Load');
+		expect(row).not.toHaveTextContent('Restart');
+		expect(row?.nextElementSibling).toHaveTextContent('Restart');
+	});
+
+	it.each(['idle', 'loading', 'offline', 'training', 'queued', 'full GPU'])(
+		'S19-3 permits Load only with a selection and no loading/offline state: %s',
+		async (stateName) => {
+			const pool = onlineWorkerPool();
+			const worker = pool.workers[0];
+			if (!worker.state) throw new Error('Expected heartbeat');
+			if (stateName === 'loading') worker.state.target_loading = 'xl-turbo';
+			if (stateName === 'offline') worker.status = 'offline';
+			if (stateName === 'training') worker.state.training_hold_seconds = 12;
+			if (stateName === 'queued') worker.state.queue_depth = 10;
+			if (stateName === 'full GPU') worker.state.vram_used_gb = 24;
+			const target = await renderWorkerPool(pool);
+			const load = findButtonByText(target, 'Load');
+			const select = target.querySelector('select');
+			if (!select) throw new Error('Expected selection');
+			expect(load).toBeDisabled();
+			select.value = 'turbo';
+			select.dispatchEvent(new Event('change', { bubbles: true }));
+			await tick();
+			expect(select.disabled).toBe(['loading', 'offline'].includes(stateName));
+			expect(load?.disabled).toBe(['loading', 'offline'].includes(stateName));
+			if (stateName === 'training') {
+				expect(target.querySelector('[aria-label="Keep loaded sft"]')).toBeDisabled();
+				expect(target.querySelector('[aria-label="Unload sft"]')).toBeDisabled();
+			}
+		}
+	);
+
+	it.each([false, true])(
+		'S19-3 sends one load to its worker and recovers after refusal=%s',
+		async (refused) => {
+			const target = await renderWorkerPool(workerPool(true));
+			let finish!: (response: Response) => void;
+			const pending = new Promise<Response>((resolve) => {
+				finish = resolve;
+			});
+			const requests: { path: string; method?: string; body: unknown }[] = [];
+			vi.stubGlobal('fetch', (path: string, init: RequestInit) => {
+				if (path === '/api/admin/workers') return fetchWorkers();
+				requests.push({ path, method: init.method, body: JSON.parse(String(init.body)) });
+				return pending;
+			});
+			let sendJob!: (status: string) => void;
+			const job = { id: 'load-1593', type: 'load_model_on_worker', status: 'queued' };
+			vi.stubGlobal(
+				'EventSource',
+				class {
+					onmessage: ((event: MessageEvent) => void) | null = null;
+					constructor() {
+						sendJob = (status) =>
+							this.onmessage?.(
+								new MessageEvent('message', { data: JSON.stringify({ ...job, status }) })
+							);
+					}
+					close() {
+						/* The controlled stream has no resources to release. */
+					}
+				}
+			);
+			const select = target.querySelector('select');
+			const load = findButtonByText(target, 'Load');
+			if (!select || !load) throw new Error('Expected load controls');
+			select.value = 'turbo';
+			select.dispatchEvent(new Event('change', { bubbles: true }));
+			await tick();
+			load.click();
+			await tick();
+			expect(load).toBeDisabled();
+			expect(select).toBeDisabled();
+			load.click();
+			expect(requests).toEqual([
+				{
+					path: '/api/admin/workers/acestep-worker-0/load_model',
+					method: 'POST',
+					body: { mode: 'turbo' }
+				}
+			]);
+			finish(
+				Response.json(refused ? { detail: 'Worker refused load' } : job, {
+					status: refused ? 503 : 200
+				})
+			);
+			if (refused) {
+				await vi.waitFor(() =>
+					expect(target.querySelector('.panel-error')).toHaveTextContent('Worker refused load')
+				);
+			} else {
+				await vi.waitFor(() =>
+					expect(target.querySelector('[aria-label="Models on this GPU"]')).toHaveTextContent(
+						'None yet — turbo is loading.'
+					)
+				);
+				expect(load).toBeDisabled();
+				expect(select).toBeDisabled();
+				poolResponse = onlineWorkerPool();
+				sendJob('completed');
+				await vi.waitFor(() =>
+					expect(target.querySelector('[aria-label="Models on this GPU"]')).toHaveTextContent('sft')
+				);
+			}
+			await vi.waitFor(() => expect(load).toBeEnabled());
+			expect(select).toBeEnabled();
 		}
 	);
 });
