@@ -1,0 +1,8 @@
+claim_id = "b9bb89414d6d4223991eea8cc6b8eb8d"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "6b07d502e2c6668792c436bb931cf4d3e2b9fcbf"
+branch = "claude/issue-1582-search-stays-put"
+scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts"]
+opened_commit = "51770c5efcc3b7c7e4bb85708cc107621d25eafa"
+whole_reason = "Bundle #1354 steps 32 (#1582) and 46 (#1583) under lead #1582: current-target search and drawer-independent Settings test preparation share one claim, worktree, review and PR before step 33."
