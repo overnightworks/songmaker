@@ -16,12 +16,14 @@ import httpx
 import pytest
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 
+from acestep_engine.errors import AudioDownloadError
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
+    JOB_ERROR_GENERATION_FAILED,
     GenerationPhase,
     JobFunction,
     JobStatus,
@@ -62,7 +64,9 @@ from songmaker_cli.jobs.generation import GenerationJobRequest, GenerationProgre
 from songmaker_cli.scheduler import (
     WORKER_STREAM_WENT_SILENT,
     GenerationTaskResultDTO,
+    NoCapacityError,
     WorkerGenerationFailed,
+    WorkerModeNotLoaded,
     WorkerProtocolError,
     WorkerTaskFailed,
 )
@@ -212,7 +216,7 @@ def test_update_job_raises_after_retries(db_factory) -> None:
 # ── run_generation_job ──────────────────────────────────────────────
 
 
-def _patch_dispatch_and_post_process(dto_or_side_effect):
+def _patch_dispatch_and_post_process(dto_or_side_effect, *, admission_error=None):
     if isinstance(dto_or_side_effect, list):
         dispatch = AsyncMock(side_effect=dto_or_side_effect)
     elif callable(dto_or_side_effect) or isinstance(dto_or_side_effect, BaseException):
@@ -225,7 +229,9 @@ def _patch_dispatch_and_post_process(dto_or_side_effect):
         with (
             patch.multiple(
                 "songmaker_cli.jobs",
-                admit_generation_worker=AsyncMock(return_value=MagicMock(id="w1")),
+                admit_generation_worker=AsyncMock(
+                    return_value=MagicMock(id="w1"), side_effect=admission_error,
+                ),
                 dispatch_generation_on_worker=dispatch,
             ),
             patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
@@ -913,25 +919,49 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
         assert job.error == "No ACE-Step workers available"
 
 
-@pytest.mark.parametrize(
-    "failure",
-    [
-        WorkerTaskFailed(
-            "Insufficient free VRAM: need ~2.9 GB, only 1.7 GB available. "
-            "Reduce batch size or audio duration",
-        ),
-        WorkerGenerationFailed("  ACE-Step failed: insufficient VRAM\nTry a shorter duration.  "),
-        WorkerGenerationFailed(WORKER_STREAM_WENT_SILENT),
-        WorkerProtocolError("Worker done event missing 'result' field"),
-    ],
-    ids=["vram-preflight", "generation-cause", "silent-stream", "protocol-error"],
-)
-def test_generation_job_preserves_worker_cause(seeded_db, tmp_path: Path, failure) -> None:
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(failure)
+_GENERATION_FAILURE_CASES = [
+    pytest.param(WorkerTaskFailed("need 18.5 GB"), JOB_ERROR_GENERATION_FAILED, id="vram"),
+    pytest.param(WorkerGenerationFailed("generation failed (no detail from ACE-Step)"),
+                 JOB_ERROR_GENERATION_FAILED, id="no-detail"),
+    pytest.param(WorkerGenerationFailed(WORKER_STREAM_WENT_SILENT),
+                 JOB_ERROR_GENERATION_FAILED, id="silence"),
+    pytest.param(WorkerProtocolError("Worker done event missing 'result' field"),
+                 JOB_ERROR_GENERATION_FAILED, id="missing-result"),
+    pytest.param(WorkerProtocolError("Invalid result DTO"),
+                 JOB_ERROR_GENERATION_FAILED, id="invalid-result"),
+    pytest.param(WorkerTaskFailed("Stream ended without terminal event"),
+                 JOB_ERROR_GENERATION_FAILED, id="stream-end"),
+    pytest.param(WorkerModeNotLoaded("mode evicted"), JOB_ERROR_GENERATION_FAILED, id="mode"),
+    pytest.param(WorkerGenerationFailed("Generation timed out"),
+                 JOB_ERROR_GENERATION_FAILED, id="worker-mimics-own-line"),
+    pytest.param(TimeoutError("private timeout"), "Generation timed out", id="timeout"),
+    pytest.param(AudioDownloadError("private download"),
+                 "Failed to download generated audio", id="download"),
+    pytest.param(ConnectionError("private connection"), "ACE-Step server not reachable",
+                 id="connection"),
+    pytest.param(NoCapacityError("private capacity"), "No ACE-Step workers available",
+                 id="capacity"),
+    pytest.param(RuntimeError("private runtime"), "Internal error during processing",
+                 id="runtime"),
+    pytest.param(ValueError("private unknown"), "An unexpected error occurred", id="unknown"),
+]
+
+
+@pytest.mark.parametrize("failure,expected", _GENERATION_FAILURE_CASES)
+@pytest.mark.parametrize("write_site", ["failed", "partial", "outer"])
+def test_generation_job_selects_musician_line(
+    seeded_db, tmp_path: Path, failure, expected, write_site, caplog,
+) -> None:
+    """defect:#1569: Each cause is sanitized at all three Generate write sites."""
+    completed = int(write_site == "partial")
+    outcomes = [_make_dto()] * completed + [failure]
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+        outcomes, admission_error=failure if write_site == "outer" else None,
+    )
     with dispatch, post_process, defaults:
         _run(
             run_generation_job(
-                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                "j1", "s1", "v1", completed + 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
                 redis=MagicMock(), target_model="sft",
             )
@@ -939,20 +969,17 @@ def test_generation_job_preserves_worker_cause(seeded_db, tmp_path: Path, failur
 
     with seeded_db() as session:
         job = get_job(session, "j1")
-        assert job.status == "failed"
+        assert job.status == ("partial" if completed else "failed")
         assert job.error_type == "generation_error"
-        assert job.error == str(failure)
+        prefix = "1/2 completed, 1 failed: " if completed else ""
+        assert job.error == prefix + expected
+        assert session.query(Generation).count() == completed
+        assert session.query(Job).filter_by(type="score", song_id="s1").count() == completed
+    assert "j1" in caplog.text
+    assert str(failure) in caplog.text
 
 
-@pytest.mark.parametrize("status_code", [409, 502])
-@pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
-def test_generation_job_preserves_auto_load_response(
-    seeded_db, tmp_path: Path, status_code: int, response_format: str,
-) -> None:
-    """defect:#1559: Auto-load failures preserve a cause, including empty bodies."""
-    from songmaker_cli.acestep_state import read_queue_depth, worker_state_key
-
-    cause = "Model sft requires 12.0GB > budget 8.0GB"
+def _worker_failure_response(status_code: int, response_format: str, cause: str):
     response_body = {
         "json": {"json": {"detail": cause}},
         "text": {"text": cause},
@@ -962,10 +989,11 @@ def test_generation_job_preserves_auto_load_response(
     response = httpx.Response(status_code, **response_body)
     if response_format in {"empty", "whitespace"}:
         cause = f"Worker returned {status_code} with no detail"
+    return response, cause
 
-    def worker_response(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/load_model"
-        return response
+
+def _exercise_auto_load_failure(seeded_db, tmp_path, worker_response):
+    from songmaker_cli.acestep_state import read_queue_depth, worker_state_key
 
     async def exercise() -> None:
         async with fakeredis.aioredis.FakeRedis() as redis:
@@ -984,11 +1012,29 @@ def test_generation_job_preserves_auto_load_response(
             assert await read_queue_depth(redis, "w1") == 0
 
     _run(exercise())
+
+
+@pytest.mark.parametrize("status_code", [409, 502])
+@pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
+def test_generation_job_sanitizes_auto_load_response(
+    seeded_db, tmp_path: Path, status_code: int, response_format: str, caplog,
+) -> None:
+    """defect:#1569: Auto-load causes stay in logs while jobs store the generic line."""
+    cause = "Model sft requires 12.0GB > budget 8.0GB"
+    response, cause = _worker_failure_response(status_code, response_format, cause)
+
+    def worker_response(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/load_model"
+        return response
+
+    _exercise_auto_load_failure(seeded_db, tmp_path, worker_response)
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert job.error_type == "generation_error"
-        assert job.error == cause
+        assert job.error == JOB_ERROR_GENERATION_FAILED
+    assert "j1" in caplog.text
+    assert cause in caplog.text
 
 
 def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
@@ -2762,22 +2808,14 @@ def test_load_model_on_worker_unreachable(seeded_db) -> None:
 
 @pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
 def test_load_model_on_worker_returns_5xx(seeded_db, response_format: str) -> None:
-    """defect:#1559: Direct loads store the worker sentence without its JSON wrapper."""
+    """defect:#1569: Direct loads retain the cause across shared response formats."""
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import load_model_on_worker
 
     _seed_worker_row(seeded_db)
     worker_response = "load failed at /opt/acestep/models/sft"
-    response_body = {
-        "json": {"json": {"detail": worker_response}},
-        "text": {"text": worker_response},
-        "empty": {"text": ""},
-        "whitespace": {"text": " \n\t"},
-    }[response_format]
-    fake_response = httpx.Response(500, **response_body)
-    if response_format in {"empty", "whitespace"}:
-        worker_response = "Worker returned 500 with no detail"
+    fake_response, worker_response = _worker_failure_response(500, response_format, worker_response)
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value=fake_response)
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
@@ -2796,13 +2834,14 @@ def test_load_model_on_worker_returns_5xx(seeded_db, response_format: str) -> No
 
 
 def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, caplog) -> None:
+    """defect:#1569: Direct admin load causes remain uncapped in storage and logs."""
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import load_model_on_worker
 
     _seed_worker_row(seeded_db)
     long_tail = "ACE-Step did not become healthy within 900s\n--- last log lines ---\n" + (
-        "vllm: loading shard 2/4\n" * 50
+        "vllm: loading shard 2/4\n" * 250
     )
     fake_response = MagicMock(status_code=502, text=long_tail)
     fake_client = AsyncMock()
@@ -2815,6 +2854,10 @@ def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, capl
 
     assert "w1-job" in caplog.text
     assert long_tail in caplog.text
+    with seeded_db() as session:
+        job = get_job(session, "w1-job")
+        assert job.error == long_tail
+        assert job.error_type == "worker_error"
 
 
 # ── download_model_on_worker ────────────────────────────────────────

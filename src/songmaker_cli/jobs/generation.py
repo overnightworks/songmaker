@@ -81,6 +81,7 @@ from ._runtime import (
     _touch_heartbeat,
     _update_job,
 )
+from .generation_failure import generation_failure
 
 log = logging.getLogger(__name__)
 
@@ -676,22 +677,24 @@ def _finalize_generation_job(
     if completed == count:
         _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
     elif completed > 0:
+        failure = generation_failure(last_error, job_id)
         _update_job(
             db_factory,
             job_id,
             JobStatus.PARTIAL,
             progress=completed / count,
             error=f"{completed}/{count} completed, {count - completed} failed: "
-            f"{_sanitize_error(last_error, job_id)}",
-            error_type="generation_error",
+            f"{failure.message}",
+            error_type=failure.error_type,
         )
     else:
+        failure = generation_failure(last_error, job_id)
         _update_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(last_error, job_id),
-            error_type="generation_error",
+            error=failure.message,
+            error_type=failure.error_type,
         )
 
 
@@ -994,12 +997,13 @@ async def run_generation_job(
         raise
     except Exception as exc:
         log.exception("Generation job failed: %s", exc)
+        failure = generation_failure(exc, job_id)
         _update_job(
             db_factory,
             job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
-            error_type="generation_error",
+            error=failure.message,
+            error_type=failure.error_type,
         )
     finally:
         if admitted_worker is not None:
