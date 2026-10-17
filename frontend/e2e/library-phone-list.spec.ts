@@ -521,6 +521,7 @@ test(
 
 const PAINTED_ORDERS_KEY = '__paintedOrders';
 const LISTEN_READ_PATH = '/api/library/listen';
+const SONG_READ_PATH = /^\/api\/songs\/[^/]+$/;
 // Listen answers after the lists do, as it would behind a busy server: the
 // order in which A–Z, if it were painted first, would show.
 const LISTEN_ANSWER_DELAY_MS = 400;
@@ -696,6 +697,17 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 				await route.continue();
 			}
 		);
+		// The saved take's song is not answered until Listen has answered, so the
+		// take is restored after the ranking, whatever the order the server would
+		// have answered them in.
+		let rankingAnswered: Promise<unknown> = Promise.resolve();
+		await page.route(
+			(url) => SONG_READ_PATH.test(url.pathname),
+			async (route) => {
+				await rankingAnswered;
+				await route.continue();
+			}
+		);
 		let listenReads = 0;
 		page.on('request', (request) => {
 			if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
@@ -704,12 +716,19 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 
 		for (answerDelayMs of [LISTEN_ANSWER_DELAY_MS, 0]) {
 			listenReads = 0;
+			rankingAnswered = page.waitForResponse(
+				(response) =>
+					response.request().method() === 'GET' &&
+					new URL(response.url()).pathname === LISTEN_READ_PATH
+			);
 			await page.reload();
 			await expect(workspace(page).locator('.library-wall .tile-title')).toHaveCount(
 				lastPlayed.length
 			);
-			// The phone's drawer opens only after the take is back, so its rail group
-			// meets a page whose take was restored after the ranking was asked for.
+			// The take comes back only after the ranking has, so the phone's drawer,
+			// which opens after the take is back, mounts its rail group on a page
+			// whose ranking is already read and whose take was restored since: that
+			// group must rank from the read there is, not ask Listen again.
 			await expect(page.getByRole('contentinfo')).toContainText(
 				fixture.tracks[restoredAlbum.id][0].title
 			);
