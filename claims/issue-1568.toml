@@ -1,8 +1,0 @@
-claim_id = "8abb3a09cc0c4e3fa0dc2d04ce0421ed"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "2cdd08f8a186079cc98701228d057bb1c51d9418"
-branch = "claude/issue-1568-loading-stripe"
-scope = ["docs/architecture.md", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/editor/DetailTabs.test.ts", "frontend/src/lib/components/editor/GenerateButton.svelte", "frontend/src/lib/components/editor/GenerateButton.test.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.svelte", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/test-utils/generate-states.ts"]
-opened_commit = "98130e2f6d5c9dbd5531a3fa0f283ef6c2af126b"
-whole_reason = "the loading stage look, its store timing, its fixtures and its text pins move together"
