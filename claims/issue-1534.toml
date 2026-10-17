@@ -1,0 +1,8 @@
+claim_id = "bb1983ae9bd34cce809ac9a872072383"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "653bdae89e775d066744feb120360a85bbeedd20"
+branch = "claude/issue-1534-m3-session-lost-to-auth"
+scope = ["docs/architecture.md", "frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/helpers.ts", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components/share/share-import-boundary.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
+opened_commit = "e5ac04de3ae3cec0ef8c1ad968e5b0093d9c47e6"
+whole_reason = "One atomic move of the session-lost reaction from the transport to auth: the port, its owner, every importer, their tests and the e2e proof must move together or two owners decide session loss."
