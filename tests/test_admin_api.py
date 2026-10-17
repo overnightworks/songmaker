@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from conftest import make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
-from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
-from songmaker_cli.db.models import AuditLog
+from songmaker_cli.db.models import AuditLog, UserSession
 from songmaker_cli.db.queries import create_user, create_user_lora
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
@@ -24,6 +23,35 @@ from songmaker_cli.settings import get_settings
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path)
     yield client
+
+
+@pytest.fixture
+def session_deletion_failure(client: TestClient):
+    from sqlalchemy import event
+
+    @contextmanager
+    def fail_deletion(*, after: int = 1):
+        with client.app.state.ctx.db() as db:
+            engine = db.get_bind()
+        deletions = 0
+
+        def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
+            nonlocal deletions
+            if (
+                context.isdelete
+                and context.compiled.statement.table.name == UserSession.__tablename__
+            ):
+                deletions += 1
+                if deletions == after:
+                    raise RuntimeError("session deletion failed")
+
+        event.listen(engine, "after_cursor_execute", fail_after_delete)
+        try:
+            yield
+        finally:
+            event.remove(engine, "after_cursor_execute", fail_after_delete)
+
+    return fail_deletion
 
 
 def _login_as_admin(client: TestClient) -> None:
@@ -44,7 +72,7 @@ def _login_as_user(client: TestClient) -> None:
     login_and_csrf(client, "regular", "user123456")
 
 
-def _deactivate_actor_behind_the_cache(client: TestClient, actor_id: str) -> None:
+def _deactivate_actor(client: TestClient, actor_id: str) -> None:
     from songmaker_cli.db.queries import update_user
 
     with client.app.state.ctx.db() as session:
@@ -97,19 +125,6 @@ def _audit_entries(client: TestClient) -> list[dict[str, str | None]]:
             }
             for entry in session.query(AuditLog).order_by(AuditLog.created_at, AuditLog.id)
         ]
-
-
-def test_admin_can_update_a_user_after_a_session_cache_miss(
-    admin_client: TestClient, managed_account: _ManagedAccount,
-) -> None:
-    cache = installed_web_auth_config(admin_client.app).session_cache
-    with patch.object(cache, "get", return_value=None):
-        response = admin_client.put(
-            f"/api/admin/users/{managed_account.user_id}", json={"role": "admin"},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["role"] == "admin"
 
 
 @pytest.mark.parametrize(
@@ -186,17 +201,15 @@ def test_reactivation_does_not_end_sessions(
 
 
 def test_a_later_failure_rolls_back_every_field_in_a_combined_update(
-    admin_client: TestClient, managed_account: _ManagedAccount,
+    admin_client: TestClient, managed_account: _ManagedAccount, session_deletion_failure,
 ) -> None:
+    """defect:#1590: later DB failure rolls back the combined account update."""
     before = _audit_entries(admin_client)
     users_before = admin_client.get("/api/admin/users").json()
-    cache = installed_web_auth_config(admin_client.app).session_cache
     with closing(web_client(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
-        with patch.object(
-            cache, "delete_user_sessions", side_effect=[[], RuntimeError("cache unavailable")],
-        ):
+        with session_deletion_failure(after=2):
             response = failing_client.put(
                 f"/api/admin/users/{managed_account.user_id}",
                 json={"role": "admin", "password": "newpass12345"},
@@ -206,6 +219,9 @@ def test_a_later_failure_rolls_back_every_field_in_a_combined_update(
     assert admin_client.get("/api/admin/users").json() == users_before
     assert _audit_entries(admin_client) == before
     assert managed_account.client.get("/api/auth/me").status_code == 200
+    assert managed_account.client.post(
+        "/api/auth/login", json={"username": "musician", "password": "t3stP@ssw0rd"},
+    ).status_code == 200
 
 
 @pytest.mark.parametrize(
@@ -242,14 +258,13 @@ def test_account_changes_end_existing_sessions(
         ("DELETE", None, True),
     ],
 )
-def test_cache_failure_rolls_back_account_changes_and_session_deletion(
+def test_db_failure_rolls_back_account_changes_and_session_deletion(
     admin_client: TestClient, managed_account: _ManagedAccount,
-    method: str, payload, single_session: bool,
+    method: str, payload, single_session: bool, session_deletion_failure,
 ) -> None:
+    """defect:#1590: failed DB revocation leaves account, audit and sessions intact."""
     audit_before = _audit_entries(admin_client)
     users_before = admin_client.get("/api/admin/users").json()
-    cache = installed_web_auth_config(admin_client.app).session_cache
-    cache_method = "delete" if single_session else "delete_user_sessions"
     path = (
         f"/api/admin/sessions/{managed_account.session_reference}" if single_session
         else f"/api/admin/users/{managed_account.user_id}"
@@ -257,7 +272,7 @@ def test_cache_failure_rolls_back_account_changes_and_session_deletion(
     with closing(web_client(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
-        with patch.object(cache, cache_method, side_effect=RuntimeError("cache unavailable")):
+        with session_deletion_failure():
             response = failing_client.request(method, path, json=payload)
 
     assert response.status_code == 500
@@ -772,50 +787,45 @@ def test_hard_delete_user_keeps_playlist_cover_when_commit_fails(client: TestCli
     assert cover_dir.is_dir()
 
 
-def test_hard_delete_user_rolls_back_when_session_cache_fails(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+def test_hard_delete_user_rolls_back_when_session_deletion_fails(
+    client: TestClient, session_deletion_failure,
 ) -> None:
+    """defect:#1590: failed DB revocation preserves the user and owned data."""
     from conftest import login_and_csrf
 
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    from songmaker_cli.db.models import UserSession
+    from songmaker_cli.db.models import Album, Generation, Playlist, Song, UserSession
 
     _login_as_admin(client)
     user_id = _create_user_with_data(client, "victim")
     victim_client = web_client(client.app, cookies={})
     login_and_csrf(victim_client, "victim", "t3stP@ssw0rd")
 
-    session_cache = installed_web_auth_config(client.app).session_cache
-    redis = client.app.state.ctx.redis
-    sids_before = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(sids_before) == 1
+    audit_before = _audit_entries(client)
+    models = (Album, Song, Generation, Playlist)
     factory = client.app.state.ctx.db
     with factory() as session:
+        owned_ids = [{row.id for row in session.query(model).all()} for model in models]
         old_session_ids = {
             record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
         }
     assert old_session_ids
-    monkeypatch.setattr(
-        session_cache, "delete_user_sessions", MagicMock(side_effect=RuntimeError("redis down")),
-    )
-
-    with pytest.raises(RuntimeError, match="redis down"):
+    with session_deletion_failure(), pytest.raises(RuntimeError, match="session deletion failed"):
         client.delete(f"/api/admin/users/{user_id}/permanent")
 
     from songmaker_cli.db.queries import get_user
 
     with factory() as session:
         assert get_user(session, user_id) is not None
+        assert [{row.id for row in session.query(model).all()} for model in models] == owned_ids
         remaining_session_ids = {
             record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
         }
     assert remaining_session_ids == old_session_ids
 
+    assert _audit_entries(client) == audit_before
     assert victim_client.get("/api/auth/me").status_code == 200
-    assert redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}") == sids_before
-    for sid in sids_before:
-        assert session_cache.get(sid) is not None
 
+    victim_client.close()
 
 def test_hard_delete_user_ends_victim_session(client: TestClient) -> None:
     """defect:#1590: permanent deletion removes sessions and rejects replay."""
@@ -887,21 +897,40 @@ def test_hard_delete_self_blocked(client: TestClient) -> None:
     ("method", "suffix", "payload"),
     [("PUT", "", {"role": "user"}), ("DELETE", "", None), ("DELETE", "/permanent", None)],
 )
+@pytest.mark.parametrize("already_authenticated", [False, True])
 def test_last_active_admin_is_protected_from_every_removal_path(
-    client: TestClient, method: str, suffix: str, payload,
+    client: TestClient, method: str, suffix: str, payload, already_authenticated: bool,
 ) -> None:
+    """defect:#1590: removal is denied even if deactivation follows authentication."""
+    from webauth.dependencies import AuthenticatedUser
+
+    from songmaker_cli.auth_dependencies import get_current_user
+
     _login_as_admin(client)
     admin_id = client.get("/api/auth/me").json()["id"]
     target_id = client.post(
         "/api/admin/users",
         json={"username": "admin2", "password": "t3stP@ssw0rd", "role": "admin"},
     ).json()["id"]
-    _deactivate_actor_behind_the_cache(client, admin_id)
+    _deactivate_actor(client, admin_id)
 
-    response = client.request(method, f"/api/admin/users/{target_id}{suffix}", json=payload)
+    if already_authenticated:
+        client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+            id=admin_id, username="admin", role="admin", is_active=True,
+        )
+    try:
+        response = client.request(method, f"/api/admin/users/{target_id}{suffix}", json=payload)
+    finally:
+        client.app.dependency_overrides.pop(get_current_user, None)
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Cannot remove the last active admin"
+    assert response.status_code == (400 if already_authenticated else 403)
+    if already_authenticated:
+        assert response.json()["detail"] == "Cannot remove the last active admin"
+    with client.app.state.ctx.db() as db:
+        from songmaker_cli.db.queries import get_user
+        target = get_user(db, target_id)
+        assert target.is_active
+        assert target.role == "admin"
 
 
 def test_hard_delete_non_last_admin_allowed(client: TestClient) -> None:

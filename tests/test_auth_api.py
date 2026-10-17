@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -483,39 +483,6 @@ def test_setup_and_own_password_change_do_not_create_audit_entries(client: TestC
     assert _audit_log_is_empty(client)
 
 
-def test_password_change_cache_failure_rolls_back_password_and_sessions(client: TestClient) -> None:
-    _seed_admin(client)
-    _login(client, "admin", "admin12345")
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        old_session_ids = {record.id for record in session.query(UserSession).all()}
-    cache = installed_web_auth_config(client.app).session_cache
-
-    with closing(web_client(client.app, raise_server_exceptions=False)) as failing_client:
-        failing_client.cookies.update(client.cookies)
-        failing_client.headers.update(client.headers)
-        with patch.object(
-            cache, "delete_user_sessions", side_effect=RuntimeError("cache unavailable"),
-        ):
-            response = failing_client.put(
-                "/api/auth/password",
-                json={"current": "admin12345", "new_password": "newpassword1"},
-            )
-
-    assert response.status_code == 500
-    assert DEFAULT_SESSION_COOKIE_NAME not in response.cookies
-    with factory() as session:
-        assert {record.id for record in session.query(UserSession).all()} == old_session_ids
-    assert client.get("/api/auth/me").status_code == 200
-    login = client.post(
-        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
-    )
-    assert login.status_code == 200
-
-
-# -- Persisted sessions and cookie replay -------------------------------------
-
-
 @pytest.mark.parametrize("endpoint,username,password", [
     ("login", "admin", "admin12345"),
     ("setup", "myadmin", "secure1234"),
@@ -597,47 +564,6 @@ def test_login_prunes_oldest_session_over_cap(
         assert oldest_sid not in remaining_ids
 
 
-def test_login_redis_prune_failure_rolls_back(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    from songmaker_cli.db.models import UserSession
-    from songmaker_cli.settings import get_settings
-
-    monkeypatch.setattr(get_settings(), "max_concurrent_sessions_per_user", 1)
-    _seed_admin(client)
-    redis = client.app.state.ctx.redis
-    session_cache = installed_web_auth_config(client.app).session_cache
-    user_id = _get_user_id(client, "admin")
-
-    first = web_client(client.app, cookies={})
-    assert first.post(
-        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
-    ).status_code == 200
-    old_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(old_sids) == 1
-    old_sid = next(iter(old_sids))
-
-    monkeypatch.setattr(
-        session_cache, "delete", MagicMock(side_effect=RuntimeError("redis down")),
-    )
-    second = web_client(client.app, cookies={})
-    resp = second.post(
-        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
-    )
-    assert resp.status_code == 503
-    assert "degraded" in resp.json()["detail"]
-
-    assert first.get("/api/auth/me").status_code == 200
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        remaining = session.query(UserSession).filter_by(user_id=user_id).all()
-        remaining_ids = {row.id for row in remaining}
-        assert remaining_ids == {old_sid}
-    assert redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}") == old_sids
-    assert session_cache.get(old_sid) is not None
-
-
 def test_login_commit_failure_leaves_no_session_or_cookie(client: TestClient) -> None:
     """defect:#1590: a failed session commit leaves no usable authentication."""
     from sqlalchemy import event
@@ -703,31 +629,6 @@ def test_logout_removes_the_session_and_rejects_its_cookie(
         assert replay.get("/api/auth/me").status_code == 401
 
 
-def test_logout_redis_failure_rolls_back(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _seed_admin(client)
-    _login(client, "admin", "admin12345")
-
-    session_cache = installed_web_auth_config(client.app).session_cache
-    user_id = _get_user_id(client, "admin")
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        session_id = session.query(UserSession).filter_by(user_id=user_id).one().id
-
-    monkeypatch.setattr(
-        session_cache, "delete", MagicMock(side_effect=RuntimeError("redis down")),
-    )
-    resp = client.delete("/api/auth/session")
-
-    assert resp.status_code == 503
-    assert "degraded" in resp.json()["detail"]
-    with factory() as session:
-        assert session.query(UserSession).filter_by(user_id=user_id).one().id == session_id
-    assert client.get("/api/auth/me").status_code == 200
-    assert session_cache.get(session_id) is not None
-
-
 def test_password_change_replaces_session_and_rejects_old_cookie(client: TestClient) -> None:
     """defect:#1590: only the replacement session survives a password change."""
     _seed_admin(client)
@@ -757,3 +658,82 @@ def _get_user_id(client: TestClient, username: str) -> str:
         from songmaker_cli.db.queries import get_user_by_username
         user = get_user_by_username(session, username)
         return user.id
+
+
+@pytest.mark.parametrize("operation", ["password", "login", "logout"])
+def test_session_deletion_failure_rolls_back_auth_changes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, operation: str,
+) -> None:
+    """defect:#1590: DB failure leaves password, sessions and cookies unchanged."""
+    from sqlalchemy import event
+
+    from songmaker_cli.db.models import User
+    from songmaker_cli.settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "max_concurrent_sessions_per_user", 1)
+    _seed_admin(client)
+    _login(client, "admin", "admin12345")
+    factory = client.app.state.ctx.db
+    with factory() as db:
+        old_ids = {row.id for row in db.query(UserSession).all()}
+        password_hash = db.query(User).one().password_hash
+        engine = db.get_bind()
+
+    def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
+        if context.isdelete and context.compiled.statement.table.name == UserSession.__tablename__:
+            raise RuntimeError("session deletion failed")
+
+    method, path, payload = {
+        "password": ("PUT", "/api/auth/password", {
+            "current": "admin12345", "new_password": "newpassword1",
+        }),
+        "login": ("POST", "/api/auth/login", {
+            "username": "admin", "password": "admin12345",
+        }),
+        "logout": ("DELETE", "/api/auth/session", None),
+    }[operation]
+    event.listen(engine, "after_cursor_execute", fail_after_delete)
+    try:
+        with closing(web_client(client.app, raise_server_exceptions=False)) as failing_client:
+            failing_client.cookies.update(client.cookies)
+            failing_client.headers.update(client.headers)
+            response = failing_client.request(method, path, json=payload)
+    finally:
+        event.remove(engine, "after_cursor_execute", fail_after_delete)
+
+    assert response.status_code == 500
+    assert "set-cookie" not in response.headers
+    with factory() as db:
+        assert {row.id for row in db.query(UserSession).all()} == old_ids
+        assert db.query(User).one().password_hash == password_hash
+    assert client.get("/api/auth/me").status_code == 200
+    assert client.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+    ).status_code == 200
+
+
+def test_me_persists_renewal_without_reissuing_browser_cookie(client: TestClient) -> None:
+    """defect:#1590: GET renewal survives in a fresh DB transaction."""
+    from datetime import datetime, timedelta, timezone
+
+    _seed_admin(client)
+    _login(client, "admin", "admin12345")
+    old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    factory = client.app.state.ctx.db
+    with factory.begin() as db:
+        record = db.query(UserSession).one()
+        session_id = record.id
+        record.expires_at = old_expiry
+
+    before = datetime.now(timezone.utc)
+    response = client.get("/api/auth/me")
+    after = datetime.now(timezone.utc)
+
+    assert response.status_code == 200
+    assert response.json()["username"] == "admin"
+    assert "set-cookie" not in response.headers
+    window = timedelta(seconds=installed_web_auth_config(client.app).session_max_age_seconds)
+    with factory() as db:
+        expiry = db.get(UserSession, session_id).expires_at.replace(tzinfo=timezone.utc)
+        assert before + window <= expiry <= after + window
+        assert expiry > old_expiry

@@ -14,7 +14,6 @@ from conftest import TEST_SECRET, make_fake_redis, make_test_app, web_client
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event as sqlalchemy_event
-from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware
@@ -705,15 +704,13 @@ def test_each_reconnect_reauthenticates_disabled_account(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1590: reconnect reads account revocation from the database."""
     clients, factory, users = _authenticated_clients(tmp_path)
     _install_finite_route_stream(monkeypatch)
     assert clients["alice"].get("/api/resource-events/stream").status_code == 200
     with factory() as session:
         session.get(User, users["alice"]).is_active = False
         session.commit()
-    installed_web_auth_config(clients["alice"].app).session_cache.delete_user_sessions(
-        users["alice"]
-    )
     assert clients["alice"].get("/api/resource-events/stream").status_code == 403
 
 

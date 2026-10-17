@@ -51,7 +51,6 @@ from songmaker_cli.auth_stores import DatabaseLoginAttemptStore, DatabaseSession
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
-    get_user,
     get_user_by_username,
     record_login_attempt,
     user_count,
@@ -66,22 +65,6 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 SETUP_ALREADY_COMPLETED_DETAIL: Final = "Setup already completed"
-
-
-def _cache_session(
-    request: Request, session_id: str, user, ip: str, ua: str, expires, created_at,
-) -> None:
-    session_cache = web_auth_config(request).session_cache
-    if not session_cache:
-        return
-    max_age = web_auth_config(request).session_max_age_seconds
-    try:
-        session_cache.store(
-            session_id, user.id, user.username, user.role, user.is_active,
-            ip, ua, expires, created_at, max_age,
-        )
-    except Exception:
-        log.warning("Redis session cache write failed on login")
 
 
 @router.get("/setup-required")
@@ -118,7 +101,6 @@ def setup(
     )
     db.commit()
 
-    _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
     issue_session_cookies(response, user_session.id, config)
     log.info("Setup completed: admin user '%s' created", req.username)
     return UserResponse.from_orm(user)
@@ -129,7 +111,6 @@ def setup(
     responses={
         401: {"description": "Credentials are invalid"},
         429: {"description": "Too many login attempts"},
-        503: {"description": "Session service is temporarily unavailable"},
     },
 )
 def login(
@@ -168,26 +149,10 @@ def login(
         db, user.id, expires,
         ip_address=ip, user_agent=ua,
     )
-    session_cache = web_auth_config(request).session_cache
-    try:
-        prune_sessions(
-            sessions, session_cache, user.id, get_settings().max_concurrent_sessions_per_user,
-        )
-    except Exception:
-        log.warning("Redis session cache delete failed on login prune")
-        db.rollback()
-        raise HTTPException(503, "Service temporarily degraded — try again shortly")
-
-    _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
-    try:
-        db.commit()
-    except Exception:
-        if session_cache is not None:
-            try:
-                session_cache.delete(user_session.id, user.id)
-            except Exception:
-                log.warning("Redis session cache delete failed after login commit failure")
-        raise
+    prune_sessions(
+        sessions, config.session_cache, user.id, get_settings().max_concurrent_sessions_per_user,
+    )
+    db.commit()
 
     issue_session_cookies(response, user_session.id, config)
     return UserResponse.from_orm(user)
@@ -205,12 +170,8 @@ def _authenticate_login(
     raise HTTPException(401, INVALID_CREDENTIALS_DETAIL)
 
 
-@router.delete(
-    "/session",
-    responses={503: {"description": "Session service is temporarily unavailable"}},
-)
+@router.delete("/session")
 def logout(
-    request: Request,
     response: Response,
     db: Session = Depends(get_db_session),
     current_user: AuthenticatedUser = Depends(get_current_user),
@@ -218,13 +179,7 @@ def logout(
     config: WebAuthConfig = Depends(web_auth_config),
     sessions: DatabaseSessionRecordStore = Depends(_session_record_store),
 ) -> StatusResponse:
-    session_cache = web_auth_config(request).session_cache
-    try:
-        end_session(sessions, session_cache, session_id=session_id, user_id=current_user.id)
-    except Exception:
-        log.warning("Redis session cache delete failed on logout")
-        db.rollback()
-        raise HTTPException(503, "Service temporarily degraded — try again shortly")
+    end_session(sessions, config.session_cache, session_id=session_id, user_id=current_user.id)
     db.commit()
 
     clear_session_cookies(response, config)
@@ -277,7 +232,6 @@ def change_password(
         db.commit()
         raise HTTPException(401, "Current password is incorrect") from error
 
-    user = get_user(db, current_user.id)
     ua = client_user_agent(request)
     expires = datetime.now(timezone.utc) + timedelta(
         seconds=config.session_max_age_seconds,
@@ -288,6 +242,5 @@ def change_password(
     )
     db.commit()
 
-    _cache_session(request, new_session.id, user, ip, ua, expires, new_session.created_at)
     issue_session_cookies(response, new_session.id, config)
     return StatusResponse(status="ok")
