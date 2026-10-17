@@ -706,9 +706,17 @@ forms and the public share reads (`/shared/*`, which authenticate nobody) goes
 the same way, to the awaited `sessionLost` reaction, and `stores/auth.ts`
 decides that the session ended (#925).
 
-`lib/api` imports only itself, packages, `$lib/constants`, `$lib/routes/` and
-`$lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
+Outside its `*.test.ts` files, `lib/api` imports only itself, packages,
+`$lib/constants`, `$lib/routes/` and `$lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
 and no `import()` or `import.meta`; `eslint.config.js` enforces it (#925 G2).
+
+Only `lib/api/fetch.ts` calls global `fetch`; other modules reach the server
+through a `lib/api` function. The named exceptions are
+`lib/services/audioPlayer.svelte.ts` for media reads (it hands the deck its fetch
+function), `lib/services/playbackDiagnostics.ts` for its keepalive diagnostics
+beacon, and `service-worker.ts` for its cache. Tests may stub the network
+boundary. `eslint.config.js` enforces this, including `window.fetch`,
+`globalThis.fetch` and `self.fetch` (#925 G3).
 
 Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new album/playlist, playlist-picker add, the co-writer conversation row's delete ✕) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). Labelled controls (album/playlist header Play, the editor's Co-writer/Recipe toggles and Generate, the compact Edit | Co-writer | Takes tabs, Now Playing's Queue | This take tabs, the library search field) take the sibling `[data-hitbox='text']` instead: it raises the height to the same touch target and leaves the width to the label and the layout, since forcing the square would clamp a width the layout owns and `data-hitbox-face` — a fixed 24/44px box — cuts straight through a word (#163). A face is only ever drawn on an icon-only control. PlayerBar and the share surface's transport/Now Playing frames are out of this primitive's scope.
 

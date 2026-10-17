@@ -9,6 +9,7 @@
 	import { cancelJob } from '$lib/api/jobs';
 	import type { AlbumItem, CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 	import {
+		RATE_LIMITED_STATUS,
 		albumCoverStageLabel,
 		albumCoverSuggestionAlt,
 		albumCoverSuggestionPosition,
@@ -66,7 +67,6 @@
 		{ kind: 'suggestion'; id: string; url: string } | { kind: 'making'; progress: number };
 
 	const HTTP_CONFLICT = 409;
-	const HTTP_TOO_MANY_REQUESTS = 429;
 
 	const COVER_SUGGESTIONS_SETTLED: CoverSuggestionsOutcome = {
 		failure: null,
@@ -318,7 +318,7 @@
 	function isRefusal(error: unknown): error is ApiError {
 		return (
 			error instanceof ApiError &&
-			(error.status === HTTP_CONFLICT || error.status === HTTP_TOO_MANY_REQUESTS)
+			(error.status === HTTP_CONFLICT || error.status === RATE_LIMITED_STATUS)
 		);
 	}
 
@@ -337,7 +337,7 @@
 			followedRunId = latestCoverJob?.id ?? null;
 			return;
 		}
-		if (refusal.status === HTTP_TOO_MANY_REQUESTS && dailySuggestionsSpent) {
+		if (refusal.status === RATE_LIMITED_STATUS && dailySuggestionsSpent) {
 			const limitNote = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
 			updateCoverSuggestionsState(albumId, (state) => ({ ...state, limitNote }));
 			return;
