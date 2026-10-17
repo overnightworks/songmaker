@@ -1,0 +1,7 @@
+claim_id = "4c3fe0b7499a4305b5a7bb65cf24ef9c"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "1d31769f00783ae29be9862b051d9fc46ea60a64"
+branch = "claude/issue-1521-middleware-order-test"
+scope = ["tests/test_server_middleware.py"]
+opened_commit = "26e3a44d25e937b4b14de8a2865f4d4892661754"
