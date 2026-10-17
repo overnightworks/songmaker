@@ -5,6 +5,7 @@
 	import {
 		albumWhoseSongsShow,
 		libraryWallShows,
+		placeShown,
 		librarySurface
 	} from '$lib/stores/libraryContext';
 	import {
@@ -38,10 +39,11 @@
 		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
-	import { LIBRARY_ROUTE_PATH, standsOnLibraryPage } from '$lib/routes/addresses';
+	import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 	import { standingPathname } from '$lib/routes/standingAddress';
 	import { titleInitials } from '$lib/utils/format';
 	import PlayingMark from '../PlayingMark.svelte';
+	import Icon from '../Icon.svelte';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_ALBUM_ITEM_CLASS, revealOpenRailItem } from './rail-item-selector';
 
@@ -74,7 +76,7 @@
 	// its song up, so it does not make the word current (#1523).
 	const libraryWallIsSurface = $derived(libraryWallShows(surface, currentSongId));
 	const onLibraryPage = $derived(
-		libraryWallIsSurface && standsOnLibraryPage(standingPathname(page.state))
+		placeShown('library', surface, currentSongId, standingPathname(page.state))
 	);
 	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
@@ -187,22 +189,7 @@
 </script>
 
 {#snippet icon()}
-	<svg
-		width="14"
-		height="14"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		aria-hidden="true"
-	>
-		<rect x="3" y="3" width="7" height="7" rx="1" />
-		<rect x="14" y="3" width="7" height="7" rx="1" />
-		<rect x="3" y="14" width="7" height="7" rx="1" />
-		<rect x="14" y="14" width="7" height="7" rx="1" />
-	</svg>
+	<Icon name="library" size={14} />
 {/snippet}
 
 <RailGroup
