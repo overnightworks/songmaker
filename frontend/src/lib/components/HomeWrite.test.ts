@@ -86,15 +86,21 @@ it.each([
 	);
 });
 
-it.each(['song', 'album', 'initials'] as const)(
-	'1354_rule_14 uses the %s cover fallback',
-	async (source) => {
+it.each([
+	['song', 'Cold Harbour', null],
+	['album', 'Cold Harbour', null],
+	['initials', 'Cold Harbour', 'CH'],
+	['initials', 'Open Windows', 'OW']
+] as const)(
+	'1354_rule_14 uses the %s cover fallback for album %s',
+	async (source, albumTitle, initials) => {
 		const cover = { thumb: '/song.webp', card: '/song.webp', detail: '/song.webp' };
 		const albumCover = { thumb: '/album.webp', card: '/album.webp', detail: '/album.webp' };
 		writeFetch.mockResolvedValue(
 			Response.json({
 				items: [
 					writtenSong({
+						album_title: albumTitle,
 						cover: source === 'song' ? cover : null,
 						album_cover: source === 'initials' ? null : albumCover
 					})
@@ -104,7 +110,7 @@ it.each(['song', 'album', 'initials'] as const)(
 		await showWrite();
 		await settleWrite();
 		if (source === 'initials')
-			expect(document.querySelector('.tile-cover')).toHaveTextContent('QF');
+			expect(document.querySelector('.tile-cover')?.textContent?.trim()).toBe(initials);
 		else expect(document.querySelector('img')).toHaveAttribute('src', `/${source}.webp`);
 	}
 );

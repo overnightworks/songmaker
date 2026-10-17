@@ -54,6 +54,7 @@
 		{#each $libraryWriteItems as item (item.song_id)}
 			<LibraryRow
 				title={item.song_title}
+				initialsSource={item.album_title}
 				subtitle={`${item.album_title} · ${HOME_WRITE_WORK_LABELS[item.work]} · ${activityTimeLabel(item.worked_at, new Date())}`}
 				coverAlt={item.song_title}
 				coverUrl={item.cover?.card ?? item.album_cover?.card ?? null}

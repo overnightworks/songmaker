@@ -1,8 +1,12 @@
 <script module lang="ts">
+	import type { ListenReadState } from '$lib/stores/libraryOrder';
+	import type { WriteReadState } from '$lib/stores/libraryWrite';
 	export type HomeListPhase = 'loading' | 'failed' | 'empty' | 'rows';
 
-	// Each Home list's reader starts 'unread' and reports a failed first read as 'failed'.
-	export function homeListPhase(readState: string, rowCount: number): HomeListPhase {
+	export function homeListPhase(
+		readState: ListenReadState | WriteReadState,
+		rowCount: number
+	): HomeListPhase {
 		if (readState === 'unread') return 'loading';
 		if (readState === 'failed') return 'failed';
 		return rowCount === 0 ? 'empty' : 'rows';

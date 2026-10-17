@@ -315,3 +315,33 @@ it.each(['song', 'album'] as const)(
 		expect(get(libraryWriteState)).toBe('ready');
 	}
 );
+
+it.each(['song', 'album'] as const)(
+	'1354_rule_20 defect:#1575 a %s restored on another device and deleted here again leaves at once',
+	async (kind) => {
+		const remove = () => (kind === 'song' ? removeSongFromList('a') : removeSongsForAlbum('album'));
+		fetch.mockResolvedValueOnce(answer(row('a'), row('b', 'other')));
+		await ensureLibraryWriteRead();
+		fetch.mockResolvedValueOnce(answer(row('b', 'other')));
+		remove();
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['b']);
+		fetch.mockResolvedValueOnce(answer(row('a'), row('b', 'other')));
+		outdateLibraryWrite();
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['a', 'b']);
+		const resolve = deferredRead();
+		outdateLibraryWrite();
+		const inFlight = ensureLibraryWriteRead();
+		remove();
+		expect(ids()).toEqual(['b']);
+		fetch.mockResolvedValueOnce(answer(row('b', 'other')));
+		resolve(answer(row('a'), row('b', 'other')));
+		await inFlight;
+		expect(ids()).toEqual(['b']);
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(5));
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['b']);
+	}
+);
