@@ -50,6 +50,24 @@ REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[1]
 COMPOSE_CONFIG_TIMEOUT_SECONDS: Final = 60
 
 
+GENERATION_SETUP_MESSAGES = [
+    "Song not found",
+    "Version not found",
+    "Reference audio not found",
+    "Selected voice is unavailable for this generation",
+]
+
+OTHER_GENERATION_ERROR_TYPES = [
+    None,
+    "server_restart",
+    "no_worker_alive",
+    "queued_full_queue_bound",
+    "queued_too_long",
+    "setup_error",
+    "unknown",
+]
+
+
 SONGMAKER_FAILURE_CASES = [
     pytest.param((TimeoutError, "private timeout", "Generation timed out"), id="timeout"),
     pytest.param(

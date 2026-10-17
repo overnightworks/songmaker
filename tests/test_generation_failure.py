@@ -1,9 +1,14 @@
 """Generate failure ownership without worker or database dependencies."""
 
 import pytest
+from conftest import GENERATION_SETUP_MESSAGES, OTHER_GENERATION_ERROR_TYPES
 
 from songmaker_cli.jobs._runtime import GenerationSetupError
-from songmaker_cli.jobs.generation_failure import generation_failure, musician_error
+from songmaker_cli.jobs.generation_failure import (
+    generation_failure,
+    musician_error,
+    partial_failure_error,
+)
 from songmaker_cli.scheduler import (
     WorkerGenerationFailed,
     WorkerModeNotLoaded,
@@ -36,6 +41,18 @@ def test_songmaker_message_stays_with_existing_sanitizer(generation_failure_case
     assert str(cause) in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("completed", "count", "message", "expected"),
+    [
+        (1, 2, "Generation timed out", "1/2 completed, 1 failed: Generation timed out"),
+        (12, 15, "raw worker cause", "12/15 completed, 3 failed: raw worker cause"),
+    ],
+)
+def test_partial_failure_formats_completed_and_failed_counts(completed, count, message, expected):
+    """L11: Persisted partial failures retain their counts and selected cause."""
+    assert partial_failure_error(completed, count, message) == expected
+
+
 @pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])
 def test_read_preserves_songmaker_counterexamples(generation_failure_case, prefix):
     """L11: Own causes survive both complete and partial failure reads."""
@@ -45,12 +62,7 @@ def test_read_preserves_songmaker_counterexamples(generation_failure_case, prefi
 
 @pytest.mark.parametrize(
     "message",
-    [
-        "Song not found",
-        "Version not found",
-        "Reference audio not found",
-        "Selected voice is unavailable for this generation",
-    ],
+    GENERATION_SETUP_MESSAGES,
 )
 def test_setup_message_stays_with_existing_sanitizer(message):
     """L11: Setup messages retain their existing write classification."""
@@ -69,13 +81,7 @@ def test_unknown_setup_message_stays_sanitized():
 @pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])
 @pytest.mark.parametrize(
     "message",
-    [
-        "Song not found",
-        "Version not found",
-        "Reference audio not found",
-        "Selected voice is unavailable for this generation",
-        "Generating failed — try again.",
-    ],
+    [*GENERATION_SETUP_MESSAGES, "Generating failed — try again."],
 )
 def test_read_preserves_setup_and_generic_lines(message, prefix):
     """L11: The remaining owned lines survive the read projection."""
@@ -84,15 +90,7 @@ def test_read_preserves_setup_and_generic_lines(message, prefix):
 
 @pytest.mark.parametrize(
     "error_type",
-    [
-        None,
-        "server_restart",
-        "no_worker_alive",
-        "queued_full_queue_bound",
-        "queued_too_long",
-        "setup_error",
-        "unknown",
-    ],
+    OTHER_GENERATION_ERROR_TYPES,
 )
 def test_read_preserves_other_error_types(error_type):
     """L11: Projection does not reclassify other failures."""
@@ -115,19 +113,20 @@ def test_read_replaces_unknown_cause_preserving_partial_prefix(prefix, cause):
 
 
 @pytest.mark.parametrize(
-    "error",
+    ("error", "expected"),
     [
-        "x/2 completed, 1 failed: Generation timed out",
-        "1/2 completed, 1 failed:Generation timed out",
-        "prefix 1/2 completed, 1 failed: Generation timed out",
-        "1/2 completed, 1 failed: 1/2 completed, 1 failed: Generation timed out",
+        ("x/2 completed, 1 failed: Generation timed out", "Generating failed — try again."),
+        ("1/2 completed, 1 failed:Generation timed out", "Generating failed — try again."),
+        ("prefix 1/2 completed, 1 failed: Generation timed out", "Generating failed — try again."),
+        ("١/2 completed, 1 failed: Generation timed out", "Generating failed — try again."),
+        (
+            "1/2 completed, 1 failed: 1/2 completed, 1 failed: Generation timed out",
+            "1/2 completed, 1 failed: Generating failed — try again.",
+        ),
     ],
 )
-def test_read_does_not_preserve_malformed_or_nested_prefix(error):
-    """L6: Only one correctly formed leading partial prefix survives."""
-    expected = "Generating failed — try again."
-    if error.startswith("1/2 completed, 1 failed: "):
-        expected = "1/2 completed, 1 failed: " + expected
+def test_read_does_not_preserve_malformed_or_nested_prefix(error, expected):
+    """L6: Only one correctly formed leading ASCII partial prefix survives."""
     assert musician_error(error, "generation_error") == expected
 
 

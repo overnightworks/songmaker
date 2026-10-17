@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from conftest import (
+    OTHER_GENERATION_ERROR_TYPES,
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    web_client,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
@@ -4298,8 +4305,6 @@ def _read_musician_job(client, job_id, read_path):
         response = client.get(f"/api/jobs/{job_id}")
         assert response.status_code == 200
         return response.json()
-    import json
-
     _authenticate_job_stream_client(client)
     with client.stream("GET", f"/api/jobs/{job_id}/stream") as response:
         assert response.status_code == 200
@@ -4359,15 +4364,7 @@ def test_get_job_stream_job_last_failed_generation_projects_stored_worker_cause(
 @pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
 @pytest.mark.parametrize(
     "error_type",
-    [
-        None,
-        "server_restart",
-        "no_worker_alive",
-        "queued_full_queue_bound",
-        "queued_too_long",
-        "setup_error",
-        "unknown",
-    ],
+    OTHER_GENERATION_ERROR_TYPES,
 )
 def test_get_job_stream_job_last_failed_generation_preserves_other_error_types(
     client,

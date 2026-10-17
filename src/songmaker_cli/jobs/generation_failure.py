@@ -10,6 +10,13 @@ from songmaker_cli.scheduler import WorkerTaskFailed
 
 from ._runtime import _sanitize_error, generation_error_messages
 
+_PARTIAL_FAILURE_PREFIX = re.compile(r"\d+/\d+ completed, \d+ failed: ", re.ASCII)
+
+
+def partial_failure_error(completed: int, count: int, message: str) -> str:
+    """Format the persisted partial failure and its musician-facing cause."""
+    return f"{completed}/{count} completed, {count - completed} failed: {message}"
+
 
 @dataclass(frozen=True)
 class GenerationFailure:
@@ -29,7 +36,7 @@ def musician_error(error: str | None, error_type: str | None) -> str | None:
     """Project legacy Generate causes without changing their stored diagnosis."""
     if error_type != "generation_error" or not error:
         return error
-    partial = re.match(r"[0-9]+/[0-9]+ completed, [0-9]+ failed: ", error)
+    partial = _PARTIAL_FAILURE_PREFIX.match(error)
     prefix = partial.group() if partial else ""
     cause = error[len(prefix) :]
     if cause in generation_error_messages() | {JOB_ERROR_GENERATION_FAILED}:

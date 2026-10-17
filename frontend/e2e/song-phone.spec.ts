@@ -103,7 +103,8 @@ const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 	String(RUNNING_JOB_TAKE_INDEX)
 ).replace('{count}', String(RUNNING_JOB_TAKE_COUNT));
 const REMAINING_TIME_PATTERN = /~\d+:\d{2}/;
-const FAILED_GENERATION_SENTENCE = 'Too long for the GPU right now — try a shorter duration.';
+const RAW_WORKER_FAILURE = 'ACE-Step worker: CUDA out of memory on device 0';
+const FAILED_GENERATION_SENTENCE = 'Generating failed — try again.';
 const UNSAVED_DRAFT_LINE = 'a line nobody saved';
 
 // The seeded take's version as the app reads it, so a group label names it
@@ -282,8 +283,10 @@ test.describe('song page at phone width', () => {
 
 			// Failing the same job live, over its still-open SSE stream — no
 			// reload, matching a real worker crash's own reporting path.
-			await failGenerationJob(jobId, FAILED_GENERATION_SENTENCE);
+			// L6/L11: the live stream projects worker details to the musician line.
+			await failGenerationJob(jobId, RAW_WORKER_FAILURE);
 			await expect(panel.getByText(FAILED_GENERATION_SENTENCE)).toBeVisible();
+			await expect(page.getByText(RAW_WORKER_FAILURE)).toHaveCount(0);
 			await expect(panel.locator('.failure button')).toHaveCount(0);
 
 			console.log(`Song-phone flow /api requests: ${guard.apiRequestCount}`);
