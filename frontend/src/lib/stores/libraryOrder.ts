@@ -1,4 +1,4 @@
-import { derived, writable, type Readable } from 'svelte/store';
+import { derived, get, writable, type Readable } from 'svelte/store';
 import { fetchLibraryListen, type LibraryListenItem } from '$lib/api/library';
 import { LIBRARY_WALL_PLAYED_PAGE_SIZE, type LibraryWallOrder } from '$lib/constants';
 import { libraryWallOrder } from '$lib/stores/ui';
@@ -10,9 +10,25 @@ type LibraryPlace = { type: LibraryPlaceType; item: OrderedItem };
 type LastPlayed = { rank: number; at: string };
 type LibraryPlaceComparator = (a: LibraryPlace, b: LibraryPlace) => number;
 
+// `known` is false while a page that opens in Last played has not yet heard
+// back from Listen: the places stand in no order yet, and showing them in
+// title order would be a flash of the wrong one.
+type LibraryPlaceOrder = {
+	readonly known: boolean;
+	readonly compare: LibraryPlaceComparator;
+};
+
+// 'failed' only while no read has ranked the places yet: a failed read keeps
+// a ranking already known. 'outdated' is a ranking that a listen recorded
+// since has overtaken: it keeps the places in order until the next read.
+type ListenReadState = 'unread' | 'failed' | 'ranked' | 'outdated';
+
 const lastPlayed = writable<ReadonlyMap<string, LastPlayed>>(new Map());
-let lastPlayedRequest = 0;
-let lastPlayedPresent: Promise<boolean> | null = null;
+const listenRead = writable<ListenReadState>('unread');
+let lastPlayedGeneration = 0;
+let lastPlayedRead: Promise<boolean> | null = null;
+// A listen recorded while a read is out may not be in what it brings back.
+let listenRecordedDuringRead = false;
 
 export const lastPlayedByPlace: Readable<ReadonlyMap<string, LastPlayed>> = {
 	subscribe: lastPlayed.subscribe
@@ -52,16 +68,31 @@ function comparatorFor(
 	return order === 'played' ? compareByLastPlayed(byPlace) : compareTitles;
 }
 
-export const libraryPlaceOrder: Readable<LibraryPlaceComparator> = derived(
-	[libraryWallOrder, lastPlayed],
-	([order, byPlace]) => comparatorFor(order, byPlace)
+// The order the places last stood in on screen. A viewer who switches to Last
+// played keeps seeing it until Listen has answered, while a page that opens
+// in Last played has nothing to keep and holds its places instead.
+let standingOrder: LibraryPlaceOrder | null = null;
+
+export const libraryPlaceOrder: Readable<LibraryPlaceOrder> = derived(
+	[libraryWallOrder, lastPlayed, listenRead],
+	([order, byPlace, read]) => {
+		const wanted = {
+			known: order === 'title' || read !== 'unread',
+			compare: comparatorFor(order, byPlace)
+		};
+		if (wanted.known) standingOrder = wanted;
+		return standingOrder ?? wanted;
+	}
 );
 
+// Holds every place back while the order is not yet known, so no reader
+// decides on its own what to show in the meantime.
 export function inLibraryOrder<T extends OrderedItem>(
 	type: LibraryPlaceType,
 	items: readonly T[],
-	compare: LibraryPlaceComparator
+	{ known, compare }: LibraryPlaceOrder
 ): T[] {
+	if (!known) return [];
 	return items.toSorted((a, b) => compare({ type, item: a }, { type, item: b }));
 }
 
@@ -81,32 +112,55 @@ async function readEveryPlayedPlace(): Promise<LibraryListenItem[] | null> {
 	}
 }
 
-// A failed read keeps the ranking already known; only the newest read may
-// replace it.
-export async function readLastPlayed(): Promise<boolean> {
-	const request = ++lastPlayedRequest;
-	const places = await readEveryPlayedPlace();
-	if (places === null || request !== lastPlayedRequest) return false;
-	lastPlayed.set(
-		new Map(
-			places.map((place, rank) => [placeKey(place.type, place.id), { rank, at: place.played_at }])
-		)
-	);
-	return true;
-}
-
-export function ensureLastPlayedRead(): Promise<boolean> {
-	lastPlayedPresent ??= readLastPlayed().then((applied) => {
-		if (!applied) lastPlayedPresent = null;
-		return applied;
+// One read at a time: a caller that asks while a read is out joins it, so
+// the wall and both rail groups opening together start a single read. A
+// failed read still lets the page stop waiting, standing the places in title
+// order until the next read ranks them.
+export function readLastPlayed(): Promise<boolean> {
+	if (lastPlayedRead !== null) return lastPlayedRead;
+	const generation = lastPlayedGeneration;
+	listenRecordedDuringRead = false;
+	const read = readEveryPlayedPlace().then((places) => {
+		if (generation !== lastPlayedGeneration) return false;
+		lastPlayedRead = null;
+		if (places === null) {
+			listenRead.update((state) => (state === 'ranked' || state === 'outdated' ? state : 'failed'));
+			return false;
+		}
+		lastPlayed.set(rankedPlaces(places));
+		listenRead.set(listenRecordedDuringRead ? 'outdated' : 'ranked');
+		return true;
 	});
-	return lastPlayedPresent;
+	lastPlayedRead = read;
+	return read;
 }
 
-// Bumping the request number rather than zeroing it also discards a read
-// still in flight from the test before.
+function rankedPlaces(places: readonly LibraryListenItem[]): Map<string, LastPlayed> {
+	return new Map(
+		places.map((place, rank) => [placeKey(place.type, place.id), { rank, at: place.played_at }])
+	);
+}
+
+// For a caller that only needs a ranking present: it reads only while no
+// read has ranked the places, or once a recorded listen has outdated it.
+export function ensureLastPlayedRead(): Promise<boolean> {
+	return get(listenRead) === 'ranked' ? Promise.resolve(true) : readLastPlayed();
+}
+
+// The player calls this once a listen is recorded: a take merely loaded or
+// restored is no listen, and Listen ranks only what was recorded.
+export function outdateLastPlayedRanking(): void {
+	if (lastPlayedRead !== null) listenRecordedDuringRead = true;
+	listenRead.update((state) => (state === 'ranked' ? 'outdated' : state));
+}
+
+// Bumping the generation also discards a read still in flight from the test
+// before.
 export function resetLibraryOrderForTests(): void {
-	lastPlayedRequest++;
-	lastPlayedPresent = null;
+	lastPlayedGeneration++;
+	lastPlayedRead = null;
 	lastPlayed.set(new Map());
+	listenRecordedDuringRead = false;
+	standingOrder = null;
+	listenRead.set('unread');
 }

@@ -27,6 +27,7 @@
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import {
+		ensureLastPlayedRead,
 		inLibraryOrder,
 		lastPlayedByPlace,
 		lastPlayedOf,
@@ -143,14 +144,16 @@
 	const kindLoaded = $derived(
 		kind === 'library' ? $allAlbumsLoad.status === 'ready' : playlistStatus.status === 'ready'
 	);
-	const headCount = $derived(kindLoaded ? wallItems.length : undefined);
+	// A list held back until its order is known is not an empty one.
+	const orderKnown = $derived($libraryPlaceOrder.known);
+	const headCount = $derived(kindLoaded && orderKnown ? wallItems.length : undefined);
 
 	let browseEl = $state<HTMLElement | null>(null);
 
 	onMount(() => {
 		initLibraryWallOrder();
-		catchUpWall();
-		return whenBackOnline(catchUpWall);
+		catchUpWall(ensureLastPlayedRead);
+		return whenBackOnline(() => catchUpWall(readLastPlayed));
 	});
 
 	$effect(() => {
@@ -191,10 +194,12 @@
 	// A failed read keeps what is on screen, and only an empty wall names it
 	// (#1039 O4): the offline strip owns a lost network, and the wall reads
 	// again when the page returns to the foreground or the network comes back.
-	function catchUpWall(): void {
+	// Showing the wall again asks only for a ranking that a recorded listen has not
+	// outdated, so a page load stays at the one read the rail may have made.
+	function catchUpWall(readRanking: () => Promise<boolean>): void {
 		if (kind === 'library') void ensureAllAlbumsLoaded();
 		else void ensurePlaylistsLoaded();
-		if ($libraryWallOrder === 'played') void readLastPlayed();
+		if ($libraryWallOrder === 'played') void readRanking();
 	}
 
 	function chooseOrder(next: LibraryWallOrder): void {
@@ -204,7 +209,7 @@
 	}
 
 	function catchUpOnReturnToForeground(): void {
-		if (document.visibilityState === 'visible') catchUpWall();
+		if (document.visibilityState === 'visible') catchUpWall(readLastPlayed);
 	}
 
 	function onBrowseScroll(event: Event): void {
@@ -293,7 +298,7 @@
 					{/if}
 				{/each}
 			</div>
-		{:else if loadStatuses.includes('loading')}
+		{:else if !orderKnown || loadStatuses.includes('loading')}
 			<p class="empty" role="status">{copy.loading}</p>
 		{:else if loadStatuses.includes('error')}
 			<p class="empty" role="alert">{copy.failed}</p>
