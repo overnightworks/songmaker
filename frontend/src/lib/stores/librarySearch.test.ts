@@ -16,7 +16,8 @@ const fetchAlbums = vi.fn();
 const fetchSongs = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
+	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
+	fetchLibraryWrite: async () => ({ items: [] })
 }));
 vi.mock('$lib/api/albums', () => ({
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
@@ -449,7 +450,7 @@ describe('applySyncedSong', () => {
 		expect(listLoadedSongIds().sort()).toEqual(['s-search', 's1']);
 	});
 
-	it('forgetSyncedSong removes browse, search, and selection', () => {
+	it('1354_rule_20 forgetSyncedSong removes browse, search, and selection', () => {
 		songList.set([
 			song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0 }),
 			song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0, id: 's2' })
