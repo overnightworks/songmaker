@@ -70,7 +70,7 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => ({
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
-import { menuRowLabels } from '$lib/test-utils/collection-menu';
+import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
@@ -830,5 +830,31 @@ describe('PlaylistDetailView with an empty playlistList (#139)', () => {
 		await tick();
 
 		expect(target.querySelector('[role="status"], [role="alert"], .retry-btn')).toBeNull();
+	});
+});
+
+describe('PlaylistDetailView says song, never track', () => {
+	it('defect:#1529 an empty playlist says No songs in this playlist yet.', async () => {
+		const target = await renderPlaylist([]);
+
+		expect(requireElement(target, '.empty-tab').textContent).toBe('No songs in this playlist yet.');
+	});
+
+	it.each([
+		{ songs: 1, counted: '1 song' },
+		{ songs: 2, counted: '2 songs' }
+	])('defect:#1529 Delete playlist counts $counted', async ({ songs, counted }) => {
+		const target = await renderPlaylist(
+			Array.from({ length: songs }, (_, position) =>
+				entry({ id: `pe${position}`, position, song_title: `Song ${position}` })
+			)
+		);
+
+		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+		await tick();
+		menuRow(requireElement(document.body, '.menu-panel'), 'Delete playlist').click();
+		await tick();
+
+		expect(requireElement(document.body, '[role="dialog"] ul').textContent).toBe(counted);
 	});
 });

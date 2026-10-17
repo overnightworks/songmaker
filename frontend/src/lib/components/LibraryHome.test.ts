@@ -2,7 +2,15 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LibraryListenItem } from '$lib/api/library';
-import { HOME_PAGE_LABEL, LIBRARY_NEW_MENU_LABEL } from '$lib/constants';
+import {
+	HOME_PAGE_LABEL,
+	LIBRARY_NEW_ALBUM_LABEL,
+	LIBRARY_NEW_MENU_LABEL,
+	LIBRARY_NEW_PLAYLIST_LABEL,
+	NEW_ALBUM_CARD_LABEL
+} from '$lib/constants';
+
+import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 
 import LibraryHome from './LibraryHome.svelte';
 
@@ -53,10 +61,35 @@ describe('LibraryHome', () => {
 		);
 	});
 
-	it('1354_rule_31: shows no wall of albums and no + New', async () => {
+	it('1354_rule_31: shows no wall of albums', async () => {
 		const target = await render();
 
 		expect(target.querySelector('.tile-grid, .wall-tile, .library-wall')).toBeNull();
-		expect(target.querySelector(`[aria-label="${LIBRARY_NEW_MENU_LABEL}"]`)).toBeNull();
+	});
+
+	it('1354_rule_14 915_C1: stands + New on the head line, whose Album unfolds its card under the head, above Continue', async () => {
+		const target = await render();
+		const head = target.querySelector('.home-titlebar');
+		if (!head) throw new Error('Expected the Home head');
+
+		getByRoleButton(head, LIBRARY_NEW_MENU_LABEL).click();
+		await tick();
+		const menu = document.body.querySelector(
+			`[role="dialog"][aria-label="${LIBRARY_NEW_MENU_LABEL}"]`
+		);
+		if (!menu) throw new Error('+ New opened no menu');
+		expect([...menu.querySelectorAll('button')].map(accessibleName)).toEqual([
+			LIBRARY_NEW_ALBUM_LABEL,
+			LIBRARY_NEW_PLAYLIST_LABEL
+		]);
+		getByRoleButton(menu, LIBRARY_NEW_ALBUM_LABEL).click();
+		await tick();
+
+		const card = head.querySelector(`[aria-label="${NEW_ALBUM_CARD_LABEL}"]`);
+		expect(card).not.toBeNull();
+		const continueRegion = target.querySelector('[aria-label="Continue"]');
+		expect(card?.compareDocumentPosition(continueRegion as Node)).toBe(
+			Node.DOCUMENT_POSITION_FOLLOWING
+		);
 	});
 });

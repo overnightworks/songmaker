@@ -11,7 +11,6 @@
 	import { collectionTransport, toggleOrStartCollection, playAlbum } from '$lib/stores/player';
 	import { albumHasPlayableTake } from '$lib/utils/playable';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
-	import { historyLayerState } from '$lib/stores/layers';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
@@ -40,11 +39,6 @@
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_NARROW_MEDIA,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
-		LIBRARY_NEW_ALBUM_LABEL,
-		LIBRARY_NEW_FACE,
-		LIBRARY_NEW_MENU_CLOSE_LABEL,
-		LIBRARY_NEW_MENU_LABEL,
-		LIBRARY_NEW_PLAYLIST_LABEL,
 		LIBRARY_PLAYLISTS_ERROR,
 		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_PAGE_LABEL,
@@ -58,16 +52,12 @@
 		wallHeadingLabel,
 		type LibraryWallOrder
 	} from '$lib/constants';
-	import Icon from './Icon.svelte';
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
-	import MenuPopover from './MenuPopover.svelte';
-	import NewAlbumCard from './NewAlbumCard.svelte';
-	import NewPlaylistCard from './NewPlaylistCard.svelte';
+	import NewPlaceMenu from './NewPlaceMenu.svelte';
 
 	const SCROLL_RESTORE_TOLERANCE_PX = 1;
 
-	type NewPlaceKind = 'album' | 'playlist';
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
 	type WallKind = 'library' | 'playlists';
@@ -156,22 +146,11 @@
 	const headCount = $derived(kindLoaded ? wallItems.length : undefined);
 
 	let browseEl = $state<HTMLElement | null>(null);
-	let newMenu: MenuPopover | undefined = $state();
-	const newCard = historyLayerState<NewPlaceKind | null>('library-new-card', null);
-	let shownCard: NewPlaceKind | null = null;
-	let focusNewOnFold = true;
 
 	onMount(() => {
 		initLibraryWallOrder();
 		catchUpWall();
 		return whenBackOnline(catchUpWall);
-	});
-
-	$effect(() => {
-		const card = $newCard;
-		if (shownCard && !card && focusNewOnFold) newMenu?.focusTrigger();
-		focusNewOnFold = true;
-		shownCard = card;
 	});
 
 	$effect(() => {
@@ -234,20 +213,6 @@
 		captureLibraryScroll(target.scrollTop);
 	}
 
-	function startNew(kind: NewPlaceKind): void {
-		newMenu?.close(false);
-		$newCard = kind;
-	}
-
-	function cancelNew(): void {
-		$newCard = null;
-	}
-
-	function foldCreated(): void {
-		focusNewOnFold = false;
-		$newCard = null;
-	}
-
 	function retryLoad(): void {
 		if (kind === 'library') void loadLibraryBrowse({ reset: true });
 		else void loadPlaylists();
@@ -255,27 +220,6 @@
 </script>
 
 <svelte:document onvisibilitychange={catchUpOnReturnToForeground} />
-
-{#snippet newMenuButton()}
-	<MenuPopover
-		bind:this={newMenu}
-		layer="library-new"
-		label={LIBRARY_NEW_MENU_LABEL}
-		closeLabel={LIBRARY_NEW_MENU_CLOSE_LABEL}
-		pressed={$newCard !== null}
-	>
-		{#snippet trigger()}<span class="new-face"
-				><Icon name="plus" size={16} />{LIBRARY_NEW_FACE}</span
-			>{/snippet}
-		<p class="new-menu-heading">New in <b>Library</b></p>
-		<button type="button" class="new-menu-item" onclick={() => startNew('album')}
-			><Icon name="album" size={16} />{LIBRARY_NEW_ALBUM_LABEL}</button
-		>
-		<button type="button" class="new-menu-item" onclick={() => startNew('playlist')}
-			><Icon name="playlist" size={16} />{LIBRARY_NEW_PLAYLIST_LABEL}</button
-		>
-	</MenuPopover>
-{/snippet}
 
 {#snippet orderSwitch()}
 	<div class="wall-order" role="group" aria-label={copy.orderGroup}>
@@ -304,15 +248,10 @@
 			{#if headCount !== undefined}<span class="wall-count">{headCount}</span>{/if}
 		</h1>
 		{@render orderSwitch()}
-		{@render newMenuButton()}
+		{#if !narrow}<NewPlaceMenu />{/if}
 	</div>
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
-		{#if $newCard === 'album'}
-			<NewAlbumCard oncancel={cancelNew} oncreated={foldCreated} />
-		{:else if $newCard === 'playlist'}
-			<NewPlaylistCard oncancel={cancelNew} oncreated={foldCreated} />
-		{/if}
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 				{#each wallItems as item (placeType + item.id)}
@@ -393,62 +332,8 @@
 		text-transform: uppercase;
 	}
 
-	.wall-titlebar :global(.menu-trigger) {
-		padding: 0;
-	}
-
 	.wall-titlebar .wall-order {
 		margin-left: auto;
-	}
-
-	.new-face {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 42px;
-		padding: 0 14px;
-		font-family: var(--font-display);
-		font-size: 0.78rem;
-		font-weight: 500;
-		letter-spacing: 0.5px;
-		text-transform: uppercase;
-	}
-
-	.new-menu-heading {
-		padding: 0.2rem 0.6rem 0.5rem;
-		border-bottom: 1px solid var(--border);
-		color: var(--text-subtle);
-		font-size: 13px;
-	}
-
-	.new-menu-heading b {
-		color: var(--text);
-		font-weight: 600;
-	}
-
-	.new-menu-item {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		min-height: 34px;
-		padding: 0 0.6rem;
-		border: 0;
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--text);
-		font-family: var(--font-body);
-		font-size: 0.87rem;
-		text-align: left;
-	}
-
-	.new-menu-item :global(svg) {
-		flex: none;
-		color: var(--text-muted);
-	}
-
-	.new-menu-item:hover {
-		background: var(--surface-hover);
 	}
 
 	.wall-count {
@@ -588,10 +473,6 @@
 	@media (max-width: 768px) {
 		.wall-titlebar {
 			padding: 10px 12px 6px;
-		}
-
-		.new-menu-item {
-			min-height: 44px;
 		}
 
 		.wall-body {
