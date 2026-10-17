@@ -598,16 +598,18 @@ describe('the library pages opened over a collection', () => {
 			criterion: '#1402',
 			address: '/playlists',
 			surface: 'playlists',
-			open: openPlaylistsBySearch
+			open: openPlaylistsBySearch,
+			reselectionHistoryScroll: []
 		},
 		{
 			page: 'Home',
 			criterion: '1354_rule_31:',
 			address: HOME_ROUTE_PATH,
 			surface: 'home',
-			open: openHome
+			open: openHome,
+			reselectionHistoryScroll: [640]
 		}
-	] as const)('$page', ({ criterion, address, surface, open }) => {
+	] as const)('$page', ({ criterion, address, surface, open, reselectionHistoryScroll }) => {
 		it(`${criterion} opens over a fresh entry at its own address, Back and Forward stepping between it and the album below`, async () => {
 			await openAlbum('a1');
 			const length = historyLength();
@@ -634,16 +636,34 @@ describe('the library pages opened over a collection', () => {
 		});
 
 		it.each([
-			{ over: 'the Library wall', shows: 'its top', first: openLibraryWall, scrolled: 0 },
-			{ over: 'itself', shows: 'where it was', first: open, scrolled: 640 }
-		])(`defect:#1582: ${criterion} opened over $over shows $shows`, async ({ first, scrolled }) => {
-			await first();
-			captureLibraryScroll(640);
+			{
+				over: 'the Library wall',
+				shows: 'its top',
+				first: openLibraryWall,
+				scrolled: 0,
+				historyScroll: [0]
+			},
+			{
+				over: 'itself',
+				shows: 'where it was',
+				first: open,
+				scrolled: 640,
+				historyScroll: reselectionHistoryScroll
+			}
+		])(
+			`defect:#1582: ${criterion} opened over $over shows $shows`,
+			async ({ first, scrolled, historyScroll }) => {
+				await first();
+				captureLibraryScroll(640);
 
-			await open();
+				await open();
 
-			expect(get(libraryScrollAnchor)).toBe(scrolled);
-		});
+				expect(get(libraryScrollAnchor)).toBe(scrolled);
+				for (const expectedScroll of historyScroll) {
+					expect(historyEntry().scrollAnchor).toBe(expectedScroll);
+				}
+			}
+		);
 
 		it(`${criterion} opened over a scrolled Library wall keeps the wall scrolled for Back`, async () => {
 			await openLibraryWall();
@@ -2895,6 +2915,32 @@ describe('openRailSearchTarget', () => {
 			panel: get(selectedSongId) === null ? null : get(detailTab)
 		};
 	}
+
+	it.each(destinations)(
+		'defect:#1582: choosing the visible $name in the drawer dismisses it without navigating',
+		async ({ target }) => {
+			const stopNavigation = initNavigation();
+			onTestFinished(stopNavigation);
+			fetchPlaylists.mockResolvedValue([playlistItem({ share_slug: null })]);
+			await openAppPage('/settings/voices');
+			await openRailSearchTarget(target);
+			const address = location.href;
+			const selection = visibleSelection();
+			toggleSidebar();
+			await libraryHistoryStepsLanded();
+			const entries = historyLength();
+			expect(get(sidebarOpen)).toBe(true);
+
+			await openRailSearchTarget(target);
+
+			expect(get(sidebarOpen)).toBe(false);
+			expect(location.href).toBe(address);
+			expect(visibleSelection()).toEqual(selection);
+			expect(historyLength()).toBe(entries);
+			await pressBack();
+			expect(location.pathname).toBe('/settings/voices');
+		}
+	);
 
 	it.each(destinations)(
 		'defect:#1582: choosing the visible $name preserves its address, history and selection',
