@@ -194,7 +194,7 @@
 	// A failed read keeps what is on screen, and only an empty wall names it
 	// (#1039 O4): the offline strip owns a lost network, and the wall reads
 	// again when the page returns to the foreground or the network comes back.
-	// Showing the wall again asks only for a ranking that playback has not
+	// Showing the wall again asks only for a ranking that a recorded listen has not
 	// outdated, so a page load stays at the one read the rail may have made.
 	function catchUpWall(readRanking: () => Promise<boolean>): void {
 		if (kind === 'library') void ensureAllAlbumsLoaded();

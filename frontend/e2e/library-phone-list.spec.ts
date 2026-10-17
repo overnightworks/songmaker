@@ -3,18 +3,27 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants';
+import {
 	csrfHeaders,
 	expectLibraryWallLoaded,
 	FlowGuard,
 	LIBRARY_PATH,
 	LIBRARY_URL,
+	nameStartingWith,
 	observePlayingAudio,
 	ONLY_IN_SHELL,
+	openHome,
+	openLibraryWall,
 	openRailNav,
 	playingAudioState,
 	scrollWallHalfway,
 	shellOf,
 	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
+	type Shell,
 	wallBody,
 	workspace
 } from './helpers';
@@ -581,6 +590,48 @@ async function seedPlaylistHolding(page: Page, title: string, songId: string): P
 	return id;
 }
 
+// Plays the album's first take from the Library wall and waits until its
+// listen is recorded.
+async function playFirstTakeFromTheWall(
+	page: Page,
+	shell: Shell,
+	album: PhoneLibraryFixture['albums'][number]
+): Promise<void> {
+	const listenRecorded = page.waitForResponse(
+		(response) =>
+			response.request().method() === 'POST' &&
+			/^\/api\/songs\/[^/]+\/listen$/.test(new URL(response.url()).pathname)
+	);
+	await workspace(page)
+		.getByRole('button', { name: `Open album ${album.title}`, exact: true })
+		.click();
+	await workspace(page)
+		.getByRole('button', { name: songEditorOpenLabel(fixture.tracks[album.id][0].title) })
+		.click();
+	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+	const take = workspace(page).locator('.take-row');
+	await expect(take).toHaveCount(1);
+	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
+	expect((await listenRecorded).ok()).toBe(true);
+}
+
+// Leaves a take paused, so that a reload restores it, as a page Android
+// killed and the listener reopened.
+async function pauseATakeToRestore(
+	page: Page,
+	shell: Shell,
+	album: PhoneLibraryFixture['albums'][number]
+): Promise<void> {
+	await page.goto(LIBRARY_PATH);
+	await playFirstTakeFromTheWall(page, shell, album);
+	await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
+	const transport = page.getByRole('contentinfo');
+	await transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).click();
+	await expect(
+		transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+	).toBeVisible();
+}
+
 // The one switch sorts the Library, Playlists and the rail the same way
 // (1354_rule_8): each page lists its places in A–Z, arranges listens that put
 // a later one first under Last played, and names the rail rows that follow.
@@ -619,7 +670,7 @@ const LAST_PLAYED_PAGES = [
 ] as const;
 
 for (const lastPlayedPage of LAST_PLAYED_PAGES) {
-	test(`1354_rule_8: a fresh ${lastPlayedPage.name} page under Last played never paints A–Z first and reads Listen once`, async ({
+	test(`1354_rule_8: a fresh ${lastPlayedPage.name} page under Last played, with a take restored, never paints A–Z first and reads Listen once`, async ({
 		page
 	}, testInfo) => {
 		const { alphabetical, listenedLast } = await lastPlayedPage.arrange(page);
@@ -632,6 +683,8 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 			wall: '.library-wall .tile-grid .tile-title',
 			rail: lastPlayedPage.railRows
 		});
+		const restoredAlbum = fixture.albums[2];
+		await pauseATakeToRestore(page, shellOf(testInfo), restoredAlbum);
 		await page.goto(lastPlayedPage.path);
 		await page.getByRole('button', { name: 'Last played', exact: true }).click();
 		await expect(workspace(page).locator('.tile-title').first()).toHaveText(lastPlayed[0]);
@@ -655,9 +708,13 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 			await expect(workspace(page).locator('.library-wall .tile-title')).toHaveCount(
 				lastPlayed.length
 			);
+			// The phone's drawer opens only after the take is back, so its rail group
+			// meets a page whose take was restored after the ranking was asked for.
+			await expect(page.getByRole('contentinfo')).toContainText(
+				fixture.tracks[restoredAlbum.id][0].title
+			);
 			const rail = await openRailNav(page, shellOf(testInfo));
 			await expect(rail.locator(lastPlayedPage.railRows)).toHaveCount(lastPlayed.length);
-
 			for (const surface of ['wall', 'rail'] as const)
 				await expect
 					.poll(async () => (await paintedOrders(page))[surface].at(-1))
@@ -670,3 +727,32 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 		}
 	});
 }
+
+test(
+	'1354_rule_8: a place played with the rail standing leads the Library when it is visited again, after one Listen read',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const [newest, older] = [fixture.albums[2], fixture.albums[42]];
+		await listenIn(page, await firstSongOf(page, older.id));
+		await page.goto(LIBRARY_PATH);
+		await page.getByRole('button', { name: 'Last played', exact: true }).click();
+		const tileTitles = workspace(page).locator('.library-wall .tile-grid .tile-title');
+		await expect(tileTitles.first()).toHaveText(older.title);
+		await playFirstTakeFromTheWall(page, 'desktop', newest);
+		await openHome(page, 'desktop');
+		await expect(
+			page.getByRole('region', { name: 'Continue' }).locator('.continue-item').first()
+		).toBeVisible();
+		let listenReads = 0;
+		page.on('request', (request) => {
+			if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
+				listenReads++;
+		});
+
+		await openLibraryWall(page, 'desktop');
+
+		await expect(tileTitles.first()).toHaveText(newest.title);
+		await expect(tileTitles.nth(1)).toHaveText(older.title);
+		expect(listenReads, 'Listen reads on visiting the Library').toBe(1);
+	}
+);

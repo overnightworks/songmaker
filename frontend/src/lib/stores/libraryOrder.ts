@@ -1,7 +1,6 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
 import { fetchLibraryListen, type LibraryListenItem } from '$lib/api/library';
 import { LIBRARY_WALL_PLAYED_PAGE_SIZE, type LibraryWallOrder } from '$lib/constants';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
@@ -14,25 +13,22 @@ type LibraryPlaceComparator = (a: LibraryPlace, b: LibraryPlace) => number;
 // `known` is false while a page that opens in Last played has not yet heard
 // back from Listen: the places stand in no order yet, and showing them in
 // title order would be a flash of the wrong one.
-export type LibraryPlaceOrder = {
+type LibraryPlaceOrder = {
 	readonly known: boolean;
 	readonly compare: LibraryPlaceComparator;
 };
 
 // 'failed' only while no read has ranked the places yet: a failed read keeps
-// a ranking already known.
-type ListenReadState = 'unread' | 'failed' | 'ranked';
+// a ranking already known. 'outdated' is a ranking that a listen recorded
+// since has overtaken: it keeps the places in order until the next read.
+type ListenReadState = 'unread' | 'failed' | 'ranked' | 'outdated';
 
 const lastPlayed = writable<ReadonlyMap<string, LastPlayed>>(new Map());
 const listenRead = writable<ListenReadState>('unread');
 let lastPlayedGeneration = 0;
 let lastPlayedRead: Promise<boolean> | null = null;
-// Playing another take records a listen the ranking has not seen.
-let takeInPlaybackWhenRanked: string | null = null;
-
-function takeInPlayback(): string | null {
-	return audioPlayer.current?.generation.id ?? null;
-}
+// A listen recorded while a read is out may not be in what it brings back.
+let listenRecordedDuringRead = false;
 
 export const lastPlayedByPlace: Readable<ReadonlyMap<string, LastPlayed>> = {
 	subscribe: lastPlayed.subscribe
@@ -123,17 +119,16 @@ async function readEveryPlayedPlace(): Promise<LibraryListenItem[] | null> {
 export function readLastPlayed(): Promise<boolean> {
 	if (lastPlayedRead) return lastPlayedRead;
 	const generation = lastPlayedGeneration;
-	const takeInPlaybackWhenAsked = takeInPlayback();
+	listenRecordedDuringRead = false;
 	const read = readEveryPlayedPlace().then((places) => {
 		if (generation !== lastPlayedGeneration) return false;
 		lastPlayedRead = null;
 		if (places === null) {
-			listenRead.update((state) => (state === 'ranked' ? state : 'failed'));
+			listenRead.update((state) => (state === 'ranked' || state === 'outdated' ? state : 'failed'));
 			return false;
 		}
 		lastPlayed.set(rankedPlaces(places));
-		takeInPlaybackWhenRanked = takeInPlaybackWhenAsked;
-		listenRead.set('ranked');
+		listenRead.set(listenRecordedDuringRead ? 'outdated' : 'ranked');
 		return true;
 	});
 	lastPlayedRead = read;
@@ -147,12 +142,16 @@ function rankedPlaces(places: readonly LibraryListenItem[]): Map<string, LastPla
 }
 
 // For a caller that only needs a ranking present: it reads only while no
-// read has ranked the places, or once another take has started playing.
+// read has ranked the places, or once a recorded listen has outdated it.
 export function ensureLastPlayedRead(): Promise<boolean> {
-	const outdatedByPlayback = takeInPlayback() !== takeInPlaybackWhenRanked;
-	return get(listenRead) === 'ranked' && !outdatedByPlayback
-		? Promise.resolve(true)
-		: readLastPlayed();
+	return get(listenRead) === 'ranked' ? Promise.resolve(true) : readLastPlayed();
+}
+
+// The player calls this once a listen is recorded: a take merely loaded or
+// restored is no listen, and Listen ranks only what was recorded.
+export function outdateLastPlayedRanking(): void {
+	if (lastPlayedRead) listenRecordedDuringRead = true;
+	listenRead.update((state) => (state === 'ranked' ? 'outdated' : state));
 }
 
 // Bumping the generation also discards a read still in flight from the test
@@ -161,7 +160,7 @@ export function resetLibraryOrderForTests(): void {
 	lastPlayedGeneration++;
 	lastPlayedRead = null;
 	lastPlayed.set(new Map());
-	takeInPlaybackWhenRanked = null;
+	listenRecordedDuringRead = false;
 	standingOrder = null;
 	listenRead.set('unread');
 }

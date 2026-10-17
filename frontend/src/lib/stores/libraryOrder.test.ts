@@ -12,6 +12,7 @@ import {
 	ensureLastPlayedRead,
 	inLibraryOrder,
 	libraryPlaceOrder,
+	outdateLastPlayedRanking,
 	readLastPlayed,
 	resetLibraryOrderForTests
 } from './libraryOrder';
@@ -127,17 +128,56 @@ describe('library order', () => {
 		expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
 	});
 
-	it('1354_rule_8: asks Listen again for a caller only once another take has started playing', async () => {
+	it('1354_rule_8: asks Listen again for a caller once a recorded listen has outdated the ranking', async () => {
 		fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
 		await ensureLastPlayedRead();
 		await ensureLastPlayedRead();
 		expect(fetchLibraryListen).toHaveBeenCalledTimes(1);
 
-		audioPlayer.current = { generation: { id: 'g-2' } } as unknown as typeof audioPlayer.current;
+		outdateLastPlayedRanking();
 		await ensureLastPlayedRead();
 		await ensureLastPlayedRead();
 
 		expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
+	});
+
+	it('1354_rule_8: keeps the ranking present when a take is restored without a recorded listen', async () => {
+		fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
+		await ensureLastPlayedRead();
+
+		audioPlayer.current = { generation: { id: 'g-2' } } as unknown as typeof audioPlayer.current;
+		await ensureLastPlayedRead();
+
+		expect(fetchLibraryListen).toHaveBeenCalledTimes(1);
+	});
+
+	it('defect:#1537: reads again after a listen recorded while a read was out, which may not have seen it', async () => {
+		const answer = Promise.withResolvers<{ items: ReturnType<typeof listened>[] }>();
+		fetchLibraryListen.mockReturnValueOnce(answer.promise);
+		const read = ensureLastPlayedRead();
+
+		outdateLastPlayedRanking();
+		answer.resolve({ items: [listened('kinetic')] });
+		await read;
+		fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
+		await ensureLastPlayedRead();
+
+		expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
+	});
+
+	it('defect:#1537: keeps the places in their ranked order while an outdated ranking waits for the next read', async () => {
+		chooseLibraryWallOrder('played');
+		fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
+		await ensureLastPlayedRead();
+		const albums = ['Afterglow', 'Kinetic'].map((title) => titled(title));
+
+		outdateLastPlayedRanking();
+
+		expect(get(libraryPlaceOrder).known).toBe(true);
+		expect(titlesOf(inLibraryOrder('album', albums, get(libraryPlaceOrder)))).toEqual([
+			'Kinetic',
+			'Afterglow'
+		]);
 	});
 
 	it('1354_rule_8: holds every place back while Last played is chosen until Listen has answered', async () => {
