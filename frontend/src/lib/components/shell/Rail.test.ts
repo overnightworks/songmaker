@@ -278,6 +278,30 @@ describe('Rail', () => {
 		}
 	);
 
+	it.each([
+		{ path: '/', surface: 'home', label: 'Home' },
+		{ path: '/library', surface: 'browse', label: 'Library 0' },
+		{ path: '/playlists', surface: 'playlists', label: 'Playlists 0' }
+	] as const)(
+		'defect:#1586: $label current mark follows song visibility at $path',
+		async ({ path, surface, label }) => {
+			replaceHistoryEntry(path);
+			librarySurface.set(surface);
+			const target = await render();
+			const currentLabels = () =>
+				Array.from(target.querySelectorAll('a.rail-page-link[aria-current="page"]'), (link) =>
+					link.textContent?.trim()
+				);
+			expect(currentLabels()).toEqual([label]);
+			selectedSongId.set('unresolved-song');
+			await tick();
+			expect(currentLabels()).toEqual([]);
+			selectedSongId.set(null);
+			await tick();
+			expect(currentLabels()).toEqual([label]);
+		}
+	);
+
 	it.each(modifiedClicks)('1354_rule_40: Home preserves browser handling for %o', async (mouse) => {
 		replaceHistoryEntry('/library');
 		librarySurface.set('browse');
@@ -331,6 +355,10 @@ describe('Rail', () => {
 			const target = collapsed ? await renderCollapsedRail() : await navigationOnly.render();
 			for (const link of target.querySelectorAll<HTMLAnchorElement>('a.home-link, a.page-link')) {
 				expect(link.hasAttribute('title')).toBe(collapsed);
+				const icon = requireElement<SVGElement>(link, 'svg');
+				expect(icon.getAttribute('width')).toBe('14');
+				expect(icon.getAttribute('height')).toBe('14');
+				expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
 			}
 		}
 	);

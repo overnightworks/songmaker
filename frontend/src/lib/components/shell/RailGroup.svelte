@@ -171,6 +171,11 @@
 		font-size: 0.85rem;
 	}
 
+	.disclose-row:has([aria-current='page']) {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+
 	.disclose {
 		display: flex;
 		align-items: center;

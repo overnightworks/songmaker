@@ -57,6 +57,9 @@ import {
 	playlistRoutePath,
 	PLAYLISTS_ROUTE_PATH,
 	songRoutePath,
+	standsOnHomePage,
+	standsOnLibraryPage,
+	standsOnPlaylistsPage,
 	takeRoutePath
 } from '$lib/routes/addresses';
 import { CREATED_SORTS } from '$lib/utils/recency';
@@ -751,6 +754,22 @@ export function libraryWallShows(surface: LibrarySurface, songId: string | null)
 
 export function playlistsWallShows(surface: LibrarySurface, songId: string | null): boolean {
 	return surface === 'playlists' && songId === null;
+}
+
+export function placeShown(
+	place: 'home' | 'library' | 'playlists',
+	surface: LibrarySurface,
+	songId: string | null,
+	pathname: string
+): boolean {
+	switch (place) {
+		case 'home':
+			return homeShows(surface, songId) && standsOnHomePage(pathname);
+		case 'library':
+			return libraryWallShows(surface, songId) && standsOnLibraryPage(pathname);
+		case 'playlists':
+			return playlistsWallShows(surface, songId) && standsOnPlaylistsPage(pathname);
+	}
 }
 
 type LegacySongQueryAddress =
