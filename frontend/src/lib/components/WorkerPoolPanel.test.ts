@@ -62,20 +62,15 @@ function workerPool(vramMeasured: boolean | null): WorkerPoolResponse {
 	};
 }
 
-async function renderVram(vramMeasured: boolean | null): Promise<HTMLSpanElement> {
-	api.listWorkers.mockResolvedValue(workerPool(vramMeasured));
+async function renderVramPool(pool: WorkerPoolResponse): Promise<HTMLElement> {
+	api.listWorkers.mockResolvedValue(pool);
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(WorkerPoolPanel, { target, props: { availableModes: [] } });
+	mounted = mount(WorkerPoolPanel, { target, props: { availableModes: ['sft', 'turbo'] } });
 	await tick();
 	await Promise.resolve();
 	await tick();
-	const row = Array.from(target.querySelectorAll('.card-row')).find(
-		(candidate) => candidate.querySelector('.row-label')?.textContent === 'VRAM:'
-	);
-	const value = row?.querySelector<HTMLSpanElement>('.row-value');
-	if (!value) throw new Error('Expected the VRAM value to be rendered');
-	return value;
+	return target;
 }
 
 beforeEach(() => {
@@ -122,7 +117,7 @@ async function renderOffline(lastRegisterAt: string): Promise<HTMLElement> {
 }
 
 describe('WorkerPoolPanel with no heartbeat', () => {
-	it('names how long the worker has been gone instead of just "no heartbeat"', async () => {
+	it('defect:#1567 names how long the worker has been gone instead of just "no heartbeat"', async () => {
 		// The GPU worker's container sat on "Created" for five days without
 		// ever registering again (issue #252's live incident). "Offline (no
 		// heartbeat)" told the operator nothing about how long that had been
@@ -132,7 +127,7 @@ describe('WorkerPoolPanel with no heartbeat', () => {
 
 		expect(target.textContent).toContain('last registered');
 		expect(target.textContent).toContain('6d ago');
-		expect(target.textContent).not.toContain('no heartbeat');
+		expect(target.querySelector('.card-row')?.textContent).not.toContain('no heartbeat');
 	});
 
 	it('explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
@@ -353,19 +348,80 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 });
 
 describe('WorkerPoolPanel VRAM measurement', () => {
-	it('marks estimated VRAM usage', async () => {
-		const value = await renderVram(false);
+	it.each([
+		{ name: 'measured', measured: true, used: 18.5, loading: false, free: '5.5 GB free' },
+		{ name: 'estimated', measured: false, used: 6, loading: false, free: null },
+		{ name: 'loading measured', measured: true, used: 9.1, loading: true, free: '14.9 GB free' },
+		{ name: 'loading estimated', measured: false, used: 6, loading: true, free: null },
+		{ name: 'legacy null flag', measured: null, used: 18.5, loading: false, free: '5.5 GB free' },
+		{
+			name: 'legacy absent flag',
+			measured: undefined,
+			used: 18.5,
+			loading: false,
+			free: '5.5 GB free'
+		},
+		{ name: 'full GPU', measured: true, used: 24, loading: false, free: '0.0 GB free' }
+	])(
+		'defect:#1567 shows $name and preserves Load availability',
+		async ({ measured, used, loading, free }) => {
+			const pool = workerPool(measured ?? null);
+			const state = pool.workers[0].state;
+			if (!state) throw new Error('Expected a heartbeating worker');
+			if (measured === undefined) delete state.vram_measured;
+			state.vram_used_gb = used;
+			state.target_loading = loading ? 'turbo' : null;
+			pool.workers[0].status = loading ? 'loading' : 'online';
+			const target = await renderVramPool(pool);
+			const row = target.querySelector('[role="group"][aria-label="VRAM"]');
+			expect(row).toHaveTextContent(
+				`${measured === false ? '~' : ''}${used.toFixed(1)} / 24.0 GB${measured === false ? ' est.' : ''}`
+			);
+			expect(row).not.toHaveTextContent('unknown');
+			if (free) expect(row).toHaveTextContent(free);
+			else {
+				expect(row).not.toHaveTextContent('GB free');
+				expect(row).toHaveTextContent(
+					'No GPU reading — the sizes of the loaded models, not a measurement'
+				);
+			}
+			const load = findButtonByText(target, 'Load');
+			if (!load) throw new Error('Expected a Load button');
+			expect(load.disabled).toBe(true);
+			const select = target.querySelector('select');
+			if (!select) throw new Error('Expected a model selector');
+			select.value = 'turbo';
+			select.dispatchEvent(new Event('change', { bubbles: true }));
+			await tick();
+			expect(load.disabled).toBe(loading);
+		}
+	);
 
-		expect(value).toHaveTextContent('~12.4 / 24.0 GB est.');
-		expect(value).toHaveAttribute('title', 'Estimated VRAM usage');
-	});
-
-	it.each([true, null])('leaves measured or legacy VRAM usage unchanged (%s)', async (measured) => {
-		const value = await renderVram(measured);
-
-		expect(value).toHaveTextContent('12.4 / 24.0 GB');
-		expect(value).not.toHaveAttribute('title');
-	});
+	it.each(['heartbeat', 'used', 'total', 'both'] as const)(
+		'defect:#1567 shows unknown when missing %s without borrowing identity capacity',
+		async (missing) => {
+			const pool = workerPool(true);
+			if (missing === 'heartbeat') {
+				pool.workers[0].state = null;
+				pool.workers[0].status = 'offline';
+			} else {
+				const state = pool.workers[0].state;
+				if (!state) throw new Error('Expected a heartbeating worker');
+				if (missing !== 'total') state.vram_used_gb = null;
+				if (missing !== 'used') state.vram_total_gb = null;
+			}
+			const target = await renderVramPool(pool);
+			const row = target.querySelector('[role="group"][aria-label="VRAM"]');
+			expect(row).toHaveTextContent('unknown');
+			expect(row).toHaveTextContent(
+				missing === 'heartbeat'
+					? 'No heartbeat — nothing to read'
+					: 'Worker build does not report VRAM fields'
+			);
+			expect(row).not.toHaveTextContent('GB');
+			expect(findButtonByText(target, 'Load')).toBeDisabled();
+		}
+	);
 });
 
 describe('WorkerPoolPanel failures', () => {

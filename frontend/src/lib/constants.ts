@@ -230,6 +230,14 @@ export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remainin
 // Named when an admin panel's first read fails while no offline strip says why.
 export const WORKER_POOL_LOAD_FAILED = 'Cannot reach the worker pool API.';
 export const WORKER_POOL_REFRESH_FAILED = 'Worker pool not updating — retrying…';
+export const WORKER_POOL_VRAM_LABEL = 'VRAM';
+export const WORKER_POOL_VRAM_UNKNOWN = 'unknown';
+export const WORKER_POOL_VRAM_ESTIMATE = 'est.';
+export const WORKER_POOL_VRAM_FREE = 'GB free';
+export const WORKER_POOL_VRAM_ESTIMATE_REASON =
+	'No GPU reading — the sizes of the loaded models, not a measurement';
+export const WORKER_POOL_VRAM_NO_HEARTBEAT = 'No heartbeat — nothing to read';
+export const WORKER_POOL_VRAM_NO_FIELDS = 'Worker build does not report VRAM fields';
 export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 
