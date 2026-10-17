@@ -28,7 +28,7 @@ async def load_model_on_worker(
 
     from songmaker_cli.db.queries import get_worker_identity
     from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
-    from songmaker_cli.scheduler import WorkerTaskFailed
+    from songmaker_cli.scheduler import WorkerTaskFailed, worker_response_cause
     from songmaker_cli.settings import get_settings
 
     factory = db_factory
@@ -72,9 +72,7 @@ async def load_model_on_worker(
             job_id,
             JobStatus.FAILED,
             error=_sanitize_error(
-                WorkerTaskFailed(
-                    f"Worker returned {response.status_code}: {response.text[:4000]}",
-                ),
+                WorkerTaskFailed(worker_response_cause(response)),
                 job_id,
             ),
             error_type="worker_error",

@@ -1,6 +1,10 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import type { Snippet } from 'svelte';
+	import { getRailCollapsed } from '$lib/contexts/rail-collapsed';
+	import { followPlainClick } from '$lib/stores/navigation';
+
+	const isRailCollapsed = getRailCollapsed();
 
 	interface GroupPage {
 		href: string;
@@ -74,14 +78,6 @@
 		}
 	});
 
-	function followPageLink(event: MouseEvent, groupPage: GroupPage): void {
-		const opensElsewhere =
-			event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
-		if (opensElsewhere) return;
-		event.preventDefault();
-		groupPage.open();
-	}
-
 	function toggleOpen(): void {
 		open = !open;
 		persistOpen(open);
@@ -125,17 +121,17 @@
 				aria-label={label}
 				aria-expanded={open}
 				aria-controls={groupId}
-				title={label}
+				title={isRailCollapsed() ? label : undefined}
 				onclick={toggleOpen}
 			>
 				{@render caret()}
 			</button>
 			<a
-				class="disclose page-link"
+				class="disclose page-link rail-page-link"
 				href={page.href}
-				title={label}
+				title={isRailCollapsed() ? label : undefined}
 				aria-current={page.current ? 'page' : undefined}
-				onclick={(event) => followPageLink(event, page)}
+				onclick={(event) => followPlainClick(event, page.open)}
 			>
 				{@render heading()}
 			</a>
@@ -146,7 +142,7 @@
 				aria-label={label}
 				aria-expanded={open}
 				aria-controls={groupId}
-				title={label}
+				title={isRailCollapsed() ? label : undefined}
 				onclick={toggleOpen}
 			>
 				{@render caret()}
@@ -201,11 +197,6 @@
 	.page-link {
 		text-decoration: none;
 		padding-left: 4px;
-	}
-
-	.page-link[aria-current='page'] {
-		color: color-mix(in srgb, var(--accent) 60%, var(--text));
-		font-weight: 600;
 	}
 
 	.disclose:hover {

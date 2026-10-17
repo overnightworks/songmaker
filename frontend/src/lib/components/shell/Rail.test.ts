@@ -1,3 +1,5 @@
+import { modifiedClicks } from '$lib/test-utils/modified-clicks';
+import { selectedSongId } from '$lib/stores/player';
 import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +17,7 @@ import {
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
-import { railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
+import { railCollapsed, railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
 import {
 	buildAlbum as album,
 	buildPlaylist as playlist,
@@ -126,7 +128,9 @@ async function openRailGroup(root: ParentNode, index: number): Promise<void> {
 beforeEach(() => {
 	localStorage.clear();
 	railWidth.set(264);
+	railCollapsed.set(false);
 	resetLibraryContextForTests();
+	selectedSongId.set(null);
 	railTreeQuery.set('');
 	albumList.set([]);
 	replaceHistoryEntry('/');
@@ -138,6 +142,7 @@ afterEach(async () => {
 	if (collapsedMounted) await unmount(collapsedMounted);
 	collapsedMounted = undefined;
 	resetLibraryContextForTests();
+	selectedSongId.set(null);
 	railTreeQuery.set('');
 	resetPlaylistsForTests();
 	discardDraft();
@@ -252,6 +257,83 @@ describe('Rail', () => {
 		expect(get(railWidth)).toBe(RAIL_MIN_WIDTH_PX);
 		expect(document.activeElement).toBe(handle);
 	});
+
+	it.each(['/', '/library', '/album/a1', '/settings'])(
+		'1354_rule_40: Home leads the pages and is current only at /, standing at %s',
+		async (path) => {
+			replaceHistoryEntry(path);
+			librarySurface.set('home');
+			openCollection.set({ kind: 'album', id: 'a1' });
+			const target = await render();
+			const links = target.querySelectorAll<HTMLAnchorElement>(
+				'.rail-scroll > a, .rail-scroll a.page-link'
+			);
+			expect(Array.from(links, (link) => link.textContent?.trim())).toEqual([
+				'Home',
+				'Library 0',
+				'Playlists 0'
+			]);
+			expect(links[0]?.getAttribute('href')).toBe('/');
+			expect(links[0]?.getAttribute('aria-current')).toBe(path === '/' ? 'page' : null);
+		}
+	);
+
+	it.each(modifiedClicks)('1354_rule_40: Home preserves browser handling for %o', async (mouse) => {
+		replaceHistoryEntry('/library');
+		librarySurface.set('browse');
+		setDraftLyrics('unsaved draft');
+		const target = await render();
+		let preventedByHome = true;
+		target.addEventListener('click', (event) => {
+			preventedByHome = event.defaultPrevented;
+			event.preventDefault();
+		});
+		requireElement<HTMLAnchorElement>(target, 'a.home-link').dispatchEvent(
+			new MouseEvent('click', { bubbles: true, cancelable: true, ...mouse })
+		);
+		await tick();
+		expect(preventedByHome).toBe(false);
+		expect(location.pathname).toBe('/library');
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(pendingDirtyNavigation)).toBeNull();
+	});
+
+	it.each(['home', 'browse', 'detail'] as const)(
+		'1354_rule_40: Home is not current over an unresolved song on %s',
+		async (surface) => {
+			replaceHistoryEntry('/?song=missing');
+			librarySurface.set(surface);
+			selectedSongId.set('missing');
+			const target = await render();
+			expect(requireElement(target, 'a.home-link').getAttribute('aria-current')).toBeNull();
+		}
+	);
+
+	it.each([false, true])(
+		'1354_rule_40: Home opens through the dirty guard, dirty=%s',
+		async (dirty) => {
+			replaceHistoryEntry('/album/a1');
+			librarySurface.set('detail');
+			if (dirty) setDraftLyrics('unsaved draft');
+			const target = await render();
+			requireElement<HTMLAnchorElement>(target, 'a.home-link').click();
+			await tick();
+			await Promise.resolve();
+			expect(get(pendingDirtyNavigation) !== null).toBe(dirty);
+			expect(get(librarySurface)).toBe(dirty ? 'detail' : 'home');
+		}
+	);
+
+	it.each([false, true])(
+		'1354_rule_40: page titles follow this rail collapse state, collapsed=%s',
+		async (collapsed) => {
+			railCollapsed.set(true);
+			const target = collapsed ? await renderCollapsedRail() : await navigationOnly.render();
+			for (const link of target.querySelectorAll<HTMLAnchorElement>('a.home-link, a.page-link')) {
+				expect(link.hasAttribute('title')).toBe(collapsed);
+			}
+		}
+	);
 
 	it('1354_rule_40: acts as the Home link when the brand wordmark is clicked, keeping the open collection', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
