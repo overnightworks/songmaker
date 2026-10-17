@@ -945,17 +945,23 @@ def test_generation_job_preserves_worker_cause(seeded_db, tmp_path: Path, failur
 
 
 @pytest.mark.parametrize("status_code", [409, 502])
-@pytest.mark.parametrize("response_format", ["text", "json"])
+@pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
 def test_generation_job_preserves_auto_load_response(
     seeded_db, tmp_path: Path, status_code: int, response_format: str,
 ) -> None:
+    """defect:#1559: Auto-load failures preserve a cause, including empty bodies."""
     from songmaker_cli.acestep_state import read_queue_depth, worker_state_key
 
     cause = "Model sft requires 12.0GB > budget 8.0GB"
-    response = httpx.Response(
-        status_code,
-        **({"json": {"detail": cause}} if response_format == "json" else {"text": cause}),
-    )
+    response_body = {
+        "json": {"json": {"detail": cause}},
+        "text": {"text": cause},
+        "empty": {"text": ""},
+        "whitespace": {"text": " \n\t"},
+    }[response_format]
+    response = httpx.Response(status_code, **response_body)
+    if response_format in {"empty", "whitespace"}:
+        cause = f"Worker returned {status_code} with no detail"
 
     def worker_response(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/load_model"
@@ -2754,14 +2760,24 @@ def test_load_model_on_worker_unreachable(seeded_db) -> None:
         assert job.error_type == "worker_unreachable"
 
 
-def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
+@pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
+def test_load_model_on_worker_returns_5xx(seeded_db, response_format: str) -> None:
+    """defect:#1559: Direct loads store the worker sentence without its JSON wrapper."""
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import load_model_on_worker
 
     _seed_worker_row(seeded_db)
     worker_response = "load failed at /opt/acestep/models/sft"
-    fake_response = MagicMock(status_code=500, text=worker_response)
+    response_body = {
+        "json": {"json": {"detail": worker_response}},
+        "text": {"text": worker_response},
+        "empty": {"text": ""},
+        "whitespace": {"text": " \n\t"},
+    }[response_format]
+    fake_response = httpx.Response(500, **response_body)
+    if response_format in {"empty", "whitespace"}:
+        worker_response = "Worker returned 500 with no detail"
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value=fake_response)
     fake_client.__aenter__ = AsyncMock(return_value=fake_client)
@@ -2776,7 +2792,7 @@ def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
         job = get_job(session, "w1-job")
         assert job.status == "failed"
         assert job.error_type == "worker_error"
-        assert job.error == f"Worker returned 500: {worker_response}"
+        assert job.error == worker_response
 
 
 def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, caplog) -> None:
