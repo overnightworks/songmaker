@@ -44,7 +44,6 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import (
     get_arq_pool,
@@ -82,6 +81,7 @@ from songmaker_cli.db.queries import (
     unpick_generation,
     update_job_status,
 )
+from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)

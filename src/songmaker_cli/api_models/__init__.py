@@ -1,6 +1,11 @@
 """Pydantic models for API requests and responses.
 
 Split by domain, re-exported here for backwards compatibility.
+
+The value objects shared with persistence (generation params, Whisper cues)
+live beneath both layers and are re-exported here because
+``scripts/generate_types.py`` reads this module's ``__all__`` to find the
+models that reach ``types.ts``.
 """
 
 from __future__ import annotations
@@ -23,12 +28,6 @@ from songmaker_cli.api_models.cover_suggestions import (
     CoverSuggestionResponse,
     CoverSuggestionSelectionRequest,
     CoverSuggestionsResponse,
-)
-from songmaker_cli.api_models.generation_params import (
-    BaseGenerationParams,
-    CoverTaskParams,
-    RepaintTaskParams,
-    StoredGenerationParams,
 )
 from songmaker_cli.api_models.health import HealthResponse
 from songmaker_cli.api_models.jobs import JobResponse
@@ -150,11 +149,6 @@ from songmaker_cli.api_models.songs import (
     TitleUpdateRequest,
     VersionResponse,
 )
-from songmaker_cli.api_models.whisper import (
-    WhisperCue,
-    WhisperWordCue,
-    stored_whisper_cues,
-)
 from songmaker_cli.api_models.workers import (
     EvictModelOnWorkerRequest,
     LoadedModelDetail,
@@ -170,6 +164,16 @@ from songmaker_cli.api_models.workers import (
     WorkerPoolResponse,
     WorkerRegisterRequest,
     WorkerRegisterResponse,
+)
+from songmaker_cli.generation_params import (
+    BaseGenerationParams,
+    CoverTaskParams,
+    RepaintTaskParams,
+    StoredGenerationParams,
+)
+from songmaker_cli.whisper_cues import (
+    WhisperCue,
+    WhisperWordCue,
 )
 
 
@@ -360,5 +364,4 @@ __all__ = [
     "WhisperWordCue",
     "WorkerRegisterRequest",
     "WorkerRegisterResponse",
-    "stored_whisper_cues",
 ]

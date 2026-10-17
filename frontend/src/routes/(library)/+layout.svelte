@@ -10,42 +10,21 @@
 	// unmounts for a resolution that fails or is still in flight.
 	import { onMount } from 'svelte';
 	import LibraryWorkspace from '$lib/components/LibraryWorkspace.svelte';
-	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
+	import { inertWhileAddressOverlay } from '$lib/stores/libraryAddressOverlay';
 	import { restoreLastPlayback } from '$lib/stores/player';
 
 	let { children } = $props();
-	let workspaceWrapper: HTMLDivElement | undefined = $state();
 
 	// The root layout renders this group only once auth has a user, so the
 	// take that user last played here can come back, paused (#1187 P2).
 	onMount(() => {
 		void restoreLastPlayback();
 	});
-
-	// `position: absolute` and `z-index` on the overlay only decide paint
-	// order, not the accessibility tree or the tab order -- the workspace is
-	// unconditionally mounted underneath it now, so without this a keyboard or
-	// screen-reader user tabs straight into the stale, invisible workspace
-	// before ever reaching the overlay's own "Try again"/"Back" action. `inert`
-	// removes the whole subtree from both the tab order and the accessibility
-	// tree, which is what a single `{#if}/{:else}` used to give for free when
-	// the overlay was the workspace's only DOM (issue #276 review fix).
-	//
-	// Driven imperatively rather than through a Svelte `inert={...}` attribute
-	// binding: jsdom (used by the unit suite) has no `inert` IDL property, and
-	// Svelte's attribute codegen detects that absence and falls back to a
-	// plain property assignment invisible to `hasAttribute` -- correct in a
-	// real browser, untestable here. `toggleAttribute` is the same DOM API in
-	// both.
-	$effect(() => {
-		return libraryAddressOverlayActive.subscribe((active) => {
-			workspaceWrapper?.toggleAttribute('inert', active);
-		});
-	});
 </script>
 
 <div class="library-stack">
-	<div class="workspace-wrapper" bind:this={workspaceWrapper}>
+	<!-- Inert while an address overlay is up, so the stale workspace leaves the tab order. -->
+	<div class="workspace-wrapper" {@attach inertWhileAddressOverlay}>
 		<LibraryWorkspace />
 	</div>
 	{@render children()}

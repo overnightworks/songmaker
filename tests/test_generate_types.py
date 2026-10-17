@@ -114,7 +114,7 @@ def test_refuses_an_annotation_without_a_typescript_counterpart() -> None:
 
 
 def test_generates_shared_repaint_mode_alias() -> None:
-    from songmaker_cli.api_models.generation_params import (
+    from songmaker_cli.generation_params import (
         BaseGenerationParams,
         RepaintTaskParams,
         StoredGenerationParams,

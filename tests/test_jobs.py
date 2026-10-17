@@ -1803,7 +1803,7 @@ def _scoring_result(
 ) -> SongScores:
     """A finished scoring run: emotional_dynamics always, text_accuracy on
     request, and optionally a scorer that blew its budget."""
-    from songmaker_cli.api_models.whisper import WhisperCue
+    from songmaker_cli.whisper_cues import WhisperCue
 
     runs = [ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK)]
     if timed_out:
