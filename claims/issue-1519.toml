@@ -1,8 +1,0 @@
-claim_id = "fceb639ed397410a95f4d6ad0b6af7b4"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "f74fecac7c642ca2513d7e3ffa87865506f86b17"
-branch = "claude/issue-1519-ratchet-object-constants"
-scope = ["docs/testing.md", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/test-utils", "scripts/test_helper_ratchet.sh", "tests/test_test_helper_ratchet.py"]
-opened_commit = "cfdcd5edbaca3ec38b1b3e8fb1effff04b803a2c"
-whole_reason = "The ratchet's matcher and the last duplicate it would count land together so the baseline never rises."
