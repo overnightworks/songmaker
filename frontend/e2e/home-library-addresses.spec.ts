@@ -19,8 +19,7 @@ import {
 	LIBRARY_NEW_MENU_LABEL,
 	PLAYLISTS_PAGE_LABEL,
 	RAIL_DRAWER_LABEL,
-	RAIL_LIBRARY_LABEL,
-	RAIL_PLAYLISTS_LABEL,
+	LIBRARY_PAGE_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
@@ -119,8 +118,8 @@ async function closeDrawer(page: Page): Promise<void> {
 	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 }
 
-type RailWord = typeof RAIL_LIBRARY_LABEL | typeof RAIL_PLAYLISTS_LABEL;
-const RAIL_WORDS: readonly RailWord[] = [RAIL_LIBRARY_LABEL, RAIL_PLAYLISTS_LABEL];
+type RailWord = typeof LIBRARY_PAGE_LABEL | typeof PLAYLISTS_PAGE_LABEL;
+const RAIL_WORDS: readonly RailWord[] = [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL];
 
 /** Which of the rail's words Library and Playlists marks the page as the one shown, `null` for neither; the phone's drawer is opened and closed again. */
 async function expectCurrentRailWord(
@@ -406,7 +405,7 @@ test('1354_rule_14 1354_rule_31 row 2: cold /library shows the wall, with + New 
 	await expectWallShown(page);
 	await expect(homeHeading(page)).toHaveCount(0);
 	await expect(newButton(page)).toHaveCount(shell === 'desktop' ? 1 : 0);
-	await expectCurrentRailWord(page, shell, RAIL_LIBRARY_LABEL);
+	await expectCurrentRailWord(page, shell, LIBRARY_PAGE_LABEL);
 	guard.assertClean();
 });
 
@@ -448,8 +447,8 @@ test('1354_rule_31 row 3b: Home, the word Library, then reload stays the Library
 // page left behind: Settings changes no surface, so it must not leave the word
 // of the page it was opened from marked.
 for (const [origin, railWord] of [
-	[LIBRARY, RAIL_LIBRARY_LABEL],
-	[PLAYLISTS, RAIL_PLAYLISTS_LABEL]
+	[LIBRARY, LIBRARY_PAGE_LABEL],
+	[PLAYLISTS, PLAYLISTS_PAGE_LABEL]
 ] as const) {
 	test(`defect:#1523 1354_rule_40: ${origin.name}, Settings, then Back marks the word ${railWord} current only on its own page, with no reload`, async ({
 		page
@@ -569,7 +568,7 @@ const BACK_ARROW_CELLS: readonly {
 	},
 	{
 		origin: 'the Library',
-		name: RAIL_LIBRARY_LABEL,
+		name: LIBRARY_PAGE_LABEL,
 		openAlbum: async (page, shell, library) => {
 			await LIBRARY.open(page, shell, library);
 			await wall(page)
@@ -580,7 +579,7 @@ const BACK_ARROW_CELLS: readonly {
 	},
 	{
 		origin: 'a cold address',
-		name: RAIL_LIBRARY_LABEL,
+		name: LIBRARY_PAGE_LABEL,
 		openAlbum: async (page) => {
 			await page.goto(`/album/${readSeededLibrary().albumId}`);
 		},
