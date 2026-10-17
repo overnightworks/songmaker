@@ -63,7 +63,7 @@ import {
 	ONLY_IN_SHELL,
 	openRailNav,
 	openSettingsSection,
-	openSettingsSectionFromDrawerSearch,
+	openSettingsSectionFromSearch,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
 	workspace
@@ -388,7 +388,7 @@ test.describe('song page at phone width', () => {
 	);
 
 	test(
-		'Discard on a Settings page from the drawer search lands on its address, which a reload keeps (#1143)',
+		'defect:#1583: Discard on a Settings page from Search lands on its address, which a reload keeps (#1143)',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			const library = readSeededLibrary();
@@ -397,7 +397,7 @@ test.describe('song page at phone width', () => {
 				library.songPhoneAlbumId
 			);
 
-			await openSettingsSectionFromDrawerSearch(page, ACCOUNT_SECTION);
+			await openSettingsSectionFromSearch(page, ACCOUNT_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
 			await unsavedDraftDialog
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
