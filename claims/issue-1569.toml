@@ -1,0 +1,8 @@
+claim_id = "18ee8cd91e8542af80253e0f1b67a95e"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "ead1ce4e978640394af5f64e128e42b9da5ab73f"
+branch = "claude/issue-1569-musician-line"
+scope = ["docs/acestep.md", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/jobs/generation_failure.py", "src/songmaker_cli/scheduler.py", "tests/test_generation_failure.py", "tests/test_jobs.py", "tests/test_scheduler.py"]
+opened_commit = "de92fb6ade2899a0e8611f8a6b20aa948a2be0fa"
+whole_reason = "the musician-line owner, its three write sites, the cause constants, the docs paragraph and their pinning tests move together"
