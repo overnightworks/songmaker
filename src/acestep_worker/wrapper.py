@@ -22,6 +22,7 @@ from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import NOT_STARTED, AceStepProgress
 from acestep_worker.child_tasks import settle_child_task
+from acestep_worker.clock import utcnow
 from acestep_worker.downloads import (
     list_available_modes,
     spawn_background,
@@ -39,6 +40,7 @@ from acestep_worker.heartbeat import (
     renew_gpu_hold,
     reserve_gpu_hold,
 )
+from acestep_worker.last_error import LastError
 from acestep_worker.model_cache import (
     CapacityError,
     ModelCache,
@@ -98,6 +100,7 @@ class WorkerDeps:
     shared_audio_root: Path = Path(DEFAULT_SHARED_AUDIO_ROOT)
     training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
     train_lora_runner: TrainLoraRunner | None = None
+    last_error: LastError | None = None
     registered: bool = False
     registration_task: asyncio.Task[None] | None = None
     gpu_hold_handover_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -179,6 +182,7 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
     snapshot = deps.cache.snapshot()
     gpu_health = deps.gpu_health_checker()
     hold_seconds = await deps.redis.ttl(gpu_hold_key(deps.worker_id))
+    last_error = deps.last_error
     return {
         "loaded": [{"mode": info.mode, "size_gb": info.size_gb} for info in snapshot.loaded],
         "target_loading": snapshot.target_loading,
@@ -188,6 +192,8 @@ async def build_state_payload(deps: WorkerDeps) -> dict[str, Any]:
             else None
         ),
         "loading_last_log_line": snapshot.loading_last_log_line,
+        "last_error": last_error.message if last_error is not None else None,
+        "last_error_at": last_error.at.isoformat() if last_error is not None else None,
         "vram_used_gb": snapshot.vram_used_gb,
         "vram_total_gb": snapshot.vram_total_gb,
         "vram_measured": snapshot.vram_measured,
@@ -257,8 +263,10 @@ class _WorkerRoutes:
         except UnknownModeError as exc:
             raise HTTPException(status_code=400, detail=f"Unknown mode: {exc}") from exc
         except CapacityError as exc:
+            self._deps.last_error = LastError(str(exc), utcnow())
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except SubprocessStartError as exc:
+            self._deps.last_error = LastError(str(exc), utcnow())
             log.exception("ACE-Step subprocess failed to start for %s", req.mode)
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return LoadModelResponse(
@@ -411,6 +419,9 @@ async def _run_generation_with_release(
             port=loaded.port,
             audio_output_dir=deps.audio_output_dir,
         )
+        snapshot = await deps.task_store.get(task_id)
+        if snapshot is not None and snapshot.state == "error" and snapshot.error is not None:
+            deps.last_error = LastError(snapshot.error, snapshot.updated_at)
     finally:
         await _release_generation_task(deps, req.mode, task_id)
 

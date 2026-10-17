@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Awaitable, Callable, Iterable
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -18,6 +20,7 @@ from starlette.routing import BaseRoute
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase, AceStepProgress
+from acestep_worker.clock import utcnow
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import (
     DEFAULT_TTL_SECONDS,
@@ -42,6 +45,7 @@ from acestep_worker.wrapper import (
     _run_train_lora_with_cleanup,
     _TrainLoraResources,
     build_router,
+    build_state_payload,
     create_app,
     default_generate_runner,
     read_queue_depth,
@@ -66,6 +70,8 @@ def _make_deps(
     tmp_path: Path,
     *,
     vram_reader: VramReader | None = None,
+    model_sizes: dict[str, float] | None = None,
+    model_loader: Callable[[str], Awaitable[LoadedModel]] | None = None,
 ) -> tuple[WorkerDeps, fakeredis.aioredis.FakeRedis]:
     redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
     loaded_log: list[str] = []
@@ -79,8 +85,8 @@ def _make_deps(
 
     cache = ModelCache(
         vram_budget_gb=24.0,
-        model_sizes={"sft": 6.0, "xl-sft": 12.0},
-        loader=loader,
+        model_sizes=model_sizes if model_sizes is not None else {"sft": 6.0, "xl-sft": 12.0},
+        loader=model_loader or loader,
         unloader=unloader,
         vram_reader=vram_reader,
     )
@@ -121,16 +127,9 @@ def _make_deps(
     deps.heartbeat = HeartbeatLoop(
         redis=redis,
         worker_id="acestep-worker-0",
-        state_provider=lambda: _state_for_test(deps),
+        state_provider=lambda: build_state_payload(deps),
     )
     return deps, redis
-
-
-async def _state_for_test(deps: WorkerDeps) -> dict[str, Any]:
-    return {
-        "loaded": deps.cache.loaded_modes(),
-        "queue_depth": await read_queue_depth(deps.redis, deps.worker_id),
-    }
 
 
 def _served_operations(routes: Iterable[BaseRoute]) -> list[tuple[str, str]]:
@@ -414,43 +413,132 @@ def test_load_model_unknown_mode(tmp_path: Path) -> None:
     assert resp.status_code == 400
 
 
-def test_load_model_capacity_error(tmp_path: Path) -> None:
-    deps, _ = _make_deps(tmp_path)
-    deps.cache._sizes["huge"] = 100.0
-    app = create_app(deps)
-    with _worker_client(app) as client:
-        resp = client.post("/load_model", json={"mode": "huge"})
-    assert resp.status_code == 409
-
-
-def test_load_model_subprocess_start_error_returns_502(tmp_path: Path) -> None:
-    from acestep_worker.model_cache import ModelCache
+@pytest.mark.parametrize("status", [409, 502])
+def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> None:
+    """S15-01: Load model last error matches response."""
     from acestep_worker.subprocess_runner import SubprocessStartError
+    from songmaker_cli.acestep_state import read_worker_state
 
     async def failing_loader(mode: str) -> LoadedModel:
-        raise SubprocessStartError(
-            "ACE-Step did not become healthy within 900s\n"
-            "--- last log lines ---\n"
-            "vllm: loading shard 2/4",
-        )
+        raise SubprocessStartError("ACE-Step did not become healthy\nloading shard 2/4")
 
-    async def unloader(_: LoadedModel) -> None:
-        pass
-
-    deps, _ = _make_deps(tmp_path)
-    deps.cache = ModelCache(
-        vram_budget_gb=24.0,
-        model_sizes={"sft": 6.0},
-        loader=failing_loader,
-        unloader=unloader,
+    deps, redis = _make_deps(
+        tmp_path,
+        model_sizes={"sft": 100.0 if status == 409 else 6.0},
+        model_loader=failing_loader,
     )
-    app = create_app(deps)
-    with _worker_client(app) as client:
-        resp = client.post("/load_model", json={"mode": "sft"})
-    assert resp.status_code == 502
-    detail = resp.json()["detail"]
-    assert "did not become healthy" in detail
-    assert "loading shard 2/4" in detail
+
+    async def go():
+        before = utcnow()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(deps)),
+            base_url="http://worker", headers=_INTERNAL_HEADERS,
+        ) as client:
+            denied = await client.post(
+                "/load_model", json={"mode": "sft"},
+                headers={_INTERNAL_TOKEN_HEADER: "wrong-token"},
+            )
+            assert denied.status_code == 401
+            assert (await build_state_payload(deps))["last_error"] is None
+            response = await client.post("/load_model", json={"mode": "sft"})
+        assert response.status_code == status
+        if status == 502:
+            assert response.json()["detail"] == "ACE-Step did not become healthy\nloading shard 2/4"
+        await deps.heartbeat.publish_once()
+        state = await read_worker_state(redis, deps.worker_id)
+        assert state["last_error"] == response.json()["detail"]
+        at = datetime.fromisoformat(state["last_error_at"])
+        assert at.utcoffset() == timedelta(0)
+        assert before <= at <= utcnow()
+
+    _run(go())
+
+
+@pytest.fixture
+def last_error_worker(tmp_path: Path):
+    from songmaker_cli.acestep_state import read_worker_state
+
+    deps, redis = _make_deps(tmp_path)
+    successful_runner = deps.generate_runner
+
+    async def publish_pair():
+        await deps.heartbeat.publish_once()
+        state = await read_worker_state(redis, deps.worker_id)
+        return state["last_error"], state["last_error_at"]
+
+    async def generate_then_publish(client, failure: str | None):
+        completed = asyncio.Event()
+
+        async def runner(store, task_id, **kwargs):
+            if failure is None:
+                await successful_runner(store, task_id, **kwargs)
+            else:
+                await store.fail(task_id, failure)
+            # Wake after the runner's completion edge has released its resources.
+            asyncio.get_running_loop().call_soon(completed.set)
+
+        deps.generate_runner = runner
+        response = await client.post(
+            "/generate", json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
+        )
+        assert response.status_code == 200
+        await asyncio.wait_for(completed.wait(), timeout=5)
+        task = await deps.task_store.get(response.json()["task_id"])
+        assert task.state == ("done" if failure is None else "error")
+        assert deps.cache.in_use_count("sft") == 0
+        pair = await publish_pair()
+        if failure is not None:
+            assert pair == (task.error, task.updated_at.isoformat())
+        assert await publish_pair() == pair
+        return pair
+
+    @asynccontextmanager
+    async def worker():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(deps)),
+            base_url="http://worker", headers=_INTERNAL_HEADERS,
+        ) as client:
+            assert (await client.post("/load_model", json={"mode": "sft"})).status_code == 200
+            yield client, publish_pair, generate_then_publish
+
+    return worker
+
+
+def test_generate_last_error_matches_task_snapshot(last_error_worker) -> None:
+    """S15-02: Generate last error matches task snapshot."""
+    async def go():
+        async with last_error_worker() as (client, _, generate_then_publish):
+            await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
+
+    _run(go())
+
+
+@pytest.mark.parametrize("success", ["load", "generate"])
+def test_last_error_survives_success_and_is_replaced(
+    tmp_path: Path, success: str, last_error_worker,
+) -> None:
+    """S15-03: Last error survives success and is replaced."""
+    async def go():
+        async with last_error_worker() as (client, publish_pair, generate_then_publish):
+            first = await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
+
+            if success == "load":
+                response = await client.post("/load_model", json={"mode": "xl-sft"})
+                assert response.status_code == 200
+                assert await publish_pair() == first
+                assert await publish_pair() == first
+            else:
+                assert await generate_then_publish(client, None) == first
+
+            later = await generate_then_publish(client, "RuntimeError: later failure")
+            assert later != first
+
+            other, _ = _make_deps(tmp_path)
+            untouched = await build_state_payload(other)
+            assert untouched["last_error"] is None
+            assert untouched["last_error_at"] is None
+
+    _run(go())
 
 
 def test_evict_model(tmp_path: Path) -> None:
@@ -898,6 +986,7 @@ def test_default_generate_runner_reports_acestep_cause_verbatim(
 
 
 def test_build_state_payload(tmp_path: Path) -> None:
+    """S15-04: Build state payload."""
     from acestep_worker.wrapper import build_state_payload
 
     deps, redis = _make_deps(tmp_path)
@@ -907,6 +996,8 @@ def test_build_state_payload(tmp_path: Path) -> None:
         return await build_state_payload(deps)
 
     payload = _run(go())
+    assert payload["last_error"] is None
+    assert payload["last_error_at"] is None
     assert payload["loaded"] == []
     assert payload["queue_depth"] == 4
     assert payload["vram_total_gb"] == 24.0
