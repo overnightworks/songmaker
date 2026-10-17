@@ -17,6 +17,7 @@ import {
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
+import { forgetListenedPlace } from '$lib/stores/libraryOrder';
 import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { addToast } from '$lib/stores/toast';
 
@@ -297,6 +298,7 @@ export async function renamePlaylist(id: string, title: string): Promise<void> {
 export async function deletePlaylist(id: string): Promise<void> {
 	await deletePlaylistApi(id);
 	playlistList.update((list) => list.filter((p) => p.id !== id));
+	forgetListenedPlace('playlist', id);
 	invalidatePlaylistDetailCache(id);
 	if (get(selectedPlaylistId) === id) {
 		deselectPlaylist();

@@ -10,7 +10,7 @@ import {
 	PLAYING_MARK_LABEL
 } from '$lib/constants';
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
-import { playlistList, playlistLoad } from '$lib/stores/playlists';
+import { deletePlaylist, playlistList, playlistLoad } from '$lib/stores/playlists';
 import {
 	ensureLastPlayedRead,
 	readLastPlayed,
@@ -173,15 +173,42 @@ describe('1354_rule_14 Listen', () => {
 		}
 	);
 
-	it.each(['loading', 'unreachable', 'error'] as const)(
-		'1354_rule_20 keeps an album deleted here off Listen while the album reload is %s',
-		async (status) => {
+	const deleteAlbumHere = () => removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
+	it.each([
+		[
+			'album',
+			'loading',
+			deleteAlbumHere,
+			() => allAlbumsLoad.set({ status: 'loading', error: null })
+		],
+		[
+			'album',
+			'unreachable',
+			deleteAlbumHere,
+			() => allAlbumsLoad.set({ status: 'unreachable', error: null })
+		],
+		['album', 'error', deleteAlbumHere, () => allAlbumsLoad.set({ status: 'error', error: null })],
+		[
+			'playlist',
+			'loading',
+			() => deletePlaylist('place-1'),
+			() => playlistLoad.set({ status: 'loading', error: null })
+		],
+		[
+			'playlist',
+			'error',
+			() => deletePlaylist('place-1'),
+			() => playlistLoad.set({ status: 'error', error: null })
+		]
+	] as const)(
+		'1354_rule_20 keeps a %s deleted here off Listen while its collection reload is %s',
+		async (type, _, deleteHere, reloadWithoutAnswer) => {
 			serveAlbumPage(() => places);
 			await ensureLastPlayedRead();
-			await removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
-			allAlbumsLoad.set({ status, error: null });
+			await deleteHere();
+			reloadWithoutAnswer();
 			await showListen();
-			expect(rowNames()).not.toContain('Open album Place 0');
+			expect(rowNames()).not.toContain(`Open ${type} ${type === 'album' ? 'Place 0' : 'Place 1'}`);
 		}
 	);
 
