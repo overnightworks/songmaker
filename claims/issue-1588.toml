@@ -1,0 +1,8 @@
+claim_id = "5c8b151494cf45f2a33d36d7bea203a3"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "d67b50b399cc5c0d0db178d1aa3d19bb57e2f3df"
+branch = "claude/issue-1588-listen-entry-id"
+scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "src/songmaker_cli/api_models/library.py", "src/songmaker_cli/db/queries/activity.py", "tests/test_library_api.py"]
+opened_commit = "19be35eae43f0e421c95434eb119b73105f94618"
+whole_reason = "The query projection, public schema, generated consumer type, API assertions and existing endpoint field inventory are one additive contract that can land independently."
