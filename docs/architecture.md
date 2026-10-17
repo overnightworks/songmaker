@@ -211,7 +211,14 @@ holds these comparators and the Last played ranking; the wall and the rail's
 albums and playlists (desktop rail and phone drawer) all ask it, so the switch
 reorders both at once. Each tile's second line follows the order: the size
 under A–Z, the last listen under Last played (the size for a place never
-listened in). The
+listened in). Back or ‹ from an album's or a playlist's page lands the wall at
+the scroll its entry kept, and on the phone the row of the place just left
+lights up once (#1354 rule 12): `setLibrarySurface` remembers the place when the
+wall replaces its page, `takePlaceReturnedFrom` hands it to the one showing of
+the wall, and `LibraryRow` tints it for a moment (a still tint under
+`prefers-reduced-motion`). The desktop tiles land the same way without the
+light. The wall moves `scrollTop` only when it is not already at the anchor, so
+the anchor its own scroll reports never cuts into a momentum scroll. The
 wall sorts the complete set from the same route-independent loader the rail
 uses (`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset,
 which history navigation (Back and Forward, an address, returning to the

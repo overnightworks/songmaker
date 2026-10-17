@@ -19,7 +19,11 @@
 		loadPlaylists
 	} from '$lib/stores/playlists';
 	import { openCollection } from '$lib/stores/collection';
-	import { captureLibraryScroll, libraryScrollAnchor } from '$lib/stores/libraryContext';
+	import {
+		captureLibraryScroll,
+		libraryScrollAnchor,
+		takePlaceReturnedFrom
+	} from '$lib/stores/libraryContext';
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
@@ -61,6 +65,8 @@
 	import NewAlbumCard from './NewAlbumCard.svelte';
 	import NewPlaylistCard from './NewPlaylistCard.svelte';
 
+	const SCROLL_RESTORE_TOLERANCE_PX = 1;
+
 	type NewPlaceKind = 'album' | 'playlist';
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
@@ -100,6 +106,7 @@
 	const browseState = $derived($libraryBrowse);
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
+	const placeReturnedFrom = takePlaceReturnedFrom();
 
 	let labelledAt = $state(new Date());
 
@@ -165,9 +172,13 @@
 		labelledAt = new Date();
 	});
 
+	// The wall's own scroll reports come back through the anchor; writing one
+	// back would cut into a momentum scroll, so only a different anchor moves it.
 	$effect(() => {
 		void wallItems.length;
-		if (browseEl) browseEl.scrollTop = restoredScroll;
+		if (!browseEl) return;
+		if (Math.abs(browseEl.scrollTop - restoredScroll) >= SCROLL_RESTORE_TOLERANCE_PX)
+			browseEl.scrollTop = restoredScroll;
 	});
 
 	function sizeLabel(item: AlbumItem | PlaylistItem): string {
@@ -314,6 +325,7 @@
 							{...content}
 							{selected}
 							subtitle={sizeLabel(item)}
+							lightUp={placeReturnedFrom?.kind === placeType && placeReturnedFrom.id === item.id}
 							openLabel={`Open ${placeType} ${item.title}`}
 							{onopen}
 							onplay={rowPlay(item)}

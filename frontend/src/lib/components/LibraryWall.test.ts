@@ -13,10 +13,14 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import {
+	libraryScrollAnchor,
+	resetLibraryContextForTests,
+	setLibrarySurface
+} from '$lib/stores/libraryContext';
 import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { openCollection } from '$lib/stores/collection';
+import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
@@ -897,4 +901,136 @@ it('1354_rule_43: the phone row starts an album and leaves Shuffle on', async ()
 	getByRoleButton(root, 'Play Shuffle').click();
 	await tick();
 	expect(get(shuffleEnabled)).toBe(true);
+});
+
+function wallBody(root: ParentNode): HTMLElement {
+	const body = root.querySelector<HTMLElement>('.wall-body');
+	if (!body) throw new Error('Expected the wall body');
+	return body;
+}
+
+function returnToWallFrom(place: OpenCollection, wall: 'browse' | 'playlists'): void {
+	setOpenCollection(place);
+	setLibrarySurface('detail');
+	setLibrarySurface(wall);
+}
+
+function litTitles(root: ParentNode): string[] {
+	return [...root.querySelectorAll('.library-row.lit .tile-title')].map(
+		(title) => title.textContent ?? ''
+	);
+}
+
+describe('the wall landing where it was left', () => {
+	it('1354_rule_12: lands at the scroll its entry kept', async () => {
+		seedWall();
+		libraryScrollAnchor.set(480);
+
+		const root = await render();
+
+		expect(wallBody(root).scrollTop).toBe(480);
+	});
+
+	it('1354_rule_12: applies a different scroll to the wall that is already showing', async () => {
+		seedWall();
+		const root = await render();
+
+		libraryScrollAnchor.set(300);
+		await tick();
+
+		expect(wallBody(root).scrollTop).toBe(300);
+	});
+
+	it('1354_rule_12: leaves scrollTop alone for a scroll it reported itself', async () => {
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		const writes: number[] = [];
+		let top = 0;
+		Object.defineProperty(body, 'scrollTop', {
+			configurable: true,
+			get: () => top,
+			set: (next: number) => {
+				top = next;
+				writes.push(next);
+			}
+		});
+
+		top = 500;
+		body.dispatchEvent(new Event('scroll'));
+		await tick();
+
+		expect(get(libraryScrollAnchor)).toBe(500);
+		expect(writes).toEqual([]);
+	});
+});
+
+describe('the row of the place the wall returns from', () => {
+	it.each([
+		{
+			case: 'the album on the phone Library',
+			kind: 'library' as const,
+			wall: 'browse' as const,
+			place: { kind: 'album', id: 'a-fuer' } as OpenCollection,
+			phone: true,
+			lit: ['Sonne für Andrea']
+		},
+		{
+			case: 'the playlist on the phone Playlists page',
+			kind: 'playlists' as const,
+			wall: 'playlists' as const,
+			place: { kind: 'playlist', id: 'p-night' } as OpenCollection,
+			phone: true,
+			lit: ['Night drive']
+		},
+		{
+			case: 'a playlist on the phone Library',
+			kind: 'library' as const,
+			wall: 'browse' as const,
+			place: { kind: 'playlist', id: 'p-night' } as OpenCollection,
+			phone: true,
+			lit: []
+		},
+		{
+			case: 'the album on the desktop wall',
+			kind: 'library' as const,
+			wall: 'browse' as const,
+			place: { kind: 'album', id: 'a-fuer' } as OpenCollection,
+			phone: false,
+			lit: []
+		}
+	])('1354_rule_12: lights up $case', async ({ kind, wall, place, phone, lit }) => {
+		if (phone) phoneViewport();
+		seedWall();
+		returnToWallFrom(place, wall);
+
+		const root = await render(kind);
+
+		expect(litTitles(root)).toEqual(lit);
+		expect(root.querySelectorAll('.lit')).toHaveLength(lit.length);
+	});
+
+	it('1354_rule_12: lights up no row when the wall was not reached by a return', async () => {
+		phoneViewport();
+		seedWall();
+		setOpenCollection({ kind: 'album', id: 'a-fuer' });
+
+		const root = await render();
+
+		expect(litTitles(root)).toEqual([]);
+	});
+
+	it('1354_rule_12: lights up its row for one showing of the wall only', async () => {
+		phoneViewport();
+		seedWall();
+		returnToWallFrom({ kind: 'album', id: 'a-fuer' }, 'browse');
+		await unmountAll();
+
+		const first = await render();
+		expect(litTitles(first)).toEqual(['Sonne für Andrea']);
+		await unmountAll();
+		const second = await render();
+
+		expect(litTitles(second)).toEqual([]);
+	});
 });

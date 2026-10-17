@@ -1,5 +1,9 @@
+<script module lang="ts">
+	const LIGHT_UP_MS = 1200;
+</script>
+
 <script lang="ts">
-	import type { ComponentProps } from 'svelte';
+	import { onMount, type ComponentProps } from 'svelte';
 	import {
 		transportButtonFace,
 		transportButtonLabel,
@@ -14,6 +18,7 @@
 		onplay?: () => void;
 		transport?: TransportState;
 		selected?: boolean;
+		lightUp?: boolean;
 	};
 	let {
 		openLabel,
@@ -21,11 +26,25 @@
 		onplay,
 		transport = 'idle',
 		selected = false,
+		lightUp = false,
 		...content
 	}: Props = $props();
+
+	let lit = $state(false);
+	onMount(() => {
+		if (!lightUp) return;
+		lit = true;
+		const settle = setTimeout(() => (lit = false), LIGHT_UP_MS);
+		return () => clearTimeout(settle);
+	});
 </script>
 
-<div class="wall-tile library-row" class:selected>
+<div
+	class="wall-tile library-row"
+	class:selected
+	class:lit
+	style:--light-up-ms={`${LIGHT_UP_MS}ms`}
+>
 	<button type="button" class="wall-tile-body" aria-label={openLabel} onclick={onopen}>
 		<LibraryTileContent {...content} presentation="row" />
 	</button>
@@ -54,6 +73,23 @@
 	}
 	.library-row.selected {
 		box-shadow: var(--selected-ring);
+	}
+	.library-row.lit {
+		animation: light-up var(--light-up-ms) ease-out;
+	}
+	@keyframes light-up {
+		from {
+			background: color-mix(in srgb, var(--accent) 30%, transparent);
+		}
+		to {
+			background: transparent;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.library-row.lit {
+			animation: none;
+			background: color-mix(in srgb, var(--accent) 18%, transparent);
+		}
 	}
 	.wall-tile-body {
 		display: flex;

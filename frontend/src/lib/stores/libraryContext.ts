@@ -117,6 +117,7 @@ const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 let runningApply: HistoryApply | null = null;
 let librarySnapshotTaken = false;
 let latestHeldWrite: LibraryHistoryState | null = null;
+let placeReturnedFrom: OpenCollection | null = null;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -978,7 +979,7 @@ export async function applyLibraryHistory(
 	const apply = startHistoryApply();
 	if (heldRestores !== null) await heldRestores;
 	if (!applyStands(apply)) return false;
-	librarySurface.set(state.surface);
+	setLibrarySurface(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
 	showSongTab(state.songId, normalizeDetailTab(state.detailTab));
@@ -1155,8 +1156,27 @@ export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	return rereadAllAlbums();
 }
 
+function isWall(surface: LibrarySurface): boolean {
+	return surface === 'browse' || surface === 'playlists';
+}
+
+// The one writer of a surface change that can be a return: the wall replacing
+// the page of the place that was open, whether by Back, by ‹ or by the rail's
+// Library link. The place is remembered until the wall has lit its row or the
+// surface changes again, because the wall's own history entry names an older
+// collection by then.
 export function setLibrarySurface(surface: LibrarySurface): void {
+	const left = get(librarySurface);
+	if (left !== surface) {
+		placeReturnedFrom = left === 'detail' && isWall(surface) ? get(openCollection) : null;
+	}
 	librarySurface.set(surface);
+}
+
+export function takePlaceReturnedFrom(): OpenCollection | null {
+	const place = placeReturnedFrom;
+	placeReturnedFrom = null;
+	return place;
 }
 
 export function captureLibraryScroll(scrollTop: number): void {
@@ -1168,6 +1188,7 @@ export function resetLibraryContextForTests(): void {
 	librarySnapshotTaken = false;
 	latestHeldWrite = null;
 	heldRestores = null;
+	placeReturnedFrom = null;
 	resetHistoryControllerForTests();
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
