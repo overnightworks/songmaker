@@ -24,9 +24,9 @@ def backend_names(path):
 FRONTEND_HELPER = re.compile(
     r"^(?:export\s+)?(?:async\s+)?function\s+(?P<function>[A-Za-z_$][\w$]*)"
     r"|^(?:export\s+)?const\s+(?P<const>[A-Za-z_$][\w$]*)"
-    r"(?:\s*:[^=\n]+)?\s*=\s*(?:async\s+)?(?:"
+    r"(?:\s*:[^=\n]+)?\s*=\s*(?:(?:async\s+)?(?:"
     r"function\b|(?:<[^;\n]+>\s*)?\([^()]*\)\s*(?::[^=;\n]+)?=>"
-    r"|[A-Za-z_$][\w$]*\s*=>)",
+    r"|[A-Za-z_$][\w$]*\s*=>)|\{)",
     re.MULTILINE,
 )
 

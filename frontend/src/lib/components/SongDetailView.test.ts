@@ -59,6 +59,7 @@ import {
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { menuRow } from '$lib/test-utils/collection-menu';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
+import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
 import {
 	editLyrics,
 	pendingVersionLoad,
@@ -207,8 +208,6 @@ import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast, addUndoToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-
-const PHONE_APP_BAR_PROPS = { username: 'felix', onlogout: () => undefined };
 
 function sourceRecipeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { inference_steps: 8, guidance_scale: 1.5 } };
