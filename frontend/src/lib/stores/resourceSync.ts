@@ -1,11 +1,5 @@
 import { get, writable, type Writable } from 'svelte/store';
-import {
-	ApiError,
-	NetworkError,
-	describeFailure,
-	handleSessionLost,
-	isTransientApiFailure
-} from '$lib/api/fetch';
+import { ApiError, NetworkError, describeFailure, isTransientApiFailure } from '$lib/api/fetch';
 import { fetchMe } from '$lib/api/auth';
 import {
 	compareDecimalId,
@@ -40,7 +34,7 @@ import {
 } from '$lib/stores/librarySearch';
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
-import { classifyAuthFailure, type AuthFailureKind } from '$lib/stores/auth';
+import { classifyAuthFailure, handleSessionLost, type AuthFailureKind } from '$lib/stores/auth';
 import { reportResourceStreamReachable } from '$lib/stores/connectivity';
 import {
 	ImmediateReopenGap,

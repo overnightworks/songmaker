@@ -653,6 +653,7 @@ export class FlowGuard {
 	private readonly failures: string[] = [];
 	private readonly takesBeingAbandoned = new Set<string>();
 	private readonly completingResponses = new WeakSet<Request>();
+	private readonly refusedAsExpected = new WeakSet<Request>();
 	private successorPath: string | undefined;
 	private abortedSuccessorUrls: string[] = [];
 	private apiRequests = 0;
@@ -682,10 +683,13 @@ export class FlowGuard {
 			// failed request with exactly this error, indistinguishable from any
 			// other intentional client-side abort. Every other reason still fails
 			// the flow, including a 429 or 5xx on the same path (handled below).
+			// A request the page leaves behind after the server's expected refusal
+			// of it is reported the same way, though its answer had arrived.
 			const cutOffOnPurpose =
 				isClosedOnPurpose(request.url()) ||
 				isSentAsThePageLeaves(request.url()) ||
-				this.forgivesAbandonedTake(request.url());
+				this.forgivesAbandonedTake(request.url()) ||
+				this.refusedAsExpected.has(request);
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
@@ -697,7 +701,10 @@ export class FlowGuard {
 			if (completesTheTake(response)) {
 				this.completingResponses.add(response.request());
 			}
-			if (refusalIsExpected(response.url(), status)) return;
+			if (refusalIsExpected(response.url(), status)) {
+				this.refusedAsExpected.add(response.request());
+				return;
+			}
 			if (status === 429 || status >= 500) {
 				this.failures.push(`${status} from ${response.url()}`);
 			}

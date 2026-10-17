@@ -22,7 +22,10 @@
 // only ask the store what it believes; it cannot re-offer a cookie the browser
 // has thrown away and watch the server refuse it.
 //
-// No route interception anywhere: every refusal is the CI stack's own answer.
+// No route interception except in the media-refusal flows (#925 M3): a session
+// the server still holds is never refused a take, so those flows refuse the
+// take's audio, and hold an album's reads, by route. Every other refusal is
+// the CI stack's own answer.
 // The admin flows' 404s and 409 are their point, so their guard forgives
 // exactly those statuses on exactly the revoke, account-update and create
 // paths.
@@ -48,6 +51,7 @@ import {
 	type Locator,
 	type Page,
 	type Response,
+	type Route,
 	type TestInfo
 } from '@playwright/test';
 
@@ -61,6 +65,7 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
+	RESOURCE_EVENT_STREAM_PATH,
 	SESSION_LOST_REDIRECT_PARAM,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
@@ -115,11 +120,16 @@ import {
  * The #1340 sign-outs were measured at 1440 / 390: 29 and
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
  * on the phone the walk through the drawer to the album -- and 23/23 for the
- * sign-out the lost network keeps from the server. One ceiling for the file,
- * the same way `admin-models.spec.ts` carries one for its four; only the
+ * sign-out the lost network keeps from the server. The #925 M3 media-refusal
+ * flows were measured over ten runs each at 1440 / 390: 46 to 47/45 to 48 for
+ * the take's audio refused, and 39 to 43 at 1440 for the take's probe and an
+ * album's reads refused together (a desktop-only flow). One ceiling for the
+ * file, the same way `admin-models.spec.ts` carries one for its four; only the
  * sign-out while a take plays carries its own, since it opens a song and plays
- * before the sign-out it is about (14.10.2026). The budget is a ceiling, not a
- * knob: a flow that suddenly needs several more round trips is a regression,
+ * before the sign-out it is about (14.10.2026), and the media-refusal flows
+ * another, since each signs in onto a song page and then loads the song or an
+ * album afresh behind a valid session, a whole cold page open on top of the
+ * first. The budget is a ceiling, not a knob: a flow that suddenly needs several more round trips is a regression,
  * so find the extra requests instead of raising this number -- see
  * `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full reasoning.
  */
@@ -127,6 +137,11 @@ const AUTH_FLOW_API_REQUEST_BUDGET = 30;
 // The sign-out while a take plays: 29 at 1440, 32 to 35 at 390.
 const PLAYS_A_TAKE_TAG = '@plays-a-take';
 const TAKE_SIGN_OUT_FLOW_API_REQUEST_BUDGET = 40;
+// The flows whose take the route refuses: a session the server still holds is
+// never refused a take, so the 401s on its audio are the sentence under proof.
+const TAKE_AUDIO_REFUSED_TAG = '@take-audio-refused';
+const TAKE_AUDIO_PATH = '/audio/';
+const TAKE_AUDIO_REFUSED_FLOW_API_REQUEST_BUDGET = 55;
 
 const AUTH_LOGIN_PATH = '/api/auth/login';
 const AUTH_ME_PATH = '/api/auth/me';
@@ -170,6 +185,7 @@ const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
 	{ path: `${ADMIN_USERS_PATH}/`, statuses: [404] },
 	{ path: ADMIN_USERS_PATH, statuses: [409] }
 ];
+const TAKE_AUDIO_REFUSAL: ExpectedRefusal = { path: TAKE_AUDIO_PATH, statuses: [401] };
 const ADMIN_PAGE_PATH = '/settings/users';
 const VOICES_PAGE_PATH = '/settings/voices';
 const VOICES_HEADING = 'My Voices';
@@ -344,16 +360,29 @@ async function signOut(page: Page, shell: Shell): Promise<void> {
 	await rail.getByRole('button', { name: LOGOUT_LABEL }).click();
 }
 
+/** Shows the open song's takes: the phone keeps them behind a tab. */
+async function showTheTakes(page: Page, shell: Shell): Promise<void> {
+	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+}
+
+/** The play button of the open song's one take. */
+function takeRowPlay(page: Page): Locator {
+	return workspace(page)
+		.locator('.take-row')
+		.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) });
+}
+
+function footerPause(page: Page): Locator {
+	return page
+		.getByRole('contentinfo')
+		.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+}
+
 /** Plays the open song's one take and waits until it sounds. */
 async function playTheTake(page: Page, shell: Shell): Promise<void> {
-	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
-	await workspace(page)
-		.locator('.take-row')
-		.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) })
-		.click();
-	await expect(
-		page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-	).toHaveAttribute('aria-busy', 'false');
+	await showTheTakes(page, shell);
+	await takeRowPlay(page).click();
+	await expect(footerPause(page)).toHaveAttribute('aria-busy', 'false');
 }
 
 function transportControls(page: Page): Locator {
@@ -415,6 +444,121 @@ function forgetAppHistorySteps(page: Page): Promise<void> {
 	);
 }
 
+/** What a page was asked for and answered with, in the order it happened. */
+interface DocumentWatch {
+	timeline: string[];
+	freshDocuments: string[];
+	movesWithinTheDocument: string[];
+}
+
+function refusalSource(response: Response): string {
+	const { pathname } = new URL(response.url());
+	if (pathname.startsWith(TAKE_AUDIO_PATH)) {
+		return `${response.request().method()} take audio ${response.status()}`;
+	}
+	return pathname.startsWith('/api/') ? `API read ${response.status()}` : pathname;
+}
+
+/**
+ * Watches the page's main frame: which fresh documents it asks for (a reload,
+ * an assign and a replace each send a navigation request; a router push sends
+ * none), which addresses it moves to within the document until then, and every
+ * refusal it receives, in the order the page sees them.
+ */
+function watchTheDocument(page: Page): DocumentWatch {
+	const watch: DocumentWatch = { timeline: [], freshDocuments: [], movesWithinTheDocument: [] };
+	let standingOn = new URL(page.url()).pathname;
+	page.on('request', (request) => {
+		if (!request.isNavigationRequest() || request.frame() !== page.mainFrame()) return;
+		const { pathname } = new URL(request.url());
+		watch.freshDocuments.push(pathname);
+		watch.timeline.push(`document ${pathname}`);
+	});
+	page.on('framenavigated', (frame) => {
+		if (frame !== page.mainFrame() || watch.freshDocuments.length > 0) return;
+		const { pathname } = new URL(frame.url());
+		if (pathname === standingOn) return;
+		standingOn = pathname;
+		watch.movesWithinTheDocument.push(pathname);
+	});
+	page.on('response', (response) => {
+		if (response.status() >= 400) watch.timeline.push(refusalSource(response));
+	});
+	return watch;
+}
+
+/** Every refusal the page saw before it asked for its first fresh document, in order. */
+function refusalsBeforeTheLoad(watch: DocumentWatch): string[] {
+	const firstDocument = watch.timeline.findIndex((entry) => entry.startsWith('document '));
+	return watch.timeline.slice(0, firstDocument === -1 ? undefined : firstDocument);
+}
+
+const isTakeAudio = (url: URL): boolean => url.pathname.startsWith(TAKE_AUDIO_PATH);
+const isTakeProbe = (response: Response): boolean =>
+	response.request().method() === 'HEAD' && isTakeAudio(new URL(response.url()));
+// What the page reads from the API, except the live stream and the session
+// check: the fresh document's own check never depends on this route.
+const isAlbumRead = (url: URL): boolean =>
+	url.pathname.startsWith('/api/') &&
+	url.pathname !== RESOURCE_EVENT_STREAM_PATH &&
+	!url.pathname.startsWith('/api/auth/');
+const SESSION_LOST_ANSWER = { status: 401, json: { detail: 'Not authenticated' } };
+
+/**
+ * Answers the take's audio as a lost session is answered, until the page asks
+ * for a fresh document, which meets the real, still valid session. A held
+ * `HEAD` probe waits in `heldProbe` for the flow to answer it.
+ */
+async function refuseTheTakeAudio(
+	page: Page,
+	watch: DocumentWatch,
+	holdsTheProbe: boolean
+): Promise<{ heldProbe: Promise<Route> }> {
+	let holdProbe: (route: Route) => void = () => undefined;
+	const heldProbe = new Promise<Route>((resolve) => (holdProbe = resolve));
+	await page.route(isTakeAudio, async (route) => {
+		if (watch.freshDocuments.length > 0) return route.fallback();
+		if (holdsTheProbe && route.request().method() === 'HEAD') return holdProbe(route);
+		return route.fulfill({ status: 401 });
+	});
+	return { heldProbe };
+}
+
+interface HeldAlbumReads {
+	arm: () => void;
+	firstHeldRead: Promise<void>;
+	refuseTheHeldReads: () => Promise<void>;
+}
+
+/**
+ * Holds every read of the album the flow opens once it is armed, until they
+ * are refused together; reads after that are refused at once. Before it is
+ * armed, and once the page asks for a fresh document, the reads go through.
+ */
+async function holdAlbumReads(page: Page, watch: DocumentWatch): Promise<HeldAlbumReads> {
+	let armed = false;
+	let refusing = false;
+	const held: Route[] = [];
+	let sawAHeldRead: () => void = () => undefined;
+	const firstHeldRead = new Promise<void>((resolve) => (sawAHeldRead = resolve));
+	await page.route(isAlbumRead, async (route) => {
+		if (!armed || watch.freshDocuments.length > 0) return route.fallback();
+		if (refusing) return route.fulfill(SESSION_LOST_ANSWER);
+		held.push(route);
+		return sawAHeldRead();
+	});
+	return {
+		arm: () => {
+			armed = true;
+		},
+		firstHeldRead,
+		refuseTheHeldReads: async () => {
+			refusing = true;
+			await Promise.all(held.map((route) => route.fulfill(SESSION_LOST_ANSWER)));
+		}
+	};
+}
+
 /** The refusal the lockout flow is about, named by the server itself. */
 async function expectAccountLocked(refusal: Response): Promise<void> {
 	expect(refusal.status()).toBe(429);
@@ -472,9 +616,10 @@ async function signInOnto(page: Page, songAddress: string): Promise<void> {
 /**
  * Every refusal this file drives is one of its sentences: the login it locks
  * out, the `/api/auth/me` a dead session answers, the admin calls a non-admin
- * makes, and for the tagged flows the library lists a lost session refuses and
- * the admin's stale revoke and taken username. A refusal anywhere else, and any
- * 5xx at all, still fails the flow.
+ * makes, and for the tagged flows the library lists a lost session refuses,
+ * the admin's stale revoke and taken username, and the take's audio the media
+ * flows refuse. A refusal anywhere else, and any 5xx at all, still fails the
+ * flow.
  */
 function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
 	const refusedPaths = [
@@ -486,12 +631,17 @@ function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
 		path,
 		statuses: SESSION_REFUSAL_STATUSES
 	}));
-	return testInfo.tags.includes(ADMIN_REFUSALS_ARE_THE_POINT_TAG)
-		? [...sessionRefusals, ...ADMIN_REFUSALS]
-		: sessionRefusals;
+	return [
+		...sessionRefusals,
+		...(testInfo.tags.includes(ADMIN_REFUSALS_ARE_THE_POINT_TAG) ? ADMIN_REFUSALS : []),
+		...(testInfo.tags.includes(TAKE_AUDIO_REFUSED_TAG) ? [TAKE_AUDIO_REFUSAL] : [])
+	];
 }
 
 function apiRequestBudgetOf(testInfo: TestInfo): number {
+	if (testInfo.tags.includes(TAKE_AUDIO_REFUSED_TAG)) {
+		return TAKE_AUDIO_REFUSED_FLOW_API_REQUEST_BUDGET;
+	}
 	return testInfo.tags.includes(PLAYS_A_TAKE_TAG)
 		? TAKE_SIGN_OUT_FLOW_API_REQUEST_BUDGET
 		: AUTH_FLOW_API_REQUEST_BUDGET;
@@ -1015,6 +1165,86 @@ test(
 		await attachShot(page, testInfo, 'auth-phone-session-lost-album-tap');
 	}
 );
+
+// A session the server still holds is never refused a take, so the refusal is
+// made here, by route, on the take's audio -- and, in the second row, on the
+// reads of an album the person opened meanwhile. The page cannot tell it from
+// a lost session, and must leave by one fresh document at the address it was
+// heading for. The take plays on the classic audio element, without
+// MediaSource, as on an iPhone; the deck's own refusal reaches the same
+// element (`audioPlayer.test.ts`).
+const MEDIA_REFUSAL_ROWS = [
+	{
+		id: '925_M3_B-A4',
+		sentence:
+			"the take's audio refusals are the only refusals, the HEAD last; one fresh document, at the song; no move within the document; nothing plays afterwards",
+		tags: [TAKE_AUDIO_REFUSED_TAG],
+		albumReadsRefused: false,
+		refusedBeforeTheLoad: ['GET take audio 401', 'HEAD take audio 401']
+	},
+	{
+		id: '925_M3_B-A3',
+		sentence:
+			"two delivered refusals, the take's HEAD and the album's reads, give one fresh document, at the album clicked",
+		tags: [TAKE_AUDIO_REFUSED_TAG, ALBUM_OPENING_REFUSED_TAG, ONLY_IN_SHELL.desktop],
+		albumReadsRefused: true,
+		refusedBeforeTheLoad: ['API read 401', 'GET take audio 401', 'HEAD take audio 401']
+	}
+];
+
+for (const row of MEDIA_REFUSAL_ROWS) {
+	test(`${row.id}: ${row.sentence}`, { tag: row.tags }, async ({ page, isMobile }, testInfo) => {
+		const shell = shellOf(testInfo);
+		await page.addInitScript(() => Reflect.deleteProperty(window, 'MediaSource'));
+		if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
+		const songAddress = await seedOwnSong(seedOwnTakeAddress);
+		const destination = row.albumReadsRefused ? albumAddressOf(await seedOwnSong()) : songAddress;
+		await signInOnto(page, songAddress);
+		await showTheTakes(page, shell);
+		const album = row.albumReadsRefused ? await albumInRail(page, shell, destination) : null;
+		if (album) await expect(album).toBeVisible();
+		await markSignedInDocument(page);
+
+		const watch = watchTheDocument(page);
+		const { heldProbe } = await refuseTheTakeAudio(page, watch, row.albumReadsRefused);
+		const albumReads = row.albumReadsRefused ? await holdAlbumReads(page, watch) : null;
+		const probeAnswered = row.albumReadsRefused ? null : page.waitForResponse(isTakeProbe);
+		const freshDocumentLoaded = page.waitForEvent('load');
+
+		await takeRowPlay(page).click();
+		if (album && albumReads) {
+			const probe = await heldProbe;
+			albumReads.arm();
+			await album.click();
+			await albumReads.firstHeldRead;
+			await Promise.all([probe.fulfill({ status: 401 }), albumReads.refuseTheHeldReads()]);
+		} else {
+			await probeAnswered;
+		}
+		await freshDocumentLoaded;
+
+		await expect(page).toHaveURL(destination);
+		if (row.albumReadsRefused) await expect(workspace(page)).toBeVisible();
+		else await expect(page.getByRole('heading', { name: DEEP_LINK_SONG_TITLE })).toBeVisible();
+		const refusedBeforeTheLoad = refusalsBeforeTheLoad(watch);
+		expect({
+			refusedBeforeTheLoad: [...new Set(refusedBeforeTheLoad)].sort(),
+			...(row.albumReadsRefused ? {} : { lastRefusalBeforeTheLoad: refusedBeforeTheLoad.at(-1) }),
+			freshDocuments: watch.freshDocuments,
+			movesWithinTheDocument: watch.movesWithinTheDocument,
+			signedInDocument: await isSignedInDocument(page),
+			offersPause: (await footerPause(page).count()) > 0
+		}).toEqual({
+			refusedBeforeTheLoad: row.refusedBeforeTheLoad,
+			...(row.albumReadsRefused ? {} : { lastRefusalBeforeTheLoad: 'HEAD take audio 401' }),
+			freshDocuments: [destination],
+			movesWithinTheDocument: row.albumReadsRefused ? [destination] : [],
+			signedInDocument: false,
+			offersPause: false
+		});
+		await attachShot(page, testInfo, `auth-media-refused-${row.id}`);
+	});
+}
 
 test('wrong passwords lock the account, in words and for as long as it says', async ({
 	page

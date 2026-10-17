@@ -5,7 +5,7 @@ export const APP_NAME = 'Hallucinai';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
-// Cross-file contract: fetch.ts's handleSessionLost writes this param,
+// Cross-file contract: fetch.ts's signInAddress writes this param,
 // whatever reads it back (the login page) must use the same name.
 export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
 
