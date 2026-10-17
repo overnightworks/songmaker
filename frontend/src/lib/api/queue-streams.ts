@@ -9,7 +9,7 @@ import { apiFetch } from './fetch';
 // well over the default API timeout while generation workers hold the box; a
 // patient budget here is the difference between one slow success and five
 // user-facing failures.
-const STREAM_BUILD_TIMEOUT_MS = 120_000;
+export const STREAM_BUILD_TIMEOUT_MS = 120_000;
 
 export async function createQueueStreamSnapshot(
 	tracks: QueueStreamTrackRequest[]
@@ -43,18 +43,6 @@ export async function createLibraryQueueStreamSnapshot(
 		},
 		STREAM_BUILD_TIMEOUT_MS
 	);
-}
-
-export async function fetchSharedPlaylistStream(slug: string): Promise<QueueStreamManifest> {
-	const resp = await fetch(`/shared/playlist/${slug}/stream`, { method: 'POST' });
-	if (!resp.ok) throw new Error('Failed to create shared playlist stream');
-	return resp.json() as Promise<QueueStreamManifest>;
-}
-
-export async function fetchSharedAlbumStream(slug: string): Promise<QueueStreamManifest> {
-	const resp = await fetch(`/shared/${slug}/stream`, { method: 'POST' });
-	if (!resp.ok) throw new Error('Failed to create shared album stream');
-	return resp.json() as Promise<QueueStreamManifest>;
 }
 
 interface QueueStreamPinState {

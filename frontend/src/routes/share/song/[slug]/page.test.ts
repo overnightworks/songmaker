@@ -110,6 +110,12 @@ function seekLine(target: HTMLElement): HTMLInputElement {
 }
 
 describe('shared song page', () => {
+	it('925_M2_W1: asks the server for the song at its own share address', async () => {
+		await openSharedSong(sharedSong());
+
+		expect(mockFetch.mock.calls[0][0]).toBe('/shared/song/shared-song');
+	});
+
 	it('opens as the player and plays the song from its own Play', async () => {
 		const target = await openSharedSong(sharedSong());
 
