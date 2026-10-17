@@ -13,11 +13,11 @@ export const libraryWriteLoading = readonly(loading);
 let generation = 0;
 let pending: Promise<boolean> | null = null;
 let outdatedDuringRead = false;
-// Remember removals even when their rows were never loaded. Undo arrives
-// through the shared library seam, independently of the visible song list.
+// Only a read already in flight can predate a successful removal.
+// Reads started afterwards are authoritative, including restores on another device.
 const removed = { song: new Set<string>(), album: new Set<string>() };
 
-export function readLibraryWrite(): Promise<boolean> {
+function readLibraryWrite(): Promise<boolean> {
 	if (pending !== null) return pending;
 	const startedGeneration = generation;
 	outdatedDuringRead = false;
@@ -42,6 +42,8 @@ export function readLibraryWrite(): Promise<boolean> {
 		)
 		.finally(() => {
 			if (startedGeneration !== generation) return;
+			removed.song.clear();
+			removed.album.clear();
 			pending = null;
 			loading.set(false);
 		});
@@ -63,27 +65,25 @@ async function refillWritten(): Promise<boolean> {
 	const startedGeneration = generation;
 	if (pending !== null) await pending;
 	if (startedGeneration !== generation) return false;
+	if (pending !== null) return pending;
+	if (get(state) === 'unread') return true;
 	outdateLibraryWrite();
 	return ensureLibraryWriteRead();
 }
 
 export function forgetWritten(kind: RemovedKind, id: string): void {
-	removed[kind].add(id);
+	if (removed[kind].has(id)) return;
+	if (pending !== null) removed[kind].add(id);
 	rows.update((items) =>
 		items.filter((row) => (kind === 'song' ? row.song_id : row.album_id) !== id)
 	);
 	void refillWritten();
 }
 
-export async function restoreWritten(kind: RemovedKind, ids: readonly string[]): Promise<boolean> {
-	const restored = ids.filter((id) => removed[kind].has(id));
-	if (restored.length === 0) return true;
-	const startedGeneration = generation;
-	if (pending !== null) await pending;
-	if (startedGeneration !== generation) return false;
-	for (const id of restored) removed[kind].delete(id);
-	outdateLibraryWrite();
-	return ensureLibraryWriteRead();
+export function restoreWritten(kind: RemovedKind, ids: readonly string[]): Promise<boolean> {
+	if (ids.length === 0) return Promise.resolve(true);
+	for (const id of ids) removed[kind].delete(id);
+	return refillWritten();
 }
 
 export function resetLibraryWriteForTests(): void {

@@ -74,16 +74,13 @@ it('1354_rule_18 distinguishes a successful empty answer from unread', async () 
 	expect(ids()).toEqual([]);
 });
 
-it.each(['foreground', 'online'])(
-	'1354_rule_19 refreshes after explicit %s invalidation',
-	async () => {
-		fetch.mockResolvedValueOnce(answer(row('old'))).mockResolvedValueOnce(answer(row('new')));
-		await ensureLibraryWriteRead();
-		outdateLibraryWrite();
-		await ensureLibraryWriteRead();
-		expect(ids()).toEqual(['new']);
-	}
-);
+it('1354_rule_19 refreshes after an explicit invalidation', async () => {
+	fetch.mockResolvedValueOnce(answer(row('old'))).mockResolvedValueOnce(answer(row('new')));
+	await ensureLibraryWriteRead();
+	outdateLibraryWrite();
+	await ensureLibraryWriteRead();
+	expect(ids()).toEqual(['new']);
+});
 
 it.each([false, true])(
 	'1354_rule_19 retries failure with a previous answer: %s',
@@ -103,7 +100,7 @@ it.each([false, true])(
 	}
 );
 
-it.each([{ removed: ['a'] }, { removed: ['a', 'b'] }])(
+it.each([{ removed: ['a'] }, { removed: ['a', 'b'] }, { removed: ['a', 'a'] }])(
 	'1354_rule_20 keeps removals $removed out of a read started before deletion and refills',
 	async ({ removed }) => {
 		const resolve = deferredRead();
@@ -116,6 +113,9 @@ it.each([{ removed: ['a'] }, { removed: ['a', 'b'] }])(
 		refill(answer(row('c'), row('d')));
 		await ensureLibraryWriteRead();
 		expect(ids()).toEqual(['c', 'd']);
+		expect(get(libraryWriteState)).toBe('ready');
+		await ensureLibraryWriteRead();
+		expect(fetch).toHaveBeenCalledTimes(2);
 	}
 );
 
@@ -142,6 +142,9 @@ it.each(['before deletion', 'between deletion and Undo', 'after Undo'])(
 		restored(answer(row('a')));
 		await ensureLibraryWriteRead();
 		expect(ids()).toEqual(['a']);
+		expect(get(libraryWriteState)).toBe('ready');
+		await ensureLibraryWriteRead();
+		expect(fetch).toHaveBeenCalledTimes(3);
 	}
 );
 
@@ -185,12 +188,36 @@ it('1354_rule_05 ordinary additions do not invent work or trigger a read', () =>
 	expect(fetch).not.toHaveBeenCalled();
 });
 
-it('defect:#1557 discards a response from before a test reset', async () => {
-	const resolve = deferredRead();
-	const read = ensureLibraryWriteRead();
-	resetLibraryWriteForTests();
-	resolve(answer(row('old')));
-	await read;
-	expect(ids()).toEqual([]);
-	expect(get(libraryWriteState)).toBe('unread');
-});
+it.each(['song', 'album'] as const)(
+	'defect:#1557 leaves unread Write idle after a %s removal',
+	async (kind) => {
+		if (kind === 'song') removeSongFromList('a');
+		else removeSongsForAlbum('album');
+		expect(get(libraryWriteState)).toBe('unread');
+		expect(fetch).not.toHaveBeenCalled();
+		fetch.mockResolvedValueOnce(answer(row('b', 'other')));
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['b']);
+	}
+);
+
+it.each(['song', 'album'] as const)(
+	'1354_rule_20 accepts a cross-device restore after the read predating %s deletion lands',
+	async (kind) => {
+		const resolve = deferredRead();
+		const first = ensureLibraryWriteRead();
+		const refill = deferredRead();
+		if (kind === 'song') removeSongFromList('a');
+		else removeSongsForAlbum('album');
+		resolve(answer(row('a')));
+		await first;
+		expect(ids()).toEqual([]);
+		refill(answer(row('b', 'other')));
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['b']);
+		fetch.mockResolvedValueOnce(answer(row('a'), row('b', 'other')));
+		outdateLibraryWrite();
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['a', 'b']);
+	}
+);
