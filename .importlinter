@@ -4,7 +4,9 @@
 # direct import. include_external_packages records an import of an installed
 # package (agent_providers, webauth) as one opaque node and never scans that
 # package's own imports, so a chain reaching the application through one of
-# them is not caught here.
+# them is not caught here. The persistence-below-http-contract contract keeps
+# songmaker_cli.db from importing songmaker_cli.api_models, directly or through
+# another in-tree module.
 [importlinter]
 include_external_packages = True
 root_packages =
@@ -22,3 +24,11 @@ source_modules =
     audio_engine
 forbidden_modules =
     songmaker_cli
+
+[importlinter:contract:persistence-below-http-contract]
+name = Persistence does not import the HTTP contract
+type = forbidden
+source_modules =
+    songmaker_cli.db
+forbidden_modules =
+    songmaker_cli.api_models

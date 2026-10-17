@@ -12,6 +12,7 @@ import pytest
 from conftest import login_and_csrf, make_authenticated_user, make_test_app, stored_hash, web_client
 from fastapi import HTTPException
 
+from songmaker_cli import audio_files
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.queue_stream_api import (
@@ -27,9 +28,9 @@ from songmaker_cli.queue_streams import (
     QUEUE_STREAM_MAX_DURATION_SECONDS,
     QueueStreamSource,
     build_queue_stream_snapshot,
+    probe_audio_duration,
     queue_stream_duration_fits_ffmpeg_timeout,
     queue_stream_ffmpeg_timeout_seconds,
-    read_audio_duration,
     run_ffmpeg_concat,
     track_source_from_generation,
 )
@@ -114,26 +115,13 @@ def _patch_audio_build(monkeypatch) -> None:
     monkeypatch.setattr(qs, "run_ffmpeg_concat", _fake_concat)
 
 
-def test_read_audio_duration_reads_a_real_audio_file(
-    tmp_path: Path, make_stereo_wav_bytes,
+def test_probe_audio_duration_reports_what_audio_files_measures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    wav_path = tmp_path / "clip.wav"
-    wav_path.write_bytes(make_stereo_wav_bytes(duration=0.5))
-    assert read_audio_duration(wav_path) == pytest.approx(0.5, abs=0.01)
-
-
-def test_read_audio_duration_is_none_for_an_unrecognized_file(tmp_path: Path) -> None:
-    garbage_path = tmp_path / "not-audio.wav"
-    garbage_path.write_bytes(b"this is not an audio file")
-    assert read_audio_duration(garbage_path) is None
-
-
-def test_read_audio_duration_is_none_for_a_zero_length_file(
-    tmp_path: Path, make_stereo_wav_bytes,
-) -> None:
-    wav_path = tmp_path / "empty.wav"
-    wav_path.write_bytes(make_stereo_wav_bytes(duration=0.0))
-    assert read_audio_duration(wav_path) is None
+    """925_M1_D3 -- the stream builder asks audio_files for a take's length, so a
+    measurement from that one owner is what the stream gets."""
+    monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: 42.5)
+    assert probe_audio_duration(tmp_path / "take.mp3") == 42.5
 
 
 @pytest.mark.parametrize(

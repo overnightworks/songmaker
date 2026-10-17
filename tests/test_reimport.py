@@ -16,6 +16,7 @@ from conftest import (
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from songmaker_cli import audio_files
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
 from songmaker_cli.db.queries import get_generation
@@ -83,8 +84,7 @@ def test_reimport_mp3(seeded_db, tmp_path: Path) -> None:
 def test_reimport_mp3_measures_audio_duration(
     seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import songmaker_cli.queue_streams as qs
-
+    """defect:#258 -- an imported mp3 take has its length measured and stored."""
     audio_dir = tmp_path / "audio"
     mp3_src = tmp_path / "source.mp3"
     mp3_src.write_bytes(b"fake-mp3-data")
@@ -95,7 +95,7 @@ def test_reimport_mp3_measures_audio_duration(
         probed.append(path)
         return 188.0
 
-    monkeypatch.setattr(qs, "read_audio_duration", _read)
+    monkeypatch.setattr(audio_files, "read_audio_duration", _read)
 
     with seeded_db() as session:
         gen_id = reimport_files(session, audio_dir, USER_ID, SONG_ID, mp3_file=mp3_src)
