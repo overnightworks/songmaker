@@ -65,6 +65,8 @@ const WALL_SELECTOR = '.library-wall';
 
 const homeHeading = (page: Page) =>
 	workspace(page).getByRole('heading', { name: HOME_PAGE_LABEL, exact: true });
+const newButton = (page: Page) =>
+	workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true });
 const continueRegion = (page: Page) => workspace(page).getByRole('region', CONTINUE_REGION);
 const wall = (page: Page) => workspace(page).locator(WALL_SELECTOR);
 const historyLength = (page: Page) => page.evaluate(() => history.length);
@@ -376,7 +378,7 @@ test.describe('signed out', () => {
 	});
 });
 
-test('1354_rule_31 row 1: cold / shows Home, with Continue, no wall, no + New, and the Library word not current', async ({
+test('1354_rule_31 row 1: cold / shows Home, with Continue and + New, no wall, and the Library word not current', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -387,27 +389,24 @@ test('1354_rule_31 row 1: cold / shows Home, with Continue, no wall, no + New, a
 
 	await expectHomeShown(page);
 	await expect(workspace(page).locator('.tile-grid')).toHaveCount(0);
-	await expect(
-		workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
-	).toHaveCount(0);
+	await expect(newButton(page)).toBeVisible();
 	expect(await wallMounts(page), 'the wall never flashed before Home').toBe(0);
 	await expectCurrentRailWord(page, shell, null);
 	guard.assertClean();
 });
 
-test('1354_rule_31 row 2: cold /library shows the wall, with + New, no Continue, and the Library word current', async ({
+test('1354_rule_31 row 2: cold /library shows the wall, with + New on the desktop head only, no Continue, and the Library word current', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
+	const shell = shellOf(testInfo);
 
 	await page.goto(LIBRARY_PATH);
 
 	await expectWallShown(page);
 	await expect(homeHeading(page)).toHaveCount(0);
-	await expect(
-		workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
-	).toBeVisible();
-	await expectCurrentRailWord(page, shellOf(testInfo), RAIL_LIBRARY_LABEL);
+	await expect(newButton(page)).toHaveCount(shell === 'desktop' ? 1 : 0);
+	await expectCurrentRailWord(page, shell, RAIL_LIBRARY_LABEL);
 	guard.assertClean();
 });
 

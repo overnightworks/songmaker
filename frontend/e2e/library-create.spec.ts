@@ -1,6 +1,8 @@
-// + NEW on the Library head makes an album or a playlist from the wall, even
-// from an empty library (#1149, #1166, #915 F2a/F2b; pictures N1–N5 in
-// docs/design/navigation.html). A card closed with a typed title opens again
+// + NEW on Home's head makes an album or a playlist at both widths, even from
+// an empty library (#1149, #1166, #915 F2a/F2b, #1529; pictures N1–N5 in
+// docs/design/navigation.html, I1 in the same file for Home). The desktop
+// Library and Playlists heads keep it; the phone's list heads carry the order
+// switch only (#1354 rules 9 and 14). A card closed with a typed title opens again
 // on it (#1184 K2). Escape folds each create card and returns focus, a refused
 // create says why in words that fit it, a repeat refusal replaces the toast
 // before it, and a long album title leaves the song card's × on screen
@@ -18,10 +20,12 @@ import {
 	type Route
 } from '@playwright/test';
 import {
+	HOME_PAGE_LABEL,
 	LIBRARY_NEW_ALBUM_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
 	LIBRARY_NEW_PLAYLIST_LABEL,
 	LIBRARY_WALL_EMPTY,
+	LIBRARY_WALL_ORDER_GROUP_LABEL,
 	NEW_ALBUM_CARD_LABEL,
 	NEW_ALBUM_CLOSE_LABEL,
 	NEW_ALBUM_FAILED,
@@ -36,6 +40,7 @@ import {
 	NEW_SONG_TITLE_LABEL,
 	newSongCardLabel,
 	PLAYLISTS_WALL_EMPTY,
+	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_PLAYLISTS_LABEL,
 	RATE_LIMITED_TOAST_MESSAGE
@@ -117,18 +122,17 @@ function newMenu(page: Page) {
 	return page.getByRole('dialog', { name: LIBRARY_NEW_MENU_LABEL });
 }
 
-test('an empty library makes its first album from + New on the Library head and opens it', async ({
+test('1354_rule_14 an empty library makes its first album from + New on the Home head and opens it', async ({
 	page
 }, testInfo) => {
 	const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
 	await answerTheLibraryEmpty(page);
-	await page.goto(LIBRARY_PATH);
+	await page.goto(HOME_PATH);
 
 	const wall = workspace(page);
-	const libraryTitle = wall.getByRole('heading', { name: 'Library', level: 1 });
-	await expect(wall.getByText(LIBRARY_WALL_EMPTY)).toBeVisible();
+	const homeTitle = wall.getByRole('heading', { name: HOME_PAGE_LABEL, level: 1 });
 	await expect(newButton(page)).toBeVisible();
-	const [titleBox, newBox] = await boundingBoxes(libraryTitle, newButton(page));
+	const [titleBox, newBox] = await boundingBoxes(homeTitle, newButton(page));
 	expect(newBox.y).toBeLessThan(titleBox.y + titleBox.height);
 	expect(newBox.y + newBox.height).toBeGreaterThan(titleBox.y);
 	expect(newBox.x + newBox.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
@@ -139,12 +143,14 @@ test('an empty library makes its first album from + New on the Library head and 
 	await page.goBack();
 	await expect(newMenu(page)).toBeHidden();
 	await expect(newButton(page)).toBeFocused();
-	await expect(libraryTitle).toBeVisible();
+	await expect(homeTitle).toBeVisible();
 
 	await newButton(page).click();
 	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL }).click();
 	const card = wall.getByRole('form', { name: NEW_ALBUM_CARD_LABEL });
 	await expect(card).toBeVisible();
+	const [homeTitleBox, cardBox] = await boundingBoxes(homeTitle, card);
+	expect(cardBox.y).toBeGreaterThanOrEqual(homeTitleBox.y + homeTitleBox.height);
 	await card.getByRole('button', { name: NEW_ALBUM_CLOSE_LABEL }).click();
 	await expect(card).toBeHidden();
 
@@ -163,11 +169,11 @@ test('an empty library makes its first album from + New on the Library head and 
 	await expect(workspace(page).getByRole('heading', { name: title })).toBeVisible();
 });
 
-test('+ New makes a named playlist from the Library head and opens it', async ({
+test('1354_rule_14 + New makes a named playlist from the Home head and opens it', async ({
 	page
 }, testInfo) => {
 	const name = `Road Trip ${shellOf(testInfo)} ${Date.now()}`;
-	await page.goto(LIBRARY_PATH);
+	await page.goto(HOME_PATH);
 	const wall = workspace(page);
 
 	await newButton(page).click();
@@ -194,23 +200,71 @@ test('+ New makes a named playlist from the Library head and opens it', async ({
 	await expect(workspace(page).getByRole('heading', { name })).toBeVisible();
 });
 
-test('#1354 rule 9: an empty account reads one line on the Library and one on Playlists, offers + New on both and keeps both rail groups', async ({
+const LIST_PAGES = [
+	{
+		address: LIBRARY_PATH,
+		emptyLine: LIBRARY_WALL_EMPTY,
+		order: LIBRARY_WALL_ORDER_GROUP_LABEL
+	},
+	{
+		address: '/playlists',
+		emptyLine: PLAYLISTS_WALL_EMPTY,
+		order: PLAYLISTS_WALL_ORDER_GROUP_LABEL
+	}
+];
+
+test('1354_rule_9 an empty account reads one line on the Library and one on Playlists, points to + New on Home, and keeps both rail groups', async ({
 	page
 }, testInfo) => {
 	await answerTheLibraryEmpty(page);
 
-	for (const { address, line } of [
-		{ address: LIBRARY_PATH, line: LIBRARY_WALL_EMPTY },
-		{ address: '/playlists', line: PLAYLISTS_WALL_EMPTY }
-	]) {
+	for (const { address, emptyLine } of LIST_PAGES) {
 		await page.goto(address);
 
-		await expect(workspace(page).locator('.wall-body .empty')).toHaveText(line);
-		await expect(newButton(page)).toBeVisible();
+		await expect(workspace(page).locator('.wall-body .empty')).toHaveText(emptyLine);
 		const rail = await openRailNav(page, shellOf(testInfo));
 		for (const group of [RAIL_LIBRARY_LABEL, RAIL_PLAYLISTS_LABEL])
 			await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
 	}
+
+	await page.goto(HOME_PATH);
+	await expect(newButton(page)).toBeVisible();
+});
+
+test.describe('1354_rule_14 the Library and Playlists heads', () => {
+	test(
+		'the desktop heads keep + New and unfold its card under the head',
+		{ tag: ONLY_IN_SHELL.desktop },
+		async ({ page }) => {
+			for (const { address } of LIST_PAGES) {
+				await page.goto(address);
+				await expect(newButton(page)).toBeVisible();
+
+				await openNewCardFromMenu(page, LIBRARY_NEW_ALBUM_LABEL);
+
+				const card = workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL });
+				await expect(card).toBeVisible();
+				const head = workspace(page).getByRole('heading', { level: 1 });
+				const [headBox, cardBox] = await boundingBoxes(head, card);
+				expect(cardBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height);
+				await page.keyboard.press('Escape');
+				await expect(card).toBeHidden();
+			}
+		}
+	);
+
+	test(
+		'the phone heads carry the order switch only',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			for (const { address, order } of LIST_PAGES) {
+				await page.goto(address);
+
+				await expect(workspace(page).getByRole('group', { name: order })).toBeVisible();
+				await expect(newButton(page)).toHaveCount(0);
+			}
+		}
+	);
 });
 
 async function openNewCardFromMenu(page: Page, kindLabel: string): Promise<void> {
@@ -234,7 +288,7 @@ interface CreateCard {
 const CREATE_CARDS: CreateCard[] = [
 	{
 		name: 'New album',
-		address: () => LIBRARY_PATH,
+		address: () => HOME_PATH,
 		open: (page) => openNewCardFromMenu(page, LIBRARY_NEW_ALBUM_LABEL),
 		form: (page) => workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL }),
 		titleLabel: NEW_ALBUM_TITLE_LABEL,
@@ -242,7 +296,7 @@ const CREATE_CARDS: CreateCard[] = [
 	},
 	{
 		name: 'New playlist',
-		address: () => LIBRARY_PATH,
+		address: () => HOME_PATH,
 		open: (page) => openNewCardFromMenu(page, LIBRARY_NEW_PLAYLIST_LABEL),
 		form: (page) => workspace(page).getByRole('form', { name: NEW_PLAYLIST_CARD_LABEL }),
 		titleLabel: NEW_PLAYLIST_NAME_LABEL,
@@ -303,7 +357,7 @@ async function answerAlbumCreates(
 }
 
 async function typeIntoNewAlbumCard(page: Page, title: string): Promise<Locator> {
-	await page.goto(LIBRARY_PATH);
+	await page.goto(HOME_PATH);
 	await openNewCardFromMenu(page, LIBRARY_NEW_ALBUM_LABEL);
 	const card = workspace(page).getByRole('form', { name: NEW_ALBUM_CARD_LABEL });
 	await card.getByLabel(NEW_ALBUM_TITLE_LABEL).fill(title);
