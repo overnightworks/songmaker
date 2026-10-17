@@ -53,7 +53,7 @@ import {
 	ONLY_IN_SHELL,
 	openLibraryWall,
 	openRailNav,
-	openSettingsSectionFromDrawerSearch,
+	openSettingsSectionFromSearch,
 	playlistEntryRows,
 	shellOf,
 	workspace,
@@ -363,8 +363,8 @@ async function expectSettingsStands(page: Page): Promise<void> {
 	await expect(settingsHeading(page)).toBeVisible();
 }
 
-function openVoicesFromDrawerSearch(page: Page): Promise<void> {
-	return openSettingsSectionFromDrawerSearch(page, SETTINGS_SECTION);
+function openVoicesFromSearch(page: Page): Promise<void> {
+	return openSettingsSectionFromSearch(page, SETTINGS_SECTION);
 }
 
 // The phone bar's 🔍 and the sheet it opens, both named as PhoneAppBar.svelte
@@ -383,7 +383,7 @@ async function openSearchSheet(page: Page): Promise<Locator> {
 
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'mobile') {
-		await openVoicesFromDrawerSearch(page);
+		await openVoicesFromSearch(page);
 	} else {
 		const rail = await openRailNav(page, shell);
 		await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
@@ -439,13 +439,15 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		afterwards: backReaches('playlist')
 	},
 	{
-		name: 'a Settings page found in the phone rail drawer closes it, and Back then Forward return to Settings',
+		name: 'defect:#1583: a Settings page found in the Search sheet closes it, and Back then Forward return to Settings',
 		shell: 'mobile',
-		open: openRailDrawer,
-		leave: openVoicesFromDrawerSearch,
+		open: async (page) => {
+			await openSearchSheet(page);
+		},
+		leave: openVoicesFromSearch,
 		expectLeft: async (page) => {
 			await expectSettingsStands(page);
-			await expect(railDrawer(page)).toBeHidden();
+			await expect(searchSheet(page)).toBeHidden();
 		},
 		afterwards: backThenForwardReturnsToSettings
 	},
@@ -736,25 +738,23 @@ test.describe('Back and Forward between the library and Settings', () => {
 		}
 	);
 
-	// The drawer belongs to the mobile shell. It carries navigation only, so
-	// its way to Settings is the search's page hit: it leaves the drawer and
-	// pushes one entry of its own.
+	// The Search sheet closes before Settings pushes its destination entry.
 	test(
-		'a drawer link to Settings pushes one entry over the playlist, and Back returns to it',
+		'defect:#1583: Search to Settings pushes one entry over the playlist, and Back returns to it',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page, request }) => {
 			const guard = new FlowGuard(page);
 			const { pages } = await openSeededPlaylist(page, request);
 			const entriesOnPlaylist = await page.evaluate(() => history.length);
 
-			await openVoicesFromDrawerSearch(page);
+			await openVoicesFromSearch(page);
 			await expectSettingsStands(page);
 			expect(await page.evaluate(() => history.length)).toBe(entriesOnPlaylist + 1);
 
 			await page.goBack();
 
 			await expectPlaylistStands(page, pages);
-			await expect(railDrawer(page)).toBeHidden();
+			await expect(searchSheet(page)).toBeHidden();
 			guard.assertClean();
 		}
 	);

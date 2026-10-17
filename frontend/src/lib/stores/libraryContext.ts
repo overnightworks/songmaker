@@ -62,6 +62,8 @@ import {
 	standsOnPlaylistsPage,
 	takeRoutePath
 } from '$lib/routes/addresses';
+import { standingPathname } from '$lib/routes/standingAddress';
+import type { RailSearchTarget } from '$lib/stores/railSearch';
 import { CREATED_SORTS } from '$lib/utils/recency';
 import { songTakesLoaded } from '$lib/utils/playable';
 
@@ -770,6 +772,17 @@ export function placeShown(
 		case 'playlists':
 			return playlistsWallShows(surface, songId) && standsOnPlaylistsPage(pathname);
 	}
+}
+
+export function targetAlreadyShown(target: RailSearchTarget): boolean {
+	if (libraryRouteShape(standingPathname(page.state)) === 'external') return false;
+	const songId = get(selectedSongId);
+	if (target.kind === 'song') return songAlreadyShown(target.id);
+	if (target.kind === 'album') return songId === null && albumAlreadyShown(target.id);
+	if (target.kind === 'playlist') return songId === null && playlistAlreadyShown(target.id);
+	if (target.href === LIBRARY_ROUTE_PATH) return libraryWallShows(get(librarySurface), songId);
+	if (target.href === PLAYLISTS_ROUTE_PATH) return playlistsWallShows(get(librarySurface), songId);
+	return false;
 }
 
 type LegacySongQueryAddress =

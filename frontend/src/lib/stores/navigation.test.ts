@@ -51,7 +51,8 @@ import {
 	openPlaylistAddress,
 	openLibraryAddress,
 	openSongAddress,
-	resetLibraryContextForTests
+	resetLibraryContextForTests,
+	showSongTab
 } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList, updateSongInList } from '$lib/stores/libraryData';
@@ -93,6 +94,7 @@ import {
 	TAKES_ERROR,
 	TAKES_RETRY_LABEL
 } from '$lib/constants';
+import type { RailSearchTarget } from '$lib/stores/railSearch';
 import type { SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
@@ -596,16 +598,18 @@ describe('the library pages opened over a collection', () => {
 			criterion: '#1402',
 			address: '/playlists',
 			surface: 'playlists',
-			open: openPlaylistsBySearch
+			open: openPlaylistsBySearch,
+			reselectionHistoryScroll: []
 		},
 		{
 			page: 'Home',
 			criterion: '1354_rule_31:',
 			address: HOME_ROUTE_PATH,
 			surface: 'home',
-			open: openHome
+			open: openHome,
+			reselectionHistoryScroll: [640]
 		}
-	] as const)('$page', ({ criterion, address, surface, open }) => {
+	] as const)('$page', ({ criterion, address, surface, open, reselectionHistoryScroll }) => {
 		it(`${criterion} opens over a fresh entry at its own address, Back and Forward stepping between it and the album below`, async () => {
 			await openAlbum('a1');
 			const length = historyLength();
@@ -632,17 +636,34 @@ describe('the library pages opened over a collection', () => {
 		});
 
 		it.each([
-			{ over: 'the Library wall', shows: 'its top', first: openLibraryWall, scrolled: 0 },
-			{ over: 'itself', shows: 'where it was', first: open, scrolled: 640 }
-		])(`${criterion} opened over $over shows $shows`, async ({ first, scrolled }) => {
-			await first();
-			captureLibraryScroll(640);
+			{
+				over: 'the Library wall',
+				shows: 'its top',
+				first: openLibraryWall,
+				scrolled: 0,
+				historyScroll: [0]
+			},
+			{
+				over: 'itself',
+				shows: 'where it was',
+				first: open,
+				scrolled: 640,
+				historyScroll: reselectionHistoryScroll
+			}
+		])(
+			`defect:#1582: ${criterion} opened over $over shows $shows`,
+			async ({ first, scrolled, historyScroll }) => {
+				await first();
+				captureLibraryScroll(640);
 
-			await open();
+				await open();
 
-			expect(get(libraryScrollAnchor)).toBe(scrolled);
-			expect(historyEntry().scrollAnchor).toBe(scrolled);
-		});
+				expect(get(libraryScrollAnchor)).toBe(scrolled);
+				for (const expectedScroll of historyScroll) {
+					expect(historyEntry().scrollAnchor).toBe(expectedScroll);
+				}
+			}
+		);
 
 		it(`${criterion} opened over a scrolled Library wall keeps the wall scrolled for Back`, async () => {
 			await openLibraryWall();
@@ -2877,6 +2898,150 @@ describe('overlays outside the library', () => {
 });
 
 describe('openRailSearchTarget', () => {
+	const destinations: { name: string; target: RailSearchTarget }[] = [
+		{ name: 'album', target: { kind: 'album', id: 'a1' } },
+		{ name: 'playlist', target: { kind: 'playlist', id: 'p1' } },
+		{ name: 'song', target: { kind: 'song', id: 's1' } },
+		{ name: 'Library', target: { kind: 'page', href: '/library' } },
+		{ name: 'Playlists', target: { kind: 'page', href: '/playlists' } }
+	];
+
+	function visibleSelection() {
+		return {
+			collection: get(openCollection),
+			song: get(selectedSongId),
+			take: get(selectedGenerationId),
+			surface: get(librarySurface),
+			panel: get(selectedSongId) === null ? null : get(detailTab)
+		};
+	}
+
+	it.each(destinations)(
+		'defect:#1582: choosing the visible $name in the drawer dismisses it without navigating',
+		async ({ target }) => {
+			const stopNavigation = initNavigation();
+			onTestFinished(stopNavigation);
+			fetchPlaylists.mockResolvedValue([playlistItem({ share_slug: null })]);
+			await openAppPage('/settings/voices');
+			await openRailSearchTarget(target);
+			const address = location.href;
+			const selection = visibleSelection();
+			toggleSidebar();
+			await libraryHistoryStepsLanded();
+			const entries = historyLength();
+			expect(get(sidebarOpen)).toBe(true);
+
+			await openRailSearchTarget(target);
+
+			expect(get(sidebarOpen)).toBe(false);
+			expect(location.href).toBe(address);
+			expect(visibleSelection()).toEqual(selection);
+			expect(historyLength()).toBe(entries);
+			await pressBack();
+			expect(location.pathname).toBe('/settings/voices');
+		}
+	);
+
+	it.each(destinations)(
+		'defect:#1582: choosing the visible $name preserves its address, history and selection',
+		async ({ target }) => {
+			fetchPlaylists.mockResolvedValue([playlistItem({ share_slug: null })]);
+			await openAppPage('/settings/voices');
+			await openRailSearchTarget(target);
+			const address = location.href;
+			const entries = historyLength();
+			const selection = visibleSelection();
+
+			await openRailSearchTarget(target);
+
+			expect(location.href).toBe(address);
+			expect(historyLength()).toBe(entries);
+			expect(visibleSelection()).toEqual(selection);
+			await pressBack();
+			expect(location.pathname).toBe('/settings/voices');
+		}
+	);
+
+	it.each(destinations)(
+		'defect:#1582: retained $name state under Settings does not prevent returning',
+		async ({ target }) => {
+			fetchPlaylists.mockResolvedValue([playlistItem({ share_slug: null })]);
+			await openRailSearchTarget(target);
+			const address = location.href;
+			const selection = visibleSelection();
+			await openAppPage('/settings/voices');
+
+			await openRailSearchTarget(target);
+
+			expect(location.href).toBe(address);
+			expect(visibleSelection()).toEqual(selection);
+		}
+	);
+
+	it.each(destinations.filter(({ target }) => target.kind !== 'page'))(
+		'defect:#1582: a different $name ID still navigates',
+		async ({ target }) => {
+			fetchPlaylists.mockResolvedValue([
+				playlistItem({ share_slug: null }),
+				playlistItem({ id: 'p2', slug: 'other', share_slug: null })
+			]);
+			songList.set([
+				song({ ...navigableSongDefaults(), slug: 's1' }),
+				song({ ...navigableSongDefaults(), id: 's2', slug: 's2' })
+			]);
+			if (target.kind === 'page') throw new Error('Expected an entity target');
+			const otherId = { album: 'a2', playlist: 'p2', song: 's2' }[target.kind];
+			await openRailSearchTarget({ kind: target.kind, id: otherId });
+			const address = location.href;
+			const entries = historyLength();
+
+			await openRailSearchTarget(target);
+
+			expect(historyLength()).toBe(entries + (target.kind === 'song' ? 0 : 1));
+			expect(location.href).not.toBe(address);
+		}
+	);
+
+	it.each(
+		destinations
+			.filter(({ target }) => target.kind === 'album' || target.kind === 'playlist')
+			.flatMap((destination) =>
+				(['song', 'wall'] as const).map((cover) => ({ ...destination, cover }))
+			)
+	)('defect:#1582: a retained $name behind the $cover still opens', async ({ target, cover }) => {
+		fetchPlaylists.mockResolvedValue([playlistItem({ share_slug: null })]);
+		await openRailSearchTarget(target);
+		const selection = visibleSelection();
+		if (cover === 'song') await selectSong('s1');
+		else await openLibraryWall();
+		const entries = historyLength();
+
+		await openRailSearchTarget(target);
+
+		expect(historyLength()).toBe(entries + 1);
+		expect(visibleSelection()).toEqual(selection);
+	});
+
+	it('defect:#1582: choosing the current song keeps its dirty draft, panel and take without asking', async () => {
+		onTestFinished(discardDraft);
+		await openSongWithAnUntouchedLoadOfV1();
+		setDraftLyrics('unsaved search draft');
+		showSongTab('s1', 'takes');
+		selectedGenerationId.set('g1');
+		const address = location.href;
+		const entries = historyLength();
+
+		await openRailSearchTarget({ kind: 'song', id: 's1' });
+
+		expect(get(editLyrics)).toBe('unsaved search draft');
+		expect(get(isDirty)).toBe(true);
+		expect(get(detailTab)).toBe('takes');
+		expect(get(selectedGenerationId)).toBe('g1');
+		expect(get(pendingDirtyNavigation)).toBeNull();
+		expect(location.href).toBe(address);
+		expect(historyLength()).toBe(entries);
+	});
+
 	it('1354_rule_31: uses the Library action for the Library page target', async () => {
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		selectedSongId.set('s1');
