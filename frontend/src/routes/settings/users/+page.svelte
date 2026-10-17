@@ -70,6 +70,7 @@
 		ModelsTaskSelection
 	} from '$lib/components/ModelsTaskRow.svelte';
 	import {
+		RATE_LIMITED_STATUS,
 		ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
 		ADMIN_ACCOUNT_GONE_MESSAGE,
 		ADMIN_REVOKE_FAILED_MESSAGE,
@@ -789,7 +790,7 @@
 			sessions = (await fetchSessions()).items;
 		} catch (e) {
 			reportError(
-				e instanceof ApiError && e.status === 429
+				e instanceof ApiError && e.status === RATE_LIMITED_STATUS
 					? ADMIN_REVOKE_RATE_LIMITED_MESSAGE
 					: describeFailure(e, ADMIN_REVOKE_FAILED_MESSAGE, {
 							offline: ADMIN_REVOKE_OFFLINE_MESSAGE

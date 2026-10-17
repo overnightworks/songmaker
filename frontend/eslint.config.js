@@ -37,6 +37,14 @@ const TRANSPORT_READS_NO_IMPORT_META =
 	'lib/api is the transport (#925 G2): import.meta (import.meta.glob included) ' +
 	'reaches modules lint cannot read. Keep it out of lib/api.';
 
+// #925 G3. Only the transport calls fetch; the named media owners, diagnostics
+// beacon and service worker retain their direct reads. Tests stub the boundary.
+// checkGlobalObject also refuses window.fetch, globalThis.fetch and self.fetch.
+// Keep this the last block setting no-restricted-globals for these files:
+// a later block replaces its options.
+const RAW_FETCH_MESSAGE =
+	'Only lib/api/fetch.ts calls fetch (#925 G3): call a lib/api function, or add one there.';
+
 export default ts.config(
 	eslint.configs.recommended,
 	...ts.configs.strict,
@@ -84,6 +92,23 @@ export default ts.config(
 				{ selector: 'ImportExpression', message: TRANSPORT_LOADS_NOTHING_LAZILY },
 				{ selector: 'TSImportType', message: TRANSPORT_TYPES_ARE_IMPORTED_BY_NAME },
 				{ selector: "MetaProperty[meta.name='import']", message: TRANSPORT_READS_NO_IMPORT_META }
+			]
+		}
+	},
+	{
+		files: ['src/**'],
+		ignores: [
+			'src/lib/api/fetch.ts',
+			'src/lib/services/audioPlayer.svelte.ts',
+			'src/lib/services/continuousDeck.ts',
+			'src/lib/services/playbackDiagnostics.ts',
+			'src/service-worker.ts',
+			'src/**/*.test.ts'
+		],
+		rules: {
+			'no-restricted-globals': [
+				'error',
+				{ globals: [{ name: 'fetch', message: RAW_FETCH_MESSAGE }], checkGlobalObject: true }
 			]
 		}
 	},

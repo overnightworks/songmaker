@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fetchMediaBytes } from '$lib/api/fetch';
 
 	interface Props {
 		audioUrl: string;
@@ -40,8 +41,7 @@
 
 	async function loadAudio(): Promise<void> {
 		try {
-			const response = await fetch(audioUrl);
-			const buffer = await response.arrayBuffer();
+			const buffer = await fetchMediaBytes(audioUrl);
 			const audioCtx = new AudioContext();
 			const decoded = await audioCtx.decodeAudioData(buffer);
 			const channelData = decoded.getChannelData(0);
