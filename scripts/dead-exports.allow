@@ -9,3 +9,8 @@ frontend/src/lib/history/historyController.ts:landedEntry # the popstate reader 
 frontend/src/lib/history/historyController.ts:stepBackTo # exported for its first-entry test; layers step back through it inside the controller (#1219), and #1006 H6 (legal) calls it directly.
 frontend/src/lib/services/continuousDeck.ts:ContinuousDeck # the continuous-deck append engine lands ahead of its caller; wired by #1187 M2 (audioPlayer plays a queue through it).
 frontend/src/lib/services/audioPlayer.svelte.ts:STALL_RECOVERY_MS # the stall-check interval is exported so the stall and recovery tests advance the clock by the one value instead of hand copies (#1330); its production reader is the stall watch in the same module.
+frontend/src/lib/stores/libraryWrite.ts:libraryWriteItems # lands ahead of its caller; HomeWrite mounts it in #1354 row 28.
+frontend/src/lib/stores/libraryWrite.ts:libraryWriteState # lands ahead of its caller; HomeWrite mounts it in #1354 row 28.
+frontend/src/lib/stores/libraryWrite.ts:libraryWriteLoading # lands ahead of its caller; HomeWrite mounts it in #1354 row 28.
+frontend/src/lib/stores/libraryWrite.ts:ensureLibraryWriteRead # lands ahead of its caller; HomeWrite mounts it in #1354 row 28.
+frontend/src/lib/stores/libraryWrite.ts:outdateLibraryWrite # lands ahead of its caller; HomeWrite mounts it in #1354 row 28.
