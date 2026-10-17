@@ -513,33 +513,36 @@ def test_password_change_cache_failure_rolls_back_password_and_sessions(client: 
     assert login.status_code == 200
 
 
-# -- Redis session cache integration ------------------------------------------
+# -- Persisted sessions and cookie replay -------------------------------------
 
 
-def test_login_populates_redis(client: TestClient) -> None:
-    from webauth.ports import SessionCache
-
-    _seed_admin(client)
-    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
-
-    client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
-
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    redis = client.app.state.ctx.redis
-    members = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{_get_user_id(client, 'admin')}")
-    assert len(members) == 1
-    sid = list(members)[0]
-    assert session_cache.get(sid) is not None
+@pytest.mark.parametrize("endpoint,username,password", [
+    ("login", "admin", "admin12345"),
+    ("setup", "myadmin", "secure1234"),
+])
+def test_login_and_setup_create_a_persisted_usable_session(
+    client: TestClient, endpoint: str, username: str, password: str,
+) -> None:
+    """defect:#1590: issued cookies authenticate a committed session."""
+    if endpoint == "login":
+        _seed_admin(client)
+    response = client.post(
+        f"/api/auth/{endpoint}", json={"username": username, "password": password},
+    )
+    assert response.status_code == 200
+    user_id = _get_user_id(client, username)
+    with client.app.state.ctx.db() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).count() == 1
+    with closing(web_client(client.app, cookies=response.cookies)) as replay:
+        response_me = replay.get("/api/auth/me")
+    assert response_me.status_code == 200
+    assert response_me.json()["username"] == username
 
 
 def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
-    from webauth.ports import SessionCache
-
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    """defect:#1590: both committed sessions remain usable below the cap."""
 
     _seed_admin(client)
-    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
-    redis = client.app.state.ctx.redis
     user_id = _get_user_id(client, "admin")
 
     first = web_client(client.app, cookies={})
@@ -551,10 +554,8 @@ def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     ).status_code == 200
 
-    sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(sids) == 2
-    for sid in sids:
-        assert session_cache.get(sid) is not None
+    with client.app.state.ctx.db() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).count() == 2
     assert first.get("/api/auth/me").status_code == 200
     assert second.get("/api/auth/me").status_code == 200
 
@@ -562,14 +563,11 @@ def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
 def test_login_prunes_oldest_session_over_cap(
     client: TestClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    from songmaker_cli.db.models import UserSession
+    """defect:#1590: pruning deletes only the oldest session and rejects its cookie."""
     from songmaker_cli.settings import get_settings
 
     monkeypatch.setattr(get_settings(), "max_concurrent_sessions_per_user", 2)
     _seed_admin(client)
-    redis = client.app.state.ctx.redis
-    session_cache = installed_web_auth_config(client.app).session_cache
     user_id = _get_user_id(client, "admin")
 
     first = web_client(client.app, cookies={})
@@ -578,9 +576,8 @@ def test_login_prunes_oldest_session_over_cap(
     assert first.post(
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     ).status_code == 200
-    oldest_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(oldest_sids) == 1
-    oldest_sid = next(iter(oldest_sids))
+    with client.app.state.ctx.db() as session:
+        oldest_sid = session.query(UserSession).filter_by(user_id=user_id).one().id
     assert second.post(
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     ).status_code == 200
@@ -588,10 +585,6 @@ def test_login_prunes_oldest_session_over_cap(
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     ).status_code == 200
 
-    members = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(members) == 2
-    assert oldest_sid not in members
-    assert session_cache.get(oldest_sid) is None
     assert first.get("/api/auth/me").status_code == 401
     assert second.get("/api/auth/me").status_code == 200
     assert third.get("/api/auth/me").status_code == 200
@@ -645,72 +638,69 @@ def test_login_redis_prune_failure_rolls_back(
     assert session_cache.get(old_sid) is not None
 
 
-def test_login_commit_failure_does_not_leave_redis_session(client: TestClient) -> None:
-    from unittest.mock import patch
+def test_login_commit_failure_leaves_no_session_or_cookie(client: TestClient) -> None:
+    """defect:#1590: a failed session commit leaves no usable authentication."""
+    from sqlalchemy import event
+    from webauth.cookies import sign_session_id
 
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    from songmaker_cli.db.models import UserSession
-    from songmaker_cli.db.queries import create_session as real_create_session
+    from songmaker_cli.app_context import get_db_session
 
     _seed_admin(client)
-    user_id = _get_user_id(client, "admin")
-    session_cache = installed_web_auth_config(client.app).session_cache
-    redis = client.app.state.ctx.redis
-    created_ids: list[str] = []
-    cached_before_commit = {"present": False}
+    factory = client.app.state.ctx.db
+    attempted_cookies: list[str] = []
+    config = installed_web_auth_config(client.app)
 
-    def create_session_then_fail_commit(db, *args, **kwargs):
-        user_session = real_create_session(db, *args, **kwargs)
-        created_ids.append(user_session.id)
-
-        def fail_commit() -> None:
-            cached_before_commit["present"] = session_cache.get(user_session.id) is not None
+    def fail_session_commit(db) -> None:
+        record = db.query(UserSession).one_or_none()
+        if record is not None:
+            attempted_cookies.append(sign_session_id(record.id, config.signing_key))
             raise RuntimeError("commit failed")
 
-        db.commit = fail_commit
-        return user_session
+    def failing_session():
+        with factory() as db:
+            event.listen(db, "before_commit", fail_session_commit)
+            yield db
 
-    with patch(
-        "songmaker_cli.auth_api.create_session",
-        side_effect=create_session_then_fail_commit,
-    ):
-        with pytest.raises(RuntimeError, match="commit failed"):
-            client.post(
-                "/api/auth/login",
-                json={"username": "admin", "password": "admin12345"},
+    client.app.dependency_overrides[get_db_session] = failing_session
+    try:
+        with closing(web_client(client.app, raise_server_exceptions=False)) as failing_client:
+            response = failing_client.post(
+                "/api/auth/login", json={"username": "admin", "password": "admin12345"},
             )
+    finally:
+        del client.app.dependency_overrides[get_db_session]
 
-    assert created_ids
-    new_sid = created_ids[0]
-    assert cached_before_commit["present"] is True
-    assert session_cache.get(new_sid) is None
-    assert new_sid not in redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-
-    factory = client.app.state.ctx.db
+    assert response.status_code == 500
+    assert DEFAULT_SESSION_COOKIE_NAME not in response.cookies
+    assert len(attempted_cookies) == 1
     with factory() as session:
-        remaining = session.query(UserSession).filter_by(user_id=user_id).all()
-        assert remaining == []
+        assert session.query(UserSession).count() == 0
+    with closing(web_client(client.app, cookies={
+        DEFAULT_SESSION_COOKIE_NAME: attempted_cookies[0],
+    })) as replay:
+        assert replay.get("/api/auth/me").status_code == 401
 
 
-def test_logout_removes_the_session_from_the_database_and_from_redis(
+def test_logout_removes_the_session_and_rejects_its_cookie(
     client: TestClient,
 ) -> None:
+    """defect:#1590: logout persists revocation before clearing the cookie."""
     _seed_admin(client)
     _login(client, "admin", "admin12345")
 
-    session_cache = installed_web_auth_config(client.app).session_cache
+    cookie = client.cookies[DEFAULT_SESSION_COOKIE_NAME]
     user_id = _get_user_id(client, "admin")
     factory = client.app.state.ctx.db
     with factory() as session:
-        session_id = session.query(UserSession).filter_by(user_id=user_id).one().id
-    assert session_cache.get(session_id) is not None
+        assert session.query(UserSession).filter_by(user_id=user_id).count() == 1
 
     resp = client.delete("/api/auth/session")
 
     assert resp.status_code == 200
     with factory() as session:
         assert session.query(UserSession).filter_by(user_id=user_id).all() == []
-    assert session_cache.get(session_id) is None
+    with closing(web_client(client.app, cookies={DEFAULT_SESSION_COOKIE_NAME: cookie})) as replay:
+        assert replay.get("/api/auth/me").status_code == 401
 
 
 def test_logout_redis_failure_rolls_back(
@@ -738,45 +728,27 @@ def test_logout_redis_failure_rolls_back(
     assert session_cache.get(session_id) is not None
 
 
-def test_password_change_clears_old_populates_new(client: TestClient) -> None:
-    from webauth.ports import SessionCache
-
+def test_password_change_replaces_session_and_rejects_old_cookie(client: TestClient) -> None:
+    """defect:#1590: only the replacement session survives a password change."""
     _seed_admin(client)
     _login(client, "admin", "admin12345")
-
-    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    redis = client.app.state.ctx.redis
+    old_cookie = client.cookies[DEFAULT_SESSION_COOKIE_NAME]
     user_id = _get_user_id(client, "admin")
-    old_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    old_sid = list(old_sids)[0]
+    with client.app.state.ctx.db() as session:
+        old_sid = session.query(UserSession).filter_by(user_id=user_id).one().id
 
-    client.put(
+    response = client.put(
         "/api/auth/password",
         json={"current": "admin12345", "new_password": "newpassword1"},
     )
-
-    assert session_cache.get(old_sid) is None
-    new_sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(new_sids) == 1
-    new_sid = list(new_sids)[0]
-    assert new_sid != old_sid
-    assert session_cache.get(new_sid) is not None
-
-
-def test_setup_populates_redis(client: TestClient) -> None:
-    from webauth.ports import SessionCache
-
-    session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
-    client.post("/api/auth/setup", json={"username": "myadmin", "password": "secure1234"})
-
-    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
-    redis = client.app.state.ctx.redis
-    user_id = _get_user_id(client, "myadmin")
-    members = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
-    assert len(members) == 1
-    sid = list(members)[0]
-    assert session_cache.get(sid) is not None
+    assert response.status_code == 200
+    with client.app.state.ctx.db() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).one().id != old_sid
+    for cookie, status in [(old_cookie, 401), (response.cookies[DEFAULT_SESSION_COOKIE_NAME], 200)]:
+        with closing(web_client(
+            client.app, cookies={DEFAULT_SESSION_COOKIE_NAME: cookie},
+        )) as replay:
+            assert replay.get("/api/auth/me").status_code == status
 
 
 def _get_user_id(client: TestClient, username: str) -> str:
