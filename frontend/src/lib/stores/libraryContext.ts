@@ -303,13 +303,13 @@ function writeLibraryHistoryNow(
 		const written = writeShallowLibraryHistory(state, url, mode);
 		return remountOverStandingEntry(url, libraryPageState(written));
 	}
-	if (historyStandsOnLibraryPage()) {
+	if (historyStandsInLibraryWorkspace()) {
 		return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, mode));
 	}
 	return navigateLibraryRoute(url, state, mode);
 }
 
-function historyStandsOnLibraryPage(): boolean {
+function historyStandsInLibraryWorkspace(): boolean {
 	return (
 		libraryRouteShape(window.location.pathname) !== 'external' &&
 		isLibraryHistoryState(libraryHistoryEntry())
@@ -749,7 +749,7 @@ export function libraryWallShows(surface: LibrarySurface, songId: string | null)
 	return surface === 'browse' && songId === null;
 }
 
-function playlistsWallShows(surface: LibrarySurface, songId: string | null): boolean {
+export function playlistsWallShows(surface: LibrarySurface, songId: string | null): boolean {
 	return surface === 'playlists' && songId === null;
 }
 

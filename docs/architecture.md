@@ -213,10 +213,15 @@ and there is no second rule (a place the viewer never listened in has no rank
 and waits at the end in title order). One owner, `stores/libraryOrder.ts`,
 holds these comparators and the Last played ranking; the wall and the rail's
 albums and playlists (desktop rail and phone drawer) all ask it, so the switch
-reorders both at once. Each tile's second line follows the order: the size
-under A–Z, the last listen under Last played (the size for a place never
-listened in). Back or ‹ from an album's or a playlist's page lands the wall at
-the scroll its entry kept, and on the phone the row of the place just left
+reorders both at once. It starts one Listen read per page load however many
+readers ask. Under Last played a page holds its places back until that read
+answers (the wall shows the loading word, the rail groups stay empty) and falls
+back to A–Z if the read fails. The player calls `outdateLastPlayedRanking` once
+a listen's POST has resolved, so the next showing of the wall reads again; a
+restored take records no listen and outdates nothing. Each tile's second line
+follows the order: the size under A–Z, the last listen under Last played (the
+size for a place never listened in). Back or ‹ from an album's or a playlist's
+page lands the wall at the scroll its entry kept, and on the phone the row of the place just left
 lights up once (#1354 rule 12): `setLibrarySurface` remembers the place when the
 wall replaces its page, `takePlaceReturnedFrom` hands it to the one showing of
 the wall, and the first `LibraryRow` to show that place tints it for a moment (a

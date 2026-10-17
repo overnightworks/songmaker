@@ -88,6 +88,7 @@ vi.mock('$lib/api/songs', () => ({
 	recordSongListen: vi.fn().mockResolvedValue(undefined)
 }));
 import { albumList, songList, upsertSongInList } from './libraryData';
+import { ensureLastPlayedRead, resetLibraryOrderForTests } from './libraryOrder';
 import {
 	collectionTransport,
 	toggleOrStartCollection,
@@ -768,6 +769,42 @@ describe('playback dispatch', () => {
 		expect(recordSongListen).toHaveBeenCalledWith(song.id, null);
 		expect(logged).toHaveBeenCalledWith('Could not record song listen:', reportingError);
 	});
+
+	it.each([
+		['recorded', true, 2],
+		['not recorded', false, 1]
+	])(
+		'defect:#1537: the Last played ranking is outdated only once the listen is %s',
+		async (_, listenRecorded, readsAfterwards) => {
+			const fetchStub = vi.fn(async () => Response.json({ items: [] }));
+			vi.stubGlobal('fetch', fetchStub);
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+			onTestFinished(() => {
+				vi.unstubAllGlobals();
+				resetLibraryOrderForTests();
+			});
+			await ensureLastPlayedRead();
+			const listen = Promise.withResolvers<undefined>();
+			vi.mocked(recordSongListen).mockReturnValueOnce(listen.promise);
+			const song = makeSong({ ...queuedSongDefaults(), id: 's-ranking-outdated' });
+			audioPlayer.status = 'playing';
+			audioPlayer.current = makePlayback(
+				makeGen({ ...genDefaults, id: 'g-ranking-outdated', song_id: song.id }),
+				song
+			);
+
+			audioPlayer.currentCallbacks.onPlaybackStarted?.();
+			await ensureLastPlayedRead();
+			expect(fetchStub).toHaveBeenCalledTimes(1);
+
+			if (listenRecorded) listen.resolve(undefined);
+			else listen.reject(new Error('offline'));
+			await listen.promise.catch(() => {});
+			await ensureLastPlayedRead();
+
+			expect(fetchStub).toHaveBeenCalledTimes(readsAfterwards);
+		}
+	);
 
 	it('does not record while share playback owns the audio callback', () => {
 		const song = makeSong({ ...queuedSongDefaults(), id: 's-share-listen' });

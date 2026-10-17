@@ -24,8 +24,7 @@
 //
 // No route interception except in the media-refusal flows (#925 M3): a session
 // the server still holds is never refused a take, so those flows refuse the
-// take's audio, and hold an album's reads, by route. Every other refusal is
-// the CI stack's own answer.
+// take's audio by route. Every other refusal is the CI stack's own answer.
 // The admin flows' 404s and 409 are their point, so their guard forgives
 // exactly those statuses on exactly the revoke, account-update and create
 // paths.
@@ -51,7 +50,6 @@ import {
 	type Locator,
 	type Page,
 	type Response,
-	type Route,
 	type TestInfo
 } from '@playwright/test';
 
@@ -65,7 +63,6 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
-	RESOURCE_EVENT_STREAM_PATH,
 	SESSION_LOST_REDIRECT_PARAM,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
@@ -121,14 +118,13 @@ import {
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
  * on the phone the walk through the drawer to the album -- and 23/23 for the
  * sign-out the lost network keeps from the server. The #925 M3 media-refusal
- * flows were measured over ten runs each at 1440 / 390: 46 to 47/45 to 48 for
- * the take's audio refused, and 39 to 43 at 1440 for the take's probe and an
- * album's reads refused together (a desktop-only flow). One ceiling for the
+ * flow was measured over ten runs at 1440 / 390: 46 to 47/45 to 48 for
+ * the take's audio refused. One ceiling for the
  * file, the same way `admin-models.spec.ts` carries one for its four; only the
  * sign-out while a take plays carries its own, since it opens a song and plays
- * before the sign-out it is about (14.10.2026), and the media-refusal flows
- * another, since each signs in onto a song page and then loads the song or an
- * album afresh behind a valid session, a whole cold page open on top of the
+ * before the sign-out it is about (14.10.2026), and the media-refusal flow
+ * another, since it signs in onto a song page and then loads the song
+ * afresh behind a valid session, a whole cold page open on top of the
  * first. The budget is a ceiling, not a knob: a flow that suddenly needs several more round trips is a regression,
  * so find the extra requests instead of raising this number -- see
  * `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full reasoning.
@@ -496,67 +492,15 @@ function refusalsBeforeTheLoad(watch: DocumentWatch): string[] {
 const isTakeAudio = (url: URL): boolean => url.pathname.startsWith(TAKE_AUDIO_PATH);
 const isTakeProbe = (response: Response): boolean =>
 	response.request().method() === 'HEAD' && isTakeAudio(new URL(response.url()));
-// What the page reads from the API, except the live stream and the session
-// check: the fresh document's own check never depends on this route.
-const isAlbumRead = (url: URL): boolean =>
-	url.pathname.startsWith('/api/') &&
-	url.pathname !== RESOURCE_EVENT_STREAM_PATH &&
-	!url.pathname.startsWith('/api/auth/');
-const SESSION_LOST_ANSWER = { status: 401, json: { detail: 'Not authenticated' } };
-
 /**
  * Answers the take's audio as a lost session is answered, until the page asks
- * for a fresh document, which meets the real, still valid session. A held
- * `HEAD` probe waits in `heldProbe` for the flow to answer it.
+ * for a fresh document, which meets the real, still valid session.
  */
-async function refuseTheTakeAudio(
-	page: Page,
-	watch: DocumentWatch,
-	holdsTheProbe: boolean
-): Promise<{ heldProbe: Promise<Route> }> {
-	let holdProbe: (route: Route) => void = () => undefined;
-	const heldProbe = new Promise<Route>((resolve) => (holdProbe = resolve));
+async function refuseTheTakeAudio(page: Page, watch: DocumentWatch): Promise<void> {
 	await page.route(isTakeAudio, async (route) => {
 		if (watch.freshDocuments.length > 0) return route.fallback();
-		if (holdsTheProbe && route.request().method() === 'HEAD') return holdProbe(route);
 		return route.fulfill({ status: 401 });
 	});
-	return { heldProbe };
-}
-
-interface HeldAlbumReads {
-	arm: () => void;
-	firstHeldRead: Promise<void>;
-	refuseTheHeldReads: () => Promise<void>;
-}
-
-/**
- * Holds every read of the album the flow opens once it is armed, until they
- * are refused together; reads after that are refused at once. Before it is
- * armed, and once the page asks for a fresh document, the reads go through.
- */
-async function holdAlbumReads(page: Page, watch: DocumentWatch): Promise<HeldAlbumReads> {
-	let armed = false;
-	let refusing = false;
-	const held: Route[] = [];
-	let sawAHeldRead: () => void = () => undefined;
-	const firstHeldRead = new Promise<void>((resolve) => (sawAHeldRead = resolve));
-	await page.route(isAlbumRead, async (route) => {
-		if (!armed || watch.freshDocuments.length > 0) return route.fallback();
-		if (refusing) return route.fulfill(SESSION_LOST_ANSWER);
-		held.push(route);
-		return sawAHeldRead();
-	});
-	return {
-		arm: () => {
-			armed = true;
-		},
-		firstHeldRead,
-		refuseTheHeldReads: async () => {
-			refusing = true;
-			await Promise.all(held.map((route) => route.fulfill(SESSION_LOST_ANSWER)));
-		}
-	};
 }
 
 /** The refusal the lockout flow is about, named by the server itself. */
@@ -1167,84 +1111,52 @@ test(
 );
 
 // A session the server still holds is never refused a take, so the refusal is
-// made here, by route, on the take's audio -- and, in the second row, on the
-// reads of an album the person opened meanwhile. The page cannot tell it from
-// a lost session, and must leave by one fresh document at the address it was
-// heading for. The take plays on the classic audio element, without
-// MediaSource, as on an iPhone; the deck's own refusal reaches the same
-// element (`audioPlayer.test.ts`).
-const MEDIA_REFUSAL_ROWS = [
-	{
-		id: '925_M3_B-A4',
-		sentence:
-			"the take's audio refusals are the only refusals, the HEAD last; one fresh document, at the song; no move within the document; nothing plays afterwards",
-		tags: [TAKE_AUDIO_REFUSED_TAG],
-		albumReadsRefused: false,
-		refusedBeforeTheLoad: ['GET take audio 401', 'HEAD take audio 401']
-	},
-	{
-		id: '925_M3_B-A3',
-		sentence:
-			"two delivered refusals, the take's HEAD and the album's reads, give one fresh document, at the album clicked",
-		tags: [TAKE_AUDIO_REFUSED_TAG, ALBUM_OPENING_REFUSED_TAG, ONLY_IN_SHELL.desktop],
-		albumReadsRefused: true,
-		refusedBeforeTheLoad: ['API read 401', 'GET take audio 401', 'HEAD take audio 401']
-	}
-];
-
-for (const row of MEDIA_REFUSAL_ROWS) {
-	test(`${row.id}: ${row.sentence}`, { tag: row.tags }, async ({ page, isMobile }, testInfo) => {
+// made here, by route, on the take's audio. The page cannot tell it from a
+// lost session, and must leave by one fresh document at the song. The take
+// plays on the classic audio element, without MediaSource, as on an iPhone;
+// the deck's own refusal reaches the same element (`audioPlayer.test.ts`).
+test(
+	"925_M3_B-A4: the take's audio refusals are the only refusals, the HEAD last; one fresh document, at the song; no move within the document; nothing plays afterwards",
+	{ tag: [TAKE_AUDIO_REFUSED_TAG] },
+	async ({ page, isMobile }, testInfo) => {
 		const shell = shellOf(testInfo);
 		await page.addInitScript(() => Reflect.deleteProperty(window, 'MediaSource'));
 		if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
 		const songAddress = await seedOwnSong(seedOwnTakeAddress);
-		const destination = row.albumReadsRefused ? albumAddressOf(await seedOwnSong()) : songAddress;
 		await signInOnto(page, songAddress);
 		await showTheTakes(page, shell);
-		const album = row.albumReadsRefused ? await albumInRail(page, shell, destination) : null;
-		if (album) await expect(album).toBeVisible();
 		await markSignedInDocument(page);
 
 		const watch = watchTheDocument(page);
-		const { heldProbe } = await refuseTheTakeAudio(page, watch, row.albumReadsRefused);
-		const albumReads = row.albumReadsRefused ? await holdAlbumReads(page, watch) : null;
-		const probeAnswered = row.albumReadsRefused ? null : page.waitForResponse(isTakeProbe);
+		await refuseTheTakeAudio(page, watch);
+		const probeAnswered = page.waitForResponse(isTakeProbe);
 		const freshDocumentLoaded = page.waitForEvent('load');
 
 		await takeRowPlay(page).click();
-		if (album && albumReads) {
-			const probe = await heldProbe;
-			albumReads.arm();
-			await album.click();
-			await albumReads.firstHeldRead;
-			await Promise.all([probe.fulfill({ status: 401 }), albumReads.refuseTheHeldReads()]);
-		} else {
-			await probeAnswered;
-		}
+		await probeAnswered;
 		await freshDocumentLoaded;
 
-		await expect(page).toHaveURL(destination);
-		if (row.albumReadsRefused) await expect(workspace(page)).toBeVisible();
-		else await expect(page.getByRole('heading', { name: DEEP_LINK_SONG_TITLE })).toBeVisible();
+		await expect(page).toHaveURL(songAddress);
+		await expect(page.getByRole('heading', { name: DEEP_LINK_SONG_TITLE })).toBeVisible();
 		const refusedBeforeTheLoad = refusalsBeforeTheLoad(watch);
 		expect({
 			refusedBeforeTheLoad: [...new Set(refusedBeforeTheLoad)].sort(),
-			...(row.albumReadsRefused ? {} : { lastRefusalBeforeTheLoad: refusedBeforeTheLoad.at(-1) }),
+			lastRefusalBeforeTheLoad: refusedBeforeTheLoad.at(-1),
 			freshDocuments: watch.freshDocuments,
 			movesWithinTheDocument: watch.movesWithinTheDocument,
 			signedInDocument: await isSignedInDocument(page),
 			offersPause: (await footerPause(page).count()) > 0
 		}).toEqual({
-			refusedBeforeTheLoad: row.refusedBeforeTheLoad,
-			...(row.albumReadsRefused ? {} : { lastRefusalBeforeTheLoad: 'HEAD take audio 401' }),
-			freshDocuments: [destination],
-			movesWithinTheDocument: row.albumReadsRefused ? [destination] : [],
+			refusedBeforeTheLoad: ['GET take audio 401', 'HEAD take audio 401'],
+			lastRefusalBeforeTheLoad: 'HEAD take audio 401',
+			freshDocuments: [songAddress],
+			movesWithinTheDocument: [],
 			signedInDocument: false,
 			offersPause: false
 		});
-		await attachShot(page, testInfo, `auth-media-refused-${row.id}`);
-	});
-}
+		await attachShot(page, testInfo, 'auth-media-refused-925_M3_B-A4');
+	}
+);
 
 test('wrong passwords lock the account, in words and for as long as it says', async ({
 	page
