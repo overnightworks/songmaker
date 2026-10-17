@@ -18,6 +18,7 @@ import detailTabsSource from './DetailTabs.svelte?raw';
 import { watchTypingOnPhone } from '$lib/stores/ui';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
+import { running } from '$lib/test-utils/generate-states';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -107,58 +108,47 @@ describe('DetailTabs', () => {
 		[
 			'generating',
 			{
-				kind: 'generating',
-				jobId: 'job1',
-				phase: 'Rendering',
-				takeCounter: 'Take 1 of 2',
-				progress: 36,
-				readout: '36%',
-				ended: false,
-				reconnecting: false,
-				offline: false
+				...running,
+				readout: '36%'
 			},
 			true
 		],
 		[
 			'submitting',
 			{
-				kind: 'generating',
+				...running,
 				jobId: null,
 				phase: 'Generating...',
 				takeCounter: null,
 				progress: 0,
-				readout: '0%',
-				ended: false,
-				reconnecting: false,
-				offline: false
+				readout: '0%'
 			},
 			true
 		],
 		['idle', { kind: 'idle', mode: 'generate' }, false],
 		['disabled', { kind: 'disabled', mode: 'generate', reason: 'No models' }, false],
 		['failed', { kind: 'failed', mode: 'generate', cause: 'Worker error' }, false]
-	] as const)('carries a ring on Takes exactly while %s', async (_label, state, expectRing) => {
-		action.set(state as GenerateState);
-		const tabs = await render();
-		expect(tabNamed(tabs, 'takes').querySelector('.ring') !== null).toBe(expectRing);
-	});
+	] as const)(
+		'[defect:#1568] carries a ring on Takes exactly while %s',
+		async (_label, state, expectRing) => {
+			action.set(state as GenerateState);
+			const tabs = await render();
+			expect(tabNamed(tabs, 'takes').querySelector('.ring') !== null).toBe(expectRing);
+		}
+	);
 
 	it.each([
 		{ connection: 'live', reconnecting: false, color: 'var(--score-ok)' },
 		{ connection: 'reconnecting', reconnecting: true, color: 'var(--text-disabled)' }
 	])(
-		'draws the running ring $color while the take is $connection',
+		'[defect:#1568] draws the running ring $color while the take is $connection',
 		async ({ reconnecting, color }) => {
 			action.set({
-				kind: 'generating',
-				jobId: 'job1',
-				phase: 'Rendering',
+				...running,
 				takeCounter: null,
 				progress: 40,
 				readout: '40%',
-				reconnecting,
-				offline: false,
-				ended: false
+				reconnecting
 			});
 			const tabs = await render();
 			const ring = tabNamed(tabs, 'takes').querySelector('.ring');

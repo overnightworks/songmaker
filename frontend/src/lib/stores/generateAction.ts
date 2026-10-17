@@ -1,4 +1,4 @@
-import { derived, get, writable } from 'svelte/store';
+import { derived, get, readable, writable } from 'svelte/store';
 import { cancelJob, generateSong } from '$lib/api/client';
 import type { JobItem, SongItem } from '$lib/api/types';
 import {
@@ -159,6 +159,8 @@ export type GenerateState =
 			kind: 'generating';
 			jobId: string | null;
 			phase: string;
+			indeterminate: boolean;
+			elapsedLabel: string | null;
 			takeCounter: string | null;
 			progress: number;
 			readout: string | null;
@@ -224,6 +226,8 @@ function generatingState(
 	return {
 		kind: 'generating',
 		jobId: job?.id ?? null,
+		indeterminate: job?.phase === 'loading_model',
+		elapsedLabel: null,
 		phase: reconnecting ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
 		takeCounter: takeCounterLabel(job),
 		progress: progressPercent(job),
@@ -234,7 +238,7 @@ function generatingState(
 	};
 }
 
-export const generateAction = derived(
+const generatePresentation = derived(
 	[
 		selectedSong,
 		activeJobs,
@@ -283,6 +287,57 @@ export const generateAction = derived(
 		return { kind: 'idle', mode: actionMode };
 	}
 );
+
+// Retain each job’s observation across navigation; a page reload starts anew.
+const stageObservations = new Map<string, { phase: string; startedAt: number }>();
+const ELAPSED_LABEL_DELAY_SECONDS = 3;
+
+export const generateAction = readable<GenerateState>(undefined, (set) => {
+	let timer: ReturnType<typeof setInterval> | undefined;
+	const unsubscribe = generatePresentation.subscribe((state) => {
+		clearInterval(timer);
+		const jobs = new Map(get(activeJobs).map(({ job }) => [job.id, job]));
+		for (const [jobId, observation] of stageObservations) {
+			const job = jobs.get(jobId);
+			if (!job || !isStillWorking(job) || phaseLabel(job) !== observation.phase) {
+				stageObservations.delete(jobId);
+			}
+		}
+		if (
+			state.kind !== 'generating' ||
+			!state.indeterminate ||
+			state.ended ||
+			state.jobId === null
+		) {
+			set(state);
+			return;
+		}
+		// A broken stream cannot establish or advance a live stage presentation.
+		if (state.reconnecting) {
+			set(state);
+			return;
+		}
+		let observation = stageObservations.get(state.jobId);
+		if (!observation || observation.phase !== state.phase) {
+			observation = { phase: state.phase, startedAt: Date.now() };
+			stageObservations.set(state.jobId, observation);
+		}
+		const startedAt = observation.startedAt;
+		const publish = () => {
+			const seconds = Math.floor((Date.now() - startedAt) / 1000);
+			set({
+				...state,
+				elapsedLabel: seconds >= ELAPSED_LABEL_DELAY_SECONDS ? formatTime(seconds) : null
+			});
+		};
+		publish();
+		timer = setInterval(publish, 1000);
+	});
+	return () => {
+		clearInterval(timer);
+		unsubscribe();
+	};
+});
 
 export async function generate(): Promise<void> {
 	const song = get(selectedSong);

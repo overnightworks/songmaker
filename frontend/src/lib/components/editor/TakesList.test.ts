@@ -119,8 +119,11 @@ function versionedSongDefaults(): Partial<SongItem> {
 }
 
 const IDLE: GenerateState = { kind: 'idle', mode: 'generate' };
+// defect:#1568 — these fixtures retain determinate progress and no elapsed phase.
 const RUNNING: GenerateState = {
 	kind: 'generating',
+	indeterminate: false,
+	elapsedLabel: null,
 	jobId: 'j1',
 	phase: 'Rendering',
 	takeCounter: null,
@@ -132,6 +135,8 @@ const RUNNING: GenerateState = {
 };
 const SUBMITTING: GenerateState = {
 	kind: 'generating',
+	indeterminate: false,
+	elapsedLabel: null,
 	jobId: null,
 	phase: 'Generating...',
 	takeCounter: null,

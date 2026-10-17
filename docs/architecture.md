@@ -1759,8 +1759,8 @@ never been observed; with a newer observation, it is `alive`.
   the previous run's take counter). `JobResponse` exposes `phase` only while
   the job is RUNNING; the frontend's `generateAction` store is the one place
   that turns it into the Generate button's and the Takes slot's label
-  (Loading model… without percent or time; Writing, Rendering, Saving take
-  with them; a running job without a phase keeps "Generating..."). The remaining-time estimate
+  (Loading model… with a subtle stripe and elapsed time after three seconds, but no percent or remaining-time estimate; Writing, Rendering, Saving take
+  with percent and remaining time; a running job without a phase keeps "Generating..."). The remaining-time estimate
   is `elapsed × (1 − progress) / progress`, with elapsed counted from
   `jobs.generation_started_at`: `update_job_status` sets it on the first write
   carrying a generating phase (writing, rendering, saving the take — never

@@ -73,8 +73,15 @@ describe('GenerationStatusSlot', () => {
 	it.each([
 		{
 			phase: 'Loading model…',
+			elapsedLabel: null,
 			readout: null,
 			expected: 'v8 · Loading model… Take 1 of 2'
+		},
+		{
+			phase: 'Loading model…',
+			readout: null,
+			elapsedLabel: '0:12',
+			expected: 'v8 · Loading model…0:12 Take 1 of 2'
 		},
 		{
 			phase: 'Writing',
@@ -97,14 +104,14 @@ describe('GenerationStatusSlot', () => {
 			expected: 'v8 · Generating... Take 1 of 2 · 36% · ~1:40'
 		}
 	] as const)(
-		'titles the version with its phase and reads out the take as "$expected"',
-		async ({ phase, readout, expected }) => {
-			await render({ ...running, phase, readout });
+		'[defect:#1568] titles the version with its phase and reads out the take as "$expected"',
+		async ({ phase, readout, expected, elapsedLabel = null }) => {
+			await render({ ...running, phase, readout, elapsedLabel, indeterminate: readout === null });
 			const slot = document.body.querySelector('.status-slot');
 			expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toBe(expected);
 			expect(
 				document.body.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')
-			).toBe('36');
+			).toBe(readout === null ? null : '36');
 		}
 	);
 
@@ -115,8 +122,15 @@ describe('GenerationStatusSlot', () => {
 		expect(slot?.querySelector('.status-line')?.textContent).toBe('36% · ~1:40');
 	});
 
-	it('leaves out the status line while a single take loads its model', async () => {
-		await render({ ...running, phase: 'Loading model…', takeCounter: null, readout: null });
+	it('[defect:#1568] leaves out the status line while a single take loads its model', async () => {
+		await render({
+			...running,
+			phase: 'Loading model…',
+			indeterminate: true,
+			elapsedLabel: '0:12',
+			takeCounter: null,
+			readout: null
+		});
 		expect(document.body.querySelector('.status-line')).toBeNull();
 	});
 
