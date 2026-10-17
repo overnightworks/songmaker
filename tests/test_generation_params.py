@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from songmaker_cli.api_models.generation_params import (
+from songmaker_cli.generation_params import (
     BaseGenerationParams,
     CoverTaskParams,
     RepaintTaskParams,

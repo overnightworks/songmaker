@@ -13,12 +13,12 @@ from songmaker_cli.api_models.songs import (
     generation_version_lyrics,
     share_pick_media,
 )
-from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.constants import (
     COVER_VARIANT_CARD,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
 )
+from songmaker_cli.whisper_cues import WhisperCue
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Playlist, PlaylistEntry

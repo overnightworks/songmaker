@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
-from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.audio_paths import AudioFileNotFoundError
 from songmaker_cli.constants import (
     AUDIO_FILE_NOT_FOUND,
@@ -64,6 +63,7 @@ from songmaker_cli.db.queries import (
     recover_stale_jobs_by_age_and_type,
     resolve_rate_limit,
 )
+from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import read_worker_liveness
 

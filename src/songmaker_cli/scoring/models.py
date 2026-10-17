@@ -8,8 +8,8 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.scoring.registry import SCORERS, ScorerHost
+from songmaker_cli.whisper_cues import WhisperCue
 
 
 class ScorerOutcome(StrEnum):

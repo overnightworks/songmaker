@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 import { phoneAppBar, sidebarOpen } from '$lib/stores/ui';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import {
@@ -177,6 +178,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	phoneAppBar.set(null);
 	sidebarOpen.set(false);
+	libraryAddressOverlayActive.set(false);
 	resetHistoryControllerForTests();
 	resetLayersForTests();
 	resetRailSearchForTests();
@@ -190,26 +192,36 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
+function songBar(onrename = vi.fn(async () => undefined)) {
+	return {
+		kind: 'song' as const,
+		title: 'Sommerlicht',
+		onrename,
+		share: {
+			isShared: false,
+			shareSlug: null,
+			onshare: vi.fn(),
+			onunshare: vi.fn()
+		},
+		menu: {
+			saveDisabled: true,
+			onsave: vi.fn(),
+			onaddtoplaylist: vi.fn(),
+			ondelete: vi.fn()
+		}
+	};
+}
+
+// Whether the workspace-style `inert` reaches the element: jsdom has no
+// hit-testing, so the attribute on it or an ancestor is what a browser acts on.
+function isInert(element: Element | null): boolean {
+	return element?.closest('[inert]') != null;
+}
+
 describe('PhoneAppBar', () => {
-	it('offers five song slots with named touch actions, search and inline rename', async () => {
+	it('defect:#1531: offers five song slots with named touch actions, search and inline rename', async () => {
 		const onrename = vi.fn(async () => undefined);
-		phoneAppBar.set({
-			kind: 'song',
-			title: 'Sommerlicht',
-			onrename,
-			share: {
-				isShared: false,
-				shareSlug: null,
-				onshare: vi.fn(),
-				onunshare: vi.fn()
-			},
-			menu: {
-				saveDisabled: true,
-				onsave: vi.fn(),
-				onaddtoplaylist: vi.fn(),
-				ondelete: vi.fn()
-			}
-		});
+		phoneAppBar.set(songBar(onrename));
 		const target = renderBar();
 		await tick();
 		expect(target.querySelector('header')?.children).toHaveLength(5);
@@ -233,6 +245,36 @@ describe('PhoneAppBar', () => {
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		await tick();
 		expect(onrename).toHaveBeenCalledWith('Abendlicht');
+	});
+
+	it('defect:#1531: waits with the workspace while an address overlay is up, and acts once it is gone', async () => {
+		phoneAppBar.set(songBar());
+		libraryAddressOverlayActive.set(true);
+		const target = renderBar();
+		await tick();
+		const songControls = (): Element[] => [
+			target.querySelector('h1') as Element,
+			getByRoleButton(target, 'Share song'),
+			getByRoleButton(target, 'Song menu')
+		];
+		const otherControls = [
+			getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL),
+			getByRoleButton(target, SEARCH_OPEN_LABEL)
+		];
+
+		expect(songControls().map(isInert)).toEqual([true, true, true]);
+		expect(otherControls.map(isInert)).toEqual([false, false]);
+
+		libraryAddressOverlayActive.set(false);
+		await tick();
+		expect(songControls().map(isInert)).toEqual([false, false, false]);
+		getByRoleButton(target, 'Song menu').click();
+		await tick();
+		expect(getByRoleButton(target, 'Delete song')).toBeTruthy();
+
+		libraryAddressOverlayActive.set(true);
+		await tick();
+		expect(songControls().map(isInert)).toEqual([true, true, true]);
 	});
 
 	it("carries search and the viewer's account circle at the right on the Library", async () => {

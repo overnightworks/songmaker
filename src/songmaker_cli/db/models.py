@@ -26,18 +26,18 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
-from songmaker_cli.api_models.generation_params import (
-    BaseGenerationParams,
-    StoredGenerationParams,
-)
-from songmaker_cli.api_models.whisper import stored_whisper_cues
 from songmaker_cli.constants import (
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
     JobStatus,
 )
+from songmaker_cli.generation_params import (
+    BaseGenerationParams,
+    StoredGenerationParams,
+)
 from songmaker_cli.timestamps import aware_timestamp as aware_timestamp
 from songmaker_cli.timestamps import utcnow
+from songmaker_cli.whisper_cues import stored_whisper_cues
 
 SONG_SLUG_MAX_LENGTH: Final = 220
 PLAYLIST_SLUG_MAX_LENGTH: Final = 220

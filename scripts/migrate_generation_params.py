@@ -39,12 +39,12 @@ from sqlalchemy.orm import Session
 
 prepend_own_checkout_src(__file__)
 
-from songmaker_cli.api_models.generation_params import (
+from songmaker_cli.db.engine import init_db, resolve_database_url
+from songmaker_cli.db.models import Generation, GenerationPreset, Version
+from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
 )
-from songmaker_cli.db.engine import init_db, resolve_database_url
-from songmaker_cli.db.models import Generation, GenerationPreset, Version
 
 log = logging.getLogger("migrate_generation_params")
 
