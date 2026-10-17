@@ -432,7 +432,7 @@ def test_a_listen_inside_a_playlist_lifts_the_playlist_and_leaves_the_album(
     assert items[1] == album_before
 
 
-def test_an_admins_actions_leave_the_owners_lists_byte_identical_and_move_the_admins_own(
+def test_1354_47_A5_an_admins_actions_leave_the_owners_lists_unchanged(
     library_ctx: tuple[object, object],
 ) -> None:
     factory, ctx = library_ctx
@@ -466,6 +466,8 @@ def test_an_admins_actions_leave_the_owners_lists_byte_identical_and_move_the_ad
         session.commit()
 
     assert _both_lists(bob) == owners_lists
+    assert all(item["entry_id"] is None for item in _listen_items(bob))
+    assert next(item for item in _listen_items(admin) if item["type"] == "playlist")["entry_id"]
     assert _places(_listen_items(admin)) == [
         ("playlist", "admin-mix", "vernissage-2", 1),
         ("album", "vernissage", "vernissage-2", 2),
@@ -551,7 +553,7 @@ def test_listen_leaves_out_an_album_without_a_live_album_listen(
     assert _listen_items(client) == []
 
 
-def test_an_album_falls_back_to_its_newest_listened_live_song(tmp_path: Path) -> None:
+def test_1354_47_A5_an_album_falls_back_to_its_newest_listened_live_song(tmp_path: Path) -> None:
     client, factory = _make_client(tmp_path, USER_A)
 
     def seed(session) -> None:
@@ -568,6 +570,7 @@ def test_an_album_falls_back_to_its_newest_listened_live_song(tmp_path: Path) ->
     items = _listen_items(client)
     assert _places(items) == [("album", "nachtstrom", "song-tide", 1)]
     assert items[0]["played_at"] == _later(10).isoformat()
+    assert items[0]["entry_id"] is None
 
 
 def _seed_played_playlist(session, *, entries: list[str], last_played_song_id: str) -> None:
@@ -581,6 +584,8 @@ def _seed_played_playlist(session, *, entries: list[str], last_played_song_id: s
     _add_playable_album(session, album_id="aside", owner=USER_A, songs=1)
     _add_playlist_of(session, playlist_id="late-drive", owner=USER_A, song_ids=entries)
     playlist = session.get(Playlist, "late-drive")
+    for index, entry in enumerate(sorted(playlist.entries, key=lambda entry: entry.position)):
+        entry.id = f"entry-{len(entries) - index}"
     playlist.last_played_at = _later(40)
     playlist.last_played_song_id = last_played_song_id
 
@@ -613,41 +618,50 @@ def _played_playlist_item(
 
     def seed(session) -> None:
         _seed_played_playlist(session, entries=entries, last_played_song_id=last_played_song_id)
-        if remove is not None:
-            remove(session)
 
     _seed(factory, seed)
+    if last_played_song_id in entries:
+        _listen_to(client, last_played_song_id, playlist_id="late-drive")
+    if remove is not None:
+        _seed(factory, remove)
 
     [item] = _listen_items(client)
-    assert item["played_at"] == _later(40).isoformat()
     return item
 
 
 _RESUMES_FROM_THE_START = {
     "type": "playlist", "id": "late-drive", "song_id": None, "song_title": None,
-    "song_number": None,
+    "song_number": None, "entry_id": None,
 }
 
 
 @pytest.mark.parametrize(
-    ("entries", "song_number"),
+    ("entries", "song_number", "entry_id", "change"),
     [
-        (["quiet-1", "quiet-2", "quiet-3"], 3),
-        (["quiet-1", "quiet-3", "quiet-3"], 2),
+        (["quiet-1", "quiet-2", "quiet-3"], 3, "entry-1", None),
+        (["quiet-1", "quiet-3", "quiet-3"], 2, "entry-2", None),
+        (["quiet-1", "quiet-3", "quiet-3"], 2, "entry-1",
+         lambda session: setattr(session.get(PlaylistEntry, "entry-1"), "position", 1)),
+        (["quiet-1", "quiet-3"], 2, "entry-1",
+         lambda session: setattr(session.get(Generation, "quiet-3-take"), "mp3_path", "")),
     ],
-    ids=["names-its-song-by-its-place", "a-song-held-twice-names-its-first-place"],
+    ids=["1354_47_A1", "1354_47_A2", "1354_47_A2-equal-position", "1354_47_A6"],
 )
-def test_a_played_playlist_names_its_last_played_song_by_its_place(
-    tmp_path: Path, entries: list[str], song_number: int,
+def test_1354_47_a_played_playlist_names_its_first_live_entry(
+    tmp_path: Path, entries: list[str], song_number: int, entry_id: str,
+    change: Callable | None,
 ) -> None:
-    item = _played_playlist_item(tmp_path, entries=entries, last_played_song_id="quiet-3")
+    item = _played_playlist_item(
+        tmp_path, entries=entries, last_played_song_id="quiet-3", remove=change,
+    )
 
     assert _places([item]) == [("playlist", "late-drive", "quiet-3", song_number)]
     assert item["song_title"] == "Quiet 3"
+    assert item["entry_id"] == entry_id
 
 
 @_AN_ENTRY_STOPS_BEING_LIVE
-def test_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
+def test_1354_47_A3_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
     tmp_path: Path, remove_aside: Callable,
 ) -> None:
     item = _played_playlist_item(
@@ -656,10 +670,11 @@ def test_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
     )
 
     assert _places([item]) == [("playlist", "late-drive", "quiet-2", 2)]
+    assert item["entry_id"] == "entry-1"
 
 
 @_AN_ENTRY_STOPS_BEING_LIVE
-def test_a_playlist_whose_last_played_entry_is_no_longer_live_resumes_from_the_start(
+def test_1354_47_A4_a_playlist_without_a_live_occurrence_resumes_from_the_start(
     tmp_path: Path, remove_aside: Callable,
 ) -> None:
     item = _played_playlist_item(
@@ -670,11 +685,12 @@ def test_a_playlist_whose_last_played_entry_is_no_longer_live_resumes_from_the_s
     assert {key: item[key] for key in _RESUMES_FROM_THE_START} == _RESUMES_FROM_THE_START
 
 
-def test_a_playlist_whose_last_played_song_left_it_resumes_from_the_start(
+def test_1354_47_A4_a_playlist_whose_last_played_song_left_it_resumes_from_the_start(
     tmp_path: Path,
 ) -> None:
     item = _played_playlist_item(
-        tmp_path, entries=["quiet-1", "quiet-2"], last_played_song_id="aside-1",
+        tmp_path, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
+        remove=lambda session: session.delete(session.get(PlaylistEntry, "entry-1")),
     )
 
     assert {key: item[key] for key in _RESUMES_FROM_THE_START} == _RESUMES_FROM_THE_START
