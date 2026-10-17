@@ -336,33 +336,36 @@ interface LightUps {
 // Records every moment a phone row is marked as the place just returned from,
 // and every animation that marking starts, for the page's whole document.
 async function watchLightUps(page: Page): Promise<void> {
-	await page.evaluate((key) => {
-		const seen: LightUps = { marked: [], animated: [] };
-		Reflect.set(window, key, seen);
-		const titleOf = (element: Element) => element.querySelector('.tile-title')?.textContent ?? '';
-		const isLit = (element: Element) =>
-			element.classList.contains('library-row') && element.classList.contains('lit');
-		new MutationObserver((records) => {
-			for (const record of records) {
-				const target = record.target as Element;
-				const wasLit = (record.oldValue ?? '').split(' ').includes('lit');
-				if (isLit(target) && !wasLit) seen.marked.push(titleOf(target));
-			}
-		}).observe(document.body, {
-			subtree: true,
-			attributes: true,
-			attributeOldValue: true,
-			attributeFilter: ['class']
-		});
-		document.addEventListener(
-			'animationstart',
-			(event) => {
-				if (event.animationName.endsWith('light-up'))
-					seen.animated.push(titleOf(event.target as Element));
-			},
-			true
-		);
-	}, LIGHT_UPS_KEY);
+	await page.evaluate(
+		({ key, animation }) => {
+			const seen: LightUps = { marked: [], animated: [] };
+			Reflect.set(window, key, seen);
+			const titleOf = (element: Element) => element.querySelector('.tile-title')?.textContent ?? '';
+			const isLit = (element: Element) =>
+				element.classList.contains('library-row') && element.classList.contains('lit');
+			new MutationObserver((records) => {
+				for (const record of records) {
+					const target = record.target as Element;
+					const wasLit = (record.oldValue ?? '').split(' ').includes('lit');
+					if (isLit(target) && !wasLit) seen.marked.push(titleOf(target));
+				}
+			}).observe(document.body, {
+				subtree: true,
+				attributes: true,
+				attributeOldValue: true,
+				attributeFilter: ['class']
+			});
+			document.addEventListener(
+				'animationstart',
+				(event) => {
+					if (event.animationName.endsWith(animation))
+						seen.animated.push(titleOf(event.target as Element));
+				},
+				true
+			);
+		},
+		{ key: LIGHT_UPS_KEY, animation: LIGHT_UP_ANIMATION_SUFFIX }
+	);
 }
 
 function lightUps(page: Page): Promise<LightUps> {
