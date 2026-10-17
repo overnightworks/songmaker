@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
-	import { albumList, songList } from '$lib/stores/libraryData';
+	import { albumList, songList, albumSongsErrorMessage } from '$lib/stores/libraryData';
 	import {
 		closeNowPlaying,
+		ensureGenerationsLoaded,
 		idlePlayTarget,
 		nowPlayingOpen,
 		nowPlayingSurface,
@@ -24,6 +25,8 @@
 		toggleShuffle,
 		waitingStartOf
 	} from '$lib/stores/player';
+	import { openAlbum } from '$lib/stores/navigation';
+	import { addToast } from '$lib/stores/toast';
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		playlistDetailLoad,
@@ -113,12 +116,11 @@
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
 	const nextSong = $derived(canPlayNextSong(current, songs, ctx));
 
-	const coverUrl = $derived.by(() => {
-		if (!shownTake) return null;
-		const song = songs.find((item) => item.id === shownTake.songId);
-		const album = song ? $albumList.find((item) => item.id === song.album_id) : undefined;
-		return album?.cover?.card ?? null;
-	});
+	const playingSong = $derived(songs.find((item) => item.id === shownTake?.songId));
+	const playingAlbumId = $derived(playingSong?.album_id);
+	const coverUrl = $derived(
+		$albumList.find((item) => item.id === playingAlbumId)?.cover?.card ?? null
+	);
 
 	// A cut title shows the rest of itself once, then rests at its start with
 	// its ellipsis again; a title that fits, or a listener who asked for less
@@ -191,6 +193,17 @@
 	});
 
 	$effect(() => {
+		if (mobileTransport || !shownTake || playingSong) return;
+		let active = true;
+		void ensureGenerationsLoaded(shownTake.songId).catch((err: unknown) => {
+			if (active) addToast(albumSongsErrorMessage(err), 'error');
+		});
+		return () => {
+			active = false;
+		};
+	});
+
+	$effect(() => {
 		const withoutCover = window.matchMedia(MINI_PLAYER_WITHOUT_COVER_MEDIA);
 		const sync = () => {
 			roomForCover = !withoutCover.matches;
@@ -219,6 +232,15 @@
 					{@attach mobileTransport && scrollTitleOnceWhenCut}>{shownTake.songTitle}</span
 				>
 			{/key}
+			{#if !mobileTransport}
+				{#if playingAlbumId}
+					<button class="track-album" onclick={() => playingAlbumId && openAlbum(playingAlbumId)}
+						>{shownTake.albumTitle}</button
+					>
+				{:else}
+					<span class="track-album">{shownTake.albumTitle}</span>
+				{/if}
+			{/if}
 			<span class="track-detail" id={detailId}
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
@@ -314,12 +336,28 @@
 				0 0 16px color-mix(in srgb, var(--accent) 20%, transparent);
 		}
 	}
+	.track-album,
 	.track-detail {
 		font-size: 0.73rem;
 		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+	button.track-album {
+		padding: 0;
+		border: 0;
+		background: none;
+		font: inherit;
+		font-size: 0.73rem;
+		text-align: left;
+		cursor: pointer;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	button.track-album:hover,
+	button.track-album:focus-visible {
+		color: var(--primary);
 	}
 	.loading-text {
 		color: var(--primary);

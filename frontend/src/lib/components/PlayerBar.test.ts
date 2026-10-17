@@ -1,6 +1,7 @@
 import {
 	makeAlbum as albumItem,
 	makeGeneration,
+	makeSong,
 	makePlaylistEntry,
 	makePlaylistDetail as playlistItem
 } from '$lib/test-utils/factories';
@@ -40,6 +41,7 @@ import {
 	shuffleEnabled
 } from '$lib/stores/player';
 import * as playerStore from '$lib/stores/player';
+import { dismissToast, toasts } from '$lib/stores/toast';
 import { openCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { sidebarOpen, toggleSidebar, watchTypingOnPhone } from '$lib/stores/ui';
@@ -600,6 +602,70 @@ describe('PlayerBar stream boundaries', () => {
 
 		expect(playSpy).toHaveBeenCalledOnce();
 		expect(audioContextConstructor).not.toHaveBeenCalled();
+	});
+});
+
+describe('1354_rule_41 desktop album navigation', () => {
+	it.each([
+		{ source: 'album', cached: true, restored: false },
+		{ source: 'playlist', cached: false, restored: false },
+		{ source: 'restored album', cached: false, restored: true }
+	])('opens the song’s own album from $source playback', async ({ source, cached, restored }) => {
+		useDesktopLayout();
+		const song = makeSong({ album_id: 'own-album', generations: [makeGeneration()] });
+		albumList.set([albumItem({ id: 'own-album', title: 'Album' })]);
+		songList.set(cached ? [song] : []);
+		if (source !== 'playlist') queueContext.set({ type: 'album', albumId: 'own-album' });
+		vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
+			const url = String(input);
+			if (url === '/api/songs/s1') return Response.json(song);
+			if (url.startsWith('/api/albums/own-album/songs')) {
+				return Response.json({ items: [song], total: 1, has_more: false });
+			}
+			throw new Error(`Unexpected request: ${url}`);
+		});
+		audioPlayer.load(barTake(), { autoplay: false, startAt: restored ? RESTORED_POSITION : 0 });
+		component = mount(PlayerBar, { target });
+		await vi.waitFor(() => expect(target.querySelector('button.track-album')).not.toBeNull());
+
+		const albumButton = target.querySelector<HTMLButtonElement>('button.track-album');
+		if (!albumButton) throw new Error('Album action missing');
+		expect(albumButton.textContent).toBe('Album');
+		expect(albumButton.parentElement?.closest('button')).toBeNull();
+		albumButton.click();
+		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'own-album' }));
+		expect(audioPlayer.current?.songId).toBe('s1');
+	});
+
+	it.each([404, 503])(
+		'keeps an unresolved album as plain text when lookup returns %s',
+		async (status) => {
+			useDesktopLayout();
+			for (const toast of get(toasts)) dismissToast(toast.id);
+			onTestFinished(() => {
+				for (const toast of get(toasts)) dismissToast(toast.id);
+			});
+			vi.stubGlobal('fetch', async () => Response.json({ detail: 'Unavailable' }, { status }));
+			loadTake();
+			component = mount(PlayerBar, { target });
+			await tick();
+			await vi.waitFor(() =>
+				expect(get(toasts).some((toast) => toast.type === 'error')).toBe(true)
+			);
+
+			expect(target.querySelector('span.track-album')?.textContent).toBe('Album');
+			expect(target.querySelector('button.track-album')).toBeNull();
+		}
+	);
+
+	it('keeps the phone track text free of a nested album action', async () => {
+		songList.set([makeSong()]);
+		loadTake();
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(target.querySelector('.track-album')).toBeNull();
+		expect(target.querySelector('.track-title')?.textContent).toBe('Opening Move');
 	});
 });
 
