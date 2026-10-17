@@ -60,6 +60,7 @@ import {
 	rememberedSongTab,
 	setLibrarySurface,
 	showSongTab,
+	targetAlreadyShown,
 	snapshotLibraryHistory,
 	writeLibraryHistory,
 	type DetailTab,
@@ -251,6 +252,11 @@ export function openPlaylist(playlistId: string): Promise<void> {
 // data owner only describes that destination; this navigation owner performs
 // the transition and closes the compact drawer on every successful choice.
 export async function openRailSearchTarget(target: RailSearchTarget): Promise<void> {
+	if (targetAlreadyShown(target)) {
+		closeSidebar();
+		await libraryHistoryStepsLanded();
+		return;
+	}
 	if (target.kind === 'album') {
 		await openAlbum(target.id);
 		return;

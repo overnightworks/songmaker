@@ -459,14 +459,14 @@ export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 	await accountMenu(page).getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
 }
 
-/** A Settings section from the phone drawer's search, its one way there from a song page. */
-export async function openSettingsSectionFromDrawerSearch(
-	page: Page,
-	section: string
-): Promise<void> {
-	const rail = await openRailNav(page, 'mobile');
-	await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(section);
-	await rail
+/** A Settings section from the phone bar's Search sheet (defect:#1583). */
+export async function openSettingsSectionFromSearch(page: Page, section: string): Promise<void> {
+	const sheet = page.getByRole('dialog', { name: 'Search', exact: true });
+	if (!(await sheet.isVisible())) {
+		await appBar(page).getByRole('button', { name: 'Search', exact: true }).click();
+	}
+	await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(section);
+	await sheet
 		.getByRole('group', { name: 'Pages' })
 		.getByRole('option', { name: nameStartingWith(section) })
 		.click();
