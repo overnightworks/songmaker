@@ -21,6 +21,7 @@ import {
 } from './fetch';
 import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
+import { hangsUntilAborted } from '$lib/test-utils/network';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -599,20 +600,9 @@ describe('apiFetch abort signal', () => {
 		expect(signalPassedToFetch().aborted).toBe(true);
 	});
 
-	function fetchRejectingOnAbort(): void {
-		mockFetch.mockImplementationOnce(
-			(_path: string, init: RequestInit) =>
-				new Promise((_resolve, reject) => {
-					init.signal?.addEventListener('abort', () =>
-						reject(new DOMException('signal is aborted without reason', 'AbortError'))
-					);
-				})
-		);
-	}
-
 	it('rejects a request that hits the timeout as a NetworkError with a timeout reason', async () => {
 		vi.useFakeTimers();
-		fetchRejectingOnAbort();
+		mockFetch.mockImplementationOnce(hangsUntilAborted);
 		const failure = apiFetch('/api/songs/s1').catch((err: unknown) => err);
 		await vi.advanceTimersByTimeAsync(30_000);
 		const rejected = await failure;
@@ -622,7 +612,7 @@ describe('apiFetch abort signal', () => {
 	});
 
 	it("leaves the caller's own abort an AbortError", async () => {
-		fetchRejectingOnAbort();
+		mockFetch.mockImplementationOnce(hangsUntilAborted);
 		const caller = new AbortController();
 		const failure = apiFetch('/api/songs/s1', { signal: caller.signal }).catch(
 			(err: unknown) => err

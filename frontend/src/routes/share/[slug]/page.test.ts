@@ -7,6 +7,7 @@ import type {
 	WhisperCue
 } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { hangsUntilAborted } from '$lib/test-utils/network';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-album' } } }));
 
@@ -223,14 +224,7 @@ describe('shared album page', () => {
 	it('925_M2_T1: a read that gets no answer within 30 seconds shows the error status with Try again', async () => {
 		vi.useFakeTimers();
 		onTestFinished(() => void vi.useRealTimers());
-		mockFetch.mockImplementation(
-			(_path: string, init: RequestInit) =>
-				new Promise((_resolve, reject) => {
-					init.signal?.addEventListener('abort', () =>
-						reject(new DOMException('aborted', 'AbortError'))
-					);
-				})
-		);
+		mockFetch.mockImplementation(hangsUntilAborted);
 		const target = document.createElement('div');
 		document.body.appendChild(target);
 		component = mount(Page, { target });

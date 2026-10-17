@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
+import { hangsUntilAborted } from '$lib/test-utils/network';
 import { ApiError, NetworkError } from './fetch';
 import {
 	fetchSharedCollection,
@@ -110,14 +111,7 @@ describe('the share client building a stream', () => {
 		'925_M2_S2: a $kind stream build is kept alive for its 120 second budget',
 		async ({ kind }) => {
 			vi.useFakeTimers();
-			mockFetch.mockImplementation(
-				(_path: string, init: RequestInit) =>
-					new Promise((_resolve, reject) => {
-						init.signal?.addEventListener('abort', () =>
-							reject(new DOMException('aborted', 'AbortError'))
-						);
-					})
-			);
+			mockFetch.mockImplementation(hangsUntilAborted);
 
 			const outcome = fetchSharedStream(kind, 'some-slug').catch((e: unknown) => e);
 			const signal = (mockFetch.mock.calls[0][1] as RequestInit).signal as AbortSignal;

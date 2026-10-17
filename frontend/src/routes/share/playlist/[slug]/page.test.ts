@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { hangsUntilAborted } from '$lib/test-utils/network';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-playlist' } } }));
 
@@ -166,17 +167,10 @@ describe('shared playlist page', () => {
 	});
 
 	it('925_M2_T2: a stream build that outlasts its 120 second budget falls back to classic playback', async () => {
-		mockFetch.mockImplementation(
-			(path: string, init: RequestInit) =>
-				new Promise((resolve, reject) => {
-					if (!path.endsWith('/stream')) {
-						resolve({ ok: true, status: 200, json: async () => sharedPlaylist });
-						return;
-					}
-					init.signal?.addEventListener('abort', () =>
-						reject(new DOMException('aborted', 'AbortError'))
-					);
-				})
+		mockFetch.mockImplementation((path: string, init: RequestInit) =>
+			path.endsWith('/stream')
+				? hangsUntilAborted(path, init)
+				: Promise.resolve({ ok: true, status: 200, json: async () => sharedPlaylist })
 		);
 		const target = document.createElement('div');
 		document.body.appendChild(target);
@@ -186,11 +180,19 @@ describe('shared playlist page', () => {
 		vi.useFakeTimers();
 		onTestFinished(() => void vi.useRealTimers());
 		target.querySelectorAll<HTMLButtonElement>('.queue-row')[0].click();
-		await vi.advanceTimersByTimeAsync(120_000);
+		await vi.advanceTimersByTimeAsync(119_999);
+		expect(audioPlayer.current).toBeNull();
+		expect(audio.src).toBe('');
+
+		await vi.advanceTimersByTimeAsync(1);
 		vi.useRealTimers();
 
-		await vi.waitFor(() => expect(audioPlayer.current?.songTitle).toBe('First'));
+		await vi.waitFor(() => expect(audio.src).toBe('/audio/first.mp3'));
+		audio.fire('canplay');
+		expect(audioPlayer.current?.songTitle).toBe('First');
 		expect(audioPlayer.mode).toBe('classic');
+		expect(audioPlayer.transport).toBe('playing');
+		expect(audio.paused).toBe(false);
 	});
 
 	it.each(['classic', 'stream'] as const)(
