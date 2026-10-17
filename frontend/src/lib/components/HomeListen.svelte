@@ -7,8 +7,7 @@
 		HOME_LISTEN_LIMIT,
 		HOME_LISTEN_EMPTY,
 		HOME_LISTEN_LOADING,
-		HOME_LISTEN_ERROR,
-		LIBRARY_RETRY_LABEL
+		HOME_LISTEN_ERROR
 	} from '$lib/constants';
 	import {
 		ensureLastPlayedRead,
@@ -36,6 +35,7 @@
 	import { activityTimeLabel } from '$lib/utils/format';
 	import { albumRowOffersPlay } from '$lib/utils/playable';
 	import LibraryRow from './LibraryRow.svelte';
+	import HomeListSection, { homeListPhase } from './HomeListSection.svelte';
 
 	const albums = $derived(new Map($albumList.map((album) => [album.id, album])));
 	const playlists = $derived(new Map($playlistList.map((playlist) => [playlist.id, playlist])));
@@ -51,6 +51,8 @@
 			})
 			.slice(0, HOME_LISTEN_LIMIT)
 	);
+
+	const phase = $derived(homeListPhase($libraryListenState, visibleItems.length));
 
 	onMount(() => {
 		void ensureLastPlayedRead();
@@ -100,18 +102,15 @@
 
 <svelte:document onvisibilitychange={foreground} />
 
-<section class="home-listen" aria-label={HOME_LISTEN_LABEL}>
-	<h2>{HOME_LISTEN_LABEL}</h2>
-	{#if $libraryListenState === 'unread'}
-		<p role="status">{HOME_LISTEN_LOADING}</p>
-	{:else if $libraryListenState === 'failed'}
-		<div class="listen-error" role="alert">
-			<p>{HOME_LISTEN_ERROR}</p>
-			<button type="button" onclick={() => void readLastPlayed()}>{LIBRARY_RETRY_LABEL}</button>
-		</div>
-	{:else if visibleItems.length === 0}
-		<p>{HOME_LISTEN_EMPTY}</p>
-	{:else}
+<HomeListSection
+	label={HOME_LISTEN_LABEL}
+	loadingText={HOME_LISTEN_LOADING}
+	errorText={HOME_LISTEN_ERROR}
+	emptyText={HOME_LISTEN_EMPTY}
+	{phase}
+	onretry={() => void readLastPlayed()}
+>
+	{#snippet rows()}
 		{#each visibleItems as item (item.type + item.id)}
 			{@const transport = $collectionTransport(item.type, item.id)}
 			<LibraryRow
@@ -128,42 +127,5 @@
 				onplay={rowPlay(item)}
 			/>
 		{/each}
-	{/if}
-</section>
-
-<style>
-	.home-listen {
-		padding: 12px 20px;
-	}
-	h2 {
-		margin: 0 0 8px;
-		font-size: 13px;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 1px;
-	}
-	p {
-		margin: 0;
-		color: var(--text-subtle);
-		font-size: var(--label-font-size);
-	}
-	.listen-error {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	button {
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: var(--surface);
-		color: var(--text);
-		font: inherit;
-		padding: 4px 8px;
-		cursor: pointer;
-	}
-	@media (max-width: 768px) {
-		.home-listen {
-			padding: 12px;
-		}
-	}
-</style>
+	{/snippet}
+</HomeListSection>

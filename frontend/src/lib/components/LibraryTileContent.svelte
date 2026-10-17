@@ -8,6 +8,7 @@
 		presentation?: 'cover' | 'row';
 		current?: boolean;
 		title: string;
+		initialsSource?: string;
 		subtitle: string;
 		coverAlt: string;
 		coverUrl?: string | null;
@@ -19,6 +20,7 @@
 		presentation = 'cover',
 		current = false,
 		title,
+		initialsSource,
 		subtitle,
 		coverAlt,
 		coverUrl = null,
@@ -36,7 +38,7 @@
 		<span class="tile-cover-fill" style:background={fill} aria-hidden="true"></span>
 	{:else}
 		<span class="tile-cover-fill tile-cover-initials" aria-hidden="true"
-			>{titleInitials(title)}</span
+			>{titleInitials(initialsSource ?? title)}</span
 		>
 	{/if}
 </span>

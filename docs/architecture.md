@@ -189,7 +189,18 @@ Listen (`HomeListen.svelte`: up to three Library rows from the shared
 `stores/libraryOrder.ts` Listen read), with no wall. Listen retains rows when
 offline and offers Retry when its first read fails. The live collection stores
 hide deleted or archived places; restoring an album reveals its retained row.
-Its head line holds the one + New (`NewPlaceMenu.svelte`: the button, its
+Write (`HomeWrite.svelte`) follows Listen, showing the server's three distinct
+worked songs through `stores/libraryWrite.ts`. Its Library rows and pencils
+open the editor, with album context, work kind and relative time. Mount reuses
+a fresh document-memory answer; foreground and reconnect explicitly invalidate
+and refresh it. Subscriptions belong to the mounted surface and are cleaned up.
+Cached rows (including empty results) survive failed refreshes; a failed first
+read offers Retry. Removal excludes stale in-flight answers until they settle;
+Undo consumes recognition separately and requests an authoritative fresh read.
+Confirmed logout/session loss replaces the document; Write has no persistent cache.
+Both lists render through `HomeListSection.svelte`, which owns the heading and the
+loading, failed (with Retry), empty and rows states; each list keeps its own reader.
+Home's head line holds the one + New (`NewPlaceMenu.svelte`: the button, its
 Album · Playlist popover and the inline card that unfolds under the head) at
 both widths; the desktop Library and Playlists heads mount the same component,
 the phone's list heads do not (#1354 rule 14, #1529).

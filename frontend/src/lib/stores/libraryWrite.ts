@@ -2,7 +2,7 @@ import { get, readonly, writable } from 'svelte/store';
 import { fetchLibraryWrite } from '$lib/api/library';
 import type { LibraryWriteItem } from '$lib/api/types';
 
-type WriteReadState = 'unread' | 'failed' | 'ready' | 'outdated';
+export type WriteReadState = 'unread' | 'failed' | 'ready' | 'outdated';
 type RemovedKind = 'song' | 'album';
 const rows = writable<readonly LibraryWriteItem[]>([]);
 const state = writable<WriteReadState>('unread');
@@ -72,7 +72,8 @@ async function refillWritten(): Promise<void> {
 }
 
 export function forgetWritten(kind: RemovedKind, id: string): void {
-	if (removed[kind].has(id)) return;
+	// A repeat inside one read is a no-op; a delete after Undo must be recognized again.
+	if (removed[kind].has(id) && removedHere[kind].has(id)) return;
 	removedHere[kind].add(id);
 	if (pending !== null) removed[kind].add(id);
 	rows.update((items) =>
@@ -86,7 +87,6 @@ export function restoreWritten(kind: RemovedKind, ids: readonly string[]): Promi
 	if (restored.length === 0) return Promise.resolve();
 	for (const id of restored) {
 		removedHere[kind].delete(id);
-		removed[kind].delete(id);
 	}
 	return refillWritten();
 }
