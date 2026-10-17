@@ -168,11 +168,14 @@ describe('RailLibraryGroup', () => {
 		{ address: '/playlists', current: false },
 		{ address: '/?song=s1', current: false }
 	] as const)(
-		'defect:#1523: with the surface still on browse, the word Library is current: $current at $address',
+		'defect:#1523: with the surface still on browse, the word Library is current: $current and its group is unfolded at $address',
 		async ({ address, current }) => {
 			await goto(resolve(address));
 			const target = await render();
 
+			expect(
+				requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
+			).toBe('true');
 			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
 			expect(word.hasAttribute('aria-current')).toBe(current);
 			expect(get(librarySurface)).toBe('browse');

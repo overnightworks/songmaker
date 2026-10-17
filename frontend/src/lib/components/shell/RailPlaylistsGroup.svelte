@@ -49,12 +49,14 @@
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
 	const shownPlaylistId = $derived(playlistWhoseDetailShows($librarySurface, $openCollection));
-	// The Playlists page itself: its group is current and unfolded there (#1354 D3),
-	// and only where the address is the Playlists' (#1523).
+	// The Playlists wall is the surface in view: it unfolds the group (#1354 D3).
+	// The surface stays `playlists` after leaving for Settings, so it does not make
+	// the word current (#1523).
+	const playlistsWallIsSurface = $derived(
+		$librarySurface === 'playlists' && $selectedSongId === null
+	);
 	const onPlaylistsPage = $derived(
-		$librarySurface === 'playlists' &&
-			$selectedSongId === null &&
-			standsOnPlaylistsPage(standingPathname(page.state))
+		playlistsWallIsSurface && standsOnPlaylistsPage(standingPathname(page.state))
 	);
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
@@ -115,7 +117,7 @@
 	groupId="rail-playlists-group"
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
 	count={playlistCount}
-	expandTrigger={onPlaylistsPage || openPlaylistId !== null || filtering}
+	expandTrigger={playlistsWallIsSurface || openPlaylistId !== null || filtering}
 	page={{
 		href: resolve(PLAYLISTS_ROUTE_PATH),
 		current: onPlaylistsPage,

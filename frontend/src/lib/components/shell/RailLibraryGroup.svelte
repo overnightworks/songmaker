@@ -69,11 +69,12 @@
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
-	// The Library page itself: its group is current and unfolded there (#1354 D1),
-	// and only where the address is the Library's -- the surface alone also reads
-	// `browse` on /settings and while /?song= looks its song up (#1523).
+	// The Library wall is the surface in view: it unfolds the group (#1354 D1).
+	// The surface alone also reads `browse` on /settings and while /?song= looks
+	// its song up, so it does not make the word current (#1523).
+	const libraryWallIsSurface = $derived(libraryWallShows(surface, currentSongId));
 	const onLibraryPage = $derived(
-		libraryWallShows(surface, currentSongId) && standsOnLibraryPage(standingPathname(page.state))
+		libraryWallIsSurface && standsOnLibraryPage(standingPathname(page.state))
 	);
 	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
@@ -209,7 +210,7 @@
 	groupId="rail-library-group"
 	storageKey={LIBRARY_OPEN_STORAGE_KEY}
 	count={albumCount}
-	expandTrigger={onLibraryPage || isAlbumDetail || loadFailure !== null || filtering}
+	expandTrigger={libraryWallIsSurface || isAlbumDetail || loadFailure !== null || filtering}
 	page={{
 		href: resolve(LIBRARY_ROUTE_PATH),
 		current: onLibraryPage,
