@@ -38,6 +38,7 @@ import {
 	NetworkError,
 	describeFailure,
 	handleSessionLost,
+	isTransientApiFailure,
 	signInAddress,
 	signInReturnPath
 } from './fetch';
@@ -460,6 +461,38 @@ describe('describeFailure', () => {
 		const refusal = new ApiError(422, 'Validation error on: body.title', '/api/x');
 
 		expect(describeFailure(refusal, fallback, { withholdServerDetail: true })).toBe(fallback);
+	});
+});
+
+describe('isTransientApiFailure', () => {
+	it.each([
+		{
+			failure: 'a rate limit',
+			err: new ApiError(429, 'Too many requests', '/api/x'),
+			transient: true
+		},
+		{ failure: 'a failing server', err: new ApiError(500, '', '/api/x'), transient: true },
+		{ failure: 'a bad gateway', err: new ApiError(502, '', '/api/x'), transient: true },
+		{ failure: 'an unavailable server', err: new ApiError(503, '', '/api/x'), transient: true },
+		{ failure: 'a malformed request', err: new ApiError(400, '', '/api/x'), transient: false },
+		{ failure: 'a missing session', err: new ApiError(401, '', '/api/x'), transient: false },
+		{ failure: 'a forbidden request', err: new ApiError(403, '', '/api/x'), transient: false },
+		{ failure: 'a missing resource', err: new ApiError(404, '', '/api/x'), transient: false },
+		{
+			failure: 'a request timeout, which no server of ours sends',
+			err: new ApiError(408, '', '/api/x'),
+			transient: false
+		},
+		{ failure: 'a conflict', err: new ApiError(409, '', '/api/x'), transient: false },
+		{ failure: 'a validation refusal', err: new ApiError(422, '', '/api/x'), transient: false },
+		{
+			failure: 'a request that got no answer',
+			err: new NetworkError('/api/x', new TypeError('Failed to fetch')),
+			transient: false
+		},
+		{ failure: 'a plain error', err: new Error('undefined is not a function'), transient: false }
+	])('defect:#1508 says a retry can help after $failure: $transient', ({ err, transient }) => {
+		expect(isTransientApiFailure(err)).toBe(transient);
 	});
 });
 

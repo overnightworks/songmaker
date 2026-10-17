@@ -207,6 +207,10 @@ function seededTakeRow(takes: Locator): Locator {
 	return takes.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) });
 }
 
+function takeMenu(page: Page): Locator {
+	return page.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL, exact: true });
+}
+
 function deleteConfirm(page: Page): Locator {
 	return page.getByRole('dialog', {
 		name: TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(SEEDED_TAKE_NUMBER))
@@ -221,7 +225,7 @@ async function openDeleteConfirm(
 	await openSong(page, shell, playlist);
 	const takes = await songsTakes(page, shell);
 	await takes.getByRole('button', { name: TAKE_OVERFLOW_LABEL, exact: true }).first().click();
-	await page.getByRole('menuitem', { name: TAKE_DELETE_LABEL, exact: true }).click();
+	await takeMenu(page).getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
 	await expect(deleteConfirm(page)).toBeVisible();
 }
 
@@ -474,11 +478,11 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		open: async (page, playlist) => {
 			const takes = await openSongsTakes(page, playlist);
 			await takes.getByRole('button', { name: TAKE_OVERFLOW_LABEL, exact: true }).first().click();
-			await expect(page.getByRole('menu')).toBeVisible();
+			await expect(takeMenu(page)).toBeVisible();
 		},
 		leave: goBack,
 		expectLeft: async (page, _pages, playlist) => {
-			await expect(page.getByRole('menu')).toBeHidden();
+			await expect(takeMenu(page)).toBeHidden();
 			await expectSongStands(page, 'mobile', firstSong(playlist));
 		},
 		afterwards: backReaches('playlist')

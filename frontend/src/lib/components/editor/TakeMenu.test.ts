@@ -2,7 +2,16 @@ import { makeGeneration as gen } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX, TAKE_REPAINT_LABEL } from '$lib/constants';
+import {
+	HITBOX_COMPACT_PX,
+	HITBOX_FREQUENT_PX,
+	TAKE_COVER_LABEL,
+	TAKE_DELETE_LABEL,
+	TAKE_PLAYLIST_LABEL,
+	TAKE_REPAINT_LABEL,
+	TAKE_SHARE_LABEL
+} from '$lib/constants';
+import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import TakeMenu from './TakeMenu.svelte';
@@ -60,68 +69,96 @@ async function mountMenu(overrides: Partial<ReturnType<typeof defaultProps>> = {
 	return { target, props };
 }
 
-function clickOverflowButton(target: HTMLElement): void {
-	target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+function moreButtonIn(target: ParentNode): HTMLButtonElement {
+	const trigger = target.querySelector<HTMLButtonElement>('.menu-trigger');
+	if (!trigger) throw new Error('Expected the More trigger');
+	return trigger;
 }
 
 async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {
 	const rendered = await mountMenu(overrides);
-	clickOverflowButton(rendered.target);
+	moreButtonIn(rendered.target).click();
 	await tick();
 	return rendered;
 }
 
 describe('TakeMenu', () => {
-	it('names the take on the first row', async () => {
-		const { target } = await render();
-		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 2');
+	it.each([
+		{ case: 'its version and number', version: 3, heading: 'Take · v3 · 2' },
+		{ case: 'its number alone when it has no version', version: null, heading: 'Take · 2' }
+	])('915_C3: names the take by $case on the first row', async ({ version, heading }) => {
+		const { target } = await render({
+			gen: gen({ version_number: version, generation_number: 2 })
+		});
+		expect(target.querySelector('.menu-heading')?.textContent).toBe(heading);
 	});
 
 	it.each([false, true])(
-		'offers five ordered actions and leaves Keep to the row when kept is %s',
+		'915_C3: offers five ordered actions with an icon each, Delete last in red, and leaves Keep to the row when kept is %s',
 		async (kept) => {
 			const { target } = await render({
 				gen: gen({ is_kept: kept, is_shared: true, is_archived: true })
 			});
-			const rows = target.querySelectorAll('.overflow-menu > button, .share-row');
-			expect(Array.from(rows, (row) => row.textContent?.trim())).toEqual([
-				'Repaint',
-				'Cover',
-				'Add to playlist',
-				'Share',
-				'Delete'
+			expect(menuRowLabels(target)).toEqual([
+				TAKE_REPAINT_LABEL,
+				TAKE_COVER_LABEL,
+				TAKE_PLAYLIST_LABEL,
+				TAKE_SHARE_LABEL,
+				TAKE_DELETE_LABEL
 			]);
-			expect(target.querySelectorAll('.overflow-menu button')).toHaveLength(5);
+			const rows = Array.from(target.querySelectorAll('.menu-item'));
+			expect(rows.every((row) => row.querySelector('svg') !== null)).toBe(true);
+			expect(rows.map((row) => row.classList.contains('destructive'))).toEqual([
+				false,
+				false,
+				false,
+				false,
+				true
+			]);
 		}
 	);
+
+	it('915_C3: is a dialog of plain buttons named More, not a menu', async () => {
+		const { target } = await render();
+		const panel = target.querySelector('.menu-panel');
+		expect(panel?.getAttribute('role')).toBe('dialog');
+		expect(panel?.getAttribute('aria-label')).toBe('More');
+		expect(target.querySelector('[role="menu"], [role="menuitem"]')).toBeNull();
+	});
 
 	it.each([
 		['Repaint', 'onrepaint'],
 		['Cover', 'oncover'],
 		['Add to playlist', 'onaddtoplaylist'],
 		['Delete', 'ondelete']
-	] as const)('runs %s and closes the menu', async (label, callback) => {
-		const { target, props } = await render();
-		const button = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-			(button) => button.textContent?.trim() === label
-		);
-		button?.click();
-		await tick();
-		expect(props[callback]).toHaveBeenCalledOnce();
-		expect(target.querySelector('.overflow-menu')).toBeNull();
-		expect(document.activeElement).toBe(target.querySelector('.overflow-btn'));
-	});
+	] as const)(
+		'915_C3: runs %s and closes the menu, handing focus back to More',
+		async (label, callback) => {
+			const { target, props } = await render();
+			menuRow(target, label).click();
+			await vi.waitFor(() => expect(document.activeElement).toBe(moreButtonIn(target)));
+			expect(props[callback]).toHaveBeenCalledOnce();
+			expect(target.querySelector('.menu-panel')).toBeNull();
+		}
+	);
 
 	it.each([false, true])(
-		'uses the shared ShareButton behavior when shared is %s',
+		'915_C3: shares or unshares from its Share row and stays open when shared is %s',
 		async (shared) => {
 			const writeText = vi.fn(async () => undefined);
 			vi.stubGlobal('navigator', { clipboard: { writeText } });
 			const { target, props } = await render({
 				gen: gen({ is_shared: shared, share_slug: shared ? 'take' : null })
 			});
-			target.querySelector<HTMLButtonElement>('.share-btn')?.click();
+			const share = menuRow(target, TAKE_SHARE_LABEL);
+			expect(share.getAttribute('aria-pressed')).toBe(String(shared));
+			expect(share.querySelector('.menu-item-hint')?.textContent?.trim()).toBe(
+				shared ? 'on' : 'off'
+			);
+
+			share.click();
 			await tick();
+
 			if (shared) {
 				expect(props.onunshare).toHaveBeenCalledOnce();
 				expect(props.onshare).not.toHaveBeenCalled();
@@ -131,13 +168,14 @@ describe('TakeMenu', () => {
 				expect(props.onunshare).not.toHaveBeenCalled();
 				expect(writeText).toHaveBeenCalledWith('https://example.com/share/gen/take');
 			}
+			expect(target.querySelector('.menu-panel')).not.toBeNull();
 		}
 	);
 
-	it('sizes the overflow trigger to the frequent hitbox on a coarse pointer', async () => {
+	it('915_C3: sizes the More trigger to the frequent hitbox on a coarse pointer, keeping its face', async () => {
 		const { target } = await render();
-		const btn = target.querySelector<HTMLButtonElement>('.overflow-btn');
-		if (!btn) throw new Error('Expected the overflow trigger button');
+		const btn = moreButtonIn(target);
+		expect(btn.hasAttribute('data-hitbox-face')).toBe(true);
 		document.documentElement.dataset.pointer = 'coarse';
 		const coarse = getComputedStyle(btn);
 		expect(px(coarse.minWidth)).toBe(HITBOX_FREQUENT_PX);
@@ -147,51 +185,12 @@ describe('TakeMenu', () => {
 		expect(px(fine.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 
-	it('focuses the first action and returns focus on Escape', async () => {
+	it('915_C3: focuses the first action and returns focus on Escape', async () => {
 		const { target } = await render();
 		expect(document.activeElement?.textContent?.trim()).toBe('Repaint');
-		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		await tick();
-		expect(target.querySelector('.overflow-menu')).toBeNull();
-		expect(document.activeElement).toBe(target.querySelector('.overflow-btn'));
-	});
-
-	it('opens downward when there is enough space below the trigger', async () => {
-		vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-			bottom: 400,
-			top: 0,
-			left: 0,
-			right: 0,
-			height: 0,
-			width: 0,
-			x: 0,
-			y: 0,
-			toJSON: () => ({})
-		});
-		vi.stubGlobal('innerHeight', 800);
-		const { target } = await render();
-		await tick();
-		expect(target.querySelector('.overflow-menu')?.classList.contains('flip-up')).toBe(false);
-		vi.unstubAllGlobals();
-	});
-
-	it('flips upward when there is not enough space below the trigger', async () => {
-		vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-			bottom: 900,
-			top: 500,
-			left: 0,
-			right: 0,
-			height: 0,
-			width: 0,
-			x: 0,
-			y: 0,
-			toJSON: () => ({})
-		});
-		vi.stubGlobal('innerHeight', 800);
-		const { target } = await render();
-		await tick();
-		expect(target.querySelector('.overflow-menu')?.classList.contains('flip-up')).toBe(true);
-		vi.unstubAllGlobals();
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		await vi.waitFor(() => expect(document.activeElement).toBe(moreButtonIn(target)));
+		expect(target.querySelector('.menu-panel')).toBeNull();
 	});
 });
 
@@ -207,21 +206,21 @@ describeBackClosesOverlay({
 				})
 			})
 		).target,
-	open: clickOverflowButton,
-	isShown: (target) => target.querySelector('.overflow-menu') !== null,
+	open: (target) => moreButtonIn(target).click(),
+	isShown: (target) => target.querySelector('.menu-panel') !== null,
 	closeWays: [
-		{ way: 'a tap outside', close: () => document.body.click() },
+		{
+			way: 'a tap outside',
+			close: (target) => target.querySelector<HTMLButtonElement>('.menu-backdrop')?.click()
+		},
 		{
 			way: 'Escape',
 			close: () =>
-				document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 		},
 		{
 			way: 'choosing Repaint',
-			close: (target) =>
-				Array.from(target.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-					.find((item) => item.textContent?.trim() === TAKE_REPAINT_LABEL)
-					?.click(),
+			close: (target) => menuRow(target, TAKE_REPAINT_LABEL).click(),
 			actionSawHistoryAt: () => repaintSawHistoryAt
 		}
 	]

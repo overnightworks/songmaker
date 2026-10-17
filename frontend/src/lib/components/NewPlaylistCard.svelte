@@ -8,7 +8,8 @@
 		NEW_PLAYLIST_CLOSE_LABEL,
 		NEW_PLAYLIST_FAILED,
 		NEW_PLAYLIST_HINT,
-		NEW_PLAYLIST_NAME_LABEL
+		NEW_PLAYLIST_NAME_LABEL,
+		NEW_PLAYLIST_REFUSED
 	} from '$lib/constants';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
@@ -35,6 +36,7 @@
 	closeLabel={NEW_PLAYLIST_CLOSE_LABEL}
 	hint={NEW_PLAYLIST_HINT}
 	failedMessage={NEW_PLAYLIST_FAILED}
+	refusedMessage={NEW_PLAYLIST_REFUSED}
 	draftKey="playlist"
 	bind:title={name}
 	ready={name.trim() !== ''}

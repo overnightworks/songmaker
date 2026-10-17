@@ -9,6 +9,7 @@
 		NEW_SONG_CLOSE_LABEL,
 		NEW_SONG_FAILED,
 		NEW_SONG_HINT,
+		NEW_SONG_REFUSED,
 		NEW_SONG_TITLE_LABEL,
 		newSongCardLabel
 	} from '$lib/constants';
@@ -43,6 +44,7 @@
 	closeLabel={NEW_SONG_CLOSE_LABEL}
 	hint={NEW_SONG_HINT}
 	failedMessage={NEW_SONG_FAILED}
+	refusedMessage={NEW_SONG_REFUSED}
 	draftKey={`song:${album.id}`}
 	bind:title
 	ready={title.trim() !== ''}
