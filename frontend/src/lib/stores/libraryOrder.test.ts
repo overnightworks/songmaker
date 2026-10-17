@@ -6,6 +6,7 @@ vi.mock('$lib/api/library', () => ({
 	fetchLibraryListen: (...args: unknown[]) => fetchLibraryListen(...args)
 }));
 
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { chooseLibraryWallOrder } from './ui';
 import {
 	ensureLastPlayedRead,
@@ -33,6 +34,7 @@ beforeEach(() => {
 	localStorage.clear();
 	chooseLibraryWallOrder('title');
 	resetLibraryOrderForTests();
+	audioPlayer.current = null;
 	fetchLibraryListen.mockReset().mockResolvedValue({ items: [] });
 });
 
@@ -92,5 +94,100 @@ describe('library order', () => {
 		await ensureLastPlayedRead();
 
 		expect(fetchLibraryListen).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		[
+			'the wall and both rail groups opening together',
+			[readLastPlayed, ensureLastPlayedRead, ensureLastPlayedRead]
+		],
+		['a rail group opening before the wall', [ensureLastPlayedRead, readLastPlayed]]
+	])(
+		'1354_rule_8: starts one Listen read for %s, and reads again once it has come back',
+		async (_, readers) => {
+			fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
+
+			const applied = await Promise.all(readers.map((read) => read()));
+
+			expect(applied).toEqual(readers.map(() => true));
+			expect(fetchLibraryListen).toHaveBeenCalledTimes(1);
+			await readLastPlayed();
+			expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
+		}
+	);
+
+	it('1354_rule_8: asks Listen again only for a caller whose ranking is not yet present', async () => {
+		fetchLibraryListen.mockRejectedValueOnce(new Error('offline'));
+		expect(await ensureLastPlayedRead()).toBe(false);
+		fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
+
+		expect(await ensureLastPlayedRead()).toBe(true);
+		expect(await ensureLastPlayedRead()).toBe(true);
+
+		expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
+	});
+
+	it('1354_rule_8: asks Listen again for a caller only once another take has started playing', async () => {
+		fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
+		await ensureLastPlayedRead();
+		await ensureLastPlayedRead();
+		expect(fetchLibraryListen).toHaveBeenCalledTimes(1);
+
+		audioPlayer.current = { generation: { id: 'g-2' } } as unknown as typeof audioPlayer.current;
+		await ensureLastPlayedRead();
+		await ensureLastPlayedRead();
+
+		expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
+	});
+
+	it('1354_rule_8: holds every place back while Last played is chosen until Listen has answered', async () => {
+		chooseLibraryWallOrder('played');
+		const answer = Promise.withResolvers<{ items: ReturnType<typeof listened>[] }>();
+		fetchLibraryListen.mockReturnValue(answer.promise);
+		const albums = ['Afterglow', 'Kinetic'].map((title) => titled(title));
+		const read = readLastPlayed();
+
+		expect(get(libraryPlaceOrder).known).toBe(false);
+		expect(inLibraryOrder('album', albums, get(libraryPlaceOrder))).toEqual([]);
+
+		answer.resolve({ items: [listened('kinetic')] });
+		await read;
+
+		expect(get(libraryPlaceOrder).known).toBe(true);
+		expect(titlesOf(inLibraryOrder('album', albums, get(libraryPlaceOrder)))).toEqual([
+			'Kinetic',
+			'Afterglow'
+		]);
+	});
+
+	it('1354_rule_8: keeps the places in the order a viewer sees while they switch to Last played, until Listen has answered', async () => {
+		const albums = ['Afterglow', 'Kinetic'].map((title) => titled(title));
+		const standing = () => titlesOf(inLibraryOrder('album', albums, get(libraryPlaceOrder)));
+		expect(standing()).toEqual(['Afterglow', 'Kinetic']);
+		const answer = Promise.withResolvers<{ items: ReturnType<typeof listened>[] }>();
+		fetchLibraryListen.mockReturnValue(answer.promise);
+
+		chooseLibraryWallOrder('played');
+		const read = readLastPlayed();
+
+		expect(standing()).toEqual(['Afterglow', 'Kinetic']);
+
+		answer.resolve({ items: [listened('kinetic')] });
+		await read;
+
+		expect(standing()).toEqual(['Kinetic', 'Afterglow']);
+	});
+
+	it('1354_rule_8: stands the places in title order when the first read fails, rather than holding them for good', async () => {
+		chooseLibraryWallOrder('played');
+		fetchLibraryListen.mockRejectedValue(new Error('offline'));
+
+		await readLastPlayed();
+
+		const albums = ['Kinetic', 'Afterglow'].map((title) => titled(title));
+		expect(titlesOf(inLibraryOrder('album', albums, get(libraryPlaceOrder)))).toEqual([
+			'Afterglow',
+			'Kinetic'
+		]);
 	});
 });

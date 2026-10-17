@@ -254,6 +254,26 @@ describe('RailLibraryGroup', () => {
 		);
 	});
 
+	it('1354_rule_8: lists no album while Last played is chosen and Listen has not answered', async () => {
+		albumList.set([
+			album({ id: 'afterglow', title: 'Afterglow' }),
+			album({ id: 'v', title: 'Vernissage' })
+		]);
+		const listen = Promise.withResolvers<ReturnType<typeof lastPlayedPage>>();
+		vi.mocked(fetchLibraryListen).mockReturnValue(listen.promise);
+		chooseLibraryWallOrder('played');
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+		const albumTitles = () =>
+			Array.from(target.querySelectorAll('.album-label .row-title')).map((row) => row.textContent);
+
+		expect(albumTitles()).toEqual([]);
+
+		listen.resolve(lastPlayedPage('album', ['v']));
+		await vi.waitFor(() => expect(albumTitles()).toEqual(['Vernissage', 'Afterglow']));
+	});
+
 	it('narrows known albums and songs, while keeping the open album visible', async () => {
 		albumList.set([
 			album({ id: 'a-open', title: 'Anfield' }),

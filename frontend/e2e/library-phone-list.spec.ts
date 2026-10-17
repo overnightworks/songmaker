@@ -3,14 +3,17 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	csrfHeaders,
 	expectLibraryWallLoaded,
 	FlowGuard,
 	LIBRARY_PATH,
 	LIBRARY_URL,
 	observePlayingAudio,
 	ONLY_IN_SHELL,
+	openRailNav,
 	playingAudioState,
 	scrollWallHalfway,
+	shellOf,
 	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	wallBody,
 	workspace
@@ -506,3 +509,164 @@ test(
 		expect((await lightUps(page)).marked).toEqual([]);
 	}
 );
+
+const PAINTED_ORDERS_KEY = '__paintedOrders';
+const LISTEN_READ_PATH = '/api/library/listen';
+// Listen answers after the lists do, as it would behind a busy server: the
+// order in which A–Z, if it were painted first, would show.
+const LISTEN_ANSWER_DELAY_MS = 400;
+
+interface PaintedOrders {
+	wall: string[][];
+	rail: string[][];
+}
+
+// Records the order the wall and the rail group stand in on every frame that
+// painted a different one, for the whole document: a poll that waits for the
+// final order cannot see an A–Z order that stood in front of it first.
+async function recordPaintedOrders(
+	page: Page,
+	selectors: Record<keyof PaintedOrders, string>
+): Promise<void> {
+	await page.addInitScript(
+		({ key, rows }) => {
+			const painted: PaintedOrders = { wall: [], rail: [] };
+			Reflect.set(window, key, painted);
+			const sample = () => {
+				for (const surface of ['wall', 'rail'] as const) {
+					const titles = [...document.querySelectorAll(rows[surface])].map(
+						(title) => title.textContent ?? ''
+					);
+					const previous = painted[surface].at(-1);
+					if (titles.length > 0 && previous?.join('\n') !== titles.join('\n'))
+						painted[surface].push(titles);
+				}
+				requestAnimationFrame(sample);
+			};
+			requestAnimationFrame(sample);
+		},
+		{ key: PAINTED_ORDERS_KEY, rows: selectors }
+	);
+}
+
+function paintedOrders(page: Page): Promise<PaintedOrders> {
+	return page.evaluate((key) => Reflect.get(window, key) as PaintedOrders, PAINTED_ORDERS_KEY);
+}
+
+async function firstSongOf(page: Page, albumId: string): Promise<string> {
+	const songs = await page.request.get(`/api/songs?album_id=${albumId}`);
+	expect(songs.ok()).toBe(true);
+	const [song] = (await songs.json()).items as Array<{ id: string }>;
+	return song.id;
+}
+
+async function listenIn(page: Page, songId: string, playlistId?: string): Promise<void> {
+	const listen = await page.request.post(`/api/songs/${songId}/listen`, {
+		headers: await csrfHeaders(page),
+		data: playlistId ? { playlist_id: playlistId } : undefined
+	});
+	expect(listen.ok()).toBe(true);
+}
+
+async function seedPlaylistHolding(page: Page, title: string, songId: string): Promise<string> {
+	const headers = await csrfHeaders(page);
+	const created = await page.request.post('/api/playlists', { headers, data: { title } });
+	expect(created.ok()).toBe(true);
+	const { id } = (await created.json()) as { id: string };
+	const added = await page.request.post(`/api/playlists/${id}/entries/song`, {
+		headers,
+		data: { song_id: songId }
+	});
+	expect(added.ok()).toBe(true);
+	return id;
+}
+
+// The one switch sorts the Library, Playlists and the rail the same way
+// (1354_rule_8): each page lists its places in A–Z, arranges listens that put
+// a later one first under Last played, and names the rail rows that follow.
+const LAST_PLAYED_PAGES = [
+	{
+		name: 'Library',
+		path: LIBRARY_PATH,
+		railRows: '.album-label .row-title',
+		async arrange(page: Page) {
+			const [newest, older] = [fixture.albums[2], fixture.albums[42]];
+			await listenIn(page, await firstSongOf(page, older.id));
+			await listenIn(page, await firstSongOf(page, newest.id));
+			return {
+				alphabetical: fixture.albums.map((album) => album.title),
+				listenedLast: [newest.title, older.title]
+			};
+		}
+	},
+	{
+		name: 'Playlists',
+		path: '/playlists',
+		railRows: '.playlist-label .row-title',
+		async arrange(page: Page) {
+			const [alpha, omega] = ['E2E Phone Playlist Alpha', 'E2E Phone Playlist Omega'];
+			const alphaSong = await firstSongOf(page, fixture.albums[42].id);
+			const omegaSong = await firstSongOf(page, fixture.albums[2].id);
+			await seedPlaylistHolding(page, alpha, alphaSong);
+			const omegaId = await seedPlaylistHolding(page, omega, omegaSong);
+			await listenIn(page, omegaSong, omegaId);
+			return {
+				alphabetical: [alpha, omega, fixture.playlist.title],
+				listenedLast: [omega]
+			};
+		}
+	}
+] as const;
+
+for (const lastPlayedPage of LAST_PLAYED_PAGES) {
+	test(`1354_rule_8: a fresh ${lastPlayedPage.name} page under Last played never paints A–Z first and reads Listen once`, async ({
+		page
+	}, testInfo) => {
+		const { alphabetical, listenedLast } = await lastPlayedPage.arrange(page);
+		const lastPlayed = [
+			...listenedLast,
+			...alphabetical.filter((title) => !listenedLast.includes(title))
+		];
+		expect(lastPlayed, 'the listens change the order').not.toEqual(alphabetical);
+		await recordPaintedOrders(page, {
+			wall: '.library-wall .tile-grid .tile-title',
+			rail: lastPlayedPage.railRows
+		});
+		await page.goto(lastPlayedPage.path);
+		await page.getByRole('button', { name: 'Last played', exact: true }).click();
+		await expect(workspace(page).locator('.tile-title').first()).toHaveText(lastPlayed[0]);
+		let answerDelayMs = 0;
+		await page.route(
+			(url) => url.pathname === LISTEN_READ_PATH,
+			async (route) => {
+				await new Promise((resolve) => setTimeout(resolve, answerDelayMs));
+				await route.continue();
+			}
+		);
+		let listenReads = 0;
+		page.on('request', (request) => {
+			if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
+				listenReads++;
+		});
+
+		for (answerDelayMs of [LISTEN_ANSWER_DELAY_MS, 0]) {
+			listenReads = 0;
+			await page.reload();
+			await expect(workspace(page).locator('.library-wall .tile-title')).toHaveCount(
+				lastPlayed.length
+			);
+			const rail = await openRailNav(page, shellOf(testInfo));
+			await expect(rail.locator(lastPlayedPage.railRows)).toHaveCount(lastPlayed.length);
+
+			for (const surface of ['wall', 'rail'] as const)
+				await expect
+					.poll(async () => (await paintedOrders(page))[surface].at(-1))
+					.toEqual(lastPlayed);
+			const painted = await paintedOrders(page);
+			for (const orders of [painted.wall, painted.rail])
+				for (const order of orders)
+					expect(order).toEqual(lastPlayed.filter((title) => order.includes(title)));
+			expect(listenReads, `Listen reads with its answer ${answerDelayMs} ms late`).toBe(1);
+		}
+	});
+}

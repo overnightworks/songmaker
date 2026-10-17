@@ -18,7 +18,7 @@ import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySe
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '$lib/stores/libraryData';
-import { libraryWallOrder } from '$lib/stores/ui';
+import { chooseLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
@@ -292,6 +292,32 @@ describe('LibraryWall', () => {
 			expect(new Set(tileLines(root))).toEqual(new Set(['today 05:47']));
 		});
 	});
+
+	it.each([
+		['library', 'Library', ['Sonnenlauf', 'nachtstrom', 'Sonne für Andrea']],
+		['playlists', 'Playlists', ['Night drive']]
+	] as const)(
+		'1354_rule_8: paints no %s tile, no count and no empty word while Last played is chosen and Listen has not answered',
+		async (kind, pageLabel, ranked) => {
+			seedWall();
+			chooseLibraryWallOrder('played');
+			const listen = Promise.withResolvers<{ items: ReturnType<typeof place>[] }>();
+			fetchLibraryListen.mockReturnValue(listen.promise);
+			const root = await render(kind);
+			await vi.waitFor(() =>
+				expect((kind === 'library' ? get(allAlbumsLoad) : get(playlistLoad)).status).toBe('ready')
+			);
+
+			expect(tileTitles(root)).toEqual([]);
+			expect(root.querySelector('[role="status"]')).not.toBeNull();
+			expect(root.querySelector('.wall-titlebar h1')?.getAttribute('aria-label')).toBe(pageLabel);
+
+			listen.resolve({ items: [place('album', 'a-sonne', 'Sonnenlauf', '2026-09-21T10:00:00Z')] });
+
+			await vi.waitFor(() => expect(tileTitles(root)).toEqual(ranked));
+			expect(root.querySelector('[role="status"]')).toBeNull();
+		}
+	);
 
 	it('opens in the order last chosen on this device', async () => {
 		seedWall();
