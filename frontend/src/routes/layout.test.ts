@@ -25,6 +25,7 @@ import {
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
 	RAIL_DRAWER_OPEN_LABEL,
+	RATE_LIMITED_TOAST_MESSAGE,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
 import {
@@ -32,7 +33,7 @@ import {
 	SEARCH_SHEET_LABEL,
 	backLabel
 } from '$lib/components/PhoneAppBar.svelte';
-import { handleSessionLost } from '$lib/api/fetch';
+import { apiFetch, handleSessionLost } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
@@ -56,6 +57,7 @@ import {
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
+import { toasts } from '$lib/stores/toast';
 import {
 	closeNowPlaying,
 	nowPlayingDockable,
@@ -1181,6 +1183,61 @@ describe('the live library stream', () => {
 		await unmountCurrentLayout();
 
 		expect(liveStream.stop).toHaveBeenCalled();
+	});
+});
+
+// The transport only reports a 429; this layout installs the reaction that
+// tells the person (`stores/rateLimitNotice.ts`), and takes it away again.
+describe('a 429 under the mounted layout', () => {
+	function throttleToasts() {
+		return get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+	}
+
+	function aThrottledRead() {
+		return apiFetch('/api/songs').catch(() => undefined);
+	}
+
+	beforeEach(() => {
+		toasts.set([]);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () => new Response(JSON.stringify({ detail: 'Too many requests' }), { status: 429 })
+			)
+		);
+	});
+
+	it('925_M3_L1: the first request the layout itself sends already raises the throttle toast', async () => {
+		vi.mocked(checkAuth).mockImplementationOnce(async () => {
+			await aThrottledRead();
+			currentUser.set(USER);
+			authLoading.set(false);
+			return USER;
+		});
+
+		await renderLayout(LIBRARY_ROUTE_PATH);
+
+		await vi.waitFor(() => expect(throttleToasts()).toHaveLength(1));
+	});
+
+	it('925_M3_L2: a burst of 429s on ordinary requests raises the throttle toast once', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+
+		await Promise.all([aThrottledRead(), aThrottledRead(), aThrottledRead()]);
+
+		expect(throttleToasts()).toHaveLength(1);
+	});
+
+	it('925_M3_L4: after the layout unmounts, a 429 raises no toast', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+		await aThrottledRead();
+		expect(throttleToasts()).toHaveLength(1);
+		toasts.set([]);
+
+		await unmountCurrentLayout();
+		await aThrottledRead();
+
+		expect(throttleToasts()).toHaveLength(0);
 	});
 });
 

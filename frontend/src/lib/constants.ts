@@ -755,7 +755,7 @@ export const JOB_TYPE_COVER = 'cover';
 // burst can still happen, and a client that silently stalls reads as
 // broken. A few paths already surface their own 429 copy some other way
 // and are exempted from this toast — see `RATE_LIMIT_TOAST_EXEMPT_PATHS`
-// in `lib/api/fetch.ts` for exactly which, and why.
+// in `lib/stores/rateLimitNotice.ts` for exactly which, and why.
 export const RATE_LIMITED_TOAST_MESSAGE =
 	'Too many requests — hang on, it will continue in a moment.';
 

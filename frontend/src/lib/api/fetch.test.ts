@@ -1,6 +1,5 @@
 import { replaceHistoryEntry } from '$lib/test-utils/library-history';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -38,13 +37,13 @@ import {
 	NetworkError,
 	describeFailure,
 	handleSessionLost,
+	installRefusalReactions,
 	isTransientApiFailure,
 	signInAddress,
 	signInReturnPath
 } from './fetch';
 import { UserFacingError } from './userFacingError';
-import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
-import { dismissToast, toasts } from '$lib/stores/toast';
+import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
 import { currentUser } from '$lib/stores/auth';
 import {
 	navigateTo,
@@ -300,76 +299,89 @@ describe('apiFetch 429 classification', () => {
 	});
 });
 
-describe('429 throttle toast', () => {
-	function rateLimitedResponse() {
-		return {
+describe('refusal reactions', () => {
+	const throughApiFetch = (path: string) => apiFetch(path);
+	const throughSseFetch = (path: string) => sseFetch(path, { method: 'POST' }).next();
+	const clients = [
+		{ client: 'apiFetch', request: throughApiFetch },
+		{ client: 'sseFetch', request: throughSseFetch }
+	];
+
+	function serverRefusesWith(status: number) {
+		mockFetch.mockImplementation(async () => ({
 			ok: false,
-			status: 429,
+			status,
 			headers: { get: () => null },
-			json: () => Promise.resolve({ detail: 'Too many requests' })
-		};
+			json: () => Promise.resolve({ detail: 'refused' })
+		}));
 	}
 
-	beforeEach(() => {
-		toasts.set([]);
+	function aRefusedRequest() {
+		return throughApiFetch('/api/songs').catch((e: unknown) => e);
+	}
+
+	afterEach(() => {
+		mockFetch.mockReset();
 	});
 
-	it('shows exactly one toast for a burst of 429s', async () => {
-		mockFetch.mockResolvedValue(rateLimitedResponse());
+	it.each(clients)(
+		'925_M3_P1: a 429 tells rateLimited its path through $client',
+		async ({ request }) => {
+			const told: string[] = [];
+			onTestFinished(installRefusalReactions({ rateLimited: (path) => told.push(path) }));
+			serverRefusesWith(429);
 
-		await Promise.all(
-			Array.from({ length: 5 }, () => apiFetch('/api/songs').catch((e: unknown) => e))
-		);
+			await request('/api/songs').catch((e: unknown) => e);
 
-		const shown = get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
-		expect(shown).toHaveLength(1);
-	});
+			expect(told).toEqual(['/api/songs']);
+		}
+	);
 
-	it('raises a fresh toast once the earlier one is gone', async () => {
-		mockFetch.mockResolvedValue(rateLimitedResponse());
+	it.each([400, 403, 404, 500, 502])(
+		'925_M3_P2: a %i tells rateLimited nothing',
+		async (status) => {
+			const told: string[] = [];
+			onTestFinished(installRefusalReactions({ rateLimited: (path) => told.push(path) }));
+			serverRefusesWith(status);
 
-		await apiFetch('/api/songs').catch((e: unknown) => e);
-		const first = get(toasts).find((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
-		if (!first) throw new Error('expected a throttle toast');
-		dismissToast(first.id);
+			await aRefusedRequest();
 
-		await apiFetch('/api/songs').catch((e: unknown) => e);
-		const shown = get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
-		expect(shown).toHaveLength(1);
-		expect(shown[0].id).not.toBe(first.id);
-	});
+			expect(told).toEqual([]);
+		}
+	);
 
-	it('does not toast for a path that already surfaces its own 429 in place', async () => {
-		mockFetch.mockResolvedValue(rateLimitedResponse());
+	it.each(clients)(
+		'925_M3_P3: with nothing installed a 429 still rejects with its ApiError through $client',
+		async ({ request }) => {
+			serverRefusesWith(429);
 
-		await apiFetch('/api/auth/login', { method: 'POST' }).catch((e: unknown) => e);
-		await apiFetch('/api/auth/me').catch((e: unknown) => e);
-		await apiFetch('/api/albums/a1/cover-suggestions', { method: 'POST' }).catch((e: unknown) => e);
+			const failure = await request('/api/songs').catch((e: unknown) => e);
 
-		expect(get(toasts)).toHaveLength(0);
-	});
+			expect(failure).toBeInstanceOf(ApiError);
+			expect((failure as ApiError).status).toBe(429);
+		}
+	);
 
-	it('does not toast for a non-429 error', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: false,
-			status: 500,
-			headers: { get: () => null },
-			json: () => Promise.resolve({ detail: 'boom' })
-		});
+	it('925_M3_P4: an uninstall puts back the set installed before it, and after the last one a 429 reaches no reaction', async () => {
+		const told: string[] = [];
+		const listening = (name: string) =>
+			installRefusalReactions({ rateLimited: () => told.push(name) });
+		const uninstallFirst = listening('first');
+		const uninstallSecond = listening('second');
+		serverRefusesWith(429);
 
-		await apiFetch('/api/songs').catch((e: unknown) => e);
+		try {
+			await aRefusedRequest();
+			uninstallSecond();
+			await aRefusedRequest();
+			uninstallFirst();
+			await aRefusedRequest();
+		} finally {
+			uninstallSecond();
+			uninstallFirst();
+		}
 
-		expect(get(toasts)).toHaveLength(0);
-	});
-
-	it('shows the same throttle toast through sseFetch', async () => {
-		mockFetch.mockResolvedValueOnce(rateLimitedResponse());
-
-		const gen = sseFetch('/api/chat/turn', { method: 'POST' });
-		await gen.next().catch((e: unknown) => e);
-
-		const shown = get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
-		expect(shown).toHaveLength(1);
+		expect(told).toEqual(['second', 'first']);
 	});
 });
 

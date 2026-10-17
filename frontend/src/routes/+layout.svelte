@@ -1,10 +1,11 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import '../app.css';
+	import { onDestroy } from 'svelte';
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
-	import { signInAddress } from '$lib/api/fetch';
+	import { installRefusalReactions, signInAddress } from '$lib/api/fetch';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
@@ -30,6 +31,7 @@
 		openLibraryWall
 	} from '$lib/stores/navigation';
 	import { closeTopLayer } from '$lib/stores/layers';
+	import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
 	import {
 		historyStandsStill,
@@ -66,6 +68,11 @@
 	import { escapeLevelUpTarget, handleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';
 	import { get } from 'svelte/store';
+
+	// Installed while the component initialises -- before any child exists and
+	// before the first request, which `initAuth`'s effect sends -- so no refusal
+	// reaches the transport while nothing is listening.
+	onDestroy(installRefusalReactions({ rateLimited: notifyRateLimited }));
 
 	let { children } = $props();
 
