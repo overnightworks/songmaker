@@ -86,6 +86,7 @@
 	import { pageBelowStandingPage, stepBackOr } from '$lib/history/historyController';
 	import { standingPathname } from '$lib/routes/standingAddress';
 	import { historyLayerState } from '$lib/stores/layers';
+	import { inertWhileAddressOverlay } from '$lib/stores/libraryAddressOverlay';
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import { openHome, openListOverPage } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
@@ -215,7 +216,7 @@
 		</svg>
 	</button>
 	{#if $phoneAppBar}
-		<h1 class="bar-title" aria-label={$phoneAppBar.title}>
+		<h1 class="bar-title" aria-label={$phoneAppBar.title} {@attach inertWhileAddressOverlay}>
 			<EditableTitle
 				bind:this={titleEditor}
 				value={$phoneAppBar.title}
@@ -224,12 +225,16 @@
 			/>
 		</h1>
 		{@render searchButton()}
-		<ShareButton {...$phoneAppBar.share} iconOnly />
-		<SongMenu
-			{...$phoneAppBar.menu}
-			title={$phoneAppBar.title}
-			onrename={() => titleEditor?.startEdit()}
-		/>
+		<div class="song-control" {@attach inertWhileAddressOverlay}>
+			<ShareButton {...$phoneAppBar.share} iconOnly />
+		</div>
+		<div class="song-control" {@attach inertWhileAddressOverlay}>
+			<SongMenu
+				{...$phoneAppBar.menu}
+				title={$phoneAppBar.title}
+				onrename={() => titleEditor?.startEdit()}
+			/>
+		</div>
 	{:else if backTargetName !== null}
 		<button
 			type="button"
@@ -305,6 +310,10 @@
 		font-size: var(--input-font-size);
 		color: var(--text);
 		letter-spacing: var(--btn-letter-spacing);
+	}
+
+	.song-control {
+		display: contents;
 	}
 
 	.bar-title :global(.editable-title-display) {
