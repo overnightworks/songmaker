@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import threading
 from io import BytesIO
 from pathlib import Path
@@ -102,14 +103,13 @@ def _outcome(
     )
 
 
-def _image_event_stream(codex_home: Path) -> str:
-    return (_FIXTURES / "codex-imagegen-real-stream.jsonl").read_text().replace(
-        "{CODEX_HOME}", str(codex_home.resolve()),
-    )
+def _image_event_stream() -> str:
+    """Synthetic mirror of the provider's measured Codex 0.163.0 stream."""
+    return (_FIXTURES / "codex-imagegen-real-stream.jsonl").read_text()
 
 
-def _image_event_records(codex_home: Path) -> list[dict]:
-    return [json.loads(line) for line in _image_event_stream(codex_home).splitlines()]
+def _image_event_records() -> list[dict]:
+    return [json.loads(line) for line in _image_event_stream().splitlines()]
 
 
 @pytest.fixture
@@ -129,6 +129,7 @@ def cover_job(tmp_path: Path):
             lyrics="l" * (COVER_PROMPT_SONG_FIELD_MAX_CHARS + 10),
         )
         job = Job(id="job", type=JobType.COVER, user_id=user.id, album_id=album.id)
+        set_cover_settings(session, "codex", "cli", "")
         session.add_all([album, song, version, job])
         session.commit()
     return factory, tmp_path / "audio", "job"
@@ -166,11 +167,16 @@ def _install_fake_codex_cli(
             artifact = home / "generated_images" / "thread" / "cover.png"
             artifact.parent.mkdir(parents=True)
             artifact.write_bytes(_png_bytes())
-        result = outcome or _outcome(stdout=_image_event_stream(home))
+        result = outcome or _outcome(stdout=_image_event_stream())
         _reap_fake_codex_process(kwargs)
         return result
 
-    override_provider_runtime(codex_cli_auth_file=auth_file)
+    override_provider_runtime(
+        codex_cli_auth_file=auth_file,
+        codex_cli_binary=sys.executable,
+        codex_code_mode_host_binary=Path(sys.executable),
+        codex_resources_directory=tmp_path,
+    )
     monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
     return calls
 
@@ -178,12 +184,9 @@ def _install_fake_codex_cli(
 def test_cover_job_generates_one_normalized_png_through_isolated_fake_cli(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     factory, audio_dir, job_id = cover_job
     calls = _install_fake_codex_cli(monkeypatch, tmp_path)
-    monkeypatch.setattr(
-        "songmaker_cli.cover_runner.cover_image_provider_method",
-        lambda _session: _codex_cover_dispatch(),
-    )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
 
@@ -203,7 +206,7 @@ def test_cover_job_generates_one_normalized_png_through_isolated_fake_cli(
     assert all("--sandbox" in call["command"] for call in calls)
     assert all("read-only" in call["command"] for call in calls)
     assert all(call["command"] == (
-        "codex", "exec", "--json", "--sandbox", "read-only",
+        sys.executable, "exec", "--json", "--sandbox", "read-only",
         "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules",
         "--ephemeral", "--enable", "code_mode_host", "--disable", "code_mode",
         "--disable", "code_mode_only", "-c", 'approval_policy="never"', "-c", "mcp_servers={}",
@@ -237,18 +240,12 @@ def test_cover_job_generates_one_normalized_png_through_isolated_fake_cli(
 def test_a_saved_codex_model_reaches_the_image_cli_as_its_model_flag(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     factory, audio_dir, job_id = cover_job
     with factory() as session:
         set_cover_settings(session, "codex", "cli", "gpt-5.4")
         session.commit()
     calls = _install_fake_codex_cli(monkeypatch, tmp_path)
-    monkeypatch.setattr(
-        "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: True,
-    )
-    monkeypatch.setattr(
-        "agent_providers.dispatch.codex_cover_image_capability_is_available", lambda: True,
-    )
-
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
 
     with factory() as session:
@@ -302,69 +299,10 @@ def test_cover_job_asks_the_selected_codex_route_to_sign_in(
         assert job.error == JOB_ERROR_COVER_CLI_LOGIN
 
 
-@pytest.mark.parametrize(
-    "mutate",
-    (
-        lambda records: records[3]["item"].update(command="/bin/bash -lc \"id\""),
-        lambda records: records[3]["item"].update(
-            command=records[3]["item"]["command"].replace("SKILL.md", "OTHER.md"),
-        ),
-        lambda records: records[3]["item"].update(
-            command=records[3]["item"]["command"].replace("-lc", "-c"),
-        ),
-        lambda records: records[3]["item"].update(cwd="/outside-the-private-root"),
-        lambda records: records[3]["item"].update(type="file_change"),
-        lambda records: records[3]["item"].update(type="mcp_tool_call"),
-        lambda records: records[3]["item"].update(type="web_search"),
-        lambda records: records[3]["item"].update(type="future_item"),
-    ),
-)
-def test_codex_image_gate_blocks_synthetic_deviations_from_the_real_stream(
-    tmp_path: Path, mutate,
-) -> None:
-    codex_home = tmp_path / "codex-home"
-    codex_home.mkdir()
-    records = _image_event_records(codex_home)
-    mutate(records)
-    event_stream = "\n".join(json.dumps(record) for record in records)
-
-    with pytest.raises(codex_image.ImageToolBlockedError):
-        codex_image._validate_codex_image_events(
-            event_stream, codex_home=codex_home,
-        )
-
-
-def test_codex_image_gate_aborts_and_reaps_as_soon_as_a_blocked_event_arrives(
+def test_codex_image_gate_accepts_the_synthetic_01630_stream_line_by_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    auth_file = tmp_path / "auth.json"
-    auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
-    observed_abort = threading.Event()
-
-    def fake_runner(_command, **kwargs):
-        channel = kwargs["stdout_line_channel"]
-        home = Path(kwargs["extra_env"]["CODEX_HOME"])
-        records = _image_event_records(home)
-        records[3]["item"]["type"] = "web_search"
-        assert channel._send((json.dumps(records[3]) + "\n").encode())
-        if channel._abort_requested.wait(timeout=1):
-            observed_abort.set()
-        result = _outcome(complete=False, reason=CliRunReason.CANCELLED)
-        _reap_fake_codex_process(kwargs)
-        return result
-
-    override_provider_runtime(codex_cli_auth_file=auth_file)
-    monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
-
-    with pytest.raises(codex_image.ImageToolBlockedError):
-        codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
-
-    assert observed_abort.is_set()
-
-
-def test_codex_image_gate_accepts_the_real_stream_line_by_line(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     auth_file = tmp_path / "auth.json"
     auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     channels = []
@@ -376,7 +314,7 @@ def test_codex_image_gate_accepts_the_real_stream_line_by_line(
         artifact = home / "generated_images" / "thread" / "cover.png"
         artifact.parent.mkdir(parents=True)
         artifact.write_bytes(_png_bytes())
-        stream = _image_event_stream(home)
+        stream = _image_event_stream()
         for line in stream.splitlines(keepends=True):
             assert channel._send(line.encode())
         result = _outcome(stdout=stream)
@@ -394,22 +332,45 @@ def test_codex_image_gate_accepts_the_real_stream_line_by_line(
 
 
 @pytest.mark.parametrize(
-    "mutate",
-    (
-        lambda records: records[3]["item"].update(type="collab_agent_tool_call"),
-        lambda records: records[4]["item"].update(exit_code=1),
-        lambda records: records[4]["item"].update(id="other-command"),
-        lambda records: records.insert(5, {
-            "type": "item.started",
-            "item": {**records[3]["item"], "id": "second-command"},
-        }),
-        lambda records: records[3].update(type="item.updated"),
-        lambda records: records[3].update(type="turn.unknown"),
-    ),
+    ("event", "reason"),
+    [
+        pytest.param(
+            {"type": "item.completed", "item": {"type": item_type}},
+            codex_image.ImageToolBlockedReason.BLOCKED_ITEM,
+            id=item_type,
+        )
+        for item_type in (
+            "command_execution", "file_change", "mcp_tool_call", "web_search",
+            "collab_agent_tool_call",
+        )
+    ] + [
+        pytest.param(
+            {"type": "item.started", "item": {
+                "type": "command_execution", "id": "old-skill-read",
+                "command": (
+                    "/bin/bash -lc \"sed -n '1,240p' "
+                    "{CODEX_HOME}/skills/.system/imagegen/SKILL.md\""
+                ),
+            }},
+            codex_image.ImageToolBlockedReason.BLOCKED_ITEM,
+            id="former-skill-read",
+        ),
+        pytest.param(
+            {"type": "item.completed", "item": {"type": "future_item"}},
+            codex_image.ImageToolBlockedReason.UNEXPECTED_ITEM,
+            id="unknown-item",
+        ),
+        pytest.param(
+            {"type": "turn.unknown"},
+            codex_image.ImageToolBlockedReason.UNEXPECTED_EVENT,
+            id="unknown-event",
+        ),
+    ],
 )
 def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutate,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, event: dict, reason,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     auth_file = tmp_path / "auth.json"
     auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     observed_abort = threading.Event()
@@ -417,8 +378,8 @@ def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
     def fake_runner(_command, **kwargs):
         channel = kwargs["stdout_line_channel"]
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
-        records = _image_event_records(home)
-        mutate(records)
+        records = _image_event_records()
+        records.insert(2, json.loads(json.dumps(event).replace("{CODEX_HOME}", str(home))))
         for record in records:
             if not channel._send((json.dumps(record) + "\n").encode()):
                 break
@@ -431,9 +392,10 @@ def test_codex_image_gate_aborts_and_reaps_each_streamed_gate_deviation(
     override_provider_runtime(codex_cli_auth_file=auth_file)
     monkeypatch.setattr(codex_protocol, "run_cli_bounded", fake_runner)
 
-    with pytest.raises(codex_image.ImageToolBlockedError):
+    with pytest.raises(codex_image.ImageToolBlockedError) as raised:
         codex_image.generate_codex_cover_image("prompt", policy=A_COVER_POLICY, deadline=10_000_000)
 
+    assert raised.value.reason == reason
     assert observed_abort.is_set()
 
 
@@ -480,12 +442,9 @@ def test_cover_job_leaves_no_group_for_named_image_failures(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     outcome: CliRunOutcome, expected_error: str,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     factory, audio_dir, job_id = cover_job
     _install_fake_codex_cli(monkeypatch, tmp_path, outcome=outcome)
-    monkeypatch.setattr(
-        "songmaker_cli.cover_runner.cover_image_provider_method",
-        lambda _session: _codex_cover_dispatch(),
-    )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
 
@@ -521,15 +480,12 @@ def test_cover_job_reports_an_unavailable_cli_probe_as_an_image_failure(
 def test_cover_job_names_a_busy_codex_process_pool(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     factory, audio_dir, job_id = cover_job
     process_pool = CodexProcessPool(maximum_processes=1, maximum_image_runs=1)
     process_pool.reserve(CodexProcessKind.IMAGE)
     _install_fake_codex_cli(monkeypatch, tmp_path)
     use_codex_process_pool(monkeypatch, process_pool)
-    monkeypatch.setattr(
-        "songmaker_cli.cover_runner.cover_image_provider_method",
-        lambda _session: _codex_cover_dispatch(),
-    )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
 
@@ -542,15 +498,12 @@ def test_cover_job_names_a_busy_codex_process_pool(
 def test_cover_job_names_a_completed_turn_that_creates_no_image(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     factory, audio_dir, job_id = cover_job
     _install_fake_codex_cli(
         monkeypatch,
         tmp_path,
         creates_artifact=False,
-    )
-    monkeypatch.setattr(
-        "songmaker_cli.cover_runner.cover_image_provider_method",
-        lambda _session: _codex_cover_dispatch(),
     )
 
     asyncio.run(run_cover_suggestion_job(job_id, db_factory=factory, audio_dir=audio_dir))
@@ -559,12 +512,16 @@ def test_cover_job_names_a_completed_turn_that_creates_no_image(
         job = session.get(Job, job_id)
         assert job.status == JobStatus.FAILED
         assert job.error == JOB_ERROR_COVER_IMAGE_NOT_CREATED
+        assert job.error == "Codex did not create a cover image. Try generating the cover again."
+        assert "Image tool blocked" not in job.error
+        assert "administrator" not in job.error
         assert not job.album.cover_suggestions
 
 
 def test_codex_image_ignores_non_generated_png_assets(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     auth_file = tmp_path / "auth.json"
     auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
 
@@ -576,7 +533,7 @@ def test_codex_image_ignores_non_generated_png_assets(
         bundled_asset = home / "skills" / "imagegen" / "assets" / "guide.png"
         bundled_asset.parent.mkdir(parents=True)
         bundled_asset.write_bytes(_png_bytes())
-        result = _outcome(stdout=_image_event_stream(home))
+        result = _outcome(stdout=_image_event_stream())
         _reap_fake_codex_process(kwargs)
         return result
 
@@ -591,6 +548,7 @@ def test_codex_image_ignores_non_generated_png_assets(
 def test_codex_image_rejects_an_artifact_outside_its_private_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     auth_file = tmp_path / "auth.json"
     auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     outside = tmp_path / "outside.png"
@@ -599,7 +557,7 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
 
     def fake_runner(_command, **kwargs):
         homes.append(Path(kwargs["extra_env"]["CODEX_HOME"]))
-        result = _outcome(stdout=_image_event_stream(homes[-1]))
+        result = _outcome(stdout=_image_event_stream())
         _reap_fake_codex_process(kwargs)
         return result
 
@@ -617,6 +575,7 @@ def test_codex_image_rejects_an_artifact_outside_its_private_home(
 def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#1471: verify the v0.1.3 cover integration contract."""
     auth_file = tmp_path / "auth.json"
     auth_file.write_text(json.dumps(_REDACTED_CODEX_LOGIN))
     outside = tmp_path / "outside"
@@ -628,7 +587,7 @@ def test_codex_image_rejects_a_generated_images_symlink_outside_its_private_home
         home = Path(kwargs["extra_env"]["CODEX_HOME"])
         homes.append(home)
         (home / "generated_images").symlink_to(outside, target_is_directory=True)
-        result = _outcome(stdout=_image_event_stream(home))
+        result = _outcome(stdout=_image_event_stream())
         _reap_fake_codex_process(kwargs)
         return result
 

@@ -11,7 +11,7 @@ songmaker's decision, built in `request_policies.py`.
 The provider layer is likewise not in this repository. `agent_providers` ships
 as the distribution `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers),
-pinned bare in the `server` extra to the release wheel of tag `v0.1.2` and
+pinned bare in the `server` extra to the release wheel of tag `v0.1.3` and
 hash-locked in `uv.lock` (#886). Module names below such as
 `agent_providers.claude.provider` are its import paths; the runtime values it
 runs on — binaries, credential mirrors, secret-scrub list, the sandbox
@@ -927,14 +927,21 @@ admin-stored cover model, appended as `--model <slug>` when that setting is
 not empty. Each run creates a private
 `0700` root whose `codex-home/` and `work/` directories are separate `0700`
 siblings; the home contains only the redacted `auth.json` mirror (`0600`) and
-the process cwd is the resolved `work/` path. The streamed event gate permits
-`image_gen` and exactly one measured bootstrap pair: matching
-`item.started`/`item.completed` `command_execution` events with the same ID,
-the `sed -n '1,240p' CODEX_HOME/skills/.system/imagegen/SKILL.md` command,
-that cwd in both events, and completed exit code 0. Any other command, cwd,
-file change, MCP call, web search, collaboration or unknown event requests
-abort and is reported as `ImageToolBlockedError`; the process is reaped before
-the route returns. Every Co-Writer tool-loop round keeps Code Mode disabled.
+the process cwd is the resolved `work/` path. The streamed event gate admits a
+completed turn without requiring a command or an `image_gen` event. No command is admitted, including the former
+skill-read command. The measured Codex CLI 0.163.0 turn produced one PNG
+without reporting either a command or an `image_gen` event. Reported blocked
+items (including commands, file changes, MCP calls, web searches and
+collaboration) and unknown event or item types request abort and are reported
+as `ImageToolBlockedError`; the process is reaped before the route returns.
+
+The gate sees only what the CLI reports. This measurement does not establish
+whether other tools using the invisible path would be reported. The PNG is
+associated with the turn through its private `CODEX_HOME` location and
+normalization under the host `ImagePolicy`. The gate is defense in depth;
+containment rests on the Codex read-only sandbox and songmaker's AppArmor and
+seccomp profiles. Fixture replay proves event handling, not live containment.
+Every Co-Writer tool-loop round keeps Code Mode disabled.
 
 Claude creates `~/.claude.json` itself, so it is neither seeded nor mounted.
 Every bind uses Compose long syntax, `read_only: true`, and
