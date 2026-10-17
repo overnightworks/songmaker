@@ -12,6 +12,7 @@ import {
 	playlistRoutePath,
 	readLegacySongQuery,
 	songRoutePath,
+	standsOnHomePage,
 	standsOnLibraryPage,
 	standsOnPlaylistsPage,
 	takeRoutePath
@@ -60,6 +61,12 @@ describe('library route addresses', () => {
 	});
 
 	it.each([
+		...['/', '/library', '/playlists', '/album/anfield', '/settings'].map((pathname) => ({
+			page: 'Home',
+			stands: standsOnHomePage,
+			pathname,
+			expected: pathname === HOME_ROUTE_PATH
+		})),
 		{ page: 'Library', stands: standsOnLibraryPage, pathname: LIBRARY_ROUTE_PATH, expected: true },
 		{ page: 'Library', stands: standsOnLibraryPage, pathname: '/library/', expected: false },
 		{ page: 'Library', stands: standsOnLibraryPage, pathname: HOME_ROUTE_PATH, expected: false },
