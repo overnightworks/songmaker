@@ -21,6 +21,7 @@
 	const presentation = $derived($generateAction);
 	const reconnecting = $derived(isGenerateJobActive(presentation) && presentation.reconnecting);
 	const cancelUnreachable = $derived(isGenerateJobActive(presentation) && presentation.offline);
+	const indeterminate = $derived(presentation.kind === 'generating' && presentation.indeterminate);
 	const percent = $derived(presentation.kind === 'generating' ? presentation.progress : 0);
 	const statusLineText = $derived.by(() => {
 		if (presentation.kind !== 'generating') return null;
@@ -34,7 +35,13 @@
 		<div class="status-head">
 			<span class="status-title">
 				v{latestVersionNumber} ·
-				<b>{presentation.kind === 'queued' ? presentation.label : presentation.phase}</b>
+				<b
+					>{presentation.kind === 'queued'
+						? presentation.label
+						: presentation.phase}{#if presentation.kind === 'generating' && presentation.elapsedLabel}<span
+							class="elapsed">{presentation.elapsedLabel}</span
+						>{/if}</b
+				>
 			</span>
 			{#if offersCancel(presentation)}
 				<button
@@ -58,11 +65,14 @@
 			class="bar"
 			role="progressbar"
 			aria-label={reconnecting ? EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL : undefined}
-			aria-valuenow={percent}
+			aria-valuenow={indeterminate ? undefined : percent}
+			aria-valuetext={indeterminate && presentation.kind === 'generating'
+				? presentation.phase
+				: undefined}
 			aria-valuemin={0}
 			aria-valuemax={100}
 		>
-			<span style:width={`${percent}%`}></span>
+			<span class:indeterminate style:width={indeterminate ? undefined : `${percent}%`}></span>
 		</div>
 		{#if statusLineText}
 			<p class="status-line">{statusLineText}</p>
@@ -99,6 +109,12 @@
 		font-family: var(--font-display);
 		letter-spacing: 0.4px;
 		font-size: var(--btn-font-size-sm);
+		color: var(--text-muted);
+	}
+
+	.elapsed {
+		margin-left: 0.3rem;
+		font-variant-numeric: tabular-nums;
 		color: var(--text-muted);
 	}
 
@@ -159,5 +175,36 @@
 	.icon-button.unreachable {
 		color: var(--text-disabled);
 		cursor: default;
+	}
+	.bar span.indeterminate {
+		width: 35%;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			color-mix(in srgb, var(--score-ok) 100%, transparent),
+			transparent
+		);
+		transform: translateX(95%);
+		animation: stage-sweep 2.6s ease-in-out infinite;
+	}
+
+	@keyframes stage-sweep {
+		from {
+			transform: translateX(-100%);
+		}
+		to {
+			transform: translateX(290%);
+		}
+	}
+
+	.reconnecting .bar span.indeterminate {
+		animation: none;
+		background: color-mix(in srgb, var(--text-disabled) 20%, transparent);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.bar span.indeterminate {
+			animation: none;
+		}
 	}
 </style>
