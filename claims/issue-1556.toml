@@ -1,0 +1,8 @@
+claim_id = "78390c2af8ca48f9aa1bdf5e21cdea7c"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "79e2c6ef5d158fd95d45eebc5b42f56ce46afe88"
+branch = "claude/issue-1556-place-labels"
+scope = ["frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/playlist-address.spec.ts", "frontend/e2e/playlist-cover-rail.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/stores/railSearch.ts"]
+opened_commit = "9df0cb1d157eeafb9b5b0c934f95006e591ca5d4"
+whole_reason = "one constant per place name: the constant, its nine production importers and its e2e locators move together or the build breaks"
