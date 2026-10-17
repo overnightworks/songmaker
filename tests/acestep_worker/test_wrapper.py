@@ -1306,6 +1306,7 @@ def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
 
 
 _TRAINING_HOLD_TOKEN = "training-hold-token"
+_HANG_GUARD_SECONDS = 5
 
 
 @dataclass
@@ -1325,6 +1326,25 @@ class _ChildStoppingUntilCancelledAgain:
             self.ended.set()
 
 
+@dataclass
+class _ChildIgnoringCancelsUntilReleased:
+    started: asyncio.Event = field(default_factory=asyncio.Event)
+    release: asyncio.Event = field(default_factory=asyncio.Event)
+    cancels: asyncio.Queue[None] = field(default_factory=asyncio.Queue)
+    ended: asyncio.Event = field(default_factory=asyncio.Event)
+
+    async def __call__(self, *_args: object, **_kwargs: object) -> None:
+        self.started.set()
+        try:
+            while not self.release.is_set():
+                try:
+                    await self.release.wait()
+                except asyncio.CancelledError:
+                    self.cancels.put_nowait(None)
+        finally:
+            self.ended.set()
+
+
 async def _training_finished_at_once(*_args: object, **_kwargs: object) -> None:
     return None
 
@@ -1338,6 +1358,13 @@ class _TrainingOwner:
     deps: WorkerDeps
     renew_task: asyncio.Task[None]
     task: asyncio.Task[None]
+
+    async def still_holds_everything(self) -> None:
+        assert not self.task.done()
+        assert await self.deps.redis.get(gpu_hold_key(self.deps.worker_id)) is not None
+        assert self.deps.cache.in_use_count("sft") == 1
+        assert _TRAINING_HOLD_TOKEN in self.deps.gpu_hold_handover_tokens
+        assert not self.renew_task.done()
 
     async def ends_cancelled_with_everything_released(self) -> None:
         with pytest.raises(asyncio.CancelledError):
@@ -1385,6 +1412,31 @@ def test_training_owner_cancelled_again_while_training_stops_releases_everything
         assert training.ended.is_set()
 
     _run(go())
+
+
+@pytest.mark.parametrize("owner_cancels", [2, 3, 5])
+def test_training_owner_cancelled_repeatedly_keeps_everything_until_training_has_ended(
+    tmp_path: Path,
+    owner_cancels: int,
+) -> None:
+    """defect:#1509 -- a third cancel released the hold and the cache while training still ran."""
+
+    async def go() -> None:
+        training = _ChildIgnoringCancelsUntilReleased()
+        owner = await _start_training_owner(tmp_path, training, _renewing_the_training_hold)
+        await training.started.wait()
+        try:
+            for _ in range(owner_cancels):
+                owner.task.cancel()
+                await training.cancels.get()
+            await owner.still_holds_everything()
+            assert not training.ended.is_set()
+        finally:
+            training.release.set()
+        await owner.ends_cancelled_with_everything_released()
+        assert training.ended.is_set()
+
+    _run(asyncio.wait_for(go(), _HANG_GUARD_SECONDS))
 
 
 def test_training_owner_cancelled_while_cleanup_waits_for_renewal_releases_everything(
