@@ -1,5 +1,5 @@
 import { writable, derived, get, readonly } from 'svelte/store';
-import { ApiError, describeFailure, handleSessionLost, NetworkError } from '$lib/api/fetch';
+import { ApiError, describeFailure, NetworkError } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
@@ -51,6 +51,7 @@ import {
 	songList,
 	upsertSongInList
 } from '$lib/stores/libraryData';
+import { handleSessionLost } from '$lib/stores/auth';
 import { addToast } from '$lib/stores/toast';
 import { offline, whenBackOnline } from '$lib/stores/connectivity';
 import {

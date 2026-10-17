@@ -9,6 +9,7 @@ import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-util
 import {
 	historyStandsStill,
 	pushEntry,
+	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
 } from '$lib/history/historyController';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -33,13 +34,14 @@ import {
 	SEARCH_SHEET_LABEL,
 	backLabel
 } from '$lib/components/PhoneAppBar.svelte';
-import { apiFetch, handleSessionLost } from '$lib/api/fetch';
+import { apiFetch } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
 	currentUser,
 	authLoading,
 	authCheckError,
+	handleSessionLost,
 	resetAuthForTests
 } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -1240,6 +1242,63 @@ describe('a 429 under the mounted layout', () => {
 		await aThrottledRead();
 
 		expect(throttleToasts()).toHaveLength(0);
+	});
+});
+
+// The transport only reports a 401; this layout installs the reaction that
+// ends the session (`handleSessionLost`, in stores/auth.ts), and takes it away
+// again.
+describe('a 401 under the mounted layout', () => {
+	const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+
+	function aRefusedRead() {
+		return apiFetch('/api/songs').catch(() => undefined);
+	}
+
+	beforeEach(() => {
+		resetHistoryControllerForTests();
+		onTestFinished(resetHistoryControllerForTests);
+		standInForDocumentLoadsForTests(documentLoads);
+		for (const load of Object.values(documentLoads)) load.mockReset();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () => new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 })
+			)
+		);
+	});
+
+	it('925_M3_L1: a request sent while the layout mounts already reaches the session-lost reaction', async () => {
+		let sentWhileMounting: Promise<unknown> = Promise.resolve();
+		const sendsARequestWhenMounted = createRawSnippet(() => ({
+			render: () => '<main></main>',
+			setup: () => {
+				sentWhileMounting = aRefusedRead();
+			}
+		}));
+
+		await renderLayout(LIBRARY_ROUTE_PATH, sendsARequestWhenMounted);
+		await sentWhileMounting;
+
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
+	});
+
+	it('925_M3_L3: a 401 on an ordinary request with a user signed in loads the page afresh once', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+
+		await Promise.all([aRefusedRead(), aRefusedRead()]);
+
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
+	});
+
+	it('925_M3_L4: after the layout unmounts, a 401 loads nothing', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+		await unmountCurrentLayout();
+		currentUser.set(USER);
+
+		await aRefusedRead();
+
+		expect(documentLoads.reload).not.toHaveBeenCalled();
 	});
 });
 

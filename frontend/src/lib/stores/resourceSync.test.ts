@@ -1,35 +1,13 @@
 import { makeGeneration as gen, makeSong as song } from '$lib/test-utils/factories';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
-const mockClassifyAuthFailure = vi.hoisted(() => vi.fn());
-
-vi.mock('$lib/stores/auth', () => {
-	let user: { id: string } | null = null;
-	const subscribers = new Set<(value: typeof user) => void>();
-	const currentUser = {
-		subscribe(fn: (value: typeof user) => void) {
-			fn(user);
-			subscribers.add(fn);
-			return () => subscribers.delete(fn);
-		},
-		set(value: typeof user) {
-			user = value;
-			subscribers.forEach((fn) => fn(user));
-		}
-	};
-	return {
-		classifyAuthFailure: mockClassifyAuthFailure,
-		currentUser,
-		hasSessionToLose: () => user !== null
-	};
-});
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { currentUser } from '$lib/stores/auth';
+import { ApiError, installRefusalReactions, NetworkError } from '$lib/api/fetch';
+import { currentUser, handleSessionLost, resetAuthForTests } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
 import {
 	reloadAfresh,
@@ -46,7 +24,6 @@ import {
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
-	SERVER_UNREACHABLE_STATUSES,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
@@ -260,20 +237,13 @@ function latestSource(sources: MockEventSource[]): MockEventSource {
 
 beforeEach(() => {
 	MockEventSource.instances = [];
-	mockClassifyAuthFailure.mockReset();
-	mockClassifyAuthFailure.mockImplementation((error: { status?: number }) => {
-		if (error.status === 401) return 'unauthorized';
-		if (error.status === 403) return 'disabled';
-		if (error instanceof NetworkError || SERVER_UNREACHABLE_STATUSES.has(error.status ?? 0)) {
-			return 'unreachable';
-		}
-		return 'retryable';
-	});
 });
 
 afterEach(() => {
 	resetResourceSyncForTests();
 	resetHistoryControllerForTests();
+	currentUser.set(null);
+	resetAuthForTests();
 	selectedSongId.set(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
@@ -2048,28 +2018,63 @@ describe('library resource sync wiring', () => {
 		}
 	);
 
-	it('routes a 401 on its auth probe through the one shared session-lost reaction', async () => {
-		const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
-		standInForDocumentLoadsForTests(documentLoads);
-		vi.stubGlobal('EventSource', MockEventSource);
-		vi.stubGlobal(
-			'fetch',
-			vi.fn().mockResolvedValue({
-				ok: false,
-				status: 401,
-				headers: { get: () => null },
-				json: () => Promise.resolve({ detail: 'Not authenticated' })
-			})
-		);
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+	// The two rows separate the sources of the one load. Forwarding shows the
+	// transport's hand-off loading before the sync error; with the transport
+	// only recording, resource sync's own onUnauthorized is the only path to a
+	// load, and it comes after the error is on screen.
+	it.each([
+		{
+			transport: 'forwards it to auth',
+			forwardsToAuth: true,
+			happenings: ['document load', 'sync error']
+		},
+		{
+			transport: 'only records it',
+			forwardsToAuth: false,
+			happenings: ['sync error', 'document load']
+		}
+	])(
+		'925_M3_S8: a 401 on the resource stream auth probe loads afresh once when the transport $transport',
+		async ({ forwardsToAuth, happenings }) => {
+			const happened: string[] = [];
+			const told: string[] = [];
+			onTestFinished(
+				installRefusalReactions({
+					rateLimited: () => undefined,
+					sessionLost: () => {
+						told.push('transport');
+						return forwardsToAuth ? handleSessionLost() : Promise.resolve();
+					}
+				})
+			);
+			standInForDocumentLoadsForTests({
+				assign: vi.fn(),
+				replace: vi.fn(),
+				reload: () => void happened.push('document load')
+			});
+			onTestFinished(
+				resourceSync.subscribe((state) => {
+					if (state.error === RESOURCE_SYNC_ERROR) happened.push('sync error');
+				})
+			);
+			vi.stubGlobal('EventSource', MockEventSource);
+			vi.stubGlobal(
+				'fetch',
+				vi.fn().mockResolvedValue({
+					ok: false,
+					status: 401,
+					headers: { get: () => null },
+					json: () => Promise.resolve({ detail: 'Not authenticated' })
+				})
+			);
+			currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 
-		startLibraryResourceSync();
-		MockEventSource.instances[0].error();
-		// Deeper chain than elsewhere here (a real apiFetch round trip plus
-		// two dynamic imports), so one flush() isn't always enough ticks.
-		await flush();
-		await flush();
+			startLibraryResourceSync();
+			MockEventSource.instances[0].error();
+			await vi.waitFor(() => expect(happened).toContain('sync error'));
+			await flush();
 
-		expect(documentLoads.reload).toHaveBeenCalledOnce();
-	});
+			expect({ told, happened }).toEqual({ told: ['transport'], happened: happenings });
+		}
+	);
 });
