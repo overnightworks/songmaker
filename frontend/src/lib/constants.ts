@@ -527,12 +527,12 @@ export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
 export function wallHeadingLabel(pageLabel: string, count: number): string {
 	return `${pageLabel} · ${count}`;
 }
-export const LIBRARY_WALL_EMPTY = 'No albums yet. + New makes one.';
+export const LIBRARY_WALL_EMPTY = 'No albums yet. + New on Home makes one.';
 // The Playlists page (#1402): its head, which search names it by too, and the
 // count beside it, read as one heading ('Playlists · 3').
 export const PLAYLISTS_PAGE_LABEL = 'Playlists';
 export const PLAYLISTS_WALL_ORDER_GROUP_LABEL = 'Sort playlists';
-export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New makes one.';
+export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New on Home makes one.';
 export const LIBRARY_NEW_FACE = 'New';
 export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
