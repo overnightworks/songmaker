@@ -69,10 +69,6 @@ vi.mock('$lib/services/mediaSession', async (importOriginal) => {
 		}
 	};
 });
-vi.mock('$lib/api/fetch', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/fetch')>();
-	return { ...actual, handleSessionLost: vi.fn() };
-});
 vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
 	createLibraryQueueStreamSnapshot: vi.fn(),
@@ -158,8 +154,13 @@ import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
 import { fromSharedSong, type SharedCollectionView } from '$lib/share/sharedCollection';
 import { currentUser } from '$lib/stores/auth';
+import {
+	resetHistoryControllerForTests,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
+import { documentLoads } from '$lib/test-utils/document-loads';
 import type { ResumeQueueSource } from '$lib/stores/playbackResume';
-import { ApiError, handleSessionLost, NetworkError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	libraryTakePool,
@@ -4430,13 +4431,20 @@ describe('Now Playing surface', () => {
 });
 
 describe('audioPlayer onAuthLost wiring', () => {
-	it('hands a lost stream/media session to the one shared session-lost reaction', async () => {
+	it("925_M3_S7: hands a lost stream/media session to auth's reaction, which loads afresh once for a signed-in user", async () => {
 		const onAuthLost = audioPlayer.currentCallbacks.onAuthLost;
 		if (!onAuthLost) throw new Error('onAuthLost is not assigned');
+		onTestFinished(() => {
+			currentUser.set(null);
+			resetHistoryControllerForTests();
+		});
+		standInForDocumentLoadsForTests(documentLoads);
+		documentLoads.reload.mockClear();
+		currentUser.set({ id: 'u-signed-in', username: 'listener', role: 'user' });
 
 		await onAuthLost();
 
-		expect(handleSessionLost).toHaveBeenCalledOnce();
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 });
 

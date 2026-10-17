@@ -11,11 +11,16 @@ import { UserFacingError } from './userFacingError';
 const API_TIMEOUT_MS = 30_000;
 
 interface RefusalReactions {
+	/** A 401 outside the sign-in forms; the request rejects only once this has settled. */
+	sessionLost: () => Promise<void>;
 	/** A 429; whether the person hears of it is the reaction's to decide. */
 	rateLimited: (path: string) => void;
 }
 
-const NO_REACTIONS: RefusalReactions = { rateLimited: () => undefined };
+const NO_REACTIONS: RefusalReactions = {
+	sessionLost: () => Promise.resolve(),
+	rateLimited: () => undefined
+};
 let installedReactions = NO_REACTIONS;
 
 /**
@@ -214,43 +219,6 @@ export function signInReturnPath(signInPage: URL): string {
 	return requested === null ? SAFE_INTERNAL_PATH_FALLBACK : safeInternalPath(requested);
 }
 
-// The one reaction to "the session is gone" (issue #385). player.ts's
-// stream/media probe and resourceSync.ts's SSE-drop probe detect a lost
-// session a way apiFetch never sees, so they call this instead of
-// redirecting on their own.
-let sessionLostRun: Promise<void> | null = null;
-
-export function handleSessionLost(): Promise<void> {
-	if (!sessionLostRun) {
-		sessionLostRun = reactToSessionLost().finally(() => {
-			sessionLostRun = null;
-		});
-	}
-	return sessionLostRun;
-}
-
-// No-ops when there is no session to lose (`hasSessionToLose`): the first
-// load, a second caller that lost the in-flight race above, or a deliberate
-// sign-out under way, which leaves for sign-in itself. This leaves
-// +layout.svelte's own /login-vs-/setup routing, or the sign-out, to decide
-// instead of forcing a redirect that could race it.
-//
-// A lost session loads the address history stands on afresh once history has
-// come to rest -- the album a tap in the drawer opened, whichever of its
-// requests the server refused first -- so nothing of the signed-in page stays
-// in memory (#1340, ruling A). That load asks for the session as every load
-// does: the server's answer sends it to sign-in, carrying the address back,
-// and says whether the session expired (#1215). Over an open overlay's entry
-// the load replaces it, so nothing steps back on the way (#1230).
-async function reactToSessionLost(): Promise<void> {
-	const [{ hasSessionToLose }, { reloadAfresh }] = await Promise.all([
-		import('$lib/stores/auth'),
-		import('$lib/history/historyController')
-	]);
-	if (!hasSessionToLose()) return;
-	await reloadAfresh();
-}
-
 function abortOnCallerOrTimeout(
 	callerSignal: AbortSignal | null | undefined,
 	timeoutSignal: AbortSignal
@@ -272,7 +240,7 @@ async function throwForFailedResponse(response: Response, path: string): Promise
 	if (response.ok) return;
 	const { detail, responseDetail } = await readErrorDetail(response);
 	if (response.status === RATE_LIMITED_STATUS) installedReactions.rateLimited(path);
-	if (isSessionLostResponse(response.status, path)) await handleSessionLost();
+	if (isSessionLostResponse(response.status, path)) await installedReactions.sessionLost();
 	throw new ApiError(
 		response.status,
 		detail,

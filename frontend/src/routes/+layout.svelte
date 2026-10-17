@@ -21,6 +21,7 @@
 		authLoading,
 		authCheckError,
 		authCheckUnreachable,
+		handleSessionLost,
 		logout
 	} from '$lib/stores/auth';
 	import {
@@ -72,7 +73,9 @@
 	// Installed while the component initialises -- before any child exists and
 	// before the first request, which `initAuth`'s effect sends -- so no refusal
 	// reaches the transport while nothing is listening.
-	onDestroy(installRefusalReactions({ rateLimited: notifyRateLimited }));
+	onDestroy(
+		installRefusalReactions({ sessionLost: handleSessionLost, rateLimited: notifyRateLimited })
+	);
 
 	let { children } = $props();
 
