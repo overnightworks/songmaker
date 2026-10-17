@@ -42,6 +42,7 @@ import {
 	regainNetwork,
 	scrollWallHalfway,
 	shellOf,
+	waitForServiceWorkerControl,
 	wallBody,
 	workspace,
 	type Shell
@@ -661,12 +662,7 @@ test(
 		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		await page.goto(HOME_PATH);
 		await expectHomeShown(page);
-		// Each page's route code loads when it is first shown, so a session that
-		// "had loaded" both pages has used both before the network goes.
-		await openLibraryWall(page, 'desktop');
-		await expectWallShown(page);
-		await openHome(page, 'desktop');
-		await expectHomeShown(page);
+		await waitForServiceWorkerControl(page);
 		await loseNetwork(page, context);
 
 		await openHome(page, 'desktop');

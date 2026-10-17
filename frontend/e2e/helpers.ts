@@ -271,6 +271,19 @@ export async function loseNetwork(
 	if (!keepOpenStreams) await page.evaluate(() => window.stop());
 }
 
+/**
+ * Waits until the service worker has installed and controls the page, so that
+ * what it precached (the route code of every address) answers once the
+ * network is cut. A cut inside the install window, the first seconds after a
+ * first-ever load, is owned by #1160.
+ */
+export async function waitForServiceWorkerControl(page: Page): Promise<void> {
+	await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+	await expect
+		.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
+		.toBe(true);
+}
+
 /** Gives the page its network back: the browser reports online and the stream may reopen. */
 export async function regainNetwork(page: Page, context: BrowserContext): Promise<void> {
 	await page.unroute(isResourceEventStream);
