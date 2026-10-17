@@ -3,6 +3,6 @@ agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
 role = "builder"
 base = "79e2c6ef5d158fd95d45eebc5b42f56ce46afe88"
 branch = "claude/issue-1557-write-data"
-scope = ["frontend/src/lib/api/library.test.ts", "frontend/src/lib/api/library.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/libraryWrite.test.ts", "frontend/src/lib/stores/libraryWrite.ts"]
+scope = ["frontend/src/lib/api/library.test.ts", "frontend/src/lib/api/library.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/libraryWrite.test.ts", "frontend/src/lib/stores/libraryWrite.ts", "scripts/dead-exports.allow"]
 opened_commit = "aeb6ab7df27d2aa683f10f1aae97d095b3a6704e"
 whole_reason = "Write reader, its store and the libraryData seam move together: the seam notifies the store the reader feeds"
