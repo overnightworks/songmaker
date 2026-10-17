@@ -6,7 +6,7 @@ Since #258, every newly generated take stores its measured audio length in
 ``NULL`` there, so playlist views and the public share pages (album, song,
 generation, playlist) show no duration for them at all. This script measures
 the MP3 header of every such take and fills the column, reusing
-``queue_streams.read_audio_duration()`` — the same probe the live app already
+``audio_files.read_audio_duration()`` — the same probe the live app already
 uses on a generation GET.
 
 Modes:
@@ -56,7 +56,7 @@ from sqlalchemy.orm import Session
 
 prepend_own_checkout_src(__file__)
 
-from songmaker_cli import queue_streams
+from songmaker_cli import audio_files
 from songmaker_cli.config import find_project_root
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.models import Generation
@@ -106,7 +106,7 @@ def run_backfill(session: Session, audio_dir: Path, *, apply: bool) -> BackfillR
     filled = 0
     missing_or_unreadable = 0
     for index, generation in enumerate(candidates, start=1):
-        duration = queue_streams.read_audio_duration(audio_dir / generation.mp3_path)
+        duration = audio_files.read_audio_duration(audio_dir / generation.mp3_path)
         if duration is None:
             missing_or_unreadable += 1
             log.warning("Could not measure audio duration for %s", generation.mp3_path)
