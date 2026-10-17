@@ -1,0 +1,8 @@
+claim_id = "ccc4777b43d9487db645901e22efb877"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "43dcfa8245c75390a67a901735934821eb58ab55"
+branch = "claude/issue-1573-models-list"
+scope = ["docs/acestep.md", "frontend/src/lib/components/WorkerModelsList.svelte", "frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/lib/components/WorkerPoolPanel.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "2501270c97203fe255d0c5ba1df22b843a403937"
+whole_reason = "the models list component, its mount in the worker card, its labels, its docs words and the card test move together"
