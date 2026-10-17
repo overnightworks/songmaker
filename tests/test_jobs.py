@@ -18,6 +18,7 @@ from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
+from songmaker_cli import audio_files
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
@@ -555,18 +556,16 @@ def test_generation_job_persists_the_takes_own_measured_duration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A completed generation carries its measured length (#258) -- driven
+    """defect:#258 -- A completed generation carries its measured length (#258) -- driven
     through the real job-completion path (run_generation_job), not by
     calling create_generation() with audio_dir directly."""
-    import songmaker_cli.queue_streams as qs
-
     probed: list[Path] = []
 
     def _read(path: Path) -> float:
         probed.append(path)
         return 188.0
 
-    monkeypatch.setattr(qs, "read_audio_duration", _read)
+    monkeypatch.setattr(audio_files, "read_audio_duration", _read)
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
     with dispatch, post_process, defaults:

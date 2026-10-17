@@ -1215,6 +1215,8 @@ modules to it in both directions, so a constant cannot quietly change sides.
 
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `agent_providers` and `webauth` are now installed distributions rather than directories under `src/`, and their own boundaries are contracted in their repositories; because `include_external_packages` is on, `.importlinter` still resolves them in songmaker's real import graph. CI's `lint-imports` step breaks the build on a violation, reading that graph rather than grepping the package directories.
 
+Persistence sits beneath the HTTP contract: `db/` never imports `api_models/`, directly or through another in-tree module. The value objects both use — generation knobs (`generation_params.py`) and Whisper time marks (`whisper_cues.py`) — live beside them in `songmaker_cli/`; `api_models` re-exports them because `scripts/generate_types.py` reads its `__all__`. `.importlinter` enforces the direction (#925 G1).
+
 ## Data Model
 
 ```
