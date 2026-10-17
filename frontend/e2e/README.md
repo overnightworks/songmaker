@@ -240,24 +240,21 @@ API class — fail closed, not fail open), the CI
 workflow's own `/health`/login smoke test before Playwright even starts,
 anything seeded through Playwright's `request` API context (global setup's
 library, each attempt's playlist), and a retry re-running a whole flow inside
-the same window. What the rate limiter actually counts is measured the same
-way `docker/docker-compose.ci.yml`'s own `IP_RATE_LIMIT` comment measures it: from
+the same window. What the rate limiter actually counts is measured from
 `docker compose logs songmaker-web`'s access log, filtered to the runner's
-one IP and to the API class. One full local run of the whole suite (the CI
-workflow's smoke-test curls plus both Playwright projects) measured 288 such
-requests, finishing in about 35 seconds — so the 60-second window's peak is
-that same 288 — comfortably under the CI stack's `IP_RATE_LIMIT: "2000"`
-override (`docker/docker-compose.ci.yml`), which carries several times the headroom
-that measurement needs, including room for one CI retry landing inside the
-same window. That 288 has not been re-measured since `admin-models.spec.ts`
-and `auth-flows.spec.ts` were added -- and the second of those also brings
-document navigations of its own, since its flows reload the tab and reopen the
-app rather than staying inside one SPA session -- and the sum above is not a
-substitute for it: when it matters,
-measure it from the access log the same way rather than trusting the total. Re-running the suite repeatedly against the same stack inside that
-window is cumulative, not reset per run — see "Running it locally" below. If
-this suite gains more specs, re-measure the same way rather than trusting
-the `FlowGuard` sum — that gap between the two is exactly what let #344
+one IP and to the API class by the same rate-limit policy the server uses
+(`scripts/e2e_rate_window.py`). The E2E workflow's "Busiest API rate-limit
+window" step prints that busiest 60-second window after every Playwright run,
+counting setup, cleanup, retries and browser traffic, so the figure cannot go
+stale. The CI stack's `IP_RATE_LIMIT: "8000"` override
+(`docker/docker-compose.ci.yml`) is kept at least three times above that
+peak, with room for one CI retry landing inside the same window (#1555). A
+request the limiter refused never reaches the access log, so on a run that
+hit 429 the printed peak is only a lower bound. Re-running the suite
+repeatedly against the same stack inside that window is cumulative, not reset
+per run — see "Running it locally" below. If this suite gains more specs,
+check the printed peak against the override rather than trusting the
+`FlowGuard` sum — that gap between the two is exactly what let #344
 through.
 
 Opening a track from an open album address is still a route-file crossing
@@ -341,7 +338,7 @@ cd .. && docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml do
 ```
 
 Re-running against the same stack repeatedly will trip the app's IP rate limit
-— `IP_RATE_LIMIT: "2000"` per 60-second window under this CI recipe (see the
+— `IP_RATE_LIMIT: "8000"` per 60-second window under this CI recipe (see the
 budget note above; the production default is 120) — and the flow will report
 429s — that is the guard working, not a flaky test. Wait out the window or
 reset the stack; a fresh run right after a previous one still counts against

@@ -1004,6 +1004,10 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 			name: nameStartingWith(RAIL_LIBRARY_LABEL)
 		});
 		const settingsToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
+		// defect:#1555: the album rows above left the rail scrolled wherever
+		// they were judged, and desktop openRailNav does not reset it, so this
+		// promise sets its own starting position at the top of the Library list.
+		await libraryGroupTitle.scrollIntoViewIfNeeded();
 		await expect(libraryGroupTitle).toBeInViewport();
 		await expect(settingsToggle).toBeInViewport();
 
