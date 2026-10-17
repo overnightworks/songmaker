@@ -8,10 +8,10 @@ import threading
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import TextAccuracyScore
 from songmaker_cli.scoring.pipeline import AudioData, PipelineConfig, register
+from songmaker_cli.whisper_cues import WhisperCue, WhisperWordCue
 
 log = logging.getLogger(__name__)
 

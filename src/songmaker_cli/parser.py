@@ -6,8 +6,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
-from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.constants import DEFAULT_ARTIST
+from songmaker_cli.generation_params import BaseGenerationParams
 
 
 class SongMeta(BaseModel):

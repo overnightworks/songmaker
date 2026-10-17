@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
 from songmaker_cli.acestep_capabilities import ACESTEP_PROFILES
-from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.queries.settings import get_global_defaults, save_global_defaults
 from songmaker_cli.errors import ValidationError
+from songmaker_cli.generation_params import BaseGenerationParams
 
 log = logging.getLogger(__name__)
 
