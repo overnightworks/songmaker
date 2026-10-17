@@ -442,6 +442,8 @@ def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> 
             assert (await build_state_payload(deps))["last_error"] is None
             response = await client.post("/load_model", json={"mode": "sft"})
         assert response.status_code == status
+        if status == 502:
+            assert response.json()["detail"] == "ACE-Step did not become healthy\nloading shard 2/4"
         await deps.heartbeat.publish_once()
         state = await read_worker_state(redis, deps.worker_id)
         assert state["last_error"] == response.json()["detail"]
@@ -460,59 +462,57 @@ def test_last_error_survives_success_and_is_replaced(tmp_path: Path, success: st
 
     deps, redis = _make_deps(tmp_path)
     successful_runner = deps.generate_runner
-    failure = "ACE-Step failed\noriginal worker detail"
-    completed = asyncio.Event()
 
-    async def runner(store, task_id, **kwargs):
-        if failure is None:
-            await successful_runner(store, task_id, **kwargs)
-        else:
-            await store.fail(task_id, failure)
-        # Wake after the runner's completion edge has released its resources.
-        asyncio.get_running_loop().call_soon(completed.set)
+    async def publish_pair():
+        await deps.heartbeat.publish_once()
+        state = await read_worker_state(redis, deps.worker_id)
+        return state["last_error"], state["last_error_at"]
 
-    deps.generate_runner = runner
+    async def generate_then_publish(client, failure: str | None):
+        completed = asyncio.Event()
+
+        async def runner(store, task_id, **kwargs):
+            if failure is None:
+                await successful_runner(store, task_id, **kwargs)
+            else:
+                await store.fail(task_id, failure)
+            # Wake after the runner's completion edge has released its resources.
+            asyncio.get_running_loop().call_soon(completed.set)
+
+        deps.generate_runner = runner
+        response = await client.post(
+            "/generate", json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
+        )
+        assert response.status_code == 200
+        await asyncio.wait_for(completed.wait(), timeout=5)
+        task = await deps.task_store.get(response.json()["task_id"])
+        assert task.state == ("done" if failure is None else "error")
+        assert deps.cache.in_use_count("sft") == 0
+        pair = await publish_pair()
+        if failure is not None:
+            assert pair == (task.error, task.updated_at.isoformat())
+        assert await publish_pair() == pair
+        return pair
 
     async def go():
-        nonlocal failure
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=create_app(deps)),
             base_url="http://worker", headers=_INTERNAL_HEADERS,
         ) as client:
             assert (await client.post("/load_model", json={"mode": "sft"})).status_code == 200
-            first = None
-            for index in range(3):
-                if index == 1:
-                    failure = None
-                elif index == 2:
-                    failure = "RuntimeError: later failure"
-                if index == 1 and success == "load":
-                    response = await client.post("/load_model", json={"mode": "xl-sft"})
-                else:
-                    completed.clear()
-                    response = await client.post(
-                        "/generate", json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
-                    )
-                    assert response.status_code == 200
-                    await asyncio.wait_for(completed.wait(), timeout=5)
-                    task = await deps.task_store.get(response.json()["task_id"])
-                    assert task.state == ("done" if failure is None else "error")
-                    assert deps.cache.in_use_count("sft") == 0
+            first = await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
+
+            if success == "load":
+                response = await client.post("/load_model", json={"mode": "xl-sft"})
                 assert response.status_code == 200
-                await deps.heartbeat.publish_once()
-                state = await read_worker_state(redis, deps.worker_id)
-                pair = (state["last_error"], state["last_error_at"])
-                if index == 0:
-                    first = pair
-                if index == 1:
-                    assert pair == first
-                else:
-                    assert pair == (task.error, task.updated_at.isoformat())
-                if index == 2:
-                    assert pair != first
-                await deps.heartbeat.publish_once()
-                again = await read_worker_state(redis, deps.worker_id)
-                assert (again["last_error"], again["last_error_at"]) == pair
+                assert await publish_pair() == first
+                assert await publish_pair() == first
+            else:
+                assert await generate_then_publish(client, None) == first
+
+            later = await generate_then_publish(client, "RuntimeError: later failure")
+            assert later != first
+
             other, _ = _make_deps(tmp_path)
             untouched = await build_state_payload(other)
             assert untouched["last_error"] is None
