@@ -19,6 +19,7 @@ import {
 	SONG_TITLE_LABEL
 } from '../src/lib/constants';
 import {
+	appBar,
 	boundingBoxes,
 	csrfHeaders,
 	FlowGuard,
@@ -29,6 +30,7 @@ import {
 import { expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
 
 const VIEWPORT_HEIGHT_PX = 844;
+const SONG_RESOLVING_TEXT = 'Loading song...';
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
 const ROW_LABELS_IN_ORDER = [
 	SONG_MENU_SAVE_LABEL,
@@ -87,7 +89,8 @@ async function onOwnSong(
 	page: Page,
 	title: string,
 	width: number,
-	flow: (ids: { songId: string; albumId: string }) => Promise<void>
+	flow: (ids: { songId: string; albumId: string }) => Promise<void>,
+	{ awaitTitle = true } = {}
 ): Promise<void> {
 	await page.setViewportSize({ width, height: VIEWPORT_HEIGHT_PX });
 	const headers = await csrfHeaders(page);
@@ -105,11 +108,9 @@ async function onOwnSong(
 		expect(created.ok()).toBe(true);
 		const song = (await created.json()) as { id: string; slug: string };
 		await page.goto(`/album/${albumId}/${song.slug}`);
-		await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
-		// The title shows while the address still resolves, and until it has the
-		// workspace is inert: a dialog the phone's menu opens meanwhile mounts
-		// inside it, where nothing can take the focus (#1531).
-		await workspace(page).click({ trial: true });
+		// The title is inert, and so out of the accessibility tree, until the song's address has resolved (#1531).
+		if (awaitTitle)
+			await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 		await flow({ songId: song.id, albumId });
 	} finally {
 		const archived = await page.request.post(`/api/albums/${albumId}/archive`, { headers });
@@ -126,6 +127,42 @@ async function openSongMenu(page: Page): Promise<Locator> {
 	const menu = page.getByRole('dialog', { name: SONG_MENU_LABEL });
 	await expect(menu).toBeVisible();
 	return menu;
+}
+
+/** Delete song from the open menu, down to the confirm dialog with Cancel focused. */
+async function openDeleteConfirm(page: Page, title: string): Promise<Locator> {
+	const menu = await openSongMenu(page);
+	await menu.getByRole('button', { name: SONG_MENU_DELETE_LABEL, exact: true }).click();
+
+	const confirm = page.getByRole('dialog', { name: `Delete "${title}"?` });
+	await expect(confirm).toBeVisible();
+	await expect(confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL })).toBeFocused();
+	return confirm;
+}
+
+const isAlbumSongListing = (url: URL): boolean =>
+	url.pathname === '/api/songs' && url.searchParams.has('album_id');
+const isLibrarySongListing = (url: URL): boolean =>
+	url.pathname === '/api/songs' && url.searchParams.has('sort');
+
+/**
+ * Opens the window in which the song's address still resolves although the song already stands in
+ * the phone app bar: the album's first song-listing read answers once the library's own lists have
+ * loaded, every re-read of it waits until released. The page keeps its "Loading song..." overlay,
+ * and the workspace inert, until that re-read answers.
+ */
+async function holdSongListingRereads(page: Page): Promise<{ release: () => void }> {
+	let release!: () => void;
+	const released = new Promise<void>((resolve) => (release = resolve));
+	let reads = 0;
+	await page.route(isAlbumSongListing, async (route) => {
+		reads += 1;
+		if (reads === 1)
+			await page.waitForResponse((response) => isLibrarySongListing(new URL(response.url())));
+		else await released;
+		await route.continue();
+	});
+	return { release };
 }
 
 interface MenuTextSizes {
@@ -240,12 +277,7 @@ test(
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		await onOwnSong(page, TITLES[1], 390, async ({ songId }) => {
-			const menu = await openSongMenu(page);
-			await menu.getByRole('button', { name: SONG_MENU_DELETE_LABEL, exact: true }).click();
-
-			const confirm = page.getByRole('dialog', { name: `Delete "${TITLES[1]}"?` });
-			await expect(confirm).toBeVisible();
-			await expect(confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL })).toBeFocused();
+			const confirm = await openDeleteConfirm(page, TITLES[1]);
 			await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
 
 			await expect(confirm).toBeHidden();
@@ -253,6 +285,34 @@ test(
 			await expect(page.getByRole('heading', { name: TITLES[1], exact: true })).toBeVisible();
 			expect((await page.request.get(`/api/songs/${songId}`)).ok()).toBe(true);
 		});
+	}
+);
+
+test(
+	'defect:#1531: the song ⋯ waits while the song loads, then Delete opens its dialog with Cancel focused',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const listing = await holdSongListingRereads(page);
+		await onOwnSong(
+			page,
+			TITLES[1],
+			390,
+			async () => {
+				const trigger = appBar(page).getByLabel(SONG_MENU_LABEL, { exact: true });
+				await expect(trigger).toBeVisible();
+				await expect(page.getByText(SONG_RESOLVING_TEXT, { exact: true })).toBeVisible();
+				const [triggerBox] = await boundingBoxes(trigger);
+				await page.mouse.click(
+					triggerBox.x + triggerBox.width / 2,
+					triggerBox.y + triggerBox.height / 2
+				);
+				await expect(page.getByRole('dialog', { name: SONG_MENU_LABEL })).toBeHidden();
+
+				listing.release();
+				await openDeleteConfirm(page, TITLES[1]);
+			},
+			{ awaitTitle: false }
+		);
 	}
 );
 
