@@ -1,0 +1,7 @@
+claim_id = "51a16ff1dc524bfe966ce7de9fbd3774"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "267c9c1ef376155c1018fe7c1a3fd6cdf8600402"
+branch = "fix/stream-deadline-test-timing"
+scope = ["tests/test_api.py"]
+opened_commit = "6246653bbf4c6c33ec99c677aca46e01f3496d73"
