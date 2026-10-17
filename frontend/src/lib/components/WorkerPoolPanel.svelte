@@ -20,6 +20,8 @@
 		WORKER_TRAINING_REMAINING_TEMPLATE
 	} from '$lib/constants';
 
+	import WorkerVramLine from './WorkerVramLine.svelte';
+
 	const POLL_INTERVAL_MS = 3000;
 	const LOAD_JOB_TYPE = 'load_model_on_worker';
 
@@ -181,14 +183,6 @@
 		return `${total.toFixed(0)} GB`;
 	}
 
-	function formatVramUsage(state: WorkerInfoItem['state']): string | null {
-		if (!state || state.vram_used_gb == null || state.vram_total_gb == null) return null;
-		const isEstimate = state.vram_measured === false;
-		const estimatePrefix = isEstimate ? '~' : '';
-		const estimateSuffix = isEstimate ? ' est.' : '';
-		return `${estimatePrefix}${state.vram_used_gb.toFixed(1)} / ${state.vram_total_gb.toFixed(1)} GB${estimateSuffix}`;
-	}
-
 	function isCardBusy(worker: WorkerInfoItem): boolean {
 		if (worker.state?.target_loading) return true;
 		if (worker.state?.training_hold_seconds != null) return true;
@@ -298,7 +292,6 @@
 				{@const busy = isCardBusy(worker)}
 				{@const trackedJob = loadingByWorker.get(worker.identity.id)}
 				{@const offline = worker.status === 'offline'}
-				{@const vramUsage = formatVramUsage(worker.state)}
 				<div class="card" class:busy>
 					<div class="card-header">
 						<span class={statusClass(worker.status)}>{statusIcon(worker.status)}</span>
@@ -340,27 +333,20 @@
 							<span class="row-label">Queue:</span>
 							<span class="row-value">{worker.state.queue_depth} jobs</span>
 						</div>
-						{#if vramUsage}
-							<div class="card-row">
-								<span class="row-label">VRAM:</span>
-								<span
-									class="row-value"
-									title={worker.state.vram_measured === false ? 'Estimated VRAM usage' : undefined}
-								>
-									{vramUsage}
-								</span>
-							</div>
-						{/if}
-						<div class="card-row">
-							<span class="row-label">Last seen:</span>
-							<span class="row-value">{formatLastSeen(worker.state.last_heartbeat_at)}</span>
-						</div>
 					{:else}
 						<div class="card-row">
 							<span class="row-value dim">{describeOffline(worker)}</span>
 						</div>
 						<div class="card-row">
 							<span class="row-value dim">{restartDisabledHint(worker)}</span>
+						</div>
+					{/if}
+
+					<WorkerVramLine state={worker.state} />
+					{#if worker.state && !offline}
+						<div class="card-row">
+							<span class="row-label">Last seen:</span>
+							<span class="row-value">{formatLastSeen(worker.state.last_heartbeat_at)}</span>
 						</div>
 					{/if}
 
