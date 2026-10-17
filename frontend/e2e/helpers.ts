@@ -78,8 +78,9 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
 /**
  * What the library flow costs the API per shell, measured on a green full-suite
  * run against `library.spec.ts`'s own first test: 42 requests on desktop and
- * 35 on mobile, budgeted at 42 and 40 respectively (27.09.2026). Continue
- * fetching fresh on the return to the wall brought desktop to 41 (05.09.2026).
+ * 35 on mobile, budgeted at 42 and 40 respectively (27.09.2026). Home's
+ * Listen list fetching fresh on the return to the wall brought desktop to 41
+ * (05.09.2026).
  * The flow's round trip to Settings stops the live stream, so the snapshot on
  * the return follows a gap and reads every album again (#1102): one request
  * per 50 albums, one more on each shell. Both projects
@@ -319,6 +320,11 @@ export function nameStartingWith(...labels: string[]): RegExp {
  */
 export function workspace(page: Page): Locator {
 	return page.getByRole('main');
+}
+
+/** Home's Listen list (`HomeListen.svelte`): the places last played. */
+export function listenRegion(page: Page): Locator {
+	return workspace(page).getByRole('region', { name: 'Listen', exact: true });
 }
 
 /**

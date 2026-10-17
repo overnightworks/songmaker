@@ -12,6 +12,7 @@ import {
 	expectLibraryWallLoaded,
 	FlowGuard,
 	LIBRARY_PATH,
+	listenRegion,
 	LIBRARY_URL,
 	nameStartingWith,
 	observePlayingAudio,
@@ -746,7 +747,7 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 }
 
 test(
-	'1354_rule_8: a place played with the rail standing leads the Library when it is visited again, after one Listen read',
+	"1354_rule_8 1354_rule_14: a place played with the rail standing leads Home's Listen and the Library visited after it, on one Listen read",
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
 		const [newest, older] = [fixture.albums[2], fixture.albums[42]];
@@ -756,20 +757,21 @@ test(
 		const tileTitles = workspace(page).locator('.library-wall .tile-grid .tile-title');
 		await expect(tileTitles.first()).toHaveText(older.title);
 		await playFirstTakeFromTheWall(page, 'desktop', newest);
-		await openHome(page, 'desktop');
-		await expect(
-			page.getByRole('region', { name: 'Continue' }).locator('.continue-item').first()
-		).toBeVisible();
 		let listenReads = 0;
 		page.on('request', (request) => {
 			if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
 				listenReads++;
 		});
+		await openHome(page, 'desktop');
+		await expect(listenRegion(page).locator('.wall-tile-body').first()).toHaveAttribute(
+			'aria-label',
+			`Open album ${newest.title}`
+		);
 
 		await openLibraryWall(page, 'desktop');
 
 		await expect(tileTitles.first()).toHaveText(newest.title);
 		await expect(tileTitles.nth(1)).toHaveText(older.title);
-		expect(listenReads, 'Listen reads on visiting the Library').toBe(1);
+		expect(listenReads, 'Listen reads on Home and the Library visited after it').toBe(1);
 	}
 );

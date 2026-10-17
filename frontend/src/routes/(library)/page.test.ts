@@ -103,7 +103,7 @@ const ROUTE_PAGES: RoutePage[] = [
 		harness: LibraryAddressHarness,
 		surface: 'browse',
 		shown: '.library-wall',
-		hidden: ['.library-home', '[aria-label="Continue"]']
+		hidden: ['.library-home', '[aria-label="Listen"]']
 	}
 ];
 

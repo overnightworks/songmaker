@@ -34,6 +34,7 @@
 	import { selectSong } from '$lib/stores/navigation';
 	import { historyLayerState, holdOpenWhile } from '$lib/stores/layers';
 	import { setOpenCollection } from '$lib/stores/collection';
+	import { forgetListenedPlace, readRestoredPlace } from '$lib/stores/libraryOrder';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import {
@@ -51,7 +52,7 @@
 		PLACE_LINE_SEPARATOR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import { albumHasPlayableTake, songPlayability } from '$lib/utils/playable';
+	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '$lib/utils/playable';
 	import type { SongItem } from '$lib/api/types';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
@@ -91,7 +92,9 @@
 	// neither of its controls can reach the running queue.
 	const albumHasTakes = $derived(
 		selectedAlbum !== null &&
-			albumHasPlayableTake(selectedAlbum, albumSongs, { songsComplete: albumLoad === 'idle' })
+			albumHasPlayableTake(selectedAlbum, albumSongs, {
+				songsComplete: albumSongsSettled(albumLoad)
+			})
 	);
 	const albumLoadFailure = $derived(currentAlbumId ? albumSongsLoadFailure(currentAlbumId) : null);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
@@ -218,6 +221,7 @@
 		try {
 			await deleteAlbum(albumId);
 			removeAlbumFromList(albumId);
+			forgetListenedPlace('album', albumId);
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
 			addUndoToast('Album deleted', {
@@ -226,6 +230,7 @@
 					try {
 						const restored = await restoreAlbum(albumId);
 						addAlbumToList(restored);
+						void readRestoredPlace('album', albumId);
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
 						addToast('Album restored', 'success');
@@ -246,6 +251,7 @@
 		try {
 			await archiveAlbum(albumId);
 			removeAlbumFromList(albumId);
+			forgetListenedPlace('album', albumId);
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
 			addUndoToast('Album archived', {
@@ -254,6 +260,7 @@
 					try {
 						const restored = await unarchiveAlbum(albumId);
 						addAlbumToList(restored);
+						void readRestoredPlace('album', albumId);
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
 						addToast('Album unarchived', 'success');

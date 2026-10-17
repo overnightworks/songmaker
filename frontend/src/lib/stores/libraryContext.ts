@@ -62,7 +62,7 @@ import {
 import { CREATED_SORTS } from '$lib/utils/recency';
 import { songTakesLoaded } from '$lib/utils/playable';
 
-// 'home' shows Home (LibraryHome: Continue), 'browse' the library wall (the
+// 'home' shows Home (LibraryHome: Listen), 'browse' the library wall (the
 // LibraryWall component), 'playlists' the Playlists page's wall of playlists
 // alone (#1402); 'detail' shows whichever collection is currently open. Song
 // detail always wins over all four (see LibraryWorkspace.svelte). An entry

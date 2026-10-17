@@ -12,6 +12,9 @@ import {
 
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 
+import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
+import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
+import { makeAlbum } from '$lib/test-utils/factories';
 import LibraryHome from './LibraryHome.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -29,9 +32,14 @@ const listenedAlbum: LibraryListenItem = {
 };
 
 beforeEach(() => {
+	resetLibraryOrderForTests();
+	albumList.set([makeAlbum({ id: 'album-1' })]);
+	allAlbumsLoad.set({ status: 'ready', error: null });
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async () => Response.json({ items: [listenedAlbum] }))
+		vi.fn(async (url: string) =>
+			Response.json({ items: url.includes('/api/library/listen') ? [listenedAlbum] : [] })
+		)
 	);
 });
 
@@ -45,18 +53,18 @@ async function render(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted.push(mount(LibraryHome, { target }));
-	await vi.waitFor(() => expect(target.querySelector('.continue-item')).not.toBeNull());
+	await vi.waitFor(() => expect(target.querySelector('.wall-tile-body')).not.toBeNull());
 	await tick();
 	return target;
 }
 
-describe('LibraryHome', () => {
-	it('1354_rule_31: heads the page Home and shows Continue under it', async () => {
+describe('1354_rule_14 LibraryHome', () => {
+	it('1354_rule_31: heads the page Home and shows Listen under it', async () => {
 		const target = await render();
 
 		expect(target.querySelector('h1')?.textContent).toBe(HOME_PAGE_LABEL);
-		expect(target.querySelector('[aria-label="Continue"]')).not.toBeNull();
-		expect(target.querySelector('.continue-item')?.getAttribute('aria-label')).toBe(
+		expect(target.querySelector('[aria-label="Listen"]')).not.toBeNull();
+		expect(target.querySelector('.wall-tile-body')?.getAttribute('aria-label')).toBe(
 			'Open album Open Windows'
 		);
 	});
@@ -64,10 +72,10 @@ describe('LibraryHome', () => {
 	it('1354_rule_31: shows no wall of albums', async () => {
 		const target = await render();
 
-		expect(target.querySelector('.tile-grid, .wall-tile, .library-wall')).toBeNull();
+		expect(target.querySelector('.tile-grid, .library-wall')).toBeNull();
 	});
 
-	it('1354_rule_14 915_C1: stands + New on the head line, whose Album unfolds its card under the head, above Continue', async () => {
+	it('1354_rule_14 915_C1: stands + New on the head line, whose Album unfolds its card under the head, above Listen', async () => {
 		const target = await render();
 		const head = target.querySelector('.home-titlebar');
 		if (!head) throw new Error('Expected the Home head');
@@ -87,8 +95,8 @@ describe('LibraryHome', () => {
 
 		const card = head.querySelector(`[aria-label="${NEW_ALBUM_CARD_LABEL}"]`);
 		expect(card).not.toBeNull();
-		const continueRegion = target.querySelector('[aria-label="Continue"]');
-		expect(card?.compareDocumentPosition(continueRegion as Node)).toBe(
+		const listenRegion = target.querySelector('[aria-label="Listen"]');
+		expect(card?.compareDocumentPosition(listenRegion as Node)).toBe(
 			Node.DOCUMENT_POSITION_FOLLOWING
 		);
 	});

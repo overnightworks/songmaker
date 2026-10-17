@@ -187,7 +187,7 @@ export interface SeededLibrary {
 	 * each prove their own reorder without relying on another spec to move the
 	 * shared library's leader in between.
 	 */
-	continueReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
+	listenReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
@@ -438,14 +438,13 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 	const songIdByTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.songId]));
 	const takeBySongTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.takeId]));
 
-	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
-	// Each project reorders its own Continue target, so the two never move the
-	// same song. Other flows may play the mobile target before mobile runs;
-	// library-continue picks its listened-elsewhere song at run time and copes.
-	const playlistSongTitles = [desktopContinueSongTitle, mobileContinueSongTitle];
-	const continueReorderSongs = {
-		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
-		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
+	const [pickedSongTitle, mobileListenSongTitle, desktopListenSongTitle] = SONG_TITLES;
+	// Each project records listens with its own song. The persisted fixture key
+	// also serves the Library ordering flow.
+	const playlistSongTitles = [desktopListenSongTitle, mobileListenSongTitle];
+	const listenReorderSongs = {
+		desktop: seededSong(songIdByTitle, desktopListenSongTitle),
+		mobile: seededSong(songIdByTitle, mobileListenSongTitle)
 	};
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 
@@ -496,7 +495,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		playlistShareUrl: `${BASE_URL}/share/playlist/${playlistShare.share_slug}`,
 		pickedSongTitle,
-		continueReorderSongs,
+		listenReorderSongs,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,

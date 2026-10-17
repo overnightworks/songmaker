@@ -112,7 +112,6 @@ type Theme = 'dark' | 'light';
 const STORAGE_KEY = 'theme';
 const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
 const RAIL_WIDTH_STORAGE_KEY = 'songmaker.rail-width';
-const LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY = 'songmaker.library-continue-collapsed';
 const LIBRARY_WALL_ORDER_STORAGE_KEY = 'songmaker.library-wall-order';
 const DEFAULT_LIBRARY_WALL_ORDER: LibraryWallOrder = 'title';
 const VALID_LIBRARY_WALL_ORDERS: ReadonlySet<string> = new Set(LIBRARY_WALL_ORDERS);
@@ -137,25 +136,6 @@ function getInitialRailCollapsed(): boolean {
 }
 
 export const railCollapsed = writable(getInitialRailCollapsed());
-
-function getInitialLibraryContinueCollapsed(): boolean {
-	if (typeof window === 'undefined') return false;
-	return localStorage.getItem(LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY) === 'true';
-}
-
-export const libraryContinueCollapsed = writable(getInitialLibraryContinueCollapsed());
-
-export function toggleLibraryContinueCollapsed(): void {
-	libraryContinueCollapsed.update((collapsed) => {
-		const next = !collapsed;
-		localStorage.setItem(LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY, String(next));
-		return next;
-	});
-}
-
-export function initLibraryContinueCollapsed(): void {
-	libraryContinueCollapsed.set(getInitialLibraryContinueCollapsed());
-}
 
 function getInitialLibraryWallOrder(): LibraryWallOrder {
 	if (typeof window === 'undefined') return DEFAULT_LIBRARY_WALL_ORDER;

@@ -1,4 +1,4 @@
-import { derived, get, writable, type Readable } from 'svelte/store';
+import { derived, get, readonly, writable, type Readable } from 'svelte/store';
 import { fetchLibraryListen, type LibraryListenItem } from '$lib/api/library';
 import { LIBRARY_WALL_PLAYED_PAGE_SIZE, type LibraryWallOrder } from '$lib/constants';
 import { libraryWallOrder } from '$lib/stores/ui';
@@ -25,10 +25,17 @@ type ListenReadState = 'unread' | 'failed' | 'ranked' | 'outdated';
 
 const lastPlayed = writable<ReadonlyMap<string, LastPlayed>>(new Map());
 const listenRead = writable<ListenReadState>('unread');
+const listenedPlaces = writable<readonly LibraryListenItem[]>([]);
+export const libraryListenItems = readonly(listenedPlaces);
+export const libraryListenState = readonly(listenRead);
 let lastPlayedGeneration = 0;
 let lastPlayedRead: Promise<boolean> | null = null;
 // A listen recorded while a read is out may not be in what it brings back.
 let listenRecordedDuringRead = false;
+// Places deleted or archived here while a read is out: that read may predate
+// the removal, so its answer must not name them. A read started after the
+// removal is authoritative, because the server already knows it.
+const forgottenDuringRead = new Set<string>();
 
 export const lastPlayedByPlace: Readable<ReadonlyMap<string, LastPlayed>> = {
 	subscribe: lastPlayed.subscribe
@@ -123,11 +130,15 @@ export function readLastPlayed(): Promise<boolean> {
 	const read = readEveryPlayedPlace().then((places) => {
 		if (generation !== lastPlayedGeneration) return false;
 		lastPlayedRead = null;
+		const forgotten = new Set(forgottenDuringRead);
+		forgottenDuringRead.clear();
 		if (places === null) {
 			listenRead.update((state) => (state === 'ranked' || state === 'outdated' ? state : 'failed'));
 			return false;
 		}
-		lastPlayed.set(rankedPlaces(places));
+		const current = places.filter((place) => !forgotten.has(placeKey(place.type, place.id)));
+		listenedPlaces.set(current);
+		lastPlayed.set(rankedPlaces(current));
 		listenRead.set(listenRecordedDuringRead ? 'outdated' : 'ranked');
 		return true;
 	});
@@ -154,13 +165,37 @@ export function outdateLastPlayedRanking(): void {
 	listenRead.update((state) => (state === 'ranked' ? 'outdated' : state));
 }
 
+// A place deleted or archived here leaves Listen at once and stays off it
+// whatever the collection reloads do meanwhile: Listen stops naming it
+// before any read can confirm the removal, and a read already out cannot
+// bring it back.
+export function forgetListenedPlace(type: LibraryPlaceType, id: string): void {
+	if (lastPlayedRead !== null) forgottenDuringRead.add(placeKey(type, id));
+	listenedPlaces.update((places) =>
+		places.filter((place) => place.type !== type || place.id !== id)
+	);
+}
+
+// An Undo has put a forgotten place back: Listen reads again and ranks it
+// where its listens put it. A read already out may predate the Undo and lack
+// the place, so the read that answers starts only after it, and the ranking
+// stays outdated until that read succeeds, so the next opening reads again.
+export async function readRestoredPlace(type: LibraryPlaceType, id: string): Promise<boolean> {
+	forgottenDuringRead.delete(placeKey(type, id));
+	if (lastPlayedRead !== null) await lastPlayedRead;
+	outdateLastPlayedRanking();
+	return readLastPlayed();
+}
+
 // Bumping the generation also discards a read still in flight from the test
 // before.
 export function resetLibraryOrderForTests(): void {
 	lastPlayedGeneration++;
 	lastPlayedRead = null;
 	lastPlayed.set(new Map());
+	listenedPlaces.set([]);
 	listenRecordedDuringRead = false;
+	forgottenDuringRead.clear();
 	standingOrder = null;
 	listenRead.set('unread');
 }

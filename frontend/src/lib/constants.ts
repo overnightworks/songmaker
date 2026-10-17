@@ -822,3 +822,9 @@ export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
 // long enough for the page to resync, short enough that a refresh that never
 // runs does not leave a card behind.
 export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;
+
+export const HOME_LISTEN_LABEL = 'Listen';
+export const HOME_LISTEN_LIMIT = 3;
+export const HOME_LISTEN_EMPTY = 'Albums and playlists you play will appear here.';
+export const HOME_LISTEN_LOADING = 'Loading Listen…';
+export const HOME_LISTEN_ERROR = 'Could not load Listen.';

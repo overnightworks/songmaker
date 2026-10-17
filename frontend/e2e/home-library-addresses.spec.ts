@@ -52,7 +52,7 @@ import {
 } from './helpers';
 import { readSeededLibrary, type SeededLibrary } from './seed';
 
-const CONTINUE_REGION = { name: 'Continue' };
+const LISTEN_REGION = { name: 'Listen' };
 const SETTINGS_SECTION = 'Voices';
 const SETTINGS_SECTION_URL = /\/settings\/voices$/;
 const SETTINGS_LIST_URL = /\/settings$/;
@@ -67,7 +67,7 @@ const homeHeading = (page: Page) =>
 	workspace(page).getByRole('heading', { name: HOME_PAGE_LABEL, exact: true });
 const newButton = (page: Page) =>
 	workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true });
-const continueRegion = (page: Page) => workspace(page).getByRole('region', CONTINUE_REGION);
+const listenRegion = (page: Page) => workspace(page).getByRole('region', LISTEN_REGION);
 const wall = (page: Page) => workspace(page).locator(WALL_SELECTOR);
 const historyLength = (page: Page) => page.evaluate(() => history.length);
 
@@ -78,14 +78,14 @@ function albumAddress(library: SeededLibrary): RegExp {
 async function expectHomeShown(page: Page): Promise<void> {
 	await expect(page).toHaveURL(HOME_URL);
 	await expect(homeHeading(page)).toBeVisible();
-	await expect(continueRegion(page)).toBeVisible();
+	await expect(listenRegion(page)).toBeVisible();
 	await expect(wall(page)).toHaveCount(0);
 }
 
 async function expectWallShown(page: Page): Promise<void> {
 	await expect(page).toHaveURL(LIBRARY_URL);
 	await expectLibraryWallLoaded(page);
-	await expect(continueRegion(page)).toHaveCount(0);
+	await expect(listenRegion(page)).toHaveCount(0);
 }
 
 async function expectPlaylistsShown(page: Page): Promise<void> {
@@ -378,7 +378,7 @@ test.describe('signed out', () => {
 	});
 });
 
-test('1354_rule_31 row 1: cold / shows Home, with Continue and + New, no wall, and the Library word not current', async ({
+test('1354_rule_14 1354_rule_31 row 1: cold / shows Home, with Listen and + New, no wall, and the Library word not current', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -395,7 +395,7 @@ test('1354_rule_31 row 1: cold / shows Home, with Continue and + New, no wall, a
 	guard.assertClean();
 });
 
-test('1354_rule_31 row 2: cold /library shows the wall, with + New on the desktop head only, no Continue, and the Library word current', async ({
+test('1354_rule_14 1354_rule_31 row 2: cold /library shows the wall, with + New on the desktop head only, no Listen, and the Library word current', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -550,9 +550,8 @@ for (const origin of [HOME, LIBRARY]) {
 }
 
 // The phone's ‹ names the page below the album, and goes there when clicked;
-// a cold album has none below it and goes to the Library. A Continue row opens
-// a song, which carries its own bar instead of ‹, so the album is opened from
-// Home through the drawer's album row.
+// a cold album has none below it and goes to the Library. A Listen row opens
+// an album; this address proof uses the drawer's album row.
 const BACK_ARROW_CELLS: readonly {
 	readonly origin: string;
 	readonly name: string;
@@ -716,12 +715,14 @@ test(
 );
 
 test(
-	'1354_rule_31 R6 row 12: with the network gone Home mounts without rows and the word Library still opens the wall',
+	'1354_rule_19 1354_rule_31 R6 row 12: with the network gone Home keeps its rows and the word Library still opens the wall',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page, context }) => {
 		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		await page.goto(HOME_PATH);
 		await expectHomeShown(page);
+		await expect(listenRegion(page).getByRole('status')).toHaveCount(0);
+		const rows = await listenRegion(page).locator('.library-row').count();
 		await waitForServiceWorkerControl(page);
 		await loseNetwork(page, context);
 
@@ -731,8 +732,8 @@ test(
 		await openHome(page, 'desktop');
 
 		await expect(homeHeading(page)).toBeVisible();
-		await expect(continueRegion(page)).toBeVisible();
-		await expect(continueRegion(page).locator('.continue-item')).toHaveCount(0);
+		await expect(listenRegion(page)).toBeVisible();
+		await expect(listenRegion(page).locator('.library-row')).toHaveCount(rows);
 		await expect(wall(page)).toHaveCount(0);
 		await openLibraryWall(page, 'desktop');
 		await expectWallShown(page);

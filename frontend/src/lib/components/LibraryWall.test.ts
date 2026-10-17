@@ -226,12 +226,12 @@ describe('LibraryWall', () => {
 		expect(root.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Sort albums');
 	});
 
-	it('1354_rule_31: shows no Continue, and reads no listens until Last played is chosen', async () => {
+	it('1354_rule_31 1354_rule_14: shows no Listen list, and reads no listens until Last played is chosen', async () => {
 		seedWall();
 
 		const root = await render();
 
-		expect(root.querySelector('[aria-label="Continue"]')).toBeNull();
+		expect(root.querySelector('[aria-label="Listen"]')).toBeNull();
 		expect(fetchLibraryListen).not.toHaveBeenCalled();
 	});
 

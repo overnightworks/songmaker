@@ -1,4 +1,5 @@
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type { AlbumSongsLoadStatus } from '$lib/stores/libraryData';
 
 /*
  * The one frontend owner of "something to hear", mirroring the backend's
@@ -49,4 +50,21 @@ export function albumHasPlayableTake(
 	if (playabilities.includes('playable')) return true;
 	if (songsComplete && playabilities.every((playability) => playability === 'none')) return false;
 	return album.has_playable_take;
+}
+
+// An album's songs speak for it once their load has settled, which
+// `albumSongsLoad` records as 'idle'.
+export function albumSongsSettled(load: AlbumSongsLoadStatus | undefined): boolean {
+	return load === 'idle';
+}
+
+// Whether an album's row offers ▶, for every list that shows album rows.
+export function albumRowOffersPlay(
+	album: Pick<AlbumItem, 'id' | 'has_playable_take'>,
+	songs: SongItem[],
+	songLoads: Readonly<Record<string, AlbumSongsLoadStatus>>
+): boolean {
+	return albumHasPlayableTake(album, songs, {
+		songsComplete: albumSongsSettled(songLoads[album.id])
+	});
 }

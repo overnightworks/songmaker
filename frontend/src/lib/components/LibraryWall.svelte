@@ -9,7 +9,7 @@
 		albumSongsLoad
 	} from '$lib/stores/libraryData';
 	import { collectionTransport, toggleOrStartCollection, playAlbum } from '$lib/stores/player';
-	import { albumHasPlayableTake } from '$lib/utils/playable';
+	import { albumRowOffersPlay } from '$lib/utils/playable';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
@@ -183,9 +183,7 @@
 	function rowPlay(item: AlbumItem | PlaylistItem): (() => void) | undefined {
 		if (
 			!('song_count' in item) ||
-			!albumHasPlayableTake(item, songsByAlbum.get(item.id) ?? [], {
-				songsComplete: $albumSongsLoad[item.id] === 'idle'
-			})
+			!albumRowOffersPlay(item, songsByAlbum.get(item.id) ?? [], $albumSongsLoad)
 		)
 			return undefined;
 		return () => toggleOrStartCollection('album', item.id, () => void playAlbum(item.id));

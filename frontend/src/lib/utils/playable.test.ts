@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { makeAlbum, makeGeneration, makeSong } from '$lib/test-utils/factories';
 import type { GenerationItem } from '$lib/api/types';
+import type { AlbumSongsLoadStatus } from '$lib/stores/libraryData';
 import {
 	albumHasPlayableTake,
+	albumRowOffersPlay,
 	bestTake,
 	songHasPlayableTake,
 	songPlayability,
@@ -72,5 +74,18 @@ describe('1354_rule_11 album playability', () => {
 		['the songs are a partial set, the server flag stands', true, [none], false, true]
 	])('when %s', (_, serverFlag, songs, songsComplete, expected) => {
 		expect(albumHasPlayableTake(album(serverFlag), songs, { songsComplete })).toBe(expected);
+	});
+});
+
+describe('defect:#1550 album row play', () => {
+	const album = makeAlbum({ id: 'album', has_playable_take: true });
+	const silent = [songWith(1, [archived()])];
+
+	it.each<[string, Readonly<Record<string, AlbumSongsLoadStatus>>, boolean]>([
+		['songs never loaded, the server flag stands', {}, true],
+		['songs still loading, the server flag stands', { album: 'loading' }, true],
+		['songs settled with nothing to hear', { album: 'idle' }, false]
+	])('when %s', (_, songLoads, expected) => {
+		expect(albumRowOffersPlay(album, silent, songLoads)).toBe(expected);
 	});
 });

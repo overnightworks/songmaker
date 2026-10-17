@@ -520,7 +520,7 @@ def check_own_playlist_access(
 
     Unlike the general playlist access helper, this does not grant
     administrators another musician's playlist: a listen an administrator
-    starts must never reorder that musician's Continue.
+    starts must never reorder that musician's Listen.
     """
     return check_playlist_access(session, playlist_id, user, require_owner=True)
 
