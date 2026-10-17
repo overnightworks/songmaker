@@ -25,7 +25,6 @@ from conftest import (
     web_client,
 )
 
-from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.constants import (
     CLAUDE_SCORING_MODEL_DEFAULT,
     JUDGE_DEFAULT_PROVIDER,
@@ -53,6 +52,7 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
+from songmaker_cli.whisper_cues import WhisperCue
 
 LIVE_CATALOG = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6"],

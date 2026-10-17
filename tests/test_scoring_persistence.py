@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.db.queries import save_scores
@@ -19,6 +18,7 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
+from songmaker_cli.whisper_cues import WhisperCue
 
 JOB_ID = "job-score"
 GENERATION_ID = "gen-1"

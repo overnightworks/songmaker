@@ -11,7 +11,6 @@ from typing import Final
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from songmaker_cli import queue_streams
-from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.audio_paths import canonical_audio_filename
 from songmaker_cli.constants import JobStatus
 from songmaker_cli.db.models import Album, Generation, Rating, Score, Song
@@ -20,6 +19,7 @@ from songmaker_cli.db.queries.sharing import (
     enable_sharing,
     playable_take_filter,
 )
+from songmaker_cli.whisper_cues import WhisperCue
 
 log = logging.getLogger(__name__)
 
