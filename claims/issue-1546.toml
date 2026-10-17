@@ -1,0 +1,8 @@
+claim_id = "134ef286a1bf43b983bc02e9018641e0"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "934acb62488b1833ccc9faf785712a0b6fbe8fcc"
+branch = "claude/issue-1546-m1-audio-seam-and-g1"
+scope = [".importlinter", "docs/architecture.md", "scripts/backfill_audio_durations.py", "src/songmaker_cli/audio_files.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/queue_streams.py", "tests/test_api.py", "tests/test_audio_files.py", "tests/test_backfill_audio_durations.py", "tests/test_db.py", "tests/test_import_boundaries.py", "tests/test_jobs.py", "tests/test_queue_streams.py", "tests/test_reimport.py"]
+opened_commit = "7f9735eb533c9ebe4ef559a45e816bb1da275f26"
+whole_reason = "The last db to api_models chain and the gate that keeps it cut: the seam, its callers, the twelve re-pointed patches, the moved tests and G1 land together or G1 is red."
