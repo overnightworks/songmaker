@@ -4263,3 +4263,233 @@ def test_bulk_delete_requires_auth(unauthed_client: TestClient) -> None:
         json={"generation_ids": ["g1"]},
     )
     assert resp.status_code in (401, 403)
+
+
+@pytest.fixture
+def stored_musician_job(client):
+    """L11: A stored failure newer than existing takes, without worker stubs."""
+    with client.app.state.ctx.db() as session:
+        session.add(
+            Job(
+                id="legacy-failure",
+                type="generate",
+                status="failed",
+                user_id=_DEFAULT_USER_ID,
+                song_id="s1",
+                progress=0.5,
+                take_index=1,
+                take_count=2,
+                error="need 18.5 GB",
+                error_type="generation_error",
+                started_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+    return "legacy-failure"
+
+
+def _read_musician_job(client, job_id, read_path):
+    if read_path == "reload":
+        response = client.get("/api/songs/s1/last-failed-generation")
+        assert response.status_code == 200
+        return response.json()["job"]
+    if read_path == "get":
+        response = client.get(f"/api/jobs/{job_id}")
+        assert response.status_code == 200
+        return response.json()
+    import json
+
+    _authenticate_job_stream_client(client)
+    with client.stream("GET", f"/api/jobs/{job_id}/stream") as response:
+        assert response.status_code == 200
+        events = [
+            json.loads(line.removeprefix("data: "))
+            for line in response.iter_lines()
+            if line.startswith("data: ")
+        ]
+    assert len(events) == 1
+    return events[0]
+
+
+@pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
+@pytest.mark.parametrize("status", ["failed", "partial"])
+@pytest.mark.parametrize("role", ["user", "admin"])
+def test_get_job_stream_job_last_failed_generation_projects_stored_worker_cause(
+    client,
+    stored_musician_job,
+    read_path,
+    status,
+    role,
+):
+    """L6 L11 L5: Every musician read hides worker text, including for admins."""
+    from songmaker_cli.auth_dependencies import get_current_user
+
+    job_id = stored_musician_job
+    prefix = "1/2 completed, 1 failed: " if status == "partial" else ""
+    raw = prefix + "need 18.5 GB"
+    with client.app.state.ctx.db() as session:
+        job = session.get(Job, job_id)
+        job.status = status
+        job.error = raw
+        session.get(User, _DEFAULT_USER_ID).role = role
+        session.commit()
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        _DEFAULT_USER_ID,
+        role=role,
+    )
+    result = _read_musician_job(client, job_id, read_path)
+    if read_path == "reload" and status == "partial":
+        assert result is None
+    else:
+        assert result["error"] == prefix + "Generating failed — try again."
+        assert result["error_type"] == "generation_error"
+        assert result["id"] == job_id
+        assert result["status"] == status
+        assert result["progress"] == 0.5
+        assert (result["take_index"], result["take_count"]) == (1, 2)
+        assert result["remaining_time_estimate"] == 0
+    with client.app.state.ctx.db() as session:
+        job = session.get(Job, job_id)
+        assert job.error == raw
+        assert job.error_type == "generation_error"
+        assert session.query(Generation).count() == 2
+
+
+@pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
+@pytest.mark.parametrize(
+    "error_type",
+    [
+        None,
+        "server_restart",
+        "no_worker_alive",
+        "queued_full_queue_bound",
+        "queued_too_long",
+        "setup_error",
+        "unknown",
+    ],
+)
+def test_get_job_stream_job_last_failed_generation_preserves_other_error_types(
+    client,
+    stored_musician_job,
+    read_path,
+    error_type,
+):
+    """L11: Other error classifications pass through all read paths untouched."""
+    with client.app.state.ctx.db() as session:
+        session.get(Job, stored_musician_job).error_type = error_type
+        session.commit()
+    result = _read_musician_job(client, stored_musician_job, read_path)
+    assert result["error"] == "need 18.5 GB"
+    assert result["error_type"] == error_type
+
+
+@pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
+def test_get_job_stream_job_last_failed_generation_preserves_own_causes(
+    client,
+    stored_musician_job,
+    generation_failure_case,
+    read_path,
+):
+    """L11: Shared Songmaker counterexamples remain visible through real routes."""
+    _, expected = generation_failure_case
+    with client.app.state.ctx.db() as session:
+        session.get(Job, stored_musician_job).error = expected
+        session.commit()
+    assert _read_musician_job(client, stored_musician_job, read_path)["error"] == expected
+
+
+@pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
+@pytest.mark.parametrize("error", [None, "", "Generating failed — try again."])
+def test_get_job_stream_job_last_failed_generation_preserves_missing_or_new_line(
+    client,
+    stored_musician_job,
+    read_path,
+    error,
+):
+    """L11: Missing text and newly sanitized failures survive all read paths."""
+    with client.app.state.ctx.db() as session:
+        session.get(Job, stored_musician_job).error = error
+        session.commit()
+    assert _read_musician_job(client, stored_musician_job, read_path)["error"] == error
+
+
+@pytest.mark.parametrize("read_path", ["get", "stream"])
+@pytest.mark.parametrize("job_type", ["lora_training", "load_model_on_worker", "cover"])
+def test_get_job_stream_job_preserves_other_job_causes(
+    client,
+    stored_musician_job,
+    read_path,
+    job_type,
+):
+    """L5: The Generate projection does not erase other job diagnostics."""
+    with client.app.state.ctx.db() as session:
+        session.get(Job, stored_musician_job).type = job_type
+        session.commit()
+    result = _read_musician_job(client, stored_musician_job, read_path)
+    assert result["error"] == "need 18.5 GB"
+    assert result["type"] == job_type
+
+
+@pytest.mark.parametrize("status", ["queued", "running", "failed", "partial"])
+def test_cancel_preserves_status_contract_for_stored_errors(client, stored_musician_job, status):
+    """L11: Cancellation clears active errors and still refuses terminal jobs."""
+    with client.app.state.ctx.db() as session:
+        session.get(Job, stored_musician_job).status = status
+        session.commit()
+    response = client.post(f"/api/jobs/{stored_musician_job}/cancel")
+    active = status in {"queued", "running"}
+    assert response.status_code == (200 if active else 409)
+    if active:
+        assert response.json()["status"] == "cancelled"
+        assert response.json()["error"] is None
+        assert response.json()["error_type"] is None
+    with client.app.state.ctx.db() as session:
+        job = session.get(Job, stored_musician_job)
+        assert job.status == ("cancelled" if active else status)
+        assert job.error == (None if active else "need 18.5 GB")
+        assert job.error_type == (None if active else "generation_error")
+
+
+@pytest.mark.parametrize("read_path", ["get", "stream", "cancel"])
+def test_get_job_stream_job_cancel_rejects_foreign_job(client, stored_musician_job, read_path):
+    """L5: Projection never bypasses job ownership."""
+    with client.app.state.ctx.db() as session:
+        session.add(User(id="foreign", username="foreign", password_hash="unused", role="user"))
+        session.flush()
+        session.get(Job, stored_musician_job).user_id = "foreign"
+        session.commit()
+    path = f"/api/jobs/{stored_musician_job}"
+    if read_path == "cancel":
+        response = client.post(path + "/cancel")
+    elif read_path == "stream":
+        _authenticate_job_stream_client(client)
+        with client.stream("GET", path + "/stream") as response:
+            assert response.status_code == 404
+        return
+    else:
+        response = client.get(path)
+    assert response.status_code == 404
+
+
+def test_get_job_preserves_queue_position_with_projected_error(client, stored_musician_job):
+    """L11: Read projection preserves the queue's calculated position and reason."""
+    with client.app.state.ctx.db() as session:
+        job = session.get(Job, stored_musician_job)
+        job.status = "queued"
+        job.queue_reason = "Waiting for the next GPU slot."
+        session.add(
+            Job(
+                id="ahead",
+                type="generate",
+                status="queued",
+                user_id=_DEFAULT_USER_ID,
+                started_at=job.started_at - timedelta(seconds=1),
+            )
+        )
+        session.commit()
+    response = client.get(f"/api/jobs/{stored_musician_job}")
+    assert response.status_code == 200
+    assert response.json()["error"] == "Generating failed — try again."
+    assert response.json()["queue_position"] == 2
+    assert response.json()["queue_reason"] == "Waiting for the next GPU slot."

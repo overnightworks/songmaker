@@ -40,12 +40,40 @@ from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.dependencies import AuthenticatedUser  # noqa: E402
 
+from acestep_engine.errors import AudioDownloadError  # noqa: E402
 from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402
+from songmaker_cli.scheduler import NoCapacityError  # noqa: E402
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[1]
 COMPOSE_CONFIG_TIMEOUT_SECONDS: Final = 60
+
+
+SONGMAKER_FAILURE_CASES = [
+    pytest.param((TimeoutError, "private timeout", "Generation timed out"), id="timeout"),
+    pytest.param(
+        (AudioDownloadError, "private download", "Failed to download generated audio"),
+        id="download",
+    ),
+    pytest.param(
+        (ConnectionError, "private connection", "ACE-Step server not reachable"), id="connection"
+    ),
+    pytest.param(
+        (NoCapacityError, "private capacity", "No ACE-Step workers available"), id="capacity"
+    ),
+    pytest.param(
+        (RuntimeError, "private runtime", "Internal error during processing"), id="runtime"
+    ),
+    pytest.param((ValueError, "private unknown", "An unexpected error occurred"), id="unknown"),
+]
+
+
+@pytest.fixture(params=SONGMAKER_FAILURE_CASES)
+def generation_failure_case(request):
+    """L11: Fresh exceptions for the shared Songmaker counterexamples."""
+    error_class, cause, expected = request.param
+    return error_class(cause), expected
 
 
 def web_client(app, **kwargs) -> TestClient:
