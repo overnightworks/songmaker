@@ -181,12 +181,20 @@ it('1354_rule_20 restores album membership even when fetching its unloaded songs
 	expect(ids()).toEqual(['a']);
 });
 
-it('1354_rule_05 ordinary additions do not invent work or trigger a read', () => {
-	addAlbumToList(makeAlbum());
-	addSongsToList([makeSong()]);
-	expect(ids()).toEqual([]);
-	expect(fetch).not.toHaveBeenCalled();
-});
+it.each(['unread', 'ready'] as const)(
+	'1354_rule_05 ordinary additions do not invent work or trigger a read while %s',
+	async (state) => {
+		if (state === 'ready') {
+			fetch.mockResolvedValue(answer(row('kept')));
+			await ensureLibraryWriteRead();
+		}
+		addAlbumToList(makeAlbum());
+		addSongsToList([makeSong()]);
+		expect(ids()).toEqual(state === 'ready' ? ['kept'] : []);
+		expect(get(libraryWriteState)).toBe(state);
+		expect(fetch).toHaveBeenCalledTimes(state === 'ready' ? 1 : 0);
+	}
+);
 
 it.each(['song', 'album'] as const)(
 	'defect:#1557 leaves unread Write idle after a %s removal',
@@ -201,14 +209,19 @@ it.each(['song', 'album'] as const)(
 	}
 );
 
-it.each(['song', 'album'] as const)(
-	'1354_rule_20 accepts a cross-device restore after the read predating %s deletion lands',
-	async (kind) => {
+it.each([
+	{ kind: 'song', ordinaryAddition: false },
+	{ kind: 'album', ordinaryAddition: false },
+	{ kind: 'album', ordinaryAddition: true }
+] as const)(
+	'1354_rule_20 accepts a cross-device restore after the read predating $kind deletion lands (ordinary addition: $ordinaryAddition)',
+	async ({ kind, ordinaryAddition }) => {
 		const resolve = deferredRead();
 		const first = ensureLibraryWriteRead();
 		const refill = deferredRead();
 		if (kind === 'song') removeSongFromList('a');
 		else removeSongsForAlbum('album');
+		if (ordinaryAddition) addAlbumToList(makeAlbum({ id: 'not-removed-here' }));
 		resolve(answer(row('a')));
 		await first;
 		expect(ids()).toEqual([]);

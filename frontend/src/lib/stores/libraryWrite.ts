@@ -16,6 +16,8 @@ let outdatedDuringRead = false;
 // Only a read already in flight can predate a successful removal.
 // Reads started afterwards are authoritative, including restores on another device.
 const removed = { song: new Set<string>(), album: new Set<string>() };
+// Undo recognition lasts for the session, independently of in-flight read exclusions.
+const removedHere = { song: new Set<string>(), album: new Set<string>() };
 
 function readLibraryWrite(): Promise<boolean> {
 	if (pending !== null) return pending;
@@ -73,6 +75,7 @@ async function refillWritten(): Promise<boolean> {
 
 export function forgetWritten(kind: RemovedKind, id: string): void {
 	if (removed[kind].has(id)) return;
+	removedHere[kind].add(id);
 	if (pending !== null) removed[kind].add(id);
 	rows.update((items) =>
 		items.filter((row) => (kind === 'song' ? row.song_id : row.album_id) !== id)
@@ -81,8 +84,12 @@ export function forgetWritten(kind: RemovedKind, id: string): void {
 }
 
 export function restoreWritten(kind: RemovedKind, ids: readonly string[]): Promise<boolean> {
-	if (ids.length === 0) return Promise.resolve(true);
-	for (const id of ids) removed[kind].delete(id);
+	const restored = ids.filter((id) => removedHere[kind].has(id));
+	if (restored.length === 0) return Promise.resolve(true);
+	for (const id of restored) {
+		removedHere[kind].delete(id);
+		removed[kind].delete(id);
+	}
 	return refillWritten();
 }
 
@@ -92,6 +99,8 @@ export function resetLibraryWriteForTests(): void {
 	outdatedDuringRead = false;
 	removed.song.clear();
 	removed.album.clear();
+	removedHere.song.clear();
+	removedHere.album.clear();
 	rows.set([]);
 	state.set('unread');
 	loading.set(false);
