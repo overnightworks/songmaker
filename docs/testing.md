@@ -450,7 +450,8 @@ distinguish new locations from existing ones. The file fixtures in
 
 `scripts/test_helper_ratchet.sh` checks how many helper names are defined in more
 than one test module: module-level private Python functions in `tests/`, and
-top-level named functions or `const` function expressions in `frontend/src/**/*.test.ts`.
+top-level named functions, `const` function expressions, or `const` object literals in
+`frontend/src/**/*.test.ts`.
 Calls and repeated definitions within one file do not increase the count.
 The backend CI job compares both counts with `scripts/test_helper_ratchet.txt`;
 a growth fails, including with `--update`. After consolidation, run

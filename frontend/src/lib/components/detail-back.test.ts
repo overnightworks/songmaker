@@ -5,6 +5,7 @@ import {
 	makeSong as song
 } from '$lib/test-utils/factories';
 import { historyLength } from '$lib/test-utils/library-history';
+import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -73,8 +74,6 @@ import PlaylistDetailView from './PlaylistDetailView.svelte';
 import SongDetailView from './SongDetailView.svelte';
 import PhoneAppBar from './PhoneAppBar.svelte';
 import SettingsLayout from '../../routes/settings/+layout.svelte';
-
-const PHONE_APP_BAR_PROPS = { username: 'felix', onlogout: () => undefined };
 
 function detailSongDefaults(): Partial<SongItem> {
 	return { album_id: 'a-local', album_title: 'Local Album', generations: [generation()] };

@@ -37,6 +37,14 @@ def run_ratchet(root: Path, *arguments: str) -> subprocess.CompletedProcess:
         ("frontend/src", ".test.ts", "const helper = () => 1;\n", "0 1\n"),
         ("frontend/src", ".test.ts", "const helper = async (value: number) => value;\n", "0 1\n"),
         ("frontend/src", ".test.ts", "const helper = function () {};\n", "0 1\n"),
+        pytest.param(
+            "frontend/src", ".test.ts", "const helper = { value: 1 };\n", "0 1\n",
+            id="defect:#1519-object-literal-constant",
+        ),
+        pytest.param(
+            "frontend/src", ".test.ts", "export const helper: Shape = {\n\tvalue: 1\n};\n", "0 1\n",
+            id="defect:#1519-typed-multiline-object-literal-constant",
+        ),
     ],
 )
 def test_counts_each_helper_name_once_across_files(
@@ -52,15 +60,18 @@ def test_counts_each_helper_name_once_across_files(
 
 
 def test_calls_and_duplicates_in_one_file_do_not_count(ratchet_tree: Path) -> None:
+    """defect:#1519 -- an indented object constant and a call that takes one are no definitions."""
     (ratchet_tree / "tests/first.py").write_text("def _helper():\n    pass\n" * 2)
     (ratchet_tree / "tests/second.py").write_text("_helper()\n" * 2)
     (ratchet_tree / "frontend/src/first.test.ts").write_text("function helper() {}\n" * 2)
     (ratchet_tree / "frontend/src/second.test.ts").write_text(
         "helper();\nconst result = helper();\n"
-        "const err = (await helper().catch((e: unknown) => e)) as Error;\n",
+        "const err = (await helper().catch((e: unknown) => e)) as Error;\n"
+        "  const helper = { value: 1 };\n",
     )
     (ratchet_tree / "frontend/src/third.test.ts").write_text(
-        "const err = (await helper().catch((e: unknown) => e)) as Error;\n",
+        "const err = (await helper().catch((e: unknown) => e)) as Error;\n"
+        "const helper = makeHelper({});\n",
     )
 
     result = run_ratchet(ratchet_tree, "--update")
