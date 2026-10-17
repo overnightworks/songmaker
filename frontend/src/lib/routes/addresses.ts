@@ -65,6 +65,10 @@ export function libraryRouteShape(pathname: string): LibraryRouteShape {
 	return pathname === LIBRARY_ROUTE_PATH ? 'library' : 'external';
 }
 
+export function standsOnHomePage(pathname: string): boolean {
+	return libraryRouteShape(pathname) === 'home';
+}
+
 export function standsOnLibraryPage(pathname: string): boolean {
 	return libraryRouteShape(pathname) === 'library';
 }
