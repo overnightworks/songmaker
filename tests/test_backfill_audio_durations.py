@@ -187,7 +187,7 @@ def test_apply_survives_an_interruption_after_the_first_commit_batch(
         for i in range(5):
             write_wav(audio_dir / f"take{i}.wav", np.zeros(4410), 44100)
 
-    real_read_audio_duration = backfill.queue_streams.read_audio_duration
+    real_read_audio_duration = backfill.audio_files.read_audio_duration
     calls_made = 0
 
     def _probe_that_crashes_on_the_third_call(path: Path) -> float | None:
@@ -198,7 +198,7 @@ def test_apply_survives_an_interruption_after_the_first_commit_batch(
         return real_read_audio_duration(path)
 
     monkeypatch.setattr(
-        backfill.queue_streams, "read_audio_duration",
+        backfill.audio_files, "read_audio_duration",
         _probe_that_crashes_on_the_third_call,
     )
 
@@ -217,7 +217,7 @@ def test_apply_survives_an_interruption_after_the_first_commit_batch(
     assert measured_after_crash["g4"] is None
 
     monkeypatch.setattr(
-        backfill.queue_streams, "read_audio_duration", real_read_audio_duration,
+        backfill.audio_files, "read_audio_duration", real_read_audio_duration,
     )
     with factory() as session:
         rerun_report = backfill.run_backfill(session, audio_dir, apply=True)

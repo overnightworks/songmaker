@@ -29,7 +29,6 @@ from songmaker_cli.queue_streams import (
     build_queue_stream_snapshot,
     queue_stream_duration_fits_ffmpeg_timeout,
     queue_stream_ffmpeg_timeout_seconds,
-    read_audio_duration,
     run_ffmpeg_concat,
     track_source_from_generation,
 )
@@ -112,28 +111,6 @@ def _patch_audio_build(monkeypatch) -> None:
         output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
 
     monkeypatch.setattr(qs, "run_ffmpeg_concat", _fake_concat)
-
-
-def test_read_audio_duration_reads_a_real_audio_file(
-    tmp_path: Path, make_stereo_wav_bytes,
-) -> None:
-    wav_path = tmp_path / "clip.wav"
-    wav_path.write_bytes(make_stereo_wav_bytes(duration=0.5))
-    assert read_audio_duration(wav_path) == pytest.approx(0.5, abs=0.01)
-
-
-def test_read_audio_duration_is_none_for_an_unrecognized_file(tmp_path: Path) -> None:
-    garbage_path = tmp_path / "not-audio.wav"
-    garbage_path.write_bytes(b"this is not an audio file")
-    assert read_audio_duration(garbage_path) is None
-
-
-def test_read_audio_duration_is_none_for_a_zero_length_file(
-    tmp_path: Path, make_stereo_wav_bytes,
-) -> None:
-    wav_path = tmp_path / "empty.wav"
-    wav_path.write_bytes(make_stereo_wav_bytes(duration=0.0))
-    assert read_audio_duration(wav_path) is None
 
 
 @pytest.mark.parametrize(

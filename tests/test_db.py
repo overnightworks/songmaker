@@ -11,6 +11,7 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
 
 import songmaker_cli.db.queries.jobs as job_queries
+from songmaker_cli import audio_files
 from songmaker_cli.api_models import (
     AlbumResponse,
     GenerationResponse,
@@ -1147,15 +1148,13 @@ def test_create_generation_measures_duration_even_when_requested_zero(
 ) -> None:
     """The take's own length is measured, not copied from the "auto" (0)
     request parameter it was generated with (#258)."""
-    import songmaker_cli.queue_streams as qs
-
     probed: list[Path] = []
 
     def _read(path: Path) -> float:
         probed.append(path)
         return 188.0
 
-    monkeypatch.setattr(qs, "read_audio_duration", _read)
+    monkeypatch.setattr(audio_files, "read_audio_duration", _read)
 
     gen = create_generation(
         seeded_session,
@@ -1195,15 +1194,13 @@ def test_create_generation_without_an_audio_file_leaves_duration_unmeasured(
 def test_measure_generation_audio_duration_backfills_a_generation(
     seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import songmaker_cli.queue_streams as qs
-
     probed: list[Path] = []
 
     def _read(path: Path) -> float:
         probed.append(path)
         return 42.5
 
-    monkeypatch.setattr(qs, "read_audio_duration", _read)
+    monkeypatch.setattr(audio_files, "read_audio_duration", _read)
 
     gen = get_generation(seeded_session, "g1")
     assert gen.audio_duration_sec is None
@@ -1218,8 +1215,6 @@ def test_measure_generation_audio_duration_backfills_a_generation(
 def test_measure_generation_audio_duration_does_not_reprobe_a_measured_generation(
     seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import songmaker_cli.queue_streams as qs
-
     gen = get_generation(seeded_session, "g1")
     gen.audio_duration_sec = 99.0
     seeded_session.flush()
@@ -1227,7 +1222,7 @@ def test_measure_generation_audio_duration_does_not_reprobe_a_measured_generatio
     def _fail(_path: Path) -> float:
         raise AssertionError("should not re-probe an already-measured generation")
 
-    monkeypatch.setattr(qs, "read_audio_duration", _fail)
+    monkeypatch.setattr(audio_files, "read_audio_duration", _fail)
 
     duration = measure_generation_audio_duration(seeded_session, tmp_path, gen)
 
@@ -1239,9 +1234,7 @@ def test_measure_generation_audio_duration_stores_none_when_file_unreadable(
 ) -> None:
     """read_audio_duration returning None (unreadable file) must resolve to
     "unknown" on the generation, not raise or leave a stale value."""
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "read_audio_duration", lambda _path: None)
+    monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: None)
 
     gen = get_generation(seeded_session, "g1")
     duration = measure_generation_audio_duration(seeded_session, tmp_path, gen)
@@ -1255,13 +1248,11 @@ def test_measure_generation_audio_duration_retries_after_a_failed_probe(
 ) -> None:
     """Not idempotent across a failure: a None result isn't cached forever,
     so a later call (e.g. a second GET) gets another chance to measure it."""
-    import songmaker_cli.queue_streams as qs
-
     gen = get_generation(seeded_session, "g1")
-    monkeypatch.setattr(qs, "read_audio_duration", lambda _path: None)
+    monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: None)
     assert measure_generation_audio_duration(seeded_session, tmp_path, gen) is None
 
-    monkeypatch.setattr(qs, "read_audio_duration", lambda _path: 77.0)
+    monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: 77.0)
     assert measure_generation_audio_duration(seeded_session, tmp_path, gen) == 77.0
 
 

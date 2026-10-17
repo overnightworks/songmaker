@@ -1,4 +1,8 @@
-"""The packages beside the application never import it, and CI proves it."""
+"""The import boundaries hold, and CI proves it.
+
+The packages beside the application never import it, and persistence never
+imports the HTTP contract.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -20,9 +25,28 @@ CONTRACT_SECTION = "importlinter:contract:independent-packages"
 APPLICATION_PACKAGE = "songmaker_cli"
 INDEPENDENT_PACKAGE = "acestep_engine"
 INDEPENDENT_PACKAGES = ("agent_providers", "webauth")
-INJECTED_IMPORT = f"from {APPLICATION_PACKAGE} import constants\n"
-FORBIDDEN_CHAIN = f"{INDEPENDENT_PACKAGE} -> {APPLICATION_PACKAGE}.constants"
 UNCOPIED_ARTEFACTS = shutil.ignore_patterns("__pycache__", "*.egg-info")
+
+
+@dataclass(frozen=True)
+class Breach:
+    importer: str
+    injected_import: str
+    forbidden_chain: str
+
+
+BREACHES_BY_CONTRACT = {
+    "independent-packages": Breach(
+        importer=f"{INDEPENDENT_PACKAGE}/__init__.py",
+        injected_import=f"from {APPLICATION_PACKAGE} import constants\n",
+        forbidden_chain=f"{INDEPENDENT_PACKAGE} -> {APPLICATION_PACKAGE}.constants",
+    ),
+    "persistence-below-http-contract": Breach(
+        importer=f"{APPLICATION_PACKAGE}/db/__init__.py",
+        injected_import=f"from {APPLICATION_PACKAGE}.api_models import fields\n",
+        forbidden_chain=f"{APPLICATION_PACKAGE}.db -> {APPLICATION_PACKAGE}.api_models.fields",
+    ),
+}
 
 
 def _contract() -> configparser.ConfigParser:
@@ -92,23 +116,31 @@ def test_independent_packages_do_not_import_the_application() -> None:
     )
 
 
-def test_an_application_import_in_an_independent_package_breaks_the_contract(
+@pytest.mark.parametrize(
+    "breach",
+    BREACHES_BY_CONTRACT.values(),
+    ids=BREACHES_BY_CONTRACT.keys(),
+)
+def test_a_forbidden_import_breaks_its_contract_and_names_the_chain(
+    breach: Breach,
     tmp_path: Path,
 ) -> None:
+    """925_M1_G1 -- an import across either contracted boundary breaks
+    lint-imports, and the output names the chain."""
     project_root = _copy_of_this_tree(tmp_path)
-    package_init = project_root / "src" / INDEPENDENT_PACKAGE / "__init__.py"
-    package_init.write_text(
-        package_init.read_text(encoding="utf-8") + INJECTED_IMPORT,
+    importer = project_root / "src" / breach.importer
+    importer.write_text(
+        importer.read_text(encoding="utf-8") + breach.injected_import,
         encoding="utf-8",
     )
 
     completed = _lint_imports(project_root)
 
     assert completed.returncode == 1, (
-        f"lint-imports accepted an application import in {INDEPENDENT_PACKAGE}.\n"
+        f"lint-imports accepted {breach.injected_import!r} in {breach.importer}.\n"
         f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
     )
-    assert FORBIDDEN_CHAIN in completed.stdout, completed.stdout
+    assert breach.forbidden_chain in completed.stdout, completed.stdout
 
 
 def test_every_package_beside_the_application_is_under_contract() -> None:
