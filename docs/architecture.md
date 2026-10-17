@@ -1087,7 +1087,7 @@ no middleware reads songmaker's settings.
 The provider layer left this repository with #886. It ships as the distribution
 `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
-and is pinned in the `server` extra to the release wheel of tag `v0.1.2`;
+and is pinned in the `server` extra to the release wheel of tag `v0.1.3`;
 `uv.lock` records that wheel's hash, so every image installs the same bytes and
 no image needs `git`. The pin is bare — not `[api,image]` in its brackets — so
 the library's own optional capabilities never leak `anthropic` into the music

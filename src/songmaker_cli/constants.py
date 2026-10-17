@@ -34,8 +34,7 @@ JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED: Final[str] = (
     "Image tool blocked. Ask an administrator to enable the image tool."
 )
 JOB_ERROR_COVER_IMAGE_NOT_CREATED: Final[str] = (
-    "Codex did not create a cover image. Try again or ask an administrator "
-    "to enable image generation."
+    "Codex did not create a cover image. Try generating the cover again."
 )
 JOB_ERROR_COVER_IMAGE_FAILED: Final[str] = "Cover suggestion could not be generated"
 JOB_ERROR_COVER_CLI_BUSY: Final[str] = "Codex is busy. Try generating the cover again shortly."

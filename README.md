@@ -102,7 +102,7 @@ Tests run against an in-memory SQLite database (no Postgres needed for unit test
 The auth layer and the provider layer are external dependencies:
 `overnightworks-webauth` is pinned to the `v0.11.0` release wheel of
 [overnightworks/webauth](https://github.com/overnightworks/webauth), and
-`overnightworks-agent-providers` to the `v0.1.2` release wheel of
+`overnightworks-agent-providers` to the `v0.1.3` release wheel of
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers).
 Both are in the `server` extra and hash-locked in `uv.lock`, so `uv sync`
 installs them like any other dependency and their own tests run in those
