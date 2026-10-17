@@ -15,6 +15,7 @@ JOB_ERROR_AUDIO_DOWNLOAD_FAILED: Final[str] = "Failed to download generated audi
 JOB_ERROR_SERVER_UNREACHABLE: Final[str] = "ACE-Step server not reachable"
 JOB_ERROR_GENERATION_TIMED_OUT: Final[str] = "Generation timed out"
 JOB_ERROR_NO_WORKERS: Final[str] = "No ACE-Step workers available"
+JOB_ERROR_GENERATION_FAILED: Final[str] = "Generating failed — try again."
 JOB_ERROR_WORKER_TRAINING_FAILED: Final[str] = "Worker training failed"
 JOB_ERROR_WORKER_STREAM_SILENT: Final[str] = "Worker stream went silent"
 JOB_ERROR_INTERNAL: Final[str] = "Internal error during processing"
