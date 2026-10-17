@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { HOME_PAGE_LABEL } from '$lib/constants';
-	import LibraryContinue from './LibraryContinue.svelte';
+	import HomeListen from './HomeListen.svelte';
 	import NewPlaceMenu from './NewPlaceMenu.svelte';
 </script>
 
@@ -9,7 +9,7 @@
 		<h1 class="home-title">{HOME_PAGE_LABEL}</h1>
 		<NewPlaceMenu />
 	</div>
-	<LibraryContinue />
+	<HomeListen />
 </div>
 
 <style>

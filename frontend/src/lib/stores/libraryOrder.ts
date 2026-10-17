@@ -1,4 +1,4 @@
-import { derived, get, writable, type Readable } from 'svelte/store';
+import { derived, get, readonly, writable, type Readable } from 'svelte/store';
 import { fetchLibraryListen, type LibraryListenItem } from '$lib/api/library';
 import { LIBRARY_WALL_PLAYED_PAGE_SIZE, type LibraryWallOrder } from '$lib/constants';
 import { libraryWallOrder } from '$lib/stores/ui';
@@ -25,6 +25,9 @@ type ListenReadState = 'unread' | 'failed' | 'ranked' | 'outdated';
 
 const lastPlayed = writable<ReadonlyMap<string, LastPlayed>>(new Map());
 const listenRead = writable<ListenReadState>('unread');
+const listenedPlaces = writable<readonly LibraryListenItem[]>([]);
+export const libraryListenItems = readonly(listenedPlaces);
+export const libraryListenState = readonly(listenRead);
 let lastPlayedGeneration = 0;
 let lastPlayedRead: Promise<boolean> | null = null;
 // A listen recorded while a read is out may not be in what it brings back.
@@ -127,6 +130,7 @@ export function readLastPlayed(): Promise<boolean> {
 			listenRead.update((state) => (state === 'ranked' || state === 'outdated' ? state : 'failed'));
 			return false;
 		}
+		listenedPlaces.set(places);
 		lastPlayed.set(rankedPlaces(places));
 		listenRead.set(listenRecordedDuringRead ? 'outdated' : 'ranked');
 		return true;
@@ -160,6 +164,7 @@ export function resetLibraryOrderForTests(): void {
 	lastPlayedGeneration++;
 	lastPlayedRead = null;
 	lastPlayed.set(new Map());
+	listenedPlaces.set([]);
 	listenRecordedDuringRead = false;
 	standingOrder = null;
 	listenRead.set('unread');

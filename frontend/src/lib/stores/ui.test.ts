@@ -41,32 +41,6 @@ describe('railCollapsed', () => {
 	});
 });
 
-describe('libraryContinueCollapsed', () => {
-	it('starts open when this browser has no Continue preference', async () => {
-		const { libraryContinueCollapsed } = await import('./ui');
-
-		expect(get(libraryContinueCollapsed)).toBe(false);
-	});
-
-	it('restores and persists the browser preference', async () => {
-		localStorage.setItem('songmaker.library-continue-collapsed', 'true');
-		const {
-			initLibraryContinueCollapsed,
-			libraryContinueCollapsed,
-			toggleLibraryContinueCollapsed
-		} = await import('./ui');
-
-		expect(get(libraryContinueCollapsed)).toBe(true);
-		toggleLibraryContinueCollapsed();
-		expect(get(libraryContinueCollapsed)).toBe(false);
-		expect(localStorage.getItem('songmaker.library-continue-collapsed')).toBe('false');
-
-		libraryContinueCollapsed.set(true);
-		initLibraryContinueCollapsed();
-		expect(get(libraryContinueCollapsed)).toBe(false);
-	});
-});
-
 describe('libraryWallOrder', () => {
 	it('opens in A–Z when this browser has no wall order', async () => {
 		const { libraryWallOrder } = await import('./ui');

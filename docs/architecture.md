@@ -185,14 +185,16 @@ selected track pre-expand automatically on entry without overriding a later
 manual collapse. There is no Studio/Listen mode split and no third library
 tab for
 Shared. Home (`LibraryHome.svelte`, `/`) is its own page: the head "Home" and
-Continue (`LibraryContinue.svelte`: up to six places from
-`/api/library/listen`, so only places the musician listened in), with no wall.
+Listen (`HomeListen.svelte`: up to three Library rows from the shared
+`stores/libraryOrder.ts` Listen read), with no wall. Listen retains rows when
+offline and offers Retry when its first read fails. The live collection stores
+hide deleted or archived places; restoring an album reveals its retained row.
 Its head line holds the one + New (`NewPlaceMenu.svelte`: the button, its
 Album · Playlist popover and the inline card that unfolds under the head) at
 both widths; the desktop Library and Playlists heads mount the same component,
 the phone's list heads do not (#1354 rule 14, #1529).
 `LibraryWall.svelte` (the main-area library browser, `/library`) shows one wall
-of albums alone, without Continue
+of albums alone, without Listen
 (`kind="library"`; the Playlists page mounts the same component as
 `kind="playlists"` for a wall of playlists alone), with no filter chips
 (#1102; state (g) of `docs/design/album-browsing.html` as blessed 27.09.2026

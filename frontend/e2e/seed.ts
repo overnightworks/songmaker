@@ -438,14 +438,13 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 	const songIdByTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.songId]));
 	const takeBySongTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.takeId]));
 
-	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
-	// Each project reorders its own Continue target, so the two never move the
-	// same song. Other flows may play the mobile target before mobile runs;
-	// library-continue picks its listened-elsewhere song at run time and copes.
-	const playlistSongTitles = [desktopContinueSongTitle, mobileContinueSongTitle];
+	const [pickedSongTitle, mobileListenSongTitle, desktopListenSongTitle] = SONG_TITLES;
+	// Each project records listens with its own song. The persisted fixture key
+	// also serves the Library ordering flow.
+	const playlistSongTitles = [desktopListenSongTitle, mobileListenSongTitle];
 	const continueReorderSongs = {
-		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
-		mobile: seededSong(songIdByTitle, mobileContinueSongTitle)
+		desktop: seededSong(songIdByTitle, desktopListenSongTitle),
+		mobile: seededSong(songIdByTitle, mobileListenSongTitle)
 	};
 	await seed.postJson(`/api/generations/${takeId(takeBySongTitle, pickedSongTitle)}/pick`, {});
 
