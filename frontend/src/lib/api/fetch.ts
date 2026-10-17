@@ -299,6 +299,14 @@ export async function apiFetch<T>(
 	}
 }
 
+// The waveform read draws audio rather than sending a person's request. Its
+// failure already shows as flat bars, so it must not trigger refusal reactions.
+export async function fetchMediaBytes(url: string): Promise<ArrayBuffer> {
+	const response = await fetch(url);
+	if (!response.ok) throw new ApiError(response.status, '', url);
+	return response.arrayBuffer();
+}
+
 export type JobStatus = JobItem;
 
 async function* parseSseEvents<T>(

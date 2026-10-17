@@ -9,6 +9,7 @@ vi.mock('$app/navigation', async () =>
 
 import {
 	apiFetch,
+	fetchMediaBytes,
 	sseFetch,
 	addCsrfToken,
 	ApiError,
@@ -692,5 +693,42 @@ describe('sign-in return path', () => {
 		['the API root', `?redirect=${encodeURIComponent('/api')}`, '/']
 	])('lands on %s', (_label, query, expected) => {
 		expect(signInReturnPath(signInPage(query))).toBe(expected);
+	});
+});
+
+describe('fetchMediaBytes', () => {
+	afterEach(() => mockFetch.mockReset());
+
+	it('925_M2_M1: returns the media bytes', async () => {
+		const bytes = new Uint8Array([1, 2, 3]);
+		mockFetch.mockResolvedValueOnce(new Response(bytes));
+		expect(new Uint8Array(await fetchMediaBytes('/audio/a'))).toEqual(bytes);
+	});
+
+	it.each([401, 404, 429])(
+		'925_M2_M1: a %i refuses media without app reactions',
+		async (status) => {
+			const told: string[] = [];
+			onTestFinished(
+				installRefusalReactions({
+					rateLimited: () => told.push('rateLimited'),
+					sessionLost: async () => {
+						told.push('sessionLost');
+					}
+				})
+			);
+			mockFetch.mockResolvedValueOnce(new Response(null, { status }));
+			const failure = await fetchMediaBytes('/audio/a').catch((error: unknown) => error);
+			expect(failure).toBeInstanceOf(ApiError);
+			expect(failure).toMatchObject({ status, detail: '', path: '/audio/a' });
+			expect(told).toEqual([]);
+		}
+	);
+
+	it.each(['request', 'body'])('925_M2_M3: propagates a failed media %s', async (stage) => {
+		const failure = new TypeError('connection lost');
+		if (stage === 'request') mockFetch.mockRejectedValueOnce(failure);
+		else mockFetch.mockResolvedValueOnce({ ok: true, arrayBuffer: () => Promise.reject(failure) });
+		await expect(fetchMediaBytes('/audio/a')).rejects.toBe(failure);
 	});
 });
