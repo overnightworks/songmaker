@@ -3,6 +3,6 @@ agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
 role = "builder"
 base = "e00448198d1e032a6cce5c645cb86cb0d44a9c59"
 branch = "claude/issue-1531-delete-dialog-focus"
-scope = ["frontend/e2e/song-menu.spec.ts", "frontend/src/lib/components/ConfirmDialog.svelte", "frontend/src/lib/components/ConfirmDialog.test.ts", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts"]
+scope = ["frontend/e2e/song-menu.spec.ts", "frontend/src/lib/components/ConfirmDialog.svelte", "frontend/src/lib/components/ConfirmDialog.test.ts", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts"]
 opened_commit = "5a478a17b5fd86ff29a2e1f035d674bcfa6242d2"
 whole_reason = "One focus race between the closing song menu and the opening confirm dialog; the dialog, the menu, the popover and their tests decide it together."
