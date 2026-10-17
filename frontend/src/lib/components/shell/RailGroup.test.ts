@@ -202,10 +202,17 @@ describe('RailGroup', () => {
 			expect(open).not.toHaveBeenCalled();
 		});
 
-		it('#1354 rule 40: a modified click leaves the browser to open the address elsewhere', async () => {
+		it.each([
+			{ ctrlKey: true },
+			{ metaKey: true },
+			{ shiftKey: true },
+			{ altKey: true },
+			{ button: 1 },
+			{ button: 2 }
+		])('1354_rule_40: leaves browser handling for %o', async (mouse) => {
 			const open = vi.fn();
 			const { target } = await render({ page: { href: '/playlists', current: false, open } });
-			const click = new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true });
+			const click = new MouseEvent('click', { bubbles: true, cancelable: true, ...mouse });
 			let preventedByGroup = true;
 			// Last on the way up, so it reads what the group did and then stops jsdom
 			// from trying to leave the document.

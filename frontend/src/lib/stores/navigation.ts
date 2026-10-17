@@ -296,13 +296,15 @@ export function openAppPage(href: AppPageHref): Promise<void> {
 	});
 }
 
+export function isPlainPrimaryClick(event: MouseEvent): boolean {
+	return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
 // An app-page `<a href>` inside the shell or the song surface: a plain click
 // goes through `openAppPage`, while a modified or non-primary click (a new
 // tab or window) keeps the browser default, because it never leaves the song.
 export function followAppPageLink(event: MouseEvent, href: AppPageHref): void {
-	const opensElsewhere =
-		event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
-	if (opensElsewhere) return;
+	if (!isPlainPrimaryClick(event)) return;
 	event.preventDefault();
 	void openAppPage(href);
 }

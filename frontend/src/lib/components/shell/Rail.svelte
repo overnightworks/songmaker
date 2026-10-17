@@ -1,7 +1,11 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { followAppPageLink, openHome } from '$lib/stores/navigation';
-	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
+	import { setContext } from 'svelte';
+	import { page } from '$app/state';
+	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
+	import { standingPathname } from '$lib/routes/standingAddress';
+	import { followAppPageLink, isPlainPrimaryClick, openHome } from '$lib/stores/navigation';
+	import { APP_NAME, HOME_PAGE_LABEL, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import { accountInitial } from '$lib/utils/format';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
@@ -37,6 +41,10 @@
 		showCollapseControl?: boolean;
 		showResizeHandle?: boolean;
 	} = $props();
+
+	// Each rail supplies its own state so the phone drawer stays expanded.
+	setContext('rail-collapsed', () => collapsed);
+	const onHome = $derived(standingPathname(page.state) === HOME_ROUTE_PATH);
 
 	const collapseRailLabel = 'Collapse rail';
 	const expandRailLabel = 'Expand rail';
@@ -116,6 +124,32 @@
 	<RailSearch />
 
 	<div class="rail-scroll" use:kineticScroll={{ itemSelector: RAIL_ITEM_SELECTOR }}>
+		<a
+			class="home-link"
+			href={HOME_ROUTE_PATH}
+			aria-current={onHome ? 'page' : undefined}
+			title={collapsed ? HOME_PAGE_LABEL : undefined}
+			onclick={(event) => {
+				if (!isPlainPrimaryClick(event)) return;
+				event.preventDefault();
+				void openHome();
+			}}
+		>
+			<svg
+				width="14"
+				height="14"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				aria-hidden="true"
+			>
+				<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
+			</svg>
+			<span class="group-title">{HOME_PAGE_LABEL}</span>
+		</a>
 		<RailLibraryGroup />
 		<RailPlaylistsGroup />
 	</div>
@@ -203,6 +237,35 @@
 		letter-spacing: 3px;
 		text-transform: uppercase;
 		text-decoration: none;
+	}
+
+	.home-link {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 16px;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 0.85rem;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		text-decoration: none;
+	}
+
+	.home-link:hover {
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+
+	.home-link[aria-current='page'] {
+		box-shadow: inset 3px 0 0 var(--accent);
+		background: color-mix(in srgb, var(--accent) 22%, transparent);
+		color: color-mix(in srgb, var(--accent) 60%, var(--text));
+		font-weight: 600;
+	}
+
+	.rail-collapsed .home-link {
+		justify-content: center;
 	}
 
 	.rail-scroll {

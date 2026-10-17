@@ -1,6 +1,9 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import type { Snippet } from 'svelte';
+	import { getContext, type Snippet } from 'svelte';
+	import { isPlainPrimaryClick } from '$lib/stores/navigation';
+
+	const isRailCollapsed = getContext<() => boolean>('rail-collapsed') ?? (() => false);
 
 	interface GroupPage {
 		href: string;
@@ -75,9 +78,7 @@
 	});
 
 	function followPageLink(event: MouseEvent, groupPage: GroupPage): void {
-		const opensElsewhere =
-			event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
-		if (opensElsewhere) return;
+		if (!isPlainPrimaryClick(event)) return;
 		event.preventDefault();
 		groupPage.open();
 	}
@@ -125,7 +126,7 @@
 				aria-label={label}
 				aria-expanded={open}
 				aria-controls={groupId}
-				title={label}
+				title={isRailCollapsed() ? label : undefined}
 				onclick={toggleOpen}
 			>
 				{@render caret()}
@@ -133,7 +134,7 @@
 			<a
 				class="disclose page-link"
 				href={page.href}
-				title={label}
+				title={isRailCollapsed() ? label : undefined}
 				aria-current={page.current ? 'page' : undefined}
 				onclick={(event) => followPageLink(event, page)}
 			>
@@ -146,7 +147,7 @@
 				aria-label={label}
 				aria-expanded={open}
 				aria-controls={groupId}
-				title={label}
+				title={isRailCollapsed() ? label : undefined}
 				onclick={toggleOpen}
 			>
 				{@render caret()}
