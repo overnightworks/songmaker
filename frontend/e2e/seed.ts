@@ -187,7 +187,7 @@ export interface SeededLibrary {
 	 * each prove their own reorder without relying on another spec to move the
 	 * shared library's leader in between.
 	 */
-	continueReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
+	listenReorderSongs: Record<'desktop' | 'mobile', SeededSong>;
 	/** Takes a per-attempt playlist starts with, in playlist order. */
 	playlistTakes: SeededTake[];
 	/** Row label of a reimported take, which carries no version. */
@@ -442,7 +442,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 	// Each project records listens with its own song. The persisted fixture key
 	// also serves the Library ordering flow.
 	const playlistSongTitles = [desktopListenSongTitle, mobileListenSongTitle];
-	const continueReorderSongs = {
+	const listenReorderSongs = {
 		desktop: seededSong(songIdByTitle, desktopListenSongTitle),
 		mobile: seededSong(songIdByTitle, mobileListenSongTitle)
 	};
@@ -495,7 +495,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		playlistShareUrl: `${BASE_URL}/share/playlist/${playlistShare.share_slug}`,
 		pickedSongTitle,
-		continueReorderSongs,
+		listenReorderSongs,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,

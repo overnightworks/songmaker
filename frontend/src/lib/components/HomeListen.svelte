@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { LibraryListenItem } from '$lib/api/library';
+	import type { SongItem } from '$lib/api/types';
 	import {
 		HOME_LISTEN_LABEL,
 		HOME_LISTEN_LIMIT,
@@ -17,6 +18,7 @@
 	} from '$lib/stores/libraryOrder';
 	import {
 		albumList,
+		albumSongsLoad,
 		allAlbumsLoad,
 		songList,
 		ensureAllAlbumsLoaded
@@ -32,6 +34,7 @@
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { activityTimeLabel } from '$lib/utils/format';
+	import { albumRowOffersPlay } from '$lib/utils/playable';
 	import LibraryRow from './LibraryRow.svelte';
 
 	const albums = $derived(new Map($albumList.map((album) => [album.id, album])));
@@ -84,9 +87,14 @@
 	function rowPlay(item: LibraryListenItem): (() => void) | undefined {
 		if ($collectionTransport(item.type, item.id).current)
 			return () => toggleOrStartCollection(item.type, item.id, null);
-		if (item.type === 'album' && albums.get(item.id)?.has_playable_take)
-			return () => toggleOrStartCollection('album', item.id, () => void playAlbum(item.id));
-		return undefined;
+		const album = item.type === 'album' ? albums.get(item.id) : undefined;
+		if (!album || !albumRowOffersPlay(album, albumSongs(album.id), $albumSongsLoad))
+			return undefined;
+		return () => toggleOrStartCollection('album', album.id, () => void playAlbum(album.id));
+	}
+
+	function albumSongs(albumId: string): SongItem[] {
+		return $songList.filter((song) => song.album_id === albumId);
 	}
 </script>
 
@@ -105,6 +113,7 @@
 		<p>{HOME_LISTEN_EMPTY}</p>
 	{:else}
 		{#each visibleItems as item (item.type + item.id)}
+			{@const transport = $collectionTransport(item.type, item.id)}
 			<LibraryRow
 				title={item.title}
 				subtitle={subtitle(item)}
@@ -114,7 +123,8 @@
 				openLabel={`Open ${item.type} ${item.title}`}
 				onopen={() =>
 					item.type === 'album' ? void openAlbum(item.id) : void openPlaylist(item.id)}
-				transport={$collectionTransport(item.type, item.id).transport}
+				current={transport.current}
+				transport={transport.transport}
 				onplay={rowPlay(item)}
 			/>
 		{/each}

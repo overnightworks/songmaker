@@ -158,6 +158,23 @@ export function outdateLastPlayedRanking(): void {
 	listenRead.update((state) => (state === 'ranked' ? 'outdated' : state));
 }
 
+// A place deleted or archived here leaves Listen at once and stays off it
+// whatever the collection reloads do meanwhile: Listen stops naming it
+// before any read can confirm the removal.
+export function forgetListenedPlace(type: LibraryPlaceType, id: string): void {
+	listenedPlaces.update((places) =>
+		places.filter((place) => place.type !== type || place.id !== id)
+	);
+}
+
+// An Undo has put a forgotten place back: Listen reads again and ranks it
+// where its listens put it. A read already out may predate the Undo, so the
+// ranking it brings back counts as outdated.
+export function readRestoredPlace(): Promise<boolean> {
+	outdateLastPlayedRanking();
+	return readLastPlayed();
+}
+
 // Bumping the generation also discards a read still in flight from the test
 // before.
 export function resetLibraryOrderForTests(): void {

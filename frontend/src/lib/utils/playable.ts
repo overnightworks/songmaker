@@ -50,3 +50,14 @@ export function albumHasPlayableTake(
 	if (songsComplete && playabilities.every((playability) => playability === 'none')) return false;
 	return album.has_playable_take;
 }
+
+// Whether an album's row offers ▶, for every list that shows album rows: its
+// songs speak for it once their load has settled, which `albumSongsLoad`
+// records as 'idle'.
+export function albumRowOffersPlay(
+	album: Pick<AlbumItem, 'id' | 'has_playable_take'>,
+	songs: SongItem[],
+	songLoads: Readonly<Record<string, string>>
+): boolean {
+	return albumHasPlayableTake(album, songs, { songsComplete: songLoads[album.id] === 'idle' });
+}

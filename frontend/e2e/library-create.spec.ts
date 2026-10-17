@@ -62,7 +62,7 @@ import { readSeededLibrary, type SeededLibrary } from './seed';
 
 /**
  * Sized before the first CI measurement from the cold wall open (auth, the
- * album and playlist lists, Continue, the live stream) plus one album create
+ * album and playlist lists, Listen, the live stream) plus one album create
  * and the album page's own loads; the CI log line below is the measurement to
  * tighten it against.
  */

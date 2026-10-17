@@ -1,7 +1,14 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LibraryListenItem } from '$lib/api/library';
-import { HOME_LISTEN_EMPTY, HOME_LISTEN_ERROR } from '$lib/constants';
+import { get } from 'svelte/store';
+import {
+	COLLECTION_MENU_ARCHIVE_LABEL,
+	COLLECTION_MENU_DELETE_LABEL,
+	HOME_LISTEN_EMPTY,
+	HOME_LISTEN_ERROR,
+	PLAYING_MARK_LABEL
+} from '$lib/constants';
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import {
@@ -12,7 +19,10 @@ import {
 import { queueContext } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { makeAlbum, makePlaylist, makeSong, makeGeneration } from '$lib/test-utils/factories';
+import { toasts } from '$lib/stores/toast';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { openCollectionMenu, requireButtonContainingText } from './shell/rail-test-fixtures';
+import AlbumDetailView from './AlbumDetailView.svelte';
 import HomeListen from './HomeListen.svelte';
 
 const places: LibraryListenItem[] = Array.from({ length: 4 }, (_, index) => ({
@@ -55,6 +65,7 @@ afterEach(async () => {
 	target.remove();
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
+	toasts.set([]);
 	vi.unstubAllGlobals();
 });
 
@@ -62,6 +73,38 @@ async function showListen(): Promise<void> {
 	component = mount(HomeListen, { target });
 	await vi.waitFor(() => expect(target.querySelector('[role="status"]')).toBeNull());
 	await tick();
+}
+
+// The album page of the first place, answering its delete, archive and their
+// Undo the way the server does; Listen answers whatever `listenAnswer` holds.
+function serveAlbumPage(listenAnswer: () => LibraryListenItem[]): void {
+	const album = homeAlbums[0];
+	fetchListen.mockImplementation(async (url: string) => {
+		const { pathname } = new URL(url, 'http://localhost');
+		if (pathname === '/api/library/listen') return Response.json({ items: listenAnswer() });
+		if (pathname.startsWith(`/api/albums/${album.id}`)) return Response.json(album);
+		return Response.json({ items: [], total: 0, offset: 0, limit: 200, has_more: false });
+	});
+}
+
+async function removeOnAlbumPage(action: string): Promise<void> {
+	const page = document.createElement('div');
+	document.body.append(page);
+	const albumPage = mount(AlbumDetailView, { target: page, props: { albumId: 'place-0' } });
+	await tick();
+	requireButtonContainingText(await openCollectionMenu(page), action).click();
+	await tick();
+	if (action === COLLECTION_MENU_DELETE_LABEL)
+		getByRoleButton(document.body, 'Delete Album').click();
+	await vi.waitFor(() => expect(get(toasts).some((toast) => toast.action)).toBe(true));
+	await unmount(albumPage);
+	page.remove();
+}
+
+async function undoLastRemoval(): Promise<void> {
+	await get(toasts)
+		.find((toast) => toast.action)
+		?.action?.handler();
 }
 
 const rowNames = () =>
@@ -130,8 +173,53 @@ describe('1354_rule_14 Listen', () => {
 		}
 	);
 
+	it.each(['loading', 'unreachable', 'error'] as const)(
+		'1354_rule_20 keeps an album deleted here off Listen while the album reload is %s',
+		async (status) => {
+			serveAlbumPage(() => places);
+			await ensureLastPlayedRead();
+			await removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
+			allAlbumsLoad.set({ status, error: null });
+			await showListen();
+			expect(rowNames()).not.toContain('Open album Place 0');
+		}
+	);
+
+	it.each([COLLECTION_MENU_DELETE_LABEL, COLLECTION_MENU_ARCHIVE_LABEL])(
+		'1354_rule_20 %s on the album page, a Listen read on Home, then Undo brings the row back',
+		async (action) => {
+			let removed = false;
+			serveAlbumPage(() => (removed ? places.slice(1) : places));
+			await showListen();
+			await unmount(component);
+			await removeOnAlbumPage(action);
+			removed = true;
+			await showListen();
+			expect(rowNames()).not.toContain('Open album Place 0');
+			await readLastPlayed();
+			removed = false;
+			await undoLastRemoval();
+			await vi.waitFor(() => expect(rowNames()[0]).toBe('Open album Place 0'));
+		}
+	);
+
+	it('1354_rule_19 reads Listen again on the return to the foreground and shows the new order', async () => {
+		await showListen();
+		fetchListen.mockImplementation(async () => Response.json({ items: places.toReversed() }));
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+		document.dispatchEvent(new Event('visibilitychange'));
+		await vi.waitFor(() =>
+			expect(rowNames()).toEqual([
+				'Open playlist Place 3',
+				'Open album Place 2',
+				'Open playlist Place 1'
+			])
+		);
+		expect(fetchListen).toHaveBeenCalledTimes(2);
+	});
+
 	it.each(['album', 'playlist'] as const)(
-		'1354_rule_15 shows pause for the playing %s and its current song subtitle',
+		'1354_rule_15 shows pause and the playing mark for the playing %s and its current song subtitle',
 		async (type) => {
 			const id = type === 'album' ? 'place-0' : 'place-1';
 			const title = type === 'album' ? 'Place 0' : 'Place 1';
@@ -156,7 +244,11 @@ describe('1354_rule_14 Listen', () => {
 			};
 			audioPlayer.status = 'playing';
 			await showListen();
-			expect(getByRoleButton(target, `Pause ${title}`)).toBeTruthy();
+			const playingRow = getByRoleButton(target, `Pause ${title}`).closest('.library-row');
+			expect(
+				playingRow?.querySelector(`[role="img"][aria-label="${PLAYING_MARK_LABEL}"]`)
+			).not.toBeNull();
+			expect(target.querySelectorAll(`[aria-label="${PLAYING_MARK_LABEL}"]`)).toHaveLength(1);
 			expect(target.textContent).toContain(
 				`${type === 'album' ? 'Album' : 'Playlist'} · playing · song 2 of 4`
 			);

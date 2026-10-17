@@ -14,6 +14,7 @@ import {
 	loseNetwork,
 	regainNetwork,
 	openHome,
+	listenRegion,
 	shellOf,
 	workspace
 } from './helpers';
@@ -26,9 +27,6 @@ import {
 	seedUnpickedLibrary,
 	readSeededLibrary
 } from './seed';
-
-const listenRegion = (page: Page) =>
-	workspace(page).getByRole('region', { name: 'Listen', exact: true });
 
 async function postFromPage(
 	page: Page,
@@ -188,6 +186,12 @@ test('1354_rule_19: a never-loaded Home offers Retry and then loads Listen', asy
 	await listenRegion(page).getByRole('button', { name: 'Retry', exact: true }).click();
 	await expect(listenRegion(page).getByText(HOME_LISTEN_ERROR)).toHaveCount(0);
 	await expect(listenRegion(page).getByRole('status')).toHaveCount(0);
+	await expect(
+		listenRegion(page)
+			.locator('.library-row')
+			.or(listenRegion(page).getByText(HOME_LISTEN_EMPTY))
+			.first()
+	).toBeVisible();
 	guard.assertClean();
 });
 
@@ -196,10 +200,7 @@ test('1354_rule_15: the playing Listen row offers Pause and its body opens the a
 }, testInfo) => {
 	const guard = new FlowGuard(page);
 	const library = readSeededLibrary();
-	await postFromPage(
-		page,
-		`/api/songs/${library.continueReorderSongs[shellOf(testInfo)].id}/listen`
-	);
+	await postFromPage(page, `/api/songs/${library.listenReorderSongs[shellOf(testInfo)].id}/listen`);
 	await page.goto(HOME_PATH);
 	await listenRegion(page)
 		.getByRole('button', { name: `Play ${library.albumTitle}`, exact: true })

@@ -34,6 +34,7 @@
 	import { selectSong } from '$lib/stores/navigation';
 	import { historyLayerState, holdOpenWhile } from '$lib/stores/layers';
 	import { setOpenCollection } from '$lib/stores/collection';
+	import { forgetListenedPlace, readRestoredPlace } from '$lib/stores/libraryOrder';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import {
@@ -218,6 +219,7 @@
 		try {
 			await deleteAlbum(albumId);
 			removeAlbumFromList(albumId);
+			forgetListenedPlace('album', albumId);
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
 			addUndoToast('Album deleted', {
@@ -226,6 +228,7 @@
 					try {
 						const restored = await restoreAlbum(albumId);
 						addAlbumToList(restored);
+						void readRestoredPlace();
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
 						addToast('Album restored', 'success');
@@ -246,6 +249,7 @@
 		try {
 			await archiveAlbum(albumId);
 			removeAlbumFromList(albumId);
+			forgetListenedPlace('album', albumId);
 			removeSongsForAlbum(albumId);
 			setOpenCollection(null);
 			addUndoToast('Album archived', {
@@ -254,6 +258,7 @@
 					try {
 						const restored = await unarchiveAlbum(albumId);
 						addAlbumToList(restored);
+						void readRestoredPlace();
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
 						addToast('Album unarchived', 'success');
