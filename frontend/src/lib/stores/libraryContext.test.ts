@@ -23,7 +23,7 @@ import { get } from 'svelte/store';
 import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import { LIBRARY_HISTORY_KIND } from '$lib/constants';
-import { openCollection } from '$lib/stores/collection';
+import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
 import {
 	libraryBrowse,
 	librarySearch,
@@ -134,8 +134,10 @@ import {
 	libraryRootState,
 	rememberedSongTab,
 	resetLibraryContextForTests,
+	setLibrarySurface,
 	showSongTab,
 	snapshotLibraryHistory,
+	takePlaceReturnedFrom,
 	writeLibraryHistory,
 	type LibraryHistoryState
 } from './libraryContext';
@@ -2068,4 +2070,108 @@ describe('an address route whose history moves on', () => {
 			expect(historyEntry()).toEqual(albumLeftFor);
 		}
 	);
+});
+
+describe('the place the wall returns from', () => {
+	type LibrarySurface = Parameters<typeof setLibrarySurface>[0];
+	const album: OpenCollection = { kind: 'album', id: 'a2' };
+	const playlist: OpenCollection = { kind: 'playlist', id: 'p1' };
+
+	it.each<{
+		change: string;
+		from: LibrarySurface;
+		open: OpenCollection | null;
+		to: LibrarySurface;
+		returnedFrom: OpenCollection | null;
+	}>([
+		{
+			change: 'an album page to the Library wall',
+			from: 'detail',
+			open: album,
+			to: 'browse',
+			returnedFrom: album
+		},
+		{
+			change: 'a playlist page to the Playlists page',
+			from: 'detail',
+			open: playlist,
+			to: 'playlists',
+			returnedFrom: playlist
+		},
+		{
+			change: 'an album page to Home',
+			from: 'detail',
+			open: album,
+			to: 'home',
+			returnedFrom: null
+		},
+		{
+			change: 'Home to the Library wall',
+			from: 'home',
+			open: album,
+			to: 'browse',
+			returnedFrom: null
+		},
+		{
+			change: 'the wall to itself',
+			from: 'browse',
+			open: album,
+			to: 'browse',
+			returnedFrom: null
+		},
+		{
+			change: 'a page without a collection to the wall',
+			from: 'detail',
+			open: null,
+			to: 'browse',
+			returnedFrom: null
+		}
+	])('1354_rule_12: $change names $returnedFrom', ({ from, open, to, returnedFrom }) => {
+		librarySurface.set(from);
+		setOpenCollection(open);
+
+		setLibrarySurface(to);
+
+		expect(takePlaceReturnedFrom()).toEqual(returnedFrom);
+	});
+
+	it('1354_rule_12: names the place to one wall only', () => {
+		librarySurface.set('detail');
+		setOpenCollection(album);
+		setLibrarySurface('browse');
+
+		expect(takePlaceReturnedFrom()).toEqual(album);
+		expect(takePlaceReturnedFrom()).toBeNull();
+	});
+
+	it('1354_rule_12: forgets the place when the surface changes again before the wall takes it', () => {
+		librarySurface.set('detail');
+		setOpenCollection(album);
+		setLibrarySurface('browse');
+		setLibrarySurface('home');
+
+		expect(takePlaceReturnedFrom()).toBeNull();
+	});
+
+	it('1354_rule_12: keeps the place when the same surface is applied twice', () => {
+		librarySurface.set('detail');
+		setOpenCollection(album);
+		setLibrarySurface('browse');
+		setLibrarySurface('browse');
+
+		expect(takePlaceReturnedFrom()).toEqual(album);
+	});
+
+	it('1354_rule_12: Back onto the wall names the album left although the wall entry holds none', async () => {
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			collection: albumSnapshot('a2')
+		});
+
+		await applyLibraryHistory(libraryRootState());
+
+		expect(get(openCollection)).toBeNull();
+		expect(takePlaceReturnedFrom()).toEqual(album);
+	});
 });
