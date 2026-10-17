@@ -6,7 +6,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL
 } from '../src/lib/constants';
@@ -150,7 +150,7 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 		await page.goto(`/album/${album.id}`);
 		await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
 		const rail = await openRail(page, Boolean(isMobile));
-		const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${RAIL_LIBRARY_LABEL}`) });
+		const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${LIBRARY_PAGE_LABEL}`) });
 		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 		const railAlbum = rail
 			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })

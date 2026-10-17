@@ -90,7 +90,7 @@
 	import {
 		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
-		RAIL_LIBRARY_LABEL,
+		LIBRARY_PAGE_LABEL,
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ALT_TYPE,
 		SONG_COVER_ALT_TYPE,
@@ -194,7 +194,7 @@
 	const breadcrumbItems = $derived(
 		song
 			? [
-					{ label: RAIL_LIBRARY_LABEL, onclick: () => void openLibraryWall() },
+					{ label: LIBRARY_PAGE_LABEL, onclick: () => void openLibraryWall() },
 					{
 						label: song.album_title,
 						onclick: collection ? () => openCollectionEntry(collection) : undefined

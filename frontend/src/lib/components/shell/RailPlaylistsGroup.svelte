@@ -31,7 +31,7 @@
 		libraryPlaceOrder
 	} from '$lib/stores/libraryOrder';
 	import { libraryWallOrder } from '$lib/stores/ui';
-	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
+	import { PLAYLISTS_PAGE_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import PlaylistCover from '../PlaylistCover.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
@@ -115,7 +115,7 @@
 {/snippet}
 
 <RailGroup
-	label={RAIL_PLAYLISTS_LABEL}
+	label={PLAYLISTS_PAGE_LABEL}
 	groupId="rail-playlists-group"
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
 	count={playlistCount}
