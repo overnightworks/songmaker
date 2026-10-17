@@ -102,7 +102,7 @@ function offlineWorkerPool(lastRegisterAt: string): WorkerPoolResponse {
 }
 
 describe('WorkerPoolPanel with no heartbeat', () => {
-	it('S19-2 defect:#1567 names how long the worker has been gone instead of just "no heartbeat"', async () => {
+	it('defect:#1567 names how long the worker has been gone instead of just "no heartbeat"', async () => {
 		// The GPU worker's container sat on "Created" for five days without
 		// ever registering again (issue #252's live incident). "Offline (no
 		// heartbeat)" told the operator nothing about how long that had been
@@ -115,7 +115,7 @@ describe('WorkerPoolPanel with no heartbeat', () => {
 		expect(target.querySelector('.card-row')?.textContent).not.toContain('no heartbeat');
 	});
 
-	it('S19-2 explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
+	it('defect:#1593 explains why Restart cannot help instead of leaving it clickable into a 502', async () => {
 		const target = await renderWorkerPool(offlineWorkerPool(new Date().toISOString()), []);
 
 		const restartButton = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -175,7 +175,7 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 	// non-null. The panel must not read state-presence as "Idle" — the red
 	// status icon and the row text must agree, and nothing must be
 	// clickable.
-	it('S19-2 defect:#1573 names the GPU failure from the heartbeat and disables every action', async () => {
+	it('defect:#1573 names the GPU failure from the heartbeat and disables every action', async () => {
 		const target = await renderWorkerPool(
 			heartbeatingButOfflineWorkerPool(false, 'Driver/library version mismatch')
 		);
@@ -195,7 +195,7 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 		expect(select?.disabled).toBe(true);
 	});
 
-	it('S19-2 names an old worker build that never learned to report GPU health', async () => {
+	it('defect:#1593 names an old worker build that never learned to report GPU health', async () => {
 		const target = await renderWorkerPool(heartbeatingButOfflineWorkerPool(null, null));
 
 		expect(target.textContent).toContain('GPU health not reported');
@@ -259,7 +259,7 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 	// this change may make a genuinely healthy worker's actions
 	// unreachable. Without this, a guard that fails "always disabled" would
 	// pass every offline test and still be a regression.
-	it('S19-2 defect:#1573 leaves Load, Keep loaded, Unload, and Restart usable', async () => {
+	it('defect:#1573 leaves Load, Keep loaded, Unload, and Restart usable', async () => {
 		const target = await renderWorkerPool(onlineWorkerPool());
 
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
@@ -282,7 +282,7 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 		expect(restartButton.disabled).toBe(false);
 	});
 
-	it('S19-2 shows a held online worker as training with the remaining lease', async () => {
+	it('defect:#1593 shows a held online worker as training with the remaining lease', async () => {
 		const target = await renderWorkerPool(trainingWorkerPool(), ['sft']);
 
 		expect(target.textContent).toContain('Training (12s remaining)');
@@ -308,7 +308,7 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 		{ name: 'full GPU', measured: true, used: 24, loading: false, free: '0.0 GB free' },
 		{ name: 'over capacity', measured: true, used: 25.3, loading: false, free: '0.0 GB free' }
 	])(
-		'S19-2 defect:#1567 shows $name and preserves Load availability',
+		'defect:#1567 shows $name and preserves Load availability',
 		async ({ measured, used, loading, free }) => {
 			const pool = workerPool(measured ?? null);
 			const state = pool.workers[0].state;
@@ -354,7 +354,7 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 		{ missing: 'total', reason: 'Worker does not report total VRAM' },
 		{ missing: 'both', reason: 'Worker build does not report VRAM fields' }
 	])(
-		'S19-2 defect:#1567 shows unknown when missing $missing without borrowing identity capacity',
+		'defect:#1567 shows unknown when missing $missing without borrowing identity capacity',
 		async ({ missing, reason }) => {
 			const pool = workerPool(true);
 			if (missing === 'heartbeat') {
@@ -388,7 +388,7 @@ describe('WorkerPoolPanel failures', () => {
 			err: new TypeError('Failed to fetch'),
 			shown: WORKER_POOL_LOAD_FAILED
 		}
-	])('S19-2 names $failure without browser text', async ({ err, shown }) => {
+	])('defect:#1593 names $failure without browser text', async ({ err, shown }) => {
 		poolFailure = err;
 		const target = await renderWorkerPool(poolResponse, []);
 
@@ -396,7 +396,7 @@ describe('WorkerPoolPanel failures', () => {
 		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 
-	it('S19-2 under the offline strip keeps its workers with no wording of its own and polls again once back online', async () => {
+	it('defect:#1593 under the offline strip keeps its workers with no wording of its own and polls again once back online', async () => {
 		vi.useFakeTimers();
 		poolResponse = offlineWorkerPool('2026-09-01T10:00:00Z');
 		const target = await renderWorkerPool(poolResponse, []);
@@ -433,32 +433,29 @@ describe('WorkerPoolPanel model rows', () => {
 		return pool;
 	}
 
-	it.each([0, 1, 3])(
-		'S19-2 defect:#1573 renders %i model rows from the heartbeat',
-		async (count) => {
-			const target = await renderWorkerPool(modelsPool(count));
-			const list = target.querySelector('[aria-label="Models on this GPU"]');
-			expect(list).not.toBeNull();
-			expect(list).toHaveTextContent('Models on this GPU');
-			if (count === 0) expect(list).toHaveTextContent('No model loaded');
-			else expect(list).not.toHaveTextContent('No model loaded');
-			expect(list?.querySelectorAll('[role="group"]')).toHaveLength(count);
-			for (const model of models.slice(0, count)) {
-				const row = list?.querySelector(`[aria-label="${model.mode}"]`);
-				expect(row).toHaveTextContent(`${model.mode} ~${model.size_gb.toFixed(0)} GB`);
-				expect(row?.querySelector('[role="switch"]')).toHaveAttribute(
-					'aria-checked',
-					String(model.mode !== 'turbo')
-				);
-				expect(row?.querySelector(`[aria-label="Unload ${model.mode}"]`)).toBeEnabled();
-			}
-			expect(
-				target.textContent?.match(/Keep loaded — never unloaded to make room/g) ?? []
-			).toHaveLength(count > 0 ? 1 : 0);
-			expect(target.textContent).not.toContain('Loaded:');
-			expect(target.textContent).not.toMatch(/\b(?:Pin|Unpin|Evict)\b/);
+	it.each([0, 1, 3])('defect:#1573 renders %i model rows from the heartbeat', async (count) => {
+		const target = await renderWorkerPool(modelsPool(count));
+		const list = target.querySelector('[aria-label="Models on this GPU"]');
+		expect(list).not.toBeNull();
+		expect(list).toHaveTextContent('Models on this GPU');
+		if (count === 0) expect(list).toHaveTextContent('No model loaded');
+		else expect(list).not.toHaveTextContent('No model loaded');
+		expect(list?.querySelectorAll('[role="group"]')).toHaveLength(count);
+		for (const model of models.slice(0, count)) {
+			const row = list?.querySelector(`[aria-label="${model.mode}"]`);
+			expect(row).toHaveTextContent(`${model.mode} ~${model.size_gb.toFixed(0)} GB`);
+			expect(row?.querySelector('[role="switch"]')).toHaveAttribute(
+				'aria-checked',
+				String(model.mode !== 'turbo')
+			);
+			expect(row?.querySelector(`[aria-label="Unload ${model.mode}"]`)).toBeEnabled();
 		}
-	);
+		expect(
+			target.textContent?.match(/Keep loaded — never unloaded to make room/g) ?? []
+		).toHaveLength(count > 0 ? 1 : 0);
+		expect(target.textContent).not.toContain('Loaded:');
+		expect(target.textContent).not.toMatch(/\b(?:Pin|Unpin|Evict)\b/);
+	});
 
 	it.each(
 		[
@@ -468,7 +465,7 @@ describe('WorkerPoolPanel model rows', () => {
 			{ action: 'evict_model', mode: 'sft', label: 'Unload', kept: true, count: 1 }
 		].flatMap((action) => [false, true].map((refused) => ({ ...action, refused })))
 	)(
-		'S19-2 defect:#1573 $action with $count models targets its model, waits for refresh, and handles refusal=$refused',
+		'defect:#1573 $action with $count models targets its model, waits for refresh, and handles refusal=$refused',
 		async ({ action, mode, label, kept, refused, count }) => {
 			const pool = modelsPool(count);
 			const target = await renderWorkerPool(pool);
@@ -541,7 +538,7 @@ describe('WorkerPoolPanel model rows', () => {
 	);
 
 	it.each(['loading', 'training'])(
-		'S19-2 defect:#1573 disables model actions during %s',
+		'defect:#1573 disables model actions during %s',
 		async (busy) => {
 			const pool = modelsPool();
 			const state = pool.workers[0].state;
@@ -558,22 +555,45 @@ describe('WorkerPoolPanel model rows', () => {
 
 describe('WorkerPoolPanel load row', () => {
 	it.each([
-		{ name: 'idle', loaded: false, loading: false, offline: false, heartbeat: true },
-		{ name: 'empty loading', loaded: false, loading: true, offline: false, heartbeat: true },
-		{ name: 'loaded loading', loaded: true, loading: true, offline: false, heartbeat: true },
+		{
+			name: 'idle',
+			loaded: false,
+			loading: false,
+			offline: false,
+			heartbeat: true,
+			expected: 'No model loaded'
+		},
+		{
+			name: 'empty loading',
+			loaded: false,
+			loading: true,
+			offline: false,
+			heartbeat: true,
+			expected: 'None yet — xl-turbo is loading.'
+		},
+		{
+			name: 'loaded loading',
+			loaded: true,
+			loading: true,
+			offline: false,
+			heartbeat: true,
+			expected: 'sft'
+		},
 		{
 			name: 'offline without state',
 			loaded: false,
 			loading: false,
 			offline: true,
-			heartbeat: false
+			heartbeat: false,
+			expected: 'Unknown while the worker is offline.'
 		},
 		{
 			name: 'offline with stale models',
 			loaded: true,
 			loading: true,
 			offline: true,
-			heartbeat: true
+			heartbeat: true,
+			expected: 'Unknown while the worker is offline.'
 		}
 	])('S19-1 S19-2 shows an honest $name list above its load row', async (scenario) => {
 		const pool = onlineWorkerPool();
@@ -586,14 +606,7 @@ describe('WorkerPoolPanel load row', () => {
 		const target = await renderWorkerPool(pool);
 		const list = target.querySelector('[aria-label="Models on this GPU"]');
 		expect(list).toHaveTextContent('Models on this GPU');
-		const expected = scenario.offline
-			? 'Unknown while the worker is offline.'
-			: scenario.loaded
-				? 'sft'
-				: scenario.loading
-					? 'None yet — xl-turbo is loading.'
-					: 'No model loaded';
-		expect(list).toHaveTextContent(expected);
+		expect(list).toHaveTextContent(scenario.expected);
 		expect(list?.querySelectorAll('[role="switch"]')).toHaveLength(
 			scenario.loaded && !scenario.offline ? 1 : 0
 		);

@@ -185,11 +185,12 @@
 		return `${total.toFixed(0)} GB`;
 	}
 
+	function isWorkerLoading(worker: WorkerInfoItem): boolean {
+		return !!worker.state?.target_loading || loadingByWorker.has(worker.identity.id);
+	}
+
 	function isCardBusy(worker: WorkerInfoItem): boolean {
-		if (worker.state?.target_loading) return true;
-		if (worker.state?.training_hold_seconds != null) return true;
-		if (loadingByWorker.has(worker.identity.id)) return true;
-		return false;
+		return isWorkerLoading(worker) || worker.state?.training_hold_seconds != null;
 	}
 
 	async function handleLoad(workerId: string): Promise<void> {
@@ -295,7 +296,7 @@
 				{@const trackedJob = loadingByWorker.get(worker.identity.id)}
 				{@const offline = worker.status === 'offline'}
 				{@const loadingMode = worker.state?.target_loading ?? trackedJob?.mode ?? null}
-				{@const loading = !!loadingMode || !!trackedJob || !!busyAction[worker.identity.id]}
+				{@const loading = isWorkerLoading(worker) || !!busyAction[worker.identity.id]}
 				<div class="card" class:busy>
 					<div class="card-header">
 						<span class={statusClass(worker.status)}>{statusIcon(worker.status)}</span>
@@ -525,7 +526,7 @@
 	}
 
 	.load-row .mode-select {
-		flex: 1;
+		flex: 0 1 8.2rem;
 	}
 
 	.mode-select {
