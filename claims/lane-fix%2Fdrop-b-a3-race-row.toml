@@ -1,7 +1,0 @@
-claim_id = "baf801d60f024a978ff947b813e39bd7"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "85652c4c4f7d51b667af26f60f775720c2fa796e"
-branch = "fix/drop-b-a3-race-row"
-scope = ["frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts"]
-opened_commit = "bd2c69f504ebc0601897337a39193ffe4bde1cdb"
