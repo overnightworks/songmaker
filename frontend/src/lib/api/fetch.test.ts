@@ -1,30 +1,8 @@
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// Synchronous factory -- an async one leaves a window where a concurrent
-// dynamic import('$lib/stores/auth') can bypass the mock.
-vi.mock('$lib/stores/auth', () => {
-	let user: { id: string } | null = null;
-	const subscribers = new Set<(value: typeof user) => void>();
-	const currentUser = {
-		subscribe(fn: (value: typeof user) => void) {
-			fn(user);
-			subscribers.add(fn);
-			return () => subscribers.delete(fn);
-		},
-		set(value: typeof user) {
-			user = value;
-			subscribers.forEach((fn) => fn(user));
-		}
-	};
-	return {
-		currentUser,
-		hasSessionToLose: () => user !== null
-	};
-});
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
@@ -36,7 +14,6 @@ import {
 	ApiError,
 	NetworkError,
 	describeFailure,
-	handleSessionLost,
 	installRefusalReactions,
 	isTransientApiFailure,
 	signInAddress,
@@ -44,14 +21,6 @@ import {
 } from './fetch';
 import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
-import { currentUser } from '$lib/stores/auth';
-import {
-	navigateTo,
-	resetHistoryControllerForTests,
-	standInForDocumentLoadsForTests
-} from '$lib/history/historyController';
-import { holdRouteLoads } from '$lib/test-utils/app-navigation';
-import type { AuthUser } from '$lib/api/types';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -307,6 +276,11 @@ describe('refusal reactions', () => {
 		{ client: 'sseFetch', request: throughSseFetch }
 	];
 
+	const NOTHING_HAPPENS = {
+		sessionLost: () => Promise.resolve(),
+		rateLimited: () => undefined
+	};
+
 	function serverRefusesWith(status: number) {
 		mockFetch.mockImplementation(async () => ({
 			ok: false,
@@ -328,7 +302,9 @@ describe('refusal reactions', () => {
 		'925_M3_P1: a 429 tells rateLimited its path through $client',
 		async ({ request }) => {
 			const told: string[] = [];
-			onTestFinished(installRefusalReactions({ rateLimited: (path) => told.push(path) }));
+			onTestFinished(
+				installRefusalReactions({ ...NOTHING_HAPPENS, rateLimited: (path) => told.push(path) })
+			);
 			serverRefusesWith(429);
 
 			await request('/api/songs').catch((e: unknown) => e);
@@ -337,34 +313,46 @@ describe('refusal reactions', () => {
 		}
 	);
 
-	it.each([400, 403, 404, 500, 502])(
-		'925_M3_P2: a %i tells rateLimited nothing',
+	it.each([400, 403, 404, 500, 502, 503])(
+		'925_M3_P2: a %i tells neither rateLimited nor sessionLost anything',
 		async (status) => {
 			const told: string[] = [];
-			onTestFinished(installRefusalReactions({ rateLimited: (path) => told.push(path) }));
+			onTestFinished(
+				installRefusalReactions({
+					rateLimited: (path) => told.push(`rateLimited ${path}`),
+					sessionLost: () => {
+						told.push('sessionLost');
+						return Promise.resolve();
+					}
+				})
+			);
 			serverRefusesWith(status);
 
-			await aRefusedRequest();
+			const failure = await aRefusedRequest();
 
+			expect(failure).toBeInstanceOf(ApiError);
 			expect(told).toEqual([]);
 		}
 	);
 
 	// Through apiFetch the same guarantee is pinned by 'carries status and
 	// Retry-After seconds on the ApiError' above, which installs nothing either.
-	it('925_M3_P3: with nothing installed a 429 still rejects with its ApiError through sseFetch', async () => {
-		serverRefusesWith(429);
+	it.each([429, 401])(
+		'925_M3_P3: with nothing installed a %i still rejects with its ApiError through sseFetch',
+		async (status) => {
+			serverRefusesWith(status);
 
-		const failure = await throughSseFetch('/api/songs').catch((e: unknown) => e);
+			const failure = await throughSseFetch('/api/songs').catch((e: unknown) => e);
 
-		expect(failure).toBeInstanceOf(ApiError);
-		expect((failure as ApiError).status).toBe(429);
-	});
+			expect(failure).toBeInstanceOf(ApiError);
+			expect((failure as ApiError).status).toBe(status);
+		}
+	);
 
 	it('925_M3_P4: an uninstall puts back the set installed before it, and after the last one a 429 reaches no reaction', async () => {
 		const told: string[] = [];
 		const listening = (name: string) =>
-			installRefusalReactions({ rateLimited: () => told.push(name) });
+			installRefusalReactions({ ...NOTHING_HAPPENS, rateLimited: () => told.push(name) });
 		const uninstallFirst = listening('first');
 		const uninstallSecond = listening('second');
 		serverRefusesWith(429);
@@ -381,6 +369,77 @@ describe('refusal reactions', () => {
 		}
 
 		expect(told).toEqual(['second', 'first']);
+	});
+
+	const SIGN_IN_FORMS = [
+		{ form: 'the login form', path: '/api/auth/login' },
+		{ form: 'the setup form', path: '/api/auth/setup' },
+		{ form: 'the password change (wrong current password)', path: '/api/auth/password' }
+	];
+
+	function sessionLostTold(): { count: number } {
+		const told = { count: 0 };
+		onTestFinished(
+			installRefusalReactions({
+				...NOTHING_HAPPENS,
+				sessionLost: () => {
+					told.count += 1;
+					return Promise.resolve();
+				}
+			})
+		);
+		return told;
+	}
+
+	it.each(clients)(
+		'925_M3_P5: a 401 outside the sign-in forms tells sessionLost through $client',
+		async ({ request }) => {
+			const told = sessionLostTold();
+			serverRefusesWith(401);
+
+			await request('/api/songs/s1').catch((e: unknown) => e);
+
+			expect(told.count).toBe(1);
+		}
+	);
+
+	it.each(SIGN_IN_FORMS)(
+		'925_M3_P6: a 401 from $form tells sessionLost nothing and rejects with its ApiError',
+		async ({ path }) => {
+			const told = sessionLostTold();
+			serverRefusesWith(401);
+
+			const failure = await apiFetch(path, { method: 'POST' }).catch((e: unknown) => e);
+
+			expect(failure).toBeInstanceOf(ApiError);
+			expect(told.count).toBe(0);
+		}
+	);
+
+	it('925_M3_P7: the request rejects only after sessionLost has settled', async () => {
+		const happened: string[] = [];
+		let settleReaction: () => void = () => undefined;
+		onTestFinished(
+			installRefusalReactions({
+				...NOTHING_HAPPENS,
+				sessionLost: () =>
+					new Promise<void>((resolve) => {
+						happened.push('reaction told');
+						settleReaction = () => {
+							happened.push('reaction settled');
+							resolve();
+						};
+					})
+			})
+		);
+		serverRefusesWith(401);
+
+		const rejected = apiFetch('/api/songs/s1').catch(() => happened.push('request rejected'));
+		await vi.waitFor(() => expect(happened).toEqual(['reaction told']));
+		settleReaction();
+		await rejected;
+
+		expect(happened).toEqual(['reaction told', 'reaction settled', 'request rejected']);
 	});
 });
 
@@ -574,138 +633,6 @@ describe('apiFetch abort signal', () => {
 		vi.advanceTimersByTime(1);
 		expect(signalPassedToFetch().aborted).toBe(true);
 		expect(caller.signal.aborted).toBe(false);
-	});
-});
-
-describe('session lost (401)', () => {
-	const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
-
-	function unauthorizedResponse() {
-		return {
-			ok: false,
-			status: 401,
-			headers: { get: () => null },
-			json: () => Promise.resolve({ detail: 'Not authenticated' })
-		};
-	}
-
-	function expectNoDocumentLoad(): void {
-		for (const load of Object.values(documentLoads)) expect(load).not.toHaveBeenCalled();
-	}
-
-	beforeEach(() => {
-		resetHistoryControllerForTests();
-		standInForDocumentLoadsForTests(documentLoads);
-		for (const load of Object.values(documentLoads)) load.mockReset();
-		currentUser.set(null);
-		replaceHistoryEntry('/');
-	});
-
-	it('loads the page afresh, which asks the server for the session again, when a session existed', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		replaceHistoryEntry('/album/a1/song-1');
-		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
-
-		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
-
-		expect(documentLoads.reload).toHaveBeenCalledOnce();
-		expect(documentLoads.assign).not.toHaveBeenCalled();
-		expect(documentLoads.replace).not.toHaveBeenCalled();
-	});
-
-	it('loads afresh the page a navigation started before the session was lost lands on', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		replaceHistoryEntry('/settings/voices');
-		let reloadedOn: string | undefined;
-		documentLoads.reload.mockImplementation(() => (reloadedOn = location.pathname));
-		const releaseRouteLoads = holdRouteLoads();
-		const albumOpened = navigateTo('/album/b2', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true,
-			state: {}
-		});
-
-		const reaction = handleSessionLost();
-		await vi.dynamicImportSettled();
-		expect(documentLoads.reload).not.toHaveBeenCalled();
-		releaseRouteLoads();
-		await Promise.all([albumOpened, reaction]);
-
-		expect(reloadedOn).toBe('/album/b2');
-	});
-
-	it('reacts the same way through sseFetch as through apiFetch', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
-
-		const gen = sseFetch('/api/chat/turn', { method: 'POST' });
-		await gen.next().catch((e: unknown) => e);
-
-		expect(documentLoads.reload).toHaveBeenCalledOnce();
-	});
-
-	it('still rejects with an ApiError so the caller can show its own message', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
-
-		const err = await apiFetch('/api/songs/s1').catch((e: unknown) => e);
-
-		expect(err).toBeInstanceOf(ApiError);
-		expect((err as ApiError).status).toBe(401);
-	});
-
-	it('does not react for a visitor who was never signed in, leaving app routing to decide', async () => {
-		currentUser.set(null);
-		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
-
-		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
-
-		expectNoDocumentLoad();
-	});
-
-	it.each([
-		{ form: 'the login form', path: '/api/auth/login' },
-		{ form: 'the password change (wrong current password)', path: '/api/auth/password' }
-	])(
-		'does not react to a 401 from $form itself (a refusal, not a lost session)',
-		async ({ path }) => {
-			currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-			mockFetch.mockResolvedValueOnce(unauthorizedResponse());
-
-			const err = await apiFetch(path, { method: 'POST' }).catch((e: unknown) => e);
-
-			expect(err).toBeInstanceOf(ApiError);
-			expectNoDocumentLoad();
-		}
-	);
-
-	it('a second caller that arrives while the reaction is in flight joins it instead of starting a new one', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		// A navigation under way holds the one load back until it lands. Joined,
-		// the second caller's wait ends with that load; a reaction of its own
-		// would find the leave already counted and end before anything loaded.
-		let loaded = false;
-		documentLoads.reload.mockImplementation(() => {
-			loaded = true;
-		});
-		const releaseRouteLoads = holdRouteLoads();
-		const albumOpened = navigateTo('/album/b2', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true,
-			state: {}
-		});
-
-		const loadedWhenDone = [handleSessionLost(), handleSessionLost()].map((reaction) =>
-			reaction.then(() => loaded)
-		);
-		await vi.dynamicImportSettled();
-		releaseRouteLoads();
-		await albumOpened;
-
-		expect(await Promise.all(loadedWhenDone)).toEqual([true, true]);
-		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 });
 
