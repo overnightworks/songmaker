@@ -92,7 +92,7 @@ tests:
   - interval: 1m
     name: a failing background loop alerts after its hold period
     input_series:
-      - series: 'songmaker_background_loop_consecutive_failures{loop="session_sync"}'
+      - series: 'songmaker_background_loop_consecutive_failures{loop="session_cleanup"}'
         values: "3x10"
     alert_rule_test:
       - eval_time: 4m
@@ -103,7 +103,7 @@ tests:
         exp_alerts:
           - exp_labels:
               severity: critical
-              loop: session_sync
+              loop: session_cleanup
             exp_annotations:
               summary: A Songmaker background loop is unhealthy
               description: A background loop has stopped or failed three consecutive ticks.

@@ -65,7 +65,7 @@ from songmaker_cli.lifecycle import (
     report_codex_image_sandbox_runtime,
     resource_event_cleanup_loop,
     score_backfill_loop,
-    session_sync_loop,
+    session_cleanup_loop,
     stale_job_reaper_loop,
 )
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
@@ -182,7 +182,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     app.state.startup_time = datetime.now(timezone.utc)
     loop_tasks = [
-        (BackgroundLoopName.SESSION_SYNC, asyncio.create_task(session_sync_loop(app))),
+        (BackgroundLoopName.SESSION_CLEANUP, asyncio.create_task(session_cleanup_loop(app))),
         (
             BackgroundLoopName.RESOURCE_EVENT_CLEANUP,
             asyncio.create_task(resource_event_cleanup_loop(app)),

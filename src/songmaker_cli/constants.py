@@ -255,7 +255,7 @@ REDIS_RESOURCE_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:resource-stream:u
 REDIS_RESOURCE_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:resource-stream:global"
 REDIS_JOB_STREAM_LEASE_USER_PREFIX = f"{REDIS_KEY_PREFIX}:job-stream:user"
 REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
-REDIS_SESSION_SYNC_INTERVAL_SECONDS = 300
+SESSION_CLEANUP_INTERVAL_SECONDS = 300
 REDIS_DEGRADED_THRESHOLD = 3
 REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
 
@@ -299,8 +299,6 @@ WORKER_RESTART_GRACE_SECONDS: Final[int] = 300
 WORKER_LAST_ALIVE_TTL_SECONDS: Final[int] = 7 * 24 * 60 * 60
 RECOVERY_LOCK_MUSIC_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:music"
 RECOVERY_LOCK_SCORING_KEY = f"{REDIS_KEY_PREFIX}:recovery_lock:scoring"
-SESSION_SYNC_LOCK_KEY = f"{REDIS_KEY_PREFIX}:session_sync_lock"
-SESSION_SYNC_LOCK_TTL_SECONDS = 60
 
 # Score backfill (issue #222): catches up generations that predate
 # auto-scoring, or that an auto-score attempt could not reach (worker down,

@@ -724,6 +724,7 @@ def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path) -
 
 
 def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
+    # defect:#1590 — cleanup loop replaces TTL reconciliation.
     """The chat/lora_training reaper (#371) must actually be scheduled by the
     running server, not just exist as a function -- generate/score get their
     equivalent from the arq-worker cron unconditionally; the web-process side
@@ -765,7 +766,7 @@ def test_lifespan_schedules_stale_job_reaper_loop(tmp_path: Path) -> None:
             ),
             patch("songmaker_cli.server.resource_event_cleanup_loop", new=AsyncMock()),
             patch("songmaker_cli.server.score_backfill_loop", new=AsyncMock()),
-            patch("songmaker_cli.server.session_sync_loop", new=AsyncMock()),
+            patch("songmaker_cli.server.session_cleanup_loop", new=AsyncMock()),
             patch(
                 "songmaker_cli.server.stale_job_reaper_loop",
                 new=AsyncMock(side_effect=_reaper_loop),

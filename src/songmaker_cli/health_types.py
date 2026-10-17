@@ -11,7 +11,7 @@ from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 
 class BackgroundLoopName(StrEnum):
     COVER_RUNNER = "cover_runner"
-    SESSION_SYNC = "session_sync"
+    SESSION_CLEANUP = "session_cleanup"
     RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
     SCORE_BACKFILL = "score_backfill"
     STALE_JOB_REAPER = "stale_job_reaper"

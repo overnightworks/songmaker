@@ -185,7 +185,7 @@ export function makeHealthResponse(overrides: Partial<HealthResponse> = {}): Hea
 		codex_image_sandbox_runtime: 'ready',
 		background_loops: {
 			cover_runner: { state: 'ok', consecutive_failures: 0, last_error: null },
-			session_sync: { state: 'ok', consecutive_failures: 0, last_error: null },
+			session_cleanup: { state: 'ok', consecutive_failures: 0, last_error: null },
 			resource_event_cleanup: { state: 'ok', consecutive_failures: 0, last_error: null },
 			score_backfill: { state: 'ok', consecutive_failures: 0, last_error: null },
 			stale_job_reaper: { state: 'ok', consecutive_failures: 0, last_error: null },
