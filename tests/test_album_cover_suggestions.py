@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import login_and_csrf, make_authenticated_user, make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from PIL import Image
 from webauth.dependencies import AuthenticatedUser
@@ -115,20 +115,16 @@ def _add_suggestion(
     return suggestion_id
 
 
-def _actor(user_id: str, *, role: str = "user") -> AuthenticatedUser:
-    return AuthenticatedUser(id=user_id, username=user_id, role=role, is_active=True)
-
-
 def _album_owner(session, album_id: str = "alice-album") -> AuthenticatedUser:
     album = session.query(Album).filter_by(id=album_id).one()
-    return _actor(album.created_by or "")
+    return make_authenticated_user(album.created_by or "")
 
 
 def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_path: Path) -> None:
     _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
 
     with factory() as session:
-        alice = _actor("alice")
+        alice = make_authenticated_user("alice")
         with pytest.raises(CoverSuggestionAlbumNotFoundError):
             request_cover_suggestions(session, "missing", alice)
         with pytest.raises(CoverSuggestionAlbumNotFoundError):

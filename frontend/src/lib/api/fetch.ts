@@ -2,7 +2,9 @@ import { get } from 'svelte/store';
 import type { JobItem } from './types';
 import {
 	API_ERROR_GENERIC_MESSAGE,
+	RATE_LIMITED_STATUS,
 	RATE_LIMITED_TOAST_MESSAGE,
+	SERVER_ERROR_STATUS_FLOOR,
 	SESSION_LOST_REDIRECT_PARAM
 } from '$lib/constants';
 import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
@@ -70,6 +72,18 @@ export function describeFailure(
 	if (err instanceof ApiError && err.detail && !wording.withholdServerDetail) return err.detail;
 	if (err instanceof UserFacingError) return err.message;
 	return fallback;
+}
+
+/**
+ * The one answer to "can asking again help?" for a server answer: a failing
+ * server (5xx) and a rate limit (429) pass, so a retry can succeed. Any other
+ * refusal is about the request itself and is refused the same way again.
+ */
+export function isTransientApiFailure(err: unknown): boolean {
+	return (
+		err instanceof ApiError &&
+		(err.status >= SERVER_ERROR_STATUS_FLOOR || err.status === RATE_LIMITED_STATUS)
+	);
 }
 
 async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{

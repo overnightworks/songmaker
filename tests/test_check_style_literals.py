@@ -84,6 +84,45 @@ def test_tokens_resets_and_non_color_hashes_pass(gate, text):
     assert gate({"styles.css": text})[0] == 0
 
 
+@pytest.mark.parametrize(
+    "declaration, literal",
+    [
+        ("box-shadow: 0 0 2px !important;", "0 0 2px"),
+        ("box-shadow: 0 0 2px   \n\t!IMPORTANT;", "0 0 2px"),
+        ("box-shadow: 0 0 2px!important;", "0 0 2px"),
+        ("box-shadow: 0 1px !important 2px !important;", "0 1px 2px"),
+        ("box-shadow: 0 0 2px !importantly;", "0 0 2px !importantly"),
+        ("box-shadow: 0 0 2px ! important;", "0 0 2px ! important"),
+        ("box-shadow: 0 0\u00a0!important 2px;", "0 0 2px"),
+    ],
+)
+def test_important_flag_and_the_space_before_it_are_not_part_of_the_literal(declaration, literal):
+    """defect:#1498 -- the S8786-safe split strips !important and the space before it."""
+    assert [found.literal for found in CHECKER["findings"](declaration, ".css")] == [literal]
+
+
+@pytest.mark.parametrize(
+    "declaration, kinds",
+    [
+        ("font-size: 12px;", []),
+        ("font-size: 12.0px;", []),
+        ("font-size: .75rem;", []),
+        ("font-size: 0.6875rem;", []),
+        ("font-size: 12.5px;", ["font-size"]),
+        ("font-size: 12.px;", ["font-size"]),
+        ("font-size: -12px;", ["font-size"]),
+        ("font-size: 1.5rem;", ["font-size"]),
+        ("border-radius: .5px;", ["border-radius"]),
+        ("border-radius: 1.5.5px;", ["border-radius"]),
+        ("border-radius: 12.%;", []),
+        ("border-radius: -2px;", ["border-radius"]),
+    ],
+)
+def test_number_shapes_decide_which_dimensions_are_style_literals(declaration, kinds):
+    """defect:#1498 -- the S8786-safe number matching keeps the same dimension shapes."""
+    assert [found.kind for found in CHECKER["findings"](declaration, ".css")] == kinds
+
+
 def test_only_frontend_source_extensions_are_scanned_and_app_css_is_exempt(gate):
     status, output, _ = gate({"app.css": "color: #fff;", "notes.md": "#abc", "empty.ts": ""})
     assert status == 0

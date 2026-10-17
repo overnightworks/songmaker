@@ -22,13 +22,14 @@ import sys
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+ENTRY_DOCUMENT_REASON = "entry document"
 
 ALLOWED_ROOT_ENTRIES: dict[str, str] = {
     ".aco": "aco looks for its board configuration in the repository root",
-    "README.md": "entry document",
-    "AGENTS.md": "entry document",
-    "CLAUDE.md": "entry document",
-    "LICENSE": "entry document",
+    "README.md": ENTRY_DOCUMENT_REASON,
+    "AGENTS.md": ENTRY_DOCUMENT_REASON,
+    "CLAUDE.md": ENTRY_DOCUMENT_REASON,
+    "LICENSE": ENTRY_DOCUMENT_REASON,
     "pyproject.toml": "uv/pip resolve the project root by its presence",
     "uv.lock": "uv resolves the lockfile next to pyproject.toml",
     "alembic.ini": "alembic's default `-c`-less lookup from the CWD; Dockerfile COPYs it to /app",

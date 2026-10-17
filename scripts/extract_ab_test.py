@@ -81,7 +81,7 @@ def run_demucs(src: Path, work_dir: Path) -> dict[str, Path]:
         "--filename", "{stem}.{ext}",
         str(src),
     ]
-    subprocess.run(cmd, check=True)  # NOSONAR Fixed shell-free argv.
+    subprocess.run(cmd, check=True)  # NOSONAR(S8705) Fixed shell-free argv.
     out_dir = work_dir / DEMUCS_MODEL / src.stem
     return {
         "vocals": out_dir / "vocals.wav",
@@ -101,7 +101,7 @@ def acestep_submit_extract(base_url: str, src_audio_path: str, track_name: str) 
         "use_random_seed": True,
         "thinking": False,
     }
-    req = urllib.request.Request(  # NOSONAR Operator CLI, not a server sink.
+    req = urllib.request.Request(  # NOSONAR(S8703) Operator CLI, not a server sink.
         f"{base_url}/release_task",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
@@ -122,7 +122,7 @@ def acestep_poll_task(base_url: str, task_id: str) -> dict:
     while time.monotonic() < deadline:
         try:
             url = f"{base_url}/get_task_result/{task_id}"
-            with urllib.request.urlopen(url, timeout=15) as resp:  # NOSONAR Local ID.
+            with urllib.request.urlopen(url, timeout=15) as resp:  # NOSONAR(S8703) Local ID.
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -201,8 +201,8 @@ def main() -> None:
         ace_dir = work_root / "acestep"
         try:
             ace_stems = acestep_extract(args.acestep_base_url, args.source, ace_dir)
-        except Exception as exc:
-            log.error("acestep extract failed: %s", exc)
+        except Exception:
+            log.exception("acestep extract failed")
             log.error(
                 "if this is a 'wrong model loaded' error,"
                 " set ACESTEP_CONFIG_PATH=acestep-v15-xl-base and restart the worker",
@@ -216,10 +216,10 @@ def main() -> None:
         sys.exit(1)
 
     log.info("LUFS-normalizing all candidates for fair comparison")
-    rng = random.Random(time.time_ns())  # NOSONAR Not a security token.
+    rng = random.Random(time.time_ns())
     blind_map: dict[str, dict] = {}
     for sep, track, src_wav in candidates:
-        nonce = rng.randint(1000, 9999)  # NOSONAR Filename only, never a security token.
+        nonce = rng.randint(1000, 9999)  # NOSONAR(S2245) Filename only, never a security token.
         blind_name = f"{track}_{nonce}.wav"
         blind_path = blind_dir / blind_name
         ffmpeg_normalize(src_wav, blind_path)

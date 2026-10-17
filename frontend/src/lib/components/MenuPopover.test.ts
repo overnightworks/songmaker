@@ -45,7 +45,7 @@ function layOut(trigger: Placement, panelHeight = PANEL_HEIGHT): void {
 const ONE_ITEM = '<button>Rename</button>';
 const TWO_ITEMS = '<div><button>Rename</button><button>Delete</button></div>';
 
-async function renderClosed(items = ONE_ITEM): Promise<HTMLElement> {
+async function renderClosed(items = ONE_ITEM, hitboxFace = false): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(MenuPopover, {
@@ -54,6 +54,7 @@ async function renderClosed(items = ONE_ITEM): Promise<HTMLElement> {
 			layer: 'test-menu',
 			label: 'More',
 			closeLabel: 'Close menu',
+			hitboxFace,
 			trigger: createRawSnippet(() => ({ render: () => '<span>⋯</span>' })),
 			children: createRawSnippet(() => ({ render: () => items }))
 		}
@@ -162,6 +163,50 @@ describe('MenuPopover placement', () => {
 
 		expect(placementOf(panel)).toEqual({ left: 8, top: 162 });
 	});
+});
+
+describe('MenuPopover reopening', () => {
+	it.each([
+		{
+			case: 'under a trigger high in a laptop window',
+			viewport: { width: 1280, height: 800 },
+			trigger: { left: 900, top: 120 }
+		},
+		{
+			case: 'above a trigger at the bottom edge of a laptop window',
+			viewport: { width: 1280, height: 800 },
+			trigger: { left: 900, top: 760 }
+		},
+		{
+			case: 'against the right edge of a phone',
+			viewport: { width: 390, height: 844 },
+			trigger: { left: 390 - 12 - TRIGGER_SIZE, top: 800 }
+		}
+	])('915_C3: opens $case in the same place every time', async ({ viewport, trigger }) => {
+		setViewport(viewport);
+		layOut(trigger);
+		const target = await renderClosed();
+		const firstOpen = placementOf(await openIn(target));
+
+		triggerOf(target).click();
+		await tick();
+		expect(target.querySelector('.menu-panel')).toBeNull();
+		const secondOpen = placementOf(await openIn(target));
+
+		expect(secondOpen).toEqual(firstOpen);
+	});
+});
+
+describe('MenuPopover trigger face', () => {
+	it.each([true, false])(
+		'915_C3: keeps the touch target and draws a small face only when asked (hitboxFace: %s)',
+		async (hitboxFace) => {
+			const target = await renderClosed(ONE_ITEM, hitboxFace);
+
+			expect(triggerOf(target).getAttribute('data-hitbox')).toBe('frequent');
+			expect(triggerOf(target).hasAttribute('data-hitbox-face')).toBe(hitboxFace);
+		}
+	);
 });
 
 describe('MenuPopover keyboard', () => {

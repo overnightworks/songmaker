@@ -3,7 +3,7 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { resetCollectionForTests } from '$lib/stores/collection';
 import { detailTab } from '$lib/stores/libraryContext';
 import { songList } from '$lib/stores/libraryData';
@@ -70,10 +70,8 @@ function toastMessages(): string[] {
 	return get(toasts).map((toast) => toast.message);
 }
 
-function refuseOnce(): void {
-	createSong.mockRejectedValueOnce(
-		new ApiError(422, 'Validation error on: body.title', '/api/songs')
-	);
+function failOnce(status: number, detail: string): void {
+	createSong.mockRejectedValueOnce(new ApiError(status, detail, '/api/songs'));
 }
 
 describe('NewSongCard', () => {
@@ -108,23 +106,65 @@ describe('NewSongCard', () => {
 		expect(creates).toBe(1);
 	});
 
-	it('keeps the card and the title when the server refuses, and says why readably', async () => {
-		refuseOnce();
+	it.each([
+		{
+			case: 'the server refuses it and says why',
+			failure: new ApiError(422, 'That title is taken', '/api/songs'),
+			toast: 'That title is taken'
+		},
+		{
+			case: 'the server refuses it without a reason',
+			failure: new ApiError(404, '', '/api/songs'),
+			toast: 'The song could not be created.'
+		},
+		{
+			case: 'the server fails',
+			failure: new ApiError(500, 'Internal Server Error', '/api/songs'),
+			toast: SONG_NOT_CREATED
+		},
+		{
+			case: 'the server rate-limits it',
+			failure: new ApiError(429, 'Too many requests', '/api/songs', 30),
+			toast: SONG_NOT_CREATED
+		},
+		{
+			case: 'the network is gone',
+			failure: new NetworkError('/api/songs', new TypeError('Failed to fetch')),
+			toast: "You're offline, so nothing was created. Try again once you're back online."
+		}
+	])(
+		'915_E2 keeps the card and the title when $case, and says why in words that fit',
+		async ({ failure, toast }) => {
+			createSong.mockRejectedValueOnce(failure);
+			const root = await render();
+			type(field(root, 'Title'), 'Tidewater');
+
+			createButton(root).click();
+			await createSettled(createSong);
+
+			expect(creates).toBe(0);
+			expect(field(root, 'Title').value).toBe('Tidewater');
+			expect(createButton(root).disabled).toBe(false);
+			expect(get(songList)).toEqual([]);
+			expect(toastMessages()).toEqual([toast]);
+		}
+	);
+
+	it('915_E3 says only the latest failure when the create is refused again', async () => {
+		failOnce(422, 'That title is taken');
+		failOnce(422, 'That title is too long');
 		const root = await render();
 		type(field(root, 'Title'), 'Tidewater');
+		createButton(root).click();
+		await vi.waitFor(() => expect(toastMessages()).toEqual(['That title is taken']));
 
 		createButton(root).click();
-		await createSettled(createSong);
 
-		expect(creates).toBe(0);
-		expect(field(root, 'Title').value).toBe('Tidewater');
-		expect(createButton(root).disabled).toBe(false);
-		expect(get(songList)).toEqual([]);
-		expect(toastMessages()).toEqual([SONG_NOT_CREATED]);
+		await vi.waitFor(() => expect(toastMessages()).toEqual(['That title is too long']));
 	});
 
-	it('clears the failure it said once the song is made after all', async () => {
-		refuseOnce();
+	it('915_E3 clears the failure it said once the song is made after all', async () => {
+		failOnce(500, 'Internal Server Error');
 		const root = await render();
 		type(field(root, 'Title'), 'Tidewater');
 		createButton(root).click();

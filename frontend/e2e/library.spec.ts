@@ -526,7 +526,10 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	if (shell === 'desktop') {
 		const takeRow = surface.locator('.take-row').filter({ hasText: library.takeLabel });
 		await takeRow.getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
-		await surface.getByRole('menuitem', { name: TAKE_PLAYLIST_LABEL }).click();
+		await surface
+			.getByRole('dialog', { name: TAKE_OVERFLOW_LABEL, exact: true })
+			.getByRole('button', { name: TAKE_PLAYLIST_LABEL })
+			.click();
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
 		await openPlaylistsPage(page, shell);
