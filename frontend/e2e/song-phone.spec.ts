@@ -162,7 +162,7 @@ function expectSongAddressStands(page: Page, albumId: string, title: string): vo
 
 test.describe('song page at phone width', () => {
 	test(
-		'lists takes with a play control each, shows a running generation, then its failure',
+		'[defect:#1568] lists takes with a play control each, shows a running generation, then its failure',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			// Stands in for the absent worker's own heartbeat (see the file header):
@@ -240,6 +240,8 @@ test.describe('song page at phone width', () => {
 				takeCount: RUNNING_JOB_TAKE_COUNT,
 				phase: LOADING_JOB_PHASE
 			});
+			await page.clock.install();
+			await page.clock.pauseAt(new Date());
 			await page.goto(songAddress);
 			// The song comes back on the Takes tab it was left on (#1047); the
 			// Generate status lives on Edit.
@@ -254,6 +256,13 @@ test.describe('song page at phone width', () => {
 			await expect(panel.getByText(LOADING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
 			await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: true })).toBeVisible();
 			await expect(panel.getByText(REMAINING_TIME_PATTERN)).toHaveCount(0);
+			await expect(panel.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+			await page.clock.runFor(12000);
+			await expect(panel.locator('.status-title')).toContainText('0:12');
+			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
+			await expect(generateStatus).toContainText('Loading model… 0:12');
+			await page.getByRole('tab', { name: /Takes/ }).click();
+			await page.clock.resume();
 
 			// Leaving the model load live, over the same job's still-open SSE
 			// stream — no reload, matching a real worker's own reporting path.
