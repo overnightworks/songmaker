@@ -1031,7 +1031,7 @@ test('the admin page is refused for a non-admin, with nothing of it rendered', a
 	await attachShot(page, testInfo, 'auth-admin-refused');
 });
 
-test('a session past its absolute maximum age lands on the login page', async ({
+test('defect:#1590: a session past its absolute maximum age lands on the login page', async ({
 	page
 }, testInfo) => {
 	await signIn(page);
@@ -1046,7 +1046,7 @@ test('a session past its absolute maximum age lands on the login page', async ({
 	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
 	// The browser still carries the cookie; it is the session behind it that the
 	// server no longer honours.
-	expect(await sessionCookie(page.context())).toBeDefined();
+	expect((await sessionCookie(page.context()))?.value).toBe(signedIn?.value);
 	await attachShot(page, testInfo, 'auth-session-expired');
 });
 

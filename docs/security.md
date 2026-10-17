@@ -3,7 +3,7 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.11.0` and hash-locked in
+the `server` extra to the release wheel of tag `v0.14.0` and hash-locked in
 `uv.lock` (#879). Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
@@ -22,15 +22,15 @@ directory names — remain songmaker's decision, installed through
 
 Session-based auth with Argon2id password hashing (OWASP profile: 19 MiB memory, 2 iterations, 1 degree of parallelism).
 
-- **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in both DB and Redis
-- **Redis session cache**: Session validation reads from Redis first (no DB hit on cache hit). DB is the durable store, synced every 5 minutes via a background task. Redis failure degrades gracefully to DB-only mode. Session TTL in Redis replaces per-request DB writes for sliding window renewal. Login writes the new session to Redis before the DB transaction commits (and deletes that key if commit fails) so a concurrent prune cannot be overwritten by a late cache `SET`.
-- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret comes from the `SESSION_SECRET` env var (min 32 chars) and is required at startup — Settings raises `ValidationError` if missing. There is no auto-generation fallback (was removed in the W1 no-silent-fallbacks cleanup; the old fallback masked deployment misconfigurations).
+- **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in the DB.
+- **DB session authority**: Every authenticated request loads the session and account from the DB. `ExpiryColumnLiveness` checks `expires_at` and the absolute age from `created_at`; inactive accounts are refused. Renewal must update an existing row (`touch()` returns `True`); a missing or revoked row cannot be recreated. Login and pruning commit together before cookies are issued.
+- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak alone does not yield usable cookies. The secret comes from the `SESSION_SECRET` env var (min 32 chars) and is required at startup — Settings raises `ValidationError` if missing. There is no auto-generation fallback (was removed in the W1 no-silent-fallbacks cleanup; the old fallback masked deployment misconfigurations).
 - **Cookie flags and names**: `HttpOnly`, `SameSite=Strict`, `Secure` when `COOKIE_SECURE` is true (the default). The session and CSRF cookies are then also named with the `__Host-` prefix (`__Host-session_id`, `__Host-csrf_token`), which a browser accepts only on a `Secure` cookie carrying no `Domain` — a sibling subdomain cannot plant one. `COOKIE_SECURE=false` drops `Secure` and the `__Host-` prefix together, for local plain-http development; production never sets it false. Unlike the IP and proxy facts below, `COOKIE_SECURE` is one fixed deployment setting, not something a request's scheme or `X-Forwarded-Proto` can change.
-- **Session lifetime**: 30-day sliding window (via Redis TTL), 90-day absolute max (checked from cached `created_at`)
-- **Session fixation**: Login adds an independent session and prunes only the oldest overflow once the per-user cap (`MAX_CONCURRENT_SESSIONS_PER_USER`, default 10) is exceeded. Expired sessions do not consume the cap. Password change, admin password reset, and the local `songmaker reset-password` CLI delete all sessions from both DB and Redis; the CLI changes nothing when Redis is unreachable
-- **Logout**: `DELETE /session` invalidates the session in both DB and Redis (not just the cookie). The session it deletes is named by the `verified_session_id` dependency, which resolves `get_current_user` first — see "Authorization" below.
-- **Session anomaly detection**: IP and user-agent changes are logged to the audit trail (even on Redis cache hits)
-- **User deactivation**: All sessions immediately deleted from both DB and Redis. A `user_sessions:{user_id}` Redis set tracks all active session IDs per user for efficient bulk deletion.
+- **Session lifetime**: With the configured defaults, successful authentication (including `GET /api/auth/me`) renews DB `expires_at` for 30 days, subject to a 90-day absolute age from `created_at`. It does not reissue the browser cookie: that cookie gets `Max-Age=30 days` at login, so the browser is signed out no later than 30 days after login even with daily use. The CLI stores only the cookie name and signed value and sends them anew on each call, so it can remain signed in for up to 90 days if gaps between calls stay below 30 days. Revocation can end either session sooner.
+- **Session fixation**: Login adds an independent session and prunes only the oldest overflow once the per-user cap (`MAX_CONCURRENT_SESSIONS_PER_USER`, default 10) is exceeded. Expired sessions do not consume the cap. Password change, admin password reset, and the local `songmaker reset-password` CLI delete all existing DB sessions atomically with the password update. The CLI needs no Redis; self-service password change issues a fresh session only after commit.
+- **Logout**: `DELETE /api/auth/session` ends the DB session and clears the cookies. The session it deletes is named by the `verified_session_id` dependency, which resolves `get_current_user` first — see "Authorization" below.
+- **Session anomaly detection**: IP and user-agent changes are written to the audit trail in the authentication transaction.
+- **User deactivation**: Account deactivation and deletion of all its DB sessions commit together.
 - **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
 - **Account lockout**: After 15 failed attempts per username within 1 hour, the account is temporarily locked (returns 429 with Retry-After). This catches patient attackers who stay under the per-window rate limit. Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
 - **Constant-time verification**: Argon2id always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration. A stored hash that is not this host's Argon2id (wrong algorithm, wrong cost) raises loudly instead of being read as a wrong password.
@@ -42,7 +42,7 @@ Session-based auth with Argon2id password hashing (OWASP profile: 19 MiB memory,
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` is a FastAPI dependency that validates the session cookie, checks expiry/lifetime/active status, and renews the session. On Redis cache hit, validation uses cached data and TTL refresh replaces the DB write. On Redis miss or failure, falls back to the DB path (`SELECT ... FOR UPDATE` so an in-flight prune is not resurrected) and populates the Redis cache for subsequent requests.
+1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` validates the signed cookie and DB session under `SELECT ... FOR UPDATE`, checks expiry/lifetime/active status, and renews the existing row. Its own short transaction commits renewal and identity audit before the endpoint runs, without committing endpoint writes. Manual stream callers commit and close their authentication transaction before starting the stream.
    The logout route names the session it deletes through the factory's
    `verified_session_id` dependency, which resolves `get_current_user` first —
    so a session is only ever deleted after the request proved it holds it, and
@@ -166,13 +166,13 @@ Five-layer defense:
 4. **Form-submit blocking**: On that same fallback path, mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
 5. **Fetch metadata**: `Sec-Fetch-Site` is checked before the Origin allowlist. `same-origin` passes the origin check; `cross-site` and `none` are rejected (403), even with an allowed Origin. `same-site` and a missing header follow the Origin/Referer allowlist and form-submit rules above. The session-bound token is still required. The internal worker routes remain token-exempt but still follow this origin check. [Server tests](../tests/test_server.py) prove the accepted and rejected header cases.
 
-### Deliberate changes with the webauth migration (#905)
+### History: deliberate changes with the webauth migration (#905)
 
 - The per-IP middleware starts fresh budgets once at deployment because its Redis keys change to the class-qualified names documented below. Session keys, stored data and rights are unchanged.
 - The fetch-metadata check above hardens mutating `/api/` requests. Songmaker's frontend is same-origin; CLI and workers omit `Sec-Fetch-Site` and keep their existing behavior. A cross-site browser client cannot make these mutations, even when its Origin is configured.
 - Logout clears both cookies with `SameSite=Strict`, previously Starlette's `lax`. The header text changes; deletion still matches the same cookie name, domain and path. The logout behavior remains covered by [auth API tests](../tests/test_auth_api.py); no test pins this deletion attribute.
 
-### Deliberate changes with webauth v0.11.0 (#1320)
+### History: deliberate changes with webauth v0.11.0 (#1320)
 
 - Password hashing moved to Argon2id (OWASP profile) from the prior library's algorithm. **Every hash stored under the old algorithm is now unreadable** — `verify()` raises `UnknownHashFormatError` instead of returning "wrong password", so an account with a pre-upgrade hash fails login loudly (500) rather than silently. This is why S5 lands together with S6 at an operator-named moment, immediately followed by `songmaker reset-password` for every account.
 - The session and CSRF cookie names are no longer request-scheme-dependent: they are fixed at startup from the static `COOKIE_SECURE` setting (`__Host-session_id` / `__Host-csrf_token` when true, `session_id` / `csrf_token` when false). `X-Forwarded-Proto` and `TRUSTED_PROXIES` no longer influence the `Secure` flag or `Strict-Transport-Security`; see "Authentication" and "Proxy trust" above. Every existing cookie becomes invalid at the same moment the names change, ending every session.
@@ -1007,15 +1007,16 @@ deliberately changes four behaviors:
 3. An inactive admin can be deactivated again or permanently deleted while
    another active admin remains. Only active admins count toward the last-admin
    protection; removing the last active admin still returns 400.
-4. A cache failure while ending sessions during role changes, admin password
-   resets, deactivation, or force-logout returns 500 and rolls back the database
-   operation. Hard-delete retains its existing post-commit cache cleanup.
+4. A DB failure while ending sessions during role changes, admin password
+   resets, deactivation, force-logout, or hard-delete returns 500 and rolls back
+   the operation, including session deletion (DB-only since #1590).
 
 The HTTP proofs live in [test_admin_api.py](../tests/test_admin_api.py):
 `test_admin_changes_keep_their_audit_action_and_detail`,
 `test_setting_the_existing_role_keeps_sessions_and_writes_no_audit`,
-`test_delete_inactive_admin_allowed_when_another_admin_remains`, and
-`test_cache_failure_rolls_back_account_changes_and_session_deletion`.
+`test_delete_inactive_admin_allowed_when_another_admin_remains`,
+`test_db_failure_rolls_back_account_changes_and_session_deletion` and
+`test_hard_delete_user_rolls_back_when_session_deletion_fails`.
 Reactivation writes `update` with `active=True` and does not end sessions.
 
 ## ACE-Step Worker Pool Trust Boundary
@@ -1214,7 +1215,6 @@ Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on 
 - **Claude CLI agents**: `--disable-slash-commands` closes slash commands and skills (verified empty in the init event's `slash_commands` list — see Claude Chat Security above), but the CLI still lists five built-in *agents* (`claude`, `Explore`, `general-purpose`, `Plan`, `statusline-setup`) in that same init event even with every isolation flag set. No exploit path is confirmed: reaching one needs a `Task`-shaped tool, and `--tools ""` already removes that. A future CLI version that could reach an agent some other way would reopen this; the tool-surface gate does not check the `agents` field today.
 - **No IP binding on sessions**: A stolen session cookie works from any IP. The auth dependency calls `resolve_client_ip()` to obtain the real client IP when the direct peer is in `TRUSTED_PROXIES` (otherwise the direct peer), then stores it for later comparisons; an IP or user-agent change is written to the audit trail. It is not an authorization check: the session remains valid so ordinary mobile-network changes do not log a user out (#327).
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
-- **Redis session staleness**: If Redis delete fails during user deactivation or after a failed login commit, the cached session remains valid until the next background sync (up to 5 minutes) or Redis TTL expiry. The background sync detects and cleans up orphaned/deactivated sessions.
 - **Worker control endpoints have no cooldown**: `POST /api/admin/workers/{id}/restart`, `POST /api/admin/workers/{id}/pin_model`, and `POST /api/admin/registry/{mode}/download` are not rate-limited. Repeated calls by a compromised admin could disrupt GPU workers or exhaust download bandwidth. Admin-only auth is the only gate.
 - **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth (`health_api.py:211-218`). The web container binds port 8080 to `127.0.0.1`, so the repository makes this endpoint host-local by default (`docker-compose.yml:89-90`); a public deployment needs a filtering layer in front of it, which this repository does not provide (#327).
 

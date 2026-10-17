@@ -18,7 +18,7 @@ Before writing tests, you need to know what correct behavior looks like. Read th
 
 2. **Claude API** — Read `src/songmaker_cli/claude/`. The Anthropic SDK is the contract — check that our usage matches what the SDK actually does. Any fields we set that could be silently ignored?
 
-3. **Redis patterns** — Read `src/songmaker_cli/redis_client.py` and `src/songmaker_cli/constants.py`. The key prefixes, Lua scripts, TTL semantics, and session cache contract are already in code — just verify the Lua scripts do what their callers assume.
+3. **Redis patterns** — Read `src/songmaker_cli/redis_client.py` and `src/songmaker_cli/constants.py`. The key prefixes, Lua scripts, and TTL semantics are already in code — verify the Lua scripts do what their callers assume. Sessions are DB-owned: verify `src/songmaker_cli/auth_stores.py` and `src/songmaker_cli/db/queries/auth.py` for renewal and revocation, and `src/songmaker_cli/auth_dependencies.py` for the authentication transaction.
 
 ### Phase 2: Payload assertion tests
 
