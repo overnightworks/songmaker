@@ -1,0 +1,8 @@
+claim_id = "a0bb521c2faa497baf4244348af459c3"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "e00448198d1e032a6cce5c645cb86cb0d44a9c59"
+branch = "claude/issue-1529-home-new-entry"
+scope = ["docs/architecture.md", "docs/design/navigation.html", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/src/lib/components/LibraryHome.svelte", "frontend/src/lib/components/LibraryHome.test.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/NewPlaceMenu.svelte", "frontend/src/lib/components/NewPlaceMenu.test.ts", "frontend/src/lib/components/PlaylistDetailView.svelte", "frontend/src/lib/components/PlaylistDetailView.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "3cb7d42be3ac661ada10e06eadc45115b3680a9a"
+whole_reason = "One create entry moves between Home and the wall heads; its component, both mount points, the empty-state copy and the e2e/doc pins must move together or a width lies."
