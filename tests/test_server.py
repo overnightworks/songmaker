@@ -2112,7 +2112,8 @@ def test_real_access_record_is_readable_by_rate_window_parser(
 
     parser_path = Path(__file__).resolve().parents[1] / "scripts" / "e2e_rate_window.py"
     spec = importlib.util.spec_from_file_location("e2e_rate_window", parser_path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     parser_module = importlib.util.module_from_spec(spec)
     # Dataclasses resolve postponed annotations through the module registry.
     with monkeypatch.context() as module_patch:
