@@ -21,6 +21,7 @@ from redis.asyncio import Redis
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import NOT_STARTED, AceStepProgress
+from acestep_worker.child_tasks import settle_child_task
 from acestep_worker.downloads import (
     list_available_modes,
     spawn_background,
@@ -169,9 +170,7 @@ async def _cancel_gpu_hold_renewal(renew_task: asyncio.Task[None]) -> None:
     if not renew_task.done():
         renew_task.cancel()
     try:
-        await renew_task
-    except asyncio.CancelledError:  # NOSONAR The owner cancels its renewal child.
-        pass
+        await settle_child_task(renew_task)
     except Exception:
         log.exception("GPU hold renewal failed while its owner cleaned up")
 
@@ -549,8 +548,10 @@ async def _run_train_lora_with_cleanup(
     try:
         await _await_training_or_renewal(training_task, resources.renew_task)
     finally:
-        await _cancel_training_task(training_task)
-        await _clean_up_train_lora_run(deps, request, resources)
+        try:
+            await _cancel_training_task(training_task)
+        finally:
+            await _clean_up_train_lora_run(deps, request, resources)
 
 
 async def _await_training_or_renewal(
@@ -571,10 +572,7 @@ async def _cancel_training_task(training_task: asyncio.Task[None]) -> None:
     if training_task.done():
         return
     training_task.cancel()
-    try:
-        await training_task
-    except asyncio.CancelledError:  # NOSONAR The parent owns this child task.
-        pass
+    await settle_child_task(training_task)
 
 
 async def _clean_up_train_lora_run(
@@ -582,7 +580,13 @@ async def _clean_up_train_lora_run(
     request: TrainLoraRequest,
     resources: _TrainLoraResources,
 ) -> None:
-    await _cancel_gpu_hold_renewal(resources.renew_task)
+    try:
+        await _cancel_gpu_hold_renewal(resources.renew_task)
+    finally:
+        await _release_train_lora_resources(deps, request)
+
+
+async def _release_train_lora_resources(deps: WorkerDeps, request: TrainLoraRequest) -> None:
     try:
         await release_gpu_hold(deps.redis, deps.worker_id, request.hold_token)
     finally:

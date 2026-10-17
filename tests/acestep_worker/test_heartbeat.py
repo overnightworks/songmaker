@@ -153,3 +153,30 @@ def test_stop_handles_externally_cancelled_task() -> None:
         await loop.stop()
 
     _run(go())
+
+
+def test_stop_ends_cancelled_when_cancelled_while_waiting_for_the_loop() -> None:
+    """defect:#1509 -- cancelling stop() while it waited for the loop was swallowed."""
+
+    async def go():
+        publishing = asyncio.Event()
+        finish_publishing = asyncio.Event()
+
+        async def slow_provider() -> dict[str, object]:
+            publishing.set()
+            await finish_publishing.wait()
+            return {}
+
+        loop, _ = _make_loop(provider=slow_provider)
+        loop.start()
+        await publishing.wait()
+        stopping = asyncio.create_task(loop.stop())
+        await asyncio.sleep(0)
+        stopping.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await stopping
+        finish_publishing.set()
+        await loop.stop()
+        return loop.is_running
+
+    assert not _run(go())

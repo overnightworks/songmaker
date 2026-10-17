@@ -18,6 +18,7 @@ import {
 	type SharedTrack
 } from './sharedCollection';
 import { updateMediaSessionMetadata } from '$lib/services/mediaSession';
+import { shuffled } from '$lib/utils/shuffle';
 import type { QueueRowItem, QueueViewModel } from '$lib/stores/player';
 
 export type ShareStreamFetcher = () => Promise<QueueStreamManifest>;
@@ -48,14 +49,10 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 	networkFailureIsAnnounced: () => false
 };
 
-function shuffleKeepingFirst(tracks: SharedTrack[], anchor: SharedTrack | null): SharedTrack[] {
-	if (tracks.length <= 1) return [...tracks];
-	const rest = anchor ? tracks.filter((t) => t.key !== anchor.key) : [...tracks];
-	for (let i = rest.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1)); // NOSONAR(S2245) Playback ordering does not generate secrets or security tokens.
-		[rest[i], rest[j]] = [rest[j], rest[i]];
-	}
-	return anchor ? [anchor, ...rest] : rest;
+function shuffledAfterAnchor(tracks: SharedTrack[], anchor: SharedTrack | null): SharedTrack[] {
+	if (!anchor) return shuffled(tracks);
+	const rest = tracks.filter((t) => t.key !== anchor.key);
+	return shuffled([anchor, ...rest], { keepFirst: true });
 }
 
 export class SharePlayback {
@@ -215,7 +212,7 @@ export class SharePlayback {
 		if (this.shuffle === next) return;
 		this.shuffle = next;
 		const anchor = this.currentTrack;
-		this.playOrder = next ? shuffleKeepingFirst(this.baseTracks, anchor) : [...this.baseTracks];
+		this.playOrder = next ? shuffledAfterAnchor(this.baseTracks, anchor) : [...this.baseTracks];
 		this.activeIndex = anchor ? this.playOrder.findIndex((t) => t.key === anchor.key) : -1;
 		if (anchor) void this.playTrack(anchor);
 	}

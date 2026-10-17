@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
@@ -374,7 +374,7 @@ async def _pick_and_call_worker(
         if task_id is None:
             raise
     finally:
-        await _stop_lora_renewal(renew_task, suppress_failure=handover.complete)
+        await _cancel_child_task(renew_task, suppress_failure=handover.complete)
 
     return await _read_lora_training_events(
         worker,
@@ -537,24 +537,20 @@ async def _race_with_renewal(awaitable, renew_task: asyncio.Task[None]):
     if operation_task in done:
         return await operation_task
     if renew_task in done:
-        operation_task.cancel()
-        try:
-            await operation_task
-        except asyncio.CancelledError:  # NOSONAR Renewal owns this intentional cancellation.
-            pass
+        await _cancel_child_task(operation_task)
         return await renew_task
     return await operation_task
 
 
-async def _stop_lora_renewal(
-    renew_task: asyncio.Task[None],
+async def _cancel_child_task(
+    child_task: asyncio.Task[Any],
     *,
     suppress_failure: bool = False,
 ) -> None:
-    if not renew_task.done():
-        renew_task.cancel()
+    if not child_task.done():
+        child_task.cancel()
     try:
-        await renew_task
+        await child_task
     except asyncio.CancelledError:
         current_task = asyncio.current_task()
         if current_task is not None and current_task.cancelling():
@@ -743,7 +739,7 @@ async def _prepare_and_submit_lora(
         if not handover.complete:
             await _release_lora_hold(worker, hold_token, best_effort=True)
         if renew_task is not None:
-            await _stop_lora_renewal(renew_task, suppress_failure=True)
+            await _cancel_child_task(renew_task, suppress_failure=True)
 
 
 def _validate_export_path(

@@ -9,6 +9,8 @@ from typing import Any
 
 from redis.asyncio import Redis
 
+from acestep_worker.child_tasks import settle_child_task
+
 log = logging.getLogger(__name__)
 
 DEFAULT_INTERVAL_SECONDS = 5.0
@@ -132,10 +134,7 @@ class HeartbeatLoop:
     async def stop(self) -> None:
         self._stop_event.set()
         if self._task is not None:
-            try:
-                await self._task
-            except asyncio.CancelledError:  # NOSONAR Shutdown accepts a cancelled heartbeat.
-                pass
+            await settle_child_task(self._task)
             self._task = None
 
     async def shutdown(self) -> None:
