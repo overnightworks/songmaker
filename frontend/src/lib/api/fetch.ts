@@ -11,7 +11,10 @@ import { UserFacingError } from './userFacingError';
 const API_TIMEOUT_MS = 30_000;
 
 interface RefusalReactions {
-	/** A 401 outside the sign-in forms; the request rejects only once this has settled. */
+	/**
+	 * A 401 outside the sign-in forms and the public share reads; the request
+	 * rejects only once this has settled.
+	 */
 	sessionLost: () => Promise<void>;
 	/** A 429; whether the person hears of it is the reaction's to decide. */
 	rateLimited: (path: string) => void;
@@ -158,8 +161,13 @@ function getCsrfToken(): string {
 // saying the session is gone, so it never signs anyone out.
 const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/password']);
 
+// The public share reads (`/shared/*`, sharing_api.py) authenticate nobody, so
+// a 401 there cannot mean that a session ended; the share player opts out the
+// same way (`onAuthLost: null`).
+export const PUBLIC_SHARE_PATH_PREFIX = '/shared/';
+
 function isSessionLostResponse(status: number, path: string): boolean {
-	return status === 401 && !AUTH_ENDPOINTS.has(path);
+	return status === 401 && !AUTH_ENDPOINTS.has(path) && !path.startsWith(PUBLIC_SHARE_PATH_PREFIX);
 }
 
 const SAFE_INTERNAL_PATH_FALLBACK = HOME_ROUTE_PATH;
@@ -289,6 +297,14 @@ export async function apiFetch<T>(
 	} finally {
 		clearTimeout(timeout);
 	}
+}
+
+// The waveform read draws audio rather than sending a person's request. Its
+// failure already shows as flat bars, so it must not trigger refusal reactions.
+export async function fetchMediaBytes(url: string): Promise<ArrayBuffer> {
+	const response = await fetch(url);
+	if (!response.ok) throw new ApiError(response.status, '', url);
+	return response.arrayBuffer();
 }
 
 export type JobStatus = JobItem;

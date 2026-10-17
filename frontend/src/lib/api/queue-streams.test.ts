@@ -9,8 +9,6 @@ vi.mock('$app/navigation', async () =>
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
-	fetchSharedAlbumStream,
-	fetchSharedPlaylistStream,
 	pinQueueStream,
 	unpinQueueStream
 } from './queue-streams';
@@ -73,28 +71,4 @@ describe('queue stream API contract', () => {
 		expect(url).toBe('/api/queue-streams/snap-1/pin');
 		expect(init.method).toBe(method);
 	});
-
-	it.each([
-		[
-			'playlist',
-			() => fetchSharedPlaylistStream('shared-playlist'),
-			'/shared/playlist/shared-playlist/stream'
-		],
-		['album', () => fetchSharedAlbumStream('shared-album'), '/shared/shared-album/stream']
-	])(
-		'returns the shared %s manifest and reports an unavailable stream',
-		async (_name, fetchStream, url) => {
-			mockFetch.mockResolvedValueOnce({
-				ok: true,
-				json: () => Promise.resolve({ snapshot_id: 'snap-1' })
-			});
-			expect(await fetchStream()).toEqual({ snapshot_id: 'snap-1' });
-			expect(request()[0]).toBe(url);
-			expect(request()[1]).toEqual({ method: 'POST' });
-
-			mockFetch.mockReset();
-			mockFetch.mockResolvedValueOnce({ ok: false });
-			await expect(fetchStream()).rejects.toThrow('Failed to create shared');
-		}
-	);
 });

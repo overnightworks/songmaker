@@ -1,7 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { hangsUntilAborted } from '$lib/test-utils/network';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-playlist' } } }));
 
@@ -131,6 +132,29 @@ afterEach(async () => {
 });
 
 describe('shared playlist page', () => {
+	it('925_M2_W1: asks the server for the playlist at its own share address', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => sharedPlaylist });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
+		expect(mockFetch.mock.calls[0][0]).toBe('/shared/playlist/shared-playlist');
+	});
+
+	it('925_M2_W2: says in one line that a gone playlist link is no longer shared, with no player', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('h1')?.textContent).toBe('Playlist not found')
+		);
+		expect(target.textContent).toContain('This share link is invalid or was removed.');
+		expect(target.querySelector('.now-playing')).toBeNull();
+	});
+
 	it('1374_rule_5 shows each entry with its album', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => sharedPlaylist });
 		const target = document.createElement('div');
@@ -140,6 +164,35 @@ describe('shared playlist page', () => {
 		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 		expect(target.textContent).toContain('First');
 		expect(target.textContent).toContain('Album');
+	});
+
+	it('925_M2_T2: a stream build that outlasts its 120 second budget falls back to classic playback', async () => {
+		mockFetch.mockImplementation((path: string, init: RequestInit) =>
+			path.endsWith('/stream')
+				? hangsUntilAborted(path, init)
+				: Promise.resolve({ ok: true, status: 200, json: async () => sharedPlaylist })
+		);
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
+
+		vi.useFakeTimers();
+		onTestFinished(() => void vi.useRealTimers());
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[0].click();
+		await vi.advanceTimersByTimeAsync(119_999);
+		expect(audioPlayer.current).toBeNull();
+		expect(audio.src).toBe('');
+
+		await vi.advanceTimersByTimeAsync(1);
+		vi.useRealTimers();
+
+		await vi.waitFor(() => expect(audio.src).toBe('/audio/first.mp3'));
+		audio.fire('canplay');
+		expect(audioPlayer.current?.songTitle).toBe('First');
+		expect(audioPlayer.mode).toBe('classic');
+		expect(audioPlayer.transport).toBe('playing');
+		expect(audio.paused).toBe(false);
 	});
 
 	it.each(['classic', 'stream'] as const)(
