@@ -1,0 +1,8 @@
+claim_id = "6cd544108aa34980a06d648ff308a4ab"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "6b07d502e2c6668792c436bb931cf4d3e2b9fcbf"
+branch = "claude/issue-1579-plain-failure-line"
+scope = ["docs/design/song-page-phone.html", "docs/design/vocabulary.html", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/GenerateButton.svelte", "frontend/src/lib/components/editor/GenerateButton.test.ts", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "8d630cbd54d700c62405b40265cb15593b7dc662"
+whole_reason = "the plain line, its two removed labels, the two frozen pictures and the four tests that pin the expander change together"
