@@ -1,0 +1,8 @@
+claim_id = "8ae5acd050364bef87feb2ccf5f8a43d"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "5c13f848aa8f78632bcd67c09801bf296ce13731"
+branch = "claude/issue-1593-worker-load-row"
+scope = ["frontend/src/lib/components/WorkerModelsList.svelte", "frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/lib/components/WorkerPoolPanel.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "c3bec6bdaad82e6cb6090bdf4a9dcb31b18a9dd3"
+whole_reason = "Eine zusammenhängende Änderung der vorhandenen Worker-Liste mit Ladezeile, Zustandsbeschriftungen und ihren Panel-Nachweisen; die vier Dateien müssen gemeinsam landen."
