@@ -7,7 +7,12 @@ vi.mock('$app/navigation', async () =>
 );
 
 import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
-import { fetchLibraryListen, fetchLibraryPoolQueue, searchLibrary } from './library';
+import {
+	fetchLibraryListen,
+	fetchLibraryPoolQueue,
+	fetchLibraryWrite,
+	searchLibrary
+} from './library';
 
 function mockOk(data: unknown) {
 	mockFetch.mockResolvedValueOnce({
@@ -105,4 +110,18 @@ describe('fetchLibraryPoolQueue', () => {
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
+});
+
+it('1354_rule_14 reads the authenticated Write endpoint and returns its answer', async () => {
+	const response = { items: [] };
+	mockOk(response);
+	expect(await fetchLibraryWrite()).toEqual(response);
+	expect(mockFetch).toHaveBeenCalledWith(
+		'/api/library/write',
+		expect.objectContaining({ credentials: 'include' })
+	);
+});
+it('1354_rule_19 propagates a failed Write read', async () => {
+	mockFetch.mockRejectedValueOnce(new TypeError('offline'));
+	await expect(fetchLibraryWrite()).rejects.toThrow('offline');
 });

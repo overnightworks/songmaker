@@ -1,4 +1,9 @@
-import type { LibrarySearchResponse, LibraryListenResponse, LibraryPoolQueue } from './types';
+import type {
+	LibrarySearchResponse,
+	LibraryListenResponse,
+	LibraryPoolQueue,
+	LibraryWriteResponse
+} from './types';
 import { apiFetch } from './fetch';
 import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
 import type { CreatedSort } from '$lib/utils/recency';
@@ -61,4 +66,8 @@ export async function fetchLibraryPoolQueue(options?: {
 	return apiFetch<LibraryPoolQueue>(`${LIBRARY_POOL_QUEUE_PATH}?${params}`, {
 		signal: options?.signal
 	});
+}
+
+export async function fetchLibraryWrite(): Promise<LibraryWriteResponse> {
+	return apiFetch<LibraryWriteResponse>('/api/library/write');
 }
