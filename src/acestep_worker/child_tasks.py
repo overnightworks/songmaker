@@ -19,7 +19,7 @@ async def settle_child_task(child: asyncio.Task[Any]) -> None:
     while not child.done():
         try:
             await asyncio.wait({child})
-        except asyncio.CancelledError as cancellation:
+        except asyncio.CancelledError as cancellation:  # NOSONAR(S7497) Re-raised after the loop.
             waiter_cancellation = cancellation
             if not child.done():
                 child.cancel()

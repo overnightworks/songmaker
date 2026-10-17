@@ -242,8 +242,9 @@ def test_run_download_raises_when_its_progress_poll_failed(tmp_path: Path) -> No
             download_fn=download_until_the_progress_poll_failed,
         )
 
+    download_with_a_failing_progress_poll = go()
     with pytest.raises(OSError, match="progress store unavailable"):
-        _run(go())
+        _run(download_with_a_failing_progress_poll)
 
 
 def test_poll_progress_emits_updates(tmp_path: Path) -> None:

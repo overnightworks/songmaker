@@ -102,8 +102,9 @@ def test_settling_a_failed_child_raises_the_childs_own_failure(
         child.cancel()
         await settle_child_task(child)
 
+    settling_a_failed_child = go()
     with pytest.raises(OSError, match="failed"):
-        _run(go())
+        _run(settling_a_failed_child)
     assert caplog.records == []
 
 
