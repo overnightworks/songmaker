@@ -31,8 +31,6 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import type { VersionItem } from '../src/lib/api/types';
 import {
 	DIALOG_CANCEL_LABEL,
-	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
-	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
@@ -63,7 +61,7 @@ import {
 	ONLY_IN_SHELL,
 	openRailNav,
 	openSettingsSection,
-	openSettingsSectionFromDrawerSearch,
+	openSettingsSectionFromSearch,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
 	workspace
@@ -105,7 +103,7 @@ const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 	String(RUNNING_JOB_TAKE_INDEX)
 ).replace('{count}', String(RUNNING_JOB_TAKE_COUNT));
 const REMAINING_TIME_PATTERN = /~\d+:\d{2}/;
-const FAILED_GENERATION_SENTENCE = 'ACE-Step worker: CUDA out of memory on device 0';
+const FAILED_GENERATION_SENTENCE = 'Too long for the GPU right now — try a shorter duration.';
 const UNSAVED_DRAFT_LINE = 'a line nobody saved';
 
 // The seeded take's version as the app reads it, so a group label names it
@@ -162,7 +160,7 @@ function expectSongAddressStands(page: Page, albumId: string, title: string): vo
 
 test.describe('song page at phone width', () => {
 	test(
-		'[defect:#1568] lists takes with a play control each, shows a running generation, then its failure',
+		'[defect:#1568] [defect:#1579] lists takes with a play control each, shows a running generation, then its failure',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			// Stands in for the absent worker's own heartbeat (see the file header):
@@ -286,15 +284,7 @@ test.describe('song page at phone width', () => {
 			// reload, matching a real worker crash's own reporting path.
 			await failGenerationJob(jobId, FAILED_GENERATION_SENTENCE);
 			await expect(panel.getByText(FAILED_GENERATION_SENTENCE)).toBeVisible();
-			// The same failure also raises a toast (ToastContainer.svelte) that
-			// overlaps the expand button until it is dismissed or its own 5s timer
-			// runs out — dismiss it explicitly so the click below isn't racing that
-			// timer.
-			await page.getByRole('alert').getByRole('button', { name: 'Dismiss' }).click();
-			await panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_EXPAND_LABEL }).click();
-			await expect(
-				panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL })
-			).toBeVisible();
+			await expect(panel.locator('.failure button')).toHaveCount(0);
 
 			console.log(`Song-phone flow /api requests: ${guard.apiRequestCount}`);
 			guard.assertClean();
@@ -388,7 +378,7 @@ test.describe('song page at phone width', () => {
 	);
 
 	test(
-		'Discard on a Settings page from the drawer search lands on its address, which a reload keeps (#1143)',
+		'defect:#1583: Discard on a Settings page from Search lands on its address, which a reload keeps (#1143)',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			const library = readSeededLibrary();
@@ -397,7 +387,7 @@ test.describe('song page at phone width', () => {
 				library.songPhoneAlbumId
 			);
 
-			await openSettingsSectionFromDrawerSearch(page, ACCOUNT_SECTION);
+			await openSettingsSectionFromSearch(page, ACCOUNT_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
 			await unsavedDraftDialog
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })

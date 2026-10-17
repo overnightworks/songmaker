@@ -2098,3 +2098,71 @@ def test_csp_allows_the_apps_own_workers(server_app: TestClient) -> None:
     """The lyrics alignment worker is same-origin; default-src 'none' would block it."""
     resp = server_app.get("/")
     assert "worker-src 'self'" in resp.headers["Content-Security-Policy"]
+
+
+def test_real_access_record_is_readable_by_rate_window_parser(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """defect:#1576 -- format the actual request record while its context is still bound."""
+    import importlib.util
+    import io
+    import sys
+
+    import structlog
+
+    parser_path = Path(__file__).resolve().parents[1] / "scripts" / "e2e_rate_window.py"
+    spec = importlib.util.spec_from_file_location("e2e_rate_window", parser_path)
+    assert spec is not None
+    assert spec.loader is not None
+    parser_module = importlib.util.module_from_spec(spec)
+    # Dataclasses resolve postponed annotations through the module registry.
+    with monkeypatch.context() as module_patch:
+        module_patch.setitem(sys.modules, spec.name, parser_module)
+        spec.loader.exec_module(parser_module)
+    parse_access_record = parser_module.parse_access_record
+
+    server_app, _ = make_test_app(tmp_path)
+    output = io.StringIO()
+    handler = logging.StreamHandler(output)
+    handler.setFormatter(structlog.stdlib.ProcessorFormatter(
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.JSONRenderer(),
+        ],
+        foreign_pre_chain=[
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.add_logger_name,
+            structlog.processors.TimeStamper(fmt="iso"),
+        ],
+    ))
+    logger = logging.getLogger("songmaker_cli.middleware.access_log")
+    previous_level = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    async def request():
+        transport = httpx.ASGITransport(app=server_app.app, client=(_TRUSTED_PEER, 55000))
+        async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
+            response = await client.get(
+                "/api/access-log-proof", headers={"x-forwarded-for": "203.0.113.1"},
+            )
+            assert response.status_code == 404
+
+    before = datetime.now(timezone.utc)
+    try:
+        with _trusting_the_proxy_network(server_app):
+            asyncio.run(request())
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous_level)
+        handler.close()
+    after = datetime.now(timezone.utc)
+    lines = output.getvalue().splitlines()
+    assert len(lines) == 1
+    entry = json.loads(lines[0])
+    assert entry["logger"] == "songmaker_cli.middleware.access_log"
+    assert entry["method"] == "GET"
+    record = parse_access_record(lines[0])
+    assert record is not None
+    assert record.client_ip == "203.0.113.1"
+    assert record.path == "/api/access-log-proof"
+    assert before <= record.at <= after

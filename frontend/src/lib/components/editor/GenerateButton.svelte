@@ -2,8 +2,6 @@
 	import {
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-		EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
-		EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 		EDITOR_GENERATE_MODE_LABELS
 	} from '$lib/constants';
 	import {
@@ -37,12 +35,6 @@
 	const reasonInsideButton: string | null = $derived(
 		reasonInside && presentation.kind === 'disabled' ? presentation.reason : null
 	);
-	let expanded = $state(false);
-	const failureId = $props.id();
-
-	$effect(() => {
-		if (presentation.kind !== 'failed') expanded = false;
-	});
 </script>
 
 {#snippet disabledReason(reason: string)}
@@ -113,22 +105,7 @@
 		{#if presentation.kind === 'disabled' && presentation.reason !== null && reasonInsideButton === null}
 			<p class="reason-below">{@render disabledReason(presentation.reason)}</p>
 		{:else if presentation.kind === 'failed'}
-			<div class="failure" class:expanded>
-				<p id={failureId} class="cause">{presentation.cause}</p>
-				<button
-					type="button"
-					class="icon-button"
-					data-hitbox="frequent"
-					aria-label={expanded
-						? EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL
-						: EDITOR_GENERATE_FAILURE_EXPAND_LABEL}
-					aria-expanded={expanded}
-					aria-controls={failureId}
-					onclick={() => (expanded = !expanded)}
-				>
-					<Icon name={expanded ? 'chevron-up' : 'chevron-down'} />
-				</button>
-			</div>
+			<p class="failure">{presentation.cause}</p>
 		{/if}
 	{/if}
 </div>
@@ -250,27 +227,10 @@
 	}
 
 	.failure {
-		display: flex;
-		align-items: center;
 		color: var(--score-bad);
-	}
-
-	.cause {
-		flex: 1;
-		min-width: 0;
-		margin: 0;
-		overflow: hidden;
-		white-space: nowrap;
-		text-overflow: ellipsis;
-	}
-
-	.failure.expanded {
-		align-items: flex-start;
-	}
-
-	.expanded .cause {
 		white-space: pre-wrap;
 	}
+
 	.progress-fill.indeterminate {
 		width: 35%;
 		background: linear-gradient(
