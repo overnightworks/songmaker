@@ -2100,15 +2100,25 @@ def test_csp_allows_the_apps_own_workers(server_app: TestClient) -> None:
     assert "worker-src 'self'" in resp.headers["Content-Security-Policy"]
 
 
-def test_real_access_record_is_readable_by_rate_window_parser(tmp_path: Path) -> None:
+def test_real_access_record_is_readable_by_rate_window_parser(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """defect:#1576 -- format the actual request record while its context is still bound."""
+    import importlib.util
     import io
     import sys
 
     import structlog
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-    from e2e_rate_window import parse_access_record
+    parser_path = Path(__file__).resolve().parents[1] / "scripts" / "e2e_rate_window.py"
+    spec = importlib.util.spec_from_file_location("e2e_rate_window", parser_path)
+    assert spec is not None and spec.loader is not None
+    parser_module = importlib.util.module_from_spec(spec)
+    # Dataclasses resolve postponed annotations through the module registry.
+    with monkeypatch.context() as module_patch:
+        module_patch.setitem(sys.modules, spec.name, parser_module)
+        spec.loader.exec_module(parser_module)
+    parse_access_record = parser_module.parse_access_record
 
     server_app, _ = make_test_app(tmp_path)
     output = io.StringIO()
