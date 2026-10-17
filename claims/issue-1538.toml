@@ -1,0 +1,7 @@
+claim_id = "5abbfd4cd887417a9d04f873c4ab70fa"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "fa1cc53cc419e1a2832aab49e7b099a9be702c69"
+branch = "claude/issue-1538-g2-lib-api-transport-lint"
+scope = ["docs/architecture.md", "frontend/eslint.config.js", "frontend/src/lib/api/songs.ts"]
+opened_commit = "01dba8c50781ca40db2c209eed7f8ed4430796cc"
