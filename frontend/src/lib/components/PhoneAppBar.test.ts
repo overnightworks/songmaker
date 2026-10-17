@@ -1,3 +1,4 @@
+import { backLabel } from '$lib/routes/pageBack';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -42,8 +43,7 @@ import { buildAlbum, buildPlaylist, buildSong } from './shell/rail-test-fixtures
 import PhoneAppBar, {
 	SEARCH_CLOSE_LABEL,
 	SEARCH_OPEN_LABEL,
-	SEARCH_SHEET_LABEL,
-	backLabel
+	SEARCH_SHEET_LABEL
 } from './PhoneAppBar.svelte';
 
 vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
@@ -51,10 +51,12 @@ vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation'
 const navigation = vi.hoisted(() => ({
 	openAppPage: vi.fn(),
 	openLibraryWall: vi.fn(),
-	openListOverPage: vi.fn(),
 	openRailSearchTarget: vi.fn()
 }));
-vi.mock('$lib/stores/navigation', () => navigation);
+vi.mock('$lib/stores/navigation', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/navigation')>()),
+	...navigation
+}));
 
 vi.mock('$lib/api/library', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/library')>()),
@@ -219,16 +221,22 @@ function isInert(element: Element | null): boolean {
 }
 
 describe('PhoneAppBar', () => {
-	it('defect:#1531: offers five song slots with named touch actions, search and inline rename', async () => {
+	it('1354_rule_32: offers song Back beside named touch actions, search and inline rename', async () => {
 		const onrename = vi.fn(async () => undefined);
+		await standOn('/album/a2/quiet-wind', '/album/a2');
 		phoneAppBar.set(songBar(onrename));
 		const target = renderBar();
 		await tick();
-		expect(target.querySelector('header')?.children).toHaveLength(5);
 		expect(target.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
 		expect(target.querySelector('.brand')).toBeNull();
 		expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).toBeNull();
-		for (const name of [RAIL_DRAWER_OPEN_LABEL, SEARCH_OPEN_LABEL, 'Share song', 'Song menu']) {
+		for (const name of [
+			backLabel('Cold Harbour'),
+			RAIL_DRAWER_OPEN_LABEL,
+			SEARCH_OPEN_LABEL,
+			'Share song',
+			'Song menu'
+		]) {
 			expectFrequentHitbox(getByRoleButton(target, name), name);
 		}
 		getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL).click();
@@ -404,6 +412,20 @@ describe('PhoneAppBar', () => {
 			expect(target.querySelector('.brand')).toBeNull();
 		}
 	);
+
+	it.each([
+		{ from: '/album/a2' as const, name: 'Cold Harbour' },
+		{ from: '/' as const, name: HOME_PAGE_LABEL }
+	])('1354_rule_32: song ‹ traverses to $name without adding an entry', async ({ from, name }) => {
+		await standOn('/album/a2/quiet-wind', from);
+		phoneAppBar.set(songBar());
+		const target = renderBar();
+		await tick();
+		const length = history.length;
+		getByRoleButton(target, backLabel(name)).click();
+		await vi.waitFor(() => expect(location.pathname).toBe(from));
+		expect(history).toHaveLength(length);
+	});
 
 	it('renames ‹ when history moves onto another page', async () => {
 		const target = renderBar();

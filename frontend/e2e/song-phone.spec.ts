@@ -35,6 +35,8 @@ import {
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
+	EDITOR_VIEW_COWRITER_LABEL,
+	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	GENERATION_PHASE_LABELS,
@@ -445,6 +447,176 @@ test.describe('song page at phone width', () => {
 			await expect(lyrics).toHaveValue(savedLyrics);
 		}
 	);
+
+	test.describe('song bar Back (#1591)', () => {
+		for (const origin of ['album', 'Home'] as const) {
+			test(
+				`1354_rule_32: clean song returns to ${origin}, and editor tabs keep its Back`,
+				{ tag: ONLY_IN_SHELL.mobile },
+				async ({ page }) => {
+					await page.setViewportSize({ width: 390, height: 844 });
+					const { songPhoneAlbumId } = readSeededLibrary();
+					const { lyrics, savedLyrics, songHeading } = await openSongWithAnUnsavedDraft(
+						page,
+						songPhoneAlbumId
+					);
+					const title = await songHeading.innerText();
+					await lyrics.fill(savedLyrics);
+					const bar = page.locator('.mobile-strip');
+					const albumResponse = await page.request.get(`/api/albums/${songPhoneAlbumId}`);
+					expect(albumResponse.ok()).toBe(true);
+					const album: { title: string } = await albumResponse.json();
+					let name = `Back to ${album.title}`;
+					let destination = `/album/${songPhoneAlbumId}`;
+					if (origin === 'Home') {
+						await page.goto('/');
+						await page
+							.getByRole('region', { name: 'Write', exact: true })
+							.getByRole('button', { name: songEditorOpenLabel(title), exact: true })
+							.click();
+						await expect(songHeading).toBeVisible();
+						name = 'Back to Home';
+						destination = '/';
+					}
+					const back = bar.getByRole('button', { name, exact: true });
+					await expect(back).toBeVisible();
+					const address = page.url();
+					const length = await page.evaluate(() => history.length);
+					for (const tab of [EDITOR_VIEW_COWRITER_LABEL, EDITOR_TAB_EDIT_LABEL]) {
+						await page.getByRole('tab', { name: tab, exact: true }).click();
+						await expect(page).toHaveURL(address);
+						await expect(back).toBeVisible();
+						expect(await page.evaluate(() => history.length)).toBe(length);
+						await expect(workspace(page).getByRole('button', { name: /^Back to / })).toHaveCount(0);
+					}
+					await back.click();
+					await expect(page).toHaveURL(new URL(destination, address).href);
+					await expect(songHeading).toBeHidden();
+					expect(await page.evaluate(() => history.length)).toBe(length);
+				}
+			);
+		}
+
+		for (const choice of [
+			DIALOG_CANCEL_LABEL,
+			EDITOR_UNSAVED_DISCARD_LABEL,
+			EDITOR_UNSAVED_SAVE_LABEL
+		]) {
+			test(
+				`1354_rule_32: song ‹ asks first and honors ${choice}`,
+				{ tag: ONLY_IN_SHELL.mobile },
+				async ({ page }) => {
+					await page.setViewportSize({ width: 390, height: 844 });
+					const { songPhoneAlbumId } = readSeededLibrary();
+					const { lyrics, savedLyrics, songHeading, unsavedDraftDialog } =
+						await openSongWithAnUnsavedDraft(page, songPhoneAlbumId);
+					const address = page.url();
+					const draft = await lyrics.inputValue();
+					await page
+						.locator('.mobile-strip')
+						.getByRole('button', { name: /^Back to / })
+						.click();
+					await expect(unsavedDraftDialog).toBeVisible();
+					await expect(page).toHaveURL(address);
+					await unsavedDraftDialog.getByRole('button', { name: choice, exact: true }).click();
+					await expect(unsavedDraftDialog).toBeHidden();
+					if (choice === DIALOG_CANCEL_LABEL) {
+						await expect(page).toHaveURL(address);
+						await expect(songHeading).toBeVisible();
+						await expect(lyrics).toHaveValue(draft);
+					} else {
+						await expect(page).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
+						await expect(songHeading).toBeHidden();
+						await page.goForward();
+						await expect(songHeading).toBeVisible();
+						await expect(lyrics).toHaveValue(
+							choice === EDITOR_UNSAVED_SAVE_LABEL ? draft : savedLyrics
+						);
+					}
+				}
+			);
+		}
+
+		test(
+			'1354_rule_32: cold song ‹ names its album and asks before replacing the song',
+			{ tag: ONLY_IN_SHELL.mobile },
+			async ({ page, context }) => {
+				const { songPhoneAlbumId } = readSeededLibrary();
+				const { lyrics, savedLyrics } = await openSongWithAnUnsavedDraft(page, songPhoneAlbumId);
+				await lyrics.fill(savedLyrics);
+				const address = page.url();
+				const expectedName = await page
+					.locator('.mobile-strip')
+					.getByRole('button', { name: /^Back to / })
+					.getAttribute('aria-label');
+				if (!expectedName) throw new Error('Expected the song Back name');
+				const cold = await context.newPage();
+				try {
+					await cold.setViewportSize({ width: 390, height: 844 });
+					await cold.goto(address);
+					await cold.getByRole('textbox', { name: /^Lyrics/ }).fill(UNSAVED_DRAFT_LINE);
+					const length = await cold.evaluate(() => history.length);
+					await cold
+						.locator('.mobile-strip')
+						.getByRole('button', { name: expectedName, exact: true })
+						.click();
+					const question = cold.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+					await expect(question).toBeVisible();
+					await expect(cold).toHaveURL(address);
+					await question
+						.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+						.click();
+					await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
+					expect(await cold.evaluate(() => history.length)).toBe(length);
+				} finally {
+					await cold.close();
+				}
+			}
+		);
+
+		for (const dirty of [false, true]) {
+			test(
+				`1354_rule_30: browser Back closes search over a ${dirty ? 'dirty' : 'clean'} song first`,
+				{ tag: ONLY_IN_SHELL.mobile },
+				async ({ page }) => {
+					await page.setViewportSize({ width: 390, height: 844 });
+					const { lyrics, savedLyrics, unsavedDraftDialog, songHeading } =
+						await openSongWithAnUnsavedDraft(page, readSeededLibrary().songPhoneAlbumId);
+					if (!dirty) await lyrics.fill(savedLyrics);
+					const draft = await lyrics.inputValue();
+					const address = page.url();
+					await page
+						.locator('.mobile-strip')
+						.getByRole('button', { name: 'Search', exact: true })
+						.click();
+					const search = page.getByRole('dialog', { name: 'Search', exact: true });
+					await expect(search).toBeVisible();
+					await page.goBack();
+					await expect(search).toBeHidden();
+					await expect(unsavedDraftDialog).toBeHidden();
+					await expect(page).toHaveURL(address);
+					await expect(songHeading).toBeVisible();
+					await expect(lyrics).toHaveValue(draft);
+				}
+			);
+		}
+
+		test(
+			'1354_rule_25: cold Settings ‹ replaces with Settings',
+			{ tag: ONLY_IN_SHELL.mobile },
+			async ({ page }) => {
+				await page.setViewportSize({ width: 390, height: 844 });
+				await page.goto('/settings/voices');
+				const length = await page.evaluate(() => history.length);
+				await page
+					.locator('.mobile-strip')
+					.getByRole('button', { name: 'Back to Settings', exact: true })
+					.click();
+				await expect(page).toHaveURL(/\/settings$/);
+				expect(await page.evaluate(() => history.length)).toBe(length);
+			}
+		);
+	});
 
 	// The defect #1144 fixed reproduced on the desktop rail as well; the phone
 	// rows above cover the drawer, this one the 1440 px rail's Settings group.
