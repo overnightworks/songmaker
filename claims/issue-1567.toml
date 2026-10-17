@@ -1,8 +1,0 @@
-claim_id = "f4a66a3f8a65490c82b75b0e3337cf63"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "2cdd08f8a186079cc98701228d057bb1c51d9418"
-branch = "claude/issue-1567-vram-line"
-scope = ["frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/lib/components/WorkerPoolPanel.test.ts", "frontend/src/lib/components/WorkerVramLine.svelte", "frontend/src/lib/constants.ts"]
-opened_commit = "2cbe723779726564fd0117957cb01e5715f93abf"
-whole_reason = "the VRAM line component, its one mount in the worker card, its labels and the card test move together"
