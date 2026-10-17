@@ -15,28 +15,28 @@ const NIGHT_DRIVE = {
 };
 
 // The picker as a song page shows it: choosing a playlist or closing it hides it.
-const picker = {
+const playlistPicker = {
 	added: [] as string[],
 	addSawHistoryAt: undefined as number | undefined,
 	shown: null as ReturnType<typeof mount> | null,
 	open(target: HTMLElement): void {
-		picker.added = [];
-		picker.addSawHistoryAt = undefined;
-		picker.shown = mount(PlaylistPicker, {
+		playlistPicker.added = [];
+		playlistPicker.addSawHistoryAt = undefined;
+		playlistPicker.shown = mount(PlaylistPicker, {
 			target,
 			props: {
 				onselect: (playlistId: string) => {
-					picker.added.push(playlistId);
-					picker.addSawHistoryAt = plannedHistoryIndex();
-					picker.hide();
+					playlistPicker.added.push(playlistId);
+					playlistPicker.addSawHistoryAt = plannedHistoryIndex();
+					playlistPicker.hide();
 				},
-				onclose: picker.hide
+				onclose: playlistPicker.hide
 			}
 		});
 	},
 	hide(): void {
-		if (picker.shown) void unmount(picker.shown);
-		picker.shown = null;
+		if (playlistPicker.shown) void unmount(playlistPicker.shown);
+		playlistPicker.shown = null;
 	}
 };
 
@@ -46,7 +46,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	picker.hide();
+	playlistPicker.hide();
 	resetPlaylistsForTests();
 	document.body.replaceChildren();
 });
@@ -58,7 +58,7 @@ it('defect:#1444 lists every supplied playlist with its title and entry count', 
 	]);
 	const target = document.createElement('div');
 	document.body.append(target);
-	picker.open(target);
+	playlistPicker.open(target);
 	await tick();
 
 	expect(
@@ -81,14 +81,14 @@ describe('the playlist picker closes on history Back', () => {
 			await tick();
 			return target;
 		},
-		open: picker.open,
+		open: playlistPicker.open,
 		isShown: (target) => target.querySelector('[role="dialog"]') !== null,
-		afterBack: () => expect(picker.added).toEqual([]),
+		afterBack: () => expect(playlistPicker.added).toEqual([]),
 		closeWays: [
 			{
 				way: 'choosing a playlist',
 				close: (target) => target.querySelector<HTMLButtonElement>('.picker-item')?.click(),
-				actionSawHistoryAt: () => picker.addSawHistoryAt
+				actionSawHistoryAt: () => playlistPicker.addSawHistoryAt
 			},
 			{ way: 'a click outside it', close: () => document.body.click() },
 			{
