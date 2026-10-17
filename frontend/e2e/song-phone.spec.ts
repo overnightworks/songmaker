@@ -530,7 +530,7 @@ test.describe('song page at phone width', () => {
 		test(
 			'1354_rule_32: cold song ‹ names its album and asks before replacing the song',
 			{ tag: ONLY_IN_SHELL.mobile },
-			async ({ page, context }) => {
+			async ({ page, context, browser }) => {
 				const { songPhoneAlbumId } = readSeededLibrary();
 				const { lyrics, savedLyrics } = await openSongWithAnUnsavedDraft(page, songPhoneAlbumId);
 				await lyrics.fill(savedLyrics);
@@ -540,13 +540,20 @@ test.describe('song page at phone width', () => {
 					.getByRole('button', { name: /^Back to / })
 					.getAttribute('aria-label');
 				if (!expectedName) throw new Error('Expected the song Back name');
-				const cold = await context.newPage();
+				const coldContext = await browser.newContext({
+					storageState: await context.storageState()
+				});
 				try {
+					const cold = await coldContext.newPage();
 					await cold.setViewportSize({ width: 390, height: 844 });
 					await cold.goto(address);
 					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
 					await expect(coldLyrics).toHaveValue(savedLyrics);
-					await coldLyrics.fill(UNSAVED_DRAFT_LINE);
+					// A late editor reload can overwrite typing; #1598 removes this retry.
+					await expect(async () => {
+						await coldLyrics.fill(UNSAVED_DRAFT_LINE);
+						await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE, { timeout: 1000 });
+					}).toPass();
 					await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE);
 					const readHistoryIndex = () =>
 						(window as unknown as { navigation: { currentEntry: { index: number } } }).navigation
@@ -565,7 +572,7 @@ test.describe('song page at phone width', () => {
 					await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
 					expect(await cold.evaluate(readHistoryIndex)).toBe(index);
 				} finally {
-					await cold.close();
+					await coldContext.close();
 				}
 			}
 		);
