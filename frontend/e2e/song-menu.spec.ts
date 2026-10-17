@@ -106,6 +106,10 @@ async function onOwnSong(
 		const song = (await created.json()) as { id: string; slug: string };
 		await page.goto(`/album/${albumId}/${song.slug}`);
 		await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+		// The title shows while the address still resolves, and until it has the
+		// workspace is inert: a dialog the phone's menu opens meanwhile mounts
+		// inside it, where nothing can take the focus (#1531).
+		await workspace(page).click({ trial: true });
 		await flow({ songId: song.id, albumId });
 	} finally {
 		const archived = await page.request.post(`/api/albums/${albumId}/archive`, { headers });
