@@ -160,7 +160,7 @@ def test_main_apply_writes_and_reports_filled(
 def test_apply_survives_an_interruption_after_the_first_commit_batch(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """The done-when promise, pinned instead of counted: an aborted run keeps
+    """defect:#258 -- The done-when promise, pinned instead of counted: an aborted run keeps
     the batches it already committed, and a rerun fills exactly the rest.
 
     COMMIT_BATCH_SIZE=2 over 5 rows (processed in id order) means the first

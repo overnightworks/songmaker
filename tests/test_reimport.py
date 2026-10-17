@@ -84,6 +84,7 @@ def test_reimport_mp3(seeded_db, tmp_path: Path) -> None:
 def test_reimport_mp3_measures_audio_duration(
     seeded_db, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#258 -- an imported mp3 take has its length measured and stored."""
     audio_dir = tmp_path / "audio"
     mp3_src = tmp_path / "source.mp3"
     mp3_src.write_bytes(b"fake-mp3-data")

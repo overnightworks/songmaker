@@ -1146,7 +1146,7 @@ def test_create_generation_with_wav_path(
 def test_create_generation_measures_duration_even_when_requested_zero(
     seeded_session: Session, take_maker: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The take's own length is measured, not copied from the "auto" (0)
+    """defect:#258 -- The take's own length is measured, not copied from the "auto" (0)
     request parameter it was generated with (#258)."""
     probed: list[Path] = []
 
@@ -1194,6 +1194,7 @@ def test_create_generation_without_an_audio_file_leaves_duration_unmeasured(
 def test_measure_generation_audio_duration_backfills_a_generation(
     seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#258 -- a generation without a measured length gets the probed length stored."""
     probed: list[Path] = []
 
     def _read(path: Path) -> float:
@@ -1215,6 +1216,7 @@ def test_measure_generation_audio_duration_backfills_a_generation(
 def test_measure_generation_audio_duration_does_not_reprobe_a_measured_generation(
     seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """defect:#258 -- a generation that already has a measured length is not probed again."""
     gen = get_generation(seeded_session, "g1")
     gen.audio_duration_sec = 99.0
     seeded_session.flush()
@@ -1232,7 +1234,7 @@ def test_measure_generation_audio_duration_does_not_reprobe_a_measured_generatio
 def test_measure_generation_audio_duration_stores_none_when_file_unreadable(
     seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """read_audio_duration returning None (unreadable file) must resolve to
+    """defect:#258 -- read_audio_duration returning None (unreadable file) must resolve to
     "unknown" on the generation, not raise or leave a stale value."""
     monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: None)
 
@@ -1246,7 +1248,7 @@ def test_measure_generation_audio_duration_stores_none_when_file_unreadable(
 def test_measure_generation_audio_duration_retries_after_a_failed_probe(
     seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Not idempotent across a failure: a None result isn't cached forever,
+    """defect:#258 -- Not idempotent across a failure: a None result isn't cached forever,
     so a later call (e.g. a second GET) gets another chance to measure it."""
     gen = get_generation(seeded_session, "g1")
     monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: None)

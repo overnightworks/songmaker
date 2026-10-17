@@ -700,7 +700,7 @@ def test_get_generation(client: TestClient) -> None:
 def test_get_generation_measures_and_persists_audio_duration(
     client: TestClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A take that has never had its length measured gets it measured on
+    """defect:#258 -- A take that has never had its length measured gets it measured on
     view, and the measurement is persisted (#258) -- not just returned once."""
     probed: list[Path] = []
 
@@ -723,7 +723,7 @@ def test_get_generation_measures_and_persists_audio_duration(
 def test_get_generation_reports_unmeasurable_duration_as_null(
     client: TestClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An unreadable file is reported as unknown, never as a 0-second take."""
+    """defect:#258 -- An unreadable file is reported as unknown, never as a 0-second take."""
     monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: None)
     resp = client.get("/api/generations/g1")
     assert resp.status_code == 200

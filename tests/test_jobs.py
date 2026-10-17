@@ -556,7 +556,7 @@ def test_generation_job_persists_the_takes_own_measured_duration(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A completed generation carries its measured length (#258) -- driven
+    """defect:#258 -- A completed generation carries its measured length (#258) -- driven
     through the real job-completion path (run_generation_job), not by
     calling create_generation() with audio_dir directly."""
     probed: list[Path] = []

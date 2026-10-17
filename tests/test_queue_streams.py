@@ -12,6 +12,7 @@ import pytest
 from conftest import login_and_csrf, make_authenticated_user, make_test_app, stored_hash, web_client
 from fastapi import HTTPException
 
+from songmaker_cli import audio_files
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 from songmaker_cli.queue_stream_api import (
@@ -27,6 +28,7 @@ from songmaker_cli.queue_streams import (
     QUEUE_STREAM_MAX_DURATION_SECONDS,
     QueueStreamSource,
     build_queue_stream_snapshot,
+    probe_audio_duration,
     queue_stream_duration_fits_ffmpeg_timeout,
     queue_stream_ffmpeg_timeout_seconds,
     run_ffmpeg_concat,
@@ -111,6 +113,15 @@ def _patch_audio_build(monkeypatch) -> None:
         output_path.write_bytes(b"\xff\xfb\x90\x00" * 100)
 
     monkeypatch.setattr(qs, "run_ffmpeg_concat", _fake_concat)
+
+
+def test_probe_audio_duration_reports_what_audio_files_measures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """925_M1_D3 -- the stream builder asks audio_files for a take's length, so a
+    measurement from that one owner is what the stream gets."""
+    monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: 42.5)
+    assert probe_audio_duration(tmp_path / "take.mp3") == 42.5
 
 
 @pytest.mark.parametrize(

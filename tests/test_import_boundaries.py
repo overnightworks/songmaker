@@ -107,7 +107,9 @@ def _copy_of_this_tree(destination: Path) -> Path:
     return destination
 
 
-def test_independent_packages_do_not_import_the_application() -> None:
+def test_real_tree_satisfies_both_import_contracts() -> None:
+    """925_M1_G1 -- the real source tree satisfies both contracts: the independent
+    packages never import the application, and persistence never imports the HTTP contract."""
     completed = _lint_imports(REPOSITORY_ROOT)
 
     assert completed.returncode == 0, (
