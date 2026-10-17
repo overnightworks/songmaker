@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	EDITOR_GENERATE_CANCEL_LABEL,
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
-	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
@@ -206,32 +204,22 @@ describe('GenerateButton', () => {
 		}
 	);
 
-	it('expands and collapses the literal worker sentence and retries through Generate', async () => {
-		const cause =
-			'Generation failed because the worker exhausted GPU memory while processing the second take. Reduce the batch size and try again.';
+	it.each([
+		'Too long for the GPU right now — try a shorter duration.',
+		"Generating isn't available right now.",
+		'Generating failed — try again.'
+	])('[defect:#1579] shows the complete failure without an expander: %s', async (cause) => {
 		await render({ kind: 'failed', mode: 'generate', cause });
-		const expand = getByRoleButton(document.body, EDITOR_GENERATE_FAILURE_EXPAND_LABEL);
-		const sentence = document.getElementById(expand.getAttribute('aria-controls') ?? '');
-		expect(sentence?.textContent).toBe(cause);
-		expect(expand.getAttribute('aria-expanded')).toBe('false');
-		expect(minSquarePx(expand, EDITOR_GENERATE_FAILURE_EXPAND_LABEL)).toEqual({
-			width: HITBOX_FREQUENT_PX,
-			height: HITBOX_FREQUENT_PX
-		});
-		expand.click();
-		await tick();
-		const collapse = getByRoleButton(document.body, EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL);
-		expect(collapse.getAttribute('aria-expanded')).toBe('true');
-		expect(sentence?.textContent).toBe(cause);
-		collapse.click();
-		await tick();
-		expect(
-			getByRoleButton(document.body, EDITOR_GENERATE_FAILURE_EXPAND_LABEL).getAttribute(
-				'aria-expanded'
-			)
-		).toBe('false');
-		getByRoleButton(document.body, 'Generate').click();
-		expect(generate).toHaveBeenCalledOnce();
+		const sentence = document.body.querySelector<HTMLElement>('.failure');
+		if (!sentence) throw new Error('Expected the failure sentence');
+		injectComponentStyles(generateButtonSource, 'GenerateButton.svelte', sentence);
+		expect(sentence.textContent).toBe(cause);
+		expect(getComputedStyle(sentence).whiteSpace).toBe('pre-wrap');
+		expect(getComputedStyle(sentence).overflowWrap).toBe('anywhere');
+		expect(getComputedStyle(sentence).overflow).not.toBe('hidden');
+		expect(getComputedStyle(sentence).textOverflow).not.toBe('ellipsis');
+		expect(document.body.querySelectorAll('button')).toHaveLength(1);
+		expect(getByRoleButton(document.body, 'Generate').disabled).toBe(false);
 	});
 
 	it.each([
