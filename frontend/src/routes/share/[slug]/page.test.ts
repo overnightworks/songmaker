@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type {
 	QueueStreamManifest,
 	SharedAlbumPayload,
@@ -218,6 +218,29 @@ describe('shared album page', () => {
 		await vi.waitFor(() => {
 			expect(target.querySelector('h1')?.textContent).toBe('Recovered album');
 		});
+	});
+
+	it('925_M2_T1: a read that gets no answer within 30 seconds shows the error status with Try again', async () => {
+		vi.useFakeTimers();
+		onTestFinished(() => void vi.useRealTimers());
+		mockFetch.mockImplementation(
+			(_path: string, init: RequestInit) =>
+				new Promise((_resolve, reject) => {
+					init.signal?.addEventListener('abort', () =>
+						reject(new DOMException('aborted', 'AbortError'))
+					);
+				})
+		);
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await tick();
+		expect(target.querySelector('h1')?.textContent).toBe('Loading album');
+
+		await vi.advanceTimersByTimeAsync(30_000);
+
+		expect(target.querySelector('h1')?.textContent).toBe('Could not load this album');
+		expect(target.querySelector('button')?.textContent).toBe('Try again');
 	});
 
 	it('hides songs without a pick instead of showing a disabled row', async () => {

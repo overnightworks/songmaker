@@ -407,15 +407,18 @@ describe('refusal reactions', () => {
 		}
 	);
 
-	const PUBLIC_SHARE_REQUESTS = [{ request: 'a share read', path: '/shared/playlist/p1' }];
+	const PUBLIC_SHARE_REQUESTS = [
+		{ request: 'a share read', path: '/shared/playlist/p1', init: undefined },
+		{ request: 'a share stream build', path: '/shared/p1/stream', init: { method: 'POST' } }
+	];
 
 	it.each(PUBLIC_SHARE_REQUESTS)(
 		'925_M2_C3: a 401 from $request tells sessionLost nothing and rejects with its ApiError',
-		async ({ path }) => {
+		async ({ path, init }) => {
 			const told = refusalsTold();
 			serverRefusesWith(401);
 
-			const failure = await apiFetch(path).catch((e: unknown) => e);
+			const failure = await apiFetch(path, init).catch((e: unknown) => e);
 
 			expect(failure).toBeInstanceOf(ApiError);
 			expect((failure as ApiError).status).toBe(401);

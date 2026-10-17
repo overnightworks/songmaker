@@ -1,5 +1,7 @@
 import { apiFetch, isNotFound, PUBLIC_SHARE_PATH_PREFIX } from './fetch';
+import { STREAM_BUILD_TIMEOUT_MS } from './queue-streams';
 import type {
+	QueueStreamManifest,
 	SharedAlbumPayload,
 	SharedGenerationPayload,
 	SharedPlaylistPayload,
@@ -32,6 +34,19 @@ export function fetchSharedCollection<K extends SharedCollectionKind>(
 	slug: string
 ): Promise<SharedPayloads[K]> {
 	return apiFetch<SharedPayloads[K]>(sharedAddress(kind, slug));
+}
+
+type SharedStreamKind = Extract<SharedCollectionKind, 'album' | 'playlist'>;
+
+export function fetchSharedStream(
+	kind: SharedStreamKind,
+	slug: string
+): Promise<QueueStreamManifest> {
+	return apiFetch<QueueStreamManifest>(
+		`${sharedAddress(kind, slug)}/stream`,
+		{ method: 'POST' },
+		STREAM_BUILD_TIMEOUT_MS
+	);
 }
 
 export type SharedCollectionFailure = 'missing' | 'error';

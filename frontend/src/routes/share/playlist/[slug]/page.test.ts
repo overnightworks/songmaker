@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 
@@ -163,6 +163,34 @@ describe('shared playlist page', () => {
 		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
 		expect(target.textContent).toContain('First');
 		expect(target.textContent).toContain('Album');
+	});
+
+	it('925_M2_T2: a stream build that outlasts its 120 second budget falls back to classic playback', async () => {
+		mockFetch.mockImplementation(
+			(path: string, init: RequestInit) =>
+				new Promise((resolve, reject) => {
+					if (!path.endsWith('/stream')) {
+						resolve({ ok: true, status: 200, json: async () => sharedPlaylist });
+						return;
+					}
+					init.signal?.addEventListener('abort', () =>
+						reject(new DOMException('aborted', 'AbortError'))
+					);
+				})
+		);
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
+
+		vi.useFakeTimers();
+		onTestFinished(() => void vi.useRealTimers());
+		target.querySelectorAll<HTMLButtonElement>('.queue-row')[0].click();
+		await vi.advanceTimersByTimeAsync(120_000);
+		vi.useRealTimers();
+
+		await vi.waitFor(() => expect(audioPlayer.current?.songTitle).toBe('First'));
+		expect(audioPlayer.mode).toBe('classic');
 	});
 
 	it.each(['classic', 'stream'] as const)(

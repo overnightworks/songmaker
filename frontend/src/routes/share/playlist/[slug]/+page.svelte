@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { fetchSharedPlaylistStream } from '$lib/api/queue-streams';
 	import {
 		fetchSharedCollection,
+		fetchSharedStream,
 		sharedCollectionFailure,
 		type SharedCollectionFailure
 	} from '$lib/api/shared';
@@ -44,5 +44,5 @@
 	resource="playlist"
 	onretry={() => fetchData(slug)}
 	{view}
-	fetchStream={() => fetchSharedPlaylistStream(slug)}
+	fetchStream={() => fetchSharedStream('playlist', slug)}
 />
