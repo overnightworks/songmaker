@@ -1,0 +1,8 @@
+claim_id = "9e82b742f68e4493a5fa437f58c1db2c"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "95a2f8e9b3f6810ef81f541fa0271c565fc0a912"
+branch = "claude/issue-1595-worker-last-error"
+scope = ["frontend/src/lib/api/types.ts", "src/acestep_worker/last_error.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/api_models/workers.py", "tests/acestep_worker/test_wrapper.py", "tests/test_acestep_state.py", "tests/test_admin_api.py"]
+opened_commit = "3cc7ae92ecb33ccdcbf17402f1b3b68242abb0d5"
+whole_reason = "Ein additives Fehlerpaar muss zusammenhängend vom Worker über Heartbeat und Admin-Modell bis zum generierten Clientvertrag und seinen drei Vertragsprüfungen landen; eine Teilung ließe Erzeuger und Leser auseinanderlaufen."
