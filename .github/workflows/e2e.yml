@@ -45,6 +45,7 @@ jobs:
         run: docker compose $COMPOSE_FILES down -v
 
       - name: Boot stack
+        id: boot
         env:
           # Share links (album/song/generation/playlist) need a configured
           # public address (#339) — this stack has no proxy in front of it,
@@ -110,6 +111,17 @@ jobs:
         env:
           E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
         run: pnpm test:e2e
+
+      # The E2E-only IP_RATE_LIMIT in docker/docker-compose.ci.yml is sized
+      # from this peak (#1555), so every run prints it rather than leaving a
+      # dated number to go stale.
+      - name: Busiest API rate-limit window
+        if: ${{ !cancelled() && steps.boot.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          docker compose $COMPOSE_FILES logs --no-color --no-log-prefix songmaker-web \
+            | docker compose $COMPOSE_FILES exec -T songmaker-web /app/.venv/bin/python scripts/e2e_rate_window.py \
+            | tee -a "$GITHUB_STEP_SUMMARY"
 
       # A trace.zip exists only where a test was retried (trace: on-first-retry),
       # and with retries: 1 only a failed first attempt is retried, so a flake
