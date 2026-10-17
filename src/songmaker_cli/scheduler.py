@@ -249,7 +249,9 @@ def _parse_sse_event(buffer: str) -> tuple[str, dict] | None:
     return event_type, data
 
 
-def _worker_response_cause(response: httpx.Response) -> str:
+def worker_response_cause(response: httpx.Response) -> str:
+    if not response.text.strip():
+        return f"Worker returned {response.status_code} with no detail"
     try:
         body = json.loads(response.text)
     except json.JSONDecodeError:
@@ -291,7 +293,7 @@ async def _load_model(
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise WorkerTaskFailed(_worker_response_cause(resp)) from exc
+            raise WorkerTaskFailed(worker_response_cause(resp)) from exc
     worker.record_loaded(target_mode)
 
 
@@ -309,7 +311,7 @@ async def _submit_generation(
             headers=_internal_headers(),
         )
         if _answers_mode_not_loaded(resp, target_mode):
-            raise WorkerModeNotLoaded(_worker_response_cause(resp))
+            raise WorkerModeNotLoaded(worker_response_cause(resp))
         resp.raise_for_status()
         return resp.json()["task_id"]
 
@@ -317,7 +319,7 @@ async def _submit_generation(
 def _answers_mode_not_loaded(response: httpx.Response, mode: str) -> bool:
     if response.status_code != httpx.codes.CONFLICT:
         return False
-    return _worker_response_cause(response) == MODE_NOT_LOADED_DETAIL.format(mode=mode)
+    return worker_response_cause(response) == MODE_NOT_LOADED_DETAIL.format(mode=mode)
 
 
 async def _iterate_task_events(
