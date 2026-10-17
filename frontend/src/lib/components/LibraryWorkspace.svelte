@@ -24,6 +24,7 @@
 	import { resourceSync, retryResourceSync } from '$lib/stores/resourceSync';
 	import { offline } from '$lib/stores/connectivity';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
+	import LibraryHome from './LibraryHome.svelte';
 	import LibraryWall from './LibraryWall.svelte';
 	import SongDetailView from './SongDetailView.svelte';
 	import AlbumDetailView from './AlbumDetailView.svelte';
@@ -89,6 +90,8 @@
 				<PlaylistDetailView />
 			{:else if surface === 'playlists'}
 				<LibraryWall kind="playlists" />
+			{:else if surface === 'home'}
+				<LibraryHome />
 			{:else}
 				<LibraryWall kind="library" />
 			{/if}

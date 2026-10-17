@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { openCollection } from '$lib/stores/collection';
-	import { albumWhoseSongsShow, librarySurface } from '$lib/stores/libraryContext';
+	import {
+		albumWhoseSongsShow,
+		libraryWallShows,
+		librarySurface
+	} from '$lib/stores/libraryContext';
 	import {
 		albumList,
 		allAlbumsLoad,
@@ -33,6 +37,7 @@
 		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
+	import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 	import { titleInitials } from '$lib/utils/format';
 	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
@@ -63,7 +68,7 @@
 	const filtering = $derived(query.length > 0);
 	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
 	// The Library page itself: its group is current and unfolded there (#1354 D1).
-	const onLibraryPage = $derived(surface === 'browse' && currentSongId === null);
+	const onLibraryPage = $derived(libraryWallShows(surface, currentSongId));
 	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadFailure = $derived($allAlbumsLoadFailure);
@@ -200,9 +205,9 @@
 	count={albumCount}
 	expandTrigger={onLibraryPage || isAlbumDetail || loadFailure !== null || filtering}
 	page={{
-		href: resolve('/'),
+		href: resolve(LIBRARY_ROUTE_PATH),
 		current: onLibraryPage,
-		open: () => void openRailSearchTarget({ kind: 'page', href: '/' })
+		open: () => void openRailSearchTarget({ kind: 'page', href: LIBRARY_ROUTE_PATH })
 	}}
 	{icon}
 >

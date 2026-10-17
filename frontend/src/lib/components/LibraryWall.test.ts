@@ -152,12 +152,6 @@ function tileLines(root: ParentNode): string[] {
 	);
 }
 
-function continueTitles(root: ParentNode): string[] {
-	return [...root.querySelectorAll('.continue-item .tile-title')].map(
-		(title) => title.textContent ?? ''
-	);
-}
-
 function orderChoices(root: ParentNode): HTMLButtonElement[] {
 	const group = root.querySelector('[role="group"][aria-label^="Sort "]');
 	return [...(group?.querySelectorAll('button') ?? [])];
@@ -242,6 +236,15 @@ describe('LibraryWall', () => {
 		expect(root.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Sort albums');
 	});
 
+	it('1354_rule_31: shows no Continue, and reads no listens until Last played is chosen', async () => {
+		seedWall();
+
+		const root = await render();
+
+		expect(root.querySelector('[aria-label="Continue"]')).toBeNull();
+		expect(fetchLibraryListen).not.toHaveBeenCalled();
+	});
+
 	describe('with the clock on a Sunday noon in Berlin', () => {
 		beforeEach(() => {
 			vi.stubEnv('TZ', 'Europe/Berlin');
@@ -254,20 +257,16 @@ describe('LibraryWall', () => {
 			vi.unstubAllEnvs();
 		});
 
-		it('orders Last played by the listens Continue reads and names the last listen, never re-sorting Continue', async () => {
+		it('1354_rule_31: orders Last played by the listens of every place and names the last listen', async () => {
 			seedWall();
-			const continueRow = [place('album', 'a-nacht', 'nachtstrom', '2026-09-27T03:47:00Z')];
 			const everyPlace = [
 				place('album', 'a-fuer', 'Sonne für Andrea', '2026-09-27T03:47:00Z'),
 				place('playlist', 'p-night', 'Night drive', '2026-09-26T21:40:00Z'),
 				place('album', 'a-nacht', 'nachtstrom', '2026-09-24T18:31:00Z'),
 				place('album', 'a-sonne', 'Sonnenlauf', '2026-09-20T10:00:00Z')
 			];
-			fetchLibraryListen.mockImplementation((page: ListenPage) =>
-				Promise.resolve({ items: isLastPlayedRead(page) ? everyPlace : continueRow })
-			);
+			fetchLibraryListen.mockResolvedValue({ items: everyPlace });
 			const root = await render();
-			await vi.waitFor(() => expect(continueTitles(root)).toEqual(['nachtstrom']));
 
 			orderButton(root, 'Last played').click();
 
@@ -277,7 +276,6 @@ describe('LibraryWall', () => {
 			expect(fetchLibraryListen).toHaveBeenCalledWith({ offset: 0, limit: 200 });
 			expect(pressedOrder(root)).toEqual(['Last played']);
 			expect(tileLines(root)).toEqual(['today 05:47', 'Thu 20:31', '20 Sep']);
-			expect(continueTitles(root)).toEqual(['nachtstrom']);
 		});
 
 		it('orders Last played by the listens of every place and names its last listen, past one page of them', async () => {

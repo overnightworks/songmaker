@@ -1,6 +1,6 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { followAppPageLink, openLibraryWall } from '$lib/stores/navigation';
+	import { followAppPageLink, openHome } from '$lib/stores/navigation';
 	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import { accountInitial } from '$lib/utils/format';
@@ -103,7 +103,7 @@
 			type="button"
 			class="brand"
 			aria-label={collapsed ? APP_NAME : undefined}
-			onclick={() => openLibraryWall()}
+			onclick={() => openHome()}
 			data-text={APP_NAME}
 		>
 			{#if collapsed}

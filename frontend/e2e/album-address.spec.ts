@@ -21,7 +21,7 @@
 // (resolveLegacySongQueryAddress in stores/libraryContext.test.ts).
 
 import { expect, test, type Page } from '@playwright/test';
-import { RESOURCE_SYNC_ERROR, songEditorOpenLabel } from '../src/lib/constants';
+import { HOME_PAGE_LABEL, RESOURCE_SYNC_ERROR, songEditorOpenLabel } from '../src/lib/constants';
 import { FlowGuard, ONLY_IN_SHELL, workspace, HOME_PATH } from './helpers';
 import { readSeededLibrary } from './seed';
 
@@ -45,6 +45,7 @@ const ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET = 30;
 
 const LIVE_STREAM_PATH = '/api/resource-events/stream';
 const WORKSPACE_LOADING_TEXT = 'Loading...';
+const WORKSPACE_RESOLVING_SONG_TEXT = 'Loading song...';
 
 let guard: FlowGuard;
 
@@ -179,8 +180,37 @@ test(
 	}
 );
 
+interface LegacyAddressSong {
+	id: string;
+	address: string;
+	takeId: string;
+	takeNumber: number;
+}
+
+/** The seeded picked song, with the ids a pre-#275 bookmark or link carried. */
+async function legacyAddressSong(page: Page): Promise<LegacyAddressSong> {
+	const library = readSeededLibrary();
+	const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
+	const songs = (await songsResponse.json()).items as { id: string; title: string }[];
+	const pickedSong = songs.find((item) => item.title === library.pickedSongTitle);
+	if (!pickedSong) {
+		throw new Error(`Seeded song "${library.pickedSongTitle}" was not in the album listing`);
+	}
+	const song = await (await page.request.get(`/api/songs/${pickedSong.id}`)).json();
+	const [take] = song.generations as { id: string; generation_number: number }[];
+	return {
+		id: pickedSong.id,
+		address: `/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`,
+		takeId: take.id,
+		takeNumber: take.generation_number
+	};
+}
+
+const homeHeading = (page: Page) =>
+	workspace(page).getByRole('heading', { name: HOME_PAGE_LABEL, exact: true });
+
 test(
-	'a legacy /?song= bookmark redirects onto the song address, and Back skips the old form',
+	'1354_rule_31 row 9a: a legacy /?song= bookmark redirects onto the song address, and Back lands the entry before it, not the old form',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
 		// Same reasoning as the three cold-opens above: shell-independent router
@@ -193,13 +223,7 @@ test(
 		// through the query one -- issue #284's own done-when.
 
 		const library = readSeededLibrary();
-		const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
-		const songs = (await songsResponse.json()).items as { id: string; title: string }[];
-		const pickedSong = songs.find((item) => item.title === library.pickedSongTitle);
-		if (!pickedSong) {
-			throw new Error(`Seeded song "${library.pickedSongTitle}" was not in the album listing`);
-		}
-		const songAddress = `/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`;
+		const song = await legacyAddressSong(page);
 		const surface = workspace(page);
 
 		// A genuine earlier page first, so Back has somewhere honest to land --
@@ -207,12 +231,68 @@ test(
 		await page.goto(HOME_PATH);
 		await expectWorkspaceStanding(page);
 
-		await page.goto(`/?song=${pickedSong.id}`);
-		await expect(page).toHaveURL(songAddress);
+		await page.goto(`/?song=${song.id}`);
+		await expect(page).toHaveURL(song.address);
 		await expect(surface.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 		await expectWorkspaceStanding(page);
 
 		await page.goBack();
 		await expect(page).toHaveURL(HOME_PATH);
+		await expect(homeHeading(page)).toBeVisible();
+	}
+);
+
+test(
+	'1354_rule_31 row 9b: a legacy /?song=&gen= bookmark redirects onto the take address, and Back lands the entry before it',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const library = readSeededLibrary();
+		const song = await legacyAddressSong(page);
+		await page.goto(HOME_PATH);
+		await expectWorkspaceStanding(page);
+
+		await page.goto(`/?song=${song.id}&gen=${song.takeId}`);
+
+		await expect(page).toHaveURL(`${song.address}/take/${song.takeNumber}`);
+		await expect(
+			workspace(page).getByRole('heading', { name: library.pickedSongTitle })
+		).toBeVisible();
+		await expectWorkspaceStanding(page);
+		await page.goBack();
+		await expect(page).toHaveURL(HOME_PATH);
+		await expect(homeHeading(page)).toBeVisible();
+	}
+);
+
+test(
+	'1354_rule_31 row 9c: Home never strips a legacy /?song= address while its lookup is still in flight',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const library = readSeededLibrary();
+		const song = await legacyAddressSong(page);
+		let releaseLookup!: () => void;
+		const lookupReleased = new Promise<void>((release) => (releaseLookup = release));
+		let heldLookups = 0;
+		await page.route(
+			(url) => url.pathname === `/api/songs/${song.id}`,
+			async (route) => {
+				heldLookups += 1;
+				await lookupReleased;
+				await route.continue();
+			}
+		);
+
+		await page.goto(`/?song=${song.id}`);
+		await expect.poll(() => heldLookups, 'the lookup is held in flight').toBeGreaterThan(0);
+
+		await expect(page.getByText(WORKSPACE_RESOLVING_SONG_TEXT, { exact: true })).toBeVisible();
+		await expect(page).toHaveURL(`/?song=${song.id}`);
+		releaseLookup();
+
+		await expect(page).toHaveURL(song.address);
+		await expect(
+			workspace(page).getByRole('heading', { name: library.pickedSongTitle })
+		).toBeVisible();
+		await expectWorkspaceStanding(page);
 	}
 );

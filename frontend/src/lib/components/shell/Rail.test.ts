@@ -253,7 +253,7 @@ describe('Rail', () => {
 		expect(document.activeElement).toBe(handle);
 	});
 
-	it('acts as the Library link when the brand wordmark is clicked, keeping the open collection', async () => {
+	it('1354_rule_40: acts as the Home link when the brand wordmark is clicked, keeping the open collection', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
 		librarySurface.set('detail');
 		const target = await render();
@@ -267,7 +267,7 @@ describe('Rail', () => {
 		brand.click();
 		await tick();
 		await Promise.resolve();
-		expect(get(librarySurface)).toBe('browse');
+		expect(get(librarySurface)).toBe('home');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 

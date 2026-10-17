@@ -55,7 +55,6 @@
 		type LibraryWallOrder
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
-	import LibraryContinue from './LibraryContinue.svelte';
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import MenuPopover from './MenuPopover.svelte';
@@ -289,9 +288,6 @@
 		{@render orderSwitch()}
 		{@render newMenuButton()}
 	</div>
-	{#if kind === 'library'}
-		<LibraryContinue />
-	{/if}
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
 		{#if $newCard === 'album'}

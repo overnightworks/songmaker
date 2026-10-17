@@ -15,6 +15,7 @@ import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
 	APP_NAME,
 	HITBOX_FREQUENT_PX,
+	HOME_PAGE_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SEARCH_LABEL
 } from '$lib/constants';
@@ -29,7 +30,7 @@ import {
 	resetHistoryControllerForTests,
 	stampNavigatedEntry
 } from '$lib/history/historyController';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
 import { resetLayersForTests } from '$lib/stores/layers';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -247,14 +248,22 @@ describe('PhoneAppBar', () => {
 		expectFrequentHitbox(getByRoleButton(target, SEARCH_OPEN_LABEL), SEARCH_OPEN_LABEL);
 	});
 
-	// #1402: the Playlists page is a list the app opens on, as the Library is.
-	it.each<{ entered: string; from?: Pathname }>([
-		{ entered: 'fresh' },
-		{ entered: 'from an album', from: '/album/a1' }
+	// #1402, #1506: Home and the Playlists page are places the app opens on, as
+	// the Library is.
+	it.each<{ place: string; address: Pathname; entered: string; from?: Pathname }>([
+		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'fresh' },
+		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'from an album', from: '/album/a1' },
+		{ place: 'the Playlists page', address: '/playlists', entered: 'fresh' },
+		{
+			place: 'the Playlists page',
+			address: '/playlists',
+			entered: 'from an album',
+			from: '/album/a1'
+		}
 	])(
-		'carries the brand, search and the account circle without ‹ on the Playlists page entered $entered',
-		async ({ from }) => {
-			await standOn('/playlists', from);
+		'1354_rule_25: carries the brand, search and the account circle without ‹ on $place entered $entered',
+		async ({ address, from }) => {
+			await standOn(address, from);
 			const target = renderBar();
 			await tick();
 
@@ -289,6 +298,12 @@ describe('PhoneAppBar', () => {
 			opened: '/album/a1',
 			from: LIBRARY_ROUTE_PATH,
 			name: 'Library'
+		},
+		{
+			page: 'an album opened from Home',
+			opened: '/album/a1',
+			from: HOME_ROUTE_PATH,
+			name: HOME_PAGE_LABEL
 		},
 		{
 			page: 'an album opened from another album',
@@ -333,7 +348,7 @@ describe('PhoneAppBar', () => {
 		},
 		{ page: 'Settings with nothing before it', opened: '/settings', name: 'Library' }
 	])(
-		'names ‹ on $page after $name, beside search and without the account circle',
+		'1354_rule_25: names ‹ on $page after $name, beside search and without the account circle',
 		async ({ opened, from, name }) => {
 			await standOn(opened, from);
 			const target = renderBar();

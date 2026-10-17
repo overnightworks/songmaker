@@ -1,8 +1,9 @@
 <script module lang="ts">
 	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
-	import { RAIL_SETTINGS_LABEL } from '$lib/constants';
+	import { HOME_PAGE_LABEL, RAIL_SETTINGS_LABEL } from '$lib/constants';
 	import {
 		albumRoutePath,
+		HOME_ROUTE_PATH,
 		isPlaylistRoutePath,
 		LIBRARY_ROUTE_PATH,
 		libraryRouteShape,
@@ -20,9 +21,9 @@
 	const LIBRARY_HREF: PageList = LIBRARY_ROUTE_PATH;
 	const PLAYLISTS_HREF: PageList = PLAYLISTS_ROUTE_PATH;
 	const SETTINGS_HREF: PageList = '/settings';
-	// The lists the app opens on, which carry the brand and the account circle
-	// instead of ‹ wherever they were opened from.
-	const PLACE_LISTS: ReadonlySet<string> = new Set([LIBRARY_HREF, PLAYLISTS_HREF]);
+	// Home and the lists the app opens on, which carry the brand and the account
+	// circle instead of ‹ wherever they were opened from.
+	const PLACE_LISTS: ReadonlySet<string> = new Set([HOME_ROUTE_PATH, LIBRARY_HREF, PLAYLISTS_HREF]);
 	const ALBUM_NAME = 'Album';
 	const PLAYLIST_NAME = 'Playlist';
 	const SONG_NAME = 'Song';
@@ -51,6 +52,7 @@
 	// gives it, an album, playlist or song by its title, or by its kind while
 	// the library has not loaded it.
 	export function pageName(pathname: string, titles: LibraryTitles): string {
+		if (pathname === HOME_ROUTE_PATH) return HOME_PAGE_LABEL;
 		if (pathname === SETTINGS_HREF) return RAIL_SETTINGS_LABEL;
 		const appPage = visibleRailSearchPages(true).find((page) => page.href === pathname);
 		if (appPage) return appPage.label;
@@ -84,7 +86,7 @@
 	import { pageBelowStandingPage, stepBackOr } from '$lib/history/historyController';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openLibraryWall, openListOverPage } from '$lib/stores/navigation';
+	import { openHome, openListOverPage } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
@@ -239,7 +241,7 @@
 		</button>
 		{@render searchButton()}
 	{:else}
-		<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
+		<button type="button" class="brand" onclick={() => openHome()} data-text={APP_NAME}
 			>{APP_NAME}</button
 		>
 		{@render searchButton()}

@@ -50,6 +50,7 @@ import {
 	librarySurface,
 	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests,
+	openHomeAddress,
 	openLibraryAddress
 } from '$lib/stores/libraryContext';
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
@@ -414,7 +415,7 @@ describe('app shell', () => {
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
-	it('acts as the Library link when the mobile-strip brand is clicked', async () => {
+	it('1354_rule_40: acts as the Home link when the mobile-strip brand is clicked', async () => {
 		librarySurface.set('detail');
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
@@ -427,7 +428,7 @@ describe('app shell', () => {
 		brand.click();
 		await tick();
 		await Promise.resolve();
-		expect(get(librarySurface)).toBe('browse');
+		expect(get(librarySurface)).toBe('home');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
@@ -920,40 +921,53 @@ describe('a reload on a library page', () => {
 // entry; the installed history controller steps off it once the router start
 // has run -- but only while the page still stands there (issue #1002).
 describe('a reload over the phone Now Playing', () => {
-	it('stays on the Library wall the sign-in redirect lands on', async () => {
-		resetLibraryContextForTests();
-		const playlist = {
-			...libraryRootState(),
-			index: 1,
-			surface: 'detail' as const,
-			collection: { kind: 'playlist' as const, id: 'p1' }
-		};
-		pushEntry('/playlist/friday-night', { library: playlist });
-		pushEntry('/playlist/friday-night', { library: playlist }, 'now-playing');
-		// The reload forgets the open layer, so its entry is left unowned on top.
-		resetNavigationForTests();
-		loadLibraryHistoryPageForTests();
-		startFakeRouter();
-		currentUser.set(null);
-		vi.mocked(checkAuth).mockImplementation(async () => null);
-		mountLayout(HOME_ROUTE_PATH);
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
-		);
-		await historyStandsStill();
-		expect(location.pathname).toBe('/login');
+	it.each([
+		{ page: 'Home', address: HOME_ROUTE_PATH, openAddress: openHomeAddress, surface: 'home' },
+		{
+			page: 'the Library wall',
+			address: LIBRARY_ROUTE_PATH,
+			openAddress: openLibraryAddress,
+			surface: 'browse'
+		}
+	] as const)(
+		'1354_rule_31: stays on $page the sign-in redirect lands on',
+		async ({ address, openAddress, surface }) => {
+			resetLibraryContextForTests();
+			const playlist = {
+				...libraryRootState(),
+				index: 1,
+				surface: 'detail' as const,
+				collection: { kind: 'playlist' as const, id: 'p1' }
+			};
+			pushEntry('/playlist/friday-night', { library: playlist });
+			pushEntry('/playlist/friday-night', { library: playlist }, 'now-playing');
+			// The reload forgets the open layer, so its entry is left unowned on top.
+			resetNavigationForTests();
+			loadLibraryHistoryPageForTests();
+			startFakeRouter();
+			currentUser.set(null);
+			vi.mocked(checkAuth).mockImplementation(async () => null);
+			mountLayout(address);
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
+			);
+			await historyStandsStill();
+			expect(location.pathname).toBe('/login');
 
-		vi.mocked(checkAuth).mockImplementation(async () => {
-			currentUser.set(USER);
-			return USER;
-		});
-		await goto(resolve(HOME_ROUTE_PATH));
-		await openLibraryAddress();
+			vi.mocked(checkAuth).mockImplementation(async () => {
+				currentUser.set(USER);
+				return USER;
+			});
+			await goto(resolve(address));
+			await openAddress();
 
-		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
-		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });
-		expect(location.pathname).toBe(HOME_ROUTE_PATH);
-	});
+			await vi.waitFor(() =>
+				expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true)
+			);
+			expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface });
+			expect(location.pathname).toBe(address);
+		}
+	);
 });
 
 // A sign-out the server confirmed loads sign-in afresh over the account
@@ -1129,12 +1143,13 @@ describe('‹ on the page a phone tab was entered on', () => {
 // the library is actually shown.
 describe('the live library stream', () => {
 	it.each([
-		['the library route', LIBRARY_ROUTE_PATH],
+		['Home', HOME_ROUTE_PATH],
+		['the Library route', LIBRARY_ROUTE_PATH],
 		['an album address', '/album/anfield'],
 		['a song address', '/album/anfield/stadion-lauf-a'],
 		['a playlist address', '/playlist/friday-night'],
 		['the Playlists page', '/playlists']
-	])('runs on %s', async (_name, path) => {
+	])('1354_rule_31: runs on %s', async (_name, path) => {
 		await renderLayout(path);
 		expect(liveStream.start).toHaveBeenCalled();
 	});
@@ -1171,9 +1186,9 @@ describe('the live library stream', () => {
 
 // The single-mount fix (issue #276) lives in a route group, not in this
 // layout: `(library)/+layout.svelte` owns the one LibraryWorkspace mount, and
-// every library address sits inside it -- the root, an album (and its song
-// and take, one and two segments deeper), since issue #286 a playlist, and
-// since #1402 the Playlists page.
+// every library address sits inside it -- Home, the Library (#1506), an album
+// (and its song and take, one and two segments deeper), since issue #286 a
+// playlist, and since #1402 the Playlists page.
 // SvelteKit resolves a route group at build time, invisible to a mounted-
 // component test, so this reads the routes tree directly instead -- the same
 // way this file already reads app.css from disk.
@@ -1181,16 +1196,17 @@ describe('the library route group', () => {
 	const routesDir = join(process.cwd(), 'src/routes');
 	const libraryGroupDir = join(routesDir, '(library)');
 
-	it('owns the workspace mount for every library address', () => {
+	it('1354_rule_31: owns the workspace mount for every library address', () => {
 		expect(readdirSync(libraryGroupDir).sort()).toEqual([
 			'+layout.svelte',
 			'+page.svelte',
 			'album',
-			// The root address's own test harness and spec (issue #284's legacy
-			// `?song=` redirect) -- listed here rather than left to break this
-			// assertion silently, the same way `album/[slug]` already carries its
-			// own harness.svelte/page.test.ts one level down.
+			// Home's own test harness and spec (issue #284's legacy `?song=`
+			// redirect) -- listed here rather than left to break this assertion
+			// silently, the same way `album/[slug]` already carries its own
+			// harness.svelte/page.test.ts one level down.
 			'harness.svelte',
+			'library',
 			'page.test.ts',
 			'playlist',
 			'playlists'
@@ -1202,6 +1218,7 @@ describe('the library route group', () => {
 		expect(readdirSync(join(libraryGroupDir, 'album/[slug]/[song]'))).toContain('+page.svelte');
 		expect(readdirSync(join(libraryGroupDir, 'playlist/[slug]'))).toContain('+page.svelte');
 		expect(readdirSync(join(libraryGroupDir, 'playlists'))).toContain('+page.svelte');
+		expect(readdirSync(join(libraryGroupDir, 'library'))).toContain('+page.svelte');
 	});
 
 	it('leaves settings, auth, share and legal pages outside the group', () => {

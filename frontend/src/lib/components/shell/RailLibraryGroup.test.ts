@@ -9,6 +9,7 @@ import {
 	RAIL_LIBRARY_LOAD_ERROR,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import {
@@ -131,7 +132,7 @@ describe('RailLibraryGroup', () => {
 		librarySurface.set('detail');
 		const target = await render();
 		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
-		expect(word.getAttribute('href')).toBe('/');
+		expect(word.getAttribute('href')).toBe(LIBRARY_ROUTE_PATH);
 		expect(word.textContent).toContain('Library');
 
 		word.click();
@@ -154,6 +155,16 @@ describe('RailLibraryGroup', () => {
 		await tick();
 		expect(word.hasAttribute('aria-current')).toBe(false);
 	});
+
+	it.each(['home', 'playlists'] as const)(
+		'1354_rule_31: the word Library is not the current page while %s shows',
+		async (surface) => {
+			librarySurface.set(surface);
+			const target = await render();
+			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+			expect(word.hasAttribute('aria-current')).toBe(false);
+		}
+	);
 
 	it('#1354 rule 40: the Library list carries no All albums row', async () => {
 		const target = await render();

@@ -18,6 +18,7 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
@@ -270,6 +271,19 @@ export async function loseNetwork(
 	if (!keepOpenStreams) await page.evaluate(() => window.stop());
 }
 
+/**
+ * Waits until the service worker has installed and controls the page, so that
+ * what it precached (the route code of every address) answers once the
+ * network is cut. A cut inside the install window, the first seconds after a
+ * first-ever load, is owned by #1160.
+ */
+export async function waitForServiceWorkerControl(page: Page): Promise<void> {
+	await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+	await expect
+		.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
+		.toBe(true);
+}
+
 /** Gives the page its network back: the browser reports online and the stream may reopen. */
 export async function regainNetwork(page: Page, context: BrowserContext): Promise<void> {
 	await page.unroute(isResourceEventStream);
@@ -356,6 +370,23 @@ export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'mobile')
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	await expect(page).toHaveURL(LIBRARY_URL);
+}
+
+/** An album through its row in the rail's Library list — behind the drawer on the phone. */
+export async function openAlbumFromRail(
+	page: Page,
+	shell: Shell,
+	albumTitle: string
+): Promise<void> {
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: albumTitle })
+		.getByRole('button', { name: containing(albumTitle) })
+		.click();
 }
 
 /**

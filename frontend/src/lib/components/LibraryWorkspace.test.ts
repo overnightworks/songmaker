@@ -27,7 +27,8 @@ vi.mock('$lib/stores/resourceSync', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/resourceSync')>()),
 	retryResourceSync
 }));
-vi.mock('$lib/api/library', () => ({
+vi.mock('$lib/api/library', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/library')>()),
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
 vi.mock('$lib/api/client', async (importOriginal) => ({
@@ -57,6 +58,10 @@ function streamLive(): void {
 }
 
 beforeEach(() => {
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async () => Response.json({ items: [] }))
+	);
 	retryResourceSync.mockClear();
 	resetResourceSyncForTests();
 	resetLibraryContextForTests();
@@ -77,6 +82,7 @@ afterEach(() => {
 	resetResourceSyncForTests();
 	resetConnectivityForTests();
 	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
 
 describe('the library workspace', () => {
@@ -154,6 +160,33 @@ describe('the library workspace', () => {
 		expect(target.querySelector('.library-wall h1')?.getAttribute('aria-label')).toBe(
 			'Playlists · 1'
 		);
+	});
+
+	// #1506: Home's own surface, which shows no album page even while an album
+	// stays the rail context behind it.
+	it('1354_rule_31: shows Home alone on the Home surface, also while an album stays the rail context', async () => {
+		streamLive();
+		openCollection.set({ kind: 'album', id: 'anfield' });
+		librarySurface.set('home');
+
+		const target = renderWorkspace();
+		await tick();
+
+		expect(target.querySelector('.library-home h1')?.textContent).toBe('Home');
+		expect(target.querySelector('[aria-label="Continue"]')).not.toBeNull();
+		expect(target.querySelector('.library-wall')).toBeNull();
+		expect(target.textContent).not.toContain(ALBUM_TITLE);
+	});
+
+	it('1354_rule_31: shows the wall of albums, without Continue, on the Library surface', async () => {
+		streamLive();
+		librarySurface.set('browse');
+
+		const target = renderWorkspace();
+		await tick();
+
+		expect(target.querySelector('.library-wall h1')?.textContent).toContain('Library');
+		expect(target.querySelector('[aria-label="Continue"]')).toBeNull();
 	});
 
 	it('keeps showing the library when the stream errors after it was live', async () => {
