@@ -3,6 +3,6 @@ agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
 role = "builder"
 base = "14d628eb56c05ba5cc204d52bf796d46f601701b"
 branch = "claude/issue-1563-sidebar-home"
-scope = ["frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/components/shell/RailGroup.svelte", "frontend/src/lib/components/shell/RailGroup.test.ts", "frontend/src/lib/contexts/railCollapsed.ts", "frontend/src/lib/routes/addresses.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts"]
+scope = ["frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/components/shell/RailGroup.svelte", "frontend/src/lib/components/shell/RailGroup.test.ts", "frontend/src/lib/contexts/railCollapsed.ts", "frontend/src/lib/routes/addresses.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/modifiedClicks.ts"]
 opened_commit = "7b5d0ee802ea1cff01e12e3db6561474624c92d8"
 whole_reason = "the Home row, the shared click predicate and the collapsed-title rule live in the rail and its navigation owner and are tested together"
