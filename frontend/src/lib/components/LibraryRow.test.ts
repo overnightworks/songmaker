@@ -11,35 +11,57 @@ afterEach(async () => {
 	audioPlayer.status = 'idle';
 });
 
-it('1354_rule_10: open and play are separate keyboard buttons with separate outcomes', async () => {
-	let opened = false;
-	let played = false;
-	mounted = mount(LibraryRow, {
-		target: document.body,
-		props: {
-			title: 'Long album title',
-			subtitle: '8 songs',
-			coverAlt: 'Album cover',
-			openLabel: 'Open album Long album title',
-			onopen: () => {
-				opened = true;
-			},
-			onplay: () => {
-				played = true;
+it.each([
+	{
+		id: '1354_rule_10',
+		action: 'play',
+		openLabel: 'Open album Long album title',
+		actionLabel: 'Play Long album title',
+		trailing: (run: () => void) => ({ onplay: run })
+	},
+	{
+		id: '1354_rule_16 defect:#1575',
+		action: 'edit',
+		openLabel: 'Open song Long album title',
+		actionLabel: 'Open Long album title in the song editor',
+		trailing: (run: () => void) => ({
+			edit: { label: 'Open Long album title in the song editor', onclick: run }
+		})
+	}
+])(
+	'$id: open and $action are separate keyboard buttons with separate outcomes',
+	async ({ openLabel, actionLabel, trailing }) => {
+		let opened = false;
+		let acted = false;
+		mounted = mount(LibraryRow, {
+			target: document.body,
+			props: {
+				title: 'Long album title',
+				subtitle: '8 songs',
+				coverAlt: 'Album cover',
+				openLabel,
+				onopen: () => {
+					opened = true;
+				},
+				...trailing(() => {
+					acted = true;
+				})
 			}
-		}
-	});
-	await tick();
-	const buttons = document.querySelectorAll('button');
-	expect(buttons).toHaveLength(2);
-	expect(buttons[0].contains(buttons[1])).toBe(false);
-	buttons[1].click();
-	expect([opened, played]).toEqual([false, true]);
-	buttons[0].click();
-	expect(opened).toBe(true);
-	expect(buttons[0]).toHaveAccessibleName('Open album Long album title');
-	expect(buttons[0]).toHaveTextContent('8 songs');
-});
+		});
+		await tick();
+		const buttons = document.querySelectorAll('button');
+		expect(buttons).toHaveLength(2);
+		expect(buttons[0].contains(buttons[1])).toBe(false);
+		buttons[1].click();
+		expect([opened, acted]).toEqual([false, true]);
+		buttons[0].click();
+		expect(opened).toBe(true);
+		expect(buttons[0]).toHaveAccessibleName(openLabel);
+		expect(buttons[1]).toHaveAccessibleName(actionLabel);
+		expect(buttons[0]).toHaveTextContent('8 songs');
+		expect(document.querySelector('.row-play-spacer')).toBeNull();
+	}
+);
 
 it.each(['playing', 'paused', 'loading', 'recovering', 'waiting-for-network'] as const)(
 	'1354_rule_10: the %s source keeps its mark and offers the matching transport',

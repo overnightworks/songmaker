@@ -1,3 +1,4 @@
+import { resetLibraryWriteForTests } from '$lib/stores/libraryWrite';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,6 +33,7 @@ const listenedAlbum: LibraryListenItem = {
 };
 
 beforeEach(() => {
+	resetLibraryWriteForTests();
 	resetLibraryOrderForTests();
 	albumList.set([makeAlbum({ id: 'album-1' })]);
 	allAlbumsLoad.set({ status: 'ready', error: null });
@@ -59,11 +61,15 @@ async function render(): Promise<HTMLElement> {
 }
 
 describe('1354_rule_14 LibraryHome', () => {
-	it('1354_rule_31: heads the page Home and shows Listen under it', async () => {
+	it('1354_rule_31: heads the page Home and shows Listen then Write under it', async () => {
 		const target = await render();
 
 		expect(target.querySelector('h1')?.textContent).toBe(HOME_PAGE_LABEL);
-		expect(target.querySelector('[aria-label="Listen"]')).not.toBeNull();
+		expect(
+			[...target.querySelectorAll('section[aria-label]')].map((region) =>
+				region.getAttribute('aria-label')
+			)
+		).toEqual(['Listen', 'Write']);
 		expect(target.querySelector('.wall-tile-body')?.getAttribute('aria-label')).toBe(
 			'Open album Open Windows'
 		);
