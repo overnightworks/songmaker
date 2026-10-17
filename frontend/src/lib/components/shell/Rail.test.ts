@@ -283,7 +283,7 @@ describe('Rail', () => {
 		{ path: '/library', surface: 'browse', label: 'Library 0' },
 		{ path: '/playlists', surface: 'playlists', label: 'Playlists 0' }
 	] as const)(
-		'defect:#1586: $label current mark follows song visibility at $path',
+		'1354_rule_40: $label current mark follows song visibility at $path',
 		async ({ path, surface, label }) => {
 			replaceHistoryEntry(path);
 			librarySurface.set(surface);
@@ -349,7 +349,7 @@ describe('Rail', () => {
 	);
 
 	it.each([false, true])(
-		'1354_rule_40: page titles follow this rail collapse state, collapsed=%s',
+		'1354_rule_28: page titles follow this rail collapse state, collapsed=%s',
 		async (collapsed) => {
 			railCollapsed.set(true);
 			const target = collapsed ? await renderCollapsedRail() : await navigationOnly.render();

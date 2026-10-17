@@ -25,7 +25,7 @@ const cases = addresses.flatMap((address) =>
 
 describe('placeShown', () => {
 	it.each(cases)(
-		'defect:#1586: current place at $pathname with $surface and song $songId is $expected',
+		'1354_rule_40: current place at $pathname with $surface and song $songId is $expected',
 		({ pathname, surface, songId, expected }) => {
 			expect(places.filter((place) => placeShown(place, surface, songId, pathname))).toEqual(
 				expected === null ? [] : [expected]
