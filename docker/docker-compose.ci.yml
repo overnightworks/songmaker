@@ -45,12 +45,14 @@ services:
     <<: *test_stack_service
     build:
       <<: *gha_cache
-    # The full desktop + mobile suite measured 449 API requests in one run
-    # (CI run 34039372545, 2026-09-06, with admin-models.spec.ts); keep the
-    # isolated stack well above that burst. Production remains at its 120/600
-    # limits.
+    # Every API request of the whole suite -- seeds, cleanups, retries and
+    # browser traffic, both projects -- comes from the runner's one address.
+    # The E2E workflow's "Busiest API rate-limit window" step prints the
+    # measured peak on every run; keep this at least 3x above it, with room
+    # for one retry inside the window (#1555). Production remains at its
+    # 120/600 limits.
     environment:
-      IP_RATE_LIMIT: "2000"
+      IP_RATE_LIMIT: "8000"
       # The 2026-09-05 CI run opened 30 streams successfully; the 31st returned 429.
       RESOURCE_EVENT_STREAM_OPEN_LIMIT: "200"
       # Every stream open of the whole suite (resource events and job streams,
