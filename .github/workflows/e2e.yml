@@ -34,7 +34,8 @@ jobs:
   smoke:
     name: Boot stack + library flows
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # The suite runs 19-25 min (measured 17.10.2026); this ceiling guards against a hang, not a slow suite.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
 
