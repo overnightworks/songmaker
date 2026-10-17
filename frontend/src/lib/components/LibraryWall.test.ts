@@ -690,28 +690,43 @@ describe('LibraryWall + New', () => {
 	});
 
 	it.each([
-		{ kind: NEW_ALBUM, create: () => createAlbum, name: 'Night Drive', opened: 'album' },
-		{ kind: NEW_PLAYLIST, create: () => createPlaylist, name: 'Road Trip', opened: 'playlist' }
+		{
+			kind: NEW_ALBUM,
+			create: () => createAlbum,
+			name: 'Night Drive',
+			opened: 'album',
+			serverFailure: 'The album could not be created. Try again.'
+		},
+		{
+			kind: NEW_PLAYLIST,
+			create: () => createPlaylist,
+			name: 'Road Trip',
+			opened: 'playlist',
+			serverFailure: 'The playlist could not be created. Try again.'
+		}
 	])(
-		'the $kind.card card leaves no failure on screen once a create succeeds after refused tries',
-		async ({ kind, create, name, opened }) => {
+		'915_E3 the $kind.card card says only the latest refusal, and nothing once a create succeeds',
+		async ({ kind, create, name, opened, serverFailure }) => {
+			const taken = 'That name is taken';
 			const created = await create()();
 			create()
 				.mockReset()
-				.mockRejectedValueOnce(new ApiError(422, 'Validation error on: body.title', '/api'))
+				.mockRejectedValueOnce(new ApiError(422, taken, '/api'))
 				.mockRejectedValueOnce(new ApiError(500, 'Internal Server Error', '/api'))
 				.mockResolvedValue(created);
 			const root = await render();
 			const card = await chooseNew(root, kind);
+			const submit = () => card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+			const toastMessages = () => get(toasts).map(({ message }) => message);
 
 			await fillAndCreate(card, name);
-			await vi.waitFor(() => expect(get(toasts)).toHaveLength(1));
-			card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
-			await vi.waitFor(() => expect(get(toasts)).toHaveLength(2));
-			card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+			await vi.waitFor(() => expect(toastMessages()).toEqual([taken]));
+			submit();
+			await vi.waitFor(() => expect(toastMessages()).toEqual([serverFailure]));
+			submit();
 			await vi.waitFor(() => expect(get(openCollection)?.kind).toBe(opened));
 
-			expect(get(toasts)).toEqual([]);
+			expect(toastMessages()).toEqual([]);
 		}
 	);
 });

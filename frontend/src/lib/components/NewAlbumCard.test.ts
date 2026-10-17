@@ -122,8 +122,23 @@ describe('NewAlbumCard', () => {
 
 	it.each([
 		{
-			case: 'the server refuses it',
-			refusal: new ApiError(422, 'Validation error on: body.title', '/api/albums'),
+			case: 'the server refuses it and says why',
+			refusal: new ApiError(422, 'That title is taken', '/api/albums'),
+			reason: 'That title is taken'
+		},
+		{
+			case: 'the server refuses it without a reason',
+			refusal: new ApiError(422, '', '/api/albums'),
+			reason: 'The album could not be created.'
+		},
+		{
+			case: 'the server fails',
+			refusal: new ApiError(500, 'Internal Server Error', '/api/albums'),
+			reason: 'The album could not be created. Try again.'
+		},
+		{
+			case: 'the server rate-limits it',
+			refusal: new ApiError(429, 'Too many requests', '/api/albums', 30),
 			reason: 'The album could not be created. Try again.'
 		},
 		{
@@ -132,7 +147,7 @@ describe('NewAlbumCard', () => {
 			reason: "You're offline, so nothing was created. Try again once you're back online."
 		}
 	])(
-		'keeps the card and what was typed when $case, and says why readably',
+		'915_E2 keeps the card and what was typed when $case, and says why in words that fit',
 		async ({ refusal, reason }) => {
 			createAlbum.mockRejectedValue(refusal);
 			const root = await render();
