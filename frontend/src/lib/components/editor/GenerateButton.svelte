@@ -55,9 +55,20 @@
 			{#if presentation.kind === 'queued'}
 				<span class="progress-label">{presentation.label}</span>
 			{:else}
-				<span class="progress-fill" style:width={`${presentation.progress}%`} aria-hidden="true"
+				<span
+					class="progress-fill"
+					class:indeterminate={presentation.indeterminate}
+					style:width={presentation.indeterminate ? undefined : `${presentation.progress}%`}
+					aria-hidden="true"
 				></span>
-				<span class="progress-label">{progressLabel}</span>
+				<span class="progress-label"
+					>{progressLabel}{#if presentation.indeterminate}<span
+							class="elapsed-time"
+							aria-hidden="true"
+						>
+							{presentation.elapsedLabel ? ` ${presentation.elapsedLabel}` : ''}</span
+						>{/if}</span
+				>
 			{/if}
 		</div>
 		{#if offersCancel(presentation)}
@@ -204,6 +215,13 @@
 		text-align: center;
 	}
 
+	.elapsed-time {
+		display: inline-block;
+		min-width: 6ch;
+		font-variant-numeric: tabular-nums;
+		white-space: pre;
+	}
+
 	.icon-button {
 		width: var(--hitbox-frequent);
 		height: var(--hitbox-frequent);
@@ -252,5 +270,36 @@
 
 	.expanded .cause {
 		white-space: pre-wrap;
+	}
+	.progress-fill.indeterminate {
+		width: 35%;
+		background: linear-gradient(
+			90deg,
+			transparent,
+			color-mix(in srgb, var(--score-ok) 38%, transparent),
+			transparent
+		);
+		transform: translateX(95%);
+		animation: stage-sweep 2.6s ease-in-out infinite;
+	}
+
+	@keyframes stage-sweep {
+		from {
+			transform: translateX(-100%);
+		}
+		to {
+			transform: translateX(290%);
+		}
+	}
+
+	.reconnecting .progress-fill.indeterminate {
+		animation: none;
+		background: color-mix(in srgb, var(--text-disabled) 20%, transparent);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.progress-fill.indeterminate {
+			animation: none;
+		}
 	}
 </style>

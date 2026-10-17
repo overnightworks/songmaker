@@ -60,6 +60,26 @@ async function render(state: GenerateState, props: { reasonInside?: boolean } = 
 }
 
 describe('GenerateButton', () => {
+	it.each([null, '0:03', '0:12', '12:34'])(
+		'[defect:#1568:H2:H3] reserves a silent elapsed slot for %s',
+		async (elapsedLabel) => {
+			await render({
+				...running,
+				phase: 'Loading model…',
+				indeterminate: true,
+				readout: null,
+				elapsedLabel
+			});
+			const elapsed = document.body.querySelector('.elapsed-time');
+			if (!elapsed) throw new Error('Expected an elapsed slot');
+			expect(elapsed.getAttribute('aria-hidden')).toBe('true');
+			expect(elapsed.textContent?.trim()).toBe(elapsedLabel ?? '');
+			injectComponentStyles(generateButtonSource, 'GenerateButton.svelte', elapsed);
+			expect(parseFloat(getComputedStyle(elapsed).minWidth)).toBeGreaterThan(0);
+			expect(getComputedStyle(elapsed).fontVariantNumeric).toBe('tabular-nums');
+		}
+	);
+
 	it.each([
 		['generate', 'Generate'],
 		['repaint', 'Repaint'],
@@ -89,7 +109,18 @@ describe('GenerateButton', () => {
 	});
 
 	it.each([
-		{ phase: 'Loading model…', readout: null, expected: 'Take 1 of 2 · Loading model…' },
+		{
+			phase: 'Loading model…',
+			readout: null,
+			elapsedLabel: null,
+			expected: 'Take 1 of 2 · Loading model…'
+		},
+		{
+			phase: 'Loading model…',
+			readout: null,
+			elapsedLabel: '0:12',
+			expected: 'Take 1 of 2 · Loading model… 0:12'
+		},
 		{ phase: 'Writing', readout: '36% · ~1:40', expected: 'Take 1 of 2 · Writing · 36% · ~1:40' },
 		{
 			phase: 'Rendering',
@@ -103,9 +134,9 @@ describe('GenerateButton', () => {
 			expected: 'Take 1 of 2 · Generating... · 36% · ~1:40'
 		}
 	] as const)(
-		'names the take, its phase and its readout as "$expected"',
-		async ({ phase, readout, expected }) => {
-			await render({ ...running, phase, readout });
+		'[defect:#1568] names the take, its phase and its readout as "$expected"',
+		async ({ phase, readout, expected, elapsedLabel = null }) => {
+			await render({ ...running, phase, readout, elapsedLabel, indeterminate: readout === null });
 			expect(
 				document.body.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()
 			).toBe(expected);

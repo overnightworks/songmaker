@@ -16,11 +16,13 @@
 	import { offline } from '$lib/stores/connectivity';
 	import {
 		WORKER_POOL_LOAD_FAILED,
+		WORKER_POOL_NO_MODEL_LABEL,
 		WORKER_POOL_REFRESH_FAILED,
 		WORKER_TRAINING_REMAINING_TEMPLATE
 	} from '$lib/constants';
 
 	import WorkerVramLine from './WorkerVramLine.svelte';
+	import WorkerModelsList from './WorkerModelsList.svelte';
 
 	const POLL_INTERVAL_MS = 3000;
 	const LOAD_JOB_TYPE = 'load_model_on_worker';
@@ -153,7 +155,7 @@
 				String(state.training_hold_seconds)
 			);
 		}
-		if (state.loaded.length === 0) return 'No model loaded';
+		if (state.loaded.length === 0) return WORKER_POOL_NO_MODEL_LABEL;
 		if (state.queue_depth > 0) return `Busy (${state.queue_depth} in queue)`;
 		return 'Idle';
 	}
@@ -215,10 +217,10 @@
 		busyAction = { ...busyAction, [key]: true };
 		try {
 			await evictModelOnWorker(workerId, mode);
-			addToast(`Evicted ${mode} from ${workerId}`, 'success');
+			addToast(`Unloaded ${mode} from ${workerId}`, 'success');
 			await store.refresh();
 		} catch (e) {
-			actionError = describeFailure(e, 'Failed to evict model');
+			actionError = describeFailure(e, 'Failed to unload model');
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -251,14 +253,14 @@
 		try {
 			if (isPinned) {
 				await unpinModelOnWorker(workerId, mode);
-				addToast(`Unpinned ${mode} on ${workerId}`, 'success');
+				addToast(`Keep loaded disabled for ${mode} on ${workerId}`, 'success');
 			} else {
 				await pinModelOnWorker(workerId, mode);
-				addToast(`Pinned ${mode} on ${workerId}`, 'success');
+				addToast(`Keep loaded enabled for ${mode} on ${workerId}`, 'success');
 			}
 			await store.refresh();
 		} catch (e) {
-			actionError = describeFailure(e, 'Pin toggle failed');
+			actionError = describeFailure(e, 'Failed to change Keep loaded');
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -303,18 +305,6 @@
 
 					{#if worker.state && !offline}
 						<div class="card-row">
-							<span class="row-label">Loaded:</span>
-							{#if worker.state.loaded.length === 0}
-								<span class="row-value dim">(none)</span>
-							{:else}
-								<span class="row-value">
-									{worker.state.loaded
-										.map((m) => `${m.mode} (~${m.size_gb.toFixed(0)} GB est.)`)
-										.join(', ')}
-								</span>
-							{/if}
-						</div>
-						<div class="card-row">
 							<span class="row-label">Status:</span>
 							<span class="row-value">
 								{describeStatus(worker)}
@@ -350,6 +340,17 @@
 						</div>
 					{/if}
 
+					{#if worker.state && !offline}
+						<WorkerModelsList
+							loaded={worker.state.loaded}
+							pinned={worker.state.pinned ?? []}
+							isPinDisabled={(mode) => busy || !!busyAction[`${worker.identity.id}:pin:${mode}`]}
+							isUnloadDisabled={(mode) => busy || !!busyAction[`${worker.identity.id}:${mode}`]}
+							onTogglePin={(mode, pinned) => handleTogglePin(worker.identity.id, mode, pinned)}
+							onUnload={(mode) => handleEvict(worker.identity.id, mode)}
+						/>
+					{/if}
+
 					<div class="card-actions">
 						<select
 							class="mode-select"
@@ -371,26 +372,6 @@
 						>
 							{busyAction[worker.identity.id] ? 'Loading…' : 'Load'}
 						</button>
-						{#if !offline && worker.state && worker.state.loaded.length > 0}
-							{#each worker.state.loaded as loadedDetail (loadedDetail.mode)}
-								{@const isPinned = (worker.state?.pinned ?? []).includes(loadedDetail.mode)}
-								<button
-									class="action-btn"
-									onclick={() => handleTogglePin(worker.identity.id, loadedDetail.mode, isPinned)}
-									disabled={busy || busyAction[`${worker.identity.id}:pin:${loadedDetail.mode}`]}
-								>
-									{isPinned ? 'Unpin' : 'Pin'}
-									{loadedDetail.mode}
-								</button>
-								<button
-									class="action-btn"
-									onclick={() => handleEvict(worker.identity.id, loadedDetail.mode)}
-									disabled={busy || busyAction[`${worker.identity.id}:${loadedDetail.mode}`]}
-								>
-									Evict {loadedDetail.mode}
-								</button>
-							{/each}
-						{/if}
 						<button
 							class="action-btn danger"
 							onclick={() => handleRestart(worker.identity.id)}
