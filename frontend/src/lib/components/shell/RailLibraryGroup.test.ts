@@ -11,7 +11,7 @@ import {
 	RAIL_LIBRARY_LOAD_ERROR,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
-import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import {
@@ -163,15 +163,14 @@ describe('RailLibraryGroup', () => {
 	});
 
 	it.each([
-		{ address: LIBRARY_ROUTE_PATH, query: '', current: true },
-		{ address: '/settings', query: '', current: false },
-		{ address: '/playlists', query: '', current: false },
-		{ address: HOME_ROUTE_PATH, query: '?song=s1', current: false }
+		{ address: LIBRARY_ROUTE_PATH, current: true },
+		{ address: '/settings', current: false },
+		{ address: '/playlists', current: false },
+		{ address: '/?song=s1', current: false }
 	] as const)(
-		'defect:#1523: with the surface still on browse, the word Library is current: $current at $address$query',
-		async ({ address, query, current }) => {
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; resolve() cannot carry the legacy ?song= query
-			await goto(`${resolve(address)}${query}`);
+		'defect:#1523: with the surface still on browse, the word Library is current: $current at $address',
+		async ({ address, current }) => {
+			await goto(resolve(address));
 			const target = await render();
 
 			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
