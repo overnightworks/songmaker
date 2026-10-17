@@ -82,7 +82,7 @@ import {
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST,
 	PLAYLIST_LOADING_LABEL,
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	SHUFFLE_SCOPE_ALBUM,
 	SHUFFLE_SCOPE_LIBRARY,
 	SHUFFLE_SCOPE_PLAYLIST
@@ -805,7 +805,7 @@ export function idlePlayTarget(input: {
 		}
 		// A detail that failed to load has nothing to natively play -- fall
 		// back to the named library target instead of a dead Play button.
-		return { type: 'library', label: RAIL_LIBRARY_LABEL };
+		return { type: 'library', label: LIBRARY_PAGE_LABEL };
 	}
 	if (input.collection?.kind === 'album') {
 		return {
@@ -814,7 +814,7 @@ export function idlePlayTarget(input: {
 			albumId: input.collection.id
 		};
 	}
-	return { type: 'library', label: RAIL_LIBRARY_LABEL };
+	return { type: 'library', label: LIBRARY_PAGE_LABEL };
 }
 
 // The transport with no take: a start that waits for the network is what the

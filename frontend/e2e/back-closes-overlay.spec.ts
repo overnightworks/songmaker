@@ -19,7 +19,7 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SEARCH_LABEL,
@@ -396,7 +396,7 @@ async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
 // phone.
 async function railLibrary(page: Page, shell: Shell): Promise<Locator> {
 	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
 	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 	return rail.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL });
 }
@@ -433,7 +433,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		},
 		expectLeft: async (page) => {
 			await expect(
-				workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })
+				workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL })
 			).toBeVisible();
 		},
 		afterwards: backReaches('playlist')
@@ -682,7 +682,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 	}, testInfo) => {
 		const guard = new FlowGuard(page);
 		await page.goto(LIBRARY_PATH);
-		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		const wall = workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL });
 		await expect(wall).toBeVisible();
 		await openVoicesSettings(page, shellOf(testInfo));
 
@@ -700,7 +700,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
 		await page.goto(LIBRARY_PATH);
-		await expect(workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expect(workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
 		await expect(wallTileNamed(page, library.albumTitle)).toBeVisible();
 		await expectLibraryWallLoaded(page);
 		const leftAt = await scrollWallHalfway(page);
@@ -844,7 +844,7 @@ for (const gapMs of [30, 0]) {
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
 		const surface = workspace(page);
-		const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		const wall = surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL });
 		const album = surface.getByRole('heading', { name: library.albumTitle });
 		await page.goto(LIBRARY_PATH);
 		await wallTiles(page)
@@ -899,7 +899,7 @@ test('two Backs in one task from Settings over a song show the album at its addr
 	const library = readSeededLibrary();
 	const shell = shellOf(testInfo);
 	const surface = workspace(page);
-	const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+	const wall = surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL });
 	const album = surface.getByRole('heading', { name: library.albumTitle });
 	const song = songBar(page, shell).getByRole('heading', { name: library.pickedSongTitle });
 	await page.goto(LIBRARY_PATH);
@@ -1185,7 +1185,7 @@ test(
 	async ({ page }) => {
 		const guard = new FlowGuard(page);
 		await page.goto(LIBRARY_PATH);
-		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		const wall = workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL });
 		await expect(wall).toBeVisible();
 		await accountCircle(page).click();
 		await expect(accountMenu(page)).toBeVisible();
@@ -1210,7 +1210,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 
 	async function openVoicesOverTheWall(page: Page, shell: Shell): Promise<void> {
 		await page.goto(LIBRARY_PATH);
-		await expect(workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expect(workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
 		await openVoicesSettings(page, shell);
 	}
 

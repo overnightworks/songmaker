@@ -34,7 +34,7 @@
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_RETRY_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
-		RAIL_LIBRARY_LABEL,
+		LIBRARY_PAGE_LABEL,
 		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
@@ -206,7 +206,7 @@
 {/snippet}
 
 <RailGroup
-	label={RAIL_LIBRARY_LABEL}
+	label={LIBRARY_PAGE_LABEL}
 	groupId="rail-library-group"
 	storageKey={LIBRARY_OPEN_STORAGE_KEY}
 	count={albumCount}

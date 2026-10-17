@@ -15,7 +15,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import {
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RESOURCE_SYNC_ERROR
@@ -100,7 +100,7 @@ test(
 		await expect(page.getByRole('alert')).toContainText('No such playlist');
 
 		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-		const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+		const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
 		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 		await rail
 			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })

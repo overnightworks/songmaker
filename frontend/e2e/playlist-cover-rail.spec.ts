@@ -9,7 +9,7 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_NAV_LABEL,
-	RAIL_PLAYLISTS_LABEL,
+	PLAYLISTS_PAGE_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL
 } from '../src/lib/constants';
@@ -138,7 +138,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
 					.getByRole('navigation', { name: RAIL_NAV_LABEL })
 			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-		const playlistsGroup = rail.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true });
+		const playlistsGroup = rail.getByRole('button', { name: PLAYLISTS_PAGE_LABEL, exact: true });
 		const collapsedMosaicRow = rail
 			.locator('#rail-playlists-group li')
 			.filter({ hasText: playlistTitle });
@@ -193,7 +193,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 					.getByRole('navigation', { name: RAIL_NAV_LABEL })
 			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 		const refreshedPlaylistsGroup = refreshedRail.getByRole('button', {
-			name: RAIL_PLAYLISTS_LABEL,
+			name: PLAYLISTS_PAGE_LABEL,
 			exact: true
 		});
 		if ((await refreshedPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
@@ -236,7 +236,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 					.getByRole('navigation', { name: RAIL_NAV_LABEL })
 			: page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 		const restoredPlaylistsGroup = restoredRail.getByRole('button', {
-			name: RAIL_PLAYLISTS_LABEL,
+			name: PLAYLISTS_PAGE_LABEL,
 			exact: true
 		});
 		if ((await restoredPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
