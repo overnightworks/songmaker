@@ -697,14 +697,16 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 				await route.continue();
 			}
 		);
-		// The saved take's song is not answered until Listen has answered, so the
-		// take is restored after the ranking, whatever the order the server would
-		// have answered them in.
-		let rankingAnswered: Promise<unknown> = Promise.resolve();
+		// The saved take's song read is not answered until the test releases it,
+		// which it does once the wall shows the Last played order, so the take is
+		// restored after the ranking was applied, whatever the order the server
+		// would have answered them in.
+		let takeReleased: Promise<void> = Promise.resolve();
+		let releaseTake = () => {};
 		await page.route(
 			(url) => SONG_READ_PATH.test(url.pathname),
 			async (route) => {
-				await rankingAnswered;
+				await takeReleased;
 				await route.continue();
 			}
 		);
@@ -716,19 +718,15 @@ for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 
 		for (answerDelayMs of [LISTEN_ANSWER_DELAY_MS, 0]) {
 			listenReads = 0;
-			rankingAnswered = page.waitForResponse(
-				(response) =>
-					response.request().method() === 'GET' &&
-					new URL(response.url()).pathname === LISTEN_READ_PATH
-			);
+			takeReleased = new Promise<void>((release) => (releaseTake = release));
 			await page.reload();
-			await expect(workspace(page).locator('.library-wall .tile-title')).toHaveCount(
-				lastPlayed.length
-			);
-			// The take comes back only after the ranking has, so the phone's drawer,
-			// which opens after the take is back, mounts its rail group on a page
-			// whose ranking is already read and whose take was restored since: that
-			// group must rank from the read there is, not ask Listen again.
+			await expect(workspace(page).locator('.library-wall .tile-title')).toHaveText(lastPlayed);
+			releaseTake();
+			// The take comes back only once the wall shows the ranking, so the
+			// phone's drawer, which opens after the take is back, mounts its rail
+			// group on a page whose ranking is already applied and whose take was
+			// restored since: that group must rank from the read there is, not ask
+			// Listen again.
 			await expect(page.getByRole('contentinfo')).toContainText(
 				fixture.tracks[restoredAlbum.id][0].title
 			);
