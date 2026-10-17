@@ -361,7 +361,8 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 			loading: false,
 			free: '5.5 GB free'
 		},
-		{ name: 'full GPU', measured: true, used: 24, loading: false, free: '0.0 GB free' }
+		{ name: 'full GPU', measured: true, used: 24, loading: false, free: '0.0 GB free' },
+		{ name: 'over capacity', measured: true, used: 25.3, loading: false, free: '0.0 GB free' }
 	])(
 		'defect:#1567 shows $name and preserves Load availability',
 		async ({ measured, used, loading, free }) => {
@@ -378,6 +379,8 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 				`${measured === false ? '~' : ''}${used.toFixed(1)} / 24.0 GB${measured === false ? ' est.' : ''}`
 			);
 			expect(row).not.toHaveTextContent('unknown');
+			expect(row).toHaveTextContent('VRAM:');
+			expect(target.textContent).toMatch(/Queue:.*VRAM:.*Last seen:/s);
 			if (free) expect(row).toHaveTextContent(free);
 			else {
 				expect(row).not.toHaveTextContent('GB free');
@@ -397,9 +400,14 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 		}
 	);
 
-	it.each(['heartbeat', 'used', 'total', 'both'] as const)(
-		'defect:#1567 shows unknown when missing %s without borrowing identity capacity',
-		async (missing) => {
+	it.each([
+		{ missing: 'heartbeat', reason: 'No heartbeat — nothing to read' },
+		{ missing: 'used', reason: 'Worker build does not report VRAM fields' },
+		{ missing: 'total', reason: 'Worker does not report total VRAM' },
+		{ missing: 'both', reason: 'Worker build does not report VRAM fields' }
+	])(
+		'defect:#1567 shows unknown when missing $missing without borrowing identity capacity',
+		async ({ missing, reason }) => {
 			const pool = workerPool(true);
 			if (missing === 'heartbeat') {
 				pool.workers[0].state = null;
@@ -413,11 +421,7 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 			const target = await renderVramPool(pool);
 			const row = target.querySelector('[role="group"][aria-label="VRAM"]');
 			expect(row).toHaveTextContent('unknown');
-			expect(row).toHaveTextContent(
-				missing === 'heartbeat'
-					? 'No heartbeat — nothing to read'
-					: 'Worker build does not report VRAM fields'
-			);
+			expect(row).toHaveTextContent(reason);
 			expect(row).not.toHaveTextContent('GB');
 			expect(findButtonByText(target, 'Load')).toBeDisabled();
 		}

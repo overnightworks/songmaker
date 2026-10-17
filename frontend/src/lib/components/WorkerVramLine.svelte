@@ -7,7 +7,8 @@
 		WORKER_POOL_VRAM_FREE,
 		WORKER_POOL_VRAM_ESTIMATE_REASON,
 		WORKER_POOL_VRAM_NO_HEARTBEAT,
-		WORKER_POOL_VRAM_NO_FIELDS
+		WORKER_POOL_VRAM_NO_FIELDS,
+		WORKER_POOL_VRAM_NO_TOTAL
 	} from '$lib/constants';
 
 	let { state }: { state: WorkerInfoItem['state'] } = $props();
@@ -23,7 +24,7 @@
 </script>
 
 <div class="vram-row" role="group" aria-label={WORKER_POOL_VRAM_LABEL}>
-	<span class="label">{WORKER_POOL_VRAM_LABEL}</span>
+	<span class="label">{WORKER_POOL_VRAM_LABEL}:</span>
 	<div class="vram">
 		<div class="bar" class:estimated class:unknown aria-hidden="true">
 			{#if !unknown}<span style:width={`${percentage}%`}></span>{/if}
@@ -35,7 +36,8 @@
 						? ` ${WORKER_POOL_VRAM_ESTIMATE}`
 						: ''}</span
 				>
-				{#if !estimated}<span class="free">{(total - used).toFixed(1)} {WORKER_POOL_VRAM_FREE}</span
+				{#if !estimated}<span class="free"
+						>{Math.max(0, total - used).toFixed(1)} {WORKER_POOL_VRAM_FREE}</span
 					>{/if}
 			</div>
 			{#if estimated}<span class="reason">{WORKER_POOL_VRAM_ESTIMATE_REASON}</span>{/if}
@@ -44,7 +46,11 @@
 				><span class="ring" aria-hidden="true"></span>{WORKER_POOL_VRAM_UNKNOWN}</span
 			>
 			<span class="reason"
-				>{state ? WORKER_POOL_VRAM_NO_FIELDS : WORKER_POOL_VRAM_NO_HEARTBEAT}</span
+				>{!state
+					? WORKER_POOL_VRAM_NO_HEARTBEAT
+					: used != null && total == null
+						? WORKER_POOL_VRAM_NO_TOTAL
+						: WORKER_POOL_VRAM_NO_FIELDS}</span
 			>
 		{/if}
 	</div>
@@ -62,11 +68,13 @@
 		min-width: 5.5rem;
 	}
 	.vram {
-		display: flex;
+		display: grid;
 		flex: 1 1 12rem;
 		min-width: 0;
-		flex-direction: column;
-		gap: 0.25rem;
+		/* State (m): 390px minus borders, card padding and the label column. */
+		grid-template-columns: minmax(2rem, 15.7rem) minmax(min-content, max-content);
+		align-items: center;
+		gap: 0.25rem 0.45rem;
 	}
 	.bar {
 		height: 8px;
@@ -104,6 +112,7 @@
 		font-size: 0.74rem;
 	}
 	.reason {
+		grid-column: 1 / -1;
 		overflow-wrap: anywhere;
 	}
 	.unknown-text {

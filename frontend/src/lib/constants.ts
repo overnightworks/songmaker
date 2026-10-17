@@ -237,6 +237,7 @@ export const WORKER_POOL_VRAM_FREE = 'GB free';
 export const WORKER_POOL_VRAM_ESTIMATE_REASON =
 	'No GPU reading — the sizes of the loaded models, not a measurement';
 export const WORKER_POOL_VRAM_NO_HEARTBEAT = 'No heartbeat — nothing to read';
+export const WORKER_POOL_VRAM_NO_TOTAL = 'Worker does not report total VRAM';
 export const WORKER_POOL_VRAM_NO_FIELDS = 'Worker build does not report VRAM fields';
 export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';

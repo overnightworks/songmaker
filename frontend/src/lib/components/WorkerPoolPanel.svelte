@@ -333,10 +333,6 @@
 							<span class="row-label">Queue:</span>
 							<span class="row-value">{worker.state.queue_depth} jobs</span>
 						</div>
-						<div class="card-row">
-							<span class="row-label">Last seen:</span>
-							<span class="row-value">{formatLastSeen(worker.state.last_heartbeat_at)}</span>
-						</div>
 					{:else}
 						<div class="card-row">
 							<span class="row-value dim">{describeOffline(worker)}</span>
@@ -347,6 +343,12 @@
 					{/if}
 
 					<WorkerVramLine state={worker.state} />
+					{#if worker.state && !offline}
+						<div class="card-row">
+							<span class="row-label">Last seen:</span>
+							<span class="row-value">{formatLastSeen(worker.state.last_heartbeat_at)}</span>
+						</div>
+					{/if}
 
 					<div class="card-actions">
 						<select
