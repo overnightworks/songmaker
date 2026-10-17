@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import {
+		fetchSharedCollection,
+		sharedCollectionFailure,
+		type SharedCollectionFailure
+	} from '$lib/api/shared';
 	import { APP_NAME } from '$lib/constants';
 	import SharedCollection from '$lib/components/share/SharedCollection.svelte';
 	import { fromSharedSong, type SharedSongPayload } from '$lib/share/sharedCollection';
 
 	let data: SharedSongPayload | null = $state(null);
-	let errorKind: 'missing' | 'error' | null = $state(null);
+	let errorKind: SharedCollectionFailure | null = $state(null);
 	let loading = $state(true);
 
 	const slug = $derived(page.params.slug ?? '');
@@ -19,14 +24,9 @@
 		loading = true;
 		errorKind = null;
 		try {
-			const resp = await fetch(`/shared/song/${s}`);
-			if (!resp.ok) {
-				errorKind = resp.status === 404 ? 'missing' : 'error';
-				return;
-			}
-			data = (await resp.json()) as SharedSongPayload;
-		} catch {
-			errorKind = 'error';
+			data = await fetchSharedCollection('song', s);
+		} catch (err) {
+			errorKind = sharedCollectionFailure(err);
 		} finally {
 			loading = false;
 		}

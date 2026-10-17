@@ -131,6 +131,29 @@ afterEach(async () => {
 });
 
 describe('shared playlist page', () => {
+	it('925_M2_W1: asks the server for the playlist at its own share address', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => sharedPlaylist });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
+		expect(mockFetch.mock.calls[0][0]).toBe('/shared/playlist/shared-playlist');
+	});
+
+	it('925_M2_W2: says in one line that a gone playlist link is no longer shared, with no player', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('h1')?.textContent).toBe('Playlist not found')
+		);
+		expect(target.textContent).toContain('This share link is invalid or was removed.');
+		expect(target.querySelector('.now-playing')).toBeNull();
+	});
+
 	it('1374_rule_5 shows each entry with its album', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => sharedPlaylist });
 		const target = document.createElement('div');

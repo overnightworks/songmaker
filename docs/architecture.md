@@ -697,8 +697,9 @@ sign-in, session-check, setup and cover-suggestion paths that show their own;
 creating an album still gets both notices until #915). The layout installs while
 its component initialises, before the first request, so a request sent any
 earlier means moving the installation earlier too. A 401 outside the sign-in
-forms goes the same way, to the awaited `sessionLost` reaction, and
-`stores/auth.ts` decides that the session ended (#925).
+forms and the public share reads (`/shared/*`, which authenticate nobody) goes
+the same way, to the awaited `sessionLost` reaction, and `stores/auth.ts`
+decides that the session ended (#925).
 
 `lib/api` imports only itself, packages, `$lib/constants`, `$lib/routes/` and
 `$lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
@@ -750,7 +751,9 @@ The lyrics column (`NowPlayingLyrics.svelte`) follows playback once the playing 
 The public share pages (`/share/[slug]`, `/share/playlist/[slug]`,
 `/share/song/[slug]`, `/share/gen/[slug]`) render on the same collection
 surface as the logged-in app instead of a hand-rolled listening UI: each
-`+page.svelte` fetches its `/shared/*` payload, adapts it with
+`+page.svelte` asks `lib/api/shared.ts` for its `/shared/*` payload
+(`sharedCollectionFailure` reads a 404 as a link no longer shared and anything
+else as an error with Retry), adapts it with
 `lib/share/sharedCollection.ts` (`fromSharedAlbum`/`fromSharedPlaylist`/
 `fromSharedSong`/`fromSharedGeneration` → one `SharedCollectionView`; a song
 or take share becomes a one-track collection; `playableTracks()` drops rows
