@@ -1,0 +1,8 @@
+claim_id = "95a2accc336f49b4894f093074f351d0"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "79e2c6ef5d158fd95d45eebc5b42f56ce46afe88"
+branch = "claude/issue-1559-worker-cause"
+scope = ["docs/acestep.md", "src/songmaker_cli/jobs/model_lifecycle.py", "src/songmaker_cli/scheduler.py", "tests/test_jobs.py"]
+opened_commit = "6b4f4b76221f4ba551b538e4fe9fe7b44e702eda"
+whole_reason = "the cause reader, its second caller, its pinning test and its doc sentence move together"
