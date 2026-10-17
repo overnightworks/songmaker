@@ -1,7 +1,0 @@
-claim_id = "104116d33fe34475b66ee61fa771660a"
-agent = "claude"
-role = "builder"
-base = "ca6044bf731d7b1a8476a6ac1a57b1e1fc07189d"
-branch = "fix/e2e-job-timeout"
-scope = [".github/workflows/e2e.yml"]
-opened_commit = "21b7ac868f081394cc140d5820832c645d4f3a69"
