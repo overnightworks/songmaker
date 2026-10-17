@@ -377,11 +377,41 @@ async function expectLandedAt(page: Page, scrollTop: number): Promise<void> {
 	expect(Math.abs(landed - scrollTop)).toBeLessThanOrEqual(SCROLL_LANDING_TOLERANCE_PX);
 }
 
+// The phone turned to landscape swaps the rows for tiles, and turned back
+// swaps them again: the row that lit once is a new row by then.
+async function turnPhoneToLandscapeAndBack(page: Page): Promise<void> {
+	const portrait = page.viewportSize();
+	if (!portrait) throw new Error('Expected a viewport to turn');
+	await page.setViewportSize({ width: portrait.height, height: portrait.width });
+	await expect(workspace(page).locator('.library-row')).toHaveCount(0);
+	await page.setViewportSize(portrait);
+	await expectRows(page);
+}
+
 const RETURN_CELLS = [
-	{ name: 'bottom album, ‹', where: 'bottom', via: 'chevron', reducedMotion: false },
-	{ name: 'bottom album, the phone Back', where: 'bottom', via: 'back', reducedMotion: false },
-	{ name: 'middle album, ‹', where: 'middle', via: 'chevron', reducedMotion: false },
-	{ name: 'bottom album, ‹, reduced motion', where: 'bottom', via: 'chevron', reducedMotion: true }
+	{ name: 'bottom album, ‹', where: 'bottom', via: 'chevron', reducedMotion: false, turns: false },
+	{
+		name: 'bottom album, the phone Back',
+		where: 'bottom',
+		via: 'back',
+		reducedMotion: false,
+		turns: false
+	},
+	{ name: 'middle album, ‹', where: 'middle', via: 'chevron', reducedMotion: false, turns: false },
+	{
+		name: 'bottom album, ‹, reduced motion',
+		where: 'bottom',
+		via: 'chevron',
+		reducedMotion: true,
+		turns: false
+	},
+	{
+		name: 'bottom album, ‹, the phone turned to landscape and back',
+		where: 'bottom',
+		via: 'chevron',
+		reducedMotion: false,
+		turns: true
+	}
 ] as const;
 
 for (const cell of RETURN_CELLS) {
@@ -432,6 +462,10 @@ for (const cell of RETURN_CELLS) {
 
 			await expect(lit).toHaveCount(0);
 			await expectLandedAt(page, wall.before);
+			if (cell.turns) {
+				await turnPhoneToLandscapeAndBack(page);
+				await expect(lit).toHaveCount(0);
+			}
 			await wallBody(page).evaluate((body) => (body.scrollTop -= 200));
 			await page.getByRole('button', { name: 'Last played', exact: true }).click();
 			await page.getByRole('button', { name: 'A–Z', exact: true }).click();

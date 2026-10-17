@@ -18,7 +18,7 @@
 		playlistLoad,
 		loadPlaylists
 	} from '$lib/stores/playlists';
-	import { openCollection } from '$lib/stores/collection';
+	import { openCollection, type OpenCollection } from '$lib/stores/collection';
 	import {
 		captureLibraryScroll,
 		libraryScrollAnchor,
@@ -106,9 +106,16 @@
 	const browseState = $derived($libraryBrowse);
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
-	const placeReturnedFrom = takePlaceReturnedFrom();
 
 	let labelledAt = $state(new Date());
+
+	// The light is one event of this showing of the wall: the row that lights
+	// spends it, so a remount of that row (the width crossing the phone
+	// boundary, the list refilling) does not light it again.
+	let placeToLight = $state.raw<OpenCollection | null>(takePlaceReturnedFrom());
+	function spendLight(): void {
+		placeToLight = null;
+	}
 
 	let narrow = $state(false);
 	$effect(() => {
@@ -325,7 +332,8 @@
 							{...content}
 							{selected}
 							subtitle={sizeLabel(item)}
-							lightUp={placeReturnedFrom?.kind === placeType && placeReturnedFrom.id === item.id}
+							lightUp={placeToLight?.kind === placeType && placeToLight.id === item.id}
+							onlit={spendLight}
 							openLabel={`Open ${placeType} ${item.title}`}
 							{onopen}
 							onplay={rowPlay(item)}

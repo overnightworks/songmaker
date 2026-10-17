@@ -85,12 +85,13 @@ it('1354_rule_11: a row without a playable action has only its open button', asy
 });
 
 it.each([
-	{ asked: true, litFirst: true },
-	{ asked: false, litFirst: false }
+	{ asked: true, litFirst: true, reports: 1 },
+	{ asked: false, litFirst: false, reports: 0 }
 ])(
-	'1354_rule_12: a row asked to light up ($asked) is lit at first and settles for good',
-	async ({ asked, litFirst }) => {
+	'1354_rule_12: a row asked to light up ($asked) is lit at first, reports it and settles for good',
+	async ({ asked, litFirst, reports }) => {
 		vi.useFakeTimers();
+		let reported = 0;
 		mounted = mount(LibraryRow, {
 			target: document.body,
 			props: {
@@ -99,12 +100,14 @@ it.each([
 				coverAlt: 'Cover',
 				openLabel: 'Open album Album',
 				onopen: () => undefined,
-				lightUp: asked
+				lightUp: asked,
+				onlit: () => reported++
 			}
 		});
 		await tick();
 		const row = document.querySelector('.library-row');
 		expect(row?.classList.contains('lit')).toBe(litFirst);
+		expect(reported).toBe(reports);
 
 		await vi.advanceTimersByTimeAsync(10_000);
 

@@ -1113,7 +1113,7 @@ function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
 	if (intendedSurface !== 'detail') return;
 	if (get(openCollection) !== null) return;
 	if (get(selectedSongId) !== null) return;
-	librarySurface.set('browse');
+	setLibrarySurface('browse');
 }
 
 // A cold tab's `history.state` is SvelteKit's own bookkeeping object, not yet

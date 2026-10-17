@@ -19,6 +19,7 @@
 		transport?: TransportState;
 		selected?: boolean;
 		lightUp?: boolean;
+		onlit?: () => void;
 	};
 	let {
 		openLabel,
@@ -27,6 +28,7 @@
 		transport = 'idle',
 		selected = false,
 		lightUp = false,
+		onlit,
 		...content
 	}: Props = $props();
 
@@ -34,6 +36,7 @@
 	onMount(() => {
 		if (!lightUp) return;
 		lit = true;
+		onlit?.();
 		const settle = setTimeout(() => (lit = false), LIGHT_UP_MS);
 		return () => clearTimeout(settle);
 	});

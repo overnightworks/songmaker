@@ -768,12 +768,22 @@ for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 	});
 }
 
-function phoneViewport(): void {
+// Stubs every media query as matching the phone width; the returned function
+// turns the viewport to the phone width or away from it and tells the listeners.
+function phoneViewport(): (phone: boolean) => void {
+	let matches = true;
+	const listeners = new Set<() => void>();
 	vi.stubGlobal('matchMedia', () => ({
-		matches: true,
-		addEventListener: () => undefined,
-		removeEventListener: () => undefined
+		get matches() {
+			return matches;
+		},
+		addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+		removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener)
 	}));
+	return (phone) => {
+		matches = phone;
+		for (const listener of listeners) listener();
+	};
 }
 
 it.each([
@@ -966,6 +976,10 @@ describe('the wall landing where it was left', () => {
 });
 
 describe('the row of the place the wall returns from', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it.each([
 		{
 			case: 'the album on the phone Library',
@@ -1018,6 +1032,26 @@ describe('the row of the place the wall returns from', () => {
 		const root = await render();
 
 		expect(litTitles(root)).toEqual([]);
+	});
+
+	it('1354_rule_12: does not light the row again when a width change remounts it', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		const turnViewport = phoneViewport();
+		seedWall();
+		returnToWallFrom({ kind: 'album', id: 'a-fuer' }, 'browse');
+		const root = await render();
+		expect(litTitles(root)).toEqual(['Sonne für Andrea']);
+		await vi.advanceTimersByTimeAsync(10_000);
+		expect(litTitles(root)).toEqual([]);
+
+		turnViewport(false);
+		await tick();
+		expect(root.querySelectorAll('.library-row')).toHaveLength(0);
+		turnViewport(true);
+		await tick();
+
+		expect(root.querySelectorAll('.library-row').length).toBeGreaterThan(0);
+		expect(root.querySelectorAll('.lit')).toHaveLength(0);
 	});
 
 	it('1354_rule_12: lights up its row for one showing of the wall only', async () => {
