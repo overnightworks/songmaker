@@ -4,6 +4,7 @@ import type {
 	ShareResult,
 	SongItem,
 	SongListenRequest,
+	VersionGenerationParams,
 	VersionItem
 } from './types';
 import { apiFetch } from './fetch';
@@ -55,7 +56,7 @@ export async function updateSong(
 		bpm?: number;
 		audio_duration?: number;
 		key_scale?: string;
-		generation_params?: import('./types').VersionGenerationParams | null;
+		generation_params?: VersionGenerationParams | null;
 		new_version?: boolean;
 	}
 ): Promise<SongItem> {
