@@ -1,8 +1,0 @@
-claim_id = "556cdeb299b146c4b9f7ab0c116dff83"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "d67b50b399cc5c0d0db178d1aa3d19bb57e2f3df"
-branch = "claude/issue-1586-place-icons-current"
-scope = ["frontend/src/lib/components/Icon.svelte", "frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/components/shell/RailGroup.svelte", "frontend/src/lib/components/shell/RailGroup.test.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/placeShown.test.ts"]
-opened_commit = "3aac966c62c2c4532c0b1ad5989c67aeff9c2111"
-whole_reason = "The shared glyph and current-place owners, their three rail consumers, the group-header band and focused verification form one bounded change that prepares step 37 without leaving competing production decisions."
