@@ -89,7 +89,18 @@ describe('GenerateButton', () => {
 	});
 
 	it.each([
-		{ phase: 'Loading model…', readout: null, expected: 'Take 1 of 2 · Loading model…' },
+		{
+			phase: 'Loading model…',
+			readout: null,
+			elapsedLabel: null,
+			expected: 'Take 1 of 2 · Loading model…'
+		},
+		{
+			phase: 'Loading model…',
+			readout: null,
+			elapsedLabel: '0:12',
+			expected: 'Take 1 of 2 · Loading model… 0:12'
+		},
 		{ phase: 'Writing', readout: '36% · ~1:40', expected: 'Take 1 of 2 · Writing · 36% · ~1:40' },
 		{
 			phase: 'Rendering',
@@ -103,9 +114,9 @@ describe('GenerateButton', () => {
 			expected: 'Take 1 of 2 · Generating... · 36% · ~1:40'
 		}
 	] as const)(
-		'names the take, its phase and its readout as "$expected"',
-		async ({ phase, readout, expected }) => {
-			await render({ ...running, phase, readout });
+		'[defect:#1568] names the take, its phase and its readout as "$expected"',
+		async ({ phase, readout, expected, elapsedLabel = null }) => {
+			await render({ ...running, phase, readout, elapsedLabel, indeterminate: readout === null });
 			expect(
 				document.body.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()
 			).toBe(expected);

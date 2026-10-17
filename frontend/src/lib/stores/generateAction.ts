@@ -1,4 +1,4 @@
-import { derived, get, writable } from 'svelte/store';
+import { derived, get, readable, writable } from 'svelte/store';
 import { cancelJob, generateSong } from '$lib/api/client';
 import type { JobItem, SongItem } from '$lib/api/types';
 import {
@@ -159,6 +159,8 @@ export type GenerateState =
 			kind: 'generating';
 			jobId: string | null;
 			phase: string;
+			indeterminate: boolean;
+			elapsedLabel: string | null;
 			takeCounter: string | null;
 			progress: number;
 			readout: string | null;
@@ -224,6 +226,8 @@ function generatingState(
 	return {
 		kind: 'generating',
 		jobId: job?.id ?? null,
+		indeterminate: job?.phase === 'loading_model',
+		elapsedLabel: null,
 		phase: reconnecting ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
 		takeCounter: takeCounterLabel(job),
 		progress: progressPercent(job),
@@ -234,7 +238,7 @@ function generatingState(
 	};
 }
 
-export const generateAction = derived(
+const generatePresentation = derived(
 	[
 		selectedSong,
 		activeJobs,
@@ -283,6 +287,44 @@ export const generateAction = derived(
 		return { kind: 'idle', mode: actionMode };
 	}
 );
+
+// Retain the observation across phone-tab unmounts; a page reload starts anew.
+let observedStage: { jobId: string | null; phase: string; startedAt: number } | null = null;
+const ELAPSED_LABEL_DELAY_SECONDS = 3;
+
+export const generateAction = readable<GenerateState>(undefined, (set) => {
+	let timer: ReturnType<typeof setInterval> | undefined;
+	const unsubscribe = generatePresentation.subscribe((state) => {
+		clearInterval(timer);
+		if (state.kind !== 'generating' || !state.indeterminate || state.ended) {
+			observedStage = null;
+			set(state);
+			return;
+		}
+		// A broken stream cannot establish or advance a live stage presentation.
+		if (state.reconnecting) {
+			set(state);
+			return;
+		}
+		if (observedStage?.jobId !== state.jobId || observedStage?.phase !== state.phase) {
+			observedStage = { jobId: state.jobId, phase: state.phase, startedAt: Date.now() };
+		}
+		const startedAt = observedStage.startedAt;
+		const publish = () => {
+			const seconds = Math.floor((Date.now() - startedAt) / 1000);
+			set({
+				...state,
+				elapsedLabel: seconds >= ELAPSED_LABEL_DELAY_SECONDS ? formatTime(seconds) : null
+			});
+		};
+		publish();
+		timer = setInterval(publish, 1000);
+	});
+	return () => {
+		clearInterval(timer);
+		unsubscribe();
+	};
+});
 
 export async function generate(): Promise<void> {
 	const song = get(selectedSong);

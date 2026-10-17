@@ -2,6 +2,8 @@ import type { GenerateState } from '$lib/stores/generateAction';
 
 export const running: Extract<GenerateState, { kind: 'generating' }> = {
 	kind: 'generating',
+	indeterminate: false,
+	elapsedLabel: null,
 	jobId: 'job1',
 	phase: 'Rendering',
 	takeCounter: 'Take 1 of 2',

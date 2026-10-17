@@ -209,6 +209,8 @@ describe('generate action presentation', () => {
 			state: 'running',
 			expectedState: {
 				kind: 'generating',
+				indeterminate: false,
+				elapsedLabel: null,
 				jobId: 'job1',
 				phase: 'Generating...',
 				takeCounter: null,
@@ -224,6 +226,8 @@ describe('generate action presentation', () => {
 			state: 'running a single take',
 			expectedState: {
 				kind: 'generating',
+				indeterminate: false,
+				elapsedLabel: null,
 				jobId: 'job1',
 				phase: 'Generating...',
 				takeCounter: null,
@@ -243,7 +247,7 @@ describe('generate action presentation', () => {
 			expectedState: { kind: 'idle', mode: 'generate' },
 			setup: () => activeJobs.set([{ songId: 's2', job: queuedJob }])
 		}
-	])('exposes the state for $state', async ({ setup, expectedState }) => {
+	])('[defect:#1568] exposes the state for $state', async ({ setup, expectedState }) => {
 		setup();
 		stopHealthPolling();
 		startHealthPolling();
@@ -256,7 +260,7 @@ describe('generate action presentation', () => {
 		{ remaining: 'calculating', readout: '36%' },
 		{ remaining: null, readout: '36%' }
 	] as const)(
-		'reads out live progress and remaining time $remaining, scaled from the 0..1 job fraction to a percent',
+		'[defect:#1568] reads out live progress and remaining time $remaining, scaled from the 0..1 job fraction to a percent',
 		({ remaining, readout }) => {
 			const job: JobItem = {
 				...queuedJob,
@@ -270,6 +274,8 @@ describe('generate action presentation', () => {
 			activeJobs.set([{ songId: 's1', job }]);
 			expect(get(generateAction)).toEqual({
 				kind: 'generating',
+				indeterminate: false,
+				elapsedLabel: null,
 				jobId: 'job1',
 				phase: 'Rendering',
 				takeCounter: 'Take 1 of 2',
@@ -289,7 +295,7 @@ describe('generate action presentation', () => {
 		{ phase: 'saving_take', label: 'Saving take', readout: '36% · ~0:32' },
 		{ phase: null, label: 'Generating...', readout: '36% · ~0:32' }
 	] as const)(
-		'names the $phase phase "$label" with readout $readout',
+		'[defect:#1568] names the $phase phase "$label" with readout $readout',
 		({ phase, label, readout }) => {
 			const job: JobItem = {
 				...queuedJob,
@@ -299,7 +305,13 @@ describe('generate action presentation', () => {
 				remaining_time_estimate: 32
 			};
 			activeJobs.set([{ songId: 's1', job }]);
-			expect(get(generateAction)).toMatchObject({ kind: 'generating', phase: label, readout });
+			expect(get(generateAction)).toMatchObject({
+				kind: 'generating',
+				phase: label,
+				readout,
+				indeterminate: phase === 'loading_model',
+				elapsedLabel: null
+			});
 		}
 	);
 
@@ -352,12 +364,14 @@ describe('generate action presentation', () => {
 				offline: false
 			}
 		])(
-			'a running take reads "Reconnecting…" with its last seen progress when $cause, its cancel unreachable only offline',
+			'[defect:#1568] a running take reads "Reconnecting…" with its last seen progress when $cause, its cancel unreachable only offline',
 			({ loseConnection, offline }) => {
 				activeJobs.set([{ songId: 's1', job: runningAt40 }]);
 				loseConnection();
 				expect(get(generateAction)).toEqual({
 					kind: 'generating',
+					indeterminate: false,
+					elapsedLabel: null,
 					jobId: 'job1',
 					phase: 'Reconnecting…',
 					takeCounter: 'Take 1 of 2',
@@ -376,12 +390,14 @@ describe('generate action presentation', () => {
 			expect(get(generateAction)).toMatchObject({ takeCounter: 'Take 1 of 2', readout: null });
 		});
 
-		it('a running take is live again by itself once the connection is back', () => {
+		it('[defect:#1568] a running take is live again by itself once the connection is back', () => {
 			activeJobs.set([{ songId: 's1', job: runningAt40 }]);
 			reportResourceStreamReachable(false);
 			reportResourceStreamReachable(true);
 			expect(get(generateAction)).toEqual({
 				kind: 'generating',
+				indeterminate: false,
+				elapsedLabel: null,
 				jobId: 'job1',
 				phase: 'Rendering',
 				takeCounter: 'Take 1 of 2',
@@ -535,8 +551,93 @@ describe('generate action presentation', () => {
 	});
 });
 
+describe('[defect:#1568] observed loading time', () => {
+	it.each([
+		{ seconds: 0, elapsedLabel: null },
+		{ seconds: 2, elapsedLabel: null },
+		{ seconds: 3, elapsedLabel: '0:03' },
+		{ seconds: 12, elapsedLabel: '0:12' }
+	])(
+		'shows $elapsedLabel after $seconds seconds without resetting on updates',
+		({ seconds, elapsedLabel }) => {
+			vi.useFakeTimers();
+			const unsubscribe = generateAction.subscribe(() => {});
+			try {
+				const job: JobItem = { ...queuedJob, status: 'running', phase: 'loading_model' };
+				activeJobs.set([{ songId: 's1', job }]);
+				vi.advanceTimersByTime(seconds * 1000);
+				activeJobs.set([{ songId: 's1', job: { ...job, progress: 0.7 } }]);
+				expect(get(generateAction)).toMatchObject({
+					indeterminate: true,
+					elapsedLabel,
+					readout: null
+				});
+			} finally {
+				activeJobs.set([]);
+				unsubscribe();
+				vi.useRealTimers();
+			}
+		}
+	);
+
+	it.each(['job', 'stage', 'reconnecting', 'subscription'] as const)(
+		'handles a changed %s without presenting stale live progress',
+		(change) => {
+			vi.useFakeTimers();
+			let unsubscribe = generateAction.subscribe(() => {});
+			try {
+				const job: JobItem = { ...queuedJob, status: 'running', phase: 'loading_model' };
+				activeJobs.set([{ songId: 's1', job }]);
+				vi.advanceTimersByTime(12000);
+				expect(get(generateAction)).toMatchObject({ elapsedLabel: '0:12' });
+				if (change === 'subscription') {
+					const timers = vi.getTimerCount();
+					unsubscribe();
+					expect(vi.getTimerCount()).toBe(timers - 1);
+					unsubscribe = generateAction.subscribe(() => {});
+					expect(get(generateAction)).toMatchObject({ elapsedLabel: '0:12' });
+				} else if (change === 'reconnecting') {
+					activeJobs.set([{ songId: 's1', job, streamStale: true }]);
+					vi.advanceTimersByTime(5000);
+					expect(get(generateAction)).toMatchObject({
+						phase: 'Reconnecting…',
+						elapsedLabel: null,
+						readout: null
+					});
+					activeJobs.set([{ songId: 's1', job }]);
+					expect(get(generateAction)).toMatchObject({ elapsedLabel: '0:17' });
+				} else {
+					if (change === 'stage') {
+						activeJobs.set([
+							{
+								songId: 's1',
+								job: { ...job, phase: 'rendering', progress: 0.36, remaining_time_estimate: 32 }
+							}
+						]);
+						expect(get(generateAction)).toMatchObject({
+							indeterminate: false,
+							elapsedLabel: null,
+							readout: '36% · ~0:32'
+						});
+					}
+					activeJobs.set([
+						{ songId: 's1', job: { ...job, id: change === 'job' ? 'job2' : job.id } }
+					]);
+					expect(get(generateAction)).toMatchObject({ elapsedLabel: null, indeterminate: true });
+					vi.advanceTimersByTime(3000);
+					expect(get(generateAction)).toMatchObject({ elapsedLabel: '0:03' });
+				}
+			} finally {
+				activeJobs.set([]);
+				unsubscribe();
+				vi.useRealTimers();
+			}
+		}
+	);
+});
+
 describe('generate action execution', () => {
-	it('waits for the saved version, rejects duplicate clicks and hands pending state to the job', async () => {
+	it('[defect:#1568] waits for the saved version, rejects duplicate clicks and hands pending state to the job', async () => {
 		setDraftLyrics('new verse');
 		const saved = makeSong({ lyrics: 'new verse', prompt: 'folk' });
 		const save = Promise.withResolvers<typeof saved>();
@@ -545,6 +646,8 @@ describe('generate action execution', () => {
 		const request = generate();
 		expect(get(generateAction)).toMatchObject({
 			kind: 'generating',
+			indeterminate: false,
+			elapsedLabel: null,
 			jobId: null,
 			phase: 'Generating...',
 			progress: 0,
