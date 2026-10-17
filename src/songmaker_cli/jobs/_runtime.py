@@ -76,6 +76,15 @@ _GENERATION_SETUP_MESSAGES: frozenset[str] = frozenset({
 })
 
 
+def generation_error_messages() -> frozenset[str]:
+    """Expose the runtime-owned messages allowed on Generate reads."""
+    return (
+        _GENERATION_SETUP_MESSAGES
+        | {JOB_ERROR_UNEXPECTED}
+        | {message for _, message in _USER_FACING_ERRORS}
+    )
+
+
 class GenerationSetupError(Exception):
     pass
 

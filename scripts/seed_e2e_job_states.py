@@ -42,6 +42,9 @@ mounted. Use the venv's Python directly:
         scripts/seed_e2e_job_states.py set-completed --job-id <id> \\
         < frontend/e2e/fixtures/take.mp3
 
+The ``set-failed`` example stores raw worker detail to verify that musician
+reads show "Generating failed — try again." instead (L6/L11).
+
 ``create-song`` prints the created song's id on stdout, ``set-running`` the
 created job's id -- both mirroring ``scripts/seed_e2e_song_takes.py``'s own
 convention. ``set-phase``, ``set-failed`` and ``set-completed`` print nothing.
@@ -243,8 +246,8 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
     one) is deliberate: ``/api/jobs/{id}/stream`` polls the row and pushes the
     change to any client still watching it, the same way a real worker crash
     would report it. ``error_type`` matches ``generation.py``'s own failure
-    path (``"generation_error"``) -- the sentence this literal is supposed to
-    resemble.
+    path (``"generation_error"``). The raw worker sentence stays stored;
+    musician reads project it to "Generating failed — try again." (L6/L11).
     """
     updated = update_job_status(
         session,
