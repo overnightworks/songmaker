@@ -18,7 +18,6 @@ import {
 	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
 	EDITOR_GENERATE_MODE_LABELS,
-	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
@@ -944,9 +943,8 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		expect(btn?.textContent).toContain(EDITOR_GENERATE_MODE_LABELS.generate);
 	});
 
-	it('shows the worker failure at Generate, expands it and retries through the same button', async () => {
-		const cause =
-			'Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available';
+	it('[defect:#1579] shows the full failure at Generate and retries through the same button', async () => {
+		const cause = 'Generating failed — try again.';
 		generationFailures.set({ s1: cause });
 		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
 		const target = await renderView();
@@ -955,14 +953,11 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		expect(target.querySelectorAll('.generate-action')).toHaveLength(1);
 		expect(action.textContent).toContain(cause);
 		expect(target.querySelector('.takes-list')?.textContent ?? '').not.toContain(cause);
-		const expand = getByRoleButton(action, EDITOR_GENERATE_FAILURE_EXPAND_LABEL);
-		expect(expand.getAttribute('aria-expanded')).toBe('false');
-		expand.click();
-		await tick();
-		expect(expand.getAttribute('aria-expanded')).toBe('true');
+		expect(action.querySelectorAll('button')).toHaveLength(1);
 		getByRoleButton(action, EDITOR_GENERATE_MODE_LABELS.generate).click();
-		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
-		await tick();
+		await vi.waitFor(() =>
+			expect(action.querySelector('[role="status"]')?.textContent).toContain('Queued')
+		);
 		expect(action.textContent).not.toContain(cause);
 		expect(action.querySelector('[role="status"]')?.textContent).toContain('Queued');
 	});

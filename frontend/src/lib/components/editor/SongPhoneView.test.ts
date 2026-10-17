@@ -224,27 +224,26 @@ describe('SongPhoneView', () => {
 		closeKeyboard();
 	});
 
-	// #1017: the bar used to be unmounted while typing, so an expanded failure
-	// cause folded shut behind the user's back.
-	it('keeps an expanded failure cause open across typing in the lyrics', async () => {
+	// #1017: the Generate bar must remain mounted while typing.
+	it('[defect:#1579] keeps the full failure visible across lyrics focus and blur', async () => {
 		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		generateAction.set({
 			kind: 'failed',
 			mode: 'generate',
-			cause: 'The worker ran out of memory.'
+			cause: 'Generating failed — try again.'
 		});
 		const target = await render();
 		const lyrics = target.querySelector<HTMLTextAreaElement>('textarea[aria-label="Lyrics"]');
 		if (!lyrics) throw new Error('Expected the lyrics');
-		target.querySelector<HTMLButtonElement>('.failure button')?.click();
-		await tick();
+		expect(target.querySelector('.failure')?.textContent).toBe('Generating failed — try again.');
 
 		lyrics.focus();
 		await tick();
 		lyrics.blur();
 		await tick();
-		expect(target.querySelector('.failure button')?.getAttribute('aria-expanded')).toBe('true');
+		expect(target.querySelector('.failure')?.textContent).toBe('Generating failed — try again.');
+		expect(target.querySelector('.failure button')).toBeNull();
 		stopWatching();
 		closeKeyboard();
 	});

@@ -81,6 +81,7 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.generation_params import BaseGenerationParams
+from songmaker_cli.jobs.generation_failure import musician_job_response
 from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
@@ -379,7 +380,7 @@ def api_last_failed_generation(
         and aware_timestamp(newest_take.created_at) >= aware_timestamp(job.completed_at)
     ):
         return LastFailedGenerationResponse(job=None)
-    return LastFailedGenerationResponse(job=JobResponse.from_orm(job))
+    return LastFailedGenerationResponse(job=musician_job_response(job))
 
 
 @router.post(

@@ -453,6 +453,7 @@ export interface LibraryListenItem {
 	song_id?: string | null;
 	song_title?: string | null;
 	song_number?: number | null;
+	entry_id?: string | null;
 	played_at: string;
 }
 

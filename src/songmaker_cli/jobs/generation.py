@@ -81,7 +81,7 @@ from ._runtime import (
     _touch_heartbeat,
     _update_job,
 )
-from .generation_failure import generation_failure
+from .generation_failure import generation_failure, partial_failure_error
 
 log = logging.getLogger(__name__)
 
@@ -683,8 +683,7 @@ def _finalize_generation_job(
             job_id,
             JobStatus.PARTIAL,
             progress=completed / count,
-            error=f"{completed}/{count} completed, {count - completed} failed: "
-            f"{failure.message}",
+            error=partial_failure_error(completed, count, failure.message),
             error_type=failure.error_type,
         )
     else:
