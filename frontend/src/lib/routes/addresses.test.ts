@@ -11,6 +11,7 @@ import {
 	pendingTakeRoutePath,
 	playlistRoutePath,
 	readLegacySongQuery,
+	songAlbumRoutePath,
 	songRoutePath,
 	standsOnHomePage,
 	standsOnLibraryPage,
@@ -40,6 +41,18 @@ describe('library route addresses', () => {
 		['playlist', isPlaylistRoutePath, '/album/anfield', false]
 	])('recognizes a %s route structurally', (_name, matches, pathname, expected) => {
 		expect(matches(pathname)).toBe(expected);
+	});
+
+	it.each([
+		['/album/anfield/tide', '/album/anfield'],
+		['/album/anfield/tide/take/3', '/album/anfield'],
+		['/album/an%20field/tide%20%2F%20turn', '/album/an%20field'],
+		['/album/anfield', null],
+		['/album/anfield/', null],
+		['/playlist/friday-night', null],
+		['/', null]
+	])('1354_rule_32: finds the song’s album address for %s', (pathname, expected) => {
+		expect(songAlbumRoutePath(pathname)).toBe(expected);
 	});
 
 	it.each([

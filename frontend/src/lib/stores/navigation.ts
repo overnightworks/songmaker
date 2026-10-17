@@ -1,3 +1,4 @@
+import { listOfPage, SETTINGS_HREF } from '$lib/routes/pageBack';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { get, writable } from 'svelte/store';
@@ -7,6 +8,8 @@ import {
 	attachLandingHandler,
 	releaseLayerEntriesForTests,
 	stepBackOffStandingEntry,
+	stepBackOr,
+	stepBackOrGoTo,
 	type Landing
 } from '$lib/history/historyController';
 import { describeFailure, isNotFound } from '$lib/api/fetch';
@@ -331,20 +334,20 @@ export function leaveForLogout(logout: () => void | Promise<void>): Promise<void
 // re-opening it is a no-op that still refreshes its history entry.
 export function openCollectionEntry(collection: OpenCollection): void {
 	if (get(selectedSongId) !== null) {
-		backToCollection();
+		void backToCollection();
 		return;
 	}
 	if (collection.kind === 'album') void openAlbum(collection.id);
 	else void openPlaylist(collection.id);
 }
 
-export function backToCollection(): void {
-	void guardDirtyNavigation(() => {
+export function backToCollection(): Promise<void> {
+	return guardDirtyNavigation(() => {
 		selectedSongId.set(null);
 		selectedGenerationId.set(null);
 		openTakesTab();
 		setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
-		void replaceLibraryHistory();
+		return replaceLibraryHistory();
 	});
 }
 
@@ -398,30 +401,21 @@ async function openPlaylistsWall(): Promise<void> {
 	});
 }
 
-// The lists a page's ‹ opens when no page of the tab's own lies below it
-// (#1354 rule 25): until the phone tabs arrive, the Library, which still lists
-// albums and playlists alike, the Playlists page, which a playlist belongs to,
-// and the Settings list.
-export type PageList = typeof LIBRARY_ROUTE_PATH | typeof PLAYLISTS_ROUTE_PATH | '/settings';
+type PageList = typeof LIBRARY_ROUTE_PATH | typeof PLAYLISTS_ROUTE_PATH;
 
-// A page's list, written over the page rather than pushed, so the list's own
-// ‹ goes on rather than back to the page it replaced. The Library and the
-// Playlists page are walls, which the library shows from its own stores and so
-// writes as its own entry: a route written over an album would leave the album
-// on screen under the new address. Nothing asks about a draft here yet, since
-// the song, the one page with a draft, carries its own bar without ‹; a way
-// out of a song that comes to open a list asks here, as every other way out
-// of a song does.
-export function openListOverPage(list: PageList): Promise<void> {
-	if (list === LIBRARY_ROUTE_PATH) {
-		showLibraryWall();
-		return replaceLibraryHistory();
-	}
-	if (list === PLAYLISTS_ROUTE_PATH) {
-		showPageOverCollection('playlists')();
-		return replaceLibraryHistory();
-	}
-	return goto(resolve(list), { replaceState: true });
+// Library walls restore their stores as well as replacing the address.
+function openListOverPage(list: PageList): Promise<void> {
+	if (list === LIBRARY_ROUTE_PATH) showLibraryWall();
+	else showPageOverCollection('playlists')();
+	return replaceLibraryHistory();
+}
+
+// Only the domain fallback belongs here; the controller owns traversal.
+export function stepBackFromPage(pathname: string): Promise<void> {
+	if (isSongRoutePath(pathname)) return stepBackOr(backToCollection);
+	const list = listOfPage(pathname);
+	if (list === SETTINGS_HREF) return stepBackOrGoTo(list);
+	return stepBackOr(() => openListOverPage(list));
 }
 
 interface AlbumTrackNeighbors {
