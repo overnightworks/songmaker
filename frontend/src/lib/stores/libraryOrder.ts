@@ -21,7 +21,7 @@ type LibraryPlaceOrder = {
 // 'failed' only while no read has ranked the places yet: a failed read keeps
 // a ranking already known. 'outdated' is a ranking that a listen recorded
 // since has overtaken: it keeps the places in order until the next read.
-type ListenReadState = 'unread' | 'failed' | 'ranked' | 'outdated';
+export type ListenReadState = 'unread' | 'failed' | 'ranked' | 'outdated';
 
 const lastPlayed = writable<ReadonlyMap<string, LastPlayed>>(new Map());
 const listenRead = writable<ListenReadState>('unread');
