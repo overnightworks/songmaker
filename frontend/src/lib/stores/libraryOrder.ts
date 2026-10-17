@@ -117,7 +117,7 @@ async function readEveryPlayedPlace(): Promise<LibraryListenItem[] | null> {
 // failed read still lets the page stop waiting, standing the places in title
 // order until the next read ranks them.
 export function readLastPlayed(): Promise<boolean> {
-	if (lastPlayedRead) return lastPlayedRead;
+	if (lastPlayedRead !== null) return lastPlayedRead;
 	const generation = lastPlayedGeneration;
 	listenRecordedDuringRead = false;
 	const read = readEveryPlayedPlace().then((places) => {
@@ -150,7 +150,7 @@ export function ensureLastPlayedRead(): Promise<boolean> {
 // The player calls this once a listen is recorded: a take merely loaded or
 // restored is no listen, and Listen ranks only what was recorded.
 export function outdateLastPlayedRanking(): void {
-	if (lastPlayedRead) listenRecordedDuringRead = true;
+	if (lastPlayedRead !== null) listenRecordedDuringRead = true;
 	listenRead.update((state) => (state === 'ranked' ? 'outdated' : state));
 }
 
