@@ -1,8 +1,0 @@
-claim_id = "7ceac652ae6147c5902e81dc62a2ce94"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "e47d123902a42fc5d71210846288e048fa6e9f6c"
-branch = "claude/issue-1591-one-back-owner"
-scope = ["docs/architecture.md", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/routes/addresses.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/routes/pageBack.test.ts", "frontend/src/lib/routes/pageBack.ts", "frontend/src/lib/routes/standingAddress.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/routes/layout.test.ts"]
-opened_commit = "ebb3f0e39d109607f18f1d2d30d30f10c3d34f84"
-whole_reason = "The naming extraction, controller-composed fallback, guarded song Back and their existing test/documentation pins form one observable draft-safe navigation change; splitting them would leave the song control or its safety proof incomplete."
