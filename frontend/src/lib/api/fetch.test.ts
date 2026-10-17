@@ -350,17 +350,16 @@ describe('refusal reactions', () => {
 		}
 	);
 
-	it.each(clients)(
-		'925_M3_P3: with nothing installed a 429 still rejects with its ApiError through $client',
-		async ({ request }) => {
-			serverRefusesWith(429);
+	// Through apiFetch the same guarantee is pinned by 'carries status and
+	// Retry-After seconds on the ApiError' above, which installs nothing either.
+	it('925_M3_P3: with nothing installed a 429 still rejects with its ApiError through sseFetch', async () => {
+		serverRefusesWith(429);
 
-			const failure = await request('/api/songs').catch((e: unknown) => e);
+		const failure = await throughSseFetch('/api/songs').catch((e: unknown) => e);
 
-			expect(failure).toBeInstanceOf(ApiError);
-			expect((failure as ApiError).status).toBe(429);
-		}
-	);
+		expect(failure).toBeInstanceOf(ApiError);
+		expect((failure as ApiError).status).toBe(429);
+	});
 
 	it('925_M3_P4: an uninstall puts back the set installed before it, and after the last one a 429 reaches no reaction', async () => {
 		const told: string[] = [];

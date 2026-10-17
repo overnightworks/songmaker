@@ -14,7 +14,7 @@ import {
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
+import { createRawSnippet, flushSync, mount, tick, unmount, type Snippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -201,10 +201,10 @@ function minUsedWidth(el: Element): number {
 	return px(style.minWidth) || px(style.width);
 }
 
-async function renderLayout(path: string): Promise<HTMLElement> {
+async function renderLayout(path: string, pageContent: Snippet = children): Promise<HTMLElement> {
 	currentUser.set(USER);
 	authLoading.set(false);
-	const target = mountLayout(path);
+	const target = mountLayout(path, pageContent);
 	await tick();
 	await Promise.resolve();
 	await tick();
@@ -213,11 +213,11 @@ async function renderLayout(path: string): Promise<HTMLElement> {
 
 // Mounts the layout the way the router starts a page: on `path`, reporting
 // the `enter` navigation once it is mounted.
-function mountLayout(path: string): HTMLElement {
+function mountLayout(path: string, pageContent: Snippet = children): HTMLElement {
 	fakePage.url = new URL(`https://songmaker.test${path}`);
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(Layout, { target, props: { children } });
+	mounted = mount(Layout, { target, props: { children: pageContent } });
 	flushSync();
 	reportFakeRouterEnter();
 	return target;
@@ -1207,17 +1207,19 @@ describe('a 429 under the mounted layout', () => {
 		);
 	});
 
-	it('925_M3_L1: the first request the layout itself sends already raises the throttle toast', async () => {
-		vi.mocked(checkAuth).mockImplementationOnce(async () => {
-			await aThrottledRead();
-			currentUser.set(USER);
-			authLoading.set(false);
-			return USER;
-		});
+	it('925_M3_L1: a request sent while the layout mounts is already reported to the throttle reaction', async () => {
+		let sentWhileMounting: Promise<unknown> = Promise.resolve();
+		const sendsARequestWhenMounted = createRawSnippet(() => ({
+			render: () => '<main></main>',
+			setup: () => {
+				sentWhileMounting = aThrottledRead();
+			}
+		}));
 
-		await renderLayout(LIBRARY_ROUTE_PATH);
+		await renderLayout(LIBRARY_ROUTE_PATH, sendsARequestWhenMounted);
+		await sentWhileMounting;
 
-		await vi.waitFor(() => expect(throttleToasts()).toHaveLength(1));
+		expect(throttleToasts()).toHaveLength(1);
 	});
 
 	it('925_M3_L2: a burst of 429s on ordinary requests raises the throttle toast once', async () => {
