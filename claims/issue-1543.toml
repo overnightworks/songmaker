@@ -1,0 +1,8 @@
+claim_id = "bc0f975ac6b440498ecbeb198f71475e"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "01cb44979b77acbd38b33923b4cdc9be82eca0d0"
+branch = "claude/issue-1543-m2-share-client"
+scope = ["docs/architecture.md", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/api/queue-streams.test.ts", "frontend/src/lib/api/queue-streams.ts", "frontend/src/lib/api/shared.test.ts", "frontend/src/lib/api/shared.ts", "frontend/src/lib/share/sharedCollection.ts", "frontend/src/routes/share"]
+opened_commit = "8c3a919afec63492eb43107a2849e4bb654c9b62"
+whole_reason = "One share client replaces five raw fetch sites; the client, its four pages, the stream callers, the transport rule and their tests move together."
