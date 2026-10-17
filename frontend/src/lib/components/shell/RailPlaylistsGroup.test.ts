@@ -227,6 +227,29 @@ describe('RailPlaylistsGroup', () => {
 		await vi.waitFor(() => expect(playlistTitles()).toEqual(['night drive', 'Mix 10', 'Mix 2']));
 	});
 
+	it('1354_rule_8: lists no playlist while Last played is chosen and Listen has not answered', async () => {
+		playlistList.set([
+			playlist({ id: 'mix', title: 'Mix' }),
+			playlist({ id: 'night', title: 'night drive' })
+		]);
+		fetchPlaylists.mockResolvedValue(get(playlistList));
+		const listen = Promise.withResolvers<ReturnType<typeof lastPlayedPage>>();
+		vi.mocked(fetchLibraryListen).mockReturnValue(listen.promise);
+		chooseLibraryWallOrder('played');
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+		const playlistTitles = () =>
+			Array.from(target.querySelectorAll('.playlist-label .row-title')).map(
+				(row) => row.textContent
+			);
+
+		expect(playlistTitles()).toEqual([]);
+
+		listen.resolve(lastPlayedPage('playlist', ['night']));
+		await vi.waitFor(() => expect(playlistTitles()).toEqual(['night drive', 'Mix']));
+	});
+
 	it('loads every playlist on mount regardless of the current route', async () => {
 		await render();
 		await vi.waitFor(() => expect(fetchPlaylists).toHaveBeenCalled());

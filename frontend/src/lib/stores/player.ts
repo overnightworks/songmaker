@@ -54,6 +54,7 @@ import {
 import { handleSessionLost } from '$lib/stores/auth';
 import { addToast } from '$lib/stores/toast';
 import { offline, whenBackOnline } from '$lib/stores/connectivity';
+import { outdateLastPlayedRanking } from '$lib/stores/libraryOrder';
 import {
 	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
@@ -1946,9 +1947,11 @@ function recordFirstTakeListen(): void {
 	const listenKey = `${current.generation.id}:${playlistId ?? ''}`;
 	if (recordedListens.has(listenKey)) return;
 	recordedListens.add(listenKey);
-	void recordSongListen(current.songId, playlistId).catch((error: unknown) => {
-		console.error('Could not record song listen:', error);
-	});
+	void recordSongListen(current.songId, playlistId)
+		.then(outdateLastPlayedRanking)
+		.catch((error: unknown) => {
+			console.error('Could not record song listen:', error);
+		});
 }
 
 function handlePlaybackStarted(): void {

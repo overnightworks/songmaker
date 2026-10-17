@@ -4,7 +4,11 @@
 	import { PLAYLISTS_ROUTE_PATH, standsOnPlaylistsPage } from '$lib/routes/addresses';
 	import { standingPathname } from '$lib/routes/standingAddress';
 	import { openCollection } from '$lib/stores/collection';
-	import { librarySurface, playlistWhoseDetailShows } from '$lib/stores/libraryContext';
+	import {
+		librarySurface,
+		playlistsWallShows,
+		playlistWhoseDetailShows
+	} from '$lib/stores/libraryContext';
 	import { openPlaylist, openRailSearchTarget } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
@@ -52,9 +56,7 @@
 	// The Playlists wall is the surface in view: it unfolds the group (#1354 D3).
 	// The surface stays `playlists` after leaving for Settings, so it does not make
 	// the word current (#1523).
-	const playlistsWallIsSurface = $derived(
-		$librarySurface === 'playlists' && $selectedSongId === null
-	);
+	const playlistsWallIsSurface = $derived(playlistsWallShows($librarySurface, $selectedSongId));
 	const onPlaylistsPage = $derived(
 		playlistsWallIsSurface && standsOnPlaylistsPage(standingPathname(page.state))
 	);
