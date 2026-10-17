@@ -42,6 +42,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     update_job_status,
 )
+from songmaker_cli.jobs.generation_failure import musician_job_response
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.settings import get_settings
 
@@ -65,7 +66,7 @@ def api_get_job(
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     job = _check_job_access(session, job_id, user)
-    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
+    return musician_job_response(job, queue_position=get_queue_position(session, job))
 
 
 @router.get(
@@ -124,7 +125,7 @@ def _fetch_job_response(ctx: AppContext, job_id: str) -> JobResponse | None:
         job = get_job(db_session, job_id)
         if not job:
             return None
-        return JobResponse.from_orm(
+        return musician_job_response(
             job,
             queue_position=get_queue_position(db_session, job),
         )
@@ -265,7 +266,7 @@ def api_cancel_job(
 
     abort_web_cover_job(request.app, job_id)
     job = get_job(session, job_id)
-    return JobResponse.from_orm(job)
+    return musician_job_response(job)
 
 
 def _check_job_access(session: Session, job_id: str, user: AuthenticatedUser) -> Job:

@@ -15,8 +15,8 @@ import fakeredis.aioredis
 import httpx
 import pytest
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
+from conftest import SONGMAKER_FAILURE_CASES
 
-from acestep_engine.errors import AudioDownloadError
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
@@ -64,7 +64,6 @@ from songmaker_cli.jobs.generation import GenerationJobRequest, GenerationProgre
 from songmaker_cli.scheduler import (
     WORKER_STREAM_WENT_SILENT,
     GenerationTaskResultDTO,
-    NoCapacityError,
     WorkerGenerationFailed,
     WorkerModeNotLoaded,
     WorkerProtocolError,
@@ -920,39 +919,58 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
 
 
 _GENERATION_FAILURE_CASES = [
-    pytest.param(WorkerTaskFailed("need 18.5 GB"), JOB_ERROR_GENERATION_FAILED, id="vram"),
-    pytest.param(WorkerGenerationFailed("generation failed (no detail from ACE-Step)"),
-                 JOB_ERROR_GENERATION_FAILED, id="no-detail"),
-    pytest.param(WorkerGenerationFailed(WORKER_STREAM_WENT_SILENT),
-                 JOB_ERROR_GENERATION_FAILED, id="silence"),
-    pytest.param(WorkerProtocolError("Worker done event missing 'result' field"),
-                 JOB_ERROR_GENERATION_FAILED, id="missing-result"),
-    pytest.param(WorkerProtocolError("Invalid result DTO"),
-                 JOB_ERROR_GENERATION_FAILED, id="invalid-result"),
-    pytest.param(WorkerTaskFailed("Stream ended without terminal event"),
-                 JOB_ERROR_GENERATION_FAILED, id="stream-end"),
-    pytest.param(WorkerModeNotLoaded("mode evicted"), JOB_ERROR_GENERATION_FAILED, id="mode"),
-    pytest.param(WorkerGenerationFailed("Generation timed out"),
-                 JOB_ERROR_GENERATION_FAILED, id="worker-mimics-own-line"),
-    pytest.param(TimeoutError("private timeout"), "Generation timed out", id="timeout"),
-    pytest.param(AudioDownloadError("private download"),
-                 "Failed to download generated audio", id="download"),
-    pytest.param(ConnectionError("private connection"), "ACE-Step server not reachable",
-                 id="connection"),
-    pytest.param(NoCapacityError("private capacity"), "No ACE-Step workers available",
-                 id="capacity"),
-    pytest.param(RuntimeError("private runtime"), "Internal error during processing",
-                 id="runtime"),
-    pytest.param(ValueError("private unknown"), "An unexpected error occurred", id="unknown"),
+    pytest.param((WorkerTaskFailed, "need 18.5 GB", JOB_ERROR_GENERATION_FAILED), id="vram"),
+    pytest.param(
+        (
+            WorkerGenerationFailed,
+            "generation failed (no detail from ACE-Step)",
+            JOB_ERROR_GENERATION_FAILED,
+        ),
+        id="no-detail",
+    ),
+    pytest.param(
+        (WorkerGenerationFailed, WORKER_STREAM_WENT_SILENT, JOB_ERROR_GENERATION_FAILED),
+        id="silence",
+    ),
+    pytest.param(
+        (
+            WorkerProtocolError,
+            "Worker done event missing 'result' field",
+            JOB_ERROR_GENERATION_FAILED,
+        ),
+        id="missing-result",
+    ),
+    pytest.param(
+        (WorkerProtocolError, "Invalid result DTO", JOB_ERROR_GENERATION_FAILED),
+        id="invalid-result",
+    ),
+    pytest.param(
+        (WorkerTaskFailed, "Stream ended without terminal event", JOB_ERROR_GENERATION_FAILED),
+        id="stream-end",
+    ),
+    pytest.param((WorkerModeNotLoaded, "mode evicted", JOB_ERROR_GENERATION_FAILED), id="mode"),
+    pytest.param(
+        (WorkerGenerationFailed, "Generation timed out", JOB_ERROR_GENERATION_FAILED),
+        id="worker-mimics-own-line",
+    ),
 ]
 
 
-@pytest.mark.parametrize("failure,expected", _GENERATION_FAILURE_CASES)
+@pytest.mark.parametrize(
+    "generation_failure_case",
+    _GENERATION_FAILURE_CASES + SONGMAKER_FAILURE_CASES,
+    indirect=True,
+)
 @pytest.mark.parametrize("write_site", ["failed", "partial", "outer"])
 def test_generation_job_selects_musician_line(
-    seeded_db, tmp_path: Path, failure, expected, write_site, caplog,
+    seeded_db,
+    tmp_path: Path,
+    generation_failure_case,
+    write_site,
+    caplog,
 ) -> None:
-    """defect:#1569: Each cause is sanitized at all three Generate write sites."""
+    """L11: Each cause is sanitized at all three Generate write sites."""
+    failure, expected = generation_failure_case
     completed = int(write_site == "partial")
     outcomes = [_make_dto()] * completed + [failure]
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(
