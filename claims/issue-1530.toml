@@ -1,8 +1,0 @@
-claim_id = "e3dc32060eef4e72a9b8e34e1734b4b8"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "e00448198d1e032a6cce5c645cb86cb0d44a9c59"
-branch = "claude/issue-1530-m3-rate-limit-port"
-scope = ["docs/architecture.md", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/rateLimitNotice.test.ts", "frontend/src/lib/stores/rateLimitNotice.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
-opened_commit = "9edb9fd6d5e8907693d9a9979531a3710992583d"
-whole_reason = "The port, its one reaction owner, the layout install and their tests are one contract; a split leaves the transport toasting or the 429 unreported."
