@@ -59,6 +59,7 @@ import {
 	boundingBoxes,
 	containing,
 	FlowGuard,
+	MOBILE_VIEWPORT,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openRailNav,
@@ -541,7 +542,10 @@ test.describe('song page at phone width', () => {
 					.getAttribute('aria-label');
 				if (!expectedName) throw new Error('Expected the song Back name');
 				const coldContext = await browser.newContext({
-					storageState: await context.storageState()
+					storageState: await context.storageState(),
+					viewport: MOBILE_VIEWPORT,
+					isMobile: true,
+					hasTouch: true
 				});
 				try {
 					const cold = await coldContext.newPage();
