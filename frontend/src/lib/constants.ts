@@ -230,6 +230,10 @@ export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remainin
 // Named when an admin panel's first read fails while no offline strip says why.
 export const WORKER_POOL_LOAD_FAILED = 'Cannot reach the worker pool API.';
 export const WORKER_POOL_REFRESH_FAILED = 'Worker pool not updating — retrying…';
+export const WORKER_POOL_MODELS_LABEL = 'Models on this GPU';
+export const WORKER_POOL_KEEP_LOADED_LABEL = 'Keep loaded';
+export const WORKER_POOL_KEEP_LOADED_HINT = 'Keep loaded — never unloaded to make room';
+export const WORKER_POOL_UNLOAD_LABEL = 'Unload';
 export const WORKER_POOL_VRAM_LABEL = 'VRAM';
 export const WORKER_POOL_VRAM_UNKNOWN = 'unknown';
 export const WORKER_POOL_VRAM_ESTIMATE = 'est.';

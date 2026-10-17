@@ -20,10 +20,6 @@ import WorkerPoolPanel from './WorkerPoolPanel.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
-// Button text is split across template lines (e.g. "{isPinned ? 'Unpin' :
-// 'Pin'} {loadedDetail.mode}"), so textContent carries the whitespace
-// between them -- normalize before matching, both when asserting a button
-// exists and when asserting one doesn't.
 function findButtonByText(root: HTMLElement, text: string): HTMLButtonElement | undefined {
 	return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
 		button.textContent?.replace(/\s+/g, ' ').trim().includes(text)
@@ -83,6 +79,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	resetConnectivityForTests();
 	vi.useRealTimers();
+	vi.unstubAllGlobals();
 });
 
 function offlineWorkerPool(lastRegisterAt: string): WorkerPoolResponse {
@@ -208,7 +205,7 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 	// non-null. The panel must not read state-presence as "Idle" — the red
 	// status icon and the row text must agree, and nothing must be
 	// clickable.
-	it('names the GPU failure from the heartbeat and disables every action', async () => {
+	it('defect:#1573 names the GPU failure from the heartbeat and disables every action', async () => {
 		const target = await renderHeartbeatingButOffline(false, 'Driver/library version mismatch');
 
 		expect(target.textContent).toContain('GPU unavailable — Driver/library version mismatch');
@@ -220,11 +217,8 @@ describe('WorkerPoolPanel with a heartbeating but GPU-broken worker', () => {
 		for (const button of buttons) {
 			expect(button.disabled).toBe(true);
 		}
-		// No Pin/Evict buttons for its loaded "sft" either, even though this
-		// worker's heartbeat reports one loaded -- being offline hides them,
-		// it doesn't just leave them disabled.
-		expect(findButtonByText(target, 'Pin sft')).toBeUndefined();
-		expect(findButtonByText(target, 'Evict sft')).toBeUndefined();
+		expect(target.querySelector('[role="switch"]')).toBeNull();
+		expect(findButtonByText(target, 'Unload')).toBeUndefined();
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
 		expect(select?.disabled).toBe(true);
 	});
@@ -304,7 +298,7 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 	// this change may make a genuinely healthy worker's actions
 	// unreachable. Without this, a guard that fails "always disabled" would
 	// pass every offline test and still be a regression.
-	it('leaves the mode-select, Load, Pin, Evict, and Restart all usable', async () => {
+	it('defect:#1573 leaves Load, Keep loaded, Unload, and Restart usable', async () => {
 		const target = await renderOnline();
 
 		const select = target.querySelector<HTMLSelectElement>('select.mode-select');
@@ -319,13 +313,8 @@ describe('WorkerPoolPanel with a healthy online worker', () => {
 		if (!loadButton) throw new Error('Expected a Load button to be rendered');
 		expect(loadButton.disabled).toBe(false);
 
-		const pinButton = findButtonByText(target, 'Pin sft');
-		if (!pinButton) throw new Error('Expected a Pin button for the loaded model');
-		expect(pinButton.disabled).toBe(false);
-
-		const evictButton = findButtonByText(target, 'Evict sft');
-		if (!evictButton) throw new Error('Expected an Evict button for the loaded model');
-		expect(evictButton.disabled).toBe(false);
+		expect(target.querySelector('[role="switch"][aria-label="Keep loaded sft"]')).toBeEnabled();
+		expect(target.querySelector('[aria-label="Unload sft"]')).toBeEnabled();
 
 		const restartButton = findButtonByText(target, 'Restart');
 		if (!restartButton) throw new Error('Expected a Restart button to be rendered');
@@ -477,4 +466,124 @@ describe('WorkerPoolPanel failures', () => {
 
 		expect(target.textContent).toContain('12.4');
 	});
+});
+
+describe('WorkerPoolPanel model rows', () => {
+	const models = [
+		{ mode: 'sft', size_gb: 6 },
+		{ mode: 'turbo', size_gb: 6.4 },
+		{ mode: 'xl-turbo', size_gb: 12 }
+	];
+
+	function modelsPool(count = 3): WorkerPoolResponse {
+		const pool = onlineWorkerPool();
+		if (!pool.workers[0].state) throw new Error('Expected a heartbeat');
+		pool.workers[0].state.loaded = models.slice(0, count);
+		pool.workers[0].state.pinned = ['sft', 'xl-turbo'];
+		return pool;
+	}
+
+	it.each([1, 3])('defect:#1573 renders %i model rows from the heartbeat', async (count) => {
+		const target = await renderVramPool(modelsPool(count));
+		const list = target.querySelector('[aria-label="Models on this GPU"]');
+		expect(list).not.toBeNull();
+		expect(list?.querySelectorAll('[role="group"]')).toHaveLength(count);
+		for (const model of models.slice(0, count)) {
+			const row = list?.querySelector(`[aria-label="${model.mode}"]`);
+			expect(row).toHaveTextContent(`${model.mode} ~${model.size_gb.toFixed(0)} GB`);
+			expect(row?.querySelector('[role="switch"]')).toHaveAttribute(
+				'aria-checked',
+				String(model.mode !== 'turbo')
+			);
+			expect(row?.querySelector(`[aria-label="Unload ${model.mode}"]`)).toBeEnabled();
+		}
+		expect(target.textContent?.match(/Keep loaded — never unloaded to make room/g)).toHaveLength(1);
+		expect(target.textContent).not.toContain('Loaded:');
+		expect(target.textContent).not.toMatch(/\b(?:Pin|Unpin|Evict)\b/);
+	});
+
+	it.each(
+		[
+			{ action: 'pin_model', mode: 'turbo', label: 'Keep loaded', kept: false },
+			{ action: 'unpin_model', mode: 'sft', label: 'Keep loaded', kept: true },
+			{ action: 'evict_model', mode: 'sft', label: 'Unload', kept: true }
+		].flatMap((action) => [false, true].map((refused) => ({ ...action, refused })))
+	)(
+		'defect:#1573 $action targets its model, waits for refresh, and handles refusal=$refused',
+		async ({ action, mode, label, kept, refused }) => {
+			const pool = modelsPool();
+			const target = await renderVramPool(pool);
+			let finish!: (response: Response) => void;
+			const request = new Promise<Response>((resolve) => {
+				finish = resolve;
+			});
+			const requests: { path: string; method?: string; body: unknown }[] = [];
+			vi.stubGlobal('fetch', (path: string, init: RequestInit) => {
+				requests.push({ path, method: init.method, body: JSON.parse(String(init.body)) });
+				return request;
+			});
+			const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} ${mode}"]`);
+			if (!button) throw new Error('Expected a model control');
+			button.click();
+			await tick();
+			expect(button).toBeDisabled();
+			button.click();
+			expect(requests).toEqual([
+				{
+					path: `/api/admin/workers/acestep-worker-0/${action}`,
+					method: 'POST',
+					body: { mode }
+				}
+			]);
+			expect(target.querySelector(`[aria-label="${mode}"]`)).not.toBeNull();
+			if (label === 'Keep loaded') expect(button).toHaveAttribute('aria-checked', String(kept));
+			const updated = modelsPool();
+			const state = updated.workers[0].state;
+			if (!state) throw new Error('Expected a heartbeat');
+			if (action === 'evict_model')
+				state.loaded = state.loaded.filter((model) => model.mode !== mode);
+			state.pinned = kept
+				? state.pinned?.filter((pin) => pin !== mode)
+				: [...(state.pinned ?? []), mode];
+			if (!refused) api.listWorkers.mockResolvedValue(updated);
+			finish(
+				Response.json(refused ? { detail: 'Worker returned 409' } : {}, {
+					status: refused ? 502 : 200
+				})
+			);
+			await vi.waitFor(() => {
+				if (refused) {
+					expect(target.querySelector('.panel-error')).toHaveTextContent('Worker returned 409');
+					expect(button).toBeEnabled();
+					expect(target.querySelector(`[aria-label="${mode}"]`)).not.toBeNull();
+					if (label === 'Keep loaded') expect(button).toHaveAttribute('aria-checked', String(kept));
+				} else if (action === 'evict_model') {
+					expect(target.querySelector(`[aria-label="${mode}"]`)).toBeNull();
+				} else {
+					expect(button).toBeEnabled();
+					expect(button).toHaveAttribute('aria-checked', String(!kept));
+				}
+			});
+			expect(target.querySelector('[aria-label="xl-turbo"]')).toHaveTextContent('~12 GB');
+			expect(target.querySelector('[aria-label="Keep loaded xl-turbo"]')).toHaveAttribute(
+				'aria-checked',
+				'true'
+			);
+		}
+	);
+
+	it.each(['loading', 'training'])(
+		'defect:#1573 disables model actions during %s',
+		async (busy) => {
+			const pool = modelsPool();
+			const state = pool.workers[0].state;
+			if (!state) throw new Error('Expected a heartbeat');
+			if (busy === 'loading') state.target_loading = 'base';
+			else state.training_hold_seconds = 12;
+			const target = await renderVramPool(pool);
+			const buttons = target.querySelectorAll('[aria-label="Models on this GPU"] button');
+			expect(buttons).toHaveLength(6);
+			for (const button of buttons) expect(button).toBeDisabled();
+		}
+	);
 });

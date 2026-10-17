@@ -289,10 +289,10 @@ How pinning interacts with the cache:
 - `POST /api/admin/workers/{id}/pin_model` requires the model to already be loaded (returns 409 otherwise).
 - `_evict_to_fit` builds the eviction plan in LRU order, skipping pinned **and** in-use models, and only executes it once the plan proves sufficient.
 - If **all** loaded models are pinned (or otherwise ineligible) and the plan still doesn't fit, the cache raises `CapacityError` with a clear message naming the loaded, in-use, and pinned sets — without evicting anything. The admin must explicitly unpin one before the next load can succeed.
-- Explicit `evict_model` (the admin "Evict X" button) unpins implicitly — the operator asked for it. `_evict_to_fit` (LRU) does not unpin.
+- Explicit `evict_model` (the admin **Unload** button) unpins implicitly — the operator asked for it. `_evict_to_fit` (LRU) does not unpin.
 - Worker shutdown (`evict_all`) drains everything regardless of pin state.
 
-Pin/unpin from the admin UI: each loaded-mode row in the Worker Pool card has a **Pin** / **Unpin** button next to its **Evict** button. The button reflects the current state from the heartbeat (`pinned: list[str]`).
+Pin/unpin from the admin UI: each model row under **Models on this GPU** in the Worker Pool card has a **Keep loaded** switch next to its **Unload** button. The switch reflects the current state from the heartbeat (`pinned: list[str]`); Keep loaded prevents automatic unloading to make room, while explicit Unload also clears the pin.
 
 ### Load-while-generating refcount
 
