@@ -385,6 +385,7 @@ async function turnPhoneToLandscapeAndBack(page: Page): Promise<void> {
 	await page.setViewportSize({ width: portrait.height, height: portrait.width });
 	await expect(workspace(page).locator('.library-row')).toHaveCount(0);
 	await page.setViewportSize(portrait);
+	await expect(workspace(page).locator('.library-row')).toHaveCount(fixture.albums.length);
 	await expectRows(page);
 }
 
