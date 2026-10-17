@@ -85,7 +85,7 @@ class WorkerGenerationFailed(WorkerTaskFailed):
 
     Its message is ACE-Step's own cause from an ``error`` event, or the
     scheduler's ``WORKER_STREAM_WENT_SILENT`` cause after ``httpx.ReadTimeout``.
-    The job layer logs and stores this cause verbatim for the musician.
+    The Generate job layer logs this cause and stores a generic musician-facing line.
     """
 
 
@@ -425,7 +425,7 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
 
     ``error_exception_type`` is raised for a real (non-empty) ``error``
     event, so a caller can distinguish a generation failure — whose message
-    is ACE-Step's own cause, shown verbatim to the user — from any other
+    is ACE-Step's own cause, retained for logging — from any other
     task kind's failure.
 
     Raises ``WorkerProtocolError`` when an SSE event violates the wire
