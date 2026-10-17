@@ -1765,6 +1765,33 @@ def test_get_session_not_found(db_session: Session) -> None:
     assert get_session_with_user(db_session, "nonexistent") is None
 
 
+@pytest.mark.parametrize("commit", [False, True])
+def test_session_renewal_is_owned_by_the_callers_transaction(db_session: Session, commit) -> None:
+    """defect:#1590: renewal persists only with its caller's commit."""
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.db.queries import renew_session
+
+    user = _make_user(db_session)
+    old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    record = create_session(db_session, user.id, old_expiry, ip_address="old", user_agent="old")
+    session_id = record.id
+    db_session.commit()
+    new_expiry = old_expiry + timedelta(hours=1)
+    assert renew_session(
+        db_session, session_id, expires_at=new_expiry, ip_address="new", user_agent="new",
+    ) is True
+    if commit:
+        db_session.commit()
+    else:
+        db_session.rollback()
+    db_session.expire_all()
+    renewed = get_session_with_user(db_session, session_id)
+    assert renewed.expires_at.replace(tzinfo=timezone.utc) == (new_expiry if commit else old_expiry)
+    expected_origin = ("new", "new") if commit else ("old", "old")
+    assert (renewed.ip_address, renewed.user_agent) == expected_origin
+
+
 def test_delete_session(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 

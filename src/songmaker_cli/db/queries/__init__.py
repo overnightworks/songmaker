@@ -59,6 +59,7 @@ from songmaker_cli.db.queries.auth import (
 )
 from songmaker_cli.db.queries.auth import record_audit as record_audit
 from songmaker_cli.db.queries.auth import record_login_attempt as record_login_attempt
+from songmaker_cli.db.queries.auth import renew_session as renew_session
 from songmaker_cli.db.queries.auth import update_user as update_user
 from songmaker_cli.db.queries.auth import user_count as user_count
 from songmaker_cli.db.queries.conversations import (

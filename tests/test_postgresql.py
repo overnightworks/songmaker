@@ -522,6 +522,64 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
 
 
 @SKIP_NO_PG
+@pytest.mark.parametrize("first_operation", ["renew", "revoke"])
+def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_operation) -> None:
+    """defect:#1590: either lock order ends with revocation, never resurrection."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from songmaker_cli.auth_stores import DatabaseSessionRecordStore
+    from songmaker_cli.db.queries import create_user
+
+    now = datetime.now(timezone.utc)
+    with pg_factory() as db:
+        user = create_user(db, "renew-revoke", "hashed")
+        record = create_session(db, user.id, now + timedelta(hours=1))
+        db.commit()
+        session_id = record.id
+        db.expunge(record)
+
+    competing_statement = threading.Event()
+
+    def compete():
+        with pg_factory() as db:
+            db.execute(text("SET lock_timeout = '5s'"))
+            store = DatabaseSessionRecordStore(db, session_max_age_seconds=3600)
+
+            def statement_started(conn, cursor, statement, parameters, context, executemany):
+                if context.isupdate or context.isdelete:
+                    competing_statement.set()
+
+            event.listen(db.connection(), "before_cursor_execute", statement_started)
+            if first_operation == "renew":
+                store.delete(session_id)
+                result = None
+            else:
+                result = store.touch(record, ip_address="new", user_agent="new", now=now)
+            db.commit()
+            return result
+
+    with ThreadPoolExecutor(max_workers=1) as executor, pg_factory() as db:
+        store = DatabaseSessionRecordStore(db, session_max_age_seconds=3600)
+        if first_operation == "renew":
+            loaded = store.load(session_id)
+            assert store.touch(loaded, ip_address="new", user_agent="new", now=now) is True
+        else:
+            store.delete(session_id)
+        future = executor.submit(compete)
+        try:
+            assert competing_statement.wait(timeout=5), "Competing statement never started"
+            db.commit()
+        finally:
+            db.rollback()
+        result = future.result(timeout=10)
+        if first_operation == "revoke":
+            assert result is False
+
+    with pg_factory() as db:
+        assert db.get(UserSession, session_id) is None
+
+
+@SKIP_NO_PG
 def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
     max_sessions = 3
     thread_count = 10

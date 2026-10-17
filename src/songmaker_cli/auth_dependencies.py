@@ -1,10 +1,7 @@
 """songmaker's binding of the library's auth dependencies to its own request.
 
-The stores arrive as dependencies over `get_db_session`, so FastAPI's
-dependency cache hands the endpoint, the session store, and the audit sink
-one and the same SQLAlchemy session: the session renewal and the audit
-record become durable exactly when the endpoint commits, and vanish with the
-rest of the request when it does not.
+Regular dependencies commit authentication in a short, separate transaction
+before the endpoint runs. Stream callers own their explicit transaction.
 """
 
 from __future__ import annotations
@@ -16,7 +13,7 @@ from webauth.config import WebAuthConfig, web_auth_config
 from webauth.dependencies import AuthenticatedUser, current_user_dependency
 from webauth.users import UserManagement
 
-from songmaker_cli.app_context import get_db_session
+from songmaker_cli.app_context import get_app_context, get_db_session
 from songmaker_cli.auth_stores import (
     DatabaseAuditSink,
     DatabaseSessionRecordStore,
@@ -67,9 +64,25 @@ _auth_dependencies = current_user_dependency(
     on_authenticated=_bind_user_to_log_context,
 )
 
-get_current_user = _auth_dependencies.current_user
-require_admin = _auth_dependencies.admin_user
-get_verified_session_id = _auth_dependencies.verified_session_id
+
+def get_current_user(request: Request) -> AuthenticatedUser:
+    """Persist renewal and identity audit without committing endpoint writes."""
+    with get_app_context(request).db.begin() as db:
+        return authenticate_request(request, db)
+
+
+def require_admin(
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> AuthenticatedUser:
+    return _auth_dependencies.admin_user(request, user)
+
+
+def get_verified_session_id(
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> str:
+    return _auth_dependencies.verified_session_id(request, user)
 
 
 def authenticate_request(request: Request, db: Session) -> AuthenticatedUser:
@@ -79,4 +92,6 @@ def authenticate_request(request: Request, db: Session) -> AuthenticatedUser:
     yield dependency stays open until the whole response finishes — which for
     a stream means holding a pooled connection for its entire lifetime.
     """
-    return get_current_user(request, _session_record_store(request, db), DatabaseAuditSink(db))
+    return _auth_dependencies.current_user(
+        request, _session_record_store(request, db), DatabaseAuditSink(db),
+    )

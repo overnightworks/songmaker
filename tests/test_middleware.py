@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from conftest import install_app_context, make_fake_redis, stored_hash, web_client
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.config import installed_web_auth_config
+from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.dependencies import AuthenticatedUser
 
@@ -30,7 +31,7 @@ def _db(tmp_path: Path):
     return init_db(tmp_path / "test.db")
 
 
-def _build_auth_app(_db, redis=None):
+def _build_auth_app(_db, redis=None, *, without_session_cache=False):
     from songmaker_cli.app_context import AppContext, get_db_session
 
     if redis is None:
@@ -41,6 +42,13 @@ def _build_auth_app(_db, redis=None):
     )
     app = FastAPI()
     install_app_context(app, ctx)
+    if without_session_cache:
+        from songmaker_cli.app_context import build_web_auth_config
+        from songmaker_cli.settings import Settings
+
+        install_web_auth_config(app, replace(
+            build_web_auth_config(ctx, Settings()), session_cache=None,
+        ))
 
     @app.get("/protected")
     def protected(
@@ -252,7 +260,108 @@ def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
         entry = db.query(AuditLog).filter(AuditLog.action == "session_ua_change").first()
         assert entry is not None
 
+@pytest.mark.parametrize("commit_fails", [False, True])
+def test_auth_transaction_commits_renewal_and_audit_together(_db, commit_fails) -> None:
+    """defect:#1590: an auth commit failure leaves neither renewal nor audit."""
+    from sqlalchemy import event
+    from starlette.requests import Request
 
+    from songmaker_cli.db.models import AuditLog
+    from songmaker_cli.db.queries import get_session_with_user
+
+    sid = _make_user_and_session(_db)
+    old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        record.expires_at = old_expiry
+        record.ip_address = "192.0.2.1"
+        record.user_agent = "Old/1.0"
+        db.commit()
+
+    app = _build_auth_app(_db, without_session_cache=True)
+    cookie = f"{DEFAULT_SESSION_COOKIE_NAME}={sign_session_id(sid, _TEST_SECRET)}"
+    request = Request({
+        "type": "http", "app": app, "method": "GET", "path": "/protected",
+        "headers": [(b"cookie", cookie.encode()), (b"user-agent", b"New/2.0")],
+        "client": ("192.0.2.2", 1234),
+    })
+
+    def fail_commit(session):
+        raise RuntimeError("Auth commit failed")
+
+    if commit_fails:
+        event.listen(_db, "before_commit", fail_commit)
+    try:
+        if commit_fails:
+            with pytest.raises(RuntimeError, match="Auth commit failed"):
+                get_current_user(request)
+        else:
+            assert get_current_user(request).username.startswith("test_user")
+    finally:
+        if commit_fails:
+            event.remove(_db, "before_commit", fail_commit)
+
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        expiry = record.expires_at.replace(tzinfo=timezone.utc)
+        if commit_fails:
+            assert expiry == old_expiry
+            assert (record.ip_address, record.user_agent) == ("192.0.2.1", "Old/1.0")
+            assert db.query(AuditLog).count() == 0
+        else:
+            assert expiry > old_expiry
+            assert (record.ip_address, record.user_agent) == ("192.0.2.2", "New/2.0")
+            assert {entry.action for entry in db.query(AuditLog).all()} == {
+                "session_ip_change", "session_ua_change",
+            }
+
+
+@pytest.mark.parametrize("endpoint_write", ["none", "uncommitted", "failed"])
+def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_write) -> None:
+    """defect:#1590: GET renewal/audit commit; endpoint work never piggybacks."""
+    from songmaker_cli.app_context import get_db_session
+    from songmaker_cli.db.models import AuditLog
+    from songmaker_cli.db.queries import get_session_with_user, get_user
+
+    sid = _make_user_and_session(_db)
+    old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        record.expires_at = old_expiry
+        record.ip_address = "192.0.2.1"
+        record.user_agent = "Old/1.0"
+        user_id = record.user_id
+        original_name = record.user.username
+        db.commit()
+
+    app = _build_auth_app(_db, without_session_cache=True)
+
+    @app.get("/no-commit")
+    def no_commit(
+        user: AuthenticatedUser = Depends(get_current_user),
+        db: Session = Depends(get_db_session),
+    ):
+        if endpoint_write != "none":
+            get_user(db, user.id).username = "uncommitted-name"
+            db.flush()
+        if endpoint_write == "failed":
+            raise HTTPException(409, "Endpoint failed")
+        return {"username": user.username}
+
+    client = web_client(app, cookies={})
+    client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
+    response = client.get("/no-commit", headers={"user-agent": "New/2.0"})
+    assert response.status_code == (409 if endpoint_write == "failed" else 200)
+    assert "set-cookie" not in response.headers
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        assert record.expires_at.replace(tzinfo=timezone.utc) > old_expiry
+        assert record.user_agent == "New/2.0"
+        assert record.ip_address != "192.0.2.1"
+        assert get_user(db, user_id).username == original_name
+        assert {entry.action for entry in db.query(AuditLog).all()} == {
+            "session_ip_change", "session_ua_change",
+        }
 
 
 # -- Redis session cache integration -----------------------------------------

@@ -223,8 +223,7 @@ def test_active_session_pages_exclude_expired_records(users, sessions) -> None:
 def test_touching_a_session_writes_its_new_origin_and_renews_from_the_supplied_time(
     users, sessions, session, session_max_age_seconds: int,
 ) -> None:
-    """`touch` hands nothing back: the caller keeps working with the record it
-    loaded, so the new origin has to land on that object."""
+    """defect:#1590: renewal returns True and updates the loaded record."""
     user = users.create("nina", _PASSWORD_HASH, "user")
     created = sessions.create(
         user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0",
@@ -232,14 +231,35 @@ def test_touching_a_session_writes_its_new_origin_and_renews_from_the_supplied_t
     session.commit()
     now = datetime(2026, 9, 10, 12, tzinfo=timezone.utc)
 
-    sessions.touch(
+    assert sessions.touch(
         created, ip_address="9.9.9.9", user_agent="New/2.0",
         now=now,
-    )
+    ) is True
 
     assert created.ip_address == "9.9.9.9"
     assert created.user_agent == "New/2.0"
     assert created.expires_at == now + timedelta(seconds=session_max_age_seconds)
+
+
+@pytest.mark.parametrize("removal", ["missing", "deleted", "revoked"])
+def test_touch_does_not_recreate_an_absent_session(users, sessions, session, removal) -> None:
+    """defect:#1590: stale records cannot resurrect missing or revoked rows."""
+    user = users.create("nina", _PASSWORD_HASH, "user")
+    if removal == "missing":
+        record = UserSession(id="missing", user_id=user.id)
+    else:
+        record = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
+        if removal == "deleted":
+            sessions.delete(record.id)
+        else:
+            sessions.delete_for_user(user.id)
+    session.commit()
+
+    assert sessions.touch(
+        record, ip_address="9.9.9.9", user_agent="New/2.0",
+        now=datetime.now(timezone.utc),
+    ) is False
+    assert sessions.load(record.id) is None
 
 
 def test_deleting_a_session_leaves_the_others_alone(users, sessions, session) -> None:
