@@ -178,10 +178,12 @@ export function forgetListenedPlace(type: LibraryPlaceType, id: string): void {
 
 // An Undo has put a forgotten place back: Listen reads again and ranks it
 // where its listens put it. A read already out may predate the Undo and lack
-// the place, so the read that answers starts only after it.
+// the place, so the read that answers starts only after it, and the ranking
+// stays outdated until that read succeeds, so the next opening reads again.
 export async function readRestoredPlace(type: LibraryPlaceType, id: string): Promise<boolean> {
 	forgottenDuringRead.delete(placeKey(type, id));
 	if (lastPlayedRead !== null) await lastPlayedRead;
+	outdateLastPlayedRanking();
 	return readLastPlayed();
 }
 

@@ -191,42 +191,69 @@ describe('1354_rule_14 Listen', () => {
 	);
 
 	const deleteAlbumHere = () => removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
+	const deletePlaylistHere = () => deletePlaylist('place-1');
+	const album = 'Open album Place 0';
+	const playlist = 'Open playlist Place 1';
 	const reloads = [
 		[
 			'album',
 			'loading',
+			[album],
 			deleteAlbumHere,
 			() => allAlbumsLoad.set({ status: 'loading', error: null })
 		],
 		[
 			'album',
 			'unreachable',
+			[album],
 			deleteAlbumHere,
 			() => allAlbumsLoad.set({ status: 'unreachable', error: null })
 		],
-		['album', 'error', deleteAlbumHere, () => allAlbumsLoad.set({ status: 'error', error: null })],
+		[
+			'album',
+			'error',
+			[album],
+			deleteAlbumHere,
+			() => allAlbumsLoad.set({ status: 'error', error: null })
+		],
 		[
 			'playlist',
 			'loading',
-			() => deletePlaylist('place-1'),
+			[playlist],
+			deletePlaylistHere,
 			() => playlistLoad.set({ status: 'loading', error: null })
 		],
 		[
 			'playlist',
 			'error',
-			() => deletePlaylist('place-1'),
+			[playlist],
+			deletePlaylistHere,
 			() => playlistLoad.set({ status: 'error', error: null })
+		],
+		[
+			'album and a playlist',
+			'loading',
+			[album, playlist],
+			async () => {
+				await deleteAlbumHere();
+				await deletePlaylistHere();
+			},
+			() => {
+				allAlbumsLoad.set({ status: 'loading', error: null });
+				playlistLoad.set({ status: 'loading', error: null });
+			}
 		]
 	] as const;
 	it.each(
-		reloads.flatMap(([type, reloadState, deleteHere, reloadWithoutAnswer]) =>
+		reloads.flatMap(([type, reloadState, removedRows, deleteHere, reloadWithoutAnswer]) =>
 			(['before', 'after'] as const).map(
-				(answered) => [type, reloadState, answered, deleteHere, reloadWithoutAnswer] as const
+				(answered) =>
+					[type, reloadState, answered, removedRows, deleteHere, reloadWithoutAnswer] as const
 			)
 		)
 	)(
 		'1354_rule_20 keeps a %s deleted here off Listen while its collection reload is %s, a Listen read answering %s the delete',
-		async (type, _, answered, deleteHere, reloadWithoutAnswer) => {
+		async (_type, _reloadState, answered, removedRows, deleteHere, reloadWithoutAnswer) => {
 			serveAlbumPage(() => places);
 			const release = answered === 'after' ? holdNextListenRead() : () => {};
 			const read = ensureLastPlayedRead();
@@ -236,32 +263,51 @@ describe('1354_rule_14 Listen', () => {
 			await read;
 			reloadWithoutAnswer();
 			await showListen();
-			expect(rowNames()).not.toContain(`Open ${type} ${type === 'album' ? 'Place 0' : 'Place 1'}`);
+			for (const row of removedRows) expect(rowNames()).not.toContain(row);
 		}
 	);
 
-	it.each(
-		[COLLECTION_MENU_DELETE_LABEL, COLLECTION_MENU_ARCHIVE_LABEL].flatMap((action) =>
-			(['before', 'after'] as const).map((answered) => [action, answered] as const)
-		)
-	)(
-		'1354_rule_20 %s on the album page, a Listen read on Home answering %s the Undo, then the row is back',
-		async (action, answered) => {
+	// `around`: the read starts before the delete and answers after the Undo.
+	// A post-Undo read that `fails` leaves Home to rank the album on its next
+	// opening, so Home opens once more before the row must be back.
+	it.each([
+		[COLLECTION_MENU_DELETE_LABEL, 'before', 'answers'],
+		[COLLECTION_MENU_DELETE_LABEL, 'after', 'answers'],
+		[COLLECTION_MENU_ARCHIVE_LABEL, 'before', 'answers'],
+		[COLLECTION_MENU_ARCHIVE_LABEL, 'after', 'answers'],
+		[COLLECTION_MENU_DELETE_LABEL, 'around', 'fails'],
+		[COLLECTION_MENU_DELETE_LABEL, 'before', 'fails']
+	] as const)(
+		'1354_rule_20 %s on the album page, a Listen read on Home answering %s the Undo, the read after the Undo %s, then the row is back',
+		async (action, answered, readAfterUndo) => {
 			let removed = false;
-			serveAlbumPage(() => (removed ? places.slice(1) : places));
+			let unreachable = false;
+			serveAlbumPage(() => {
+				if (unreachable) throw new TypeError('Listen unreachable');
+				return removed ? places.slice(1) : places;
+			});
 			await showListen();
 			await unmount(component);
+			const releaseAround = answered === 'around' ? holdNextListenRead() : null;
+			const readAround = answered === 'around' ? readLastPlayed() : null;
 			await removeOnAlbumPage(action);
 			removed = true;
 			await showListen();
-			expect(rowNames()).not.toContain('Open album Place 0');
-			const release = answered === 'after' ? holdNextListenRead() : () => {};
-			const read = readLastPlayed();
+			expect(rowNames()).not.toContain(album);
+			const release = releaseAround ?? (answered === 'after' ? holdNextListenRead() : () => {});
+			const read = readAround ?? readLastPlayed();
 			if (answered === 'before') await read;
 			removed = false;
+			unreachable = readAfterUndo === 'fails';
 			await undoLastRemoval();
 			release();
-			await vi.waitFor(() => expect(rowNames()[0]).toBe('Open album Place 0'));
+			if (answered === 'before' && readAfterUndo === 'fails') {
+				expect(await readLastPlayed()).toBe(false);
+				unreachable = false;
+				await unmount(component);
+				await showListen();
+			}
+			await vi.waitFor(() => expect(rowNames()[0]).toBe(album));
 		}
 	);
 
