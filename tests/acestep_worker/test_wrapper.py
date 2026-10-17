@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Awaitable, Callable, Iterable
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -413,7 +414,6 @@ def test_load_model_unknown_mode(tmp_path: Path) -> None:
 
 
 @pytest.mark.acceptance("S15-01")
-@pytest.mark.acceptance("S15-06")
 @pytest.mark.parametrize("status", [409, 502])
 def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> None:
     from acestep_worker.subprocess_runner import SubprocessStartError
@@ -454,10 +454,8 @@ def test_load_model_last_error_matches_response(tmp_path: Path, status: int) -> 
     _run(go())
 
 
-@pytest.mark.acceptance("S15-02")
-@pytest.mark.acceptance("S15-03")
-@pytest.mark.parametrize("success", ["load", "generate"])
-def test_last_error_survives_success_and_is_replaced(tmp_path: Path, success: str) -> None:
+@pytest.fixture
+def last_error_worker(tmp_path: Path):
     from songmaker_cli.acestep_state import read_worker_state
 
     deps, redis = _make_deps(tmp_path)
@@ -494,12 +492,34 @@ def test_last_error_survives_success_and_is_replaced(tmp_path: Path, success: st
         assert await publish_pair() == pair
         return pair
 
-    async def go():
+    @asynccontextmanager
+    async def worker():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=create_app(deps)),
             base_url="http://worker", headers=_INTERNAL_HEADERS,
         ) as client:
             assert (await client.post("/load_model", json={"mode": "sft"})).status_code == 200
+            yield client, publish_pair, generate_then_publish
+
+    return worker
+
+
+@pytest.mark.acceptance("S15-02")
+def test_generate_last_error_matches_task_snapshot(last_error_worker) -> None:
+    async def go():
+        async with last_error_worker() as (client, _, generate_then_publish):
+            await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
+
+    _run(go())
+
+
+@pytest.mark.acceptance("S15-03")
+@pytest.mark.parametrize("success", ["load", "generate"])
+def test_last_error_survives_success_and_is_replaced(
+    tmp_path: Path, success: str, last_error_worker,
+) -> None:
+    async def go():
+        async with last_error_worker() as (client, publish_pair, generate_then_publish):
             first = await generate_then_publish(client, "ACE-Step failed\noriginal worker detail")
 
             if success == "load":
