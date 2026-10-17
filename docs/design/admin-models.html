@@ -865,8 +865,8 @@
 		* { transition: none !important; animation: none !important; }
 	}
 
-	/* ── #1500 · VRAM und Kapazität (Entwurf, wartet auf die Freigabe) ─────
-	   Gestrichelt umrandet = neu in diesem Entwurf. Alles ohne Rand steht heute so in der App. */
+	/* ── #1500 · VRAM und Kapazität (freigegeben am 17.10.2026) ─────
+	   Gestrichelt umrandet = neu mit #1500. Alles ohne Rand steht heute so in der App. */
 	.is-new { outline: 2px dashed var(--violet); outline-offset: 3px; border-radius: 2px; }
 	.proposed-tag.flush { margin-left: 0; }
 	.decision .after-list { margin-top: .8rem; }
@@ -1202,13 +1202,30 @@
 	.wconfirm p { margin: 0; font-size: .8rem; color: var(--ink-soft); }
 	.wconfirm .btns { display: flex; justify-content: flex-end; gap: .4rem; }
 
-	/* Songseite: die kurze Zeile unter dem Knopf, mit ihrer einen Abhilfe, und der stille Admin-Link */
+	/* Songseite: die kurze Zeile unter dem Knopf und der stille Admin-Link */
 	.sp-line-under { box-sizing: border-box; flex: 0 0 100%; min-width: 0; min-height: var(--hitbox); display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .6rem; padding: 0 .45rem; font-size: .8rem; line-height: 1.4; color: var(--score-bad); }
 	.sp-line-under .msg { min-width: 0; }
 	.sp-line-under.is-new { outline-offset: -2px; }
-	.sp-fix { height: 30px; padding: 0 .8rem; border: 1px solid var(--action); border-radius: 4px; background: none; color: var(--action); font-family: var(--sp-display); font-size: .78rem; letter-spacing: .5px; text-transform: uppercase; cursor: default; }
 	.sp-adminlink { color: var(--text-muted); font-size: .76rem; text-decoration: underline; text-underline-offset: 2px; }
 	.sp-viewer { font-size: .72rem; color: var(--muted); margin: .2rem 0 .3rem; }
+
+	/* Wartende Stufen: ein langsamer Streifen im leeren Balken zeigt, dass es lebt. Die
+	   Reduced-Motion-Regel oben hält ihn an; dann steht er still in der Mitte. */
+	.sp-bar.waiting { position: relative; }
+	.sp-sweep {
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: 35%;
+		background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--score-ok) 38%, transparent), transparent);
+		transform: translateX(95%);
+		animation: sp-sweep 2.6s ease-in-out infinite;
+	}
+	.sp-bar .sp-sweep { background: linear-gradient(90deg, transparent, var(--score-ok), transparent); }
+	@keyframes sp-sweep {
+		from { transform: translateX(-100%); }
+		to { transform: translateX(290%); }
+	}
+	.sp-elapsed { font-variant-numeric: tabular-nums; color: var(--text-muted); margin-left: .3rem; }
 	.sp-pair { display: flex; flex-direction: column; gap: .6rem; }
 </style>
 </head>
@@ -1225,12 +1242,12 @@
 	Historie.
 </p>
 <p class="freeze-note">
-	<strong>Entwurf für #1500, nach der Durchsicht vom 17.10.2026 überarbeitet, wartet auf die
-	Freigabe:</strong> Der Abschnitt <a href="#vram">„Neu · #1500 — VRAM und Kapazität"</a> weiter
-	unten zeichnet die gerulten Zeilen aus #916 am Desktop und bei 390&nbsp;px: die Worker-Karte mit
-	VRAM-Zeile und der Liste „Models on this GPU", und auf der Songseite „Waiting for GPU…",
-	„Loading model…", zu lang mit „Use 3:30" und „nicht verfügbar". Alles darüber ist die gesegnete
-	Fassung 2 und unverändert.
+	<strong>#1500 · VRAM und Kapazität, am 17.10.2026 freigegeben</strong> (Operator: „ja passt dann
+	für mich!"). Der Abschnitt <a href="#vram">„Neu · #1500 — VRAM und Kapazität"</a> weiter unten
+	ist der eingefrorene Bildbesitzer für die gerulten Zeilen aus #916 am Desktop und bei 390&nbsp;px:
+	die Worker-Karte mit VRAM-Zeile und der Liste „Models on this GPU", und auf der Songseite
+	„Waiting for GPU…", „Loading model…", „zu lang für die GPU" und „nicht verfügbar". Änderungen
+	daran brauchen eine neue Freigabe. Alles darüber ist die gesegnete Fassung 2 und unverändert.
 </p>
 <div class="wrap">
 	<header>
@@ -1754,7 +1771,7 @@
 	</svg>
 
 	<section class="decisions" id="vram">
-		<h2>Neu · #1500 — VRAM und Kapazität<span class="proposed-tag">New — revised 17.10.2026, awaiting blessing</span></h2>
+		<h2>Neu · #1500 — VRAM und Kapazität<span class="proposed-tag">Blessed 17.10.2026 · #1500</span></h2>
 
 		<div class="decision">
 			<h3>Warum — Operator-Ruling vom 20.09.2026 (#916) und die Durchsicht vom 17.10.2026</h3>
@@ -1786,16 +1803,24 @@
 					erstmal! … ich will generieren können". Die Dauer wird nie nach Kapazität gedeckelt
 					oder ausgegraut.</li>
 			</ul>
+			<p class="ruling after-list">Das letzte Wort am 17.10.2026 — die Vorab-Prüfung fällt weg, der Speicherfehler wird abgefangen:</p>
+			<p class="quote">
+				klingt aufwendig … ist es das wert? oder einfach der Fehler abgefangen werden sollte und an
+				den Nutzer weitergereicht mit too long =&gt; die genaue Länge ist ja dann wurst
+			</p>
+			<p class="quote">das könnte interaktiv sein? oder also eine Animation dabei?</p>
+			<p class="quote">ja passt dann für mich!</p>
 			<p class="ruling after-list">Was dieser Abschnitt zeigt — Zeile für Zeile der fünf gerulten Sätze aus #916, so wie sie nach dem 17.10.2026 lauten:</p>
 			<ul>
 				<li><strong>Zeile 1 — Worker-Karte (h), (i), (m), (n):</strong> belegt / gesamt, „~" bei
 					Schätzung, ein eigener Zustand „unbekannt", die geladenen Modelle als Liste in derselben
 					Karte. <strong>LOAD bleibt immer bedienbar</strong> — auch wenn der Platz laut Rechnung
 					nicht reicht; es gibt keine Ablehnung und keine Warnung am Knopf.</li>
-				<li><strong>Zeile 2 — Generate wird nicht abgewiesen, nur weil die GPU gerade belegt ist:</strong>
-					der Take wartet als „Waiting for GPU…" (j), (o). Passt die Dauer für dieses Modell
-					gar nicht, sagt es nach dem Drücken eine kurze Zeile mit einem Klick als Abhilfe (l), (q).
-					Nicht gezeigt, weil es nicht vorkommen darf: ein Take, der Minuten später scheitert.</li>
+				<li><strong>Zeile 2 — Speicherfehler und Warten (j), (l), (o), (q).</strong> Die Zeile lautet
+					seit dem 17.10.2026: <em>an out-of-memory failure is caught and says "too long" in plain
+					words as soon as it happens; nothing that generates today is refused.</em> Es gibt keine
+					Vorab-Prüfung: Generate läuft wie heute, eine belegte GPU heißt „Waiting for GPU…" (j), (o),
+					und erst der abgefangene Speicherfehler sagt „Too long for the GPU right now" (l), (q).</li>
 				<li><strong>Zeile 3 — „Loading model…" als eigene Stufe (k), (p).</strong> Die Zeile lautet
 					seit dem 17.10.2026: <em>ein gescheitertes Laden zeigt Admins den 409-Text des Workers
 					(i), (n); Musiker sehen die schlichte Zeile aus Zustand 4 (s), (r).</em></li>
@@ -1821,8 +1846,8 @@
 					nie zugeklappt werden müssen.</li>
 			</ul>
 			<p class="after-list">
-				<strong>So lesen:</strong> <span class="legend-new">gestrichelt umrandet</span> ist neu in
-				diesem Entwurf. Alles ohne Rand steht heute so in der App. Beschriftungen im Mockup sind
+				<strong>So lesen:</strong> <span class="legend-new">gestrichelt umrandet</span> ist neu mit
+				#1500. Alles ohne Rand steht heute so in der App. Beschriftungen im Mockup sind
 				Englisch und stehen so, wie sie auf dem Bildschirm stünden. Die Zahlen sind Beispiele.
 			</p>
 		</div>
@@ -1831,7 +1856,7 @@
 	<hr class="rule">
 
 	<section class="decisions">
-		<h2>Das Bild — VRAM, Desktop<span class="proposed-tag">New — awaiting blessing</span></h2>
+		<h2>Das Bild — VRAM, Desktop<span class="proposed-tag">Blessed 17.10.2026 · #1500</span></h2>
 
 		<div class="states">
 			<article class="state wide">
@@ -1971,8 +1996,10 @@
 					Die GPU ist nur <em>gerade</em> belegt — durch die eigene Warteschlange oder einen
 					Modellwechsel. Der Take wird angenommen und wartet. Die Stufe steht an den zwei Stellen,
 					an denen jede Stufe steht: im Knopf und im Statusfeld über den Takes. Sie hat
-					<strong>weder Prozent noch Zeit</strong>, der Balken bleibt leer, × bricht ab. Geprüft wird
-					gegen die abgearbeitete Warteschlange (entschieden, Frage 8): was dann passt, wartet.
+					<strong>weder Prozent noch Restzeit</strong>; ein langsamer Streifen wandert durch den leeren
+					Balken, damit man sieht, dass es lebt. Gezeichnet ist der Anfang, noch ohne Zeit — nach ein
+					paar Sekunden erscheint die vergangene Zeit wie in (k). × bricht ab. Vorab geprüft wird
+					nichts (entschieden, Frage 8): der Take wartet, statt abgelehnt zu werden.
 				</p>
 
 				<div class="sp sp-frame sp-desk">
@@ -1981,7 +2008,7 @@
 						<span class="sp-ident"><b>AMIF</b><small>Night Drive · v8 draft · XL-TURBO · 4:45 · ×2</small></span>
 						<span class="sp-views"><span>Co-writer</span><span>Recipe</span></span>
 						<div class="sp-gen">
-							<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><span class="t">Take 1 of 2 · <span class="is-new">Waiting for GPU…</span></span></div>
+							<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><i class="sp-sweep" aria-hidden="true"></i><span class="t">Take 1 of 2 · <span class="is-new">Waiting for GPU…</span></span></div>
 							<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 						</div>
 					</div>
@@ -1991,7 +2018,7 @@
 								<span class="sp-slot-title">v8 · <b class="is-new">Waiting for GPU…</b></span>
 								<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 							</div>
-							<div class="sp-bar" role="progressbar" aria-valuenow="0"><span style="width:0"></span></div>
+							<div class="sp-bar waiting" role="progressbar" aria-valuetext="waiting"><i class="sp-sweep" aria-hidden="true"></i></div>
 							<div class="sp-line">Take 1 of 2</div>
 						</div>
 						<div class="sp-vh">v7 · 4 takes</div>
@@ -2010,7 +2037,9 @@
 					Stufen: Queued → Waiting for GPU… → <strong>Loading model…</strong> → Writing → Rendering
 					→ Saving take; „Waiting" erscheint nur, wenn es wirklich wartet. Wie in (j) steht die Stufe
 					im Knopf und im Statusfeld, <strong>ohne Prozent und ohne Restzeit</strong> — Laden dauert,
-					so lange das Modell und der Cache brauchen. Der Balken bleibt leer, × bricht ab.
+					so lange das Modell und der Cache brauchen. Der Streifen wandert wie in (j); gezeichnet ist
+					der Moment nach ein paar Sekunden, wenn die vergangene Zeit erscheint: „Loading model… 0:12".
+					× bricht ab.
 				</p>
 
 				<div class="sp sp-frame sp-desk">
@@ -2019,17 +2048,17 @@
 						<span class="sp-ident"><b>AMIF</b><small>Night Drive · v8 draft · XL-TURBO · 3:00 · ×2</small></span>
 						<span class="sp-views"><span>Co-writer</span><span>Recipe</span></span>
 						<div class="sp-gen">
-							<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><span class="t">Take 1 of 2 · <span class="is-new">Loading model…</span></span></div>
+							<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><i class="sp-sweep" aria-hidden="true"></i><span class="t">Take 1 of 2 · <span class="is-new">Loading model…<span class="sp-elapsed">0:12</span></span></span></div>
 							<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 						</div>
 					</div>
 					<div class="sp-pane">
 						<div class="sp-slot">
 							<div class="sp-slot-head">
-								<span class="sp-slot-title">v8 · <b class="is-new">Loading model…</b></span>
+								<span class="sp-slot-title">v8 · <b class="is-new">Loading model…<span class="sp-elapsed">0:12</span></b></span>
 								<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 							</div>
-							<div class="sp-bar" role="progressbar" aria-valuenow="0"><span style="width:0"></span></div>
+							<div class="sp-bar waiting" role="progressbar" aria-valuetext="waiting"><i class="sp-sweep" aria-hidden="true"></i></div>
 							<div class="sp-line">Take 1 of 2</div>
 						</div>
 						<div class="sp-vh">v7 · 4 takes</div>
@@ -2042,18 +2071,20 @@
 			</article>
 
 			<article class="state wide">
-				<div class="state-head"><h3>(l) Generate · zu lang für dieses Modell — mit einem Klick als Abhilfe</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
+				<div class="state-head"><h3>(l) Generate · zu lang für die GPU — der abgefangene Speicherfehler</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1500</span></div>
 				<p class="state-note">
-					Erst nach dem Drücken, nie vorher: die Dauer ist nicht gedeckelt und nicht ausgegraut
-					(entschieden, Frage 9). Passt 4:45 auf diesem Modell auch mit leerer Warteschlange nicht,
-					bleibt die Form des gescheiterten Laufs — Knopf in Fehlerfarbe mit seinem Wort, die Zeile
-					darunter — und die Zeile bringt ihre Abhilfe mit: <strong>Use 3:30</strong> setzt die Dauer
-					und startet. Kein Take entsteht, kein Statusfeld erscheint.
+					Nichts wird vorher geprüft, nichts gedeckelt oder ausgegraut (entschieden, Fragen 8 und 9):
+					Generate läuft wie heute. Läuft dem Worker dabei der GPU-Speicher über, wird der Fehler
+					abgefangen und kommt als eine schlichte Zeile beim Musiker an — die Form des gescheiterten
+					Laufs: der Knopf behält „Generate" und ist der nächste Versuch, die Zeile steht darunter,
+					<strong>ohne Aktionsknopf</strong>. Welche Dauer passt, sagt sie nicht; die genaue Länge ist
+					„wurst". Der Admin liest den technischen Satz des Workers in der Karte als
+					<em>Last error</em> (i).
 				</p>
 				<p class="callout">
-					<b>Voraussetzung im Backend:</b> „3:30 fits" verlangt, dass das Backend die längste Dauer
-					berechnet, die auf diesem Modell passt. Zeigt ein Bau-Slice, dass sie sich nicht verlässlich
-					berechnen lässt, gilt die Ersatzzeile darunter, ohne Aktion.
+					<b>Messen im Bau-Slice:</b> #916 hat „kein Take, der Minuten später scheitert" gerult. Der
+					Bau-Slice misst, wann der Speicherfehler kommt. Kommt er erst spät, geht die Frage zurück an
+					den Operator.
 				</p>
 
 				<div class="sp sp-frame sp-desk">
@@ -2063,7 +2094,7 @@
 						<span class="sp-views"><span>Co-writer</span><span>Recipe</span></span>
 						<div class="sp-gen">
 							<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
-							<div class="sp-line-under is-new"><span class="msg">Too long for this model — 3:30 fits.</span><button class="sp-fix" type="button">Use 3:30</button></div>
+							<div class="sp-line-under is-new"><span class="msg">Too long for the GPU right now — try a shorter duration.</span></div>
 						</div>
 					</div>
 					<div class="sp-pane">
@@ -2072,14 +2103,6 @@
 							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 4</span><span class="dur">2:58</span><span class="sp-score bad"><i></i>34</span></div>
 							<div class="sp-take"><span class="play">▶</span><span class="tl">Take 3</span><span class="dur">3:02</span><span class="sp-score ok"><i></i>58</span></div>
 						</div>
-					</div>
-				</div>
-
-				<p class="sp-viewer">Ersatzzeile, falls sich die passende Dauer nicht verlässlich berechnen lässt:</p>
-				<div class="sp sp-frame sp-desk" style="max-width:24rem">
-					<div class="sp-actionbar">
-						<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
-						<div class="sp-line-under is-new"><span class="msg">Too long for this model right now — try a shorter duration.</span></div>
 					</div>
 				</div>
 			</article>
@@ -2131,7 +2154,7 @@
 	<hr class="rule">
 
 	<section class="decisions">
-		<h2>Das Bild — VRAM, 390 px<span class="proposed-tag">New — awaiting blessing</span></h2>
+		<h2>Das Bild — VRAM, 390 px<span class="proposed-tag">Blessed 17.10.2026 · #1500</span></h2>
 
 		<div class="states states-390">
 			<article class="state">
@@ -2237,7 +2260,8 @@
 				<p class="state-note">
 					Der Knopf trägt die Stufe, wie er sonst Prozent und Restzeit trägt; der Takes-Tab zeigt
 					den Ring, das Statusfeld dieselbe Stufe (<code>song-page-phone.html</code> Frame 4).
-					Kein Prozent, keine Zeit, × bricht ab.
+					Kein Prozent, keine Restzeit; der Streifen wandert, und nach ein paar Sekunden steht die
+					vergangene Zeit dabei — hier „0:08". × bricht ab.
 				</p>
 
 				<div class="sp sp-frame sp-phone">
@@ -2248,7 +2272,7 @@
 						<div class="sp-field"><span class="label">Style</span><div class="sp-textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
 					</div>
 					<div class="sp-actionbar">
-						<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><span class="t">Take 1 of 2 · <span class="is-new">Waiting for GPU…</span></span></div>
+						<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><i class="sp-sweep" aria-hidden="true"></i><span class="t">Take 1 of 2 · <span class="is-new">Waiting for GPU…<span class="sp-elapsed">0:08</span></span></span></div>
 						<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 					</div>
 				</div>
@@ -2258,10 +2282,10 @@
 					<div class="sp-body">
 						<div class="sp-slot">
 							<div class="sp-slot-head">
-								<span class="sp-slot-title">v8 · <b class="is-new">Waiting for GPU…</b></span>
+								<span class="sp-slot-title">v8 · <b class="is-new">Waiting for GPU…<span class="sp-elapsed">0:08</span></b></span>
 								<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 							</div>
-							<div class="sp-bar" role="progressbar" aria-valuenow="0"><span style="width:0"></span></div>
+							<div class="sp-bar waiting" role="progressbar" aria-valuetext="waiting"><i class="sp-sweep" aria-hidden="true"></i></div>
 							<div class="sp-line">Take 1 of 2</div>
 						</div>
 					</div>
@@ -2272,7 +2296,8 @@
 				<div class="state-head"><h3>(p) Edit und Takes · „Loading model…"</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
 				<p class="state-note">
 					Dieselbe Form wie (o), nur die Stufe heißt anders. Es ist ein eigener Zustand zwischen
-					„Waiting for GPU…" und „Writing": er hat ein Wort, aber keine Zahl.
+					„Waiting for GPU…" und „Writing": er hat ein Wort und den Streifen, aber kein Prozent.
+					Gezeichnet ist der Anfang, bevor die vergangene Zeit erscheint.
 				</p>
 
 				<div class="sp sp-frame sp-phone">
@@ -2283,7 +2308,7 @@
 						<div class="sp-field"><span class="label">Style</span><div class="sp-textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
 					</div>
 					<div class="sp-actionbar">
-						<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><span class="t">Take 1 of 2 · <span class="is-new">Loading model…</span></span></div>
+						<div class="sp-prog" role="status"><span class="fill" style="width:0"></span><i class="sp-sweep" aria-hidden="true"></i><span class="t">Take 1 of 2 · <span class="is-new">Loading model…</span></span></div>
 						<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 					</div>
 				</div>
@@ -2296,7 +2321,7 @@
 								<span class="sp-slot-title">v8 · <b class="is-new">Loading model…</b></span>
 								<span class="sp-x"><svg class="sp-ic"><use href="#sp-x"/></svg></span>
 							</div>
-							<div class="sp-bar" role="progressbar" aria-valuenow="0"><span style="width:0"></span></div>
+							<div class="sp-bar waiting" role="progressbar" aria-valuetext="waiting"><i class="sp-sweep" aria-hidden="true"></i></div>
 							<div class="sp-line">Take 1 of 2</div>
 						</div>
 						<div class="sp-vh">v7 · 4 takes</div>
@@ -2309,11 +2334,10 @@
 			</article>
 
 			<article class="state">
-				<div class="state-head"><h3>(q) Edit · zu lang für dieses Modell</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
+				<div class="state-head"><h3>(q) Edit · zu lang für die GPU</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1500</span></div>
 				<p class="state-note">
-					Wie (l): der Knopf behält „Generate", die kurze Zeile steht darunter, <strong>Use 3:30</strong>
-					setzt die Dauer und startet. Takes bleibt „(4)" und ohne Ring — nichts läuft. Darunter die
-					Ersatzzeile ohne Aktion.
+					Wie (l): der Knopf behält „Generate", die Zeile steht darunter, ohne Aktionsknopf. Takes
+					bleibt „(4)" und ohne Ring — nichts läuft mehr.
 				</p>
 
 				<div class="sp sp-frame sp-phone">
@@ -2325,14 +2349,7 @@
 					</div>
 					<div class="sp-actionbar">
 						<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
-						<div class="sp-line-under is-new"><span class="msg">Too long for this model — 3:30 fits.</span><button class="sp-fix" type="button">Use 3:30</button></div>
-					</div>
-				</div>
-
-				<div class="sp sp-frame sp-phone">
-					<div class="sp-actionbar">
-						<button class="sp-btn failed" type="button"><svg class="sp-ic sm"><use href="#sp-warn"/></svg>Generate</button>
-						<div class="sp-line-under is-new"><span class="msg">Too long for this model right now — try a shorter duration.</span></div>
+						<div class="sp-line-under is-new"><span class="msg">Too long for the GPU right now — try a shorter duration.</span></div>
 					</div>
 				</div>
 			</article>
@@ -2374,8 +2391,8 @@
 		<div class="decision">
 			<h3>Entschieden am 17.10.2026 (#1500)</h3>
 			<p>
-				Die neun Fragen des ersten Entwurfs, so wie der Operator sie am 17.10.2026 entschieden hat.
-				Nach der Freigabe dieses Bildes wird es eingefroren, und die Bau-Slices werden geschnitten.
+				Die Fragen der Entwürfe, so wie der Operator sie am 17.10.2026 entschieden hat. Das Bild ist
+				freigegeben und eingefroren; aus ihm werden die Bau-Slices geschnitten. Offen ist nichts.
 			</p>
 			<ul>
 				<li><strong>1 · Welcher Tab?</strong> Der Tab „ACE-Step", wo die Worker-Karten heute leben.</li>
@@ -2386,26 +2403,20 @@
 				<li><strong>5 · Wo spricht ein gescheitertes Laden?</strong> In der Karte, als <em>Last error</em> (i), (n).</li>
 				<li><strong>6 · Aufgeklappt oder zugeklappt?</strong> Hinfällig: die Zeilen sind kurz.</li>
 				<li><strong>7 · Zahlen für jeden Musiker?</strong> Nein — Zahlen nur für Admins.</li>
-				<li><strong>8 · Eigene Warteschlange.</strong> Geprüft wird gegen die abgearbeitete
-					Warteschlange; was dann passt, wartet als „Waiting for GPU…", statt abgelehnt zu werden.</li>
+				<li><strong>8 · Eigene Warteschlange.</strong> Wartet, statt abzulehnen; keine Vorab-Prüfung.
+					Eine belegte GPU heißt „Waiting for GPU…" (j), (o).</li>
 				<li><strong>9 · Nichts vor dem Drücken.</strong> Nichts am Knopf vor dem Drücken, und keine
 					Deckelung der Dauer.</li>
-			</ul>
-			<p class="ruling after-list">Was noch offen ist — jeweils mit meiner Empfehlung:</p>
-			<ul>
-				<li><strong>10 · Was „Use 3:30" an der Dauer ändert.</strong> Der Klick kann die Dauer im
-					Entwurf setzen (wie ein Zug am Schieber, sichtbar im Recipe) oder nur für diesen einen
-					Lauf. <em>Empfehlung: im Entwurf setzen</em> — der Take soll aus dem Recipe entstehen,
-					das man sieht, kein versteckter Einmal-Wert.</li>
+				<li><strong>10 · entfällt.</strong> Es gibt keine Abhilfe-Taste mit einer passenden Dauer mehr;
+					der abgefangene Speicherfehler sagt nur „too long" (l), (q).</li>
 				<li><strong>11 · Wann Warten zu „nicht verfügbar" wird.</strong> Ein Take, der auf eine GPU
-					wartet, die nie frei wird (Worker hängt), sollte nicht ewig „Waiting for GPU…" zeigen.
-					<em>Empfehlung: keine eigene Zeitgrenze im Bild</em>; fällt der Worker weg (kein
-					Heartbeat), wechselt der Take in Zustand 4. Eine Zeitgrenze erst, wenn die Nutzung zeigt,
-					dass sie fehlt.</li>
+					wartet, die nie frei wird (Worker hängt), zeigt nicht ewig „Waiting for GPU…". Keine
+					eigene Zeitgrenze im Bild; fällt der Worker weg (kein Heartbeat), wechselt der Take in
+					„nicht verfügbar" (s), (r). Eine Zeitgrenze erst, wenn die Nutzung zeigt, dass sie fehlt.</li>
 				<li><strong>12 · Alles „Keep loaded" und kein Platz mehr.</strong> Sind alle geladenen Modelle
 					gehalten, kann Load nichts freiräumen; Load bleibt trotzdem bedienbar (Frage 4), und
 					scheitert es, steht der Satz als <em>Last error</em> in der Karte — so wie in (i)
-					gezeichnet. <em>Empfehlung: so lassen</em>, kein Hinweis am Häkchen.</li>
+					gezeichnet. So gelassen, kein Hinweis am Häkchen.</li>
 			</ul>
 		</div>
 	</section>

@@ -35,7 +35,11 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   freigegeben und ist Teil der aktuellen Fassung. Sie ist ein Bild, noch kein
   Produktverhalten; der Default bestehender Installationen bleibt in #844 offen.
   Backend-Voraussetzungen: #316 (echter Provider-Status) und #315 (Judge
-  providerneutral).
+  providerneutral). Der Abschnitt „#1500 — VRAM und Kapazität" wurde am
+  17.10.2026 freigegeben: die Worker-Karte mit VRAM-Zeile und der Liste der
+  geladenen Modelle, auf der Songseite „Waiting for GPU…" und „Loading model…"
+  mit Streifen und vergangener Zeit, der abgefangene Speicherfehler als „Too
+  long for the GPU right now" und „nicht verfügbar" — ohne Vorab-Prüfung.
 - `album-browsing.html` — Album-/Playlist-Browsing nach dem Öffnen (#348).
   Erste Fassung freigegeben am 01.09.2026, nach dem Ausprobieren eines
   bedienbaren Prototyps: die Kachelwand bleibt bestehen und schrumpft beim
