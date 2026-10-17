@@ -68,13 +68,11 @@
 		min-width: 5.5rem;
 	}
 	.vram {
-		display: grid;
+		display: flex;
+		flex-direction: column;
 		flex: 1 1 12rem;
 		min-width: 0;
-		/* State (m): 390px minus borders, card padding and the label column. */
-		grid-template-columns: minmax(2rem, 15.7rem) minmax(min-content, max-content);
-		align-items: center;
-		gap: 0.25rem 0.45rem;
+		gap: 0.25rem;
 	}
 	.bar {
 		height: 8px;
@@ -97,7 +95,6 @@
 	}
 	.numbers {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: baseline;
 		gap: 0.25rem 0.45rem;
 		font-size: 0.82rem;
@@ -112,7 +109,6 @@
 		font-size: 0.74rem;
 	}
 	.reason {
-		grid-column: 1 / -1;
 		overflow-wrap: anywhere;
 	}
 	.unknown-text {

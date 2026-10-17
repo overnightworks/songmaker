@@ -381,6 +381,10 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 			expect(row).not.toHaveTextContent('unknown');
 			expect(row).toHaveTextContent('VRAM:');
 			expect(target.textContent).toMatch(/Queue:.*VRAM:.*Last seen:/s);
+			const bar = row?.querySelector('.bar');
+			const numbers = row?.querySelector('.numbers');
+			if (!bar || !numbers) throw new Error('Expected a VRAM bar and numbers');
+			expect(bar.compareDocumentPosition(numbers) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 			if (free) expect(row).toHaveTextContent(free);
 			else {
 				expect(row).not.toHaveTextContent('GB free');
