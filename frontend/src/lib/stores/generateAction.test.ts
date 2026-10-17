@@ -1,3 +1,5 @@
+import { mount, tick, unmount } from 'svelte';
+import GenerateButton from '$lib/components/editor/GenerateButton.svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -552,6 +554,44 @@ describe('generate action presentation', () => {
 });
 
 describe('[defect:#1568] observed loading time', () => {
+	it.each(['album', 'another loading song'])(
+		'[defect:#1568:H1] continues elapsed time after navigation to %s and component remount',
+		async (destination) => {
+			vi.useFakeTimers();
+			const target = document.createElement('div');
+			document.body.append(target);
+			let component = mount(GenerateButton, { target });
+			try {
+				const job: JobItem = { ...queuedJob, status: 'running', phase: 'loading_model' };
+				songList.update((songs) => [...songs, makeSong({ id: 's2' })]);
+				activeJobs.set([
+					{ songId: 's1', job },
+					{ songId: 's2', job: { ...job, id: 'job2' } }
+				]);
+				await tick();
+				vi.advanceTimersByTime(6000);
+				await tick();
+				expect(target.textContent).toContain('0:06');
+				selectedSongId.set(destination === 'album' ? null : 's2');
+				await tick();
+				await unmount(component);
+				vi.advanceTimersByTime(6000);
+				selectedSongId.set('s1');
+				component = mount(GenerateButton, { target });
+				await tick();
+				expect(target.textContent).toContain('0:12');
+				vi.advanceTimersByTime(1000);
+				await tick();
+				expect(target.textContent).toContain('0:13');
+			} finally {
+				activeJobs.set([]);
+				await unmount(component);
+				target.remove();
+				vi.useRealTimers();
+			}
+		}
+	);
+
 	it.each([
 		{ seconds: 0, elapsedLabel: null },
 		{ seconds: 2, elapsedLabel: null },

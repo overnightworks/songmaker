@@ -29,11 +29,7 @@
 	const cancelUnreachable: boolean = $derived(isGenerateBusy(presentation) && presentation.offline);
 	const progressLabel: string | null = $derived(
 		presentation.kind === 'generating'
-			? [
-					presentation.takeCounter,
-					[presentation.phase, presentation.elapsedLabel].filter(Boolean).join(' '),
-					presentation.readout
-				]
+			? [presentation.takeCounter, presentation.phase, presentation.readout]
 					.filter((part) => part !== null)
 					.join(' · ')
 			: null
@@ -65,7 +61,14 @@
 					style:width={presentation.indeterminate ? undefined : `${presentation.progress}%`}
 					aria-hidden="true"
 				></span>
-				<span class="progress-label">{progressLabel}</span>
+				<span class="progress-label"
+					>{progressLabel}{#if presentation.indeterminate}<span
+							class="elapsed-time"
+							aria-hidden="true"
+						>
+							{presentation.elapsedLabel ? ` ${presentation.elapsedLabel}` : ''}</span
+						>{/if}</span
+				>
 			{/if}
 		</div>
 		{#if offersCancel(presentation)}
@@ -210,6 +213,13 @@
 	.progress-label {
 		position: relative;
 		text-align: center;
+	}
+
+	.elapsed-time {
+		display: inline-block;
+		min-width: 6ch;
+		font-variant-numeric: tabular-nums;
+		white-space: pre;
 	}
 
 	.icon-button {

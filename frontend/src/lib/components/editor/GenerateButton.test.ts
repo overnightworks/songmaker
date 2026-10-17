@@ -60,6 +60,26 @@ async function render(state: GenerateState, props: { reasonInside?: boolean } = 
 }
 
 describe('GenerateButton', () => {
+	it.each([null, '0:03', '0:12', '12:34'])(
+		'[defect:#1568:H2:H3] reserves a silent elapsed slot for %s',
+		async (elapsedLabel) => {
+			await render({
+				...running,
+				phase: 'Loading model…',
+				indeterminate: true,
+				readout: null,
+				elapsedLabel
+			});
+			const elapsed = document.body.querySelector('.elapsed-time');
+			if (!elapsed) throw new Error('Expected an elapsed slot');
+			expect(elapsed.getAttribute('aria-hidden')).toBe('true');
+			expect(elapsed.textContent?.trim()).toBe(elapsedLabel ?? '');
+			injectComponentStyles(generateButtonSource, 'GenerateButton.svelte', elapsed);
+			expect(parseFloat(getComputedStyle(elapsed).minWidth)).toBeGreaterThan(0);
+			expect(getComputedStyle(elapsed).fontVariantNumeric).toBe('tabular-nums');
+		}
+	);
+
 	it.each([
 		['generate', 'Generate'],
 		['repaint', 'Repaint'],

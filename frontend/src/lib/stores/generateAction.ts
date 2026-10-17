@@ -288,16 +288,27 @@ const generatePresentation = derived(
 	}
 );
 
-// Retain the observation across phone-tab unmounts; a page reload starts anew.
-let observedStage: { jobId: string | null; phase: string; startedAt: number } | null = null;
+// Retain each job’s observation across navigation; a page reload starts anew.
+const stageObservations = new Map<string, { phase: string; startedAt: number }>();
 const ELAPSED_LABEL_DELAY_SECONDS = 3;
 
 export const generateAction = readable<GenerateState>(undefined, (set) => {
 	let timer: ReturnType<typeof setInterval> | undefined;
 	const unsubscribe = generatePresentation.subscribe((state) => {
 		clearInterval(timer);
-		if (state.kind !== 'generating' || !state.indeterminate || state.ended) {
-			observedStage = null;
+		const jobs = new Map(get(activeJobs).map(({ job }) => [job.id, job]));
+		for (const [jobId, observation] of stageObservations) {
+			const job = jobs.get(jobId);
+			if (!job || !isStillWorking(job) || phaseLabel(job) !== observation.phase) {
+				stageObservations.delete(jobId);
+			}
+		}
+		if (
+			state.kind !== 'generating' ||
+			!state.indeterminate ||
+			state.ended ||
+			state.jobId === null
+		) {
 			set(state);
 			return;
 		}
@@ -306,10 +317,12 @@ export const generateAction = readable<GenerateState>(undefined, (set) => {
 			set(state);
 			return;
 		}
-		if (observedStage?.jobId !== state.jobId || observedStage?.phase !== state.phase) {
-			observedStage = { jobId: state.jobId, phase: state.phase, startedAt: Date.now() };
+		let observation = stageObservations.get(state.jobId);
+		if (!observation || observation.phase !== state.phase) {
+			observation = { phase: state.phase, startedAt: Date.now() };
+			stageObservations.set(state.jobId, observation);
 		}
-		const startedAt = observedStage.startedAt;
+		const startedAt = observation.startedAt;
 		const publish = () => {
 			const seconds = Math.floor((Date.now() - startedAt) / 1000);
 			set({
