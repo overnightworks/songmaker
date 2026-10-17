@@ -49,7 +49,11 @@ class AccessLogMiddleware:
                 )
                 http_metrics = getattr(request.app.state, "http_metrics", None)
                 if http_metrics:
-                    http_metrics.record(request.method, status_code, duration_ms)
+                    try:
+                        http_metrics.record(request.method, status_code, duration_ms)
+                    except Exception:
+                        # Metrics must not mask an exchange failure or invalidate a sent response.
+                        log.exception("HTTP metrics recording failed")
             finally:
                 # Auth may bind user_id downstream; none of that request may leak.
                 structlog.contextvars.clear_contextvars()

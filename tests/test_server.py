@@ -2103,10 +2103,12 @@ def test_csp_allows_the_apps_own_workers(server_app: TestClient) -> None:
 def test_real_access_record_is_readable_by_rate_window_parser(tmp_path: Path) -> None:
     """defect:#1576 -- format the actual request record while its context is still bound."""
     import io
+    import sys
 
     import structlog
 
-    from scripts.e2e_rate_window import parse_access_record
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from e2e_rate_window import parse_access_record
 
     server_app, _ = make_test_app(tmp_path)
     output = io.StringIO()

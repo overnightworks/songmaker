@@ -1855,6 +1855,8 @@ Prometheus + Grafana stack in `docker-compose.yml`. Prometheus scrapes `/metrics
 
 Exported metrics: `songmaker_http_requests_total`, `songmaker_http_request_duration_milliseconds_total`, `songmaker_active_sessions`, `songmaker_jobs_total`, `songmaker_job_duration_seconds`, `songmaker_last_job_failure_timestamp_seconds` (0 while nothing has ever failed), `songmaker_queue_depth{queue="music"|"scoring"}`, `songmaker_acestep_workers_total{status=...}`, `songmaker_acestep_worker_loaded_models`, `songmaker_acestep_worker_queue_depth`, `songmaker_acestep_worker_vram_used_gigabytes`, `songmaker_acestep_worker_vram_total_gigabytes` (the last two come from each acestep-worker's own heartbeat — `songmaker-web` itself has no GPU access and cannot produce a VRAM number of its own), `songmaker_background_loop_consecutive_failures{loop=...}`, and `songmaker_background_loop_alive{loop=...}`.
 
+Access logs and HTTP duration metrics are recorded when the full exchange ends, including the lifetime of an SSE stream; an error or cancellation before response start is logged and counted as 500.
+
 Health endpoint at `/health` reports:
 - `music_worker`: running/stopped
 - `scoring_worker`: running/stopped
