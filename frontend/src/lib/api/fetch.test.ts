@@ -21,6 +21,7 @@ import {
 } from './fetch';
 import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
+import { hangsUntilAborted } from '$lib/test-utils/network';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -294,6 +295,20 @@ describe('refusal reactions', () => {
 		return throughApiFetch('/api/songs').catch((e: unknown) => e);
 	}
 
+	function refusalsTold(): string[] {
+		const told: string[] = [];
+		onTestFinished(
+			installRefusalReactions({
+				rateLimited: (path) => told.push(`rateLimited ${path}`),
+				sessionLost: () => {
+					told.push('sessionLost');
+					return Promise.resolve();
+				}
+			})
+		);
+		return told;
+	}
+
 	afterEach(() => {
 		mockFetch.mockReset();
 	});
@@ -316,16 +331,7 @@ describe('refusal reactions', () => {
 	it.each([400, 403, 404, 500, 502, 503])(
 		'925_M3_P2: a %i tells neither rateLimited nor sessionLost anything',
 		async (status) => {
-			const told: string[] = [];
-			onTestFinished(
-				installRefusalReactions({
-					rateLimited: (path) => told.push(`rateLimited ${path}`),
-					sessionLost: () => {
-						told.push('sessionLost');
-						return Promise.resolve();
-					}
-				})
-			);
+			const told = refusalsTold();
 			serverRefusesWith(status);
 
 			const failure = await aRefusedRequest();
@@ -377,42 +383,47 @@ describe('refusal reactions', () => {
 		{ form: 'the password change (wrong current password)', path: '/api/auth/password' }
 	];
 
-	function sessionLostTold(): { count: number } {
-		const told = { count: 0 };
-		onTestFinished(
-			installRefusalReactions({
-				...NOTHING_HAPPENS,
-				sessionLost: () => {
-					told.count += 1;
-					return Promise.resolve();
-				}
-			})
-		);
-		return told;
-	}
-
 	it.each(clients)(
-		'925_M3_P5: a 401 outside the sign-in forms tells sessionLost through $client',
+		'925_M3_P5: a 401 outside the sign-in forms and the public share reads tells sessionLost through $client',
 		async ({ request }) => {
-			const told = sessionLostTold();
+			const told = refusalsTold();
 			serverRefusesWith(401);
 
 			await request('/api/songs/s1').catch((e: unknown) => e);
 
-			expect(told.count).toBe(1);
+			expect(told).toEqual(['sessionLost']);
 		}
 	);
 
 	it.each(SIGN_IN_FORMS)(
 		'925_M3_P6: a 401 from $form tells sessionLost nothing and rejects with its ApiError',
 		async ({ path }) => {
-			const told = sessionLostTold();
+			const told = refusalsTold();
 			serverRefusesWith(401);
 
 			const failure = await apiFetch(path, { method: 'POST' }).catch((e: unknown) => e);
 
 			expect(failure).toBeInstanceOf(ApiError);
-			expect(told.count).toBe(0);
+			expect(told).toEqual([]);
+		}
+	);
+
+	const PUBLIC_SHARE_REQUESTS = [
+		{ request: 'a share read', path: '/shared/playlist/p1', init: undefined },
+		{ request: 'a share stream build', path: '/shared/p1/stream', init: { method: 'POST' } }
+	];
+
+	it.each(PUBLIC_SHARE_REQUESTS)(
+		'925_M2_C3: a 401 from $request tells sessionLost nothing and rejects with its ApiError',
+		async ({ path, init }) => {
+			const told = refusalsTold();
+			serverRefusesWith(401);
+
+			const failure = await apiFetch(path, init).catch((e: unknown) => e);
+
+			expect(failure).toBeInstanceOf(ApiError);
+			expect((failure as ApiError).status).toBe(401);
+			expect(told).toEqual([]);
 		}
 	);
 
@@ -589,20 +600,9 @@ describe('apiFetch abort signal', () => {
 		expect(signalPassedToFetch().aborted).toBe(true);
 	});
 
-	function fetchRejectingOnAbort(): void {
-		mockFetch.mockImplementationOnce(
-			(_path: string, init: RequestInit) =>
-				new Promise((_resolve, reject) => {
-					init.signal?.addEventListener('abort', () =>
-						reject(new DOMException('signal is aborted without reason', 'AbortError'))
-					);
-				})
-		);
-	}
-
 	it('rejects a request that hits the timeout as a NetworkError with a timeout reason', async () => {
 		vi.useFakeTimers();
-		fetchRejectingOnAbort();
+		mockFetch.mockImplementationOnce(hangsUntilAborted);
 		const failure = apiFetch('/api/songs/s1').catch((err: unknown) => err);
 		await vi.advanceTimersByTimeAsync(30_000);
 		const rejected = await failure;
@@ -612,7 +612,7 @@ describe('apiFetch abort signal', () => {
 	});
 
 	it("leaves the caller's own abort an AbortError", async () => {
-		fetchRejectingOnAbort();
+		mockFetch.mockImplementationOnce(hangsUntilAborted);
 		const caller = new AbortController();
 		const failure = apiFetch('/api/songs/s1', { signal: caller.signal }).catch(
 			(err: unknown) => err

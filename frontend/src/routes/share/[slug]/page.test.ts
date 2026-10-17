@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type {
 	QueueStreamManifest,
 	SharedAlbumPayload,
@@ -7,6 +7,7 @@ import type {
 	WhisperCue
 } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { hangsUntilAborted } from '$lib/test-utils/network';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-album' } } }));
 
@@ -167,6 +168,27 @@ afterEach(async () => {
 });
 
 describe('shared album page', () => {
+	it('925_M2_W1: asks the server for the album at its own share address', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => album });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.queue-row')).toHaveLength(2));
+		expect(mockFetch.mock.calls[0][0]).toBe('/shared/shared-album');
+	});
+
+	it('925_M2_W2: says in one line that a gone album link is no longer shared, with no player', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+
+		await vi.waitFor(() => expect(target.querySelector('h1')?.textContent).toBe('Album not found'));
+		expect(target.textContent).toContain('This share link is invalid or was removed.');
+		expect(target.querySelector('.now-playing')).toBeNull();
+	});
+
 	it('shows loading during retry and can recover into the album', async () => {
 		mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 		const target = document.createElement('div');
@@ -197,6 +219,22 @@ describe('shared album page', () => {
 		await vi.waitFor(() => {
 			expect(target.querySelector('h1')?.textContent).toBe('Recovered album');
 		});
+	});
+
+	it('925_M2_T1: a read that gets no answer within 30 seconds shows the error status with Try again', async () => {
+		vi.useFakeTimers();
+		onTestFinished(() => void vi.useRealTimers());
+		mockFetch.mockImplementation(hangsUntilAborted);
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		component = mount(Page, { target });
+		await tick();
+		expect(target.querySelector('h1')?.textContent).toBe('Loading album');
+
+		await vi.advanceTimersByTimeAsync(30_000);
+
+		expect(target.querySelector('h1')?.textContent).toBe('Could not load this album');
+		expect(target.querySelector('button')?.textContent).toBe('Try again');
 	});
 
 	it('hides songs without a pick instead of showing a disabled row', async () => {

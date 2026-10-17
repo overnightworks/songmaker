@@ -115,6 +115,12 @@ function sharedTake(media: Record<string, unknown> = {}): Record<string, unknown
 }
 
 describe('shared generation (take) page', () => {
+	it('925_M2_W1: asks the server for the take at its own share address', async () => {
+		await openSharedTake(sharedTake());
+
+		expect(mockFetch.mock.calls[0][0]).toBe('/shared/gen/shared-gen');
+	});
+
 	it('opens as the player for a shared take without exposing the internal take number', async () => {
 		const target = await openSharedTake(sharedTake());
 
