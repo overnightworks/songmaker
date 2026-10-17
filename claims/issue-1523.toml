@@ -1,8 +1,0 @@
-claim_id = "25063eeb1c244e7a98591e6ac0e86ade"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "f6a51bb31c2eac2883539ad946db174ea386c75e"
-branch = "claude/issue-1523-current-mark-outside-pages"
-scope = ["frontend/e2e/home-library-addresses.spec.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/routes/addresses.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/routes/standingAddress.ts"]
-opened_commit = "06df5cfca42764bd3a7afc55347c1502441177d4"
-whole_reason = "One current-mark rule for the two rail groups needs the shared predicates, the one reader and their e2e cells together."
