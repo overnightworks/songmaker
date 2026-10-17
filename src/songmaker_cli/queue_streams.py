@@ -27,6 +27,7 @@ from typing import Final, Literal
 from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
 
+from songmaker_cli import audio_files
 from songmaker_cli.api_models.queue_streams import (
     QueueStreamManifestResponse,
     QueueStreamTrackResponse,
@@ -514,27 +515,9 @@ def delete_snapshot_files(ctx: AppContext, snapshot_id: str) -> None:
         (root / f"{snapshot_id}{suffix}").unlink(missing_ok=True)
 
 
-def read_audio_duration(audio_path: Path) -> float | None:
-    """Read a file's real length in seconds, or None if it can't be read.
-
-    Pure: no HTTP dependency, no request-boundary shape. Safe to call from
-    any layer, including a background job or the DB query layer.
-    """
-    try:
-        from mutagen import File as MutagenFile
-
-        audio = MutagenFile(audio_path)
-        if audio is None:
-            return None
-        length = float(audio.info.length)
-    except Exception:
-        return None
-    return length if length > 0 else None
-
-
 def probe_audio_duration(audio_path: Path) -> float:
     """Request-boundary wrapper: an unreadable file is a 422, not a None."""
-    duration = read_audio_duration(audio_path)
+    duration = audio_files.read_audio_duration(audio_path)
     if duration is None:
         raise HTTPException(422, "Could not read audio duration")
     return duration

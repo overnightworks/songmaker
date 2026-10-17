@@ -257,7 +257,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 });
 
 // defect:#1091: the wall sized its covers '100%', so the initials came out a
-// fraction of a pixel. They keep the 32% of the cover's width they have at 18 px.
+// fraction of a pixel. Wall initials scale with the cover, with a readable floor on phone rows.
 const INITIALS_SHARE_OF_COVER = 0.32;
 const READABLE_INITIALS_PX = 14;
 
@@ -283,7 +283,10 @@ test('defect:#1091: a playlist without covers shows readable initials on the Pla
 		);
 
 		expect(initialsSize).toBeGreaterThanOrEqual(READABLE_INITIALS_PX);
-		expect(initialsSize / coverWidth).toBeCloseTo(INITIALS_SHARE_OF_COVER, 2);
+		expect(initialsSize).toBeCloseTo(
+			Math.max(READABLE_INITIALS_PX, coverWidth * INITIALS_SHARE_OF_COVER),
+			1
+		);
 	} finally {
 		await deleteOwnedPlaylist(page, playlist.id);
 	}

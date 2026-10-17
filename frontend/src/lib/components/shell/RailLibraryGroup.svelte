@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { openCollection } from '$lib/stores/collection';
-	import { albumWhoseSongsShow, librarySurface } from '$lib/stores/libraryContext';
+	import {
+		albumWhoseSongsShow,
+		libraryWallShows,
+		librarySurface
+	} from '$lib/stores/libraryContext';
 	import {
 		albumList,
 		allAlbumsLoad,
@@ -33,6 +38,8 @@
 		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
+	import { LIBRARY_ROUTE_PATH, standsOnLibraryPage } from '$lib/routes/addresses';
+	import { standingPathname } from '$lib/routes/standingAddress';
 	import { titleInitials } from '$lib/utils/format';
 	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
@@ -62,8 +69,13 @@
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
-	// The Library page itself: its group is current and unfolded there (#1354 D1).
-	const onLibraryPage = $derived(surface === 'browse' && currentSongId === null);
+	// The Library wall is the surface in view: it unfolds the group (#1354 D1).
+	// The surface alone also reads `browse` on /settings and while /?song= looks
+	// its song up, so it does not make the word current (#1523).
+	const libraryWallIsSurface = $derived(libraryWallShows(surface, currentSongId));
+	const onLibraryPage = $derived(
+		libraryWallIsSurface && standsOnLibraryPage(standingPathname(page.state))
+	);
 	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadFailure = $derived($allAlbumsLoadFailure);
@@ -198,11 +210,11 @@
 	groupId="rail-library-group"
 	storageKey={LIBRARY_OPEN_STORAGE_KEY}
 	count={albumCount}
-	expandTrigger={onLibraryPage || isAlbumDetail || loadFailure !== null || filtering}
+	expandTrigger={libraryWallIsSurface || isAlbumDetail || loadFailure !== null || filtering}
 	page={{
-		href: resolve('/'),
+		href: resolve(LIBRARY_ROUTE_PATH),
 		current: onLibraryPage,
-		open: () => void openRailSearchTarget({ kind: 'page', href: '/' })
+		open: () => void openRailSearchTarget({ kind: 'page', href: LIBRARY_ROUTE_PATH })
 	}}
 	{icon}
 >

@@ -14,6 +14,7 @@ from acestep_worker.downloads import (
     run_download,
     start_download,
 )
+from acestep_worker.models import TaskResult
 from acestep_worker.task_store import TaskStore
 
 
@@ -178,6 +179,72 @@ def test_run_download_failure(tmp_path: Path) -> None:
     assert snap is not None
     assert snap.state == "error"
     assert "network broke" in (snap.error or "")
+
+
+class _CancelsItsRunnerOnComplete(TaskStore):
+    async def complete(self, task_id: str, result: TaskResult) -> None:
+        await super().complete(task_id, result)
+        current_task = asyncio.current_task()
+        assert current_task is not None
+        current_task.cancel()
+
+
+def test_run_download_ends_cancelled_when_cancelled_while_stopping_its_progress_poll(
+    tmp_path: Path,
+) -> None:
+    """defect:#1509 -- cancelling the runner while it stops its poll child was swallowed."""
+
+    async def go() -> None:
+        store = _CancelsItsRunnerOnComplete()
+        task_id = await store.create("download")
+
+        async def instant_download(repo_id: str, local_dir: Path) -> None:
+            return None
+
+        await run_download(
+            store,
+            task_id,
+            mode="sft",
+            checkpoint_dir=tmp_path,
+            download_fn=instant_download,
+        )
+
+    cancelled_download = go()
+    with pytest.raises(asyncio.CancelledError):
+        _run(cancelled_download)
+
+
+class _FailsItsProgressUpdates(TaskStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.progress_update_failed = asyncio.Event()
+
+    async def update_progress(self, task_id: str, *args: object, **kwargs: object) -> None:
+        self.progress_update_failed.set()
+        raise OSError("progress store unavailable")
+
+
+def test_run_download_raises_when_its_progress_poll_failed(tmp_path: Path) -> None:
+    """defect:#1509 -- a progress poll that failed was dropped after the owner cancelled it."""
+
+    async def go() -> None:
+        store = _FailsItsProgressUpdates()
+        task_id = await store.create("download")
+
+        async def download_until_the_progress_poll_failed(repo_id: str, local_dir: Path) -> None:
+            await store.progress_update_failed.wait()
+
+        await run_download(
+            store,
+            task_id,
+            mode="sft",
+            checkpoint_dir=tmp_path,
+            download_fn=download_until_the_progress_poll_failed,
+        )
+
+    download_with_a_failing_progress_poll = go()
+    with pytest.raises(OSError, match="progress store unavailable"):
+        _run(download_with_a_failing_progress_poll)
 
 
 def test_poll_progress_emits_updates(tmp_path: Path) -> None:

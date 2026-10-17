@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 import { phoneAppBar, sidebarOpen } from '$lib/stores/ui';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import {
@@ -15,6 +16,7 @@ import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
 	APP_NAME,
 	HITBOX_FREQUENT_PX,
+	HOME_PAGE_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SEARCH_LABEL
 } from '$lib/constants';
@@ -29,7 +31,7 @@ import {
 	resetHistoryControllerForTests,
 	stampNavigatedEntry
 } from '$lib/history/historyController';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
 import { resetLayersForTests } from '$lib/stores/layers';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -176,6 +178,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	phoneAppBar.set(null);
 	sidebarOpen.set(false);
+	libraryAddressOverlayActive.set(false);
 	resetHistoryControllerForTests();
 	resetLayersForTests();
 	resetRailSearchForTests();
@@ -189,26 +192,36 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
+function songBar(onrename = vi.fn(async () => undefined)) {
+	return {
+		kind: 'song' as const,
+		title: 'Sommerlicht',
+		onrename,
+		share: {
+			isShared: false,
+			shareSlug: null,
+			onshare: vi.fn(),
+			onunshare: vi.fn()
+		},
+		menu: {
+			saveDisabled: true,
+			onsave: vi.fn(),
+			onaddtoplaylist: vi.fn(),
+			ondelete: vi.fn()
+		}
+	};
+}
+
+// Whether the workspace-style `inert` reaches the element: jsdom has no
+// hit-testing, so the attribute on it or an ancestor is what a browser acts on.
+function isInert(element: Element | null): boolean {
+	return element?.closest('[inert]') != null;
+}
+
 describe('PhoneAppBar', () => {
-	it('offers five song slots with named touch actions, search and inline rename', async () => {
+	it('defect:#1531: offers five song slots with named touch actions, search and inline rename', async () => {
 		const onrename = vi.fn(async () => undefined);
-		phoneAppBar.set({
-			kind: 'song',
-			title: 'Sommerlicht',
-			onrename,
-			share: {
-				isShared: false,
-				shareSlug: null,
-				onshare: vi.fn(),
-				onunshare: vi.fn()
-			},
-			menu: {
-				saveDisabled: true,
-				onsave: vi.fn(),
-				onaddtoplaylist: vi.fn(),
-				ondelete: vi.fn()
-			}
-		});
+		phoneAppBar.set(songBar(onrename));
 		const target = renderBar();
 		await tick();
 		expect(target.querySelector('header')?.children).toHaveLength(5);
@@ -234,6 +247,36 @@ describe('PhoneAppBar', () => {
 		expect(onrename).toHaveBeenCalledWith('Abendlicht');
 	});
 
+	it('defect:#1531: waits with the workspace while an address overlay is up, and acts once it is gone', async () => {
+		phoneAppBar.set(songBar());
+		libraryAddressOverlayActive.set(true);
+		const target = renderBar();
+		await tick();
+		const songControls = (): Element[] => [
+			target.querySelector('h1') as Element,
+			getByRoleButton(target, 'Share song'),
+			getByRoleButton(target, 'Song menu')
+		];
+		const otherControls = [
+			getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL),
+			getByRoleButton(target, SEARCH_OPEN_LABEL)
+		];
+
+		expect(songControls().map(isInert)).toEqual([true, true, true]);
+		expect(otherControls.map(isInert)).toEqual([false, false]);
+
+		libraryAddressOverlayActive.set(false);
+		await tick();
+		expect(songControls().map(isInert)).toEqual([false, false, false]);
+		getByRoleButton(target, 'Song menu').click();
+		await tick();
+		expect(getByRoleButton(target, 'Delete song')).toBeTruthy();
+
+		libraryAddressOverlayActive.set(true);
+		await tick();
+		expect(songControls().map(isInert)).toEqual([true, true, true]);
+	});
+
 	it("carries search and the viewer's account circle at the right on the Library", async () => {
 		const target = renderBar();
 		await tick();
@@ -247,14 +290,22 @@ describe('PhoneAppBar', () => {
 		expectFrequentHitbox(getByRoleButton(target, SEARCH_OPEN_LABEL), SEARCH_OPEN_LABEL);
 	});
 
-	// #1402: the Playlists page is a list the app opens on, as the Library is.
-	it.each<{ entered: string; from?: Pathname }>([
-		{ entered: 'fresh' },
-		{ entered: 'from an album', from: '/album/a1' }
+	// #1402, #1506: Home and the Playlists page are places the app opens on, as
+	// the Library is.
+	it.each<{ place: string; address: Pathname; entered: string; from?: Pathname }>([
+		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'fresh' },
+		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'from an album', from: '/album/a1' },
+		{ place: 'the Playlists page', address: '/playlists', entered: 'fresh' },
+		{
+			place: 'the Playlists page',
+			address: '/playlists',
+			entered: 'from an album',
+			from: '/album/a1'
+		}
 	])(
-		'carries the brand, search and the account circle without ‹ on the Playlists page entered $entered',
-		async ({ from }) => {
-			await standOn('/playlists', from);
+		'1354_rule_25: carries the brand, search and the account circle without ‹ on $place entered $entered',
+		async ({ address, from }) => {
+			await standOn(address, from);
 			const target = renderBar();
 			await tick();
 
@@ -289,6 +340,12 @@ describe('PhoneAppBar', () => {
 			opened: '/album/a1',
 			from: LIBRARY_ROUTE_PATH,
 			name: 'Library'
+		},
+		{
+			page: 'an album opened from Home',
+			opened: '/album/a1',
+			from: HOME_ROUTE_PATH,
+			name: HOME_PAGE_LABEL
 		},
 		{
 			page: 'an album opened from another album',
@@ -333,7 +390,7 @@ describe('PhoneAppBar', () => {
 		},
 		{ page: 'Settings with nothing before it', opened: '/settings', name: 'Library' }
 	])(
-		'names ‹ on $page after $name, beside search and without the account circle',
+		'1354_rule_25: names ‹ on $page after $name, beside search and without the account circle',
 		async ({ opened, from, name }) => {
 			await standOn(opened, from);
 			const target = renderBar();

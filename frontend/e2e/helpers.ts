@@ -5,6 +5,8 @@ import {
 	type BrowserContext,
 	type Locator,
 	type Page,
+	type Request,
+	type Response,
 	type TestInfo
 } from '@playwright/test';
 import {
@@ -16,6 +18,7 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
@@ -268,6 +271,19 @@ export async function loseNetwork(
 	if (!keepOpenStreams) await page.evaluate(() => window.stop());
 }
 
+/**
+ * Waits until the service worker has installed and controls the page, so that
+ * what it precached (the route code of every address) answers once the
+ * network is cut. A cut inside the install window, the first seconds after a
+ * first-ever load, is owned by #1160.
+ */
+export async function waitForServiceWorkerControl(page: Page): Promise<void> {
+	await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+	await expect
+		.poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
+		.toBe(true);
+}
+
 /** Gives the page its network back: the browser reports online and the stream may reopen. */
 export async function regainNetwork(page: Page, context: BrowserContext): Promise<void> {
 	await page.unroute(isResourceEventStream);
@@ -354,6 +370,23 @@ export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'mobile')
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	await expect(page).toHaveURL(LIBRARY_URL);
+}
+
+/** An album through its row in the rail's Library list — behind the drawer on the phone. */
+export async function openAlbumFromRail(
+	page: Page,
+	shell: Shell,
+	albumTitle: string
+): Promise<void> {
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: albumTitle })
+		.getByRole('button', { name: containing(albumTitle) })
+		.click();
 }
 
 /**
@@ -479,6 +512,67 @@ export function containing(title: string): RegExp {
 	return new RegExp(escapeForRegExp(title));
 }
 
+const PLAYING_AUDIO_KEY = 'playingAudio';
+
+export interface PlayingAudioState {
+	time: number;
+	paused: boolean;
+	src: string;
+}
+
+/**
+ * Makes the media element the app last started readable by
+ * `playingAudioState`, without changing how it plays. Call it before the page
+ * loads: the player owns a detached element no locator can reach.
+ */
+export async function observePlayingAudio(page: Page): Promise<void> {
+	await page.addInitScript((key) => {
+		const play = HTMLMediaElement.prototype.play;
+		HTMLMediaElement.prototype.play = function () {
+			Reflect.set(window, key, this);
+			return play.call(this);
+		};
+	}, PLAYING_AUDIO_KEY);
+}
+
+export function playingAudioState(page: Page): Promise<PlayingAudioState> {
+	return page.evaluate((key) => {
+		const audio = Reflect.get(window, key) as HTMLMediaElement | undefined;
+		return { time: audio?.currentTime ?? 0, paused: audio?.paused ?? true, src: audio?.src ?? '' };
+	}, PLAYING_AUDIO_KEY);
+}
+
+// How far the tapped take must play on before the tap counts as played.
+const PLAYBACK_PROGRESS_SECONDS = 0.3;
+// How long a cancelled successor take has to arrive in full after all; a take
+// that crawls in over a throttled link is not a failure, a take that never
+// comes is.
+const SUCCESSOR_REFETCH_TIMEOUT_MS = 30_000;
+// The total budget of a test that taps through takes: each tap can wait out a
+// full SUCCESSOR_REFETCH_TIMEOUT_MS, so the budget has to outlast several waits.
+export const SUCCESSOR_TAKES_TEST_TIMEOUT_MS = 120_000;
+
+/**
+ * Passes once the media element the app last started has played on from where
+ * it stands when this is called, so call it right after the tap's playing mark
+ * shows. A paused element has not played on: a take the app only marked as
+ * playing, or the one it just left, does not pass. Position alone proves
+ * nothing, because on the continuous deck `currentTime` is the position in the
+ * whole stream and a tap on a take the deck already holds is a seek that moves
+ * it without a frame played. It does not fit a load with a start position
+ * (`pendingRecoverySeek` in `audioPlayer.svelte.ts`): that load seeks, so its
+ * first frames are a jump rather than a play-on from where it stood.
+ */
+async function expectPlaybackAdvances(page: Page): Promise<void> {
+	const { time: startedAt } = await playingAudioState(page);
+	await expect
+		.poll(async () => {
+			const { paused, time } = await playingAudioState(page);
+			return paused ? 0 : time - startedAt;
+		})
+		.toBeGreaterThan(PLAYBACK_PROGRESS_SECONDS);
+}
+
 export interface RenderedBox {
 	x: number;
 	y: number;
@@ -530,6 +624,26 @@ function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
 	return refusal.path.endsWith('/') ? pathname.startsWith(refusal.path) : pathname === refusal.path;
 }
 
+const BYTE_RANGE_SERVED = /^bytes (\d+)-(\d+)\/(\d+)$/;
+const BYTE_RANGE_TO_THE_END = /^bytes=\d+-$/;
+
+// The deck resumes a cancelled take with a range request from where the cancel
+// cut it (`continuousDeck.ts`), and the browser reads a playing element with
+// open-ended ranges too. Only a GET that asked for the take to its end and was
+// answered with the whole take, or with the part from the cut to its last byte,
+// completes it: the player's HEAD probe of the take, the one-byte reads seen
+// beside it, and an answer that names no known end deliver nothing.
+function completesTheTake(response: Response): boolean {
+	const request = response.request();
+	if (request.method() !== 'GET') return false;
+	const asked = request.headers()['range'];
+	if (asked !== undefined && !BYTE_RANGE_TO_THE_END.test(asked)) return false;
+	if (response.status() === 200) return true;
+	if (response.status() !== 206) return false;
+	const served = BYTE_RANGE_SERVED.exec(response.headers()['content-range'] ?? '');
+	return served !== null && Number(served[2]) + 1 === Number(served[3]);
+}
+
 /**
  * Fails the flow on a rate-limited or failed response, on a browser console
  * error, and on an uncaught page exception — and counts what the flow costs
@@ -537,9 +651,17 @@ function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
  */
 export class FlowGuard {
 	private readonly failures: string[] = [];
+	private readonly takesBeingAbandoned = new Set<string>();
+	private readonly completingResponses = new WeakSet<Request>();
+	private readonly refusedAsExpected = new WeakSet<Request>();
+	private successorPath: string | undefined;
+	private abortedSuccessorUrls: string[] = [];
 	private apiRequests = 0;
 
-	constructor(page: Page, options: FlowGuardOptions = {}) {
+	constructor(
+		private readonly page: Page,
+		options: FlowGuardOptions = {}
+	) {
 		const refusalsExpectedOn = options.refusalsExpectedOn ?? [];
 		const losesNetworkOnPurpose = options.losesNetworkOnPurpose ?? false;
 		const refusalIsExpected = (url: string, status: number): boolean => {
@@ -556,12 +678,18 @@ export class FlowGuard {
 		});
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
-			// Chromium reports a stream the client cancelled in flight, and a send
-			// the leaving page cut off, as a failed request with exactly this error, indistinguishable from any other
-			// intentional client-side abort. Every other reason still fails the
-			// flow, including a 429 or 5xx on the same path (handled below).
+			// Chromium reports a stream the client cancelled in flight, a send the
+			// leaving page cut off and a take the running step abandons as a
+			// failed request with exactly this error, indistinguishable from any
+			// other intentional client-side abort. Every other reason still fails
+			// the flow, including a 429 or 5xx on the same path (handled below).
+			// A request the page leaves behind after the server's expected refusal
+			// of it is reported the same way, though its answer had arrived.
 			const cutOffOnPurpose =
-				isClosedOnPurpose(request.url()) || isSentAsThePageLeaves(request.url());
+				isClosedOnPurpose(request.url()) ||
+				isSentAsThePageLeaves(request.url()) ||
+				this.forgivesAbandonedTake(request.url()) ||
+				this.refusedAsExpected.has(request);
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
@@ -570,9 +698,21 @@ export class FlowGuard {
 		});
 		page.on('response', (response) => {
 			const status = response.status();
-			if (refusalIsExpected(response.url(), status)) return;
+			if (completesTheTake(response)) {
+				this.completingResponses.add(response.request());
+			}
+			if (refusalIsExpected(response.url(), status)) {
+				this.refusedAsExpected.add(response.request());
+				return;
+			}
 			if (status === 429 || status >= 500) {
 				this.failures.push(`${status} from ${response.url()}`);
+			}
+		});
+		page.on('requestfinished', (request) => {
+			const completedTake = this.completingResponses.has(request);
+			if (completedTake && new URL(request.url()).pathname === this.successorPath) {
+				this.abortedSuccessorUrls = [];
 			}
 		});
 		page.on('console', (message) => {
@@ -588,6 +728,49 @@ export class FlowGuard {
 		page.on('pageerror', (error) => {
 			this.failures.push(`uncaught page error: ${error.message}`);
 		});
+	}
+
+	/**
+	 * Runs the step that leaves these takes for `successorPath` — a tap or a Next
+	 * that repicks the queue — and forgives, for exactly as long as it runs, the
+	 * aborted downloads of those takes: the player cancels the download of every
+	 * take it drops or asks for anew, which Chromium reports as an aborted request
+	 * whether or not the whole take had arrived, and a look-ahead it had only just
+	 * started can fall to the same tap. The abort of the successor itself is
+	 * forgiven only once a later request for it has finished and reached the end
+	 * of the take, because the deck keeps the audio of a cancelled download and
+	 * playback can go on from it without the take ever arriving. The step ends
+	 * with the proof that the successor plays, so an abort after it, or of any
+	 * other take, still fails the flow.
+	 */
+	async abandoningTakes(
+		abandonedPaths: readonly string[],
+		successorPath: string,
+		step: () => Promise<void>
+	): Promise<void> {
+		for (const audioPath of abandonedPaths) this.takesBeingAbandoned.add(audioPath);
+		this.successorPath = successorPath;
+		try {
+			await step();
+			await expectPlaybackAdvances(this.page);
+			await expect
+				.poll(() => this.abortedSuccessorUrls, {
+					message: 'the successor take was cancelled and never fetched in full afterwards',
+					timeout: SUCCESSOR_REFETCH_TIMEOUT_MS
+				})
+				.toEqual([]);
+		} finally {
+			for (const audioPath of abandonedPaths) this.takesBeingAbandoned.delete(audioPath);
+			this.successorPath = undefined;
+			this.abortedSuccessorUrls = [];
+		}
+	}
+
+	private forgivesAbandonedTake(url: string): boolean {
+		const pathname = new URL(url).pathname;
+		if (!this.takesBeingAbandoned.has(pathname)) return false;
+		if (pathname === this.successorPath) this.abortedSuccessorUrls.push(url);
+		return true;
 	}
 
 	get apiRequestCount(): number {

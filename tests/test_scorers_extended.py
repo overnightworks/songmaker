@@ -13,7 +13,7 @@ import pytest
 librosa = pytest.importorskip("librosa")
 
 from conftest import override_provider_runtime, read_wav, write_wav
-from songmaker_cli.api_models.whisper import WhisperCue, WhisperWordCue
+from songmaker_cli.whisper_cues import WhisperCue, WhisperWordCue
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (

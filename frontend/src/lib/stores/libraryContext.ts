@@ -49,25 +49,26 @@ import {
 import { deselectPlaylist, loadPlaylistDetail, playlistList } from '$lib/stores/playlists';
 import {
 	albumRoutePath,
+	HOME_ROUTE_PATH,
 	legacySongRoutePath,
+	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	pendingTakeRoutePath,
 	playlistRoutePath,
 	PLAYLISTS_ROUTE_PATH,
-	LIBRARY_ROUTE_PATH,
 	songRoutePath,
 	takeRoutePath
 } from '$lib/routes/addresses';
 import { CREATED_SORTS } from '$lib/utils/recency';
 import { songTakesLoaded } from '$lib/utils/playable';
 
-// 'browse' shows the library wall (the LibraryWall component), 'playlists'
-// the Playlists page's wall of playlists alone (#1402); 'detail' shows
-// whichever collection is currently open. Song detail always wins over all
-// three (see LibraryWorkspace.svelte). An entry still carrying the removed
-// create surface is no library entry any more, so Back onto it lands on the
-// wall.
-type LibrarySurface = 'browse' | 'playlists' | 'detail';
+// 'home' shows Home (LibraryHome: Continue), 'browse' the library wall (the
+// LibraryWall component), 'playlists' the Playlists page's wall of playlists
+// alone (#1402); 'detail' shows whichever collection is currently open. Song
+// detail always wins over all four (see LibraryWorkspace.svelte). An entry
+// still carrying the removed create surface is no library entry any more, so
+// Back onto it lands on the wall.
+type LibrarySurface = 'home' | 'browse' | 'playlists' | 'detail';
 // Song tabs (#1016): 'edit' hosts recipe, style, lyrics and Generate;
 // 'cowriter' hosts the conversation; 'takes' lists generations.
 // LEGACY_DETAIL_TAB_MAP below keeps history entries written under the older
@@ -102,7 +103,7 @@ export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
 
-const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'playlists', 'detail']);
+const SURFACES: ReadonlySet<LibrarySurface> = new Set(['home', 'browse', 'playlists', 'detail']);
 const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 	write: 'edit',
 	generations: 'takes',
@@ -116,6 +117,7 @@ const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 let runningApply: HistoryApply | null = null;
 let librarySnapshotTaken = false;
 let latestHeldWrite: LibraryHistoryState | null = null;
+let placeReturnedFrom: OpenCollection | null = null;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -205,6 +207,7 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 		}
 		return legacySongRoutePath(state.songId, state.generationId);
 	}
+	if (state.surface === 'home') return HOME_ROUTE_PATH;
 	if (state.surface === 'playlists') return PLAYLISTS_ROUTE_PATH;
 	const shownAlbum = albumWhoseSongsShow(state.surface, state.collection);
 	if (shownAlbum) return albumRoutePath(shownAlbum);
@@ -214,14 +217,14 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 	// point that opens a playlist already awaits before writing history. The
 	// rare case where it genuinely hasn't yet (the collection was restored
 	// from a stale history entry whose playlist has since vanished) falls
-	// back to '/' rather than a broken address -- the wall is always a safe
-	// landing, unlike a guessed path that names no playlist.
+	// back to the Library rather than a broken address -- the wall is always a
+	// safe landing, unlike a guessed path that names no playlist.
 	const shownPlaylist = playlistWhoseDetailShows(state.surface, state.collection);
 	if (shownPlaylist) {
 		const playlist = get(playlistList).find((item) => item.id === shownPlaylist);
 		if (playlist) return playlistRoutePath(playlist.slug);
 	}
-	return '/';
+	return LIBRARY_ROUTE_PATH;
 }
 
 type HistoryWriteMode = 'push' | 'replace';
@@ -238,7 +241,7 @@ type HistoryWriteMode = 'push' | 'replace';
 // A write from a library page -- an entry carrying a library state -- is
 // therefore shallow routing (`pushState`/`replaceState`), synchronous and
 // without a route resolution. When it changes which route file the address
-// names (`/`, `/album/<slug>`, `/album/<slug>/<song>`,
+// names (`/`, `/library`, `/album/<slug>`, `/album/<slug>/<song>`,
 // `/album/<slug>/<song>/take/<n>`, `/playlists`, `/playlist/<slug>`;
 // `libraryRouteShape` names which), a `goto` then mounts the route of that
 // address over the entry already standing, carrying the library as its page
@@ -300,13 +303,13 @@ function writeLibraryHistoryNow(
 		const written = writeShallowLibraryHistory(state, url, mode);
 		return remountOverStandingEntry(url, libraryPageState(written));
 	}
-	if (historyStandsOnLibraryPage()) {
+	if (historyStandsInLibraryWorkspace()) {
 		return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, mode));
 	}
 	return navigateLibraryRoute(url, state, mode);
 }
 
-function historyStandsOnLibraryPage(): boolean {
+function historyStandsInLibraryWorkspace(): boolean {
 	return (
 		libraryRouteShape(window.location.pathname) !== 'external' &&
 		isLibraryHistoryState(libraryHistoryEntry())
@@ -371,6 +374,9 @@ export function loadLibraryHistoryPageForTests(): void {
 // The library history entry the next write starts from: the entry history
 // stands on, or -- while history the controller has moving holds a write --
 // the latest held write, which is what will stand once history stands still.
+// A held write is read as written, not through the address: a `{browse}` push
+// for `/library` is held while the address still reads `/`, and must not be
+// taken for the stale Home entry that address used to hold.
 export function currentLibraryHistoryState(): unknown {
 	return latestHeldWrite ?? libraryHistoryEntry();
 }
@@ -379,10 +385,26 @@ export function currentLibraryHistoryState(): unknown {
 // the router keeps it under its page state, and an entry written raw before
 // the router did (a tab kept open across the change) is that state itself.
 // Every read of an entry -- the current one or the one a popstate lands on --
-// goes through here.
+// goes through here, and the address history stands on decides what it says
+// (`entryForAddress`). The entry read is always the one at that address: a
+// popstate reaches its handler after the address moved, and a handler that
+// attaches late hears the entry history stands on.
 export function libraryHistoryEntry(entry: unknown = history.state): unknown {
 	const pageState = pageStateOfHistoryState(entry);
-	return pageState === null ? entry : (pageState.library ?? null);
+	const written = pageState === null ? entry : (pageState.library ?? null);
+	return entryForAddress(written, window.location.pathname);
+}
+
+// Home had no address of its own before #1506: the Library wall stood at `/`,
+// so a `{browse}` entry at `/` is one a tab or a history from before the
+// switch kept, and it says Home now. Every other field stays -- the open
+// collection among them, which the rail keeps as its context -- except the
+// scroll, which belongs to the wall and not to Home. An entry of any other
+// surface says what it was written to say.
+function entryForAddress(entry: unknown, pathname: string): unknown {
+	if (!isLibraryHistoryState(entry) || entry.surface !== 'browse') return entry;
+	if (libraryRouteShape(pathname) !== 'home') return entry;
+	return { ...entry, surface: 'home', scrollAnchor: 0 };
 }
 
 function libraryPageState(state: LibraryHistoryState): App.PageState {
@@ -433,19 +455,25 @@ export function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
 			routePath: albumRoutePath(albumId),
 			historyOpens: () => historyAlreadyOpens(albumId),
 			addressState: () => albumAddressState(albumId),
-			shown: () => albumAlreadyShown(albumId)
+			shown: () => albumAlreadyShown(albumId),
+			restoresListing: true
 		};
 	});
 }
 
 // What an address route resolved its params to: the page's own address,
 // whether history already opens it, the library state that opens it afresh,
-// and whether the library already shows it.
+// whether the library already shows it, and whether applying it restores the
+// listing. An address that names a surface and no resource leaves the listing
+// to the live stream's snapshot, which restores it on every cold tab (an
+// in-app route has it already): its own restore would load the same pages a
+// second time.
 interface ResolvedAddress {
 	readonly routePath: string;
 	readonly historyOpens: () => boolean;
 	readonly addressState: () => LibraryHistoryState;
 	readonly shown: () => boolean;
+	readonly restoresListing: boolean;
 }
 
 // The address the route was mounted under, read as its resolution starts:
@@ -490,7 +518,7 @@ async function showResolvedAddress(address: ResolvedAddress): Promise<void> {
 		? (currentLibraryHistoryState() as LibraryHistoryState)
 		: address.addressState();
 	if (!opened) await writeLibraryHistory(state, address.routePath, 'replace');
-	if (!address.shown()) await applyLibraryHistory(state);
+	if (!address.shown()) await applyLibraryHistory(state, address.restoresListing);
 }
 
 // Both short circuits keep the address from re-asking what the library has
@@ -563,7 +591,8 @@ export function openSongAddress(
 			routePath: songRoutePath(albumId, songSlug),
 			historyOpens: () => historyAlreadyOpensSong(song.id),
 			addressState: () => songAddressState(song, generationId),
-			shown: () => songAlreadyShown(song.id)
+			shown: () => songAlreadyShown(song.id),
+			restoresListing: true
 		};
 	});
 }
@@ -603,7 +632,8 @@ export function openTakeAddress(
 			routePath: takeRoutePath(albumId, songSlug, takeNumber),
 			historyOpens: () => historyAlreadyOpensTake(song.id, generation.id),
 			addressState: () => songAddressState(song, generation.id),
-			shown: () => takeAlreadyShown(song.id, generation.id)
+			shown: () => takeAlreadyShown(song.id, generation.id),
+			restoresListing: true
 		};
 	});
 }
@@ -623,7 +653,8 @@ export function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
 			routePath: playlistRoutePath(slug),
 			historyOpens: () => historyAlreadyOpensPlaylist(playlist.id),
 			addressState: () => playlistAddressState(playlist.id),
-			shown: () => playlistAlreadyShown(playlist.id)
+			shown: () => playlistAlreadyShown(playlist.id),
+			restoresListing: true
 		};
 	});
 }
@@ -671,49 +702,54 @@ function playlistAddressState(playlistId: string): LibraryHistoryState {
 	};
 }
 
-// The Library page owns its initial entry, just like the Playlists page.
-// A matching browse entry keeps its collection, query, sort and scroll;
+// The entry point of an address that names a surface and no resource (Home,
+// the Library, the Playlists page; #1402): there is nothing to look up and no
+// verdict to state, so the route only resolves through the frame every address
+// route shares, which decides whether history moved on meanwhile. An entry
+// that already shows the surface keeps its collection, query, sort and scroll;
 // a foreign entry is replaced in place without adding a Back step.
-export function openLibraryAddress(): Promise<'found'> {
+function openSurfaceAddress(
+	routePath: string,
+	surface: LibrarySurface,
+	shows: (surface: LibrarySurface, songId: string | null) => boolean
+): Promise<'found'> {
 	return resolveMountedAddress<never>(() =>
 		Promise.resolve({
-			routePath: LIBRARY_ROUTE_PATH,
+			routePath,
 			historyOpens: () => {
 				const state = currentLibraryHistoryState();
-				return isLibraryHistoryState(state) && libraryWallShows(state.surface, state.songId);
+				return isLibraryHistoryState(state) && shows(state.surface, state.songId);
 			},
-			addressState: () => ({ ...libraryRootState(), surface: 'browse' }),
-			shown: () => libraryWallShows(get(librarySurface), get(selectedSongId))
+			addressState: () => ({ ...libraryRootState(), surface }),
+			shown: () => shows(get(librarySurface), get(selectedSongId)),
+			restoresListing: false
 		})
 	);
 }
 
-// The entry point of the /playlists route (#1402). The address names no
-// resource of its own, so there is nothing to look up and no verdict to
-// state; the route still resolves through the frame every address route
-// shares, which decides whether history moved on meanwhile.
+export function openHomeAddress(): Promise<'found'> {
+	return openSurfaceAddress(HOME_ROUTE_PATH, 'home', homeShows);
+}
+
+export function openLibraryAddress(): Promise<'found'> {
+	return openSurfaceAddress(LIBRARY_ROUTE_PATH, 'browse', libraryWallShows);
+}
+
 export function openPlaylistsAddress(): Promise<'found'> {
-	return resolveMountedAddress<never>(() =>
-		Promise.resolve({
-			routePath: PLAYLISTS_ROUTE_PATH,
-			historyOpens: historyAlreadyOpensPlaylists,
-			addressState: () => ({ ...libraryRootState(), surface: 'playlists' }),
-			shown: () => playlistsWallShows(get(librarySurface), get(selectedSongId))
-		})
-	);
+	return openSurfaceAddress(PLAYLISTS_ROUTE_PATH, 'playlists', playlistsWallShows);
 }
 
-function historyAlreadyOpensPlaylists(): boolean {
-	const state = currentLibraryHistoryState();
-	return isLibraryHistoryState(state) && playlistsWallShows(state.surface, state.songId);
+// A surface shows only while no song is open: an open song stands in front of
+// every surface, Home and both walls included.
+function homeShows(surface: LibrarySurface, songId: string | null): boolean {
+	return surface === 'home' && songId === null;
 }
 
-function libraryWallShows(surface: LibrarySurface, songId: string | null): boolean {
+export function libraryWallShows(surface: LibrarySurface, songId: string | null): boolean {
 	return surface === 'browse' && songId === null;
 }
 
-// An open song stands in front of every surface, the Playlists wall included.
-function playlistsWallShows(surface: LibrarySurface, songId: string | null): boolean {
+export function playlistsWallShows(surface: LibrarySurface, songId: string | null): boolean {
 	return surface === 'playlists' && songId === null;
 }
 
@@ -936,11 +972,14 @@ function applyStands(apply: HistoryApply): boolean {
 	return apply.entry === null || standingPageEntryId() === apply.entry;
 }
 
-export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
+export async function applyLibraryHistory(
+	state: LibraryHistoryState,
+	restoresListing = true
+): Promise<boolean> {
 	const apply = startHistoryApply();
 	if (heldRestores !== null) await heldRestores;
 	if (!applyStands(apply)) return false;
-	librarySurface.set(state.surface);
+	setLibrarySurface(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
 	showSongTab(state.songId, normalizeDetailTab(state.detailTab));
@@ -949,12 +988,14 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	selectedGenerationId.set(state.generationId);
 	await hydrateCollection(state.collection);
 	if (!applyStands(apply)) return false;
-	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
-	if (!applyStands(apply)) return false;
-	if (state.query.trim()) {
-		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
+	if (restoresListing) {
+		await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
+		if (!applyStands(apply)) return false;
+		if (state.query.trim()) {
+			await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
+		}
+		if (!applyStands(apply)) return false;
 	}
-	if (!applyStands(apply)) return false;
 	await hydrateSelectedResources(state, apply);
 	if (!applyStands(apply)) return false;
 	const shownAlbum = albumWhoseSongsShow(state.surface, state.collection);
@@ -1072,7 +1113,7 @@ function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
 	if (intendedSurface !== 'detail') return;
 	if (get(openCollection) !== null) return;
 	if (get(selectedSongId) !== null) return;
-	librarySurface.set('browse');
+	setLibrarySurface('browse');
 }
 
 // A cold tab's `history.state` is SvelteKit's own bookkeeping object, not yet
@@ -1115,8 +1156,27 @@ export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	return rereadAllAlbums();
 }
 
+function isWall(surface: LibrarySurface): boolean {
+	return surface === 'browse' || surface === 'playlists';
+}
+
+// The one writer of a surface change that can be a return: the wall replacing
+// the page of the place that was open, whether by Back, by ‹ or by the rail's
+// Library link. The place is remembered until the wall has lit its row or the
+// surface changes again, because the wall's own history entry names an older
+// collection by then.
 export function setLibrarySurface(surface: LibrarySurface): void {
+	const left = get(librarySurface);
+	if (left !== surface) {
+		placeReturnedFrom = left === 'detail' && isWall(surface) ? get(openCollection) : null;
+	}
 	librarySurface.set(surface);
+}
+
+export function takePlaceReturnedFrom(): OpenCollection | null {
+	const place = placeReturnedFrom;
+	placeReturnedFrom = null;
+	return place;
 }
 
 export function captureLibraryScroll(scrollTop: number): void {
@@ -1128,6 +1188,7 @@ export function resetLibraryContextForTests(): void {
 	librarySnapshotTaken = false;
 	latestHeldWrite = null;
 	heldRestores = null;
+	placeReturnedFrom = null;
 	resetHistoryControllerForTests();
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);

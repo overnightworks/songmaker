@@ -105,9 +105,9 @@ export function persistLibraryHistory(): void {
 }
 
 // The routes that mount the library workspace: every address
-// `libraryRouteShape` gives a library shape -- the home path, the Playlists
-// page (#1402), and each album, song, take and playlist address. All render
-// the same workspace, and the address a surface owns is written by
+// `libraryRouteShape` gives a library shape -- the Home and Library paths, the
+// Playlists page (#1402), and each album, song, take and playlist address. All
+// render the same workspace, and the address a surface owns is written by
 // libraryHistoryUrl. Used only by routes/+layout.svelte (to decide whether to
 // start the live event stream): writeLibraryHistory's own crossing check
 // reaches the router for a write landing on any of these addresses from
@@ -238,8 +238,8 @@ export function openPlaylist(playlistId: string): Promise<void> {
 		// meanwhile, but this is awaited (not fire-and-forget) so the playlist's
 		// slug is in hand before pushLibraryHistory below asks libraryHistoryUrl
 		// to build the /playlist/<slug> address — without it, the write would
-		// fall back to '/' for exactly the callers that need it most (issue
-		// #286).
+		// fall back to the Library for exactly the callers that need it most
+		// (issue #286).
 		await ensurePlaylistsLoaded();
 		setLibrarySurface('detail');
 		closeSidebar();
@@ -355,25 +355,34 @@ export async function openLibraryWall(): Promise<void> {
 	});
 }
 
-// The Playlists page (#1402) in place of the open song or collection, which
-// stays the rail context as it does behind the Library wall. Coming from
-// another page it starts at its top: the one scroll the library keeps is the
-// other wall's.
-function showPlaylistsWall(): () => void {
-	const cameFromAnotherPage = get(librarySurface) !== 'playlists';
+// Home (#1506) and the Playlists page (#1402) in place of the open song or
+// collection, which stays the rail context as it does behind the Library wall.
+// Coming from another page they start at their top: the one scroll the library
+// keeps is the Library wall's.
+function showPageOverCollection(surface: 'home' | 'playlists'): () => void {
+	const cameFromAnotherPage = get(librarySurface) !== surface;
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
-	setLibrarySurface('playlists');
+	setLibrarySurface(surface);
 	return () => {
 		if (cameFromAnotherPage) captureLibraryScroll(0);
 	};
 }
 
-// Like the Library, a fresh history entry, so Back returns to what was open.
+// The brand's destination. Like the Library, a fresh history entry, so Back
+// returns to what was open.
+export async function openHome(): Promise<void> {
+	await guardDirtyNavigation(async () => {
+		closeSidebar();
+		await pushLibraryHistory(showPageOverCollection('home'));
+	});
+}
+
+// Like Home and the Library, a fresh history entry.
 async function openPlaylistsWall(): Promise<void> {
 	await guardDirtyNavigation(async () => {
 		closeSidebar();
-		await pushLibraryHistory(showPlaylistsWall());
+		await pushLibraryHistory(showPageOverCollection('playlists'));
 	});
 }
 
@@ -397,7 +406,7 @@ export function openListOverPage(list: PageList): Promise<void> {
 		return replaceLibraryHistory();
 	}
 	if (list === PLAYLISTS_ROUTE_PATH) {
-		showPlaylistsWall()();
+		showPageOverCollection('playlists')();
 		return replaceLibraryHistory();
 	}
 	return goto(resolve(list), { replaceState: true });

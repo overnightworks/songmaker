@@ -10,21 +10,21 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field, field_validator
 
 from songmaker_cli.api_models.fields import ComputedTimestamp
-from songmaker_cli.api_models.generation_params import (
-    BaseGenerationParams,
-)
-from songmaker_cli.api_models.whisper import (
-    WhisperCue,
-    generation_whisper_cues,
-)
 from songmaker_cli.constants import (
     COVER_VARIANT_CARD,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     MODEL_AVAILABLE_MODES,
 )
+from songmaker_cli.generation_params import (
+    BaseGenerationParams,
+)
 from songmaker_cli.scoring.registry import VALID_SCORER_NAMES
 from songmaker_cli.settings import get_settings
+from songmaker_cli.whisper_cues import (
+    WhisperCue,
+    generation_whisper_cues,
+)
 
 log = logging.getLogger(__name__)
 

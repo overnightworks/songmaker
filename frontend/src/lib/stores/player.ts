@@ -1,5 +1,5 @@
 import { writable, derived, get, readonly } from 'svelte/store';
-import { ApiError, describeFailure, handleSessionLost, NetworkError } from '$lib/api/fetch';
+import { ApiError, describeFailure, NetworkError } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
@@ -51,8 +51,10 @@ import {
 	songList,
 	upsertSongInList
 } from '$lib/stores/libraryData';
+import { handleSessionLost } from '$lib/stores/auth';
 import { addToast } from '$lib/stores/toast';
 import { offline, whenBackOnline } from '$lib/stores/connectivity';
+import { outdateLastPlayedRanking } from '$lib/stores/libraryOrder';
 import {
 	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
@@ -91,6 +93,7 @@ import {
 	type NowPlayingSurfaceKind,
 	type PlaybackSource
 } from '$lib/constants/now-playing';
+import { shuffled } from '$lib/utils/shuffle';
 
 // --- Browsing state ---
 export const selectedAlbumId = writable<string | null>(null);
@@ -334,24 +337,11 @@ function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
 	};
 }
 
-function randomIndex(length: number): number {
-	return Math.floor(Math.random() * length); // NOSONAR S2245: shuffle has no security context.
-}
-
-function shuffled<T>(items: T[]): T[] {
-	const copy = [...items];
-	for (let i = copy.length - 1; i > 0; i--) {
-		const j = randomIndex(i + 1);
-		[copy[i], copy[j]] = [copy[j], copy[i]];
-	}
-	return copy;
-}
-
 function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; startIndex: number } {
 	if (!get(shuffleEnabled) || items.length <= 1) return { items, startIndex };
 	const start = items[startIndex] ?? items[0];
 	const rest = items.filter((_, index) => index !== startIndex);
-	return { items: [start, ...shuffled(rest)], startIndex: 0 };
+	return { items: shuffled([start, ...rest], { keepFirst: true }), startIndex: 0 };
 }
 
 // Where an album start begins: at its first playable song, or at the song the
@@ -879,8 +869,40 @@ export function transportOfTheStart(
 	return notice === 'gave-up-on-network' ? 'waiting-for-network' : 'recovering';
 }
 
+interface CollectionTransport {
+	current: boolean;
+	waiting: boolean;
+	transport: TransportState;
+}
+
+// Store inputs stay subscribed by the surface; reading the callable also tracks
+// the audio player's reactive transport without copying it into another store.
+export const collectionTransport = derived(
+	[playbackSource, playStartNotice, pendingStart],
+	([$source, $notice, $pending]) =>
+		(kind: PlaybackSource['kind'], id: string): CollectionTransport => {
+			const current = audioPlayer.current !== null && $source?.kind === kind && $source.id === id;
+			const waiting = kind === 'album' && waitingStartOf($notice, $pending)?.albumId === id;
+			if (waiting) {
+				return { current, waiting, transport: transportOfTheStart(null, $notice, 'idle') };
+			}
+			return { current, waiting, transport: current ? audioPlayer.transport : 'idle' };
+		}
+);
+
+export function toggleOrStartCollection(
+	kind: PlaybackSource['kind'],
+	id: string,
+	onstart: (() => void) | null
+): void {
+	const state = get(collectionTransport)(kind, id);
+	if (state.waiting) stopStartAwaitingNetwork();
+	else if (state.current) audioPlayer.toggle();
+	else if (onstart) onstart();
+}
+
 // The bar's and the header's press withdraw a waiting start altogether.
-export function stopStartAwaitingNetwork(): boolean {
+function stopStartAwaitingNetwork(): boolean {
 	if (!pauseStartAwaitingNetwork()) return false;
 	dropPendingStart();
 	return true;
@@ -1925,9 +1947,11 @@ function recordFirstTakeListen(): void {
 	const listenKey = `${current.generation.id}:${playlistId ?? ''}`;
 	if (recordedListens.has(listenKey)) return;
 	recordedListens.add(listenKey);
-	void recordSongListen(current.songId, playlistId).catch((error: unknown) => {
-		console.error('Could not record song listen:', error);
-	});
+	void recordSongListen(current.songId, playlistId)
+		.then(outdateLastPlayedRanking)
+		.catch((error: unknown) => {
+			console.error('Could not record song listen:', error);
+		});
 }
 
 function handlePlaybackStarted(): void {

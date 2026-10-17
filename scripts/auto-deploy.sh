@@ -66,6 +66,21 @@
 #     runs BEFORE this branch guard: an operator sitting on an experiment
 #     branch with nothing actually pending to deploy must not get a loud
 #     err line every ~2 minutes for no reason (see step ordering below).
+#   - The ACE-Step submodule pin (vendor/acestep) ships with the commit that
+#     moves it. A plain `git merge --ff-only` leaves the submodule on the old
+#     commit, which `git status --porcelain` then reports as dirty: the dirty
+#     guard would refuse every later tick. So before the fast-forward,
+#     fetch_acestep_pin makes the pinned commit available in the submodule
+#     (a network failure or an uninitialised submodule is a counted refusal
+#     that moves nothing), and right after it checkout_acestep_pin checks the
+#     pinned commit out locally. A pin change is also a base-image input
+#     (BASE_IMAGE_INPUT_PATHS). Both git fetches of a tick run under
+#     GIT_FETCH_TIMEOUT_SECONDS: a hung fetch would hold the flock forever and
+#     never reach the consecutive-failure ALERT. Each fetch runs in a process
+#     group of its own that is killed outright once git has exited, so a
+#     transport that ignores TERM cannot outlive the tick. A SIGKILLed fetch
+#     can leave a git lock file behind; clearing it is manual
+#     (docs/architecture.md).
 #
 # Per CLAUDE.md: NEVER wrap `docker compose up --build --wait` in `timeout`.
 # A cold-cache rebuild can take 8-15 minutes; the systemd unit has no
@@ -136,6 +151,10 @@ BASE_IMAGES=(
     "songmaker/gpu-torch-base:latest"
     "songmaker/acestep-base:latest"
 )
+ACESTEP_SUBMODULE_PATH="vendor/acestep"
+# What the local-only base images are built from: a difference in any of these
+# between the running revision and the selected candidate rebuilds them.
+BASE_IMAGE_INPUT_PATHS=(docker/base/ "$ACESTEP_SUBMODULE_PATH")
 PROMETHEUS_CONFIG_FILE="monitoring/prometheus.yml"
 PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
 PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
@@ -197,21 +216,58 @@ log_err() { log err "$*"; }
 # the service or its caller.
 GIT_BINARY="/usr/bin/git"
 GIT_PATH="/usr/bin:/bin"
+SAFE_GIT_COMMAND=(
+    env -i
+    PATH="$GIT_PATH"
+    LANG="C.UTF-8"
+    LC_ALL="C.UTF-8"
+    GIT_CONFIG_NOSYSTEM="1"
+    GIT_CONFIG_GLOBAL="/dev/null"
+    GIT_NO_LAZY_FETCH="1"
+    GIT_NO_REPLACE_OBJECTS="1"
+    GIT_TERMINAL_PROMPT="0"
+    GIT_OPTIONAL_LOCKS="0"
+    "$GIT_BINARY"
+    -c core.hooksPath=/dev/null
+    -c core.fsmonitor=false
+)
 safe_git() {
-    env -i \
-        PATH="$GIT_PATH" \
-        LANG="C.UTF-8" \
-        LC_ALL="C.UTF-8" \
-        GIT_CONFIG_NOSYSTEM="1" \
-        GIT_CONFIG_GLOBAL="/dev/null" \
-        GIT_NO_LAZY_FETCH="1" \
-        GIT_NO_REPLACE_OBJECTS="1" \
-        GIT_TERMINAL_PROMPT="0" \
-        GIT_OPTIONAL_LOCKS="0" \
-        "$GIT_BINARY" \
-        -c core.hooksPath=/dev/null \
-        -c core.fsmonitor=false \
-        -C "$REPO_ROOT" "$@"
+    "${SAFE_GIT_COMMAND[@]}" -C "$REPO_ROOT" "$@"
+}
+
+# The only network-facing git commands of a tick, so the only ones with a
+# deadline. `timeout` cannot run the shell function above, but it can run the
+# same scrubbed command. It stops supervising once git itself has exited, so a
+# transport child that ignored the TERM would live on with nobody to KILL it,
+# holding git's output pipe and with it the whole tick. The fetch therefore
+# gets a process group of its own (setsid), its output goes to a file that no
+# survivor can keep a reader waiting on, and the group is killed outright as
+# soon as `timeout` returns. A background job of a non-interactive shell leads
+# no group, so setsid runs in place and $! is the id of the group it creates.
+# Prints git's combined output and returns its exit status. Builds stay
+# unbounded.
+# Usage: safe_git_fetch <repository> <git fetch arguments...>
+safe_git_fetch() {
+    local repository="$1"
+    shift
+    local output_file fetch_group fetch_exit_code
+    if ! output_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.git-fetch.XXXXXX" 2>&1)"; then
+        printf 'cannot create a temporary file for the fetch output: %s' "$output_file"
+        return 1
+    fi
+    setsid timeout --kill-after="$GIT_FETCH_KILL_GRACE_SECONDS" "$GIT_FETCH_TIMEOUT_SECONDS" \
+        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@" >"$output_file" 2>&1 &
+    fetch_group=$!
+    if wait "$fetch_group"; then
+        fetch_exit_code=0
+    else
+        fetch_exit_code=$?
+    fi
+    # Nothing left to kill is the normal case, hence the ignored status.
+    kill -KILL -- "-$fetch_group" 2>/dev/null || true
+    cat "$output_file"
+    rm -f "$output_file"
+    return "$fetch_exit_code"
 }
 
 # Resolve the real git ADMIN directory instead of assuming $REPO_ROOT/.git
@@ -276,6 +332,36 @@ if ! [[ "$CHECK_RUN_APPEARANCE_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS must be a positive integer, got '$CHECK_RUN_APPEARANCE_GRACE_SECONDS'"
     exit 1
 fi
+# A git fetch that never returns would hold the flock forever: no later tick
+# runs, so the consecutive-failure ALERT is never reached. Both fetches of a
+# tick (the superproject's and the ACE-Step pin's) get this deadline; a
+# timeout is a counted refusal like any other failed fetch. The default is
+# several times the longest healthy fetch measured on this host (about 12 s
+# for a pin over HTTPS). At the deadline the whole fetch process group gets
+# TERM; whatever is still running after the grace period, or once git has
+# exited, gets KILL (see safe_git_fetch).
+GIT_FETCH_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS:-120}"
+GIT_FETCH_KILL_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS:-5}"
+if ! [[ "$GIT_FETCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS must be a positive integer, got '$GIT_FETCH_TIMEOUT_SECONDS'"
+    exit 1
+fi
+if ! [[ "$GIT_FETCH_KILL_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS must be a positive integer, got '$GIT_FETCH_KILL_GRACE_SECONDS'"
+    exit 1
+fi
+# The one place that reads what `timeout` leaves in $? when it cut a command
+# short. 124 is its own status for a deadline it enforced. 137 is a SIGKILL:
+# `timeout` sends one when TERM was not honoured within the grace period, but an
+# outside kill (the OOM killer) ends a command the same way, so 137 is named
+# as a kill and never claimed as a timeout. Prints nothing for any other status.
+# Usage: describe_timeout_status <exit status of the timed command>
+describe_timeout_status() {
+    case "$1" in
+        124) printf 'timed out' ;;
+        137) printf 'was killed by SIGKILL' ;;
+    esac
+}
 # Bounds the container-readiness wait of step 10 only; the image build in
 # step 9 stays deliberately unbounded, because a cold-cache build takes
 # 8-15 minutes by design. Without a bound, one service that can never
@@ -424,7 +510,7 @@ base_images_need_build() {
     local deployed_sha="$1"
     local candidate_sha="$2"
     local base_image
-    local changed_base_files
+    local changed_base_inputs
 
     for base_image in "${BASE_IMAGES[@]}"; do
         if ! docker image inspect "$base_image" >/dev/null 2>&1; then
@@ -438,13 +524,13 @@ base_images_need_build() {
         return 0
     fi
 
-    if ! changed_base_files="$(safe_git diff --name-only "$deployed_sha..$candidate_sha" -- docker/base/ 2>&1)"; then
-        log_err "cannot compare docker/base changes between deployed $deployed_sha and candidate $candidate_sha: $changed_base_files"
+    if ! changed_base_inputs="$(safe_git diff --ignore-submodules=none --name-only "$deployed_sha..$candidate_sha" -- "${BASE_IMAGE_INPUT_PATHS[@]}" 2>&1)"; then
+        log_err "cannot compare base image inputs between deployed $deployed_sha and candidate $candidate_sha: $changed_base_inputs"
         return 2
     fi
 
-    if [[ -n "$changed_base_files" ]]; then
-        log_info "docker/base changed since deployed revision $deployed_sha; rebuilding base images before compose build"
+    if [[ -n "$changed_base_inputs" ]]; then
+        log_info "base image inputs changed since deployed revision $deployed_sha (${changed_base_inputs//$'\n'/, }); rebuilding base images before compose build"
         return 0
     fi
 
@@ -796,6 +882,96 @@ compose_config_refusal() {
     fail_tick "compose configuration refused $moment"
 }
 
+# A fetch that failed or overran its deadline is a counted refusal like every
+# other tick that could not deploy. The deadline is enforced by safe_git_fetch.
+fail_tick_after_fetch_failure() {
+    local description="$1"
+    local fetch_exit_code="$2"
+    local fetch_output="$3"
+    local reason="$4"
+    local termination
+    termination="$(describe_timeout_status "$fetch_exit_code")"
+    if [[ -n "$termination" ]]; then
+        log_err "$description $termination (exit $fetch_exit_code, deadline ${GIT_FETCH_TIMEOUT_SECONDS}s): $fetch_output"
+        fail_tick "$reason ($termination)"
+    fi
+    log_err "$description failed (exit $fetch_exit_code): $fetch_output"
+    fail_tick "$reason"
+}
+
+# Prints the commit $1 pins vendor/acestep to, and nothing when $1 has no
+# gitlink there. On failure it prints git's complaint and returns non-zero.
+acestep_pin_of() {
+    local commit_sha="$1"
+    local tree_entry
+    if ! tree_entry="$(safe_git ls-tree "$commit_sha" -- "$ACESTEP_SUBMODULE_PATH" 2>&1)"; then
+        printf '%s' "$tree_entry"
+        return 1
+    fi
+    if [[ "$tree_entry" =~ ^160000\ commit\ ([0-9a-f]+) ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    fi
+}
+
+# Runs before the fast-forward, so a pin that cannot be had leaves the checkout
+# untouched and the next tick retries from step 2. Every submodule lookup is
+# anchored to $REPO_ROOT: this script never changes its working directory, and
+# a bare `git -C vendor/acestep` on an uninitialised submodule resolves to the
+# superproject.
+fetch_acestep_pin() {
+    local pinned_sha="$1"
+    local submodule_dir="$REPO_ROOT/$ACESTEP_SUBMODULE_PATH"
+    local fetch_output
+    local fetch_exit_code
+
+    # -e: a submodule checkout has a .git file, an embedded repository a directory.
+    if [[ ! -e "$submodule_dir/.git" ]]; then
+        log_err "$ACESTEP_SUBMODULE_PATH is not initialised in $REPO_ROOT — refusing to deploy, not touching the tree (run: git submodule update --init $ACESTEP_SUBMODULE_PATH)"
+        fail_tick "$ACESTEP_SUBMODULE_PATH is not initialised"
+    fi
+
+    # A bare `cat-file -e <sha>` would accept an object of any type.
+    if safe_git -C "$submodule_dir" cat-file -e "$pinned_sha^{commit}" 2>/dev/null; then
+        return 0
+    fi
+
+    log_info "fetching the $ACESTEP_SUBMODULE_PATH pin $pinned_sha"
+    if fetch_output="$(safe_git_fetch "$submodule_dir" origin "$pinned_sha" 2>&1)"; then
+        return 0
+    else
+        fetch_exit_code=$?
+    fi
+    fail_tick_after_fetch_failure \
+        "fetching the $ACESTEP_SUBMODULE_PATH pin $pinned_sha" \
+        "$fetch_exit_code" "$fetch_output" \
+        "cannot fetch the $ACESTEP_SUBMODULE_PATH pin $pinned_sha"
+}
+
+# Runs right after the fast-forward is verified, before the configuration guard
+# can refuse the tick: the fast-forward alone leaves the submodule on its old
+# commit, which the dirty guard would then refuse on every later tick. The
+# pin's objects are already local (fetch_acestep_pin), so nothing here touches
+# the network. A submodule status that starts with a space proves its HEAD
+# matches the index; worktree cleanliness stays with the dirty guard.
+checkout_acestep_pin() {
+    local pinned_sha="$1"
+    local update_output
+    local status_output
+
+    if ! update_output="$(safe_git submodule update --checkout --no-fetch -- "$ACESTEP_SUBMODULE_PATH" 2>&1)"; then
+        log_err "cannot check out $ACESTEP_SUBMODULE_PATH at $pinned_sha in $REPO_ROOT (recover with: git submodule update $ACESTEP_SUBMODULE_PATH): $update_output"
+        fail_tick "$ACESTEP_SUBMODULE_PATH checkout failed"
+    fi
+    if ! status_output="$(safe_git submodule status -- "$ACESTEP_SUBMODULE_PATH" 2>&1)"; then
+        log_err "cannot read the $ACESTEP_SUBMODULE_PATH status in $REPO_ROOT after its checkout: $status_output"
+        fail_tick "$ACESTEP_SUBMODULE_PATH status failed"
+    fi
+    if [[ "${status_output:0:1}" != " " ]]; then
+        log_err "$ACESTEP_SUBMODULE_PATH is not at its pinned commit $pinned_sha in $REPO_ROOT after its checkout (submodule status: '$status_output') — refusing to build"
+        fail_tick "$ACESTEP_SUBMODULE_PATH not at its pinned commit"
+    fi
+}
+
 # Prints exactly one of green, waiting, or failed. An API/CLI failure is a
 # named error return because it is not evidence that the fetched commit is
 # safe to deploy. The API's explicit zero-run envelope waits only until the
@@ -804,7 +980,7 @@ compose_config_refusal() {
 remote_check_status() {
     local commit_sha="$1"
     local commit_timestamp="$2"
-    local check_runs gh_error gh_stderr_file lookup_exit
+    local check_runs gh_error gh_stderr_file lookup_exit termination
     if ! command -v gh >/dev/null 2>&1; then
         printf '%s' "GitHub CLI (gh) is unavailable on PATH"
         return 1
@@ -821,8 +997,9 @@ remote_check_status() {
         lookup_exit=$?
         gh_error="$(<"$gh_stderr_file")"
         rm -f "$gh_stderr_file"
-        if ((lookup_exit == 124)); then
-            printf '%s' 'check-run lookup timed out'
+        termination="$(describe_timeout_status "$lookup_exit")"
+        if [[ -n "$termination" ]]; then
+            printf 'check-run lookup %s' "$termination"
         else
             printf '%s' "$gh_error"
         fi
@@ -949,9 +1126,16 @@ if ! LOCAL_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
     fail_tick "cannot determine local HEAD"
 fi
 
-if ! FETCH_OUTPUT="$(safe_git fetch origin "$DEPLOY_BRANCH" --quiet 2>&1)"; then
-    log_err "git fetch origin $DEPLOY_BRANCH failed in $REPO_ROOT: $FETCH_OUTPUT"
-    fail_tick "git fetch failed"
+# --no-recurse-submodules: the pin gate before the fast-forward is the one
+# owner of the ACE-Step fetch, so a bad pin in a newer, unselected commit
+# cannot block an older green candidate here.
+if FETCH_OUTPUT="$(safe_git_fetch "$REPO_ROOT" --no-recurse-submodules origin "$DEPLOY_BRANCH" 2>&1)"; then
+    :
+else
+    FETCH_EXIT_CODE=$?
+    fail_tick_after_fetch_failure \
+        "git fetch origin $DEPLOY_BRANCH in $REPO_ROOT" \
+        "$FETCH_EXIT_CODE" "$FETCH_OUTPUT" "git fetch failed"
 fi
 
 if ! REMOTE_HEAD="$(safe_git rev-parse "origin/$DEPLOY_BRANCH" 2>&1)"; then
@@ -1160,6 +1344,14 @@ fi
 # stdout/stderr rather than being captured — a failed build's full output
 # can easily exceed what a single logger argument can carry (see header) —
 # only a short log_err line with the exit code goes through `logger`.
+if ! ACESTEP_PIN="$(acestep_pin_of "$DEPLOY_COMMIT")"; then
+    log_err "cannot read the $ACESTEP_SUBMODULE_PATH pin of $DEPLOY_COMMIT in $REPO_ROOT: $ACESTEP_PIN"
+    fail_tick "cannot read the $ACESTEP_SUBMODULE_PATH pin"
+fi
+if [[ -n "$ACESTEP_PIN" ]]; then
+    fetch_acestep_pin "$ACESTEP_PIN"
+fi
+
 if ! MERGE_OUTPUT="$(safe_git merge --ff-only "$DEPLOY_COMMIT" 2>&1)"; then
     log_err "git merge --ff-only to selected deploy candidate ($DEPLOY_COMMIT) failed in $REPO_ROOT: $MERGE_OUTPUT"
     fail_tick "git fast-forward failed"
@@ -1173,6 +1365,10 @@ fi
 if [[ "$CHECKED_OUT_HEAD" != "$DEPLOY_COMMIT" ]]; then
     log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the selected deploy candidate $DEPLOY_COMMIT — refusing to build"
     fail_tick "checked out commit differs from verified commit"
+fi
+
+if [[ -n "$ACESTEP_PIN" ]]; then
+    checkout_acestep_pin "$ACESTEP_PIN"
 fi
 
 # The selected commit may require a variable the previous one did not; name

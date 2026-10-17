@@ -1,8 +1,9 @@
 <script module lang="ts">
 	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
-	import { RAIL_SETTINGS_LABEL } from '$lib/constants';
+	import { HOME_PAGE_LABEL, RAIL_SETTINGS_LABEL } from '$lib/constants';
 	import {
 		albumRoutePath,
+		HOME_ROUTE_PATH,
 		isPlaylistRoutePath,
 		LIBRARY_ROUTE_PATH,
 		libraryRouteShape,
@@ -20,9 +21,9 @@
 	const LIBRARY_HREF: PageList = LIBRARY_ROUTE_PATH;
 	const PLAYLISTS_HREF: PageList = PLAYLISTS_ROUTE_PATH;
 	const SETTINGS_HREF: PageList = '/settings';
-	// The lists the app opens on, which carry the brand and the account circle
-	// instead of ‹ wherever they were opened from.
-	const PLACE_LISTS: ReadonlySet<string> = new Set([LIBRARY_HREF, PLAYLISTS_HREF]);
+	// Home and the lists the app opens on, which carry the brand and the account
+	// circle instead of ‹ wherever they were opened from.
+	const PLACE_LISTS: ReadonlySet<string> = new Set([HOME_ROUTE_PATH, LIBRARY_HREF, PLAYLISTS_HREF]);
 	const ALBUM_NAME = 'Album';
 	const PLAYLIST_NAME = 'Playlist';
 	const SONG_NAME = 'Song';
@@ -51,6 +52,7 @@
 	// gives it, an album, playlist or song by its title, or by its kind while
 	// the library has not loaded it.
 	export function pageName(pathname: string, titles: LibraryTitles): string {
+		if (pathname === HOME_ROUTE_PATH) return HOME_PAGE_LABEL;
 		if (pathname === SETTINGS_HREF) return RAIL_SETTINGS_LABEL;
 		const appPage = visibleRailSearchPages(true).find((page) => page.href === pathname);
 		if (appPage) return appPage.label;
@@ -82,9 +84,11 @@
 	import { page } from '$app/state';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
 	import { pageBelowStandingPage, stepBackOr } from '$lib/history/historyController';
+	import { standingPathname } from '$lib/routes/standingAddress';
 	import { historyLayerState } from '$lib/stores/layers';
+	import { inertWhileAddressOverlay } from '$lib/stores/libraryAddressOverlay';
 	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openLibraryWall, openListOverPage } from '$lib/stores/navigation';
+	import { openHome, openListOverPage } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
@@ -106,12 +110,13 @@
 		readonly below: string | null;
 	}
 
-	// `page.state` follows every entry history stands on -- shallow routing
-	// included, which leaves `page.url` where the router last navigated -- so
-	// the bar reads again where history stands, and what lies below it,
-	// whenever that state changes.
-	function standingPage(_stateOfStandingEntry: unknown): StandingPage {
-		return { pathname: location.pathname, below: pageBelowStandingPage() };
+	// The bar reads again where history stands, and what lies below it, whenever
+	// `page.state` changes.
+	function standingPage(stateOfStandingEntry: unknown): StandingPage {
+		return {
+			pathname: standingPathname(stateOfStandingEntry),
+			below: pageBelowStandingPage()
+		};
 	}
 
 	const standing = $derived(standingPage(page.state));
@@ -211,7 +216,7 @@
 		</svg>
 	</button>
 	{#if $phoneAppBar}
-		<h1 class="bar-title" aria-label={$phoneAppBar.title}>
+		<h1 class="bar-title" aria-label={$phoneAppBar.title} {@attach inertWhileAddressOverlay}>
 			<EditableTitle
 				bind:this={titleEditor}
 				value={$phoneAppBar.title}
@@ -220,12 +225,16 @@
 			/>
 		</h1>
 		{@render searchButton()}
-		<ShareButton {...$phoneAppBar.share} iconOnly />
-		<SongMenu
-			{...$phoneAppBar.menu}
-			title={$phoneAppBar.title}
-			onrename={() => titleEditor?.startEdit()}
-		/>
+		<div class="song-control" {@attach inertWhileAddressOverlay}>
+			<ShareButton {...$phoneAppBar.share} iconOnly />
+		</div>
+		<div class="song-control" {@attach inertWhileAddressOverlay}>
+			<SongMenu
+				{...$phoneAppBar.menu}
+				title={$phoneAppBar.title}
+				onrename={() => titleEditor?.startEdit()}
+			/>
+		</div>
 	{:else if backTargetName !== null}
 		<button
 			type="button"
@@ -239,7 +248,7 @@
 		</button>
 		{@render searchButton()}
 	{:else}
-		<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
+		<button type="button" class="brand" onclick={() => openHome()} data-text={APP_NAME}
 			>{APP_NAME}</button
 		>
 		{@render searchButton()}
@@ -301,6 +310,10 @@
 		font-size: var(--input-font-size);
 		color: var(--text);
 		letter-spacing: var(--btn-letter-spacing);
+	}
+
+	.song-control {
+		display: contents;
 	}
 
 	.bar-title :global(.editable-title-display) {

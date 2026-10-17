@@ -39,16 +39,6 @@ const FORBIDDEN_MODULES = [
 	'lib/stores/auth.ts'
 ].map((relative) => `/src/${relative}`);
 
-// share's stream fetchers (lib/api/queue-streams.ts) call the public
-// /shared/* endpoints with a bare fetch() and never through apiFetch() — see
-// their implementation. apiFetch()'s 401 branch (the only thing in this file
-// that reaches stores/auth) is therefore unreachable from the share surface,
-// even though the module-level `import { apiFetch } from './fetch'` puts the
-// whole file in the static graph. A per-export reachability walk would prove
-// this properly; a two-line exemption is cheaper for one known false
-// positive.
-const DYNAMIC_IMPORT_EXEMPTIONS = new Set(['/src/lib/api/fetch.ts::$lib/stores/auth']);
-
 const STATIC_IMPORT_RE = /import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
 const BARE_IMPORT_RE = /import\s+['"]([^'"]+)['"]/g;
 const EXPORT_FROM_RE = /export\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
@@ -116,7 +106,6 @@ function collectRuntimeImports(file: string, visited: Set<string>): void {
 	}
 	for (const match of content.matchAll(DYNAMIC_IMPORT_RE)) {
 		const [, specifier] = match;
-		if (DYNAMIC_IMPORT_EXEMPTIONS.has(`${file}::${specifier}`)) continue;
 		const resolved = resolveLocalSpecifier(specifier, file);
 		if (resolved) collectRuntimeImports(resolved, visited);
 	}

@@ -5,7 +5,7 @@ export const APP_NAME = 'Hallucinai';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
-// Cross-file contract: fetch.ts's handleSessionLost writes this param,
+// Cross-file contract: fetch.ts's signInAddress writes this param,
 // whatever reads it back (the login page) must use the same name.
 export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
 
@@ -519,18 +519,20 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 	title: 'A–Z',
 	played: 'Last played'
 };
+// Home's head, and what a page's ‹ calls it (#1354 rules 25 and 31).
+export const HOME_PAGE_LABEL = 'Home';
 export const LIBRARY_PAGE_LABEL = 'Library';
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums';
 // Each page's head reads its name and count as one heading ('Library · 12').
 export function wallHeadingLabel(pageLabel: string, count: number): string {
 	return `${pageLabel} · ${count}`;
 }
-export const LIBRARY_WALL_EMPTY = 'No albums yet. + New makes one.';
+export const LIBRARY_WALL_EMPTY = 'No albums yet. + New on Home makes one.';
 // The Playlists page (#1402): its head, which search names it by too, and the
 // count beside it, read as one heading ('Playlists · 3').
 export const PLAYLISTS_PAGE_LABEL = 'Playlists';
 export const PLAYLISTS_WALL_ORDER_GROUP_LABEL = 'Sort playlists';
-export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New makes one.';
+export const PLAYLISTS_WALL_EMPTY = 'No playlists yet. + New on Home makes one.';
 export const LIBRARY_NEW_FACE = 'New';
 export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
@@ -547,17 +549,22 @@ export const NEW_ALBUM_TITLE_LABEL = 'Title';
 export const NEW_ALBUM_ARTIST_LABEL = 'Artist';
 export const NEW_ALBUM_ARTIST_OPTIONAL = 'optional';
 export const NEW_ALBUM_HINT = 'Opens the album; add songs there.';
+// A create the server could not carry out says "Try again" (FAILED); one it refused
+// says only what it would not do (REFUSED), when it gave no reason of its own.
 export const NEW_ALBUM_FAILED = 'The album could not be created. Try again.';
+export const NEW_ALBUM_REFUSED = 'The album could not be created.';
 export const NEW_PLAYLIST_CARD_LABEL = 'New playlist';
 export const NEW_PLAYLIST_CLOSE_LABEL = 'Close new playlist';
 export const NEW_PLAYLIST_NAME_LABEL = 'Name';
 export const NEW_PLAYLIST_HINT = 'Opens the playlist; add songs from any album.';
 export const NEW_PLAYLIST_FAILED = 'The playlist could not be created. Try again.';
+export const NEW_PLAYLIST_REFUSED = 'The playlist could not be created.';
 export const NEW_SONG_ROW_LABEL = 'New song';
 export const NEW_SONG_CLOSE_LABEL = 'Close new song';
 export const NEW_SONG_TITLE_LABEL = 'Title';
 export const NEW_SONG_HINT = 'Opens the song on Write.';
 export const NEW_SONG_FAILED = 'The song could not be created. Try again.';
+export const NEW_SONG_REFUSED = 'The song could not be created.';
 export const ALBUM_NO_SONGS = 'No songs yet.';
 
 export function newSongCardLabel(albumTitle: string): string {
@@ -723,8 +730,8 @@ export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
 // a 429 or a 500 comes from a server that is there (#1099).
 export const SERVER_UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
 export const SERVER_ERROR_STATUS_FLOOR = 500;
-// A rate limit passes: a song refresh it refused is fetched again on the
-// song-refresh backoff, no sooner than its `Retry-After` (#1099).
+// A rate limit passes, like a failing server: a request it refused can be
+// asked again, no sooner than its `Retry-After` (#1099, #1508).
 export const RATE_LIMITED_STATUS = 429;
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 // `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
@@ -748,7 +755,7 @@ export const JOB_TYPE_COVER = 'cover';
 // burst can still happen, and a client that silently stalls reads as
 // broken. A few paths already surface their own 429 copy some other way
 // and are exempted from this toast — see `RATE_LIMIT_TOAST_EXEMPT_PATHS`
-// in `lib/api/fetch.ts` for exactly which, and why.
+// in `lib/stores/rateLimitNotice.ts` for exactly which, and why.
 export const RATE_LIMITED_TOAST_MESSAGE =
 	'Too many requests — hang on, it will continue in a moment.';
 

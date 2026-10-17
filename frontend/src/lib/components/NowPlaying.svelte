@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -141,13 +142,24 @@
 		return () => takeDetailsReloads.stop();
 	});
 
+	// A load that settles once this surface is gone has nobody to show it to:
+	// the unmount's stop() must not be followed by a failure arming a reload.
+	let unmounted = false;
+	onDestroy(() => {
+		unmounted = true;
+	});
+
+	function stillWanted(songId: string): boolean {
+		return !unmounted && songId === info.songId;
+	}
+
 	function loadTakeDetails(songId: string): void {
 		void ensureGenerationsLoaded(songId).then(
 			() => {
-				if (songId === info.songId) takeDetailsReloads.stop();
+				if (stillWanted(songId)) takeDetailsReloads.stop();
 			},
 			(err: unknown) => {
-				if (songId === info.songId) settleTakeDetailsFailure(err);
+				if (stillWanted(songId)) settleTakeDetailsFailure(err);
 			}
 		);
 	}

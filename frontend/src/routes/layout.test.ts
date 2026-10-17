@@ -9,12 +9,13 @@ import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-util
 import {
 	historyStandsStill,
 	pushEntry,
+	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
 } from '$lib/history/historyController';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
+import { createRawSnippet, flushSync, mount, tick, unmount, type Snippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -25,6 +26,7 @@ import {
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
 	RAIL_DRAWER_OPEN_LABEL,
+	RATE_LIMITED_TOAST_MESSAGE,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
 import {
@@ -32,13 +34,14 @@ import {
 	SEARCH_SHEET_LABEL,
 	backLabel
 } from '$lib/components/PhoneAppBar.svelte';
-import { handleSessionLost } from '$lib/api/fetch';
+import { apiFetch } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
 	currentUser,
 	authLoading,
 	authCheckError,
+	handleSessionLost,
 	resetAuthForTests
 } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -50,11 +53,13 @@ import {
 	librarySurface,
 	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests,
+	openHomeAddress,
 	openLibraryAddress
 } from '$lib/stores/libraryContext';
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
+import { toasts } from '$lib/stores/toast';
 import {
 	closeNowPlaying,
 	nowPlayingDockable,
@@ -198,10 +203,10 @@ function minUsedWidth(el: Element): number {
 	return px(style.minWidth) || px(style.width);
 }
 
-async function renderLayout(path: string): Promise<HTMLElement> {
+async function renderLayout(path: string, pageContent: Snippet = children): Promise<HTMLElement> {
 	currentUser.set(USER);
 	authLoading.set(false);
-	const target = mountLayout(path);
+	const target = mountLayout(path, pageContent);
 	await tick();
 	await Promise.resolve();
 	await tick();
@@ -210,11 +215,11 @@ async function renderLayout(path: string): Promise<HTMLElement> {
 
 // Mounts the layout the way the router starts a page: on `path`, reporting
 // the `enter` navigation once it is mounted.
-function mountLayout(path: string): HTMLElement {
+function mountLayout(path: string, pageContent: Snippet = children): HTMLElement {
 	fakePage.url = new URL(`https://songmaker.test${path}`);
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(Layout, { target, props: { children } });
+	mounted = mount(Layout, { target, props: { children: pageContent } });
 	flushSync();
 	reportFakeRouterEnter();
 	return target;
@@ -414,7 +419,7 @@ describe('app shell', () => {
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
-	it('acts as the Library link when the mobile-strip brand is clicked', async () => {
+	it('1354_rule_40: acts as the Home link when the mobile-strip brand is clicked', async () => {
 		librarySurface.set('detail');
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
@@ -427,7 +432,7 @@ describe('app shell', () => {
 		brand.click();
 		await tick();
 		await Promise.resolve();
-		expect(get(librarySurface)).toBe('browse');
+		expect(get(librarySurface)).toBe('home');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
@@ -920,40 +925,53 @@ describe('a reload on a library page', () => {
 // entry; the installed history controller steps off it once the router start
 // has run -- but only while the page still stands there (issue #1002).
 describe('a reload over the phone Now Playing', () => {
-	it('stays on the Library wall the sign-in redirect lands on', async () => {
-		resetLibraryContextForTests();
-		const playlist = {
-			...libraryRootState(),
-			index: 1,
-			surface: 'detail' as const,
-			collection: { kind: 'playlist' as const, id: 'p1' }
-		};
-		pushEntry('/playlist/friday-night', { library: playlist });
-		pushEntry('/playlist/friday-night', { library: playlist }, 'now-playing');
-		// The reload forgets the open layer, so its entry is left unowned on top.
-		resetNavigationForTests();
-		loadLibraryHistoryPageForTests();
-		startFakeRouter();
-		currentUser.set(null);
-		vi.mocked(checkAuth).mockImplementation(async () => null);
-		mountLayout(HOME_ROUTE_PATH);
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
-		);
-		await historyStandsStill();
-		expect(location.pathname).toBe('/login');
+	it.each([
+		{ page: 'Home', address: HOME_ROUTE_PATH, openAddress: openHomeAddress, surface: 'home' },
+		{
+			page: 'the Library wall',
+			address: LIBRARY_ROUTE_PATH,
+			openAddress: openLibraryAddress,
+			surface: 'browse'
+		}
+	] as const)(
+		'1354_rule_31: stays on $page the sign-in redirect lands on',
+		async ({ address, openAddress, surface }) => {
+			resetLibraryContextForTests();
+			const playlist = {
+				...libraryRootState(),
+				index: 1,
+				surface: 'detail' as const,
+				collection: { kind: 'playlist' as const, id: 'p1' }
+			};
+			pushEntry('/playlist/friday-night', { library: playlist });
+			pushEntry('/playlist/friday-night', { library: playlist }, 'now-playing');
+			// The reload forgets the open layer, so its entry is left unowned on top.
+			resetNavigationForTests();
+			loadLibraryHistoryPageForTests();
+			startFakeRouter();
+			currentUser.set(null);
+			vi.mocked(checkAuth).mockImplementation(async () => null);
+			mountLayout(address);
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
+			);
+			await historyStandsStill();
+			expect(location.pathname).toBe('/login');
 
-		vi.mocked(checkAuth).mockImplementation(async () => {
-			currentUser.set(USER);
-			return USER;
-		});
-		await goto(resolve(HOME_ROUTE_PATH));
-		await openLibraryAddress();
+			vi.mocked(checkAuth).mockImplementation(async () => {
+				currentUser.set(USER);
+				return USER;
+			});
+			await goto(resolve(address));
+			await openAddress();
 
-		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
-		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });
-		expect(location.pathname).toBe(HOME_ROUTE_PATH);
-	});
+			await vi.waitFor(() =>
+				expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true)
+			);
+			expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface });
+			expect(location.pathname).toBe(address);
+		}
+	);
 });
 
 // A sign-out the server confirmed loads sign-in afresh over the account
@@ -1129,12 +1147,13 @@ describe('‹ on the page a phone tab was entered on', () => {
 // the library is actually shown.
 describe('the live library stream', () => {
 	it.each([
-		['the library route', LIBRARY_ROUTE_PATH],
+		['Home', HOME_ROUTE_PATH],
+		['the Library route', LIBRARY_ROUTE_PATH],
 		['an album address', '/album/anfield'],
 		['a song address', '/album/anfield/stadion-lauf-a'],
 		['a playlist address', '/playlist/friday-night'],
 		['the Playlists page', '/playlists']
-	])('runs on %s', async (_name, path) => {
+	])('1354_rule_31: runs on %s', async (_name, path) => {
 		await renderLayout(path);
 		expect(liveStream.start).toHaveBeenCalled();
 	});
@@ -1169,11 +1188,125 @@ describe('the live library stream', () => {
 	});
 });
 
+// The transport only reports a 429; this layout installs the reaction that
+// tells the person (`stores/rateLimitNotice.ts`), and takes it away again.
+describe('a 429 under the mounted layout', () => {
+	function throttleToasts() {
+		return get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+	}
+
+	function aThrottledRead() {
+		return apiFetch('/api/songs').catch(() => undefined);
+	}
+
+	beforeEach(() => {
+		toasts.set([]);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () => new Response(JSON.stringify({ detail: 'Too many requests' }), { status: 429 })
+			)
+		);
+	});
+
+	it('925_M3_L1: a request sent while the layout mounts is already reported to the throttle reaction', async () => {
+		let sentWhileMounting: Promise<unknown> = Promise.resolve();
+		const sendsARequestWhenMounted = createRawSnippet(() => ({
+			render: () => '<main></main>',
+			setup: () => {
+				sentWhileMounting = aThrottledRead();
+			}
+		}));
+
+		await renderLayout(LIBRARY_ROUTE_PATH, sendsARequestWhenMounted);
+		await sentWhileMounting;
+
+		expect(throttleToasts()).toHaveLength(1);
+	});
+
+	it('925_M3_L2: a burst of 429s on ordinary requests raises the throttle toast once', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+
+		await Promise.all([aThrottledRead(), aThrottledRead(), aThrottledRead()]);
+
+		expect(throttleToasts()).toHaveLength(1);
+	});
+
+	it('925_M3_L4: after the layout unmounts, a 429 raises no toast', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+		await aThrottledRead();
+		expect(throttleToasts()).toHaveLength(1);
+		toasts.set([]);
+
+		await unmountCurrentLayout();
+		await aThrottledRead();
+
+		expect(throttleToasts()).toHaveLength(0);
+	});
+});
+
+// The transport only reports a 401; this layout installs the reaction that
+// ends the session (`handleSessionLost`, in stores/auth.ts), and takes it away
+// again.
+describe('a 401 under the mounted layout', () => {
+	const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+
+	function aRefusedRead() {
+		return apiFetch('/api/songs').catch(() => undefined);
+	}
+
+	beforeEach(() => {
+		resetHistoryControllerForTests();
+		onTestFinished(resetHistoryControllerForTests);
+		standInForDocumentLoadsForTests(documentLoads);
+		for (const load of Object.values(documentLoads)) load.mockReset();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () => new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 })
+			)
+		);
+	});
+
+	it('925_M3_L1: a request sent while the layout mounts already reaches the session-lost reaction', async () => {
+		let sentWhileMounting: Promise<unknown> = Promise.resolve();
+		const sendsARequestWhenMounted = createRawSnippet(() => ({
+			render: () => '<main></main>',
+			setup: () => {
+				sentWhileMounting = aRefusedRead();
+			}
+		}));
+
+		await renderLayout(LIBRARY_ROUTE_PATH, sendsARequestWhenMounted);
+		await sentWhileMounting;
+
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
+	});
+
+	it('925_M3_L3: a 401 on an ordinary request with a user signed in loads the page afresh once', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+
+		await Promise.all([aRefusedRead(), aRefusedRead()]);
+
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
+	});
+
+	it('925_M3_L4: after the layout unmounts, a 401 loads nothing', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+		await unmountCurrentLayout();
+		currentUser.set(USER);
+
+		await aRefusedRead();
+
+		expect(documentLoads.reload).not.toHaveBeenCalled();
+	});
+});
+
 // The single-mount fix (issue #276) lives in a route group, not in this
 // layout: `(library)/+layout.svelte` owns the one LibraryWorkspace mount, and
-// every library address sits inside it -- the root, an album (and its song
-// and take, one and two segments deeper), since issue #286 a playlist, and
-// since #1402 the Playlists page.
+// every library address sits inside it -- Home, the Library (#1506), an album
+// (and its song and take, one and two segments deeper), since issue #286 a
+// playlist, and since #1402 the Playlists page.
 // SvelteKit resolves a route group at build time, invisible to a mounted-
 // component test, so this reads the routes tree directly instead -- the same
 // way this file already reads app.css from disk.
@@ -1181,16 +1314,17 @@ describe('the library route group', () => {
 	const routesDir = join(process.cwd(), 'src/routes');
 	const libraryGroupDir = join(routesDir, '(library)');
 
-	it('owns the workspace mount for every library address', () => {
+	it('1354_rule_31: owns the workspace mount for every library address', () => {
 		expect(readdirSync(libraryGroupDir).sort()).toEqual([
 			'+layout.svelte',
 			'+page.svelte',
 			'album',
-			// The root address's own test harness and spec (issue #284's legacy
-			// `?song=` redirect) -- listed here rather than left to break this
-			// assertion silently, the same way `album/[slug]` already carries its
-			// own harness.svelte/page.test.ts one level down.
+			// Home's own test harness and spec (issue #284's legacy `?song=`
+			// redirect) -- listed here rather than left to break this assertion
+			// silently, the same way `album/[slug]` already carries its own
+			// harness.svelte/page.test.ts one level down.
 			'harness.svelte',
+			'library',
 			'page.test.ts',
 			'playlist',
 			'playlists'
@@ -1202,6 +1336,7 @@ describe('the library route group', () => {
 		expect(readdirSync(join(libraryGroupDir, 'album/[slug]/[song]'))).toContain('+page.svelte');
 		expect(readdirSync(join(libraryGroupDir, 'playlist/[slug]'))).toContain('+page.svelte');
 		expect(readdirSync(join(libraryGroupDir, 'playlists'))).toContain('+page.svelte');
+		expect(readdirSync(join(libraryGroupDir, 'library'))).toContain('+page.svelte');
 	});
 
 	it('leaves settings, auth, share and legal pages outside the group', () => {

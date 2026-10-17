@@ -1,5 +1,5 @@
 import { get, writable, type Writable } from 'svelte/store';
-import { ApiError, NetworkError, describeFailure, handleSessionLost } from '$lib/api/fetch';
+import { ApiError, NetworkError, describeFailure, isTransientApiFailure } from '$lib/api/fetch';
 import { fetchMe } from '$lib/api/auth';
 import {
 	compareDecimalId,
@@ -20,9 +20,7 @@ import {
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
-	RATE_LIMITED_STATUS,
-	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
-	SERVER_ERROR_STATUS_FLOOR
+	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import { leavesForFreshDocument } from '$lib/history/historyController';
@@ -36,7 +34,7 @@ import {
 } from '$lib/stores/librarySearch';
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
-import { classifyAuthFailure, type AuthFailureKind } from '$lib/stores/auth';
+import { classifyAuthFailure, handleSessionLost, type AuthFailureKind } from '$lib/stores/auth';
 import { reportResourceStreamReachable } from '$lib/stores/connectivity';
 import {
 	ImmediateReopenGap,
@@ -999,11 +997,7 @@ function visibleErrorMessage(err: unknown): string | null {
 
 function classifySongRefreshFailure(err: unknown): SongRefreshFailure {
 	if (err instanceof NetworkError) return 'network';
-	if (!(err instanceof ApiError)) return 'refused';
-	if (err.status >= SERVER_ERROR_STATUS_FLOOR || err.status === RATE_LIMITED_STATUS) {
-		return 'transient';
-	}
-	return 'refused';
+	return isTransientApiFailure(err) ? 'transient' : 'refused';
 }
 
 function retryAfterMs(err: unknown): number {

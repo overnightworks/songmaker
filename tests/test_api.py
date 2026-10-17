@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
+from songmaker_cli import audio_files
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import build_ace_config
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
@@ -699,17 +700,15 @@ def test_get_generation(client: TestClient) -> None:
 def test_get_generation_measures_and_persists_audio_duration(
     client: TestClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A take that has never had its length measured gets it measured on
+    """defect:#258 -- A take that has never had its length measured gets it measured on
     view, and the measurement is persisted (#258) -- not just returned once."""
-    import songmaker_cli.queue_streams as qs
-
     probed: list[Path] = []
 
     def _read(path: Path) -> float:
         probed.append(path)
         return 188.0
 
-    monkeypatch.setattr(qs, "read_audio_duration", _read)
+    monkeypatch.setattr(audio_files, "read_audio_duration", _read)
     resp = client.get("/api/generations/g1")
     assert resp.status_code == 200
     assert resp.json()["audio_duration_sec"] == 188.0
@@ -724,10 +723,8 @@ def test_get_generation_measures_and_persists_audio_duration(
 def test_get_generation_reports_unmeasurable_duration_as_null(
     client: TestClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An unreadable file is reported as unknown, never as a 0-second take."""
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "read_audio_duration", lambda _path: None)
+    """defect:#258 -- An unreadable file is reported as unknown, never as a 0-second take."""
+    monkeypatch.setattr(audio_files, "read_audio_duration", lambda _path: None)
     resp = client.get("/api/generations/g1")
     assert resp.status_code == 200
     assert resp.json()["audio_duration_sec"] is None
@@ -3257,13 +3254,17 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A job stuck at "running" must not be polled forever -- the stream's
+    """defect:fix/stream-deadline-test-timing -- the deadline may elapse before the
+    first poll returns, so the stream owes no frame; it owes an end.
+
+    A job stuck at "running" must not be polled forever -- the stream's
     own lifetime deadline closes it, letting the frontend's already-handled
     EventSource reconnect (jobs.ts) pick it back up."""
     import asyncio
+    import json
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, get_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "JOB_STREAM_CONNECTION_SECONDS", 0.05)
@@ -3276,15 +3277,17 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
         session.commit()
         job_id = job.id
 
-    async def _drain_until_closed() -> int:
-        frame_count = 0
-        async for _frame in _job_event_generator(ctx, job_id):
-            frame_count += 1
-        return frame_count
+    async def _drain_until_closed() -> list[dict]:
+        return [
+            json.loads(frame.removeprefix("data: "))
+            async for frame in _job_event_generator(ctx, job_id)
+        ]
 
-    frame_count = asyncio.run(asyncio.wait_for(_drain_until_closed(), timeout=5))
+    frames = asyncio.run(asyncio.wait_for(_drain_until_closed(), timeout=5))
 
-    assert frame_count >= 1
+    assert {frame["status"] for frame in frames} <= {"running"}
+    with ctx.db() as session:
+        assert get_job(session, job_id).status == "running"
 
 
 def test_stream_job_lease_is_acquired_and_released_around_the_stream(

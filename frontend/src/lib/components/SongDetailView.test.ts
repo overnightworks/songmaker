@@ -57,7 +57,9 @@ import {
 	versionReplaceDraftMessage
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
+import { menuRow } from '$lib/test-utils/collection-menu';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
+import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
 import {
 	editLyrics,
 	pendingVersionLoad,
@@ -206,8 +208,6 @@ import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast, addUndoToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-
-const PHONE_APP_BAR_PROPS = { username: 'felix', onlogout: () => undefined };
 
 function sourceRecipeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { inference_steps: 8, guidance_scale: 1.5 } };
@@ -504,13 +504,9 @@ describe('SongDetailView adding a take to a playlist', () => {
 		const target = await renderView();
 		const row = target.querySelector<HTMLElement>('.take-row');
 		if (!row) throw new Error('Expected a take row');
-		row.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+		row.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
-		const addItem = Array.from(row.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
-			(el) => el.textContent?.trim() === TAKE_PLAYLIST_LABEL
-		);
-		if (!addItem) throw new Error(`Expected a "${TAKE_PLAYLIST_LABEL}" menu item`);
-		addItem.click();
+		menuRow(row, TAKE_PLAYLIST_LABEL).click();
 		await tick();
 		row.querySelector<HTMLButtonElement>('.picker-item')?.click();
 		// The picker closes once the add has fully settled, toast included.
@@ -806,7 +802,7 @@ describe('SongDetailView recipe and takes', () => {
 			stubLibraryMedia({ narrow: compact, compact });
 			const target = await renderView();
 			expect(get(recipeOpen)).toBe(false);
-			target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+			target.querySelector<HTMLButtonElement>('.take-row .menu-trigger')?.click();
 			await tick();
 			clickNamed(target, mode === 'repaint' ? TAKE_REPAINT_LABEL : TAKE_COVER_LABEL);
 			await tick();
@@ -822,7 +818,7 @@ describe('SongDetailView recipe and takes', () => {
 		const { deleteGeneration } = await import('$lib/api/client');
 		vi.mocked(deleteGeneration).mockClear();
 		const target = await renderView();
-		target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.take-row .menu-trigger')?.click();
 		await tick();
 		clickNamed(target, 'Delete');
 		await tick();
@@ -1211,11 +1207,13 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		expect(target.querySelector('.menu-panel')).toBeNull();
 		if (phone) {
-			mounted.push(mount(PhoneAppBar, { target, props: PHONE_APP_BAR_PROPS }));
+			const bar = document.createElement('div');
+			document.body.append(bar);
+			mounted.push(mount(PhoneAppBar, { target: bar, props: PHONE_APP_BAR_PROPS }));
 			await tick();
-			target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+			bar.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 			await tick();
-			clickNamed(target, 'Save version');
+			clickNamed(bar, 'Save version');
 		} else {
 			writeSaveButton(target).click();
 		}

@@ -1,15 +1,40 @@
-import { get } from 'svelte/store';
 import type { JobItem } from './types';
 import {
 	API_ERROR_GENERIC_MESSAGE,
-	RATE_LIMITED_TOAST_MESSAGE,
+	RATE_LIMITED_STATUS,
+	SERVER_ERROR_STATUS_FLOOR,
 	SESSION_LOST_REDIRECT_PARAM
 } from '$lib/constants';
 import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
-import { addToast, toasts } from '$lib/stores/toast';
 import { UserFacingError } from './userFacingError';
 
 const API_TIMEOUT_MS = 30_000;
+
+interface RefusalReactions {
+	/** A 401 outside the sign-in forms; the request rejects only once this has settled. */
+	sessionLost: () => Promise<void>;
+	/** A 429; whether the person hears of it is the reaction's to decide. */
+	rateLimited: (path: string) => void;
+}
+
+const NO_REACTIONS: RefusalReactions = {
+	sessionLost: () => Promise.resolve(),
+	rateLimited: () => undefined
+};
+let installedReactions = NO_REACTIONS;
+
+/**
+ * The transport reports what the server answered; the app decides what a
+ * refusal means to the person. Returns the uninstall, which puts back the set
+ * that was installed before this one, so installs unwind in reverse order.
+ */
+export function installRefusalReactions(reactions: RefusalReactions): () => void {
+	const previous = installedReactions;
+	installedReactions = reactions;
+	return () => {
+		installedReactions = previous;
+	};
+}
 
 export class ApiError extends Error {
 	constructor(
@@ -72,6 +97,18 @@ export function describeFailure(
 	return fallback;
 }
 
+/**
+ * The one answer to "can asking again help?" for a server answer: a failing
+ * server (5xx) and a rate limit (429) pass, so a retry can succeed. Any other
+ * refusal is about the request itself and is refused the same way again.
+ */
+export function isTransientApiFailure(err: unknown): boolean {
+	return (
+		err instanceof ApiError &&
+		(err.status >= SERVER_ERROR_STATUS_FLOOR || err.status === RATE_LIMITED_STATUS)
+	);
+}
+
 async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
 	detail: string;
 	responseDetail: unknown;
@@ -120,44 +157,6 @@ function getCsrfToken(): string {
 // password at sign-in, setup, or a password change (#1117) -- rather than
 // saying the session is gone, so it never signs anyone out.
 const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/password']);
-
-// A path whose own 429 is already visible some other way, so the generic
-// toast below would only repeat it. Kept as its own list, not
-// derived from `AUTH_ENDPOINTS` above (that one exists for the unrelated
-// 401-redirect suppression) -- a future path added there for its 401 reason
-// should not silently also lose this toast.
-//   - '/api/auth/login': `stores/auth.ts`'s `login()` turns a 429 into
-//     "Too many attempts. Try again later." under the login form.
-//   - '/api/auth/me': `stores/auth.ts`'s `checkAuth()` turns a 429 into the
-//     full-page session-check retry banner.
-//   - '/api/auth/setup': not auth.ts -- `routes/setup/+page.svelte`'s own
-//     catch block shows the error inline via `err.message`.
-//   - '/api/albums/<id>/cover-suggestions': `AlbumCoverEditor.svelte` shows
-//     every refusal there itself -- the spent daily limit under the cover,
-//     any other as its failure or error toast; nothing retries it, so
-//     "it will continue in a moment" would be untrue there.
-const RATE_LIMIT_TOAST_EXEMPT_PATHS: readonly RegExp[] = [
-	/^\/api\/auth\/login$/,
-	/^\/api\/auth\/me$/,
-	/^\/api\/auth\/setup$/,
-	/^\/api\/albums\/[^/]+\/cover-suggestions$/
-];
-
-/**
- * Never more than one throttle toast on screen at once, not one per
- * rejected request: a 429 burst calls this many times in a row, but a
- * toast already showing the same message is left alone instead of being
- * duplicated (issue #257). The toast auto-dismisses after 5s (`addToast`'s
- * 'info' type), so a burst that outlasts that raises a fresh toast every
- * ~5s for as long as it's still being throttled -- which reads as "still
- * throttled", not as a bug.
- */
-function notifyIfRateLimited(status: number, path: string): void {
-	if (status !== 429 || RATE_LIMIT_TOAST_EXEMPT_PATHS.some((exempt) => exempt.test(path))) return;
-	const alreadyShown = get(toasts).some((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
-	if (alreadyShown) return;
-	addToast(RATE_LIMITED_TOAST_MESSAGE, 'info');
-}
 
 function isSessionLostResponse(status: number, path: string): boolean {
 	return status === 401 && !AUTH_ENDPOINTS.has(path);
@@ -220,43 +219,6 @@ export function signInReturnPath(signInPage: URL): string {
 	return requested === null ? SAFE_INTERNAL_PATH_FALLBACK : safeInternalPath(requested);
 }
 
-// The one reaction to "the session is gone" (issue #385). player.ts's
-// stream/media probe and resourceSync.ts's SSE-drop probe detect a lost
-// session a way apiFetch never sees, so they call this instead of
-// redirecting on their own.
-let sessionLostRun: Promise<void> | null = null;
-
-export function handleSessionLost(): Promise<void> {
-	if (!sessionLostRun) {
-		sessionLostRun = reactToSessionLost().finally(() => {
-			sessionLostRun = null;
-		});
-	}
-	return sessionLostRun;
-}
-
-// No-ops when there is no session to lose (`hasSessionToLose`): the first
-// load, a second caller that lost the in-flight race above, or a deliberate
-// sign-out under way, which leaves for sign-in itself. This leaves
-// +layout.svelte's own /login-vs-/setup routing, or the sign-out, to decide
-// instead of forcing a redirect that could race it.
-//
-// A lost session loads the address history stands on afresh once history has
-// come to rest -- the album a tap in the drawer opened, whichever of its
-// requests the server refused first -- so nothing of the signed-in page stays
-// in memory (#1340, ruling A). That load asks for the session as every load
-// does: the server's answer sends it to sign-in, carrying the address back,
-// and says whether the session expired (#1215). Over an open overlay's entry
-// the load replaces it, so nothing steps back on the way (#1230).
-async function reactToSessionLost(): Promise<void> {
-	const [{ hasSessionToLose }, { reloadAfresh }] = await Promise.all([
-		import('$lib/stores/auth'),
-		import('$lib/history/historyController')
-	]);
-	if (!hasSessionToLose()) return;
-	await reloadAfresh();
-}
-
 function abortOnCallerOrTimeout(
 	callerSignal: AbortSignal | null | undefined,
 	timeoutSignal: AbortSignal
@@ -277,8 +239,8 @@ export function addCsrfToken(init: RequestInit, method: string): RequestInit {
 async function throwForFailedResponse(response: Response, path: string): Promise<void> {
 	if (response.ok) return;
 	const { detail, responseDetail } = await readErrorDetail(response);
-	notifyIfRateLimited(response.status, path);
-	if (isSessionLostResponse(response.status, path)) await handleSessionLost();
+	if (response.status === RATE_LIMITED_STATUS) installedReactions.rateLimited(path);
+	if (isSessionLostResponse(response.status, path)) await installedReactions.sessionLost();
 	throw new ApiError(
 		response.status,
 		detail,

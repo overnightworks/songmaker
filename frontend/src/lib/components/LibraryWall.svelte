@@ -1,21 +1,34 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
-	import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
+	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
+	import {
+		albumList,
+		allAlbumsLoad,
+		ensureAllAlbumsLoaded,
+		songList,
+		albumSongsLoad
+	} from '$lib/stores/libraryData';
+	import { collectionTransport, toggleOrStartCollection, playAlbum } from '$lib/stores/player';
+	import { albumHasPlayableTake } from '$lib/utils/playable';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
-	import { historyLayerState } from '$lib/stores/layers';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
 		playlistLoad,
 		loadPlaylists
 	} from '$lib/stores/playlists';
-	import { openCollection } from '$lib/stores/collection';
-	import { captureLibraryScroll, libraryScrollAnchor } from '$lib/stores/libraryContext';
+	import { openCollection, type OpenCollection } from '$lib/stores/collection';
+	import {
+		captureLibraryScroll,
+		libraryScrollAnchor,
+		takePlaceReturnedFrom
+	} from '$lib/stores/libraryContext';
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import {
+		ensureLastPlayedRead,
+		inLibraryOrder,
 		lastPlayedByPlace,
 		lastPlayedOf,
 		libraryPlaceOrder,
@@ -25,12 +38,8 @@
 	import { activityTimeLabel, songCountLabel } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
+		LIBRARY_NARROW_MEDIA,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
-		LIBRARY_NEW_ALBUM_LABEL,
-		LIBRARY_NEW_FACE,
-		LIBRARY_NEW_MENU_CLOSE_LABEL,
-		LIBRARY_NEW_MENU_LABEL,
-		LIBRARY_NEW_PLAYLIST_LABEL,
 		LIBRARY_PLAYLISTS_ERROR,
 		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_PAGE_LABEL,
@@ -44,15 +53,12 @@
 		wallHeadingLabel,
 		type LibraryWallOrder
 	} from '$lib/constants';
-	import Icon from './Icon.svelte';
-	import LibraryContinue from './LibraryContinue.svelte';
+	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
-	import MenuPopover from './MenuPopover.svelte';
-	import NewAlbumCard from './NewAlbumCard.svelte';
-	import NewPlaylistCard from './NewPlaylistCard.svelte';
+	import NewPlaceMenu from './NewPlaceMenu.svelte';
 
-	type NewPlaceKind = 'album' | 'playlist';
-	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
+	const SCROLL_RESTORE_TOLERANCE_PX = 1;
+
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
 	type WallKind = 'library' | 'playlists';
@@ -94,13 +100,41 @@
 
 	let labelledAt = $state(new Date());
 
-	const wallItems = $derived.by(() => {
-		const items: WallItem[] =
-			kind === 'library'
-				? albums.map((item) => ({ type: 'album' as const, item }))
-				: playlists.map((item) => ({ type: 'playlist' as const, item }));
-		return items.sort($libraryPlaceOrder);
+	// The light is one event of this showing of the wall: the row that lights
+	// spends it, so a remount of that row (the width crossing the phone
+	// boundary, the list refilling) does not light it again.
+	let placeToLight = $state.raw<OpenCollection | null>(takePlaceReturnedFrom());
+	function spendLight(): void {
+		placeToLight = null;
+	}
+
+	let narrow = $state(false);
+	$effect(() => {
+		if (typeof window.matchMedia !== 'function') return;
+		const media = window.matchMedia(LIBRARY_NARROW_MEDIA);
+		const sync = () => {
+			narrow = media.matches;
+		};
+		sync();
+		media.addEventListener('change', sync);
+		return () => media.removeEventListener('change', sync);
 	});
+	const songsByAlbum = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- This local map is rebuilt by $derived whenever songList changes.
+		const grouped = new Map<string, SongItem[]>();
+		for (const song of $songList) {
+			const songs = grouped.get(song.album_id);
+			if (songs) songs.push(song);
+			else grouped.set(song.album_id, [song]);
+		}
+		return grouped;
+	});
+	const wallItems = $derived(
+		kind === 'library'
+			? inLibraryOrder('album', albums, $libraryPlaceOrder)
+			: inLibraryOrder('playlist', playlists, $libraryPlaceOrder)
+	);
+	const placeType = $derived(kind === 'library' ? 'album' : 'playlist');
 	const loadStatuses = $derived(
 		kind === 'library' ? [browseState.status] : [playlistStatus.status]
 	);
@@ -110,25 +144,16 @@
 	const kindLoaded = $derived(
 		kind === 'library' ? $allAlbumsLoad.status === 'ready' : playlistStatus.status === 'ready'
 	);
-	const headCount = $derived(kindLoaded ? wallItems.length : undefined);
+	// A list held back until its order is known is not an empty one.
+	const orderKnown = $derived($libraryPlaceOrder.known);
+	const headCount = $derived(kindLoaded && orderKnown ? wallItems.length : undefined);
 
 	let browseEl = $state<HTMLElement | null>(null);
-	let newMenu: MenuPopover | undefined = $state();
-	const newCard = historyLayerState<NewPlaceKind | null>('library-new-card', null);
-	let shownCard: NewPlaceKind | null = null;
-	let focusNewOnFold = true;
 
 	onMount(() => {
 		initLibraryWallOrder();
-		catchUpWall();
-		return whenBackOnline(catchUpWall);
-	});
-
-	$effect(() => {
-		const card = $newCard;
-		if (shownCard && !card && focusNewOnFold) newMenu?.focusTrigger();
-		focusNewOnFold = true;
-		shownCard = card;
+		catchUpWall(ensureLastPlayedRead);
+		return whenBackOnline(() => catchUpWall(readLastPlayed));
 	});
 
 	$effect(() => {
@@ -136,29 +161,45 @@
 		labelledAt = new Date();
 	});
 
+	// The wall's own scroll reports come back through the anchor; writing one
+	// back would cut into a momentum scroll, so only a different anchor moves it.
 	$effect(() => {
 		void wallItems.length;
-		if (browseEl) browseEl.scrollTop = restoredScroll;
+		if (!browseEl) return;
+		if (Math.abs(browseEl.scrollTop - restoredScroll) >= SCROLL_RESTORE_TOLERANCE_PX)
+			browseEl.scrollTop = restoredScroll;
 	});
 
-	function sizeLabel(wallItem: WallItem): string {
-		return songCountLabel(
-			wallItem.type === 'album' ? wallItem.item.song_count : wallItem.item.entry_count
-		);
+	function sizeLabel(item: AlbumItem | PlaylistItem): string {
+		return songCountLabel('song_count' in item ? item.song_count : item.entry_count);
 	}
 
-	function tileDetail(wallItem: WallItem): string {
-		const lastPlayed = order === 'played' ? lastPlayedOf($lastPlayedByPlace, wallItem) : undefined;
-		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(wallItem);
+	function tileDetail(item: AlbumItem | PlaylistItem): string {
+		const lastPlayed =
+			order === 'played' ? lastPlayedOf($lastPlayedByPlace, { type: placeType, item }) : undefined;
+		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(item);
+	}
+
+	function rowPlay(item: AlbumItem | PlaylistItem): (() => void) | undefined {
+		if (
+			!('song_count' in item) ||
+			!albumHasPlayableTake(item, songsByAlbum.get(item.id) ?? [], {
+				songsComplete: $albumSongsLoad[item.id] === 'idle'
+			})
+		)
+			return undefined;
+		return () => toggleOrStartCollection('album', item.id, () => void playAlbum(item.id));
 	}
 
 	// A failed read keeps what is on screen, and only an empty wall names it
 	// (#1039 O4): the offline strip owns a lost network, and the wall reads
 	// again when the page returns to the foreground or the network comes back.
-	function catchUpWall(): void {
+	// Showing the wall again asks only for a ranking that a recorded listen has not
+	// outdated, so a page load stays at the one read the rail may have made.
+	function catchUpWall(readRanking: () => Promise<boolean>): void {
 		if (kind === 'library') void ensureAllAlbumsLoaded();
 		else void ensurePlaylistsLoaded();
-		if ($libraryWallOrder === 'played') void readLastPlayed();
+		if ($libraryWallOrder === 'played') void readRanking();
 	}
 
 	function chooseOrder(next: LibraryWallOrder): void {
@@ -168,27 +209,13 @@
 	}
 
 	function catchUpOnReturnToForeground(): void {
-		if (document.visibilityState === 'visible') catchUpWall();
+		if (document.visibilityState === 'visible') catchUpWall(readLastPlayed);
 	}
 
 	function onBrowseScroll(event: Event): void {
 		const target = event.currentTarget;
 		if (!(target instanceof HTMLElement)) return;
 		captureLibraryScroll(target.scrollTop);
-	}
-
-	function startNew(kind: NewPlaceKind): void {
-		newMenu?.close(false);
-		$newCard = kind;
-	}
-
-	function cancelNew(): void {
-		$newCard = null;
-	}
-
-	function foldCreated(): void {
-		focusNewOnFold = false;
-		$newCard = null;
 	}
 
 	function retryLoad(): void {
@@ -198,27 +225,6 @@
 </script>
 
 <svelte:document onvisibilitychange={catchUpOnReturnToForeground} />
-
-{#snippet newMenuButton()}
-	<MenuPopover
-		bind:this={newMenu}
-		layer="library-new"
-		label={LIBRARY_NEW_MENU_LABEL}
-		closeLabel={LIBRARY_NEW_MENU_CLOSE_LABEL}
-		pressed={$newCard !== null}
-	>
-		{#snippet trigger()}<span class="new-face"
-				><Icon name="plus" size={16} />{LIBRARY_NEW_FACE}</span
-			>{/snippet}
-		<p class="new-menu-heading">New in <b>Library</b></p>
-		<button type="button" class="new-menu-item" onclick={() => startNew('album')}
-			><Icon name="album" size={16} />{LIBRARY_NEW_ALBUM_LABEL}</button
-		>
-		<button type="button" class="new-menu-item" onclick={() => startNew('playlist')}
-			><Icon name="playlist" size={16} />{LIBRARY_NEW_PLAYLIST_LABEL}</button
-		>
-	</MenuPopover>
-{/snippet}
 
 {#snippet orderSwitch()}
 	<div class="wall-order" role="group" aria-label={copy.orderGroup}>
@@ -247,57 +253,52 @@
 			{#if headCount !== undefined}<span class="wall-count">{headCount}</span>{/if}
 		</h1>
 		{@render orderSwitch()}
-		{@render newMenuButton()}
+		{#if !narrow}<NewPlaceMenu />{/if}
 	</div>
-	{#if kind === 'library'}
-		<LibraryContinue />
-	{/if}
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
-		{#if $newCard === 'album'}
-			<NewAlbumCard oncancel={cancelNew} oncreated={foldCreated} />
-		{:else if $newCard === 'playlist'}
-			<NewPlaylistCard oncancel={cancelNew} oncreated={foldCreated} />
-		{/if}
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
-				{#each wallItems as wallItem (wallItem.type + wallItem.item.id)}
-					<div
-						class="wall-tile"
-						class:selected={currentCollection?.kind === wallItem.type &&
-							currentCollection.id === wallItem.item.id}
-					>
-						<button
-							type="button"
-							class="wall-tile-body"
-							onclick={() =>
-								wallItem.type === 'album'
-									? openAlbum(wallItem.item.id)
-									: openPlaylist(wallItem.item.id)}
-							aria-label={`Open ${wallItem.type} ${wallItem.item.title}`}
-						>
-							{#if wallItem.type === 'album'}
-								<LibraryTileContent
-									title={wallItem.item.title}
-									subtitle={tileDetail(wallItem)}
-									coverAlt={`${ALBUM_COVER_ALT_TYPE} ${wallItem.item.title}`}
-									coverUrl={wallItem.item.cover?.card ?? null}
-									fill={usableAlbumPrimary(wallItem.item.colors)}
-								/>
-							{:else}
-								<LibraryTileContent
-									title={wallItem.item.title}
-									subtitle={tileDetail(wallItem)}
-									coverAlt={`Playlist cover for ${wallItem.item.title}`}
-									coverUrl={wallItem.item.cover?.card ?? null}
-									playlistCovers={wallItem.item.album_covers}
-								/>
-							{/if}
-						</button>
-					</div>
+				{#each wallItems as item (placeType + item.id)}
+					{@const transport = $collectionTransport(placeType, item.id)}
+					{@const content = {
+						title: item.title,
+						coverAlt: `${placeType === 'album' ? ALBUM_COVER_ALT_TYPE : 'Playlist cover for'} ${item.title}`,
+						coverUrl: item.cover?.card ?? null,
+						fill: 'colors' in item ? usableAlbumPrimary(item.colors) : null,
+						playlistCovers: 'album_covers' in item ? item.album_covers : null
+					}}
+					{@const onopen = () => (kind === 'library' ? openAlbum(item.id) : openPlaylist(item.id))}
+					{@const selected =
+						currentCollection?.kind === placeType && currentCollection.id === item.id}
+					{#if narrow}
+						<LibraryRow
+							{...content}
+							{selected}
+							subtitle={sizeLabel(item)}
+							lightUp={placeToLight?.kind === placeType && placeToLight.id === item.id}
+							onlit={spendLight}
+							openLabel={`Open ${placeType} ${item.title}`}
+							{onopen}
+							onplay={rowPlay(item)}
+							current={placeType === 'album' && transport.current}
+							transport={transport.transport}
+						/>
+					{:else}
+						<div class="wall-tile" class:selected>
+							<button
+								type="button"
+								class="wall-tile-body"
+								onclick={onopen}
+								aria-label={`Open ${placeType} ${item.title}`}
+							>
+								<LibraryTileContent {...content} subtitle={tileDetail(item)} />
+							</button>
+						</div>
+					{/if}
 				{/each}
 			</div>
-		{:else if loadStatuses.includes('loading')}
+		{:else if !orderKnown || loadStatuses.includes('loading')}
 			<p class="empty" role="status">{copy.loading}</p>
 		{:else if loadStatuses.includes('error')}
 			<p class="empty" role="alert">{copy.failed}</p>
@@ -336,62 +337,8 @@
 		text-transform: uppercase;
 	}
 
-	.wall-titlebar :global(.menu-trigger) {
-		padding: 0;
-	}
-
 	.wall-titlebar .wall-order {
 		margin-left: auto;
-	}
-
-	.new-face {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		height: 42px;
-		padding: 0 14px;
-		font-family: var(--font-display);
-		font-size: 0.78rem;
-		font-weight: 500;
-		letter-spacing: 0.5px;
-		text-transform: uppercase;
-	}
-
-	.new-menu-heading {
-		padding: 0.2rem 0.6rem 0.5rem;
-		border-bottom: 1px solid var(--border);
-		color: var(--text-subtle);
-		font-size: 13px;
-	}
-
-	.new-menu-heading b {
-		color: var(--text);
-		font-weight: 600;
-	}
-
-	.new-menu-item {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		width: 100%;
-		min-height: 34px;
-		padding: 0 0.6rem;
-		border: 0;
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--text);
-		font-family: var(--font-body);
-		font-size: 0.87rem;
-		text-align: left;
-	}
-
-	.new-menu-item :global(svg) {
-		flex: none;
-		color: var(--text-muted);
-	}
-
-	.new-menu-item:hover {
-		background: var(--surface-hover);
 	}
 
 	.wall-count {
@@ -481,7 +428,7 @@
 	}
 
 	.wall-tile.selected {
-		box-shadow: inset 0 0 0 2px var(--accent);
+		box-shadow: var(--selected-ring);
 	}
 
 	.wall-tile-body {
@@ -533,16 +480,13 @@
 			padding: 10px 12px 6px;
 		}
 
-		.new-menu-item {
-			min-height: 44px;
-		}
-
 		.wall-body {
 			padding-inline: 12px;
 		}
 
 		.tile-grid {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0;
 		}
 	}
 </style>

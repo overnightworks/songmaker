@@ -1,8 +1,14 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
+	import { page } from '$app/state';
+	import { PLAYLISTS_ROUTE_PATH, standsOnPlaylistsPage } from '$lib/routes/addresses';
+	import { standingPathname } from '$lib/routes/standingAddress';
 	import { openCollection } from '$lib/stores/collection';
-	import { librarySurface, playlistWhoseDetailShows } from '$lib/stores/libraryContext';
+	import {
+		librarySurface,
+		playlistsWallShows,
+		playlistWhoseDetailShows
+	} from '$lib/stores/libraryContext';
 	import { openPlaylist, openRailSearchTarget } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
@@ -47,8 +53,13 @@
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
 	const shownPlaylistId = $derived(playlistWhoseDetailShows($librarySurface, $openCollection));
-	// The Playlists page itself: its group is current and unfolded there (#1354 D3).
-	const onPlaylistsPage = $derived($librarySurface === 'playlists' && $selectedSongId === null);
+	// The Playlists wall is the surface in view: it unfolds the group (#1354 D3).
+	// The surface stays `playlists` after leaving for Settings, so it does not make
+	// the word current (#1523).
+	const playlistsWallIsSurface = $derived(playlistsWallShows($librarySurface, $selectedSongId));
+	const onPlaylistsPage = $derived(
+		playlistsWallIsSurface && standsOnPlaylistsPage(standingPathname(page.state))
+	);
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const visiblePlaylists = $derived(
@@ -108,7 +119,7 @@
 	groupId="rail-playlists-group"
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
 	count={playlistCount}
-	expandTrigger={onPlaylistsPage || openPlaylistId !== null || filtering}
+	expandTrigger={playlistsWallIsSurface || openPlaylistId !== null || filtering}
 	page={{
 		href: resolve(PLAYLISTS_ROUTE_PATH),
 		current: onPlaylistsPage,

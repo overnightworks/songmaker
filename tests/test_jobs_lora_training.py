@@ -1845,6 +1845,37 @@ def test_successful_train_submit_wins_a_simultaneous_job_renewal_failure() -> No
     assert _run(exercise()) == "task-1"
 
 
+def test_race_owner_cancelled_while_awaiting_its_cancelled_operation_ends_cancelled() -> None:
+    """defect:#1509 -- cancelling the race owner while it awaited the operation was swallowed."""
+    from songmaker_cli.jobs.lora_training import _race_with_renewal
+
+    async def exercise() -> None:
+        operation_started = asyncio.Event()
+        operation_cancel_seen = asyncio.Event()
+
+        async def operation_cleaning_up_after_cancel() -> None:
+            operation_started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                operation_cancel_seen.set()
+                await asyncio.Event().wait()
+
+        async def renewal_ending_once_the_operation_runs() -> None:
+            await operation_started.wait()
+
+        renew_task = asyncio.create_task(renewal_ending_once_the_operation_runs())
+        racing = asyncio.create_task(
+            _race_with_renewal(operation_cleaning_up_after_cancel(), renew_task)
+        )
+        await operation_cancel_seen.wait()
+        racing.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await racing
+
+    _run(exercise())
+
+
 def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
     seeded,
     db_factory,

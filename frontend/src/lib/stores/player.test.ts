@@ -69,10 +69,6 @@ vi.mock('$lib/services/mediaSession', async (importOriginal) => {
 		}
 	};
 });
-vi.mock('$lib/api/fetch', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/fetch')>();
-	return { ...actual, handleSessionLost: vi.fn() };
-});
 vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
 	createLibraryQueueStreamSnapshot: vi.fn(),
@@ -92,7 +88,10 @@ vi.mock('$lib/api/songs', () => ({
 	recordSongListen: vi.fn().mockResolvedValue(undefined)
 }));
 import { albumList, songList, upsertSongInList } from './libraryData';
+import { ensureLastPlayedRead, resetLibraryOrderForTests } from './libraryOrder';
 import {
+	collectionTransport,
+	toggleOrStartCollection,
 	buildQueueViewModel,
 	canPlayNextSong,
 	canPlayPrevSong,
@@ -144,7 +143,6 @@ import {
 	transportOfTheStart,
 	waitingStartOf,
 	pendingStart,
-	stopStartAwaitingNetwork,
 	windowEnded
 } from './player';
 import {
@@ -157,8 +155,13 @@ import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
 import { fromSharedSong, type SharedCollectionView } from '$lib/share/sharedCollection';
 import { currentUser } from '$lib/stores/auth';
+import {
+	resetHistoryControllerForTests,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
+import { documentLoads } from '$lib/test-utils/document-loads';
 import type { ResumeQueueSource } from '$lib/stores/playbackResume';
-import { ApiError, handleSessionLost, NetworkError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	libraryTakePool,
@@ -766,6 +769,42 @@ describe('playback dispatch', () => {
 		expect(recordSongListen).toHaveBeenCalledWith(song.id, null);
 		expect(logged).toHaveBeenCalledWith('Could not record song listen:', reportingError);
 	});
+
+	it.each([
+		['recorded', true, 2],
+		['not recorded', false, 1]
+	])(
+		'defect:#1537: the Last played ranking is outdated only once the listen is %s',
+		async (_, listenRecorded, readsAfterwards) => {
+			const fetchStub = vi.fn(async () => Response.json({ items: [] }));
+			vi.stubGlobal('fetch', fetchStub);
+			vi.spyOn(console, 'error').mockImplementation(() => {});
+			onTestFinished(() => {
+				vi.unstubAllGlobals();
+				resetLibraryOrderForTests();
+			});
+			await ensureLastPlayedRead();
+			const listen = Promise.withResolvers<undefined>();
+			vi.mocked(recordSongListen).mockReturnValueOnce(listen.promise);
+			const song = makeSong({ ...queuedSongDefaults(), id: 's-ranking-outdated' });
+			audioPlayer.status = 'playing';
+			audioPlayer.current = makePlayback(
+				makeGen({ ...genDefaults, id: 'g-ranking-outdated', song_id: song.id }),
+				song
+			);
+
+			audioPlayer.currentCallbacks.onPlaybackStarted?.();
+			await ensureLastPlayedRead();
+			expect(fetchStub).toHaveBeenCalledTimes(1);
+
+			if (listenRecorded) listen.resolve(undefined);
+			else listen.reject(new Error('offline'));
+			await listen.promise.catch(() => {});
+			await ensureLastPlayedRead();
+
+			expect(fetchStub).toHaveBeenCalledTimes(readsAfterwards);
+		}
+	);
 
 	it('does not record while share playback owns the audio callback', () => {
 		const song = makeSong({ ...queuedSongDefaults(), id: 's-share-listen' });
@@ -2789,7 +2828,8 @@ describe('playAlbum start track', () => {
 		});
 
 		afterEach(() => {
-			stopStartAwaitingNetwork();
+			const waiting = get(pendingStart);
+			if (waiting) toggleOrStartCollection('album', waiting.albumId, null);
 			vi.useRealTimers();
 		});
 
@@ -2816,7 +2856,7 @@ describe('playAlbum start track', () => {
 					lockScreen: lockScreen.metadata
 				};
 
-				stopStartAwaitingNetwork();
+				toggleOrStartCollection('album', 'a1', null);
 
 				expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
 					whileWaiting: {
@@ -4428,13 +4468,20 @@ describe('Now Playing surface', () => {
 });
 
 describe('audioPlayer onAuthLost wiring', () => {
-	it('hands a lost stream/media session to the one shared session-lost reaction', async () => {
+	it("925_M3_S7: hands a lost stream/media session to auth's reaction, which loads afresh once for a signed-in user", async () => {
 		const onAuthLost = audioPlayer.currentCallbacks.onAuthLost;
 		if (!onAuthLost) throw new Error('onAuthLost is not assigned');
+		onTestFinished(() => {
+			currentUser.set(null);
+			resetHistoryControllerForTests();
+		});
+		standInForDocumentLoadsForTests(documentLoads);
+		documentLoads.reload.mockClear();
+		currentUser.set({ id: 'u-signed-in', username: 'listener', role: 'user' });
 
 		await onAuthLost();
 
-		expect(handleSessionLost).toHaveBeenCalledOnce();
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 });
 
@@ -5329,4 +5376,67 @@ describe('a share link that takes the player (#1391)', () => {
 		expect(lockScreenState.metadata).toBeNull();
 		expect(lockScreenState.playbackState).toBe('none');
 	});
+});
+
+describe('collection transport', () => {
+	it.each(['album', 'playlist'] as const)(
+		'1354_rule_10: names the %s queue even when browsing another collection',
+		(kind) => {
+			albumList.set([makeAlbum({ id: 'source', title: 'Source' })]);
+			queueContext.set(
+				kind === 'album'
+					? { type: 'album', albumId: 'source' }
+					: { type: 'playlist', playlist: { id: 'source', title: 'Source' }, entries: [], index: 0 }
+			);
+			audioPlayer.current = makePlayback(makeGen(), makeSong());
+			audioPlayer.status = 'playing';
+			openCollection.set({ kind, id: 'other' });
+			expect(get(collectionTransport)(kind, 'source')).toEqual({
+				current: true,
+				waiting: false,
+				transport: 'playing'
+			});
+			expect(get(collectionTransport)(kind, 'other')).toEqual({
+				current: false,
+				waiting: false,
+				transport: 'idle'
+			});
+		}
+	);
+
+	it('1354_rule_43: the shared action leaves Shuffle to its caller', () => {
+		setShuffle(true);
+		toggleOrStartCollection('album', 'new', null);
+		expect(get(shuffleEnabled)).toBe(true);
+		let startedWithShuffle = false;
+		toggleOrStartCollection('album', 'new', () => {
+			startedWithShuffle = get(shuffleEnabled);
+		});
+		expect(startedWithShuffle).toBe(true);
+	});
+
+	it.each(['awaiting-network', 'gave-up-on-network'] as const)(
+		'(#1330) withdraws a %s album start without starting over or changing shuffle',
+		async (notice) => {
+			songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
+			reportResourceStreamReachable(false);
+			vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+			await playAlbum('a1');
+			playStartNotice.set(notice);
+			setShuffle(true);
+			expect(get(collectionTransport)('album', 'a1')).toEqual({
+				current: false,
+				waiting: true,
+				transport: notice === 'awaiting-network' ? 'recovering' : 'waiting-for-network'
+			});
+			let restarted = false;
+			toggleOrStartCollection('album', 'a1', () => {
+				restarted = true;
+			});
+			expect(restarted).toBe(false);
+			expect(get(pendingStart)).toBeNull();
+			expect(get(playStartNotice)).toBe('idle');
+			expect(get(shuffleEnabled)).toBe(true);
+		}
+	);
 });

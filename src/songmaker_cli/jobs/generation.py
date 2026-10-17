@@ -26,7 +26,6 @@ from songmaker_cli.api_models import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
-from songmaker_cli.api_models.generation_params import BaseGenerationParams
 from songmaker_cli.arq_pool import is_scoring_worker_healthy
 from songmaker_cli.config import (
     audio_file_path,
@@ -66,6 +65,7 @@ from songmaker_cli.generate import (
     _splice_repaint_raw,
     _write_output,
 )
+from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.parser import AlbumMeta, SongMeta
 from songmaker_cli.scheduler import (
     AllWorkersHeld,

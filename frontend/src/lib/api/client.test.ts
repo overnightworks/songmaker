@@ -1,35 +1,14 @@
 import { makeHealthResponse } from '$lib/test-utils/factories';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, onTestFinished, vi, beforeEach } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-vi.mock('$lib/stores/auth', () => {
-	let user: { id: string } | null = null;
-	const subscribers = new Set<(value: typeof user) => void>();
-	const currentUser = {
-		subscribe(fn: (value: typeof user) => void) {
-			fn(user);
-			subscribers.add(fn);
-			return () => subscribers.delete(fn);
-		},
-		set(value: typeof user) {
-			user = value;
-			subscribers.forEach((fn) => fn(user));
-		}
-	};
-	return {
-		currentUser,
-		hasSessionToLose: () => user !== null
-	};
-});
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 
-import { standInForDocumentLoadsForTests } from '$lib/history/historyController';
-import { currentUser } from '$lib/stores/auth';
-import type { AuthUser } from './types';
+import { installRefusalReactions } from './fetch';
 import {
 	deleteAlbumCover,
 	deleteSongCover,
@@ -86,13 +65,8 @@ function mockError(status: number, detail: string = '') {
 	});
 }
 
-const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
-
 beforeEach(() => {
 	mockFetch.mockReset();
-	documentLoads.reload.mockReset();
-	standInForDocumentLoadsForTests(documentLoads);
-	currentUser.set(null);
 });
 
 describe('API client', () => {
@@ -351,32 +325,22 @@ describe('Auth API', () => {
 // Fine-grained reaction behavior is pinned in api/fetch.test.ts; this suite
 // only proves a client.ts wrapper still reaches that owner.
 describe('401 session expiry handler', () => {
-	it('routes a 401 from a client wrapper (not apiFetch directly) to the shared session-lost owner', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+	it('925_M3_P5: a 401 from a client wrapper (not apiFetch directly) tells sessionLost', async () => {
+		let told = 0;
+		onTestFinished(
+			installRefusalReactions({
+				rateLimited: () => undefined,
+				sessionLost: () => {
+					told += 1;
+					return Promise.resolve();
+				}
+			})
+		);
 		mockError(401, 'Session expired');
+
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
-		expect(documentLoads.reload).toHaveBeenCalledOnce();
-	});
 
-	it('does not redirect on 401 from login endpoint', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		mockError(401, 'Invalid credentials');
-		await expect(login('alice', 'wrong')).rejects.toThrow(ApiError);
-		expect(documentLoads.reload).not.toHaveBeenCalled();
-	});
-
-	it('does not redirect on 401 from setup endpoint', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		mockError(401, 'Bad request');
-		await expect(setupAdmin('admin', 'pass')).rejects.toThrow(ApiError);
-		expect(documentLoads.reload).not.toHaveBeenCalled();
-	});
-
-	it('does not redirect on non-401 errors', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		mockError(500, 'Internal error');
-		await expect(fetchAlbums()).rejects.toThrow(ApiError);
-		expect(documentLoads.reload).not.toHaveBeenCalled();
+		expect(told).toBe(1);
 	});
 });
 

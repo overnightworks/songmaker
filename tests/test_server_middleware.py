@@ -1,16 +1,28 @@
-"""Tests for `SelectiveGZipMiddleware` — the server's response-compression layer."""
+"""Tests for the server's middleware: `SelectiveGZipMiddleware` and the stack order."""
 
 from __future__ import annotations
 
 import asyncio
 import gzip as gzip_stdlib
+from pathlib import Path
 
 import pytest
+from conftest import make_test_app
 from fastapi import FastAPI, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
+from webauth.middleware import (
+    BodySizeLimitMiddleware,
+    CsrfOriginMiddleware,
+    CsrfTokenMiddleware,
+    IpRateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
+from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware, _accepts_gzip
+from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 
 _LARGE_JSON_PAYLOAD = {"lyrics": "la " * 1000}
 _TINY_JSON_PAYLOAD = {"status": "ok"}
@@ -244,3 +256,28 @@ def test_streaming_json_response_is_compressed_chunk_by_chunk() -> None:
 
     decompressed = gzip_stdlib.decompress(b"".join(body_messages))
     assert decompressed == b"".join(_JSON_STREAM_CHUNKS)
+
+
+def test_created_app_stacks_its_middleware_in_the_documented_security_order(
+    tmp_path: Path,
+) -> None:
+    """defect:#1521 -- the middleware order is security-critical and was only a comment.
+
+    Outermost first, because Starlette runs the last-added layer first. CORS is
+    registered for every configuration (`CORS_ORIGIN` only picks its policy), so
+    the default one is built here. An intended reorder updates this list and the
+    comment block in `server.py` together.
+    """
+    client, _ = make_test_app(tmp_path)
+
+    assert [layer.cls for layer in client.app.user_middleware] == [
+        ResourceStreamDeadlineMiddleware,
+        SelectiveGZipMiddleware,
+        CORSMiddleware,
+        BodySizeLimitMiddleware,
+        IpRateLimitMiddleware,
+        CsrfOriginMiddleware,
+        CsrfTokenMiddleware,
+        AccessLogMiddleware,
+        SecurityHeadersMiddleware,
+    ]

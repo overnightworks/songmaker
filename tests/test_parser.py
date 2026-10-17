@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from songmaker_cli.api_models.generation_params import BaseGenerationParams
+from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.parser import AlbumMeta, SongMeta
 
 

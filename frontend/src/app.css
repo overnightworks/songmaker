@@ -168,6 +168,7 @@
 
 	/* Card tokens */
 	--card-radius: 6px;
+	--selected-ring: inset 0 0 0 2px var(--accent);
 
 	/* Spacing tokens */
 	--row-padding: 0.55rem 0.8rem;

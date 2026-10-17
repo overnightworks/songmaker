@@ -2,7 +2,7 @@ const ALBUM_ROUTE_PREFIX = '/album/';
 const TAKE_ROUTE_SEGMENT = '/take/';
 const PLAYLIST_ROUTE_PREFIX = '/playlist/';
 export const HOME_ROUTE_PATH = '/';
-export const LIBRARY_ROUTE_PATH = '/';
+export const LIBRARY_ROUTE_PATH = '/library';
 export const PLAYLISTS_ROUTE_PATH = '/playlists';
 
 export function albumRoutePath(albumId: string): string {
@@ -45,7 +45,14 @@ export function isPlaylistRoutePath(pathname: string): boolean {
 }
 
 type LibraryRouteShape =
-	'root' | 'album' | 'album-song' | 'album-song-take' | 'playlists' | 'playlist' | 'external';
+	| 'home'
+	| 'library'
+	| 'album'
+	| 'album-song'
+	| 'album-song-take'
+	| 'playlists'
+	| 'playlist'
+	| 'external';
 
 export function libraryRouteShape(pathname: string): LibraryRouteShape {
 	if (pathname === PLAYLISTS_ROUTE_PATH) return 'playlists';
@@ -54,7 +61,16 @@ export function libraryRouteShape(pathname: string): LibraryRouteShape {
 		if (!isSongRoutePath(pathname)) return 'album';
 		return isTakeRoutePath(pathname) ? 'album-song-take' : 'album-song';
 	}
-	return pathname === LIBRARY_ROUTE_PATH ? 'root' : 'external';
+	if (pathname === HOME_ROUTE_PATH) return 'home';
+	return pathname === LIBRARY_ROUTE_PATH ? 'library' : 'external';
+}
+
+export function standsOnLibraryPage(pathname: string): boolean {
+	return libraryRouteShape(pathname) === 'library';
+}
+
+export function standsOnPlaylistsPage(pathname: string): boolean {
+	return libraryRouteShape(pathname) === 'playlists';
 }
 
 export function readLegacySongQuery(searchParams: URLSearchParams): {

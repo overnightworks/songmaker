@@ -2,6 +2,8 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	LIBRARY_RETRY_LABEL,
@@ -9,6 +11,7 @@ import {
 	RAIL_LIBRARY_LOAD_ERROR,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import {
@@ -25,6 +28,7 @@ import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player'
 import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { pressBack } from '$lib/test-utils/library-history';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	albumsPage,
@@ -45,6 +49,7 @@ import {
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
 vi.mock('$lib/api/library', async () =>
 	(await import('./rail-test-fixtures')).railLibraryApiMock()
@@ -65,7 +70,7 @@ import RailLibraryGroup from './RailLibraryGroup.svelte';
 
 const { render, cleanup } = createComponentMount(RailLibraryGroup);
 
-beforeEach(() => {
+beforeEach(async () => {
 	localStorage.clear();
 	chooseLibraryWallOrder('title');
 	resetLibraryOrderForTests();
@@ -82,6 +87,8 @@ beforeEach(() => {
 	railTreeQuery.set('');
 	setShuffle(false);
 	closeNowPlaying();
+	// The default surface, browse, stands on the Library's address.
+	await goto(resolve(LIBRARY_ROUTE_PATH));
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
 		audioPlayer.current = playback;
 	});
@@ -131,7 +138,7 @@ describe('RailLibraryGroup', () => {
 		librarySurface.set('detail');
 		const target = await render();
 		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
-		expect(word.getAttribute('href')).toBe('/');
+		expect(word.getAttribute('href')).toBe(LIBRARY_ROUTE_PATH);
 		expect(word.textContent).toContain('Library');
 
 		word.click();
@@ -154,6 +161,49 @@ describe('RailLibraryGroup', () => {
 		await tick();
 		expect(word.hasAttribute('aria-current')).toBe(false);
 	});
+
+	it.each([
+		{ address: LIBRARY_ROUTE_PATH, current: true },
+		{ address: '/settings', current: false },
+		{ address: '/playlists', current: false },
+		{ address: '/?song=s1', current: false }
+	] as const)(
+		'defect:#1523: with the surface still on browse, the word Library is current: $current and its group is unfolded at $address',
+		async ({ address, current }) => {
+			await goto(resolve(address));
+			const target = await render();
+
+			expect(
+				requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
+			).toBe('true');
+			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+			expect(word.hasAttribute('aria-current')).toBe(current);
+			expect(get(librarySurface)).toBe('browse');
+		}
+	);
+
+	it('defect:#1523: the word Library is current again after Back from Settings, with no reload', async () => {
+		const target = await render();
+		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+		expect(word.getAttribute('aria-current')).toBe('page');
+
+		await goto(resolve('/settings'));
+		await tick();
+		expect(word.hasAttribute('aria-current')).toBe(false);
+
+		await pressBack();
+		expect(word.getAttribute('aria-current')).toBe('page');
+	});
+
+	it.each(['home', 'playlists'] as const)(
+		'1354_rule_31: the word Library is not the current page while %s shows',
+		async (surface) => {
+			librarySurface.set(surface);
+			const target = await render();
+			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+			expect(word.hasAttribute('aria-current')).toBe(false);
+		}
+	);
 
 	it('#1354 rule 40: the Library list carries no All albums row', async () => {
 		const target = await render();
@@ -202,6 +252,26 @@ describe('RailLibraryGroup', () => {
 		await vi.waitFor(() =>
 			expect(albumTitles()).toEqual(['Vernissage', 'Filler 2', 'Afterglow', 'Filler 10'])
 		);
+	});
+
+	it('1354_rule_8: lists no album while Last played is chosen and Listen has not answered', async () => {
+		albumList.set([
+			album({ id: 'afterglow', title: 'Afterglow' }),
+			album({ id: 'v', title: 'Vernissage' })
+		]);
+		const listen = Promise.withResolvers<ReturnType<typeof lastPlayedPage>>();
+		vi.mocked(fetchLibraryListen).mockReturnValue(listen.promise);
+		chooseLibraryWallOrder('played');
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+		const albumTitles = () =>
+			Array.from(target.querySelectorAll('.album-label .row-title')).map((row) => row.textContent);
+
+		expect(albumTitles()).toEqual([]);
+
+		listen.resolve(lastPlayedPage('album', ['v']));
+		await vi.waitFor(() => expect(albumTitles()).toEqual(['Vernissage', 'Afterglow']));
 	});
 
 	it('narrows known albums and songs, while keeping the open album visible', async () => {
