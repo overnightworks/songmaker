@@ -11,7 +11,7 @@ export const libraryWriteItems = readonly(rows);
 export const libraryWriteState = readonly(state);
 export const libraryWriteLoading = readonly(loading);
 let generation = 0;
-let pending: Promise<boolean> | null = null;
+let pending: Promise<void> | null = null;
 let outdatedDuringRead = false;
 // Only a read already in flight can predate a successful removal.
 // Reads started afterwards are authoritative, including restores on another device.
@@ -19,7 +19,7 @@ const removed = { song: new Set<string>(), album: new Set<string>() };
 // Undo recognition lasts for the session, independently of in-flight read exclusions.
 const removedHere = { song: new Set<string>(), album: new Set<string>() };
 
-function readLibraryWrite(): Promise<boolean> {
+function readLibraryWrite(): Promise<void> {
 	if (pending !== null) return pending;
 	const startedGeneration = generation;
 	outdatedDuringRead = false;
@@ -27,19 +27,17 @@ function readLibraryWrite(): Promise<boolean> {
 	pending = fetchLibraryWrite()
 		.then(
 			(answer) => {
-				if (startedGeneration !== generation) return false;
+				if (startedGeneration !== generation) return;
 				rows.set(
 					answer.items.filter(
 						(row) => !removed.song.has(row.song_id) && !removed.album.has(row.album_id)
 					)
 				);
 				state.set(outdatedDuringRead ? 'outdated' : 'ready');
-				return true;
 			},
 			() => {
-				if (startedGeneration !== generation) return false;
+				if (startedGeneration !== generation) return;
 				state.update((value) => (value === 'unread' || value === 'failed' ? 'failed' : 'outdated'));
-				return false;
 			}
 		)
 		.finally(() => {
@@ -52,9 +50,9 @@ function readLibraryWrite(): Promise<boolean> {
 	return pending;
 }
 
-export function ensureLibraryWriteRead(): Promise<boolean> {
+export function ensureLibraryWriteRead(): Promise<void> {
 	if (pending !== null) return pending;
-	return get(state) === 'ready' ? Promise.resolve(true) : readLibraryWrite();
+	return get(state) === 'ready' ? Promise.resolve() : readLibraryWrite();
 }
 
 // Foreground and online callers invalidate explicitly before asking for rows.
@@ -63,12 +61,12 @@ export function outdateLibraryWrite(): void {
 	state.update((value) => (value === 'ready' ? 'outdated' : value));
 }
 
-async function refillWritten(): Promise<boolean> {
+async function refillWritten(): Promise<void> {
 	const startedGeneration = generation;
 	if (pending !== null) await pending;
-	if (startedGeneration !== generation) return false;
+	if (startedGeneration !== generation) return;
 	if (pending !== null) return pending;
-	if (get(state) === 'unread') return true;
+	if (get(state) === 'unread') return;
 	outdateLibraryWrite();
 	return ensureLibraryWriteRead();
 }
@@ -83,9 +81,9 @@ export function forgetWritten(kind: RemovedKind, id: string): void {
 	void refillWritten();
 }
 
-export function restoreWritten(kind: RemovedKind, ids: readonly string[]): Promise<boolean> {
+export function restoreWritten(kind: RemovedKind, ids: readonly string[]): Promise<void> {
 	const restored = ids.filter((id) => removedHere[kind].has(id));
-	if (restored.length === 0) return Promise.resolve(true);
+	if (restored.length === 0) return Promise.resolve();
 	for (const id of restored) {
 		removedHere[kind].delete(id);
 		removed[kind].delete(id);

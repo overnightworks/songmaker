@@ -91,11 +91,12 @@ it.each([false, true])(
 			outdateLibraryWrite();
 		}
 		fetch.mockRejectedValueOnce(lostNetwork());
-		expect(await ensureLibraryWriteRead()).toBe(false);
+		await ensureLibraryWriteRead();
 		expect(ids()).toEqual(loaded ? ['kept'] : []);
 		expect(get(libraryWriteState)).toBe(loaded ? 'outdated' : 'failed');
 		fetch.mockResolvedValueOnce(answer(row('fresh')));
-		expect(await ensureLibraryWriteRead()).toBe(true);
+		await ensureLibraryWriteRead();
+		expect(get(libraryWriteState)).toBe('ready');
 		expect(ids()).toEqual(['fresh']);
 	}
 );
