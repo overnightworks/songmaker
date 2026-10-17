@@ -1,0 +1,8 @@
+claim_id = "d5796d6b352e48f98c56063e70256bd0"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "9d8c2b7fb5d29624186a98accfd433a79471a0b7"
+branch = "claude/issue-1601-generate-unavailable"
+scope = ["docs/acestep.md", "docs/architecture.md", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/generation_failure.py", "src/songmaker_cli/scheduler.py", "tests/conftest.py", "tests/test_generation_failure.py", "tests/test_jobs.py", "tests/test_scheduler.py", "tests/worker_http_peer.py"]
+opened_commit = "bf8e9ec34c72fe58cde41721735fa969ac78b207"
+whole_reason = "Ein durchgehender Verfügbarkeitsvertrag vom Scheduler-Typ über den vorhandenen Fehlerbesitzer bis zum gespeicherten Job; gemeinsame Testpins und zwei bestehende Dokumentationsaussagen müssen mit derselben Änderung stimmen."
