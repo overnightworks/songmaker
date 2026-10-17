@@ -1,8 +1,0 @@
-claim_id = "5d7fdcb6763440cbb1aaaa34b378db4d"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "6c4b1f818e7af702da11e719dd303ea06146d418"
-branch = "claude/issue-1509-s6c-cancelled-error-shuffle-owner"
-scope = ["frontend/src/lib/share/sharePlayback.svelte.ts", "frontend/src/lib/share/sharePlayback.test.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/utils/shuffle.test.ts", "frontend/src/lib/utils/shuffle.ts", "src/acestep_worker/child_tasks.py", "src/acestep_worker/downloads.py", "src/acestep_worker/heartbeat.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/jobs/lora_training.py", "tests/acestep_worker/test_child_tasks.py", "tests/acestep_worker/test_downloads.py", "tests/acestep_worker/test_heartbeat.py", "tests/acestep_worker/test_wrapper.py", "tests/test_jobs_lora_training.py"]
-opened_commit = "8dbaed2a2e0a4fb91c17c84a10ca22f2aa62ec62"
-whole_reason = "One Sonar slice: five cancellation sites share one pattern and one test shape; the shuffle owner removes the last two S2245 copies."
