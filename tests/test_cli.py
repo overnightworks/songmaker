@@ -91,7 +91,12 @@ def test_write_output_encode_error(tmp_path: Path) -> None:
             _write_output(audio, 42, mp3_path, wav_path, meta, album_meta)
 
 
-def test_main_error_handling() -> None:
+def test_main_error_handling(isolated_logging) -> None:
+    """defect:#1590: restore CLI logging so later tests can capture warnings.
+
+    Cyclopts retains the registered launcher despite the patch below; pytest's
+    -q can therefore select CLI quiet mode and leave the root level at ERROR.
+    """
     with (
         patch("songmaker_cli.main._launcher", side_effect=ValidationError("test error")),
         pytest.raises(SystemExit),
