@@ -1,8 +1,0 @@
-claim_id = "41878947fa3c44e0886d08c09b85d2df"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "6b07d502e2c6668792c436bb931cf4d3e2b9fcbf"
-branch = "claude/issue-1578-read-projection"
-scope = ["docs/acestep.md", "frontend/e2e/song-phone.spec.ts", "scripts/seed_e2e_job_states.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/jobs/_runtime.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/jobs/generation_failure.py", "src/songmaker_cli/jobs_api.py", "tests/conftest.py", "tests/test_api.py", "tests/test_generation_failure.py", "tests/test_jobs.py"]
-opened_commit = "671e18997b11d9e83e4d2a3345866131b729e215"
-whole_reason = "the read-time projection, its four readers, its one partial-prefix owner, the docs sentence and every test that pins the projected text move together"
