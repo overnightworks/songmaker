@@ -61,14 +61,24 @@ def test_an_access_line_yields_its_client_path_and_time() -> None:
     )
 
 
-def test_the_busiest_window_counts_only_requests_inside_one_budget_window(policy) -> None:
+@pytest.mark.parametrize(
+    ("seconds", "request_count", "starts_at"),
+    [
+        pytest.param((0, 10, 59.9, 60, 61, 62, 200), 5, 10, id="burst"),
+        pytest.param((0, 60), 1, 0, id="exact-boundary"),
+        pytest.param((60, 0, 59), 2, 0, id="unordered"),
+    ],
+)
+def test_the_busiest_window_counts_only_requests_inside_one_budget_window(
+    policy, seconds: tuple[float, ...], request_count: int, starts_at: float,
+) -> None:
     """defect:#1555 -- a burst is judged inside the limiter's 60 s, not across the run."""
-    lines = [access_line("/api/albums", second) for second in (0, 10, 59.9, 60, 61, 62, 200)]
+    lines = [access_line("/api/albums", second) for second in seconds]
 
     peak = rate_window.busiest_api_window(lines, policy)
 
     assert peak == rate_window.WindowPeak(
-        RUNNER_IP, 5, RUN_START + timedelta(seconds=10),
+        RUNNER_IP, request_count, RUN_START + timedelta(seconds=starts_at),
     )
 
 

@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 """Report the busiest API rate-limit window of one E2E run from the access log.
 
 The E2E stack's ``IP_RATE_LIMIT`` override is sized from this number, so the
@@ -23,10 +22,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Final
-
-from _repo_path import prepend_own_checkout_src
-
-prepend_own_checkout_src(__file__)
 
 from webauth.policies import RateLimitClass, RateLimitPolicy
 
