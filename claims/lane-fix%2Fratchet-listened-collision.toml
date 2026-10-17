@@ -1,0 +1,7 @@
+claim_id = "77dc5e897906425da753cee1241705e3"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "f58a04e85fa2c0ac02f5446b469fe875fceb8d6f"
+branch = "fix/ratchet-listened-collision"
+scope = ["frontend/src/lib/components/LibraryHome.test.ts"]
+opened_commit = "11278aa522162b03aefece012770469a3afef88f"
