@@ -119,11 +119,7 @@ section{
 .btn.destructive{border-color:var(--score-bad);color:var(--score-bad);background:none}
 /* states — of primary and secondary, not roles of their own */
 .btn.failed{background:none;border-color:var(--score-bad);color:var(--score-bad)}
-.failline{display:flex;align-items:center;gap:2px;width:100%;min-height:44px;font:inherit;font-size:12px;line-height:1.4;color:var(--score-bad);background:none;border:0;text-align:left}
-.failline .msg{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.failline .chev{width:44px;height:44px;flex:none;display:inline-flex;align-items:center;justify-content:center}
-.failline.open{align-items:flex-start;padding-bottom:6px}
-.failline.open .msg{white-space:normal;overflow:visible;text-overflow:clip;padding-top:13px}
+.failline{width:100%;min-width:0;margin:0;font:inherit;font-size:12px;line-height:1.4;color:var(--score-bad);white-space:pre-wrap;overflow-wrap:anywhere}
 .btn[disabled]{background:none;border-color:var(--border);color:var(--text-disabled);cursor:default}
 .btn[data-busy]{
 	position:relative;overflow:hidden;background:var(--surface);
@@ -581,8 +577,8 @@ section{
 			<span class="caps">States — of primary and secondary</span>
 			<div class="unit" style="width:100%"><span class="tag">Busy — the progress is the button</span><button class="btn primary" data-busy style="width:100%"><span class="fill" style="width:36%"></span><span class="t">Take 1 of 2 · 36% · ~1:40</span></button></div>
 			<div class="unit" style="width:100%"><span class="tag">Disabled — fill dropped, outline kept</span><button class="btn primary" disabled style="width:100%">GPU offline</button></div>
-			<div class="unit" style="width:100%"><span class="tag">Failed — the same box, the failure treatment, the same label</span><button class="btn primary failed" style="width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><button class="failline" aria-expanded="false" aria-label="Show the full reason"><span class="msg">Insufficient free VRAM: need ~2.9&nbsp;GB, only 1.7&nbsp;GB available. Reduce batch size (currently 2) or audio duration (currently 285&nbsp;s).</span><span class="chev" aria-hidden="true"><svg class="ic sm"><use href="#i-down"/></svg></span></button></div>
-			<span class="note">Three states, all drawn on the primary. <b>Failed keeps the label</b> — pressing it again <i>is</i> the retry, so a separate <span class="gone">RETRY</span> would be the same action twice. The worker's sentence stands under the button in <b>two drawn states</b>: clamped to one line with a chevron at its end, and opened to the whole sentence in the same ink — tap the line or the chevron to open; tap again to close. §7 draws the pair. <span class="gone">danger</span> and <span class="gone">off</span> are gone as class names: a filled red button does not exist, and “off” was a state wearing a role's clothes.</span>
+			<div class="unit" style="width:100%"><span class="tag">Failed — the same box, the failure treatment, the same label</span><button class="btn primary failed" style="width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><p class="failline">Too long for the GPU right now — try a shorter duration.</p></div>
+			<span class="note">Three states, all drawn on the primary. <b>Failed keeps the label</b> — pressing it again <i>is</i> the retry, so a separate <span class="gone">RETRY</span> would be the same action twice. The failure sentence stands fully readable under the button, wrapping naturally without an expander or another action. §7 draws the failure examples. <span class="gone">danger</span> and <span class="gone">off</span> are gone as class names: a filled red button does not exist, and “off” was a state wearing a role's clothes.</span>
 		</div>
 		<div class="spec tight" style="width:306px">
 			<span class="caps">Icon-only — the two face sizes</span>
@@ -942,13 +938,13 @@ all mine if I stay</div>
 				<div class="bar"><span style="width:36%"></span></div>
 				<span class="line">Take 1 of 2 · 36% · ~1:40</span>
 			</div>
-			<span class="caps">Failed — the button is the failure, its reason has two states</span>
+			<span class="caps">Failed — the full reason stands under Generate</span>
 			<button class="btn primary failed" style="width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button>
-			<button class="failline" aria-expanded="false" aria-label="Show the full reason"><span class="msg">Insufficient free VRAM: need ~2.9&nbsp;GB, only 1.7&nbsp;GB available. Reduce batch size (currently 2) or audio duration (currently 285&nbsp;s).</span><span class="chev" aria-hidden="true"><svg class="ic sm"><use href="#i-down"/></svg></span></button>
-			<span class="caps">Opened — the same line, tapped</span>
+			<p class="failline">Too long for the GPU right now — try a shorter duration.</p>
+			<span class="caps">Unavailable — the full reason stands under Generate</span>
 			<button class="btn primary failed" style="width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button>
-			<button class="failline open" aria-expanded="true" aria-label="Hide the full reason"><span class="msg">Insufficient free VRAM: need ~2.9&nbsp;GB, only 1.7&nbsp;GB available. Reduce batch size (currently 2) or audio duration (currently 285&nbsp;s).</span><span class="chev" aria-hidden="true"><svg class="ic sm"><use href="#i-up"/></svg></span></button>
-			<span class="note">Round 2 gave a failed run its own dashed slot on the results surface, with a <span class="gone">RETRY</span> inside it. <b>Operator ruling 20.09.2026 moves it into the button</b>: a failed run produced nothing, so the results surface has nothing to report, and the retry was never a second action — it is Generate pressed again. Same box, fill dropped, <code>--score-bad</code> outline and ink, an inline triangle, <b>the label unchanged</b>. The worker's sentence under it has <b>two drawn states and no third</b>: <b>clamped</b> — one line, ellipsis, a chevron at its end in a 44&nbsp;px target — and <b>opened</b> — the whole sentence wrapped, the same red ink, the chevron flipped. <b>Tap the line or the chevron to open; tap again to close.</b> Without the chevron a clamped line looks like a truncation accident, not an invitation. <b>The status slot is now the running state only.</b></span>
+			<p class="failline">Generating isn't available right now.</p>
+			<span class="note">Round 2 gave a failed run its own dashed slot on the results surface, with a <span class="gone">RETRY</span> inside it. <b>Operator ruling 20.09.2026 moves it into the button</b>: a failed run produced nothing, so the results surface has nothing to report, and the retry was never a second action — it is Generate pressed again. Same box, fill dropped, <code>--score-bad</code> outline and ink, an inline triangle, <b>the label unchanged</b>. The musician’s sentence stands fully readable underneath, wrapping naturally with no ellipsis, chevron or additional action. Generate remains the next attempt. <b>The status slot is now the running state only.</b></span>
 		</div>
 		<div class="spec">
 			<span class="caps">Loading — skeleton rows and one sentence</span>
@@ -1087,7 +1083,7 @@ all mine if I stay</div>
 					<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:10px 12px;display:flex;flex-direction:column;gap:9px;margin-top:4px">
 						<nav class="tabs" style="--h:44px;border-radius:0;background:none;border-bottom:1px solid var(--border);padding:0"><button class="active">Write</button><button>Takes <span class="count">4</span></button></nav>
 						<div class="strip" style="--h:32px;--fs:.8rem"><button class="btn primary">Generate</button><button class="btn secondary">Cancel</button><button class="btn destructive">Delete</button></div>
-						<button class="btn primary failed" style="--h:32px;--fs:.8rem;width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><span class="failline">Insufficient free VRAM: need ~2.9 GB.</span>
+						<button class="btn primary failed" style="--h:32px;--fs:.8rem;width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><span class="failline">Too long for the GPU right now — try a shorter duration.</span>
 					</div>
 					<span class="note">The primary's label is <b>white on #7a18c0 — 7.7:1</b>.</span>
 				</div>
@@ -1101,7 +1097,7 @@ all mine if I stay</div>
 					<div style="background:#111;border:1px solid #333;border-radius:var(--card-radius);padding:10px 12px;display:flex;flex-direction:column;gap:9px;margin-top:4px">
 						<nav class="tabs" style="--h:44px;border-radius:0;background:none;border-bottom:1px solid #333;padding:0"><button class="active">Write</button><button style="color:#888">Takes <span class="count">4</span></button></nav>
 						<div class="strip" style="--h:32px;--fs:.8rem"><button class="btn primary">Generate</button><button class="btn secondary">Cancel</button><button class="btn destructive">Delete</button></div>
-						<button class="btn primary failed" style="--h:32px;--fs:.8rem;width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><span class="failline">Insufficient free VRAM: need ~2.9 GB.</span>
+						<button class="btn primary failed" style="--h:32px;--fs:.8rem;width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><span class="failline">Too long for the GPU right now — try a shorter duration.</span>
 					</div>
 					<span class="note" style="color:#888"><b style="color:#e0e0e0">#a020f0 reaches only 3.56:1 on #111</b> — it fails AA as a text or icon colour, so the dark theme takes the lighter sibling <b style="color:#e0e0e0">#b45cf5</b> at <b style="color:#e0e0e0">5.21:1</b>. Its filled button carries <b style="color:#e0e0e0">#111 ink, not white</b>: dark on light purple is 5.21:1, white on it only 3.6:1.</span>
 				</div>

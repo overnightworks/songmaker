@@ -226,6 +226,12 @@ describe('RailGroup', () => {
 			});
 			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
 			expect(word.getAttribute('aria-current')).toBe('page');
+			const fold = requireElement<HTMLButtonElement>(target, 'button.fold');
+			expect(fold.hasAttribute('aria-current')).toBe(false);
+			fold.click();
+			await tick();
+			expect(fold.getAttribute('aria-expanded')).toBe('true');
+			expect(word.getAttribute('aria-current')).toBe('page');
 
 			live.page = { href: '/', current: false, open: vi.fn() };
 			await tick();

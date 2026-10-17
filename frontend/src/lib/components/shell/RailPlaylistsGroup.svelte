@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { PLAYLISTS_ROUTE_PATH, standsOnPlaylistsPage } from '$lib/routes/addresses';
+	import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
 	import { standingPathname } from '$lib/routes/standingAddress';
 	import { openCollection } from '$lib/stores/collection';
 	import {
+		placeShown,
 		librarySurface,
 		playlistsWallShows,
 		playlistWhoseDetailShows
@@ -34,6 +35,7 @@
 	import { PLAYLISTS_PAGE_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import PlaylistCover from '../PlaylistCover.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
+	import Icon from '../Icon.svelte';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_PLAYLIST_ITEM_CLASS, revealOpenRailItem } from './rail-item-selector';
 
@@ -58,7 +60,7 @@
 	// the word current (#1523).
 	const playlistsWallIsSurface = $derived(playlistsWallShows($librarySurface, $selectedSongId));
 	const onPlaylistsPage = $derived(
-		playlistsWallIsSurface && standsOnPlaylistsPage(standingPathname(page.state))
+		placeShown('playlists', $librarySurface, $selectedSongId, standingPathname(page.state))
 	);
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
@@ -97,21 +99,7 @@
 </script>
 
 {#snippet icon()}
-	<svg
-		width="14"
-		height="14"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		aria-hidden="true"
-	>
-		<path d="M9 18V5l12-2v13" />
-		<circle cx="6" cy="18" r="3" />
-		<circle cx="18" cy="16" r="3" />
-	</svg>
+	<Icon name="playlists" size={14} />
 {/snippet}
 
 <RailGroup

@@ -1,15 +1,16 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { setRailCollapsed } from '$lib/contexts/rail-collapsed';
-	import { librarySurface } from '$lib/stores/libraryContext';
+	import { librarySurface, placeShown } from '$lib/stores/libraryContext';
 	import { selectedSongId } from '$lib/stores/player';
 	import { page } from '$app/state';
-	import { HOME_ROUTE_PATH, standsOnHomePage } from '$lib/routes/addresses';
+	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
 	import { standingPathname } from '$lib/routes/standingAddress';
 	import { followAppPageLink, followPlainClick, openHome } from '$lib/stores/navigation';
 	import { APP_NAME, HOME_PAGE_LABEL, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import { accountInitial } from '$lib/utils/format';
+	import Icon from '../Icon.svelte';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 	import RailSearch from './RailSearch.svelte';
@@ -47,9 +48,7 @@
 	// Each rail supplies its own state so the phone drawer stays expanded.
 	setRailCollapsed(() => collapsed);
 	const onHome = $derived(
-		$librarySurface === 'home' &&
-			$selectedSongId === null &&
-			standsOnHomePage(standingPathname(page.state))
+		placeShown('home', $librarySurface, $selectedSongId, standingPathname(page.state))
 	);
 
 	const collapseRailLabel = 'Collapse rail';
@@ -138,19 +137,7 @@
 			onclick={(event) => followPlainClick(event, openHome)}
 		>
 			<span class="home-fold-spacer" aria-hidden="true"></span>
-			<svg
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" />
-			</svg>
+			<span aria-hidden="true"><Icon name="home" size={14} /></span>
 			<span class="group-title">{HOME_PAGE_LABEL}</span>
 		</a>
 		<RailLibraryGroup />
@@ -260,7 +247,7 @@
 		color: var(--text);
 	}
 
-	.rail :global(.rail-page-link[aria-current='page']) {
+	.home-link[aria-current='page'] {
 		background: var(--surface-hover);
 		color: var(--text);
 	}
