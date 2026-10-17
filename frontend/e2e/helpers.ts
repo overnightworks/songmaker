@@ -17,7 +17,7 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
@@ -343,7 +343,7 @@ export function appBar(page: Page): Locator {
 // heard of, so a scroll made before it can be undone by it.
 export async function expectLibraryWallLoaded(page: Page): Promise<void> {
 	await expect(
-		workspace(page).getByRole('heading', { name: new RegExp(`^${RAIL_LIBRARY_LABEL} · \\d+$`) })
+		workspace(page).getByRole('heading', { name: new RegExp(`^${LIBRARY_PAGE_LABEL} · \\d+$`) })
 	).toBeVisible();
 }
 
@@ -372,7 +372,7 @@ export async function scrollWallHalfway(page: Page): Promise<number> {
 /** Back to the wall through the word LIBRARY, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	const rail = await openRailNav(page, shell);
-	await rail.getByRole('link', { name: nameStartingWith(RAIL_LIBRARY_LABEL) }).click();
+	await rail.getByRole('link', { name: nameStartingWith(LIBRARY_PAGE_LABEL) }).click();
 	if (shell === 'mobile')
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	await expect(page).toHaveURL(LIBRARY_URL);
@@ -385,7 +385,7 @@ export async function openAlbumFromRail(
 	albumTitle: string
 ): Promise<void> {
 	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
 	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 	await rail
 		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
@@ -413,22 +413,12 @@ export async function openHome(page: Page, shell: Shell): Promise<void> {
 	await expect(page).toHaveURL(HOME_URL);
 }
 
-/**
- * The Playlists page through search (#1402): the rail's field on the desktop,
- * the 🔍 sheet of the phone's app bar on the phone.
- */
+/** The Playlists page through its rail link, behind the drawer on the phone. */
 export async function openPlaylistsPage(page: Page, shell: Shell): Promise<void> {
-	const phoneSearch = 'Search';
-	let search = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-	if (shell === 'mobile') {
-		await appBar(page).getByRole('button', { name: phoneSearch, exact: true }).click();
-		search = page.getByRole('dialog', { name: phoneSearch, exact: true });
-	}
-	await search.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(PLAYLISTS_PAGE_LABEL);
-	await search
-		.getByRole('group', { name: 'Pages' })
-		.getByRole('option', { name: nameStartingWith(PLAYLISTS_PAGE_LABEL) })
-		.click();
+	const rail = await openRailNav(page, shell);
+	await rail.getByRole('link', { name: nameStartingWith(PLAYLISTS_PAGE_LABEL) }).click();
+	if (shell === 'mobile')
+		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	await expect(page).toHaveURL(/\/playlists$/);
 }
 

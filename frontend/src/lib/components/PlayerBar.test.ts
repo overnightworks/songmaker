@@ -14,7 +14,7 @@ import {
 	OFFLINE_STRIP_MESSAGE,
 	openNowPlayingLabel,
 	PLAYER_WAITING_FOR_NETWORK,
-	RAIL_LIBRARY_LABEL,
+	LIBRARY_PAGE_LABEL,
 	REDUCED_MOTION_MEDIA,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -260,7 +260,7 @@ describe('PlayerBar stream boundaries', () => {
 		expect(audioPlayer.current).toBeNull();
 		const play = target.querySelector<HTMLButtonElement>('button[aria-label="Play"]');
 		expect(play?.disabled).toBe(false);
-		expect(target.querySelector('.track-title')?.textContent).toBe(RAIL_LIBRARY_LABEL);
+		expect(target.querySelector('.track-title')?.textContent).toBe(LIBRARY_PAGE_LABEL);
 		play?.click();
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
@@ -1229,7 +1229,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		await mountBar();
 
 		expect(openTargets()).toHaveLength(0);
-		expect(bar().querySelector('.track-title')?.textContent).toBe(RAIL_LIBRARY_LABEL);
+		expect(bar().querySelector('.track-title')?.textContent).toBe(LIBRARY_PAGE_LABEL);
 	});
 });
 
