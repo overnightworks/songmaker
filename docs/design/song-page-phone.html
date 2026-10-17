@@ -124,53 +124,18 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	border-color: var(--score-bad);
 	color: var(--score-bad);
 }
-/* the worker's sentence: clamped to one line, the chevron says there is more */
+/* The full failure stays readable below Generate, which starts the next attempt. */
 .fail-line {
 	flex: 0 0 100%;
 	min-width: 0;
-	max-width: 100%;
-	overflow: hidden;
-	font: inherit;
+	margin: 0;
 	font-size: .8rem;
 	line-height: 1.4;
 	color: var(--score-bad);
-	background: none;
-	border: none;
-	text-align: left;
-	min-height: var(--hitbox-frequent);
-	display: flex;
-	align-items: center;
-	gap: .2rem;
-	padding: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
-.fail-line .msg {
-	flex: 1 1 auto;
-	min-width: 0;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-.fail-line .chev {
-	width: var(--hitbox-frequent);
-	height: var(--hitbox-frequent);
-	flex: none;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-}
-/* opened: the whole sentence wraps, same ink, the chevron flips and holds the first line */
-.fail-line.open {
-	align-items: flex-start;
-	padding-bottom: .35rem;
-}
-.fail-line.open .msg {
-	white-space: normal;
-	overflow: visible;
-	text-overflow: clip;
-	padding-top: 13px;
-}
-/* opening the line steals height from the page, so the page shows its bottom;
-   the shift is a whole card plus its gap — no element is left half-drawn */
+/* Show the page's bottom after scrolling by a whole card and its gap. */
 .body.scrolled > :first-child { margin-top: -66px; }
 
 /* icon-only: one 44px touch box, the face sits inside it */
@@ -1071,7 +1036,7 @@ the morning gives away</div>
 		</div>
 		<div class="actionbar">
 			<button class="btn-primary failed"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v3.6"/><path d="M12 16.8v.1"/></svg>Generate</button>
-			<button class="fail-line" aria-expanded="false" aria-label="Show the full reason"><span class="msg">Insufficient free VRAM: need ~2.9 GB, only 1.7 GB available. Reduce batch size (currently 2) or audio duration (currently 285s).</span><span class="chev" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button>
+			<p class="fail-line">Too long for the GPU right now — try a shorter duration.</p>
 		</div>
 		<div class="player">
 			<span class="cover" aria-hidden="true"></span>
@@ -1087,7 +1052,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>3c · Edit</b> — the same failure opened: the whole sentence, tap again to close</figcaption>
+	<figcaption><b>3c · Edit</b> — generation unavailable: the whole sentence stays readable</figcaption>
 	<div class="device" id="f3c">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -1131,7 +1096,7 @@ the morning gives away</div>
 		</div>
 		<div class="actionbar">
 			<button class="btn-primary failed"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v3.6"/><path d="M12 16.8v.1"/></svg>Generate</button>
-			<button class="fail-line open" aria-expanded="true" aria-label="Hide the full reason"><span class="msg">Insufficient free VRAM: need ~2.9 GB, only 1.7 GB available. Reduce batch size (currently 2) or audio duration (currently 285s).</span><span class="chev" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></span></button>
+			<p class="fail-line">Generating isn't available right now.</p>
 		</div>
 		<div class="player">
 			<span class="cover" aria-hidden="true"></span>
