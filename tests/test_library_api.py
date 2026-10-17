@@ -11,7 +11,7 @@ import pytest
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from slugify import slugify
-from sqlalchemy import event
+from sqlalchemy import event, select
 
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,
@@ -432,9 +432,10 @@ def test_a_listen_inside_a_playlist_lifts_the_playlist_and_leaves_the_album(
     assert items[1] == album_before
 
 
-def test_1354_47_A5_an_admins_actions_leave_the_owners_lists_unchanged(
+def test_1354_47_A5_an_admins_actions_leave_the_owners_lists_byte_identical_and_move_the_admins_own(
     library_ctx: tuple[object, object],
 ) -> None:
+    """1354_rule_6: each viewer's lists reflect only their own activity."""
     factory, ctx = library_ctx
 
     def seed(session) -> None:
@@ -464,10 +465,15 @@ def test_1354_47_A5_an_admins_actions_leave_the_owners_lists_unchanged(
             session, song_id="vernissage-1", author=ADMIN_ID, created_at=_later(20),
         )
         session.commit()
+        admin_entry_id = session.scalars(
+            select(PlaylistEntry.id).where(PlaylistEntry.playlist_id == "admin-mix"),
+        ).one()
 
     assert _both_lists(bob) == owners_lists
     assert all(item["entry_id"] is None for item in _listen_items(bob))
-    assert next(item for item in _listen_items(admin) if item["type"] == "playlist")["entry_id"]
+    assert next(
+        item for item in _listen_items(admin) if item["type"] == "playlist"
+    )["entry_id"] == admin_entry_id
     assert _places(_listen_items(admin)) == [
         ("playlist", "admin-mix", "vernissage-2", 1),
         ("album", "vernissage", "vernissage-2", 2),
@@ -620,12 +626,14 @@ def _played_playlist_item(
         _seed_played_playlist(session, entries=entries, last_played_song_id=last_played_song_id)
 
     _seed(factory, seed)
-    if last_played_song_id in entries:
-        _listen_to(client, last_played_song_id, playlist_id="late-drive")
+    _listen_to(client, last_played_song_id, playlist_id="late-drive")
+    with factory() as session:
+        played_at = session.get(Playlist, "late-drive").last_played_at
     if remove is not None:
         _seed(factory, remove)
 
     [item] = _listen_items(client)
+    assert item["played_at"] == played_at.replace(tzinfo=timezone.utc).isoformat()
     return item
 
 
@@ -664,6 +672,7 @@ def test_1354_47_a_played_playlist_names_its_first_live_entry(
 def test_1354_47_A3_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
     tmp_path: Path, remove_aside: Callable,
 ) -> None:
+    """1354_rule_20: filtered entries do not contribute to live numbering."""
     item = _played_playlist_item(
         tmp_path, entries=["aside-1", "quiet-1", "quiet-2"], last_played_song_id="quiet-2",
         remove=remove_aside,
@@ -677,6 +686,7 @@ def test_1354_47_A3_an_entry_that_is_no_longer_live_never_raises_a_later_songs_n
 def test_1354_47_A4_a_playlist_without_a_live_occurrence_resumes_from_the_start(
     tmp_path: Path, remove_aside: Callable,
 ) -> None:
+    """1354_rule_20: filtered targets expose no entry identity."""
     item = _played_playlist_item(
         tmp_path, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
         remove=remove_aside,
@@ -688,6 +698,7 @@ def test_1354_47_A4_a_playlist_without_a_live_occurrence_resumes_from_the_start(
 def test_1354_47_A4_a_playlist_whose_last_played_song_left_it_resumes_from_the_start(
     tmp_path: Path,
 ) -> None:
+    """1354_rule_20: removed targets expose no entry identity."""
     item = _played_playlist_item(
         tmp_path, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
         remove=lambda session: session.delete(session.get(PlaylistEntry, "entry-1")),
