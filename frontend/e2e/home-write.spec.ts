@@ -1,4 +1,4 @@
-import { expect, request, test, type Page } from '@playwright/test';
+import { expect, request, test, type Locator, type Page } from '@playwright/test';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
 import {
 	ACCOUNT_MENU_LABEL,
@@ -11,9 +11,12 @@ import {
 	HOME_WRITE_ERROR,
 	SONG_MENU_LABEL,
 	SONG_MENU_DELETE_LABEL,
+	homeWriteOpenLabel,
 	songEditorOpenLabel
 } from '../src/lib/constants';
+import { songRoutePath } from '../src/lib/routes/addresses';
 import {
+	appBar,
 	csrfHeaders,
 	HOME_PATH,
 	loseNetwork,
@@ -23,7 +26,8 @@ import {
 	openRailNav,
 	shellOf,
 	workspace,
-	listenRegion
+	listenRegion,
+	type Shell
 } from './helpers';
 import {
 	BASE_URL,
@@ -40,7 +44,7 @@ const writeEndpoint = '**/api/library/write';
 async function loginWriter(page: Page, username: string, password: string): Promise<void> {
 	await page.goto('/login');
 	await page.getByLabel('Username', { exact: true }).fill(username);
-	await page.getByLabel('Password', { exact: true }).fill(password);
+	await page.getByLabel('Password').fill(password);
 	await page.getByRole('button', { name: 'Enter', exact: true }).click();
 	await expect(page).toHaveURL(new RegExp(`${HOME_PATH}$`));
 	await expect(writeRegion(page)).toBeVisible();
@@ -55,28 +59,47 @@ async function writtenAnswer(page: Page): Promise<LibraryWriteResponse> {
 	expect(response.ok()).toBe(true);
 	return response.json();
 }
+const ariaLabels = (rows: Locator) =>
+	rows.evaluateAll((elements) => elements.map((element) => element.getAttribute('aria-label')));
 async function expectWrittenOrder(page: Page, answer: LibraryWriteResponse): Promise<void> {
 	await expect(writeBodies(page)).toHaveText(
 		answer.items.map((item) => new RegExp(item.song_title))
 	);
-	expect(
-		await writeBodies(page).evaluateAll((rows) => rows.map((row) => row.getAttribute('aria-label')))
-	).toEqual(answer.items.map((item) => songEditorOpenLabel(item.song_title)));
+	expect(await ariaLabels(writeBodies(page))).toEqual(
+		answer.items.map((item) => homeWriteOpenLabel(item.song_title))
+	);
+	expect(await ariaLabels(writeRegion(page).locator('.row-editor'))).toEqual(
+		answer.items.map((item) => songEditorOpenLabel(item.song_title))
+	);
+}
+async function editorPathOf(page: Page, songId: string): Promise<string> {
+	const response = await page.request.get(`/api/songs/${songId}`);
+	expect(response.ok()).toBe(true);
+	const song: SongItem = await response.json();
+	return songRoutePath(song.album_id, song.slug);
+}
+// Headless Chromium fires no visibilitychange on bringToFront, so the flip is dispatched.
+async function flipVisible(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		for (const state of ['hidden', 'visible']) {
+			Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+			document.dispatchEvent(new Event('visibilitychange'));
+		}
+	});
 }
 async function foregroundWriter(page: Page): Promise<void> {
-	const background = await page.context().newPage();
-	try {
-		await background.goto('about:blank');
-		await background.bringToFront();
-		const refreshed = page.waitForResponse(
-			(response) => new URL(response.url()).pathname === '/api/library/write'
-		);
-		await page.bringToFront();
-		await refreshed;
-	} finally {
-		await background.close();
-	}
+	const refreshed = page.waitForResponse(
+		(response) => new URL(response.url()).pathname === '/api/library/write'
+	);
+	await flipVisible(page);
+	await refreshed;
 }
+// At phone widths the song menu sits in the app bar, outside the workspace.
+const songMenuOf = (page: Page, shell: Shell) =>
+	(shell === 'mobile' ? appBar(page) : workspace(page)).getByRole('button', {
+		name: SONG_MENU_LABEL,
+		exact: true
+	});
 
 // Runs in the existing desktop/mobile projects, with a private account and real API state.
 test('1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_20: Write composes Home, opens editors and follows offline, removal and Undo', async ({
@@ -152,9 +175,10 @@ test('1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_20: Write co
 		await listenRegion(page)
 			.getByRole('button', { name: /^Pause / })
 			.click();
+		const editorPath = await editorPathOf(page, answer.items[0].song_id);
 		for (const selector of ['.wall-tile-body', '.row-editor']) {
 			await writeRegion(page).locator(selector).first().click();
-			await expect(page).toHaveURL(new RegExp(`/song/${answer.items[0].song_id}$`));
+			await expect(page).toHaveURL(new RegExp(`${editorPath}$`));
 			await openHome(page, shellOf(testInfo));
 			await expect(listenRegion(page).getByRole('button', { name: /^Play / })).toBeVisible();
 			await expect(listenRegion(page).locator('.tile-subtitle')).toContainText('stopped at song 1');
@@ -206,14 +230,11 @@ test('1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_20: Write co
 			await heldRemoval;
 			await route.fulfill({ response });
 		});
-		const background = await context.newPage();
-		await background.bringToFront();
-		await page.bringToFront();
+		await flipVisible(page);
 		await captured;
-		await background.close();
 
 		await writeBodies(page).first().click();
-		await workspace(page).getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
+		await songMenuOf(page, shellOf(testInfo)).click();
 		await page.getByRole('button', { name: SONG_MENU_DELETE_LABEL, exact: true }).click();
 		await page.getByRole('button', { name: 'Delete Song', exact: true }).click();
 		await openHome(page, shellOf(testInfo));

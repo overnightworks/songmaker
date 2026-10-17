@@ -286,3 +286,32 @@ it.each(['album', 'song'] as const)(
 		expect(fetch).toHaveBeenCalledTimes(2);
 	}
 );
+
+it.each(['song', 'album'] as const)(
+	'1354_rule_20 defect:#1575 restores the %s deleted again after Undo while one read stays in flight',
+	async (kind) => {
+		const remove = () => (kind === 'song' ? removeSongFromList('a') : removeSongsForAlbum('album'));
+		const undo = () =>
+			kind === 'song'
+				? addSongsToList([makeSong({ id: 'a' })])
+				: addAlbumToList(makeAlbum({ id: 'album' }));
+		const resolve = deferredRead();
+		const oldRead = ensureLibraryWriteRead();
+		remove();
+		undo();
+		remove();
+		const refill = deferredRead();
+		resolve(answer(row('a'), row('b', 'other')));
+		await oldRead;
+		refill(answer(row('b', 'other')));
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['b']);
+		fetch.mockResolvedValueOnce(answer(row('a'), row('b', 'other')));
+		undo();
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['a', 'b']);
+		expect(get(libraryWriteState)).toBe('ready');
+	}
+);

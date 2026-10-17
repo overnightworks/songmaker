@@ -198,6 +198,8 @@ Cached rows (including empty results) survive failed refreshes; a failed first
 read offers Retry. Removal excludes stale in-flight answers until they settle;
 Undo consumes recognition separately and requests an authoritative fresh read.
 Confirmed logout/session loss replaces the document; Write has no persistent cache.
+Both lists render through `HomeListSection.svelte`, which owns the heading and the
+loading, failed (with Retry), empty and rows states; each list keeps its own reader.
 Home's head line holds the one + New (`NewPlaceMenu.svelte`: the button, its
 Album · Playlist popover and the inline card that unfolds under the head) at
 both widths; the desktop Library and Playlists heads mount the same component,

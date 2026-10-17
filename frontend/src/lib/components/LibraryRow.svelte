@@ -10,7 +10,6 @@
 		type TransportState
 	} from '$lib/services/audioPlayer.svelte';
 	import Icon from './Icon.svelte';
-	import { songEditorOpenLabel } from '$lib/constants';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
@@ -18,7 +17,8 @@
 		openLabel: string;
 		onopen: () => void;
 		onplay?: () => void;
-		onedit?: () => void;
+		// The caller names the place its trailing action opens; the row stays generic.
+		edit?: { label: string; onclick: () => void };
 		transport?: TransportState;
 		selected?: boolean;
 		lightUp?: boolean;
@@ -28,7 +28,7 @@
 		openLabel,
 		onopen,
 		onplay,
-		onedit,
+		edit,
 		transport = 'idle',
 		selected = false,
 		lightUp = false,
@@ -64,13 +64,8 @@
 		>
 			<TransportButtonIcon face={transportButtonFace(transport)} size={20} />
 		</button>
-	{:else if onedit}
-		<button
-			type="button"
-			class="row-editor"
-			aria-label={songEditorOpenLabel(content.title)}
-			onclick={onedit}
-		>
+	{:else if edit}
+		<button type="button" class="row-editor" aria-label={edit.label} onclick={edit.onclick}>
 			<Icon name="pencil" size={20} />
 		</button>
 	{:else}

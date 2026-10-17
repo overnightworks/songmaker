@@ -72,7 +72,8 @@ async function refillWritten(): Promise<void> {
 }
 
 export function forgetWritten(kind: RemovedKind, id: string): void {
-	if (removed[kind].has(id)) return;
+	// A repeat inside one read is a no-op; a delete after Undo must be recognized again.
+	if (removed[kind].has(id) && removedHere[kind].has(id)) return;
 	removedHere[kind].add(id);
 	if (pending !== null) removed[kind].add(id);
 	rows.update((items) =>

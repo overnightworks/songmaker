@@ -834,6 +834,10 @@ export const HOME_WRITE_LABEL = 'Write';
 export const HOME_WRITE_EMPTY = 'Songs you work on will appear here.';
 export const HOME_WRITE_LOADING = 'Loading Write…';
 export const HOME_WRITE_ERROR = 'Could not load Write.';
+// The row body and its pencil both open the editor; distinct names keep them apart for a screen reader.
+export function homeWriteOpenLabel(songTitle: string): string {
+	return `Open song ${songTitle}`;
+}
 export const HOME_WRITE_WORK_LABELS = {
 	created: 'new song',
 	lyrics: 'lyrics edited',

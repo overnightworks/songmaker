@@ -2,7 +2,13 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryWriteItem } from '$lib/api/types';
-import { HOME_WRITE_EMPTY, HOME_WRITE_ERROR, HOME_WRITE_LOADING } from '$lib/constants';
+import {
+	HOME_WRITE_EMPTY,
+	HOME_WRITE_ERROR,
+	HOME_WRITE_LOADING,
+	homeWriteOpenLabel,
+	songEditorOpenLabel
+} from '$lib/constants';
 import {
 	ensureLibraryWriteRead,
 	outdateLibraryWrite,
@@ -206,9 +212,12 @@ it.each(['foreground', 'reconnect'] as const)(
 	}
 );
 
-it.each(['.wall-tile-body', '.row-editor'])(
-	'1354_rule_16 %s selects the song without changing playback',
-	async (selector) => {
+it.each([
+	{ selector: '.wall-tile-body', name: homeWriteOpenLabel('Quiet Fire') },
+	{ selector: '.row-editor', name: songEditorOpenLabel('Quiet Fire') }
+])(
+	'1354_rule_16 defect:#1575 $selector, named apart as $name, selects the song without changing playback',
+	async ({ selector, name }) => {
 		songList.set([makeSong({ id: 'song', album_id: 'album' })]);
 		await showWrite();
 		await settleWrite();
@@ -217,6 +226,7 @@ it.each(['.wall-tile-body', '.row-editor'])(
 		const status = audioPlayer.status;
 		const action = document.querySelector<HTMLButtonElement>(selector);
 		if (!action) throw new Error('Write action is missing');
+		expect(action).toHaveAccessibleName(name);
 		action.click();
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('song'));
 		expect(audioPlayer.current).toBe(playback);
