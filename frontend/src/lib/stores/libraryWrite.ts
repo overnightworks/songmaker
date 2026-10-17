@@ -86,7 +86,6 @@ export function restoreWritten(kind: RemovedKind, ids: readonly string[]): Promi
 	if (restored.length === 0) return Promise.resolve();
 	for (const id of restored) {
 		removedHere[kind].delete(id);
-		removed[kind].delete(id);
 	}
 	return refillWritten();
 }

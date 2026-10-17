@@ -114,3 +114,32 @@ it.each([
 		expect(row?.classList.contains('lit')).toBe(false);
 	}
 );
+
+it('1354_rule_16 offers an independent keyboard editor action in place of the spacer', async () => {
+	let opened = false;
+	let edited = false;
+	mounted = mount(LibraryRow, {
+		target: document.body,
+		props: {
+			title: 'Song',
+			subtitle: 'Album · lyrics edited',
+			coverAlt: 'Song',
+			openLabel: 'Open Song in the song editor',
+			onopen: () => {
+				opened = true;
+			},
+			onedit: () => {
+				edited = true;
+			}
+		}
+	});
+	await tick();
+	const buttons = document.querySelectorAll('button');
+	expect(buttons).toHaveLength(2);
+	expect(buttons[1]).toHaveAccessibleName('Open Song in the song editor');
+	buttons[1].click();
+	expect([opened, edited]).toEqual([false, true]);
+	buttons[0].click();
+	expect(opened).toBe(true);
+	expect(document.querySelector('.row-play-spacer')).toBeNull();
+});

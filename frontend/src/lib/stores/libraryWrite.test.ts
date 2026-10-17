@@ -235,3 +235,54 @@ it.each([
 		expect(ids()).toEqual(['a', 'b']);
 	}
 );
+
+it.each(['song', 'album'] as const)(
+	'defect:#1575 consumes stale %s restore recognition only once without inventing rows',
+	async (kind) => {
+		const remove = () => (kind === 'song' ? removeSongFromList('a') : removeSongsForAlbum('album'));
+		const add = () =>
+			kind === 'song'
+				? addSongsToList([makeSong({ id: 'a' })])
+				: addAlbumToList(makeAlbum({ id: 'album' }));
+		fetch.mockResolvedValueOnce(answer(row('a')));
+		await ensureLibraryWriteRead();
+		fetch.mockResolvedValueOnce(answer());
+		remove();
+		await ensureLibraryWriteRead();
+		fetch.mockResolvedValueOnce(answer(row('a'), row('b', 'other')));
+		outdateLibraryWrite();
+		await ensureLibraryWriteRead();
+		fetch.mockResolvedValueOnce(answer(row('b', 'other'), row('a')));
+		add();
+		await ensureLibraryWriteRead();
+		add();
+		await ensureLibraryWriteRead();
+		expect(fetch).toHaveBeenCalledTimes(4);
+		expect(ids()).toEqual(['b', 'a']);
+		expect(get(libraryWriteState)).toBe('ready');
+	}
+);
+
+it.each(['album', 'song'] as const)(
+	'1354_rule_20 defect:#1575 keeps a pre-removal %s answer excluded when the same ID is added before it settles',
+	async (kind) => {
+		const resolve = deferredRead();
+		const oldRead = ensureLibraryWriteRead();
+		const restored = deferredRead();
+		if (kind === 'album') {
+			removeSongsForAlbum('album');
+			addAlbumToList(makeAlbum({ id: 'album' }));
+		} else {
+			removeSongFromList('a');
+			addSongsToList([makeSong({ id: 'a' })]);
+		}
+		resolve(answer(row('a'), row('b', 'other')));
+		await oldRead;
+		expect(ids()).toEqual(['b']);
+		restored(answer(row('a'), row('c', 'other')));
+		await ensureLibraryWriteRead();
+		expect(ids()).toEqual(['a', 'c']);
+		expect(get(libraryWriteState)).toBe('ready');
+		expect(fetch).toHaveBeenCalledTimes(2);
+	}
+);
