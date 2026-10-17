@@ -84,6 +84,7 @@
 	import { page } from '$app/state';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
 	import { pageBelowStandingPage, stepBackOr } from '$lib/history/historyController';
+	import { standingPathname } from '$lib/routes/standingAddress';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import { openHome, openListOverPage } from '$lib/stores/navigation';
@@ -108,12 +109,13 @@
 		readonly below: string | null;
 	}
 
-	// `page.state` follows every entry history stands on -- shallow routing
-	// included, which leaves `page.url` where the router last navigated -- so
-	// the bar reads again where history stands, and what lies below it,
-	// whenever that state changes.
-	function standingPage(_stateOfStandingEntry: unknown): StandingPage {
-		return { pathname: location.pathname, below: pageBelowStandingPage() };
+	// The bar reads again where history stands, and what lies below it, whenever
+	// `page.state` changes.
+	function standingPage(stateOfStandingEntry: unknown): StandingPage {
+		return {
+			pathname: standingPathname(stateOfStandingEntry),
+			below: pageBelowStandingPage()
+		};
 	}
 
 	const standing = $derived(standingPage(page.state));

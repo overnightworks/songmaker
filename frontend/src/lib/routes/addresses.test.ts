@@ -12,6 +12,8 @@ import {
 	playlistRoutePath,
 	readLegacySongQuery,
 	songRoutePath,
+	standsOnLibraryPage,
+	standsOnPlaylistsPage,
 	takeRoutePath
 } from './addresses';
 
@@ -56,6 +58,46 @@ describe('library route addresses', () => {
 	])('1354_rule_31: classifies %s as %s', (pathname, shape) => {
 		expect(libraryRouteShape(pathname)).toBe(shape);
 	});
+
+	it.each([
+		{ page: 'Library', stands: standsOnLibraryPage, pathname: LIBRARY_ROUTE_PATH, expected: true },
+		{ page: 'Library', stands: standsOnLibraryPage, pathname: '/library/', expected: false },
+		{ page: 'Library', stands: standsOnLibraryPage, pathname: HOME_ROUTE_PATH, expected: false },
+		{ page: 'Library', stands: standsOnLibraryPage, pathname: '/playlists', expected: false },
+		{ page: 'Library', stands: standsOnLibraryPage, pathname: '/album/anfield', expected: false },
+		{ page: 'Library', stands: standsOnLibraryPage, pathname: '/settings', expected: false },
+		{ page: 'Playlists', stands: standsOnPlaylistsPage, pathname: '/playlists', expected: true },
+		{
+			page: 'Playlists',
+			stands: standsOnPlaylistsPage,
+			pathname: '/playlists/friday-night',
+			expected: false
+		},
+		{
+			page: 'Playlists',
+			stands: standsOnPlaylistsPage,
+			pathname: HOME_ROUTE_PATH,
+			expected: false
+		},
+		{
+			page: 'Playlists',
+			stands: standsOnPlaylistsPage,
+			pathname: LIBRARY_ROUTE_PATH,
+			expected: false
+		},
+		{
+			page: 'Playlists',
+			stands: standsOnPlaylistsPage,
+			pathname: '/playlist/friday-night',
+			expected: false
+		},
+		{ page: 'Playlists', stands: standsOnPlaylistsPage, pathname: '/settings', expected: false }
+	])(
+		'1354_rule_40: standing on the $page page at $pathname is $expected',
+		({ stands, pathname, expected }) => {
+			expect(stands(pathname)).toBe(expected);
+		}
+	);
 
 	it('1354_rule_31: classifies the legacy song query address by its path alone, as Home', () => {
 		const { pathname } = new URL(legacySongRoutePath('s1', 'g1'), 'http://localhost');
