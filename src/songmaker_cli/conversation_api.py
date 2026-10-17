@@ -40,7 +40,6 @@ from webauth.dependencies import AuthenticatedUser
 from songmaker_cli.api_helpers import (
     check_album_access,
     check_generation_access,
-    check_redis_health,
     check_song_access,
     create_job_with_rate_limit,
     owner_filter,
@@ -631,7 +630,6 @@ async def api_chat_turn(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    check_redis_health(request)
     prepared = _prepare_chat_turn(req, request, user, session)
     frames = _start_chat_turn(req, user, prepared, request.app.state.ctx.db)
     return StreamingResponse(

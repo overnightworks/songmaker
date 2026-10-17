@@ -133,17 +133,6 @@ def lock_lora_capacity(session: Session) -> None:
     _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
 
 
-def check_redis_health(request) -> None:
-    """Reject mutation requests when Redis is degraded (fail-closed)."""
-    from webauth.config import web_auth_config
-
-    from songmaker_cli.constants import REDIS_DEGRADED_THRESHOLD
-
-    cache = web_auth_config(request).session_cache
-    if cache and cache.consecutive_failures >= REDIS_DEGRADED_THRESHOLD:
-        raise HTTPException(503, "Service temporarily degraded — try again shortly")
-
-
 _PUBLIC_BASE_URL_SCHEMES = frozenset({"http", "https"})
 
 # A netloc urlsplit hands back verbatim even when it is nonsense: e.g.

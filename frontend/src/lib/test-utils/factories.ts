@@ -178,7 +178,6 @@ export function makeHealthResponse(overrides: Partial<HealthResponse> = {}): Hea
 		scoring_worker: 'running',
 		db: 'ok',
 		redis: 'ok',
-		redis_session_cache_failures: 0,
 		acestep: 'healthy',
 		uptime_seconds: 60,
 		claude_cli_tool_surface: 'ok',

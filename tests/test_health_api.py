@@ -358,11 +358,11 @@ def health_client(tmp_path, mock_arq_pool):
 
 
 @pytest.fixture
-def health_json_before_refactor() -> bytes:
+def expected_health_json() -> bytes:
     return (
         b'{"status":"$status","music_worker":"running","scoring_worker":"running",'
         b'"music_queue_depth":3,"scoring_queue_depth":2,"db":"ok","redis":"ok",'
-        b'"redis_session_cache_failures":0,"acestep":"$acestep",'
+        b'"acestep":"$acestep",'
         b'"acestep_workers_total":1,"acestep_workers_online":$online,'
         b'"queue_depth_cap_reached":false,"uptime_seconds":123,'
         b'"claude_cli_tool_surface":"$surface","codex_image_sandbox_runtime":"unverified",'
@@ -383,10 +383,10 @@ def health_json_before_refactor() -> bytes:
     ids=["worker-online", "worker-offline"],
 )
 def test_health_preserves_response_bytes(
-    health_client, health_json_before_refactor, monkeypatch,
+    health_client, expected_health_json, monkeypatch,
     tool_surface, worker_online, overall_status, acestep_status,
 ) -> None:
-    # defect:#1590 — cleanup loop replaces TTL reconciliation.
+    # defect:#1590 — health exposes only current service signals.
     import songmaker_cli.arq_pool as arq_mod
 
     now = datetime(2026, 9, 20, tzinfo=timezone.utc)
@@ -412,7 +412,7 @@ def test_health_preserves_response_bytes(
         response = health_client.get("/health")
 
     expected = (
-        health_json_before_refactor
+        expected_health_json
         .replace(b"$status", overall_status.encode())
         .replace(b"$acestep", acestep_status.encode())
         .replace(b"$online", str(int(worker_online)).encode())

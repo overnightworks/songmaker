@@ -388,7 +388,6 @@ export interface HealthResponse {
 	scoring_queue_depth: number;
 	db: 'ok' | 'error';
 	redis: 'ok' | 'error';
-	redis_session_cache_failures: number;
 	acestep: 'healthy' | 'unknown' | 'unhealthy';
 	acestep_workers_total: number;
 	acestep_workers_online: number;

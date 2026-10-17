@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
@@ -20,7 +20,6 @@ from songmaker_cli.api_helpers import (
     check_generation_access,
     check_generations_access,
     check_lora_ready_for_generation,
-    check_redis_health,
     check_song_access,
     cleanup_generation_files,
     create_job_with_rate_limit,
@@ -293,12 +292,10 @@ def api_bulk_delete_generations(
 async def api_generate_song(
     song_id: str,
     req: GenerateRequest,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    check_redis_health(request)
     song = check_song_access(session, song_id, user)
     if req.version_id:
         version = next((v for v in song.versions if v.id == req.version_id), None)
@@ -397,12 +394,10 @@ def api_last_failed_generation(
 async def api_repaint_generation(
     gen_id: str,
     req: RepaintRequest,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    check_redis_health(request)
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
 
@@ -473,12 +468,10 @@ async def api_repaint_generation(
 async def api_cover_generation(
     gen_id: str,
     req: CoverRequest,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    check_redis_health(request)
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
 
@@ -542,12 +535,10 @@ def api_scoring_schema() -> ScoringSchemaResponse:
 async def api_score_generation(
     gen_id: str,
     req: ScoreRequest,
-    request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
-    check_redis_health(request)
     check_generation_access(session, gen_id, user)
 
     job = create_job_with_rate_limit(session, user, JobType.SCORE, redis=ctx.redis)
