@@ -66,7 +66,7 @@ export function cancelAlbumSongLoads(): void {
 // 'unreachable' is a load the network swallowed: the offline strip or the
 // bounded backoff says so, and the album's songs load again by themselves;
 // 'failed' is a refusal, named by albumSongsLoadFailure with its Retry.
-type AlbumSongsLoadStatus = 'idle' | 'loading' | 'unreachable' | 'failed';
+export type AlbumSongsLoadStatus = 'idle' | 'loading' | 'unreachable' | 'failed';
 
 export const albumSongsLoad = writable<Readonly<Record<string, AlbumSongsLoadStatus>>>({});
 

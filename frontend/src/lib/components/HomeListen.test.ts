@@ -48,6 +48,7 @@ let target: HTMLElement;
 
 beforeEach(() => {
 	resetLibraryOrderForTests();
+	heldListenRead = Promise.resolve();
 	albumList.set(homeAlbums);
 	allAlbumsLoad.set({ status: 'ready', error: null });
 	playlistList.set(homePlaylists);
@@ -76,12 +77,17 @@ async function showListen(): Promise<void> {
 }
 
 // The album page of the first place, answering its delete, archive and their
-// Undo the way the server does; Listen answers whatever `listenAnswer` holds.
+// Undo the way the server does; Listen answers whatever `listenAnswer` holds
+// when the read reaches it, and a held read answers only once released.
 function serveAlbumPage(listenAnswer: () => LibraryListenItem[]): void {
 	const album = homeAlbums[0];
 	fetchListen.mockImplementation(async (url: string) => {
 		const { pathname } = new URL(url, 'http://localhost');
-		if (pathname === '/api/library/listen') return Response.json({ items: listenAnswer() });
+		if (pathname === '/api/library/listen') {
+			const items = listenAnswer();
+			await heldListenRead;
+			return Response.json({ items });
+		}
 		if (pathname.startsWith(`/api/albums/${album.id}`)) return Response.json(album);
 		return Response.json({ items: [], total: 0, offset: 0, limit: 200, has_more: false });
 	});
@@ -99,6 +105,17 @@ async function removeOnAlbumPage(action: string): Promise<void> {
 	await vi.waitFor(() => expect(get(toasts).some((toast) => toast.action)).toBe(true));
 	await unmount(albumPage);
 	page.remove();
+}
+
+let heldListenRead: Promise<void> = Promise.resolve();
+
+function holdNextListenRead(): () => void {
+	let release = () => {};
+	heldListenRead = new Promise((resolve) => (release = resolve));
+	return () => {
+		heldListenRead = Promise.resolve();
+		release();
+	};
 }
 
 async function undoLastRemoval(): Promise<void> {
@@ -174,7 +191,7 @@ describe('1354_rule_14 Listen', () => {
 	);
 
 	const deleteAlbumHere = () => removeOnAlbumPage(COLLECTION_MENU_DELETE_LABEL);
-	it.each([
+	const reloads = [
 		[
 			'album',
 			'loading',
@@ -200,21 +217,36 @@ describe('1354_rule_14 Listen', () => {
 			() => deletePlaylist('place-1'),
 			() => playlistLoad.set({ status: 'error', error: null })
 		]
-	] as const)(
-		'1354_rule_20 keeps a %s deleted here off Listen while its collection reload is %s',
-		async (type, _, deleteHere, reloadWithoutAnswer) => {
+	] as const;
+	it.each(
+		reloads.flatMap(([type, reloadState, deleteHere, reloadWithoutAnswer]) =>
+			(['before', 'after'] as const).map(
+				(answered) => [type, reloadState, answered, deleteHere, reloadWithoutAnswer] as const
+			)
+		)
+	)(
+		'1354_rule_20 keeps a %s deleted here off Listen while its collection reload is %s, a Listen read answering %s the delete',
+		async (type, _, answered, deleteHere, reloadWithoutAnswer) => {
 			serveAlbumPage(() => places);
-			await ensureLastPlayedRead();
+			const release = answered === 'after' ? holdNextListenRead() : () => {};
+			const read = ensureLastPlayedRead();
+			if (answered === 'before') await read;
 			await deleteHere();
+			release();
+			await read;
 			reloadWithoutAnswer();
 			await showListen();
 			expect(rowNames()).not.toContain(`Open ${type} ${type === 'album' ? 'Place 0' : 'Place 1'}`);
 		}
 	);
 
-	it.each([COLLECTION_MENU_DELETE_LABEL, COLLECTION_MENU_ARCHIVE_LABEL])(
-		'1354_rule_20 %s on the album page, a Listen read on Home, then Undo brings the row back',
-		async (action) => {
+	it.each(
+		[COLLECTION_MENU_DELETE_LABEL, COLLECTION_MENU_ARCHIVE_LABEL].flatMap((action) =>
+			(['before', 'after'] as const).map((answered) => [action, answered] as const)
+		)
+	)(
+		'1354_rule_20 %s on the album page, a Listen read on Home answering %s the Undo, then the row is back',
+		async (action, answered) => {
 			let removed = false;
 			serveAlbumPage(() => (removed ? places.slice(1) : places));
 			await showListen();
@@ -223,9 +255,12 @@ describe('1354_rule_14 Listen', () => {
 			removed = true;
 			await showListen();
 			expect(rowNames()).not.toContain('Open album Place 0');
-			await readLastPlayed();
+			const release = answered === 'after' ? holdNextListenRead() : () => {};
+			const read = readLastPlayed();
+			if (answered === 'before') await read;
 			removed = false;
 			await undoLastRemoval();
+			release();
 			await vi.waitFor(() => expect(rowNames()[0]).toBe('Open album Place 0'));
 		}
 	);

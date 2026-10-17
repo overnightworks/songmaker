@@ -52,7 +52,7 @@
 		PLACE_LINE_SEPARATOR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
-	import { albumHasPlayableTake, songPlayability } from '$lib/utils/playable';
+	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '$lib/utils/playable';
 	import type { SongItem } from '$lib/api/types';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
@@ -92,7 +92,9 @@
 	// neither of its controls can reach the running queue.
 	const albumHasTakes = $derived(
 		selectedAlbum !== null &&
-			albumHasPlayableTake(selectedAlbum, albumSongs, { songsComplete: albumLoad === 'idle' })
+			albumHasPlayableTake(selectedAlbum, albumSongs, {
+				songsComplete: albumSongsSettled(albumLoad)
+			})
 	);
 	const albumLoadFailure = $derived(currentAlbumId ? albumSongsLoadFailure(currentAlbumId) : null);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
@@ -228,7 +230,7 @@
 					try {
 						const restored = await restoreAlbum(albumId);
 						addAlbumToList(restored);
-						void readRestoredPlace();
+						void readRestoredPlace('album', albumId);
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
 						addToast('Album restored', 'success');
@@ -258,7 +260,7 @@
 					try {
 						const restored = await unarchiveAlbum(albumId);
 						addAlbumToList(restored);
-						void readRestoredPlace();
+						void readRestoredPlace('album', albumId);
 						const resp = await fetchSongs(albumId);
 						addSongsToList(resp.items);
 						addToast('Album unarchived', 'success');
