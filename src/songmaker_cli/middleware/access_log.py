@@ -3,38 +3,54 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from time import perf_counter
 
-from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
+import structlog
+from starlette.requests import Request
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from webauth.proxies import resolve_client_ip
 
 log = logging.getLogger(__name__)
 
 
-class AccessLogMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        import structlog
+class AccessLogMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
 
-        structlog.contextvars.clear_contextvars()
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
+        request = Request(scope)
         ip = resolve_client_ip(request)
-
+        previous_context = structlog.contextvars.get_contextvars()
+        structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(
             ip=ip, method=request.method, path=request.url.path,
         )
+        start = perf_counter()
+        status_code = 500
 
-        start = datetime.now(timezone.utc)
-        response = await call_next(request)
-        duration_ms = (datetime.now(timezone.utc) - start).total_seconds() * 1000
-        log.info(
-            "ACCESS %s %s %s %d (%.0fms)",
-            ip, request.method, request.url.path,
-            response.status_code, duration_ms,
-        )
+        async def observed_send(message: Message) -> None:
+            nonlocal status_code
+            await send(message)
+            if message["type"] == "http.response.start":
+                status_code = message["status"]
 
-        http_metrics = getattr(request.app.state, "http_metrics", None)
-        if http_metrics:
-            http_metrics.record(request.method, response.status_code, duration_ms)
-
-        return response
+        try:
+            await self.app(scope, receive, observed_send)
+        finally:
+            try:
+                duration_ms = (perf_counter() - start) * 1000
+                log.info(
+                    "ACCESS %s %s %s %d (%.0fms)",
+                    ip, request.method, request.url.path, status_code, duration_ms,
+                )
+                http_metrics = getattr(request.app.state, "http_metrics", None)
+                if http_metrics:
+                    http_metrics.record(request.method, status_code, duration_ms)
+            finally:
+                # Auth may bind user_id downstream; none of that request may leak.
+                structlog.contextvars.clear_contextvars()
+                structlog.contextvars.bind_contextvars(**previous_context)

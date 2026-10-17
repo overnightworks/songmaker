@@ -281,3 +281,113 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
         AccessLogMiddleware,
         SecurityHeadersMiddleware,
     ]
+
+
+@pytest.mark.parametrize("outcome", ["success", "error", "cancel"])
+@pytest.mark.parametrize("started", [False, True])
+def test_access_log_restores_context_and_records_each_http_outcome(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, outcome: str, started: bool,
+) -> None:
+    """defect:#1576 -- preserve streaming, status, metrics and caller context on every exit."""
+    import structlog
+
+    client, _ = make_test_app(tmp_path)
+    metrics = client.app.state.http_metrics
+    messages = []
+    chunks = [b"first", b"second"]
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    async def send(message):
+        messages.append(message)
+
+    async def app(scope, receive, send):
+        assert structlog.contextvars.get_contextvars() == {
+            "ip": "203.0.113.9", "method": "GET", "path": "/stream",
+        }
+        structlog.contextvars.bind_contextvars(user_id="request-user")
+        if started or outcome == "success":
+            await send({"type": "http.response.start", "status": 206, "headers": []})
+            for chunk in chunks:
+                await send({"type": "http.response.body", "body": chunk, "more_body": True})
+                assert messages[-1]["body"] == chunk
+        if outcome == "error":
+            raise RuntimeError("stream failed")
+        if outcome == "cancel":
+            asyncio.current_task().cancel()
+            await asyncio.sleep(0)
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    async def drive():
+        structlog.contextvars.bind_contextvars(ip="outer", user_id="outer-user", caller="test")
+        previous = structlog.contextvars.get_contextvars()
+        scope = {
+            "type": "http", "method": "GET", "path": "/stream", "headers": [],
+            "client": ("203.0.113.9", 1234), "app": client.app,
+        }
+        try:
+            await AccessLogMiddleware(app)(scope, receive, send)
+        finally:
+            assert structlog.contextvars.get_contextvars() == previous
+
+    async def run_request():
+        task = asyncio.create_task(drive())
+        if outcome == "success":
+            await task
+        else:
+            error = RuntimeError if outcome == "error" else asyncio.CancelledError
+            with pytest.raises(error):
+                await task
+
+    with caplog.at_level("INFO", logger="songmaker_cli.middleware.access_log"):
+        asyncio.run(run_request())
+
+    status = 206 if started or outcome == "success" else 500
+    records = [r for r in caplog.records if r.name == "songmaker_cli.middleware.access_log"]
+    assert len(records) == 1
+    assert f"GET /stream {status} " in records[0].getMessage()
+    snapshot = metrics.snapshot()
+    assert snapshot["http_requests_total"] == {f"GET {status}": 1}
+    assert snapshot["http_requests_count"] == 1
+    assert snapshot["http_request_duration_total_ms"] >= 0
+    if outcome == "success":
+        assert messages[-1] == {"type": "http.response.body", "body": b"", "more_body": False}
+    elif started:
+        assert messages[-1] == {"type": "http.response.body", "body": b"second", "more_body": True}
+    else:
+        assert messages == []
+
+
+@pytest.mark.parametrize("scope_type", ["lifespan", "websocket"])
+def test_access_log_passes_non_http_scopes_through(
+    caplog: pytest.LogCaptureFixture, scope_type: str,
+) -> None:
+    """defect:#1576 -- non-HTTP exchanges retain their protocol and emit no access record."""
+    import structlog
+
+    scope = {"type": scope_type}
+    incoming = {"type": f"{scope_type}.disconnect"}
+    outgoing = {"type": f"{scope_type}.close"}
+    messages = []
+
+    async def receive():
+        return incoming
+
+    async def send(message):
+        messages.append(message)
+
+    async def app(received_scope, receive, send):
+        assert received_scope == scope
+        assert await receive() == incoming
+        assert structlog.contextvars.get_contextvars()["caller"] == "outer"
+        await send(outgoing)
+
+    async def drive():
+        structlog.contextvars.bind_contextvars(caller="outer")
+        await AccessLogMiddleware(app)(scope, receive, send)
+
+    with caplog.at_level("INFO", logger="songmaker_cli.middleware.access_log"):
+        asyncio.run(drive())
+    assert messages == [outgoing]
+    assert not [r for r in caplog.records if r.name == "songmaker_cli.middleware.access_log"]
