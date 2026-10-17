@@ -8,6 +8,7 @@ import {
 	RAIL_LIBRARY_LOAD_ERROR
 } from '$lib/constants';
 import { reloadWhileUnreachable } from './connectivity';
+import { forgetWritten, restoreWritten } from './libraryWrite';
 
 const ALBUM_SONGS_LOAD_ERROR = 'Failed to load songs';
 
@@ -166,10 +167,12 @@ export function addSongToList(song: SongItem): void {
 }
 
 export function removeSongFromList(songId: string): void {
+	forgetWritten('song', songId);
 	songList.update((list) => list.filter((s) => s.id !== songId));
 }
 
 export function removeSongsForAlbum(albumId: string): void {
+	forgetWritten('album', albumId);
 	songList.update((list) => list.filter((s) => s.album_id !== albumId));
 }
 
@@ -182,6 +185,7 @@ export function removeAlbumFromList(albumId: string): void {
 }
 
 export function addAlbumToList(album: AlbumItem): void {
+	void restoreWritten('album', [album.id]);
 	albumList.update((list) => {
 		if (list.some((a) => a.id === album.id)) return list;
 		return [...list, album].sort((a, b) => a.title.localeCompare(b.title));
@@ -312,6 +316,10 @@ function replaceWithFetched(_current: AlbumItem[], fetched: AlbumItem[]): AlbumI
 }
 
 export function addSongsToList(songs: SongItem[]): void {
+	void restoreWritten(
+		'song',
+		songs.map((song) => song.id)
+	);
 	if (songs.length === 0) return;
 	songList.update((list) => {
 		const existingIds = new Set(list.map((s) => s.id));
