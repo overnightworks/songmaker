@@ -2,8 +2,11 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { NetworkError } from '$lib/api/fetch';
 import { PLAYING_MARK_LABEL } from '$lib/constants';
+import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
@@ -22,6 +25,7 @@ import {
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { pressBack } from '$lib/test-utils/library-history';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
@@ -42,6 +46,7 @@ import {
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
 vi.mock('$lib/api/library', async () =>
 	(await import('./rail-test-fixtures')).railLibraryApiMock()
@@ -151,6 +156,7 @@ describe('RailPlaylistsGroup', () => {
 
 	it('#1354 rule 40 (D3): on the Playlists page its group is the current page and unfolded', async () => {
 		librarySurface.set('playlists');
+		await goto(resolve(PLAYLISTS_ROUTE_PATH));
 		const target = await render();
 		expect(
 			requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
@@ -160,6 +166,38 @@ describe('RailPlaylistsGroup', () => {
 		librarySurface.set('browse');
 		await tick();
 		expect(requireElement(target, 'a.page-link').hasAttribute('aria-current')).toBe(false);
+	});
+
+	it.each([
+		{ address: PLAYLISTS_ROUTE_PATH, current: true },
+		{ address: '/settings', current: false },
+		{ address: '/library', current: false },
+		{ address: '/', current: false }
+	] as const)(
+		'defect:#1523: with the surface still on playlists, the word Playlists is current: $current at $address',
+		async ({ address, current }) => {
+			librarySurface.set('playlists');
+			await goto(resolve(address));
+			const target = await render();
+
+			expect(requireElement(target, 'a.page-link').hasAttribute('aria-current')).toBe(current);
+			expect(get(librarySurface)).toBe('playlists');
+		}
+	);
+
+	it('defect:#1523: the word Playlists is current again after Back from Settings, with no reload', async () => {
+		librarySurface.set('playlists');
+		await goto(resolve(PLAYLISTS_ROUTE_PATH));
+		const target = await render();
+		const word = requireElement(target, 'a.page-link');
+		expect(word.getAttribute('aria-current')).toBe('page');
+
+		await goto(resolve('/settings'));
+		await tick();
+		expect(word.hasAttribute('aria-current')).toBe(false);
+
+		await pressBack();
+		expect(word.getAttribute('aria-current')).toBe('page');
 	});
 
 	it('lists the playlists in the order the wall is switched to, A–Z by natural title first', async () => {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		albumWhoseSongsShow,
@@ -37,7 +38,8 @@
 		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
-	import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+	import { LIBRARY_ROUTE_PATH, standsOnLibraryPage } from '$lib/routes/addresses';
+	import { standingPathname } from '$lib/routes/standingAddress';
 	import { titleInitials } from '$lib/utils/format';
 	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
@@ -67,8 +69,12 @@
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
-	// The Library page itself: its group is current and unfolded there (#1354 D1).
-	const onLibraryPage = $derived(libraryWallShows(surface, currentSongId));
+	// The Library page itself: its group is current and unfolded there (#1354 D1),
+	// and only where the address is the Library's -- the surface alone also reads
+	// `browse` on /settings and while /?song= looks its song up (#1523).
+	const onLibraryPage = $derived(
+		libraryWallShows(surface, currentSongId) && standsOnLibraryPage(standingPathname(page.state))
+	);
 	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadFailure = $derived($allAlbumsLoadFailure);

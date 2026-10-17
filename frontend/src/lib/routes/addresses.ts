@@ -65,6 +65,14 @@ export function libraryRouteShape(pathname: string): LibraryRouteShape {
 	return pathname === LIBRARY_ROUTE_PATH ? 'library' : 'external';
 }
 
+export function standsOnLibraryPage(pathname: string): boolean {
+	return libraryRouteShape(pathname) === 'library';
+}
+
+export function standsOnPlaylistsPage(pathname: string): boolean {
+	return libraryRouteShape(pathname) === 'playlists';
+}
+
 export function readLegacySongQuery(searchParams: URLSearchParams): {
 	songId: string | null;
 	generationId: string | null;

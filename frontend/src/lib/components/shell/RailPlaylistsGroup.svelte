@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
+	import { page } from '$app/state';
+	import { PLAYLISTS_ROUTE_PATH, standsOnPlaylistsPage } from '$lib/routes/addresses';
+	import { standingPathname } from '$lib/routes/standingAddress';
 	import { openCollection } from '$lib/stores/collection';
 	import { librarySurface, playlistWhoseDetailShows } from '$lib/stores/libraryContext';
 	import { openPlaylist, openRailSearchTarget } from '$lib/stores/navigation';
@@ -47,8 +49,13 @@
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
 	const shownPlaylistId = $derived(playlistWhoseDetailShows($librarySurface, $openCollection));
-	// The Playlists page itself: its group is current and unfolded there (#1354 D3).
-	const onPlaylistsPage = $derived($librarySurface === 'playlists' && $selectedSongId === null);
+	// The Playlists page itself: its group is current and unfolded there (#1354 D3),
+	// and only where the address is the Playlists' (#1523).
+	const onPlaylistsPage = $derived(
+		$librarySurface === 'playlists' &&
+			$selectedSongId === null &&
+			standsOnPlaylistsPage(standingPathname(page.state))
+	);
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const visiblePlaylists = $derived(

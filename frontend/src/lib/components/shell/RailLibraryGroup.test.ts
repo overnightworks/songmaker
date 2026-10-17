@@ -2,6 +2,8 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	LIBRARY_RETRY_LABEL,
@@ -9,7 +11,7 @@ import {
 	RAIL_LIBRARY_LOAD_ERROR,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import {
@@ -26,6 +28,7 @@ import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player'
 import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { pressBack } from '$lib/test-utils/library-history';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	albumsPage,
@@ -46,6 +49,7 @@ import {
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
 vi.mock('$lib/api/library', async () =>
 	(await import('./rail-test-fixtures')).railLibraryApiMock()
@@ -66,7 +70,7 @@ import RailLibraryGroup from './RailLibraryGroup.svelte';
 
 const { render, cleanup } = createComponentMount(RailLibraryGroup);
 
-beforeEach(() => {
+beforeEach(async () => {
 	localStorage.clear();
 	chooseLibraryWallOrder('title');
 	resetLibraryOrderForTests();
@@ -83,6 +87,8 @@ beforeEach(() => {
 	railTreeQuery.set('');
 	setShuffle(false);
 	closeNowPlaying();
+	// The default surface, browse, stands on the Library's address.
+	await goto(resolve(LIBRARY_ROUTE_PATH));
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
 		audioPlayer.current = playback;
 	});
@@ -154,6 +160,37 @@ describe('RailLibraryGroup', () => {
 		librarySurface.set('detail');
 		await tick();
 		expect(word.hasAttribute('aria-current')).toBe(false);
+	});
+
+	it.each([
+		{ address: LIBRARY_ROUTE_PATH, query: '', current: true },
+		{ address: '/settings', query: '', current: false },
+		{ address: '/playlists', query: '', current: false },
+		{ address: HOME_ROUTE_PATH, query: '?song=s1', current: false }
+	] as const)(
+		'defect:#1523: with the surface still on browse, the word Library is current: $current at $address$query',
+		async ({ address, query, current }) => {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; resolve() cannot carry the legacy ?song= query
+			await goto(`${resolve(address)}${query}`);
+			const target = await render();
+
+			const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+			expect(word.hasAttribute('aria-current')).toBe(current);
+			expect(get(librarySurface)).toBe('browse');
+		}
+	);
+
+	it('defect:#1523: the word Library is current again after Back from Settings, with no reload', async () => {
+		const target = await render();
+		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+		expect(word.getAttribute('aria-current')).toBe('page');
+
+		await goto(resolve('/settings'));
+		await tick();
+		expect(word.hasAttribute('aria-current')).toBe(false);
+
+		await pressBack();
+		expect(word.getAttribute('aria-current')).toBe('page');
 	});
 
 	it.each(['home', 'playlists'] as const)(
