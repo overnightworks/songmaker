@@ -14,7 +14,7 @@ import {
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
+import { createRawSnippet, flushSync, mount, tick, unmount, type Snippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -25,6 +25,7 @@ import {
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
 	RAIL_DRAWER_OPEN_LABEL,
+	RATE_LIMITED_TOAST_MESSAGE,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
 import {
@@ -32,7 +33,7 @@ import {
 	SEARCH_SHEET_LABEL,
 	backLabel
 } from '$lib/components/PhoneAppBar.svelte';
-import { handleSessionLost } from '$lib/api/fetch';
+import { apiFetch, handleSessionLost } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
@@ -56,6 +57,7 @@ import {
 import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
+import { toasts } from '$lib/stores/toast';
 import {
 	closeNowPlaying,
 	nowPlayingDockable,
@@ -199,10 +201,10 @@ function minUsedWidth(el: Element): number {
 	return px(style.minWidth) || px(style.width);
 }
 
-async function renderLayout(path: string): Promise<HTMLElement> {
+async function renderLayout(path: string, pageContent: Snippet = children): Promise<HTMLElement> {
 	currentUser.set(USER);
 	authLoading.set(false);
-	const target = mountLayout(path);
+	const target = mountLayout(path, pageContent);
 	await tick();
 	await Promise.resolve();
 	await tick();
@@ -211,11 +213,11 @@ async function renderLayout(path: string): Promise<HTMLElement> {
 
 // Mounts the layout the way the router starts a page: on `path`, reporting
 // the `enter` navigation once it is mounted.
-function mountLayout(path: string): HTMLElement {
+function mountLayout(path: string, pageContent: Snippet = children): HTMLElement {
 	fakePage.url = new URL(`https://songmaker.test${path}`);
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(Layout, { target, props: { children } });
+	mounted = mount(Layout, { target, props: { children: pageContent } });
 	flushSync();
 	reportFakeRouterEnter();
 	return target;
@@ -1181,6 +1183,63 @@ describe('the live library stream', () => {
 		await unmountCurrentLayout();
 
 		expect(liveStream.stop).toHaveBeenCalled();
+	});
+});
+
+// The transport only reports a 429; this layout installs the reaction that
+// tells the person (`stores/rateLimitNotice.ts`), and takes it away again.
+describe('a 429 under the mounted layout', () => {
+	function throttleToasts() {
+		return get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
+	}
+
+	function aThrottledRead() {
+		return apiFetch('/api/songs').catch(() => undefined);
+	}
+
+	beforeEach(() => {
+		toasts.set([]);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () => new Response(JSON.stringify({ detail: 'Too many requests' }), { status: 429 })
+			)
+		);
+	});
+
+	it('925_M3_L1: a request sent while the layout mounts is already reported to the throttle reaction', async () => {
+		let sentWhileMounting: Promise<unknown> = Promise.resolve();
+		const sendsARequestWhenMounted = createRawSnippet(() => ({
+			render: () => '<main></main>',
+			setup: () => {
+				sentWhileMounting = aThrottledRead();
+			}
+		}));
+
+		await renderLayout(LIBRARY_ROUTE_PATH, sendsARequestWhenMounted);
+		await sentWhileMounting;
+
+		expect(throttleToasts()).toHaveLength(1);
+	});
+
+	it('925_M3_L2: a burst of 429s on ordinary requests raises the throttle toast once', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+
+		await Promise.all([aThrottledRead(), aThrottledRead(), aThrottledRead()]);
+
+		expect(throttleToasts()).toHaveLength(1);
+	});
+
+	it('925_M3_L4: after the layout unmounts, a 429 raises no toast', async () => {
+		await renderLayout(LIBRARY_ROUTE_PATH);
+		await aThrottledRead();
+		expect(throttleToasts()).toHaveLength(1);
+		toasts.set([]);
+
+		await unmountCurrentLayout();
+		await aThrottledRead();
+
+		expect(throttleToasts()).toHaveLength(0);
 	});
 });
 

@@ -17,11 +17,14 @@ import { expect, test, type Page } from '@playwright/test';
 import {
 	HOME_PAGE_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
+	PLAYLISTS_PAGE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_PLAYLISTS_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
+import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	FlowGuard,
 	HOME_PATH,
@@ -53,6 +56,9 @@ const CONTINUE_REGION = { name: 'Continue' };
 const SETTINGS_SECTION = 'Voices';
 const SETTINGS_SECTION_URL = /\/settings\/voices$/;
 const SETTINGS_LIST_URL = /\/settings$/;
+const PLAYLISTS_URL = /\/playlists$/;
+const PLAYLISTS_HEADING = new RegExp(`^${PLAYLISTS_PAGE_LABEL}( · \\d+)?$`);
+const SAME_DOCUMENT_KEY = 'sameDocument';
 const HISTORY_WRITES_KEY = 'historyWrites';
 const WALL_SIGHTINGS_KEY = 'wallSightings';
 const WALL_SELECTOR = '.library-wall';
@@ -78,6 +84,11 @@ async function expectWallShown(page: Page): Promise<void> {
 	await expect(page).toHaveURL(LIBRARY_URL);
 	await expectLibraryWallLoaded(page);
 	await expect(continueRegion(page)).toHaveCount(0);
+}
+
+async function expectPlaylistsShown(page: Page): Promise<void> {
+	await expect(page).toHaveURL(PLAYLISTS_URL);
+	await expect(workspace(page).getByRole('heading', { name: PLAYLISTS_HEADING })).toBeVisible();
 }
 
 async function expectAlbumShown(page: Page, library: SeededLibrary): Promise<void> {
@@ -106,12 +117,21 @@ async function closeDrawer(page: Page): Promise<void> {
 	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 }
 
-/** Whether the rail's word Library marks the page as the one shown; the phone's drawer is opened and closed again. */
-async function expectLibraryWordCurrent(page: Page, shell: Shell, current: boolean): Promise<void> {
+type RailWord = typeof RAIL_LIBRARY_LABEL | typeof RAIL_PLAYLISTS_LABEL;
+const RAIL_WORDS: readonly RailWord[] = [RAIL_LIBRARY_LABEL, RAIL_PLAYLISTS_LABEL];
+
+/** Which of the rail's words Library and Playlists marks the page as the one shown, `null` for neither; the phone's drawer is opened and closed again. */
+async function expectCurrentRailWord(
+	page: Page,
+	shell: Shell,
+	current: RailWord | null
+): Promise<void> {
 	const rail = await openRailNav(page, shell);
-	const word = rail.getByRole('link', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
-	if (current) await expect(word).toHaveAttribute('aria-current', 'page');
-	else await expect(word).not.toHaveAttribute('aria-current', 'page');
+	for (const label of RAIL_WORDS) {
+		const word = rail.getByRole('link', { name: nameStartingWith(label) });
+		if (label === current) await expect(word).toHaveAttribute('aria-current', 'page');
+		else await expect(word).not.toHaveAttribute('aria-current', 'page');
+	}
 	if (shell === 'mobile') await closeDrawer(page);
 }
 
@@ -215,6 +235,15 @@ const LIBRARY: AppPage = {
 		await expectWallShown(page);
 	},
 	expectStands: expectWallShown
+};
+
+const PLAYLISTS: AppPage = {
+	name: 'the Playlists page',
+	open: async (page) => {
+		await page.goto(PLAYLISTS_ROUTE_PATH);
+		await expectPlaylistsShown(page);
+	},
+	expectStands: expectPlaylistsShown
 };
 
 const ALBUM: AppPage = {
@@ -362,7 +391,7 @@ test('1354_rule_31 row 1: cold / shows Home, with Continue, no wall, no + New, a
 		workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
 	).toHaveCount(0);
 	expect(await wallMounts(page), 'the wall never flashed before Home').toBe(0);
-	await expectLibraryWordCurrent(page, shell, false);
+	await expectCurrentRailWord(page, shell, null);
 	guard.assertClean();
 });
 
@@ -378,7 +407,7 @@ test('1354_rule_31 row 2: cold /library shows the wall, with + New, no Continue,
 	await expect(
 		workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
 	).toBeVisible();
-	await expectLibraryWordCurrent(page, shellOf(testInfo), true);
+	await expectCurrentRailWord(page, shellOf(testInfo), RAIL_LIBRARY_LABEL);
 	guard.assertClean();
 });
 
@@ -415,6 +444,38 @@ test('1354_rule_31 row 3b: Home, the word Library, then reload stays the Library
 	expect(await historyLength(page)).toBe(length);
 	guard.assertClean();
 });
+
+// The rail's words follow the address history stands on, not the surface a
+// page left behind: Settings changes no surface, so it must not leave the word
+// of the page it was opened from marked.
+for (const [origin, railWord] of [
+	[LIBRARY, RAIL_LIBRARY_LABEL],
+	[PLAYLISTS, RAIL_PLAYLISTS_LABEL]
+] as const) {
+	test(`defect:#1523 1354_rule_40: ${origin.name}, Settings, then Back marks the word ${railWord} current only on its own page, with no reload`, async ({
+		page
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const shell = shellOf(testInfo);
+		const library = readSeededLibrary();
+		await origin.open(page, shell, library);
+		await expectCurrentRailWord(page, shell, railWord);
+		await page.evaluate((key) => Reflect.set(window, key, true), SAME_DOCUMENT_KEY);
+
+		await openSettings(page, shell);
+		await expectSettingsShown(page, shell);
+		await expectCurrentRailWord(page, shell, null);
+		await page.goBack();
+
+		await origin.expectStands(page, shell, library);
+		await expectCurrentRailWord(page, shell, railWord);
+		expect(
+			await page.evaluate((key) => Reflect.get(window, key), SAME_DOCUMENT_KEY),
+			'the journey stayed in one document'
+		).toBe(true);
+		guard.assertClean();
+	});
+}
 
 for (const origin of [LIBRARY, ALBUM, SETTINGS]) {
 	test(`1354_rule_40 row 5: the brand opens Home from ${origin.name}, and Back returns there`, async ({
@@ -616,7 +677,7 @@ test('1354_R1prime row 10c: a pre-switch {browse, album} entry at / reads as Hom
 	expect(await historyLength(page)).toBe(length);
 	expect(await addressesWrittenToHistory(page)).not.toContain(LIBRARY_PATH);
 	await expectOpenCollectionNamedByMiniPlayer(page, library.albumTitle, true);
-	await expectLibraryWordCurrent(page, shell, false);
+	await expectCurrentRailWord(page, shell, null);
 	guard.assertClean();
 });
 

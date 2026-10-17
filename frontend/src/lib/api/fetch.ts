@@ -1,17 +1,35 @@
-import { get } from 'svelte/store';
 import type { JobItem } from './types';
 import {
 	API_ERROR_GENERIC_MESSAGE,
 	RATE_LIMITED_STATUS,
-	RATE_LIMITED_TOAST_MESSAGE,
 	SERVER_ERROR_STATUS_FLOOR,
 	SESSION_LOST_REDIRECT_PARAM
 } from '$lib/constants';
 import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
-import { addToast, toasts } from '$lib/stores/toast';
 import { UserFacingError } from './userFacingError';
 
 const API_TIMEOUT_MS = 30_000;
+
+interface RefusalReactions {
+	/** A 429; whether the person hears of it is the reaction's to decide. */
+	rateLimited: (path: string) => void;
+}
+
+const NO_REACTIONS: RefusalReactions = { rateLimited: () => undefined };
+let installedReactions = NO_REACTIONS;
+
+/**
+ * The transport reports what the server answered; the app decides what a
+ * refusal means to the person. Returns the uninstall, which puts back the set
+ * that was installed before this one, so installs unwind in reverse order.
+ */
+export function installRefusalReactions(reactions: RefusalReactions): () => void {
+	const previous = installedReactions;
+	installedReactions = reactions;
+	return () => {
+		installedReactions = previous;
+	};
+}
 
 export class ApiError extends Error {
 	constructor(
@@ -135,44 +153,6 @@ function getCsrfToken(): string {
 // saying the session is gone, so it never signs anyone out.
 const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/password']);
 
-// A path whose own 429 is already visible some other way, so the generic
-// toast below would only repeat it. Kept as its own list, not
-// derived from `AUTH_ENDPOINTS` above (that one exists for the unrelated
-// 401-redirect suppression) -- a future path added there for its 401 reason
-// should not silently also lose this toast.
-//   - '/api/auth/login': `stores/auth.ts`'s `login()` turns a 429 into
-//     "Too many attempts. Try again later." under the login form.
-//   - '/api/auth/me': `stores/auth.ts`'s `checkAuth()` turns a 429 into the
-//     full-page session-check retry banner.
-//   - '/api/auth/setup': not auth.ts -- `routes/setup/+page.svelte`'s own
-//     catch block shows the error inline via `err.message`.
-//   - '/api/albums/<id>/cover-suggestions': `AlbumCoverEditor.svelte` shows
-//     every refusal there itself -- the spent daily limit under the cover,
-//     any other as its failure or error toast; nothing retries it, so
-//     "it will continue in a moment" would be untrue there.
-const RATE_LIMIT_TOAST_EXEMPT_PATHS: readonly RegExp[] = [
-	/^\/api\/auth\/login$/,
-	/^\/api\/auth\/me$/,
-	/^\/api\/auth\/setup$/,
-	/^\/api\/albums\/[^/]+\/cover-suggestions$/
-];
-
-/**
- * Never more than one throttle toast on screen at once, not one per
- * rejected request: a 429 burst calls this many times in a row, but a
- * toast already showing the same message is left alone instead of being
- * duplicated (issue #257). The toast auto-dismisses after 5s (`addToast`'s
- * 'info' type), so a burst that outlasts that raises a fresh toast every
- * ~5s for as long as it's still being throttled -- which reads as "still
- * throttled", not as a bug.
- */
-function notifyIfRateLimited(status: number, path: string): void {
-	if (status !== 429 || RATE_LIMIT_TOAST_EXEMPT_PATHS.some((exempt) => exempt.test(path))) return;
-	const alreadyShown = get(toasts).some((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
-	if (alreadyShown) return;
-	addToast(RATE_LIMITED_TOAST_MESSAGE, 'info');
-}
-
 function isSessionLostResponse(status: number, path: string): boolean {
 	return status === 401 && !AUTH_ENDPOINTS.has(path);
 }
@@ -291,7 +271,7 @@ export function addCsrfToken(init: RequestInit, method: string): RequestInit {
 async function throwForFailedResponse(response: Response, path: string): Promise<void> {
 	if (response.ok) return;
 	const { detail, responseDetail } = await readErrorDetail(response);
-	notifyIfRateLimited(response.status, path);
+	if (response.status === RATE_LIMITED_STATUS) installedReactions.rateLimited(path);
 	if (isSessionLostResponse(response.status, path)) await handleSessionLost();
 	throw new ApiError(
 		response.status,
