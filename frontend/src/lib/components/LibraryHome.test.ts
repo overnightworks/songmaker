@@ -8,7 +8,7 @@ import LibraryHome from './LibraryHome.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-const listened: LibraryListenItem = {
+const listenedAlbum: LibraryListenItem = {
 	type: 'album',
 	id: 'album-1',
 	title: 'Open Windows',
@@ -23,7 +23,7 @@ const listened: LibraryListenItem = {
 beforeEach(() => {
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async () => Response.json({ items: [listened] }))
+		vi.fn(async () => Response.json({ items: [listenedAlbum] }))
 	);
 });
 
