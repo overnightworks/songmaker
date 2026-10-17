@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import re
-from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from collections.abc import Awaitable, Callable, Iterable
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -19,15 +19,28 @@ from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
-from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_key, queue_depth_key
+from acestep_worker.heartbeat import (
+    DEFAULT_TTL_SECONDS,
+    HeartbeatLoop,
+    gpu_hold_key,
+    queue_depth_key,
+    reserve_gpu_hold,
+)
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
-from acestep_worker.models import GenerateRequest, GenerationTaskResult, WorkerTaskEvent
+from acestep_worker.models import (
+    GenerateRequest,
+    GenerationTaskResult,
+    TrainLoraRequest,
+    WorkerTaskEvent,
+)
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import (
     WorkerDeps,
-    _cancel_gpu_hold_renewal,
-    _cancel_training_task,
+    _create_gpu_hold_handover_task,
     _format_sse,
+    _renew_gpu_hold_until_done,
+    _run_train_lora_with_cleanup,
+    _TrainLoraResources,
     build_router,
     create_app,
     default_generate_runner,
@@ -1292,67 +1305,99 @@ def test_evict_endpoint_409_when_in_use(tmp_path: Path) -> None:
         assert "in use" in resp.json()["detail"]
 
 
+_TRAINING_HOLD_TOKEN = "training-hold-token"
+
+
 @dataclass
-class _ChildCleaningUpAfterCancel:
-    task: asyncio.Task[None]
-    cancel_seen: asyncio.Event
-    finish_cleanup: asyncio.Event
+class _ChildStoppingUntilCancelledAgain:
+    started: asyncio.Event = field(default_factory=asyncio.Event)
+    stopping: asyncio.Event = field(default_factory=asyncio.Event)
+    ended: asyncio.Event = field(default_factory=asyncio.Event)
 
-
-async def _start_child_cleaning_up_after_cancel() -> _ChildCleaningUpAfterCancel:
-    started = asyncio.Event()
-    cancel_seen = asyncio.Event()
-    finish_cleanup = asyncio.Event()
-
-    async def run() -> None:
-        started.set()
+    async def __call__(self, *_args: object, **_kwargs: object) -> None:
+        self.started.set()
         try:
             await asyncio.Event().wait()
         except asyncio.CancelledError:
-            cancel_seen.set()
-            await finish_cleanup.wait()
-            raise
-
-    task = asyncio.create_task(run())
-    await started.wait()
-    return _ChildCleaningUpAfterCancel(task, cancel_seen, finish_cleanup)
+            self.stopping.set()
+            await asyncio.Event().wait()
+        finally:
+            self.ended.set()
 
 
-_CHILD_CANCELLERS = [
-    pytest.param(_cancel_gpu_hold_renewal, id="gpu-hold-renewal"),
-    pytest.param(_cancel_training_task, id="training-task"),
-]
+async def _training_finished_at_once(*_args: object, **_kwargs: object) -> None:
+    return None
 
 
-@pytest.mark.parametrize("cancel_child", _CHILD_CANCELLERS)
-def test_cancelling_a_child_returns_once_the_child_has_ended_cancelled(cancel_child) -> None:
-    """defect:#1509 -- the owner's own cancellation of its child still ends cleanly."""
-
-    async def go() -> bool:
-        child = await _start_child_cleaning_up_after_cancel()
-        owner = asyncio.create_task(cancel_child(child.task))
-        await child.cancel_seen.wait()
-        child.finish_cleanup.set()
-        await owner
-        return child.task.cancelled()
-
-    assert _run(go())
+async def _renewing_the_training_hold(deps: WorkerDeps) -> None:
+    await _renew_gpu_hold_until_done(deps.redis, deps.worker_id, _TRAINING_HOLD_TOKEN)
 
 
-@pytest.mark.parametrize("cancel_child", _CHILD_CANCELLERS)
-def test_owner_cancelled_while_waiting_for_its_cancelled_child_ends_cancelled(
-    cancel_child,
+@dataclass
+class _TrainingOwner:
+    deps: WorkerDeps
+    renew_task: asyncio.Task[None]
+    task: asyncio.Task[None]
+
+    async def ends_cancelled_with_everything_released(self) -> None:
+        with pytest.raises(asyncio.CancelledError):
+            await self.task
+        assert self.task.cancelled()
+        assert await self.deps.redis.get(gpu_hold_key(self.deps.worker_id)) is None
+        assert self.deps.cache.in_use_count("sft") == 0
+        assert _TRAINING_HOLD_TOKEN not in self.deps.gpu_hold_handover_tokens
+        assert self.renew_task.done()
+
+
+async def _start_training_owner(
+    tmp_path: Path,
+    runner: Callable[..., Awaitable[None]],
+    renewal: Callable[[WorkerDeps], Awaitable[None]],
+) -> _TrainingOwner:
+    deps, redis = _make_deps(tmp_path)
+    await deps.cache.load("sft")
+    loaded = await deps.cache.acquire_for_use("sft")
+    assert await reserve_gpu_hold(redis, deps.worker_id, _TRAINING_HOLD_TOKEN, DEFAULT_TTL_SECONDS)
+    task_id = await _create_gpu_hold_handover_task(deps, _TRAINING_HOLD_TOKEN, train_epochs=1)
+    assert task_id is not None
+    renew_task = asyncio.create_task(renewal(deps))
+    request = TrainLoraRequest.model_construct(mode="sft", hold_token=_TRAINING_HOLD_TOKEN)
+    resources = _TrainLoraResources(loaded=loaded, renew_task=renew_task, task_id=task_id)
+    owner = asyncio.create_task(
+        _run_train_lora_with_cleanup(deps, request, request, runner, resources)
+    )
+    return _TrainingOwner(deps, renew_task, owner)
+
+
+def test_training_owner_cancelled_again_while_training_stops_releases_everything(
+    tmp_path: Path,
 ) -> None:
-    """defect:#1509 -- cancelling the owner while it waited for its child was swallowed."""
+    """defect:#1509 -- a second cancel while training stopped skipped the release."""
 
     async def go() -> None:
-        child = await _start_child_cleaning_up_after_cancel()
-        owner = asyncio.create_task(cancel_child(child.task))
-        await child.cancel_seen.wait()
-        owner.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await owner
-        child.finish_cleanup.set()
-        await asyncio.wait({child.task})
+        training = _ChildStoppingUntilCancelledAgain()
+        owner = await _start_training_owner(tmp_path, training, _renewing_the_training_hold)
+        await training.started.wait()
+        owner.task.cancel()
+        await training.stopping.wait()
+        owner.task.cancel()
+        await owner.ends_cancelled_with_everything_released()
+        assert training.ended.is_set()
+
+    _run(go())
+
+
+def test_training_owner_cancelled_while_cleanup_waits_for_renewal_releases_everything(
+    tmp_path: Path,
+) -> None:
+    """defect:#1509 -- a cancel while cleanup waited for the renewal skipped the release."""
+
+    async def go() -> None:
+        renewal = _ChildStoppingUntilCancelledAgain()
+        owner = await _start_training_owner(tmp_path, _training_finished_at_once, renewal)
+        await renewal.stopping.wait()
+        owner.task.cancel()
+        await owner.ends_cancelled_with_everything_released()
+        assert renewal.ended.is_set()
 
     _run(go())

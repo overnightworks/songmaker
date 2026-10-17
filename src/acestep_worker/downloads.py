@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
+from acestep_worker.child_tasks import settle_child_task
 from acestep_worker.models import DownloadTaskResult
 from acestep_worker.settings import get_worker_settings
 from acestep_worker.task_store import TaskStore
@@ -114,7 +115,7 @@ async def run_download(
         await task_store.fail(task_id, f"{type(exc).__name__}: {exc}")
     finally:
         progress_task.cancel()
-        await asyncio.wait({progress_task})
+        await settle_child_task(progress_task)
 
 
 _background_tasks: set[asyncio.Task[None]] = set()

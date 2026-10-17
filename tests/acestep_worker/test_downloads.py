@@ -214,6 +214,38 @@ def test_run_download_ends_cancelled_when_cancelled_while_stopping_its_progress_
         _run(cancelled_download)
 
 
+class _FailsItsProgressUpdates(TaskStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.progress_update_failed = asyncio.Event()
+
+    async def update_progress(self, task_id: str, *args: object, **kwargs: object) -> None:
+        self.progress_update_failed.set()
+        raise OSError("progress store unavailable")
+
+
+def test_run_download_raises_when_its_progress_poll_failed(tmp_path: Path) -> None:
+    """defect:#1509 -- a progress poll that failed was dropped after the owner cancelled it."""
+
+    async def go() -> None:
+        store = _FailsItsProgressUpdates()
+        task_id = await store.create("download")
+
+        async def download_until_the_progress_poll_failed(repo_id: str, local_dir: Path) -> None:
+            await store.progress_update_failed.wait()
+
+        await run_download(
+            store,
+            task_id,
+            mode="sft",
+            checkpoint_dir=tmp_path,
+            download_fn=download_until_the_progress_poll_failed,
+        )
+
+    with pytest.raises(OSError, match="progress store unavailable"):
+        _run(go())
+
+
 def test_poll_progress_emits_updates(tmp_path: Path) -> None:
     from acestep_worker.downloads import _poll_progress
 
