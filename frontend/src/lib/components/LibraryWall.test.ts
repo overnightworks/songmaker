@@ -1,8 +1,4 @@
-import {
-	describeBackClosesOverlay,
-	replaceHistoryEntry,
-	standingHistoryEntry
-} from '$lib/test-utils/library-history';
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
 	makePlaylist as playlist,
@@ -25,7 +21,6 @@ import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '$lib/stores/
 import { libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
-import { toasts } from '$lib/stores/toast';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import {
@@ -38,15 +33,13 @@ import {
 	toggleOrStartCollection
 } from '$lib/stores/player';
 import { fetchSong } from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { LIBRARY_WALL_PLAYED_PAGE_SIZE } from '$lib/constants';
+import { NetworkError } from '$lib/api/fetch';
+import { LIBRARY_NEW_MENU_LABEL, LIBRARY_WALL_PLAYED_PAGE_SIZE } from '$lib/constants';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 const fetchLibraryListen = vi.fn();
 const fetchAlbums = vi.fn();
-const createAlbum = vi.fn();
-const createPlaylist = vi.fn();
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
@@ -61,8 +54,6 @@ vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
-	createAlbum: (...args: unknown[]) => createAlbum(...args),
-	createPlaylist: (...args: unknown[]) => createPlaylist(...args),
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn(),
 	fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null })
@@ -80,10 +71,6 @@ beforeEach(() => {
 	});
 	fetchLibraryListen.mockReset().mockResolvedValue({ items: [] });
 	fetchAlbums.mockReset().mockResolvedValue(albumPage([], false));
-	createAlbum.mockReset().mockResolvedValue(album({ id: 'a-night', title: 'Night Drive' }));
-	createPlaylist
-		.mockReset()
-		.mockResolvedValue(playlist({ id: 'p-road', title: 'Road Trip', share_slug: null }));
 	localStorage.clear();
 	libraryWallOrder.set('title');
 	resetLibraryOrderForTests();
@@ -93,7 +80,6 @@ beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
-	toasts.set([]);
 	replaceHistoryEntry('/');
 });
 
@@ -457,7 +443,7 @@ describe('the Playlists page wall', () => {
 		]);
 	}
 
-	it('shows only playlists, A–Z, under one head line reading Playlists · 2 with the sort switch and + New', async () => {
+	it('defect:#1529: shows only playlists, A–Z, under one head line reading Playlists · 2 with the sort switch and + New', async () => {
 		seedPlaylists();
 
 		const root = await render('playlists');
@@ -469,7 +455,7 @@ describe('the Playlists page wall', () => {
 		expect(head?.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe(
 			'Sort playlists'
 		);
-		expect(head?.querySelector(`[aria-label="${NEW_LABEL}"]`)).not.toBeNull();
+		expect(head?.querySelector(`[aria-label="${LIBRARY_NEW_MENU_LABEL}"]`)).not.toBeNull();
 		expect(pressedOrder(root)).toEqual(['A–Z']);
 	});
 
@@ -506,17 +492,12 @@ describe('the Playlists page wall', () => {
 		expect(pressedOrder(library)).toEqual(['Last played']);
 	});
 
-	it('#1354 rule 9: says so in one line when there is no playlist yet, and still offers New in Library', async () => {
+	it('1354_rule_9: says so in one line when there is no playlist yet, and still offers New in Library', async () => {
 		emptyLibrary();
 		const root = await render('playlists');
 
-		const menu = await openNewMenu(root);
-
 		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(NO_PLAYLISTS);
-		expect([...menu.querySelectorAll('button')].map((item) => item.textContent?.trim())).toEqual([
-			'Album',
-			'Playlist'
-		]);
+		expect(newButtonOnHead(root)).not.toBeNull();
 	});
 
 	it.each([
@@ -542,68 +523,11 @@ describe('the Playlists page wall', () => {
 	});
 });
 
-const NEW_LABEL = 'New album or playlist';
-const NO_ALBUMS = 'No albums yet. + New makes one.';
-const NO_PLAYLISTS = 'No playlists yet. + New makes one.';
+const NO_ALBUMS = 'No albums yet. + New on Home makes one.';
+const NO_PLAYLISTS = 'No playlists yet. + New on Home makes one.';
 
-type NewKind = { choice: 'Album' | 'Playlist'; card: string; close: string; field: string };
-
-const NEW_ALBUM: NewKind = {
-	choice: 'Album',
-	card: 'New album',
-	close: 'Close new album',
-	field: 'Title'
-};
-const NEW_PLAYLIST: NewKind = {
-	choice: 'Playlist',
-	card: 'New playlist',
-	close: 'Close new playlist',
-	field: 'Name'
-};
-
-function newButton(root: ParentNode): HTMLButtonElement {
-	const button = root.querySelector<HTMLButtonElement>(
-		`.wall-titlebar [aria-label="${NEW_LABEL}"]`
-	);
-	if (!button) throw new Error('no + New on the Library title line');
-	return button;
-}
-
-function newMenu(): HTMLElement | null {
-	return document.querySelector<HTMLElement>(`[role="dialog"][aria-label="${NEW_LABEL}"]`);
-}
-
-function newCard(root: ParentNode, kind: NewKind): HTMLElement | null {
-	return root.querySelector<HTMLElement>(`.wall-body [aria-label="${kind.card}"]`);
-}
-
-async function openNewMenu(root: HTMLElement): Promise<HTMLElement> {
-	newButton(root).click();
-	await tick();
-	await tick();
-	const menu = newMenu();
-	if (!menu) throw new Error('+ New opened no menu');
-	return menu;
-}
-
-async function chooseNew(root: HTMLElement, kind: NewKind): Promise<HTMLElement> {
-	const menu = await openNewMenu(root);
-	[...menu.querySelectorAll('button')]
-		.find((item) => item.textContent?.trim() === kind.choice)
-		?.click();
-	await tick();
-	const card = newCard(root, kind);
-	if (!card) throw new Error(`${kind.choice} unfolded no card`);
-	return card;
-}
-
-async function fillAndCreate(card: HTMLElement, value: string): Promise<void> {
-	const input = card.querySelector<HTMLInputElement>('input');
-	if (!input) throw new Error('no first field');
-	input.value = value;
-	input.dispatchEvent(new Event('input', { bubbles: true }));
-	await tick();
-	card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+function newButtonOnHead(root: ParentNode): Element | null {
+	return root.querySelector(`.wall-titlebar [aria-label="${LIBRARY_NEW_MENU_LABEL}"]`);
 }
 
 function emptyLibrary(): void {
@@ -613,160 +537,39 @@ function emptyLibrary(): void {
 	allAlbumsLoad.set({ status: 'ready', error: null });
 }
 
-describe('LibraryWall + New', () => {
-	it('#1354 rule 9: stands on the Library title line with its plus, even with no album yet, over an empty wall that says so in one line', async () => {
+describe('1354_rule_14 915_C1 LibraryWall + New head', () => {
+	it('1354_rule_9: stands on the Library title line with its plus, even with no album yet, over an empty wall that says so in one line', async () => {
 		emptyLibrary();
 		playlistList.set([playlist({ id: 'p-road', title: 'Road Trip', share_slug: null })]);
 		const root = await render();
 
-		expect(newButton(root).textContent).toContain('New');
-		expect(newButton(root).querySelector('svg')).not.toBeNull();
+		expect(newButtonOnHead(root)?.textContent).toContain('New');
+		expect(newButtonOnHead(root)?.querySelector('svg')).not.toBeNull();
 		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(NO_ALBUMS);
 	});
 
-	it('opens New in Library offering Album and Playlist, each with its icon', async () => {
-		const root = await render();
-
-		const menu = await openNewMenu(root);
-
-		expect(newButton(root).getAttribute('aria-expanded')).toBe('true');
-		expect(menu.textContent).toContain('New in Library');
-		const items = [...menu.querySelectorAll('button')];
-		expect(items.map((item) => item.textContent?.trim())).toEqual(['Album', 'Playlist']);
-		expect(items.every((item) => item.querySelector('svg') !== null)).toBe(true);
-	});
-
-	it.each([NEW_ALBUM, NEW_PLAYLIST])(
-		'$choice closes the menu and unfolds its card at the top of the wall, + New pressed meanwhile',
+	it.each(['library', 'playlists'] as const)(
+		'the desktop %s head carries + New beside the order switch',
 		async (kind) => {
-			const root = await render();
+			const root = await render(kind);
 
-			const card = await chooseNew(root, kind);
-
-			expect(newMenu()).toBeNull();
-			expect(root.querySelector('.wall-body')?.firstElementChild).toBe(card);
-			expect(document.activeElement?.closest('label')?.textContent).toContain(kind.field);
-			expect(newButton(root).classList.contains('pressed')).toBe(true);
-			expect(tileTitles(root)).toEqual(['Local Album']);
+			expect(newButtonOnHead(root)).not.toBeNull();
+			expect(orderChoices(root)).not.toHaveLength(0);
 		}
 	);
 
-	it.each([NEW_ALBUM, NEW_PLAYLIST])(
-		'× folds the $choice card, creates nothing and hands focus back to + New',
+	it.each(['library', 'playlists'] as const)(
+		'the phone %s head carries the order switch only, no + New',
 		async (kind) => {
-			const root = await render();
-			const card = await chooseNew(root, kind);
+			phoneViewport();
 
-			card.querySelector<HTMLButtonElement>(`[aria-label="${kind.close}"]`)?.click();
-			await vi.waitFor(() => expect(document.activeElement).toBe(newButton(root)));
+			const root = await render(kind);
 
-			expect(newCard(root, kind)).toBeNull();
-			expect(newButton(root).classList.contains('pressed')).toBe(false);
-			expect(createAlbum).not.toHaveBeenCalled();
-			expect(createPlaylist).not.toHaveBeenCalled();
-		}
-	);
-
-	it('an empty library makes its first album there and opens its page', async () => {
-		emptyLibrary();
-		const root = await render();
-		const card = await chooseNew(root, NEW_ALBUM);
-
-		await fillAndCreate(card, 'Night Drive');
-		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-night' }));
-
-		expect(createAlbum).toHaveBeenCalledWith('Night Drive', '');
-		expect(newCard(root, NEW_ALBUM)).toBeNull();
-	});
-
-	it('#1354 rule 7: Playlist makes a named playlist there and opens it, leaving the album wall as it was', async () => {
-		const root = await render();
-		const card = await chooseNew(root, NEW_PLAYLIST);
-
-		await fillAndCreate(card, 'Road Trip');
-		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p-road' }));
-
-		expect(createPlaylist).toHaveBeenCalledWith('Road Trip');
-		expect(newCard(root, NEW_PLAYLIST)).toBeNull();
-		expect(tileTitles(root)).toEqual(['Local Album']);
-	});
-
-	it.each([
-		{
-			kind: NEW_ALBUM,
-			create: () => createAlbum,
-			name: 'Night Drive',
-			opened: 'album',
-			serverFailure: 'The album could not be created. Try again.'
-		},
-		{
-			kind: NEW_PLAYLIST,
-			create: () => createPlaylist,
-			name: 'Road Trip',
-			opened: 'playlist',
-			serverFailure: 'The playlist could not be created. Try again.'
-		}
-	])(
-		'915_E3 the $kind.card card says only the latest refusal, and nothing once a create succeeds',
-		async ({ kind, create, name, opened, serverFailure }) => {
-			const taken = 'That name is taken';
-			const created = await create()();
-			create()
-				.mockReset()
-				.mockRejectedValueOnce(new ApiError(422, taken, '/api'))
-				.mockRejectedValueOnce(new ApiError(500, 'Internal Server Error', '/api'))
-				.mockResolvedValue(created);
-			const root = await render();
-			const card = await chooseNew(root, kind);
-			const submit = () => card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
-			const toastMessages = () => get(toasts).map(({ message }) => message);
-
-			await fillAndCreate(card, name);
-			await vi.waitFor(() => expect(toastMessages()).toEqual([taken]));
-			submit();
-			await vi.waitFor(() => expect(toastMessages()).toEqual([serverFailure]));
-			submit();
-			await vi.waitFor(() => expect(get(openCollection)?.kind).toBe(opened));
-
-			expect(toastMessages()).toEqual([]);
+			expect(orderChoices(root)).not.toHaveLength(0);
+			expect(newButtonOnHead(root)).toBeNull();
 		}
 	);
 });
-
-describeBackClosesOverlay({
-	name: 'the New in Library menu',
-	render,
-	open: async (target) => {
-		await openNewMenu(target);
-	},
-	isShown: () => newMenu() !== null,
-	afterBack: () => expect(document.activeElement?.getAttribute('aria-label')).toBe(NEW_LABEL),
-	closeWays: []
-});
-
-for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
-	describeBackClosesOverlay({
-		name: `the ${kind.card} card`,
-		render,
-		open: async (target) => {
-			await chooseNew(target, kind);
-			await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('library-new-card'));
-		},
-		isShown: (target) => newCard(target, kind) !== null,
-		afterBack: () => {
-			expect(document.activeElement?.getAttribute('aria-label')).toBe(NEW_LABEL);
-			expect(createAlbum).not.toHaveBeenCalled();
-			expect(createPlaylist).not.toHaveBeenCalled();
-		},
-		closeWays: [
-			{
-				way: '×',
-				close: (target) =>
-					target.querySelector<HTMLButtonElement>(`[aria-label="${kind.close}"]`)?.click()
-			}
-		]
-	});
-}
 
 // Stubs every media query as matching the phone width; the returned function
 // turns the viewport to the phone width or away from it and tells the listeners.

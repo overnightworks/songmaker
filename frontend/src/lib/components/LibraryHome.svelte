@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { HOME_PAGE_LABEL } from '$lib/constants';
 	import LibraryContinue from './LibraryContinue.svelte';
+	import NewPlaceMenu from './NewPlaceMenu.svelte';
 </script>
 
 <div class="library-home">
 	<div class="home-titlebar">
 		<h1 class="home-title">{HOME_PAGE_LABEL}</h1>
+		<NewPlaceMenu />
 	</div>
 	<LibraryContinue />
 </div>
@@ -20,7 +22,12 @@
 	}
 
 	.home-titlebar {
+		display: flex;
 		flex-shrink: 0;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
 		padding: 16px 20px 12px;
 		border-bottom: 1px solid var(--border);
 	}

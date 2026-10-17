@@ -45,7 +45,7 @@
 		playlistEntryOverflowLabel
 	} from '$lib/constants';
 	import { nowPlayingTakeMeta } from '$lib/constants/now-playing';
-	import { titleInitials } from '$lib/utils/format';
+	import { songCountLabel, titleInitials } from '$lib/utils/format';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
@@ -457,7 +457,7 @@
 					{/each}
 				</ul>
 				{#if playlistDetail.entries.length === 0}
-					<p class="empty-tab">No tracks in this playlist yet.</p>
+					<p class="empty-tab">No songs in this playlist yet.</p>
 				{/if}
 			{:else if detailLoad.status === 'error'}
 				<p class="empty-tab" role="alert">{detailLoad.error}</p>
@@ -476,7 +476,7 @@
 {#if showDeleteConfirm && playlistMeta}
 	<ConfirmDeleteDialog
 		title={`Delete "${playlistMeta.title}"?`}
-		items={[`${playlistMeta.entry_count} track${playlistMeta.entry_count !== 1 ? 's' : ''}`]}
+		items={[songCountLabel(playlistMeta.entry_count)]}
 		confirmLabel="Delete Playlist"
 		onconfirm={() => {
 			showDeleteConfirm = false;
