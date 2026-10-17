@@ -1,8 +1,0 @@
-claim_id = "8872dded16724e3e8ed08e2388710464"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "01cb44979b77acbd38b33923b4cdc9be82eca0d0"
-branch = "claude/issue-1542-m1-value-objects-beneath"
-scope = ["scripts/migrate_generation_params.py", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/generation_params.py", "src/songmaker_cli/api_models/playlists.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/api_models/whisper.py", "src/songmaker_cli/config.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/generation_params.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/parser.py", "src/songmaker_cli/scoring/models.py", "src/songmaker_cli/scoring/text_accuracy.py", "src/songmaker_cli/song_api.py", "src/songmaker_cli/whisper_cues.py", "tests/test_generate_types.py", "tests/test_generation_lora_integration.py", "tests/test_generation_params.py", "tests/test_jobs.py", "tests/test_parser.py", "tests/test_scorers_extended.py", "tests/test_scoring_jobs.py", "tests/test_scoring_persistence.py"]
-opened_commit = "4432b662cfd08d11ade9a0fed26927c9b8445fa7"
-whole_reason = "One verbatim move of two value-object modules; every importer re-points in the same commit or the tree does not import."
