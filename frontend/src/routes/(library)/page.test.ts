@@ -1,7 +1,7 @@
 import { historyEntry, historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
-import { mount, unmount } from 'svelte';
+import { mount, unmount, type Component } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -80,6 +80,32 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 
 import { goto } from '$app/navigation';
 import LegacySongQueryHarness from './harness.svelte';
+import LibraryAddressHarness from './library/harness.svelte';
+
+interface RoutePage {
+	route: string;
+	harness: Component;
+	surface: string;
+	shown: string;
+	hidden: string[];
+}
+
+const ROUTE_PAGES: RoutePage[] = [
+	{
+		route: HOME_ROUTE_PATH,
+		harness: LegacySongQueryHarness,
+		surface: 'home',
+		shown: '.library-home',
+		hidden: ['.library-wall']
+	},
+	{
+		route: LIBRARY_ROUTE_PATH,
+		harness: LibraryAddressHarness,
+		surface: 'browse',
+		shown: '.library-wall',
+		hidden: ['.library-home', '[aria-label="Continue"]']
+	}
+];
 
 // The live stream the workspace bootstrap waits for -- same fake as the
 // sibling address suites (issue #276): emitting `hello` is all it takes to
@@ -132,10 +158,10 @@ function workspaceWrapper(root: HTMLElement): HTMLElement {
 	return requireElement(root, '.workspace-wrapper');
 }
 
-function openAddress(): HTMLElement {
+function openAddress(harness: Component = LegacySongQueryHarness): HTMLElement {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted.push(mount(LegacySongQueryHarness, { target }));
+	mounted.push(mount(harness, { target }));
 	return target;
 }
 
@@ -143,8 +169,8 @@ function openAddress(): HTMLElement {
 // no library stores, no history state, nothing opened before -- with the
 // live library stream running, which routes/+layout.svelte starts for every
 // signed-in library route.
-function coldTabAt(search: string): void {
-	replaceHistoryEntry('/' + search);
+function coldTabAt(search: string, route: string = HOME_ROUTE_PATH): void {
+	replaceHistoryEntry(route + search);
 	startFakeRouter();
 	albumList.set([]);
 	songList.set([]);
@@ -196,16 +222,25 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-describe('/ with no ?song= query', () => {
-	it('1354_rule_31: resolves the Home entry at / without adding a Back step', async () => {
-		coldTabAt('');
-		const length = historyLength();
-		openAddress();
-		await vi.waitFor(() => expect(historyEntry()).toMatchObject({ surface: 'home', songId: null }));
-		expect(location.pathname).toBe(HOME_ROUTE_PATH);
-		expect(historyLength()).toBe(length);
-	});
+describe.each(ROUTE_PAGES)(
+	'$route with no ?song= query',
+	({ route, harness, surface, shown, hidden }) => {
+		it('1354_rule_31: resolves its entry without adding a Back step', async () => {
+			coldTabAt('', route);
+			const length = historyLength();
 
+			const target = openAddress(harness);
+
+			await vi.waitFor(() => expect(target.querySelector(shown)).not.toBeNull());
+			await vi.waitFor(() => expect(historyEntry()).toMatchObject({ surface, songId: null }));
+			for (const selector of hidden) expect(target.querySelector(selector)).toBeNull();
+			expect(location.pathname).toBe(route);
+			expect(historyLength()).toBe(length);
+		});
+	}
+);
+
+describe('/ with no ?song= query', () => {
 	it('renders nothing and leaves the workspace reachable', async () => {
 		coldTabAt('');
 
@@ -214,6 +249,22 @@ describe('/ with no ?song= query', () => {
 		await Promise.resolve();
 		expect(target.querySelector('.address-overlay')).toBeNull();
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
+	});
+});
+
+describe('/library with a legacy ?song= query', () => {
+	it('1354_rule_31: ignores the query, since only Home redirects the legacy form', async () => {
+		coldTabAt(`?song=${SONG_ID}`, LIBRARY_ROUTE_PATH);
+
+		const target = openAddress(LibraryAddressHarness);
+
+		await vi.waitFor(() => expect(target.querySelector('.library-wall')).not.toBeNull());
+		await vi.waitFor(() =>
+			expect(historyEntry()).toMatchObject({ surface: 'browse', songId: null })
+		);
+		expect(target.querySelector('.address-overlay')).toBeNull();
+		expect(api.fetchSong).not.toHaveBeenCalled();
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 	});
 });
 
