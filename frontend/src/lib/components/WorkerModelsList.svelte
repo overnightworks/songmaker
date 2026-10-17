@@ -2,6 +2,7 @@
 	import type { LoadedModelDetailItem } from '$lib/api/types';
 	import {
 		WORKER_POOL_MODELS_LABEL,
+		WORKER_POOL_NO_MODEL_LABEL,
 		WORKER_POOL_KEEP_LOADED_LABEL,
 		WORKER_POOL_KEEP_LOADED_HINT,
 		WORKER_POOL_UNLOAD_LABEL
@@ -46,6 +47,8 @@
 				onclick={() => onUnload(model.mode)}>{WORKER_POOL_UNLOAD_LABEL}</button
 			>
 		</div>
+	{:else}
+		<p>{WORKER_POOL_NO_MODEL_LABEL}</p>
 	{/each}
 </div>
 

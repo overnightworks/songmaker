@@ -483,10 +483,13 @@ describe('WorkerPoolPanel model rows', () => {
 		return pool;
 	}
 
-	it.each([1, 3])('defect:#1573 renders %i model rows from the heartbeat', async (count) => {
+	it.each([0, 1, 3])('defect:#1573 renders %i model rows from the heartbeat', async (count) => {
 		const target = await renderVramPool(modelsPool(count));
 		const list = target.querySelector('[aria-label="Models on this GPU"]');
 		expect(list).not.toBeNull();
+		expect(list).toHaveTextContent('Models on this GPU');
+		if (count === 0) expect(list).toHaveTextContent('No model loaded');
+		else expect(list).not.toHaveTextContent('No model loaded');
 		expect(list?.querySelectorAll('[role="group"]')).toHaveLength(count);
 		for (const model of models.slice(0, count)) {
 			const row = list?.querySelector(`[aria-label="${model.mode}"]`);
@@ -504,14 +507,15 @@ describe('WorkerPoolPanel model rows', () => {
 
 	it.each(
 		[
-			{ action: 'pin_model', mode: 'turbo', label: 'Keep loaded', kept: false },
-			{ action: 'unpin_model', mode: 'sft', label: 'Keep loaded', kept: true },
-			{ action: 'evict_model', mode: 'sft', label: 'Unload', kept: true }
+			{ action: 'pin_model', mode: 'turbo', label: 'Keep loaded', kept: false, count: 3 },
+			{ action: 'unpin_model', mode: 'sft', label: 'Keep loaded', kept: true, count: 3 },
+			{ action: 'evict_model', mode: 'sft', label: 'Unload', kept: true, count: 3 },
+			{ action: 'evict_model', mode: 'sft', label: 'Unload', kept: true, count: 1 }
 		].flatMap((action) => [false, true].map((refused) => ({ ...action, refused })))
 	)(
-		'defect:#1573 $action targets its model, waits for refresh, and handles refusal=$refused',
-		async ({ action, mode, label, kept, refused }) => {
-			const pool = modelsPool();
+		'defect:#1573 $action with $count models targets its model, waits for refresh, and handles refusal=$refused',
+		async ({ action, mode, label, kept, refused, count }) => {
+			const pool = modelsPool(count);
 			const target = await renderVramPool(pool);
 			let finish!: (response: Response) => void;
 			const request = new Promise<Response>((resolve) => {
@@ -537,7 +541,7 @@ describe('WorkerPoolPanel model rows', () => {
 			]);
 			expect(target.querySelector(`[aria-label="${mode}"]`)).not.toBeNull();
 			if (label === 'Keep loaded') expect(button).toHaveAttribute('aria-checked', String(kept));
-			const updated = modelsPool();
+			const updated = modelsPool(count);
 			const state = updated.workers[0].state;
 			if (!state) throw new Error('Expected a heartbeat');
 			if (action === 'evict_model')
@@ -559,16 +563,24 @@ describe('WorkerPoolPanel model rows', () => {
 					if (label === 'Keep loaded') expect(button).toHaveAttribute('aria-checked', String(kept));
 				} else if (action === 'evict_model') {
 					expect(target.querySelector(`[aria-label="${mode}"]`)).toBeNull();
+					if (count === 1) {
+						const list = target.querySelector('[aria-label="Models on this GPU"]');
+						expect(list).toHaveTextContent('Models on this GPU');
+						expect(list).toHaveTextContent('No model loaded');
+						expect(list?.querySelectorAll('[role="group"]')).toHaveLength(0);
+					}
 				} else {
 					expect(button).toBeEnabled();
 					expect(button).toHaveAttribute('aria-checked', String(!kept));
 				}
 			});
-			expect(target.querySelector('[aria-label="xl-turbo"]')).toHaveTextContent('~12 GB');
-			expect(target.querySelector('[aria-label="Keep loaded xl-turbo"]')).toHaveAttribute(
-				'aria-checked',
-				'true'
-			);
+			if (count > 1) {
+				expect(target.querySelector('[aria-label="xl-turbo"]')).toHaveTextContent('~12 GB');
+				expect(target.querySelector('[aria-label="Keep loaded xl-turbo"]')).toHaveAttribute(
+					'aria-checked',
+					'true'
+				);
+			}
 		}
 	);
 

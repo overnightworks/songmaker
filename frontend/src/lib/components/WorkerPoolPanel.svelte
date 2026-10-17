@@ -16,6 +16,7 @@
 	import { offline } from '$lib/stores/connectivity';
 	import {
 		WORKER_POOL_LOAD_FAILED,
+		WORKER_POOL_NO_MODEL_LABEL,
 		WORKER_POOL_REFRESH_FAILED,
 		WORKER_TRAINING_REMAINING_TEMPLATE
 	} from '$lib/constants';
@@ -154,7 +155,7 @@
 				String(state.training_hold_seconds)
 			);
 		}
-		if (state.loaded.length === 0) return 'No model loaded';
+		if (state.loaded.length === 0) return WORKER_POOL_NO_MODEL_LABEL;
 		if (state.queue_depth > 0) return `Busy (${state.queue_depth} in queue)`;
 		return 'Idle';
 	}
@@ -339,7 +340,7 @@
 						</div>
 					{/if}
 
-					{#if worker.state && !offline && worker.state.loaded.length > 0}
+					{#if worker.state && !offline}
 						<WorkerModelsList
 							loaded={worker.state.loaded}
 							pinned={worker.state.pinned ?? []}
