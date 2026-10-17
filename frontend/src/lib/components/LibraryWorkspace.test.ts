@@ -1,3 +1,4 @@
+import { resetLibraryWriteForTests } from '$lib/stores/libraryWrite';
 import {
 	makeAlbum as album,
 	makePlaylist as playlist,
@@ -58,6 +59,7 @@ function streamLive(): void {
 }
 
 beforeEach(() => {
+	resetLibraryWriteForTests();
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async () => Response.json({ items: [] }))
@@ -164,7 +166,7 @@ describe('the library workspace', () => {
 
 	// #1506: Home's own surface, which shows no album page even while an album
 	// stays the rail context behind it.
-	it('1354_rule_31 1354_rule_14: shows Home with Listen alone on the Home surface, also while an album stays the rail context', async () => {
+	it('1354_rule_31 1354_rule_14: shows Home with Listen and Write on the Home surface, also while an album stays the rail context', async () => {
 		streamLive();
 		openCollection.set({ kind: 'album', id: 'anfield' });
 		librarySurface.set('home');
@@ -173,7 +175,11 @@ describe('the library workspace', () => {
 		await tick();
 
 		expect(target.querySelector('.library-home h1')?.textContent).toBe('Home');
-		expect(target.querySelector('[aria-label="Listen"]')).not.toBeNull();
+		expect(
+			[...target.querySelectorAll('section[aria-label]')].map((region) =>
+				region.getAttribute('aria-label')
+			)
+		).toEqual(['Listen', 'Write']);
 		expect(target.querySelector('.library-wall')).toBeNull();
 		expect(target.textContent).not.toContain(ALBUM_TITLE);
 	});
