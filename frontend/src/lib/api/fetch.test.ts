@@ -313,17 +313,24 @@ describe('refusal reactions', () => {
 		}
 	);
 
-	it.each([400, 403, 404, 500, 502])(
-		'925_M3_P2: a %i tells rateLimited nothing',
+	it.each([400, 403, 404, 500, 502, 503])(
+		'925_M3_P2: a %i tells neither rateLimited nor sessionLost anything',
 		async (status) => {
 			const told: string[] = [];
 			onTestFinished(
-				installRefusalReactions({ ...NOTHING_HAPPENS, rateLimited: (path) => told.push(path) })
+				installRefusalReactions({
+					rateLimited: (path) => told.push(`rateLimited ${path}`),
+					sessionLost: () => {
+						told.push('sessionLost');
+						return Promise.resolve();
+					}
+				})
 			);
 			serverRefusesWith(status);
 
-			await aRefusedRequest();
+			const failure = await aRefusedRequest();
 
+			expect(failure).toBeInstanceOf(ApiError);
 			expect(told).toEqual([]);
 		}
 	);
