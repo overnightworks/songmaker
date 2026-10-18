@@ -103,10 +103,18 @@ def queries_without_session_auth(statements: Sequence[str]) -> list[str]:
     route's row count; all other statements remain in the route budget.
     """
     session_prefixes = ("select user_sessions.", "update user_sessions set ")
-    return [
-        statement for statement in statements
-        if not " ".join(statement.lower().split()).startswith(session_prefixes)
-    ]
+    removed, kept = [], []
+    for statement in statements:
+        normalized = " ".join(statement.lower().split())
+        if normalized.startswith(session_prefixes):
+            removed.append(normalized)
+        else:
+            kept.append(statement)
+    expected = ("select user_sessions.", "update user_sessions set expires_at")
+    assert len(removed) == 2 and all(
+        sum(statement.startswith(prefix) for statement in removed) == 1 for prefix in expected
+    ), f"Expected exactly one {expected[0]!r} and one {expected[1]!r}; removed: {removed!r}"
+    return kept
 
 
 def web_client(app, **kwargs) -> TestClient:
