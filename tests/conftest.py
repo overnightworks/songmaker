@@ -51,6 +51,8 @@ from songmaker_cli.scheduler import (  # noqa: E402
     WorkerGpuOutOfMemory,
 )
 
+pytest_plugins = ["redis_server"]
+
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
 REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[1]

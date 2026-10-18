@@ -21,8 +21,6 @@ from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.music_worker import MusicWorkerSettings
 from songmaker_cli.scoring_worker import ScoringWorkerSettings
 
-pytest_plugins = ["redis_server"]
-
 
 @asynccontextmanager
 async def codec_pool(socket, monkeypatch):
