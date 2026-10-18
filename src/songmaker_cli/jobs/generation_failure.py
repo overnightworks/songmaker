@@ -59,9 +59,14 @@ def select_generation_failure(
     return current
 
 
+def is_visible_generation_failure(error_type: str | None) -> bool:
+    """Only typed GPU-memory failures are visible outside FAILED."""
+    return error_type == GPU_OUT_OF_MEMORY
+
+
 def running_failure_pair(failure: GenerationFailure | None) -> tuple[str | None, str | None]:
     """Only a GPU-memory failure is visible before all takes finish."""
-    if failure is not None and failure.error_type == GPU_OUT_OF_MEMORY:
+    if failure is not None and is_visible_generation_failure(failure.error_type):
         return failure.message, failure.error_type
     return None, None
 
