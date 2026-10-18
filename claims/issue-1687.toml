@@ -1,8 +1,0 @@
-claim_id = "9b1bef4fcd1448c59fe9f5471bec500b"
-agent = "claude"
-role = "builder"
-base = "8725870097d5d05785b621792302dbc755088c5c"
-branch = "claude/issue-1687-lora-header-proof"
-scope = ["docs/security.md", "tests/conftest.py", "tests/test_admin_api.py", "tests/test_jobs.py", "tests/test_lora_worker_auth.py"]
-opened_commit = "56fc3373e100b115bfca563fe11f661bc9a44715"
-whole_reason = "Bundle of two no-risk cards from #1301: the LoRA header proof with its shared fixture (lead) and finding 14's one documentation sentence."
