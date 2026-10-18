@@ -481,6 +481,31 @@ This contract covers jobs that reach `mark_failed`. A job that dies before that 
 
 If auto-loading a model fails, the scheduler translates the HTTP status error into `WorkerTaskFailed`. Its cause is the string `detail` field of a JSON object response, otherwise the response body, or `Worker returned <status> with no detail` for an empty or whitespace-only body. This includes HTTP 409 capacity errors. Direct model loads use the same cause reader. Generate jobs persist the generic line and log the cause; direct admin load jobs still persist the full cause without a new length cap. LoRA training retains its own `Worker training failed` line. The job-level regression tests in [`tests/test_jobs.py`](../tests/test_jobs.py) pin the different persistence contracts and exercise auto-load errors through the real scheduler.
 
+### GPU memory failures in worker tasks
+
+For failed generation results, the client classifies the full selected cause
+before shortening it. `Insufficient free VRAM`, `CUDA out of memory`,
+`OutOfMemoryError`, and `Insufficient KV cache to schedule sequence` produce
+`GpuOutOfMemoryError`, a subclass of `GenerationFailedError`. `MemoryError`
+alone and bare `out of memory` remain ordinary generation failures. The
+existing diagnostic selection, logging and shortening rules above still apply.
+
+The generate runner maps only that exception type to
+`error_kind: "gpu_out_of_memory"`. Task GET responses and SSE events carry the
+same snapshot field; it is explicitly `null` for other failures and for
+pending, running and successful tasks. A submission error containing a GPU
+marker is therefore still unclassified. Existing two-argument `TaskStore.fail`
+calls remain valid. The heartbeat retains the latest failed task's diagnostic
+and timestamp across subsequent successes.
+
+This is classification after failure, with no new admission check, duration
+limit or memory budget change. The scheduler does not yet consume `error_kind`;
+musician-facing handling belongs to the later slices of #916. The client and
+worker contract is verified by the `S7-*` cases in
+[`test_client.py`](../tests/test_client.py),
+[`test_task_store.py`](../tests/acestep_worker/test_task_store.py) and
+[`test_wrapper.py`](../tests/acestep_worker/test_wrapper.py).
+
 ## VRAM Pre-flight Note
 
 The vendored fork keeps `_vram_preflight_check()` enabled by default. Before checking, CUDA generations run `gc.collect()` and `torch.cuda.empty_cache()` so cached allocations do not cause a false rejection. This behavior comes from upstream PR [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091).

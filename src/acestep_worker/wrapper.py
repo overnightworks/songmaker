@@ -1049,7 +1049,7 @@ async def default_generate_runner(
     audio_output_dir: Path,
 ) -> None:
     from acestep_engine.client import AceStepClient
-    from acestep_engine.errors import AceStepError
+    from acestep_engine.errors import AceStepError, GpuOutOfMemoryError
     from acestep_worker.models import GenerationTaskResult
 
     await task_store.mark_running(task_id)
@@ -1086,4 +1086,7 @@ async def default_generate_runner(
     except Exception as exc:
         log.exception("Generation failed for task %s", task_id)
         cause = str(exc) if isinstance(exc, AceStepError) else f"{type(exc).__name__}: {exc}"
-        await task_store.fail(task_id, cause)
+        await task_store.fail(
+            task_id, cause,
+            error_kind="gpu_out_of_memory" if isinstance(exc, GpuOutOfMemoryError) else None,
+        )

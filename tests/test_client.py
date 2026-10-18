@@ -9,6 +9,7 @@ from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
+from acestep_http import acestep_http
 from conftest import mock_http_response as _mock_response
 
 from acestep_engine.client import (
@@ -23,6 +24,7 @@ from acestep_engine.errors import (
     AudioDownloadError,
     GenerationFailedError,
     GenerationTimeoutError,
+    GpuOutOfMemoryError,
     TaskSubmissionError,
 )
 from acestep_engine.models import AceStepConfig
@@ -240,44 +242,61 @@ def _failed_cache_entry(**overrides: object) -> str:
 def test_poll_result_failure_reports_acestep_cause(
     result: str, expected_message: str,
 ) -> None:
-    client = AceStepClient()
-
-    response_data = json.dumps({
-        "data": [{"task_id": "abc", "status": 2, "result": result}],
-    }).encode()
-
-    with patch("acestep_engine.client.urlopen") as mock_urlopen:
-        mock_urlopen.return_value = _mock_response(response_data)
+    """S7-03: Preserve diagnostic selection and missing-detail fallback."""
+    with acestep_http(result) as boundary:
+        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
         with pytest.raises(GenerationFailedError) as excinfo:
-            client._poll_result("abc")
+            client.generate(AceStepConfig(prompt="test", lyrics=""))
 
     assert str(excinfo.value) == expected_message
 
 
-def test_poll_result_failure_caps_the_cause_and_logs_it_in_full(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    client = AceStepClient()
-    long_cause = "RuntimeError: " + "x" * 1000
-    response_data = json.dumps({
-        "data": [{
-            "task_id": "abc",
-            "status": 2,
-            "result": _failed_cache_entry(error=long_cause),
-        }],
-    }).encode()
+@pytest.mark.parametrize("marker", [
+    "Insufficient free VRAM", "CUDA out of memory", "OutOfMemoryError",
+    "Insufficient KV cache to schedule sequence",
+])
+@pytest.mark.parametrize("tail", ["", "\nGeneration stopped"])
+def test_gpu_memory_failure_classified_before_shortening(marker: str, tail: str) -> None:
+    """S7-01: Each precise GPU marker survives diagnostic shortening."""
+    detail = marker + tail
+    with acestep_http(_failed_cache_entry(error=detail)) as boundary:
+        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
+        with pytest.raises(GpuOutOfMemoryError) as excinfo:
+            client.generate(AceStepConfig(prompt="test", lyrics=""))
+    assert str(excinfo.value) == detail.splitlines()[-1]
 
-    with patch("acestep_engine.client.urlopen") as mock_urlopen:
-        mock_urlopen.return_value = _mock_response(response_data)
+
+@pytest.mark.parametrize("detail", ["MemoryError", "out of memory", "Invalid model"])
+def test_failure_without_gpu_marker_remains_generic(detail: str) -> None:
+    """S7-02: Host memory and unrelated errors are not GPU failures."""
+    with acestep_http(_failed_cache_entry(error=detail)) as boundary:
+        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
+        with pytest.raises(GenerationFailedError) as excinfo:
+            client.generate(AceStepConfig(prompt="test", lyrics=""))
+    assert type(excinfo.value) is GenerationFailedError
+    assert str(excinfo.value) == detail
+
+
+@pytest.mark.parametrize("detail, error_type", [
+    ("Traceback\nRuntimeError: " + "x" * 1000, GenerationFailedError),
+    ("CUDA out of memory\nRuntimeError: " + "x" * 1000, GpuOutOfMemoryError),
+    ("RuntimeError: " + "x" * 1000 + " CUDA out of memory", GpuOutOfMemoryError),
+])
+def test_poll_result_failure_caps_the_cause_and_logs_it_in_full(
+    caplog: pytest.LogCaptureFixture, detail: str, error_type: type[GenerationFailedError],
+) -> None:
+    """S7-01/S7-03: Classify before the cap and retain the full cause in logs."""
+    with acestep_http(_failed_cache_entry(error=detail)) as boundary:
+        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
         with caplog.at_level("ERROR", logger="acestep_engine.client"):
-            with pytest.raises(GenerationFailedError) as excinfo:
-                client._poll_result("abc")
+            with pytest.raises(error_type) as excinfo:
+                client.generate(AceStepConfig(prompt="test", lyrics=""))
 
     message = str(excinfo.value)
     assert len(message) == _MAX_CAUSE_CHARS
     assert message.startswith("RuntimeError: x")
     assert message.endswith("\u2026")
-    assert any(long_cause in record.getMessage() for record in caplog.records)
+    assert any(detail in record.getMessage() for record in caplog.records)
 
 
 @pytest.mark.parametrize("audio_path", ["/v1/audio?path=test.wav", "output/song.wav"])

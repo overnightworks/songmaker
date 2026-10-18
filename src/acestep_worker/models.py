@@ -10,6 +10,7 @@ from acestep_engine.progress import AceStepPhase
 
 TaskKind = Literal["generate", "download", "train_lora"]
 TaskState = Literal["pending", "running", "done", "error"]
+TaskErrorKind = Literal["gpu_out_of_memory"]
 EventType = Literal["progress", "done", "error"]
 
 
@@ -128,6 +129,7 @@ class TaskSnapshot(BaseModel):
     training_started_at: datetime | None = None
     result: TaskResult | None = None
     error: str | None = None
+    error_kind: TaskErrorKind | None = None
     created_at: datetime
     updated_at: datetime
 
