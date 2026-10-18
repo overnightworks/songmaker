@@ -703,7 +703,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 
 	// Search is a phone layer.
 	test(
-		'the search sheet left open over a reload on the playlist is gone, and one Back reaches the wall',
+		'1354_rule_30 1354_rule_31: the search sheet left open over a reload on the playlist is gone, and one Back reaches the wall',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page, request }) => {
 			const guard = new FlowGuard(page);
