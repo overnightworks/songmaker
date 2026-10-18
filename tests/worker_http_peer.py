@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import json
 import socket
 from collections import deque
@@ -28,6 +27,9 @@ from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.wrapper import create_app
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.settings import get_settings
+
+PEER_DEADLINE_SECONDS = 15
+PEER_CLEANUP_DEADLINE_SECONDS = 3
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,7 @@ async def unload_peer_model(model: LoadedModel) -> None:
 
 class GenerationWorkerPeer:
     def __init__(self, tmp_path: Path, scenario: WorkerScenario) -> None:
+        self.phase = "startup"
         self.redis = fakeredis.aioredis.FakeRedis()
         self.audio_dir = tmp_path / "audio"
         self.data_dir = tmp_path / "data"
@@ -172,7 +175,9 @@ class GenerationWorkerPeer:
             raise answer.error(answer.message)
         if isinstance(answer, WorkerReply):
             await Response(answer.body, answer.status, media_type=answer.media_type)(
-                scope, receive, send,
+                scope,
+                receive,
+                send,
             )
         elif isinstance(answer, WorkerStream):
             await answer.response()(scope, receive, send)
@@ -198,24 +203,42 @@ class GenerationWorkerPeer:
                 self.generation_started.clear()
             await self.worker_app(scope, replay_body, observe_response)
             if kind == "submit" and status == 200:
+                previous_phase = self.phase
+                self.phase = "generation startup"
                 await self.generation_started.wait()
+                self.phase = previous_phase
 
     async def start_server(self, db_factory) -> None:
+        if any(
+            isinstance(answer, TransportFailure)
+            for answers in self.answers.values()
+            for answer in answers
+        ):
+            raise ValueError("TransportFailure requires the ASGI transport, not a real server")
+        self.phase = "server readiness"
         self.socket = socket.socket()
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind(("127.0.0.1", 0))
         self.socket.listen()
         self.socket.setblocking(False)
         port = self.socket.getsockname()[1]
-        self.server = ReadyWorkerServer(uvicorn.Config(
-            self, host="127.0.0.1", port=port, lifespan="off", log_config=None,
-            access_log=False, timeout_graceful_shutdown=1,
-        ))
+        self.server = ReadyWorkerServer(
+            uvicorn.Config(
+                self,
+                host="127.0.0.1",
+                port=port,
+                lifespan="off",
+                log_config=None,
+                access_log=False,
+                timeout_graceful_shutdown=1,
+            )
+        )
         self.server_task = asyncio.create_task(self.server.serve(sockets=[self.socket]))
         ready_task = asyncio.create_task(self.server.ready.wait())
         try:
             done, _ = await asyncio.wait(
-                (ready_task, self.server_task), return_when=asyncio.FIRST_COMPLETED,
+                (ready_task, self.server_task),
+                return_when=asyncio.FIRST_COMPLETED,
             )
             if self.server_task in done:
                 await self.server_task
@@ -225,8 +248,12 @@ class GenerationWorkerPeer:
             await asyncio.gather(ready_task, return_exceptions=True)
         with db_factory() as session:
             register_worker(
-                session, worker_id=self.settings.worker_id, host="127.0.0.1", port=port,
-                gpu_id=None, vram_total_gb=1.0,
+                session,
+                worker_id=self.settings.worker_id,
+                host="127.0.0.1",
+                port=port,
+                gpu_id=None,
+                vram_total_gb=1.0,
             )
             session.commit()
         await self.deps.heartbeat.publish_once()
@@ -258,22 +285,53 @@ async def open_generation_worker_peer(
     *,
     db_factory=None,
 ) -> AsyncIterator[GenerationWorkerPeer]:
-    async with AsyncExitStack() as stack:
-        if db_factory is not None:
-            lock = stack.enter_context(open("/tmp/probe-stack.lock", "a"))
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            stack.callback(fcntl.flock, lock, fcntl.LOCK_UN)
-        peer = GenerationWorkerPeer(tmp_path, scenario)
-        stack.push_async_callback(peer.redis.aclose)
-        stack.push_async_callback(peer.transport.close_owner)
-        await stack.enter_async_context(peer.worker_app.router.lifespan_context(peer.worker_app))
-        stack.push_async_callback(peer.stop_generation_tasks)
-        for mode in scenario.loaded_modes:
-            await peer.deps.cache.load(mode)
-        if db_factory is not None:
-            stack.push_async_callback(peer.stop_server)
-            await peer.start_server(db_factory)
-        yield peer
+    peer = GenerationWorkerPeer(tmp_path, scenario)
+    stack = AsyncExitStack()
+    stalled_phase = None
+
+    async def cleanup(phase, callback, *args):
+        nonlocal stalled_phase
+        peer.phase = phase
+        deadline = asyncio.timeout(PEER_CLEANUP_DEADLINE_SECONDS)
+        try:
+            async with deadline:
+                await callback(*args)
+        except asyncio.CancelledError:
+            stalled_phase = phase
+            raise
+        except TimeoutError as exc:
+            if deadline.expired():
+                raise TimeoutError(f"Worker peer timed out during {phase}") from exc
+            raise
+
+    stack.push_async_callback(cleanup, "Redis shutdown", peer.redis.aclose)
+    stack.push_async_callback(cleanup, "transport shutdown", peer.transport.close_owner)
+    deadline = asyncio.timeout(PEER_DEADLINE_SECONDS)
+    try:
+        async with deadline:
+            lifespan = peer.worker_app.router.lifespan_context(peer.worker_app)
+            await lifespan.__aenter__()
+            stack.push_async_callback(
+                cleanup, "worker lifespan shutdown", lifespan.__aexit__, None, None, None
+            )
+            stack.push_async_callback(cleanup, "generation shutdown", peer.stop_generation_tasks)
+            for mode in scenario.loaded_modes:
+                await peer.deps.cache.load(mode)
+            if db_factory is not None:
+                stack.push_async_callback(cleanup, "server shutdown", peer.stop_server)
+                await peer.start_server(db_factory)
+            peer.phase = "proof body"
+            yield peer
+            await stack.aclose()
+    except TimeoutError as exc:
+        if deadline.expired():
+            raise TimeoutError(
+                f"Worker peer timed out during {stalled_phase or peer.phase}"
+            ) from exc
+        raise
+    finally:
+        # Each remaining exit has its own bound after the proof deadline expires.
+        await stack.aclose()
 
 
 @pytest.fixture

@@ -14,6 +14,7 @@ import httpx
 import pytest
 from worker_http_peer import TransportFailure, WorkerReply, WorkerScenario
 
+from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
@@ -38,6 +39,7 @@ from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerGenerationFailed,
     WorkerGenerationUnavailable,
+    WorkerModeNotLoaded,
     WorkerProtocolError,
     WorkerTaskFailed,
     _iterate_task_events,
@@ -52,6 +54,7 @@ from songmaker_cli.scheduler import (
     pick_worker,
 )
 
+_SOCKET_SSE_READ_TIMEOUT_SECONDS = 2
 _PEER_DISPATCH_OPTIONS = DispatchOptions(
     load_model_timeout_seconds=0.25,
     generate_submit_timeout_seconds=0.25,
@@ -322,13 +325,6 @@ def test_pick_worker_ignores_unreadable_heartbeat_instead_of_preferring_it(
 
 
 # ── consume_task_stream ────────────────────────────────────────────
-
-
-def _build_sse_response(*events: tuple[str, dict]) -> bytes:
-    chunks = []
-    for event_type, data in events:
-        chunks.append(f"event: {event_type}\ndata: {json.dumps(data)}\n\n")
-    return "".join(chunks).encode()
 
 
 def _make_stream_client(events_or_exc) -> AsyncMock:
@@ -995,8 +991,6 @@ def test_s5_submit_transport_failure_before_response(generation_worker_peer, err
 @pytest.mark.parametrize("load_fails", [False, True], ids=["still-missing", "reload-failed"])
 def test_s5_mode_still_missing_after_reload(generation_worker_peer, load_fails):
     """S5-A/B, L3/L10: Exactly one reload precedes final typed unavailability."""
-    from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
-    from songmaker_cli.scheduler import WorkerModeNotLoaded
 
     async def exercise():
         missing = WorkerReply(409, MODE_NOT_LOADED_DETAIL.format(mode="sft"))
@@ -1037,7 +1031,10 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
                 worker=worker,
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=_PEER_DISPATCH_OPTIONS,
+                options=replace(
+                    _PEER_DISPATCH_OPTIONS,
+                    sse_read_timeout_seconds=_SOCKET_SSE_READ_TIMEOUT_SECONDS,
+                ),
             )
             assert Path(result.audio_path).is_file()
             if stop_early:
@@ -1330,3 +1327,36 @@ def test_consume_download_task_stream_empty_stream_raises() -> None:
     with _patch_async_client(client):
         with pytest.raises(WorkerTaskFailed, match="ended without"):
             _run(operation)
+
+
+def test_generation_worker_peer_deadline_cleans_up(generation_worker_peer):
+    """S5-D, L9/L10: A stalled proof names its phase and releases the peer."""
+
+    async def exercise():
+        with pytest.raises(TimeoutError, match="Worker peer timed out during proof body"):
+            async with generation_worker_peer() as peer:
+                await asyncio.Event().wait()
+        assert not peer.deps.heartbeat.is_running
+        assert peer.deps.cache.loaded_modes() == []
+        async with httpx.AsyncClient(transport=peer.transport) as client:
+            with pytest.raises(RuntimeError, match="Worker peer is closed"):
+                await client.get("http://worker/load_model")
+
+    _run(exercise())
+
+
+def test_generation_worker_peer_rejects_socket_transport_failures(
+    generation_worker_peer,
+    db_factory,
+):
+    """S5-A/D: A transport script cannot silently become an HTTP 500."""
+
+    async def exercise():
+        scenario = WorkerScenario(
+            load_answers=(TransportFailure(httpx.ConnectError, "unreachable"),),
+        )
+        with pytest.raises(ValueError, match="TransportFailure requires the ASGI transport"):
+            async with generation_worker_peer(scenario, db_factory=db_factory):
+                pytest.fail("Invalid socket scenario was accepted")
+
+    _run(exercise())

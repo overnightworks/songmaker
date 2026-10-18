@@ -143,26 +143,16 @@ def generation_failure_case(request):
 @pytest.fixture(
     params=[
         *SONGMAKER_FAILURE_CASES,
-        *[
-            pytest.param(
-                (
-                    WorkerGenerationUnavailable,
-                    cause,
-                    None,
-                    "Generating isn't available right now.",
-                    "generation_unavailable",
-                ),
-                id=f"S5-A-B-L6-L10-{cell}",
-            )
-            for cell, cause in [
-                ("load-http", "need 18.5 GB"),
-                ("load-transport", "load lost"),
-                ("submit-transport", "submit lost"),
-                ("mode-missing", "mode not loaded"),
-                ("stream-silent", "Worker stream went silent"),
-                ("reconnect-exhausted", "refused"),
-            ]
-        ],
+        pytest.param(
+            (
+                WorkerGenerationUnavailable,
+                "need 18.5 GB",
+                None,
+                "Generating isn't available right now.",
+                "generation_unavailable",
+            ),
+            id="S5-A-B-L6-L10-load-http",
+        ),
     ]
 )
 def generation_write_failure_case(request):

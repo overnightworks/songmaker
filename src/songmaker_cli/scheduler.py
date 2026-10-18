@@ -553,6 +553,7 @@ async def consume_task_stream(
     """Consume a worker generate task stream. Returns the validated DTO.
 
     Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    Raises ``WorkerGenerationUnavailable`` on silence or exhausted reconnects.
     """
     try:
         return await _consume_task_stream(
@@ -580,7 +581,9 @@ async def consume_download_task_stream(
 ) -> DownloadTaskResultDTO:
     """Consume a worker download task stream. Returns the validated DTO.
 
-    Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    Raises ``WorkerTaskFailed`` on error events, invalid payloads, or silence.
+    Exhausted reconnects retain the transport error; only generation streams
+    translate silence and exhausted reconnects to ``WorkerGenerationUnavailable``.
     """
     return await _consume_task_stream(
         worker,

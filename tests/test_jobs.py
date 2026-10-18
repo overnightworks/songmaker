@@ -20,6 +20,7 @@ from worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli import audio_files
+from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
@@ -212,7 +213,7 @@ def test_update_job_raises_after_retries(db_factory) -> None:
 # ── run_generation_job ──────────────────────────────────────────────
 
 
-def _patch_dispatch_and_post_process(dto_or_side_effect, *, admission_error=None):
+def _patch_dispatch_and_post_process(dto_or_side_effect):
     if isinstance(dto_or_side_effect, list):
         dispatch = AsyncMock(side_effect=dto_or_side_effect)
     elif callable(dto_or_side_effect) or isinstance(dto_or_side_effect, BaseException):
@@ -225,9 +226,7 @@ def _patch_dispatch_and_post_process(dto_or_side_effect, *, admission_error=None
         with (
             patch.multiple(
                 "songmaker_cli.jobs",
-                admit_generation_worker=AsyncMock(
-                    return_value=MagicMock(id="w1"), side_effect=admission_error,
-                ),
+                admit_generation_worker=AsyncMock(return_value=MagicMock(id="w1")),
                 dispatch_generation_on_worker=dispatch,
             ),
             patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
@@ -953,7 +952,6 @@ def test_generation_job_selects_musician_line(
     caplog,
 ) -> None:
     """S5-B/D, L6: HTTP worker failures preserve real takes and sanitize stored detail."""
-    from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
         scenario = WorkerScenario(
@@ -1015,7 +1013,6 @@ def test_generation_job_sanitizes_auto_load_response(
     caplog,
 ) -> None:
     """S5-B/D, L3/L6: Auto-load causes stay in logs while HTTP jobs store availability."""
-    from songmaker_cli.acestep_state import read_queue_depth
 
     response, cause = _worker_failure_response(
         status_code,
@@ -1060,7 +1057,6 @@ def test_s5_generation_job_worker_disappears_before_request(
     caplog,
 ):
     """S5-A/B, L3/L6/L10: A stopped admitted peer fails cleanly and releases occupancy."""
-    from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise():
         scenario = WorkerScenario(loaded_modes=("sft",) if loaded else ())
@@ -1089,7 +1085,12 @@ def test_s5_generation_job_worker_disappears_before_request(
         assert job.error_type == "generation_unavailable"
         assert session.query(Generation).count() == 0
     assert "j1" in caplog.text
-    assert "connect" in caplog.text.lower()
+    assert any(
+        isinstance(argument, BaseException)
+        and isinstance(argument.__cause__, httpx.ConnectError)
+        for record in caplog.records
+        for argument in record.args
+    )
 
 
 @pytest.mark.parametrize("completed", [0, 1], ids=["failed", "partial"])
@@ -1103,7 +1104,6 @@ def test_s5_generation_job_reload_unavailable(
 ):
     """S5-A/B/D, L3/L6/L10: Reload failure preserves completed takes and frees occupancy."""
     from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
-    from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise():
         missing = WorkerReply(409, MODE_NOT_LOADED_DETAIL.format(mode="sft"))
