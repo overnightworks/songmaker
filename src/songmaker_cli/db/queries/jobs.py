@@ -208,7 +208,7 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
             setattr(job, column.name, value)
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
-    if status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
+    if status in JOB_TERMINAL_STATUSES:
         job.completed_at = now
     session.flush()
     return True
@@ -260,8 +260,8 @@ def get_last_generate_job_for_song(session: Session, song_id: str) -> Job | None
 
     Used to hydrate the failure banner when a song is opened after the
     generating job's SSE stream is long gone (page reload, new visit): the
-    caller checks whether this job is a FAILED one to show -- any newer job
-    (queued, running, completed) means a failure, if any, is superseded.
+    caller decides whether its failure is recoverable; any newer attempt
+    supersedes an older failure, regardless of outcome.
     """
     return (
         session.query(Job)

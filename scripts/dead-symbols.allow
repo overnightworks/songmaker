@@ -62,7 +62,6 @@ songmaker_cli/generation_api.py:api_get_generation # HTTP dispatcher: router.get
 songmaker_cli/generation_api.py:api_keep_generation # HTTP dispatcher: router.post('/generations/{gen_id}/keep', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/generation_api.py:api_pick_generation # HTTP dispatcher: router.post('/generations/{gen_id}/pick', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/generation_api.py:api_rate_generation # HTTP dispatcher: router.post('/generations/{gen_id}/rate')
-songmaker_cli/generation_api.py:api_remaster_generation # HTTP dispatcher: router.post('/generations/{gen_id}/remaster', responses={404: {'description': 'Raw WAV does not exist for this generation'}})
 songmaker_cli/generation_api.py:api_repaint_generation # HTTP dispatcher: router.post('/generations/{gen_id}/repaint', response_model=JobResponse, responses={400: {'description': 'Repaint request or source audio is invalid'}, 404: {'description': 'Version does not exist'}, 500: {'description': 'Source audio conversion failed'}, 503: {'description': 'Generation worker or job queue is unavailable'}})
 songmaker_cli/generation_api.py:api_score_generation # HTTP dispatcher: router.post('/generations/{gen_id}/score', responses={503: {'description': 'Scoring worker or job queue is unavailable'}})
 songmaker_cli/generation_api.py:api_scoring_schema # HTTP dispatcher: router.get('/scoring/schema')
