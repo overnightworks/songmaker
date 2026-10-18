@@ -1,8 +1,0 @@
-claim_id = "6d466b2298804cde9ca525accc78c422"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "d43d269ed6dd7e3a83ce6574fa87f755aaa73b7d"
-branch = "claude/issue-1641-deploy-temp-sweep"
-scope = ["docs/architecture.md", "docs/security.md", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py"]
-opened_commit = "170ef4a12ea245af8c35f49408ae74f99b992207"
-whole_reason = "The sweep, its prefix owner, its refusal and the two doc sentences describe one tick step and must land together."
