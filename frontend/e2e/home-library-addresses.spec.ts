@@ -75,6 +75,14 @@ function albumAddress(library: SeededLibrary): RegExp {
 	return new RegExp(`/album/${library.albumId}$`);
 }
 
+async function openAlbumFromHome(page: Page, shell: Shell, title: string): Promise<void> {
+	if (shell === 'mobile') {
+		await (await phoneSearchResult(page, 'Albums', title, nameStartingWith(title))).click();
+	} else {
+		await openAlbumFromRail(page, shell, title);
+	}
+}
+
 async function expectHomeShown(page: Page): Promise<void> {
 	await expect(page).toHaveURL(HOME_URL);
 	await expect(homeHeading(page)).toBeVisible();
@@ -563,18 +571,7 @@ const BACK_ARROW_CELLS: readonly {
 		name: HOME_PAGE_LABEL,
 		openAlbum: async (page, shell, library) => {
 			await HOME.open(page, shell, library);
-			if (shell === 'mobile') {
-				await (
-					await phoneSearchResult(
-						page,
-						'Albums',
-						library.albumTitle,
-						nameStartingWith(library.albumTitle)
-					)
-				).click();
-			} else {
-				await openAlbumFromRail(page, shell, library.albumTitle);
-			}
+			await openAlbumFromHome(page, shell, library.albumTitle);
 		},
 		returnsTo: HOME
 	},
@@ -648,18 +645,7 @@ test('1354_37a_A2 1354_R1prime row 10b: a pre-switch {browse} entry at / reached
 	await watchHistoryWrites(page);
 	await page.goto(HOME_PATH);
 	await expectHomeShown(page);
-	if (shell === 'mobile') {
-		await (
-			await phoneSearchResult(
-				page,
-				'Albums',
-				library.albumTitle,
-				nameStartingWith(library.albumTitle)
-			)
-		).click();
-	} else {
-		await openAlbumFromRail(page, shell, library.albumTitle);
-	}
+	await openAlbumFromHome(page, shell, library.albumTitle);
 	await expectAlbumShown(page, library);
 	const length = await historyLength(page);
 	await page.goBack();

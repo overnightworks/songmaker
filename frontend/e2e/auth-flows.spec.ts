@@ -76,6 +76,7 @@ import {
 	openLibraryWall,
 	openRailNav,
 	containing,
+	coversPath,
 	loseNetwork,
 	nameStartingWith,
 	ONLY_IN_SHELL,
@@ -1128,14 +1129,17 @@ test(
 		expect((await found).ok()).toBe(true);
 
 		await ageSessionPastAbsoluteLimit(sessionIdOf((await sessionCookie(page.context())) as Cookie));
+		const albumRefusals: ExpectedRefusal[] = ALBUM_OPENING_PATHS.map((path) => ({
+			path,
+			statuses: SESSION_REFUSAL_STATUSES
+		}));
 		const refusedAlbum = page.waitForResponse((response) => {
 			const pathname = new URL(response.url()).pathname;
 			return (
 				response.request().method() === 'GET' &&
-				ALBUM_OPENING_PATHS.some((path) =>
-					path.endsWith('/') ? pathname.startsWith(path) : pathname === path
-				) &&
-				SESSION_REFUSAL_STATUSES.includes(response.status())
+				albumRefusals.some(
+					(refusal) => coversPath(refusal, pathname) && refusal.statuses.includes(response.status())
+				)
 			);
 		});
 		await album.click();
