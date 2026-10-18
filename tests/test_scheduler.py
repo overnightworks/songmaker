@@ -526,16 +526,17 @@ def test_consume_task_stream_gives_up_after_max_reconnects(generation_worker_pee
             stream_answers=(TransportFailure(httpx.ConnectError, "refused"),) * 3,
         )
         async with generation_worker_peer(scenario) as peer:
+            operation = consume_task_stream(
+                _make_picked(),
+                "gen-1",
+                options=replace(
+                    _PEER_DISPATCH_OPTIONS,
+                    transport=peer.transport,
+                    max_sse_reconnects=2,
+                ),
+            )
             with pytest.raises(WorkerGenerationUnavailable, match="refused"):
-                await consume_task_stream(
-                    _make_picked(),
-                    "gen-1",
-                    options=replace(
-                        _PEER_DISPATCH_OPTIONS,
-                        transport=peer.transport,
-                        max_sse_reconnects=2,
-                    ),
-                )
+                await operation
             assert [kind for kind, _ in peer.requests] == ["stream"] * 3
 
     _run(exercise())
@@ -549,12 +550,13 @@ def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_wor
             stream_answers=(TransportFailure(httpx.ReadTimeout, "stream went silent"),),
         )
         async with generation_worker_peer(scenario) as peer:
+            operation = consume_task_stream(
+                _make_picked(),
+                "gen-1",
+                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+            )
             with pytest.raises(WorkerGenerationUnavailable, match=WORKER_STREAM_WENT_SILENT):
-                await consume_task_stream(
-                    _make_picked(),
-                    "gen-1",
-                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
-                )
+                await operation
             assert [kind for kind, _ in peer.requests] == ["stream"]
 
     _run(exercise())
@@ -581,16 +583,17 @@ def test_s5_download_transport_contract(
             stream_answers=(TransportFailure(transport_error, "download lost"),) * attempts,
         )
         async with generation_worker_peer(scenario) as peer:
+            operation = consume_download_task_stream(
+                _make_picked(),
+                "download",
+                options=replace(
+                    _PEER_DISPATCH_OPTIONS,
+                    transport=peer.transport,
+                    max_sse_reconnects=2,
+                ),
+            )
             with pytest.raises(expected_error, match=message) as raised:
-                await consume_download_task_stream(
-                    _make_picked(),
-                    "download",
-                    options=replace(
-                        _PEER_DISPATCH_OPTIONS,
-                        transport=peer.transport,
-                        max_sse_reconnects=2,
-                    ),
-                )
+                await operation
             assert type(raised.value) is expected_error
             assert peer.requests == [("stream", None)] * attempts
 
@@ -946,13 +949,14 @@ def test_s5_load_transport_failure_before_response(generation_worker_peer, error
     async def exercise():
         scenario = WorkerScenario(load_answers=(TransportFailure(error_type, "load lost"),))
         async with generation_worker_peer(scenario) as peer:
+            operation = dispatch_generation_on_worker(
+                worker=_make_picked(loaded=["sft"] if reload else []),
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+            )
             with pytest.raises(WorkerGenerationUnavailable, match="load lost") as raised:
-                await dispatch_generation_on_worker(
-                    worker=_make_picked(loaded=["sft"] if reload else []),
-                    ace_config=_make_ace_config(),
-                    target_mode="sft",
-                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
-                )
+                await operation
             assert type(raised.value.__cause__) is error_type
             assert peer.requests == ([("submit", "sft")] if reload else []) + [("load", "sft")]
 
@@ -973,13 +977,14 @@ def test_s5_submit_transport_failure_before_response(generation_worker_peer, err
             submit_answers=(None, failure) if reload else (failure,),
         )
         async with generation_worker_peer(scenario) as peer:
+            operation = dispatch_generation_on_worker(
+                worker=_make_picked(loaded=["sft"]),
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+            )
             with pytest.raises(WorkerGenerationUnavailable, match="submit lost") as raised:
-                await dispatch_generation_on_worker(
-                    worker=_make_picked(loaded=["sft"]),
-                    ace_config=_make_ace_config(),
-                    target_mode="sft",
-                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
-                )
+                await operation
             assert type(raised.value.__cause__) is error_type
             assert peer.requests == ([("submit", "sft"), ("load", "sft")] if reload else []) + [
                 ("submit", "sft")
@@ -999,13 +1004,14 @@ def test_s5_mode_still_missing_after_reload(generation_worker_peer, load_fails):
             load_answers=(WorkerReply(503, "load failed"),) if load_fails else (),
         )
         async with generation_worker_peer(scenario) as peer:
+            operation = dispatch_generation_on_worker(
+                worker=_make_picked(loaded=["sft"]),
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+            )
             with pytest.raises(WorkerGenerationUnavailable) as raised:
-                await dispatch_generation_on_worker(
-                    worker=_make_picked(loaded=["sft"]),
-                    ace_config=_make_ace_config(),
-                    target_mode="sft",
-                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
-                )
+                await operation
             expected_cause = httpx.HTTPStatusError if load_fails else WorkerModeNotLoaded
             assert isinstance(raised.value.__cause__, expected_cause)
             assert peer.requests == [("submit", "sft"), ("load", "sft")] + (
@@ -1333,9 +1339,18 @@ def test_generation_worker_peer_deadline_cleans_up(generation_worker_peer):
     """S5-D, L9/L10: A stalled proof names its phase and releases the peer."""
 
     async def exercise():
+        peer = None
+        peer_context = generation_worker_peer(deadline_seconds=0.05)
+        stalled = asyncio.Event()
+
+        async def wait_for_peer_deadline():
+            nonlocal peer
+            async with peer_context as peer:
+                await stalled.wait()
+
+        operation = wait_for_peer_deadline()
         with pytest.raises(TimeoutError, match="Worker peer timed out during proof body"):
-            async with generation_worker_peer(deadline_seconds=0.05) as peer:
-                await asyncio.Event().wait()
+            await operation
         assert not peer.deps.heartbeat.is_running
         assert peer.deps.cache.loaded_modes() == []
         async with httpx.AsyncClient(transport=peer.transport) as client:
@@ -1355,8 +1370,14 @@ def test_generation_worker_peer_rejects_socket_transport_failures(
         scenario = WorkerScenario(
             load_answers=(TransportFailure(httpx.ConnectError, "unreachable"),),
         )
-        with pytest.raises(ValueError, match="TransportFailure requires the ASGI transport"):
-            async with generation_worker_peer(scenario, db_factory=db_factory):
+        peer_context = generation_worker_peer(scenario, db_factory=db_factory)
+
+        async def enter_socket_peer():
+            async with peer_context:
                 pytest.fail("Invalid socket scenario was accepted")
+
+        operation = enter_socket_peer()
+        with pytest.raises(ValueError, match="TransportFailure requires the ASGI transport"):
+            await operation
 
     _run(exercise())
