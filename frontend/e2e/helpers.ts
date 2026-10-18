@@ -24,7 +24,8 @@ import {
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	RESOURCE_EVENT_STREAM_PATH,
-	SETTINGS_NAV_LABEL
+	SETTINGS_NAV_LABEL,
+	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
 import {
 	HOME_ROUTE_PATH,
@@ -463,7 +464,7 @@ export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 export async function openSettingsSectionFromSearch(page: Page, section: string): Promise<void> {
 	const sheet = page.getByRole('dialog', { name: 'Search', exact: true });
 	if (!(await sheet.isVisible())) {
-		await appBar(page).getByRole('button', { name: 'Search', exact: true }).click();
+		await appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true }).click();
 	}
 	await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(section);
 	await sheet

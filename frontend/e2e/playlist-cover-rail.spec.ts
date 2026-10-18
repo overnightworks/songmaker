@@ -27,6 +27,16 @@ async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
 	return (await response.json()) as T;
 }
 
+async function railPlaylistRow(page: Page, title: string) {
+	const rail = await openRailNav(page, 'desktop');
+	const group = rail.getByRole('button', { name: PLAYLISTS_PAGE_LABEL, exact: true });
+	if ((await group.getAttribute('aria-expanded')) === 'false') await group.click();
+	return rail
+		.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: title });
+}
+
 async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void> {
 	const response = await page.request.delete(`/api/playlists/${playlistId}`, {
 		headers: await csrfHeaders(page)
@@ -37,7 +47,7 @@ async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void
 	).toBeTruthy();
 }
 
-test('1354_65_C4 1354_37a_A6: playlist wall, detail and desktop rail covers follow mosaic, upload and removal', async ({
+test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop rail covers follow mosaic, upload and removal', async ({
 	page,
 	isMobile
 }) => {
@@ -122,12 +132,7 @@ test('1354_65_C4 1354_37a_A6: playlist wall, detail and desktop rail covers foll
 			await expect(collapsedMosaicRow.locator('.playlist-cover-cell')).toHaveCount(4);
 			await expect(collapsedMosaicRow.locator('.playlist-cover-cell img')).toHaveCount(0);
 			expect(foldedRailCoverRequests).toBe(0);
-			if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
-				await playlistsGroup.click();
-			const row = rail
-				.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
-				.getByRole('listitem')
-				.filter({ hasText: playlistTitle });
+			const row = await railPlaylistRow(page, playlistTitle);
 
 			await expect(row.locator('.playlist-cover-cell')).toHaveCount(4);
 			await expect(row.locator('.playlist-cover-cell img')).toHaveCount(1);
@@ -158,18 +163,7 @@ test('1354_65_C4 1354_37a_A6: playlist wall, detail and desktop rail covers foll
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
 		);
 		if (!isMobile) {
-			const refreshedRail = await openRailNav(page, 'desktop');
-			const refreshedPlaylistsGroup = refreshedRail.getByRole('button', {
-				name: PLAYLISTS_PAGE_LABEL,
-				exact: true
-			});
-			if ((await refreshedPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
-				await refreshedPlaylistsGroup.click();
-			}
-			const refreshedRow = refreshedRail
-				.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
-				.getByRole('listitem')
-				.filter({ hasText: playlistTitle });
+			const refreshedRow = await railPlaylistRow(page, playlistTitle);
 			await expect(refreshedRow.locator('.playlist-cover-image')).toHaveAttribute(
 				'src',
 				new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
@@ -194,18 +188,7 @@ test('1354_65_C4 1354_37a_A6: playlist wall, detail and desktop rail covers foll
 		await openPlaylistsPage(page, isMobile ? 'mobile' : 'desktop');
 		await expect(wallPlaylistTile.locator('.playlist-cover-cell')).toHaveCount(4);
 		if (!isMobile) {
-			const restoredRail = await openRailNav(page, 'desktop');
-			const restoredPlaylistsGroup = restoredRail.getByRole('button', {
-				name: PLAYLISTS_PAGE_LABEL,
-				exact: true
-			});
-			if ((await restoredPlaylistsGroup.getAttribute('aria-expanded')) === 'false') {
-				await restoredPlaylistsGroup.click();
-			}
-			const restoredRow = restoredRail
-				.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
-				.getByRole('listitem')
-				.filter({ hasText: playlistTitle });
+			const restoredRow = await railPlaylistRow(page, playlistTitle);
 			await expect(restoredRow.locator('.playlist-cover-cell')).toHaveCount(4);
 		}
 	} finally {
