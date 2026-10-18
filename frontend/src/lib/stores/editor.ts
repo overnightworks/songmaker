@@ -7,6 +7,7 @@ import {
 } from '$lib/api/client';
 import { replaceSongInList } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
+import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { addToast } from '$lib/stores/toast';
 import type {
 	GenerationItem,
@@ -223,7 +224,8 @@ export function loadSongData(s: SongItem): void {
 			? { ...current, saved: data }
 			: { songId: s.id, saved: data, draft: { ...data }, provenance: null }
 	);
-	loadVersions(s.id).catch(() => addToast(VERSIONS_LOAD_FAILED, 'error'));
+	versionReloads.stop();
+	void loadVersions(s.id, true);
 }
 
 /** Resets the draft back to the last-saved values, discarding unsaved edits. */
@@ -231,9 +233,31 @@ export function discardDraft(): void {
 	editorState.update((s) => s && { ...s, draft: { ...s.saved }, provenance: null });
 }
 
-async function loadVersions(songId: string): Promise<void> {
-	versions.set(await fetchVersions(songId));
-	currentVersionIndex.set(0);
+let versionLoad = 0;
+const versionReloads = reloadWhileUnreachable(() => {
+	const state = get(editorState);
+	if (state) void loadVersions(state.songId, true);
+});
+selectedSongId.subscribe(() => {
+	versionLoad += 1;
+	versionReloads.stop();
+});
+
+async function loadVersions(songId: string, recover = false): Promise<void> {
+	if (get(editorState)?.songId !== songId) return;
+	const request = ++versionLoad;
+	try {
+		const loaded = await fetchVersions(songId);
+		if (request !== versionLoad || get(editorState)?.songId !== songId) return;
+		versionReloads.stop();
+		versions.set(loaded);
+		currentVersionIndex.set(0);
+	} catch (err) {
+		if (!recover) throw err;
+		if (request !== versionLoad || get(editorState)?.songId !== songId) return;
+		const message = versionReloads.nameLoadFailure(err, VERSIONS_LOAD_FAILED);
+		if (message) addToast(message, 'error');
+	}
 }
 
 function replaceDraft(songId: string, data: SongData): void {
