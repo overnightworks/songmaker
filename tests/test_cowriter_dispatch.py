@@ -31,7 +31,6 @@ from agent_providers.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from agent_providers.process import AgentCliUnavailableError
 from agent_providers.tool_loop import (
     FinalText,
     TextDelta,
@@ -42,13 +41,11 @@ from agent_providers.tool_loop import (
 from agent_providers.tools import openai_tool_schemas
 from conftest import make_authenticated_user, override_provider_runtime
 
-from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.cowriter import routing
 from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, Version
-from songmaker_cli.db.queries.settings import set_cover_settings
 
 
 class _Stream(AsyncIterator[StreamEvent]):
@@ -348,108 +345,6 @@ def test_api_dispatch_uses_http_only_when_api_is_selected(monkeypatch):
     assert asyncio.run(_events("grok", ProviderRoute.API)) == [AssistantTextEvent(text="route")]
 
 
-def _mount_a_signed_in_codex_cli(monkeypatch) -> None:
-    monkeypatch.setattr(dispatch, "codex_cover_image_capability_is_available", lambda: True)
-    monkeypatch.setattr(dispatch, "codex_cli_access_token_is_present", lambda: True)
-
-
-def _cover_session(tmp_path: Path, provider: str, route: str, model: str):
-    factory = init_test_db(tmp_path / "cover-dispatch.db")
-    session = factory()
-    set_cover_settings(session, provider, route, model)
-    session.commit()
-    return session
-
-
-@pytest.mark.parametrize(
-    ("provider", "route", "expected_code"),
-    [
-        ("codex", ProviderRoute.CLI, None),
-        ("codex", ProviderRoute.API, SafeRouteReasonCode.NO_IMAGE_TOOL),
-        ("claude", ProviderRoute.CLI, SafeRouteReasonCode.NO_IMAGE_TOOL),
-        ("claude", ProviderRoute.API, SafeRouteReasonCode.NO_IMAGE_TOOL),
-        ("grok", ProviderRoute.CLI, SafeRouteReasonCode.NO_IMAGE_TOOL),
-        ("grok", ProviderRoute.API, SafeRouteReasonCode.NO_IMAGE_TOOL),
-    ],
-)
-def test_only_the_codex_cli_route_owns_an_image_tool(
-    monkeypatch, provider: str, route: ProviderRoute, expected_code,
-) -> None:
-    _mount_a_signed_in_codex_cli(monkeypatch)
-
-    capability = dispatch.cover_image_capability(provider, route)
-
-    assert capability.carries_image_tool is (expected_code is None)
-    failure = capability.failure
-    assert (failure.code if failure is not None else None) is expected_code
-
-
-def test_the_codex_cover_route_names_a_missing_cli_login(monkeypatch) -> None:
-    monkeypatch.setattr(dispatch, "codex_cover_image_capability_is_available", lambda: True)
-    monkeypatch.setattr(dispatch, "codex_cli_access_token_is_present", lambda: False)
-
-    capability = dispatch.cover_image_capability("codex", ProviderRoute.CLI)
-
-    assert capability.carries_image_tool is True
-    assert capability.failure.code is SafeRouteReasonCode.CLI_LOGIN_NOT_CONFIGURED
-
-
-def test_the_codex_cover_route_names_an_unmounted_cli(monkeypatch) -> None:
-    monkeypatch.setattr(dispatch, "codex_cover_image_capability_is_available", lambda: False)
-
-    capability = dispatch.cover_image_capability("codex", ProviderRoute.CLI)
-
-    assert capability.carries_image_tool is True
-    assert capability.failure.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
-
-
-def test_the_saved_cover_selection_resolves_to_its_route_and_model(
-    monkeypatch, tmp_path: Path,
-) -> None:
-    _mount_a_signed_in_codex_cli(monkeypatch)
-    session = _cover_session(tmp_path, "codex", "cli", "gpt-5.4")
-
-    assert routing.cover_image_provider_method(session) == routing.CoverImageDispatch(
-        provider="codex", route=ProviderRoute.CLI, model="gpt-5.4",
-    )
-
-
-def test_a_saved_provider_without_an_image_tool_is_named_never_swapped(tmp_path: Path) -> None:
-    session = _cover_session(tmp_path, "claude", "cli", "")
-
-    with pytest.raises(CoverImageToolUnavailableError) as raised:
-        routing.cover_image_provider_method(session)
-
-    assert raised.value.provider == "claude"
-
-
-def test_a_saved_route_this_build_does_not_know_is_named_not_guessed(tmp_path: Path) -> None:
-    session = _cover_session(tmp_path, "codex", "grpc", "")
-
-    with pytest.raises(ProviderUnavailableError) as raised:
-        routing.cover_image_provider_method(session)
-
-    assert raised.value.route == "grpc"
-    assert raised.value.reason.code is SafeRouteReasonCode.ROUTE_FAILED
-
-
-def test_codex_cover_route_reports_an_unavailable_cli_probe(
-    monkeypatch, tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(dispatch, "codex_cover_image_capability_is_available", lambda: True)
-    monkeypatch.setattr(
-        dispatch,
-        "codex_cli_access_token_is_present",
-        lambda: (_ for _ in ()).throw(AgentCliUnavailableError("unreadable mirror")),
-    )
-    session = _cover_session(tmp_path, "codex", "cli", "")
-
-    with pytest.raises(ProviderUnavailableError) as raised:
-        routing.cover_image_provider_method(session)
-
-    assert raised.value.reason.code is SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE
-
-
 def _assert_cli_failure_never_falls_back_to_http(
     monkeypatch, provider: str, transport_factory: str,
 ) -> None:
@@ -676,7 +571,8 @@ def test_claude_api_missing_key_names_the_selected_route_without_an_adapter_atte
 # One table for every provider and route a musician can save today, so the
 # library/app split of the dispatch cannot quietly re-point a route.  The
 # cover routes are pinned by ``test_only_the_codex_cli_route_owns_an_image_tool``
-# and ``test_the_saved_cover_selection_resolves_to_its_route_and_model`` above.
+# and ``test_the_saved_cover_selection_resolves_to_its_route_and_model``
+# in test_cowriter_cover_dispatch.py.
 
 # One distinct key per provider, so a route that reached the right transport
 # with someone else's key fails the pin instead of passing it.
