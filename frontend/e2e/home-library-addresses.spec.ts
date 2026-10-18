@@ -19,8 +19,8 @@ import {
 	HOME_PAGE_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
 	PLAYLISTS_PAGE_LABEL,
-	RAIL_DRAWER_LABEL,
 	LIBRARY_PAGE_LABEL,
+	RAIL_DRAWER_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
@@ -122,19 +122,13 @@ async function expectSettingsShown(page: Page, shell: Shell): Promise<void> {
 	await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 }
 
-async function closeDrawer(page: Page): Promise<void> {
-	await page.keyboard.press('Escape');
-	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
-}
-
 type RailWord = typeof LIBRARY_PAGE_LABEL | typeof PLAYLISTS_PAGE_LABEL;
 const RAIL_WORDS: readonly RailWord[] = [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL];
 
-/** Which of the rail's words Library and Playlists marks the page as the one shown, `null` for neither; the phone's drawer is opened and closed again. */
 async function expectCurrentRailWord(
 	page: Page,
-	shell: Shell,
-	current: RailWord | null
+	current: RailWord | null,
+	shell: Shell = 'desktop'
 ): Promise<void> {
 	const rail = await openRailNav(page, shell);
 	for (const label of RAIL_WORDS) {
@@ -142,7 +136,13 @@ async function expectCurrentRailWord(
 		if (label === current) await expect(word).toHaveAttribute('aria-current', 'page');
 		else await expect(word).not.toHaveAttribute('aria-current', 'page');
 	}
-	if (shell === 'mobile') await closeDrawer(page);
+}
+
+async function expectCurrentPhoneDrawerWord(page: Page, current: RailWord | null): Promise<void> {
+	await expectCurrentRailWord(page, current, 'mobile');
+	const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
+	await page.keyboard.press('Escape');
+	await expect(drawer).toBeHidden();
 }
 
 // The album a page was left holding as its open collection is the one the idle
@@ -386,37 +386,43 @@ test.describe('signed out', () => {
 	});
 });
 
-test('1354_rule_14 1354_rule_31 row 1: cold / shows Home, with Listen and + New, no wall, and the Library word not current', async ({
-	page
-}, testInfo) => {
-	const guard = new FlowGuard(page);
-	const shell = shellOf(testInfo);
-	await countWallMounts(page);
+for (const shell of ['desktop', 'mobile'] as const) {
+	test(
+		`1354_rule_14 1354_rule_31 row 1: cold / shows Home, with Listen and + New, no wall${shell === 'desktop' ? ', and the Library word not current' : ''} (${shell})`,
+		{ tag: ONLY_IN_SHELL[shell] },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			await countWallMounts(page);
 
-	await page.goto(HOME_PATH);
+			await page.goto(HOME_PATH);
 
-	await expectHomeShown(page);
-	await expect(workspace(page).locator('.tile-grid')).toHaveCount(0);
-	await expect(newButton(page)).toBeVisible();
-	expect(await wallMounts(page), 'the wall never flashed before Home').toBe(0);
-	await expectCurrentRailWord(page, shell, null);
-	guard.assertClean();
-});
+			await expectHomeShown(page);
+			await expect(workspace(page).locator('.tile-grid')).toHaveCount(0);
+			await expect(newButton(page)).toBeVisible();
+			expect(await wallMounts(page), 'the wall never flashed before Home').toBe(0);
+			if (shell === 'desktop') await expectCurrentRailWord(page, null);
+			guard.assertClean();
+		}
+	);
+}
 
-test('1354_rule_14 1354_rule_31 row 2: cold /library shows the wall, with + New on the desktop head only, no Listen, and the Library word current', async ({
-	page
-}, testInfo) => {
-	const guard = new FlowGuard(page);
-	const shell = shellOf(testInfo);
+for (const shell of ['desktop', 'mobile'] as const) {
+	test(
+		`1354_rule_14 1354_rule_31 row 2: cold /library shows the wall, with + New on the desktop head only, no Listen${shell === 'desktop' ? ', and the Library word current' : ''} (${shell})`,
+		{ tag: ONLY_IN_SHELL[shell] },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
 
-	await page.goto(LIBRARY_PATH);
+			await page.goto(LIBRARY_PATH);
 
-	await expectWallShown(page);
-	await expect(homeHeading(page)).toHaveCount(0);
-	await expect(newButton(page)).toHaveCount(shell === 'desktop' ? 1 : 0);
-	await expectCurrentRailWord(page, shell, LIBRARY_PAGE_LABEL);
-	guard.assertClean();
-});
+			await expectWallShown(page);
+			await expect(homeHeading(page)).toHaveCount(0);
+			await expect(newButton(page)).toHaveCount(shell === 'desktop' ? 1 : 0);
+			if (shell === 'desktop') await expectCurrentRailWord(page, LIBRARY_PAGE_LABEL);
+			guard.assertClean();
+		}
+	);
+}
 
 test('1354_rule_31 row 3a: Library, the brand, Home, then reload stays Home with no new entry', async ({
 	page
@@ -459,29 +465,38 @@ for (const [origin, railWord] of [
 	[LIBRARY, LIBRARY_PAGE_LABEL],
 	[PLAYLISTS, PLAYLISTS_PAGE_LABEL]
 ] as const) {
-	test(`defect:#1523 1354_rule_40: ${origin.name}, Settings, then Back marks the word ${railWord} current only on its own page, with no reload`, async ({
-		page
-	}, testInfo) => {
-		const guard = new FlowGuard(page);
-		const shell = shellOf(testInfo);
-		const library = readSeededLibrary();
-		await origin.open(page, shell, library);
-		await expectCurrentRailWord(page, shell, railWord);
-		await page.evaluate((key) => Reflect.set(window, key, true), SAME_DOCUMENT_KEY);
+	for (const [shell, drawerOnly] of [
+		['desktop', false],
+		['mobile', false],
+		['mobile', true]
+	] as const) {
+		const readsWord = shell === 'desktop' || drawerOnly;
+		const expectWord = drawerOnly ? expectCurrentPhoneDrawerWord : expectCurrentRailWord;
+		test(
+			`${readsWord ? 'defect:#1523 1354_rule_40' : origin === PLAYLISTS ? '1354_37b_64' : '1354_rule_31'}: ${origin.name}, Settings, then Back restores the page${readsWord ? ` and its current ${railWord} word` : ''}, with no reload${drawerOnly ? ' (phone drawer-only, retired by #1354 row 61)' : ''}`,
+			{ tag: ONLY_IN_SHELL[shell] },
+			async ({ page }) => {
+				const guard = new FlowGuard(page);
+				const library = readSeededLibrary();
+				await origin.open(page, shell, library);
+				if (readsWord) await expectWord(page, railWord);
+				await page.evaluate((key) => Reflect.set(window, key, true), SAME_DOCUMENT_KEY);
 
-		await openSettings(page, shell);
-		await expectSettingsShown(page, shell);
-		await expectCurrentRailWord(page, shell, null);
-		await page.goBack();
+				await openSettings(page, shell);
+				await expectSettingsShown(page, shell);
+				if (readsWord) await expectWord(page, null);
+				await page.goBack();
 
-		await origin.expectStands(page, shell, library);
-		await expectCurrentRailWord(page, shell, railWord);
-		expect(
-			await page.evaluate((key) => Reflect.get(window, key), SAME_DOCUMENT_KEY),
-			'the journey stayed in one document'
-		).toBe(true);
-		guard.assertClean();
-	});
+				await origin.expectStands(page, shell, library);
+				if (readsWord) await expectWord(page, railWord);
+				expect(
+					await page.evaluate((key) => Reflect.get(window, key), SAME_DOCUMENT_KEY),
+					'the journey stayed in one document'
+				).toBe(true);
+				guard.assertClean();
+			}
+		);
+	}
 }
 
 for (const origin of [LIBRARY, ALBUM, SETTINGS]) {
@@ -664,28 +679,33 @@ test('1354_37a_A2 1354_R1prime row 10b: a pre-switch {browse} entry at / reached
 	guard.assertClean();
 });
 
-test('1354_R1prime row 10c: a pre-switch {browse, album} entry at / reads as Home with no album page and the album kept as the open collection', async ({
-	page
-}, testInfo) => {
-	const guard = new FlowGuard(page);
-	const shell = shellOf(testInfo);
-	const library = readSeededLibrary();
-	await watchHistoryWrites(page);
-	await page.goto(HOME_PATH);
-	await expectHomeShown(page);
-	await ageEntryToBrowseAtHome(page, { kind: 'album', id: library.albumId });
-	const length = await historyLength(page);
+for (const shell of ['desktop', 'mobile'] as const) {
+	test(
+		`1354_R1prime row 10c: a pre-switch {browse, album} entry at / reads as Home with no album page and the album kept as the open collection (${shell})`,
+		{ tag: ONLY_IN_SHELL[shell] },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			const library = readSeededLibrary();
+			await watchHistoryWrites(page);
+			await page.goto(HOME_PATH);
+			await expectHomeShown(page);
+			await ageEntryToBrowseAtHome(page, { kind: 'album', id: library.albumId });
+			const length = await historyLength(page);
 
-	await page.reload();
+			await page.reload();
 
-	await expectHomeShown(page);
-	await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toHaveCount(0);
-	expect(await historyLength(page)).toBe(length);
-	expect(await addressesWrittenToHistory(page)).not.toContain(LIBRARY_PATH);
-	await expectOpenCollectionNamedByMiniPlayer(page, library.albumTitle, true);
-	await expectCurrentRailWord(page, shell, null);
-	guard.assertClean();
-});
+			await expectHomeShown(page);
+			await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toHaveCount(
+				0
+			);
+			expect(await historyLength(page)).toBe(length);
+			expect(await addressesWrittenToHistory(page)).not.toContain(LIBRARY_PATH);
+			await expectOpenCollectionNamedByMiniPlayer(page, library.albumTitle, true);
+			if (shell === 'desktop') await expectCurrentRailWord(page, null);
+			guard.assertClean();
+		}
+	);
+}
 
 test(
 	'1354_R1prime row 10d: the route resolving before the live snapshot leaves a pre-switch {browse, album} entry at / as Home',
@@ -749,3 +769,27 @@ test(
 		guard.assertClean();
 	}
 );
+
+for (const [row, path, current, retainAlbum] of [
+	['1354_rule_31 row 1', HOME_PATH, null, false],
+	['1354_rule_31 row 2', LIBRARY_PATH, LIBRARY_PAGE_LABEL, false],
+	['1354_R1prime row 10c', HOME_PATH, null, true]
+] as const) {
+	test(
+		`${row}: phone drawer current word follows the address (retired by #1354 row 61)`,
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			await page.goto(path);
+			if (retainAlbum) {
+				await expectHomeShown(page);
+				await ageEntryToBrowseAtHome(page, { kind: 'album', id: readSeededLibrary().albumId });
+				await page.reload();
+			}
+			if (path === HOME_PATH) await expectHomeShown(page);
+			else await expectWallShown(page);
+			await expectCurrentPhoneDrawerWord(page, current);
+			guard.assertClean();
+		}
+	);
+}
