@@ -1,0 +1,8 @@
+claim_id = "b48e9e972b50478c9828adf2a2dd47aa"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "01779940f05b43b49fba427e1f4dca5509f7e046"
+branch = "claude/issue-1636-gpu-oom-per-take"
+scope = ["docs/acestep.md", "docs/architecture.md", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/jobs/generation_failure.py", "src/songmaker_cli/jobs_api.py", "src/songmaker_cli/scheduler.py", "tests/conftest.py", "tests/test_api.py", "tests/test_generation_failure.py", "tests/test_jobs.py", "tests/test_scheduler.py", "tests/worker_http_peer.py"]
+opened_commit = "64e0d2acc6c48f743d1315109d90ba0e52f47f96"
+whole_reason = "One failure contract (typed GPU-memory failure from the worker event to the stored, streamed and finalized job) changes across its scheduler, failure owner, progress writer, stream observation, docs and their tests in one landing."
