@@ -10,6 +10,7 @@ import threading
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 
+from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import (
     ARQ_MUSIC_HEALTH_KEY,
     ARQ_MUSIC_QUEUE_NAME,
@@ -25,7 +26,9 @@ _pool_lock = threading.Lock()
 async def init_arq_pool() -> ArqRedis:
     global _pool
     pool = await create_pool(
-        RedisSettings.from_dsn(get_settings().redis_url)
+        RedisSettings.from_dsn(get_settings().redis_url),
+        job_serializer=serialize_arq,
+        job_deserializer=deserialize_arq,
     )
     with _pool_lock:
         _pool = pool

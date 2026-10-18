@@ -1185,6 +1185,81 @@ Under the deploy lock, each tick first removes leftovers directly in its Git adm
 
 Before its Compose build, the tick inspects the two local-only base images. It runs `scripts/build_images.sh bases` without a timeout when either image is missing, when `docker/base/**` or the `vendor/acestep` submodule pin changed between the deployed revision and the selected candidate, or when the deployed revision cannot be compared. Its output streams directly into the service journal. After a successful recreate, the tick runs `docker image prune --force --filter until=48h --filter label!=songmaker.base-image=true`: Docker accepts this negated label filter, and `scripts/build_images.sh` applies that label to both base images so the cleanup never selects them. Before recreating, it tags only running Compose services with a `build:` section as `<project>-<service>:previous`; `<project>` comes from `docker compose config --format json --no-interpolate | jq -r '.name'`, so the tag follows the actual Compose project without materializing `.env` secrets. To roll back a built service, run `project="$(docker compose config --format json --no-interpolate | jq -r '.name')"; docker tag "${project}-<service>:previous" "${project}-<service>:latest" && docker compose up -d --force-recreate <service>`. Both cleanup commands are bounded by `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (600 seconds by default); an error or timeout is logged at `err` with its command and exit code, while the completed deployment remains successful and the tick does not change either counter. The builder cleanup deliberately uses `docker builder prune --all --force --filter until=48h`, preserving cache used in the last 48 hours but allowing a quiet host's next rebuild to take its normal cold-cache 8–15 minutes.
 
+### arq JSON queue deployment (#1684)
+
+For the operator changing queue format: the web producer and both workers use
+one UTF-8 JSON codec (`arq_codec.py`) for jobs and results. Unsupported objects,
+non-string object keys and nonfinite numbers are rejected. No class is imported
+or reconstructed, and there is no pickle fallback. The wire tests in
+[`test_arq_codec.py`](../tests/test_arq_codec.py) cover the configured entry points.
+Redis access control and network isolation remain separate requirements (#1301).
+
+arq 0.27 cannot JSON-encode exception objects in failed or cancelled results. It
+logs one serialization warning and stores inert `r="unable to serialize result"`
+with `s=False`; its public result reader raises `SerializationError`. The app
+does not read arq results. A leftover pickle job is rejected visibly with its job
+ID, executes nothing and leaves a readable failed result. A legacy pickle result
+read fails explicitly. Preserve that evidence and reconcile the application job
+before retrying; never purge or silently retry these entries.
+
+Use a coordinated operator window. Mixed pickle/JSON processes are unsupported,
+and the auto-deploy guard checks database jobs, not queue-format compatibility.
+Run host commands from the deployment checkout:
+
+1. **Before merge**, stop `songmaker-autodeploy.timer` with
+   `sudo systemctl stop songmaker-autodeploy.timer`. Record the running pre-merge
+   git SHA for rollback. Keep the old release running.
+2. The head's named landing task merges the PR. Wait until all Actions checks on
+   `main` are green for its merge SHA. The deploy script selects the newest fully
+   green commit; keep the window coordinated with other landings so the candidate
+   is that SHA. If checks fail, leave the timer stopped and the old release running;
+   fix forward or revert and wait for green before draining.
+3. Stop submissions. There is no maintenance switch: first wait until no cover
+   jobs are queued or running (covers run in the web process), then run
+   `docker compose stop songmaker-web`.
+4. Wait for all application jobs and both arq queues to drain, including follow-on
+   scoring. This read-only database check must return no rows:
+
+   ```sh
+   docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+   SELECT type, status, count(*) FROM jobs
+   WHERE status IN ('queued', 'running') GROUP BY type, status;
+   SQL
+   ```
+
+   For step 3, the same query's `cover` rows must be absent before stopping web.
+   These queue checks must both print `0` (names owned by the worker settings):
+
+   ```sh
+   docker compose exec -T redis redis-cli ZCARD arq:queue:music
+   docker compose exec -T redis redis-cli ZCARD arq:queue:scoring
+   ```
+
+   If anything remains, postpone; never purge. Once both checks are clear, run
+   `docker compose stop songmaker-music-worker songmaker-scoring-worker`.
+5. With the timer still stopped, run one deploy tick:
+   `sudo systemctl start songmaker-autodeploy.service`. The script owns fetch,
+   fast-forward, submodule update, build and joint startup. Check
+   `journalctl -t songmaker-autodeploy -n 20` and its deployed-SHA marker against
+   the merge SHA. By default the marker is
+   `$(git rev-parse --absolute-git-dir)/songmaker-autodeploy.deployed-sha`;
+   `SONGMAKER_AUTODEPLOY_DEPLOYED_SHA_FILE` can override it. If the tick refuses or
+   defers, fix the cause named in the journal (branch, dirty/diverged checkout,
+   Compose or alert configuration, mount preflight, database or CI) and rerun it.
+6. Complete one smoke generation with scoring on that SHA, then run
+   `sudo systemctl start songmaker-autodeploy.timer`. If smoke fails, drain again
+   using steps 3–4 before rollback.
+
+If the JSON release cannot deploy within the window, restart the old release
+only with empty queues. If the tick has already fast-forwarded the checkout,
+rebuild from the recorded pre-merge SHA. Rollback requires the same drain and a
+joint restart of web and both workers. Name the rollback release by git SHA:
+rollback image tags skip stopped services and can still point at the release
+before the pickle release. Before restarting the timer, return the deployment
+checkout to its deploy branch; a detached or lagging checkout makes later ticks
+refuse. See [auto-deploy architecture](architecture.md) for the tick's
+existing guards.
+
 ### Secrets
 
 - `SESSION_SECRET`: HMAC signing key for session cookies. Required at startup (Settings raises ValidationError if missing).
@@ -1206,7 +1281,8 @@ All request models use Pydantic with strict constraints:
 - Role fields: `Literal["admin", "user"]` — no arbitrary role injection
 - Password strength: Common password blocklist + minimum unique character count
 - No raw SQL — 100% SQLAlchemy ORM with parameterized queries
-- No `eval`, `exec`, `pickle`, `shell=True`, or `yaml.load` anywhere
+- Untrusted arq data uses the JSON boundary above; trusted local scorer-process
+  serialization is a separate boundary, not a queue decoder.
 
 ## Path Traversal Protection
 

@@ -11,6 +11,7 @@ import logging
 
 from arq import func
 
+from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     RECOVERY_LOCK_SCORING_KEY,
@@ -75,6 +76,8 @@ class ScoringWorkerSettings:
     functions = [func(_scoring_worker.score, name=JobFunction.SCORE)]
     on_startup = _scoring_worker.on_startup
     on_shutdown = _scoring_worker.on_shutdown
+    job_serializer = staticmethod(serialize_arq)
+    job_deserializer = staticmethod(deserialize_arq)
     redis_settings = build_redis_settings(_settings)
     queue_name = ScoringWorker.queue_name
     max_jobs = _settings.scoring_max_jobs
