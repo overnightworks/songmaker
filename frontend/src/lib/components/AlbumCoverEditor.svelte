@@ -745,8 +745,6 @@
 	}
 
 	.cover-suggestions-retry {
-		height: auto;
-		padding: 0.3rem 0.7rem;
 		color: var(--text-muted);
 	}
 

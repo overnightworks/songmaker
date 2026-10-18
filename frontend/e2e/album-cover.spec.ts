@@ -12,6 +12,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readSeededLibrary } from './seed';
 import { workspace } from './helpers';
+import {
+	ALBUM_COVER_EDITING_LABEL,
+	ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
+	HITBOX_FREQUENT_PX,
+	UNREACHABLE_RELOAD_DELAYS_MS
+} from '../src/lib/constants';
 
 // What a stack without the mounted Codex CLI puts on the failed job:
 // cover_image_capability() names CLI_BINARY_UNAVAILABLE, which the runner
@@ -86,6 +92,58 @@ test('Add cover asks for nothing until Suggest, whose one suggestion ends in a n
 	await expect(editing).toHaveCount(0);
 	await expect(page).toHaveURL(albumAddress);
 	await expect(surface.getByRole('button', { name: 'Add cover' })).toBeVisible();
+});
+
+test.describe('cover suggestions retry', () => {
+	test.use({ serviceWorkers: 'block' });
+
+	test('keeps a quiet touch target and reloads suggestions after bounded failures (#1160 F8)', async ({
+		page,
+		isMobile
+	}, testInfo) => {
+		const retryBudget =
+			UNREACHABLE_RELOAD_DELAYS_MS.reduce((sum, delay) => sum + delay, 0) + 10_000;
+		test.setTimeout(retryBudget + 15_000);
+		await page.setViewportSize(
+			isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }
+		);
+		const library = readSeededLibrary();
+		const suggestionsPath = `/api/albums/${library.albumId}/cover-suggestions`;
+		const suggestionsRoute = `**${suggestionsPath}`;
+		await page.route(suggestionsRoute, (route) =>
+			route.request().method() === 'GET' ? route.abort('failed') : route.continue()
+		);
+		await page.goto(`/album/${library.albumId}`);
+		await workspace(page)
+			.getByRole('button', { name: /^(Add|Edit) cover$/ })
+			.click();
+		const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
+		const retry = editing.getByRole('button', { name: ALBUM_COVER_SUGGESTIONS_RETRY_LABEL });
+		await expect(retry).toBeVisible({ timeout: retryBudget });
+		const box = await retry.boundingBox();
+		expect(box).not.toBeNull();
+		expect(box!.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+		expect(box!.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+		await testInfo.attach('cover-retry', {
+			body: await page.screenshot(),
+			contentType: 'image/png'
+		});
+
+		await page.unroute(suggestionsRoute);
+		const loaded = page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname === suggestionsPath &&
+				response.request().method() === 'GET'
+		);
+		await retry.click();
+		expect((await loaded).ok()).toBeTruthy();
+		await expect(editing.getByText(/left today$/)).toBeVisible();
+		await expect(retry).toHaveCount(0);
+		await testInfo.attach('cover-retry-loaded', {
+			body: await page.screenshot(),
+			contentType: 'image/png'
+		});
+	});
 });
 
 async function coverJobOutcome(page: Page, albumId: string): Promise<CoverJobOutcome | null> {
