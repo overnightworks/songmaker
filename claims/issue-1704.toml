@@ -1,0 +1,8 @@
+claim_id = "69077c72d5e84e3bb24b21cae511f947"
+agent = "claude"
+role = "builder"
+base = "71f216a4ebac0f2485e9e4431a638d6c65ebb1b2"
+branch = "claude/issue-1704-library-count-and-toast-cause"
+scope = ["frontend/e2e/nav-row.spec.ts", "frontend/e2e/rail-collapse.spec.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/toast.test.ts", "frontend/src/lib/stores/toast.ts"]
+opened_commit = "01ba5a143f71c35cdbdb45442120186b4e39780d"
+whole_reason = "Bundle of two no-risk #1160 cards: F30 complete-list count (lead) and the first F35/F36 slice (#1705)"
