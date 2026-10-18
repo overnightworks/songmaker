@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -49,6 +49,15 @@ from songmaker_cli.scheduler import (
     dispatch_generation_on_worker,
     pick_any_online_worker,
     pick_worker,
+)
+
+_PEER_DISPATCH_OPTIONS = DispatchOptions(
+    load_model_timeout_seconds=0.25,
+    generate_submit_timeout_seconds=0.25,
+    sse_connect_timeout_seconds=0.25,
+    sse_read_timeout_seconds=0.25,
+    initial_reconnect_backoff_seconds=0.0,
+    max_reconnect_backoff_seconds=0.0,
 )
 
 
@@ -497,9 +506,8 @@ def test_consume_task_stream_reconnects_on_transport_drop(generation_worker_peer
         async with generation_worker_peer(scenario) as peer:
             result = await dispatch_generation_on_worker(
                 worker=_make_picked(loaded=[]), ace_config=_make_ace_config(), target_mode="sft",
-                options=DispatchOptions(
-                    transport=peer.transport, max_sse_reconnects=2,
-                    initial_reconnect_backoff_seconds=0.0, max_reconnect_backoff_seconds=0.0,
+                options=replace(
+                    _PEER_DISPATCH_OPTIONS, transport=peer.transport, max_sse_reconnects=2,
                 ),
             )
             assert Path(result.audio_path).is_file()
@@ -516,9 +524,8 @@ def test_consume_task_stream_gives_up_after_max_reconnects(generation_worker_pee
         )
         async with generation_worker_peer(scenario) as peer:
             with pytest.raises(httpx.ConnectError, match="refused"):
-                await consume_task_stream(_make_picked(), "gen-1", options=DispatchOptions(
-                    transport=peer.transport, max_sse_reconnects=2,
-                    initial_reconnect_backoff_seconds=0.0, max_reconnect_backoff_seconds=0.0,
+                await consume_task_stream(_make_picked(), "gen-1", options=replace(
+                    _PEER_DISPATCH_OPTIONS, transport=peer.transport, max_sse_reconnects=2,
                 ))
             assert [kind for kind, _ in peer.requests] == ["stream"] * 3
 
@@ -533,9 +540,10 @@ def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_wor
         )
         async with generation_worker_peer(scenario) as peer:
             with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
-                await consume_task_stream(_make_picked(), "gen-1", options=DispatchOptions(
-                    transport=peer.transport,
-                ))
+                await consume_task_stream(
+                    _make_picked(), "gen-1",
+                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                )
             assert [kind for kind, _ in peer.requests] == ["stream"]
 
     _run(exercise())
@@ -803,7 +811,7 @@ def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
                     ace_config=_make_ace_config(),
                     target_mode="sft",
                     on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
-                    options=DispatchOptions(transport=peer.transport),
+                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
                 )
                 assert Path(result.audio_path).is_file()
             assert [mode for kind, mode in peer.requests if kind == "load"] == ["sft"]
@@ -831,7 +839,7 @@ def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
                     result = await dispatch_generation_on_worker(
                         worker=view, ace_config=_make_ace_config(), target_mode=mode,
                         on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
-                        options=DispatchOptions(transport=peer.transport),
+                        options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
                     )
                     assert Path(result.audio_path).is_file()
             assert [mode for kind, mode in peer.requests if kind == "load"] == [
@@ -883,6 +891,7 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
             )
             result = await dispatch_generation_on_worker(
                 worker=worker, ace_config=_make_ace_config(), target_mode="sft",
+                options=_PEER_DISPATCH_OPTIONS,
             )
             assert Path(result.audio_path).is_file()
             if stop_early:

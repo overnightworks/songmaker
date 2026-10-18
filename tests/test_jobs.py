@@ -916,10 +916,10 @@ _GENERATION_STREAM_FAILURES = [
         id="missing-result",
     ),
     pytest.param(
-        WorkerStream((("done", {"result": {"mode": "sft"}}),)), "Invalid result DTO",
+        WorkerStream((("done", {"result": {"mode": "sft"}}),)), "Worker returned invalid result:",
         id="invalid-result",
     ),
-    pytest.param(WorkerStream(()), "Stream ended without terminal event", id="stream-end"),
+    pytest.param(WorkerStream(()), "SSE stream ended without done/error event", id="stream-end"),
     pytest.param(
         WorkerStream((("error", {"error": "Generation timed out"}),)), "Generation timed out",
         id="worker-mimics-own-line",
