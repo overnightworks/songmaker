@@ -1086,10 +1086,10 @@ def test_s5_generation_job_worker_disappears_before_request(
         assert session.query(Generation).count() == 0
     assert "j1" in caplog.text
     assert any(
-        isinstance(argument, BaseException)
-        and isinstance(argument.__cause__, httpx.ConnectError)
+        record.exc_info is not None
+        and isinstance(record.exc_info[1], BaseException)
+        and isinstance(record.exc_info[1].__cause__, httpx.ConnectError)
         for record in caplog.records
-        for argument in record.args
     )
 
 

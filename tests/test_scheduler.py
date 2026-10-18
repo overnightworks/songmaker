@@ -1334,7 +1334,7 @@ def test_generation_worker_peer_deadline_cleans_up(generation_worker_peer):
 
     async def exercise():
         with pytest.raises(TimeoutError, match="Worker peer timed out during proof body"):
-            async with generation_worker_peer() as peer:
+            async with generation_worker_peer(deadline_seconds=0.05) as peer:
                 await asyncio.Event().wait()
         assert not peer.deps.heartbeat.is_running
         assert peer.deps.cache.loaded_modes() == []

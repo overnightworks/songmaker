@@ -284,6 +284,7 @@ async def open_generation_worker_peer(
     scenario: WorkerScenario = WorkerScenario(),
     *,
     db_factory=None,
+    deadline_seconds: float = PEER_DEADLINE_SECONDS,
 ) -> AsyncIterator[GenerationWorkerPeer]:
     peer = GenerationWorkerPeer(tmp_path, scenario)
     stack = AsyncExitStack()
@@ -306,7 +307,7 @@ async def open_generation_worker_peer(
 
     stack.push_async_callback(cleanup, "Redis shutdown", peer.redis.aclose)
     stack.push_async_callback(cleanup, "transport shutdown", peer.transport.close_owner)
-    deadline = asyncio.timeout(PEER_DEADLINE_SECONDS)
+    deadline = asyncio.timeout(deadline_seconds)
     try:
         async with deadline:
             lifespan = peer.worker_app.router.lifespan_context(peer.worker_app)
