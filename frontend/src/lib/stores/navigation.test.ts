@@ -1717,23 +1717,26 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
+	async function navigateFromSheetWithADirtyDraft(
+		navigate: () => void | Promise<void>
+	): Promise<Writable<boolean>> {
+		await openAlbum('a1');
+		await selectSong('s1');
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+		setDraftLyrics('unsaved edit');
+		const sheet = openNavigationSheet();
+		closeTopLayer();
+		vi.mocked(goto).mockClear();
+		await navigate();
+		return sheet;
+	}
+
 	describe.each([
 		['an album', () => openAlbum('a2'), { kind: 'album', id: 'a2' }],
 		['a playlist', () => openPlaylist('p1'), { kind: 'playlist', id: 'p1' }]
 	] as const)('opening %s from a sheet (issue #1143)', (_name, open, opened) => {
-		let sheet: Writable<boolean>;
-		async function openFromSheetWithADirtyDraft(): Promise<void> {
-			await openAlbum('a1');
-			await selectSong('s1');
-			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
-			setDraftLyrics('unsaved edit');
-			sheet = openNavigationSheet();
-			closeTopLayer();
-			await open();
-		}
-
 		it('1354_37b_71_dirty: holds the leave for the unsaved-changes dialog and closes the sheet over it', async () => {
-			await openFromSheetWithADirtyDraft();
+			const sheet = await navigateFromSheetWithADirtyDraft(open);
 
 			expect(get(pendingDirtyNavigation)).not.toBeNull();
 			expect(get(selectedSongId)).toBe('s1');
@@ -1742,7 +1745,7 @@ describe('a dirty draft guards song switch / leave', () => {
 		});
 
 		it('1354_37b_71_dirty: leaves on Discard', async () => {
-			await openFromSheetWithADirtyDraft();
+			await navigateFromSheetWithADirtyDraft(open);
 			discardDraft();
 			await get(pendingDirtyNavigation)?.();
 			pendingDirtyNavigation.set(null);
@@ -1752,7 +1755,7 @@ describe('a dirty draft guards song switch / leave', () => {
 		});
 
 		it('1354_37b_71_dirty: stays with the draft on Keep editing', async () => {
-			await openFromSheetWithADirtyDraft();
+			await navigateFromSheetWithADirtyDraft(open);
 			pendingDirtyNavigation.set(null);
 
 			expect(get(selectedSongId)).toBe('s1');
@@ -1767,21 +1770,9 @@ describe('a dirty draft guards song switch / leave', () => {
 			() => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices')
 		],
 		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/voices' })]
-	] as const)('leaving for an app page through %s (issue #1143)', (_name, leave) => {
-		let sheet: Writable<boolean>;
-		async function leaveWithADirtyDraft(): Promise<void> {
-			await openAlbum('a1');
-			await selectSong('s1');
-			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
-			setDraftLyrics('unsaved edit');
-			sheet = openNavigationSheet();
-			closeTopLayer();
-			vi.mocked(goto).mockClear();
-			await leave();
-		}
-
+	] as const)('leaving for an app page through %s (issue #1143)', (_name, navigate) => {
 		it('1354_37b_71_dirty: holds the leave for the unsaved-changes dialog and keeps the route', async () => {
-			await leaveWithADirtyDraft();
+			const sheet = await navigateFromSheetWithADirtyDraft(navigate);
 
 			expect(get(pendingDirtyNavigation)).not.toBeNull();
 			expect(window.location.pathname).toBe('/album/a1/s1');
@@ -1790,7 +1781,7 @@ describe('a dirty draft guards song switch / leave', () => {
 		});
 
 		it('1354_37b_71_dirty: leaves for the page on Discard', async () => {
-			await leaveWithADirtyDraft();
+			await navigateFromSheetWithADirtyDraft(navigate);
 			discardDraft();
 			await get(pendingDirtyNavigation)?.();
 			pendingDirtyNavigation.set(null);
@@ -1801,7 +1792,7 @@ describe('a dirty draft guards song switch / leave', () => {
 		it('1354_37b_71_dirty: keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
 			const stopNavigation = initNavigation();
 			try {
-				await leaveWithADirtyDraft();
+				await navigateFromSheetWithADirtyDraft(navigate);
 				const dialog = dialogHistoryLayer('confirm-dialog', () => undefined);
 				dialog.hold(document.createElement('div'));
 				await expectStandingLayer('confirm-dialog');
