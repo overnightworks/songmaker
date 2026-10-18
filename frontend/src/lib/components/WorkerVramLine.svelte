@@ -2,6 +2,7 @@
 	import type { WorkerInfoItem } from '$lib/api/types';
 	import {
 		WORKER_POOL_VRAM_LABEL,
+		WORKER_POOL_VRAM_OFFLINE,
 		WORKER_POOL_VRAM_UNKNOWN,
 		WORKER_POOL_VRAM_ESTIMATE,
 		WORKER_POOL_VRAM_FREE,
@@ -11,11 +12,11 @@
 		WORKER_POOL_VRAM_NO_TOTAL
 	} from '$lib/constants';
 
-	let { state }: { state: WorkerInfoItem['state'] } = $props();
+	let { state, offline }: { state: WorkerInfoItem['state']; offline: boolean } = $props();
 	const used = $derived(state?.vram_used_gb);
 	const total = $derived(state?.vram_total_gb);
 	const estimated = $derived(state?.vram_measured === false);
-	const unknown = $derived(used == null || total == null);
+	const unknown = $derived(offline || used == null || total == null);
 	const percentage = $derived(
 		used != null && total != null && total > 0
 			? Math.min(100, Math.max(0, (used / total) * 100))
@@ -29,7 +30,7 @@
 		<div class="bar" class:estimated class:unknown aria-hidden="true">
 			{#if !unknown}<span style:width={`${percentage}%`}></span>{/if}
 		</div>
-		{#if used != null && total != null}
+		{#if !unknown && used != null && total != null}
 			<div class="numbers">
 				<span
 					>{estimated ? '~' : ''}{used.toFixed(1)} / {total.toFixed(1)} GB{estimated
@@ -48,9 +49,11 @@
 			<span class="reason"
 				>{!state
 					? WORKER_POOL_VRAM_NO_HEARTBEAT
-					: used != null && total == null
-						? WORKER_POOL_VRAM_NO_TOTAL
-						: WORKER_POOL_VRAM_NO_FIELDS}</span
+					: offline
+						? WORKER_POOL_VRAM_OFFLINE
+						: used != null && total == null
+							? WORKER_POOL_VRAM_NO_TOTAL
+							: WORKER_POOL_VRAM_NO_FIELDS}</span
 			>
 		{/if}
 	</div>
