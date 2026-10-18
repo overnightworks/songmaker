@@ -247,7 +247,6 @@ sweep_stale_temp_files() {
         for path in "$GIT_ADMIN_DIR/$prefix"*; do
             suffix="${path#"$GIT_ADMIN_DIR/$prefix"}"
             [[ "$suffix" =~ ^[A-Za-z0-9]{6}$ ]] || continue
-            [[ -e "$path" || -L "$path" ]] || continue
             if rm -f -- "$path"; then
                 log_info "removed stale temp file: $path"
             else

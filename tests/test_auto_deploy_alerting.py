@@ -1781,6 +1781,7 @@ def test_a_prune_timeout_resets_the_counters_like_any_successful_deploy(
 def test_a_changed_prometheus_file_reloads_and_verifies_prometheus_rules(
     tmp_path: Path, change: str,
 ) -> None:
+    """#418: a changed Prometheus file reloads and verifies the rules."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -2052,6 +2053,7 @@ def test_prometheus_refusal_keeps_a_successful_deploy_successful(
     tmp_path: Path, setter: str, value: str | int, diagnostic: str,
     absent_journal: tuple[str, ...], absent_docker: tuple[str, ...], absent_curl: tuple[str, ...],
 ) -> None:
+    """#418: a Prometheus refusal keeps a successful deploy successful."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -2085,6 +2087,7 @@ def test_stale_temp_sweep_removes_only_owned_entries_before_fetch(
     )]
     preserved += [
         admin / "foreign.Abc123",
+        admin / "songmaker-autodeploy.other.Abc123",
         admin / "worktrees/other/songmaker-autodeploy.git-fetch.Abc123",
     ]
     preserved += [admin / f"songmaker-autodeploy.{prefix}.{suffix}"
