@@ -13,15 +13,15 @@ Revises: b2c3d4e5f6a7
 Create Date: 2026-04-09 18:10:00.000000
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = 'c5d6e7f8a9b0'
-down_revision: Union[str, Sequence[str], None] = 'b2c3d4e5f6a7'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'b2c3d4e5f6a7'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

@@ -23,15 +23,15 @@ Data migration (JSON columns):
 from __future__ import annotations
 
 import json
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b8c9d1e2f3a4"
-down_revision: Union[str, Sequence[str], None] = "a7b8c9d0e1f2"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "a7b8c9d0e1f2"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _KEY_RENAMES_FORWARD: dict[str, str] = {

@@ -5,16 +5,16 @@ Revises: f1a2b3c4d5e6
 Create Date: 2026-04-03 14:46:32.277970
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'bb091d53ebd4'
-down_revision: Union[str, Sequence[str], None] = 'f1a2b3c4d5e6'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'f1a2b3c4d5e6'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 FK_NAME = "fk_generations_src_generation_id"
 

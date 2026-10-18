@@ -13,15 +13,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d0e1f2a3b4c5"
-down_revision: Union[str, Sequence[str], None] = "c5d6e7f8a9b0"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "c5d6e7f8a9b0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
