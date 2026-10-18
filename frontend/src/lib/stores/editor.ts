@@ -39,12 +39,11 @@ interface EditorState {
 	songId: string;
 	saved: SongData;
 	draft: SongData;
-	/** The version number an older version was loaded from into the draft, until it is saved. */
-	loadedFrom: number | null;
+	/** The source version and identity of its load, retained until that provenance is saved. */
+	provenance: { version: number; token: object } | null;
 }
 
 const editorState = writable<EditorState | null>(null);
-let versionLoadCount = 0;
 
 function genParamsEqual(
 	a: VersionGenerationParams | null,
@@ -84,7 +83,7 @@ function draftIsSaved(s: EditorState): boolean {
  */
 function draftAwaitsSave(s: EditorState | null): boolean {
 	if (!s) return false;
-	return s.loadedFrom !== null || !draftIsSaved(s);
+	return s.provenance !== null || !draftIsSaved(s);
 }
 
 export const isDirty = derived(editorState, draftAwaitsSave);
@@ -92,7 +91,7 @@ export const isDirty = derived(editorState, draftAwaitsSave);
 export const savedSongData = derived(editorState, (s) => s?.saved ?? EMPTY_SONG_DATA);
 
 /** Which older version the draft came from, until it is saved; see {@link draftAwaitsSave}. */
-export const draftLoadedFrom = derived(editorState, (s) => s?.loadedFrom ?? null);
+export const draftLoadedFrom = derived(editorState, (s) => s?.provenance?.version ?? null);
 
 /** A draft loaded from an older version is saved as the next version, never over the latest. */
 export const draftSavesAsNewVersion = derived(draftLoadedFrom, (from) => from !== null);
@@ -222,14 +221,14 @@ export function loadSongData(s: SongItem): void {
 	editorState.update((current) =>
 		current?.songId === s.id && !draftIsSaved(current)
 			? { ...current, saved: data }
-			: { songId: s.id, saved: data, draft: { ...data }, loadedFrom: null }
+			: { songId: s.id, saved: data, draft: { ...data }, provenance: null }
 	);
 	loadVersions(s.id).catch(() => addToast(VERSIONS_LOAD_FAILED, 'error'));
 }
 
 /** Resets the draft back to the last-saved values, discarding unsaved edits. */
 export function discardDraft(): void {
-	editorState.update((s) => s && { ...s, draft: { ...s.saved }, loadedFrom: null });
+	editorState.update((s) => s && { ...s, draft: { ...s.saved }, provenance: null });
 }
 
 async function loadVersions(songId: string): Promise<void> {
@@ -238,7 +237,7 @@ async function loadVersions(songId: string): Promise<void> {
 }
 
 function replaceDraft(songId: string, data: SongData): void {
-	editorState.set({ songId, saved: data, draft: { ...data }, loadedFrom: null });
+	editorState.set({ songId, saved: data, draft: { ...data }, provenance: null });
 }
 
 /**
@@ -294,17 +293,17 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 	const songId = get(selectedSongId);
 	const state = get(editorState);
 	if (!state) return null;
-	versionLoadCount += 1;
-	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = state;
+	const { saved, draft: replaced, provenance: replacedProvenance } = state;
 	const isLatest = version.id === get(versions)[0]?.id;
 	const draft = isLatest ? { ...saved } : songDataFromVersion(version);
 	const loadedFrom = isLatest ? null : version.version_number;
-	if (songDataEqual(draft, replaced) && loadedFrom === replacedLoadedFrom) {
+	if (songDataEqual(draft, replaced) && loadedFrom === (replacedProvenance?.version ?? null)) {
 		offerSetAsideVersionLoadUndoAgain();
 		return null;
 	}
+	const provenance = loadedFrom === null ? null : { version: loadedFrom, token: {} };
 	const thisLoad = Symbol('version load');
-	editorState.update((s) => s && { ...s, draft, loadedFrom });
+	editorState.update((s) => s && { ...s, draft, provenance });
 	const standsIn = (currentSongId: string | null, s: EditorState | null) =>
 		currentSongId === songId && s?.saved === saved && s.draft === draft;
 	const holds = derived(
@@ -322,7 +321,7 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 		undo: () => {
 			if (!get(holds) || get(setAside)) return;
 			offeredVersionLoad.set(null);
-			editorState.update((s) => s && { ...s, draft: replaced, loadedFrom: replacedLoadedFrom });
+			editorState.update((s) => s && { ...s, draft: replaced, provenance: replacedProvenance });
 		},
 		expire: () =>
 			offeredVersionLoad.update((offered) => (offered?.load === thisLoad ? null : offered))
@@ -388,8 +387,7 @@ export function computeDraftVersionNumber(
 export async function handleSave(songId: string): Promise<SongItem> {
 	const state = get(editorState);
 	if (!state || state.songId !== songId) throw new Error('Cannot save a different song');
-	const { draft } = state;
-	const loadsBeforeSave = versionLoadCount;
+	const { draft, provenance } = state;
 	const updated = await updateSong(songId, {
 		lyrics: draft.lyrics,
 		prompt: draft.prompt,
@@ -404,7 +402,7 @@ export async function handleSave(songId: string): Promise<SongItem> {
 			? {
 					...s,
 					saved: draft,
-					loadedFrom: versionLoadCount === loadsBeforeSave ? null : s.loadedFrom
+					provenance: s.provenance?.token === provenance?.token ? null : s.provenance
 				}
 			: s
 	);
@@ -415,7 +413,7 @@ export async function handleSave(songId: string): Promise<SongItem> {
 
 /** The version the draft was loaded from, while the draft still holds exactly that version. */
 function untouchedLoadSource(s: EditorState, all: VersionItem[]): VersionItem | null {
-	const source = all.find((version) => version.version_number === s.loadedFrom);
+	const source = all.find((version) => version.version_number === s.provenance?.version);
 	return source && songDataEqual(s.draft, songDataFromVersion(source)) ? source : null;
 }
 
