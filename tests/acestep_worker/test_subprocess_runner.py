@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import signal
 import subprocess
+from io import BytesIO, StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -319,82 +321,94 @@ def test_start_acestep_subprocess_uses_cwd(tmp_path: Path) -> None:
     assert captured["cmd"] == ["uv", "run", "acestep-api", "--port", "8101"]
 
 
-def _make_stop_proc(*, exit_code: int | None) -> MagicMock:
-    proc = MagicMock()
-    proc.poll.return_value = exit_code
-    proc.pid = 1
-    proc.stdout = MagicMock()
-    return proc
+class _StopProcess:
+    pid = 1
+
+    def __init__(self, outcome: str, stdout: BytesIO) -> None:
+        self.outcome = outcome
+        self.stdout = stdout
+        self.returncode = 0 if outcome == "already-exited" else None
+        self.reaped = self.returncode is not None
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def send_signal(self, sig: int) -> None:
+        if self.returncode is not None:
+            raise AssertionError("An exited process must not be signalled")
+        if self.outcome == "lookup-race":
+            self.returncode = 0
+            self.reaped = True
+            raise ProcessLookupError
+        if self.outcome != "timeout":
+            self.returncode = -sig
+
+    def wait(self, timeout: float) -> int:
+        if self.returncode is None:
+            raise subprocess.TimeoutExpired("acestep", timeout)
+        self.reaped = True
+        return self.returncode
+
+    def kill(self) -> None:
+        self.returncode = -signal.SIGKILL
 
 
-def test_stop_acestep_subprocess_already_dead() -> None:
-    proc = _make_stop_proc(exit_code=0)
-    handle = SubprocessHandle(process=proc, stderr_path=None, port=8101)
-    stop_acestep_subprocess(handle)
-    proc.send_signal.assert_not_called()
-    proc.stdout.close.assert_called_once()
+class _CloseErrorBytesIO(BytesIO):
+    def close(self) -> None:
+        super().close()
+        raise OSError("stdout close failed")
 
 
-def test_stop_acestep_subprocess_graceful() -> None:
-    proc = _make_stop_proc(exit_code=None)
-    handle = SubprocessHandle(process=proc, stderr_path=None, port=8101)
-    stop_acestep_subprocess(handle)
-    proc.send_signal.assert_called_once()
-    proc.wait.assert_called()
+class _CloseErrorStringIO(StringIO):
+    def close(self) -> None:
+        super().close()
+        raise OSError("stderr close failed")
 
 
-def test_stop_acestep_subprocess_kills_on_timeout() -> None:
-    proc = _make_stop_proc(exit_code=None)
-    proc.wait.side_effect = [subprocess.TimeoutExpired("a", 1), None]
-    handle = SubprocessHandle(process=proc, stderr_path=None, port=8101)
-    stop_acestep_subprocess(handle)
-    proc.kill.assert_called_once()
+class _DrainingLogThread:
+    def __init__(self, stderr: StringIO) -> None:
+        self.stderr = stderr
+        self.pending = "last log line"
+
+    def is_alive(self) -> bool:
+        return bool(self.pending)
+
+    def join(self, timeout: float) -> None:
+        self.stderr.write(self.pending)
+        self.pending = ""
 
 
-def test_stop_acestep_subprocess_handles_lookup_error() -> None:
-    proc = _make_stop_proc(exit_code=None)
-    proc.send_signal.side_effect = ProcessLookupError
-    handle = SubprocessHandle(process=proc, stderr_path=None, port=8101)
-    stop_acestep_subprocess(handle)
-
-
-def test_stop_acestep_subprocess_handles_stdout_close_error() -> None:
-    proc = _make_stop_proc(exit_code=0)
-    proc.stdout.close.side_effect = OSError("io")
-    handle = SubprocessHandle(process=proc, stderr_path=None, port=8101)
-    stop_acestep_subprocess(handle)
-    proc.stdout.close.assert_called_once()
-
-
-def test_stop_acestep_subprocess_closes_stderr_file() -> None:
-    proc = _make_stop_proc(exit_code=None)
-    stderr_file = MagicMock()
+@pytest.mark.parametrize(
+    ("outcome", "expected_exit"),
+    [
+        ("already-exited", 0),
+        ("graceful", -signal.SIGTERM),
+        ("timeout", -signal.SIGKILL),
+        ("lookup-race", 0),
+    ],
+)
+@pytest.mark.parametrize("close_error", [None, "stdout", "stderr"])
+def test_stop_terminates_and_reaps_process_and_releases_resources(
+    outcome: str, expected_exit: int, close_error: str | None,
+) -> None:
+    """1346-F4-stop, 1346-F5-cleanup: exit and cleanup survive races and I/O errors."""
+    stdout = _CloseErrorBytesIO() if close_error == "stdout" else BytesIO()
+    stderr = _CloseErrorStringIO() if close_error == "stderr" else StringIO()
+    process = _StopProcess(outcome, stdout)
+    log_thread = _DrainingLogThread(stderr)
     handle = SubprocessHandle(
-        process=proc, stderr_path=None, port=8101, stderr_file=stderr_file
+        process=process, stderr_path=None, port=8101,
+        stderr_file=stderr, log_thread=log_thread,
     )
+
     stop_acestep_subprocess(handle)
-    stderr_file.close.assert_called_once()
-    assert handle.stderr_file is None
 
-
-def test_stop_acestep_subprocess_closes_stderr_when_already_dead() -> None:
-    proc = _make_stop_proc(exit_code=0)
-    stderr_file = MagicMock()
-    handle = SubprocessHandle(
-        process=proc, stderr_path=None, port=8101, stderr_file=stderr_file
-    )
-    stop_acestep_subprocess(handle)
-    stderr_file.close.assert_called_once()
-
-
-def test_stop_acestep_subprocess_handles_close_error() -> None:
-    proc = _make_stop_proc(exit_code=0)
-    stderr_file = MagicMock()
-    stderr_file.close.side_effect = OSError("io")
-    handle = SubprocessHandle(
-        process=proc, stderr_path=None, port=8101, stderr_file=stderr_file
-    )
-    stop_acestep_subprocess(handle)
+    assert process.poll() == expected_exit
+    assert process.reaped
+    assert stdout.closed
+    assert stderr.closed
+    assert not log_thread.is_alive()
+    assert handle.log_thread is None
     assert handle.stderr_file is None
 
 
@@ -678,18 +692,6 @@ def test_stream_subprocess_logs_swallows_outer_exception() -> None:
     proc = MagicMock()
     proc.stdout.readline.side_effect = RuntimeError("pipe exploded")
     _stream_subprocess_logs(mode="sft", process=proc, log_file=None, on_log_line=None)
-
-
-def test_stop_acestep_subprocess_joins_log_thread() -> None:
-    proc = _make_stop_proc(exit_code=None)
-    fake_thread = MagicMock()
-    fake_thread.is_alive.return_value = True
-    handle = SubprocessHandle(
-        process=proc, stderr_path=None, port=8101, log_thread=fake_thread,
-    )
-    stop_acestep_subprocess(handle)
-    fake_thread.join.assert_called_once_with(timeout=2.0)
-    assert handle.log_thread is None
 
 
 def test_build_env_sets_pythonunbuffered() -> None:
