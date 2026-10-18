@@ -6,6 +6,10 @@
 # containers whose alertmanager refuses to run without them.
 #
 # Not executable on its own — `source` it, then call load_alert_config.
+# Loading disables xtrace and verbose mode for the rest of the calling shell
+# so neither the config nor later credential expansions reach trace output.
+# An inherited SHELLOPTS stays exported with the reset options, keeping child
+# processes (including curl) untraced too.
 
 # .env is this project's own trusted, operator-owned config file (the same
 # one Pydantic Settings loads for the app itself), so it is sourced rather
@@ -18,6 +22,7 @@
 ALERT_CONFIG_KEYS=(ALERT_EMAIL_TO SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD)
 
 load_alert_config() {
+    set +x +v
     local env_file="$1"
 
     if [[ ! -f "$env_file" ]]; then

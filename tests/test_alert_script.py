@@ -378,3 +378,96 @@ def test_env_file_is_not_exported_into_curls_environment(tmp_path: Path) -> None
     curl_environment = env_file.read_text()
     assert "every-other-secret-in-dot-env" not in curl_environment
     assert VALID_ENV["SMTP_PASSWORD"] not in curl_environment
+
+
+@pytest.mark.parametrize(
+    ("trace_flags", "shellopts", "separate_trace", "outcome"),
+    [
+        pytest.param(trace_flags, shellopts, separate_trace, outcome, id=f"{channel}-{outcome}")
+        for channel, trace_flags, shellopts, separate_trace in [
+            ("bash-x", ["-x"], "", False),
+            ("inherited-xtrace", [], "xtrace", False),
+            ("bash-v", ["-v"], "", False),
+            ("inherited-verbose", [], "verbose", False),
+            ("trace-fd", ["-x"], "", True),
+        ]
+        for outcome in ["sent", "smtp-failure", "missing-key", "journal"]
+        # Bash disables verbose mode inside the journal's command substitution.
+        if outcome != "journal" or channel not in {"bash-v", "inherited-verbose"}
+    ],
+)
+def test_trace_channels_never_expose_config_values(
+    tmp_path: Path,
+    trace_flags: list[str],
+    shellopts: str,
+    separate_trace: bool,
+    outcome: str,
+) -> None:
+    """1301-F12-TRACE: active tracing stays secret-free through send and load failure."""
+    values = {**VALID_ENV, "SMTP_PASSWORD": "SENTINELPW", "OTHER": "SENTINELOTHER"}
+    if outcome in {"missing-key", "journal"}:
+        del values["SMTP_PORT"]
+    env_file = _write_env_file(tmp_path, values)
+    bin_dir = tmp_path / "bin"
+    args_file = tmp_path / "curl-args.txt"
+    _install_fake_curl(
+        bin_dir,
+        exit_code=35 if outcome == "smtp-failure" else 0,
+        error_message="auth rejected for SENTINELPW",
+    )
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "SONGMAKER_ALERT_ENV_FILE": str(env_file),
+        "FAKE_CURL_ARGS_FILE": str(args_file),
+    }
+    if shellopts:
+        env["SHELLOPTS"] = shellopts
+    driver = tmp_path / "driver.sh"
+    if outcome == "journal":
+        # Same subshell/error-capture boundary as auto-deploy's alert guard.
+        driver.write_text(
+            ": TRACE_CONTROL\n"
+            'if ! ALERT_CONFIG_ERROR="$( (\n'
+            '    source "$1"\n'
+            '    load_alert_config "$2"\n'
+            ') 2>&1 )"; then\n'
+            '    printf "journal: %s\\n" "$ALERT_CONFIG_ERROR" >&2\n'
+            "    exit 1\n"
+            "fi\n",
+        )
+        args = [str(ALERT_CONFIG_LIB), str(env_file)]
+    else:
+        driver.write_text(': TRACE_CONTROL\nsource "$1" subject body\n')
+        args = [str(ALERT_SCRIPT)]
+    trace_file = tmp_path / "trace.txt"
+    with trace_file.open("w") as trace:
+        if separate_trace:
+            env["BASH_XTRACEFD"] = str(trace.fileno())
+        result = subprocess.run(
+            ["bash", *trace_flags, str(driver), *args],
+            capture_output=True,
+            text=True,
+            env=env,
+            pass_fds=(trace.fileno(),) if separate_trace else (),
+            timeout=10,
+        )
+    trace_output = trace_file.read_text()
+    assert "TRACE_CONTROL" in (trace_output if separate_trace else result.stderr)
+    for output in (result.stdout, result.stderr, trace_output):
+        assert "SENTINELPW" not in output
+        assert "SENTINELOTHER" not in output
+    if outcome == "sent":
+        assert result.returncode == 0
+        assert "sent" in result.stdout
+        assert args_file.exists()
+    else:
+        assert result.returncode != 0
+        assert "sent" not in result.stdout
+        if outcome == "smtp-failure":
+            assert "[REDACTED]" in result.stderr
+            assert args_file.exists()
+        else:
+            assert "SMTP_PORT" in result.stderr
+            assert not args_file.exists()
+            if outcome == "journal":
+                assert "journal:" in result.stderr
