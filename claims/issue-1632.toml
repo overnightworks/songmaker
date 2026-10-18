@@ -1,8 +1,0 @@
-claim_id = "8809d832c8794265b09f8ad85820d277"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "9dbc4dcaee2ac4cc1139d922050068f368113d64"
-branch = "claude/issue-1632-proofs-off-the-drawer"
-scope = ["frontend/e2e/helpers.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/e2e/playlist-cover-rail.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/routes/layout.test.ts"]
-opened_commit = "5392bb766b1d66bbdfd440d6ec28bed7fe4945c7"
-whole_reason = "One preparation step for the phone tab switch; its files move together and nothing is mounted or changed for users."
