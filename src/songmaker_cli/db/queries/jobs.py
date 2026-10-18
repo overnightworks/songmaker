@@ -66,6 +66,7 @@ def count_cover_jobs_since(session: Session, album_id: str, since: datetime) -> 
         .filter(
             Job.album_id == album_id,
             Job.type == JobType.COVER,
+            Job.status == JobStatus.COMPLETED,
             Job.started_at >= since,
         )
         .count()

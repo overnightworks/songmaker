@@ -41,12 +41,14 @@ from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, sugge
 from songmaker_cli.cowriter.routing import CoverImageDispatch, cover_image_provider_method
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
+    JobStatusUpdate,
     claim_next_cover_job,
     delete_job_cover_suggestions,
     get_album,
     get_job,
     list_songs,
     recover_stale_jobs_by_type,
+    update_job_status,
 )
 from songmaker_cli.jobs._runtime import _sanitize_error, _touch_heartbeat, _update_job
 from songmaker_cli.settings import CoverExecutor, Settings, get_settings
@@ -220,7 +222,6 @@ async def run_claimed_cover_suggestion_job(
     settings = settings or get_settings()
     await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
     heartbeat_task = asyncio.create_task(_keep_heartbeats(db_factory, job_id))
-    created_path: str | None = None
     staging_dir: Path | None = None
     try:
         prompt, album_id = await asyncio.to_thread(_load_cover_prompt, db_factory, job_id)
@@ -243,7 +244,7 @@ async def run_claimed_cover_suggestion_job(
         await asyncio.to_thread(_write_staged_png, staging_dir, suggestion_id, payload)
         await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
 
-        created_path = await asyncio.to_thread(
+        publication = asyncio.create_task(asyncio.to_thread(
             _publish_suggestion,
             db_factory,
             audio_dir,
@@ -251,14 +252,20 @@ async def run_claimed_cover_suggestion_job(
             job_id,
             suggestion_id,
             staging_dir,
-        )
+        ))
+        try:
+            await asyncio.shield(publication)
+        except asyncio.CancelledError:
+            # The thread owns rollback; let it settle before removing staging.
+            with suppress(Exception):
+                await _await_thread_completion(publication)
+            raise
         await asyncio.to_thread(shutil.rmtree, staging_dir)
         staging_dir = None
-        await asyncio.to_thread(_update_job, db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
     except asyncio.CancelledError:
         if abort_signal is not None:
             abort_signal.set()
-        await asyncio.to_thread(_remove_partial_suggestion, audio_dir, created_path, staging_dir)
+        await asyncio.to_thread(_remove_staging_directory, staging_dir)
         if abort_signal is None:
             await asyncio.to_thread(
                 _update_job,
@@ -270,7 +277,7 @@ async def run_claimed_cover_suggestion_job(
             )
         raise
     except Exception as exc:
-        await asyncio.to_thread(_remove_partial_suggestion, audio_dir, created_path, staging_dir)
+        await asyncio.to_thread(_remove_staging_directory, staging_dir)
         await asyncio.to_thread(
             _update_job,
             db_factory,
@@ -369,16 +376,19 @@ def _publish_suggestion(
     job_id: str,
     suggestion_id: str,
     staging_dir: Path,
-) -> str:
+) -> None:
     path = f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{album_id}/{suggestion_id}.png"
     target = suggestion_png_path(audio_dir, album_id, suggestion_id)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    (staging_dir / f"{suggestion_id}.png").replace(target)
+    moved = False
     try:
         with db_factory() as session:
-            job = get_job(session, job_id)
-            if job is None or job.status in {JobStatus.FAILED, JobStatus.CANCELLED}:
+            if not update_job_status(
+                session, job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
+            ):
                 raise CoverSuggestionJobError()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            (staging_dir / f"{suggestion_id}.png").replace(target)
+            moved = True
             session.add(AlbumCoverSuggestion(
                 id=suggestion_id,
                 album_id=album_id,
@@ -387,18 +397,12 @@ def _publish_suggestion(
             ))
             session.commit()
     except Exception:
-        remove_cover_suggestion_files(audio_dir, [path])
+        if moved:
+            remove_cover_suggestion_files(audio_dir, [path])
         raise
-    return path
 
 
-def _remove_partial_suggestion(
-    audio_dir: Path,
-    path: str | None,
-    staging_dir: Path | None,
-) -> None:
-    if path is not None:
-        remove_cover_suggestion_files(audio_dir, [path])
+def _remove_staging_directory(staging_dir: Path | None) -> None:
     if staging_dir is not None:
         shutil.rmtree(staging_dir, ignore_errors=True)
 
@@ -433,16 +437,16 @@ async def _generate_cover_image(
     except asyncio.CancelledError:
         abort_signal.set()
         with suppress(Exception):
-            await _await_generation_completion(generation)
+            await _await_thread_completion(generation)
         raise
 
 
-async def _await_generation_completion(generation: asyncio.Task[bytes]) -> bytes:
-    """Wait for a cancellation-triggered CLI abort despite repeat task cancellation."""
+async def _await_thread_completion[T](task: asyncio.Task[T]) -> T:
+    """Let a thread settle before cleanup, despite repeat task cancellation."""
     current_task = asyncio.current_task()
     while True:
         try:
-            return await asyncio.shield(generation)
+            return await asyncio.shield(task)
         except asyncio.CancelledError:
             if current_task is None:
                 raise

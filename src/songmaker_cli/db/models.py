@@ -385,7 +385,7 @@ class Job(Base):
         ForeignKey(SONGS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
     album_id: Mapped[str | None] = mapped_column(
-        ForeignKey(ALBUMS_ID, ondelete="CASCADE"), nullable=True, index=True,
+        ForeignKey(ALBUMS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
     worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
