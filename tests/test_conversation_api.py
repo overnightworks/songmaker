@@ -23,6 +23,7 @@ from agent_providers.events import (
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi import Request
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE, GET_SONG_ONLY_FOR_OTHER_SONGS
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -59,7 +60,7 @@ def _seed_owned(session, user_id: str) -> None:
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
+def client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
     factory = init_db(tmp_path / "conv_api.db")
     with factory() as session:
         _seed_owned(session, "u-test")
@@ -68,11 +69,11 @@ def client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    yield web_client(app), factory
+    return web_client(app), factory
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path) -> TestClient:
+def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
     factory = init_db(tmp_path / "conv_api2.db")
     with factory() as session:
         _seed_owned(session, "u-owner")
@@ -85,7 +86,7 @@ def stranger_client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    yield web_client(app), factory
+    return web_client(app), factory
 
 
 def _mock_claude(text: str = "hello from claude"):

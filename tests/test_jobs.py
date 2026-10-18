@@ -131,7 +131,7 @@ async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None
 @pytest.fixture
 def db_factory(tmp_path: Path):
     factory = init_db(tmp_path / "test.db")
-    yield factory
+    return factory
 
 
 @pytest.fixture

@@ -7,7 +7,6 @@ import threading
 import time
 from dataclasses import replace
 from pathlib import Path
-from typing import Generator
 from unittest.mock import patch
 
 import numpy as np
@@ -38,11 +37,11 @@ _FAKE_AUDIO = AudioData(audio=np.zeros(22050, dtype=np.float32), sr=22050)
 
 
 @pytest.fixture
-def clean_registry() -> Generator[ScorerRegistry, None, None]:
+def clean_registry() -> ScorerRegistry:
     """Provide an isolated scorer registry for testing."""
     registry = ScorerRegistry()
     registry.reset_for_testing()
-    yield registry
+    return registry
 
 
 @pytest.fixture

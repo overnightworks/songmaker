@@ -68,7 +68,7 @@ def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
 @pytest.fixture
 def client_a(client_and_ctx: tuple[TestClient, AppContext]) -> TestClient:
     client, _ = client_and_ctx
-    yield client
+    return client
 
 
 @contextmanager

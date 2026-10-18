@@ -94,7 +94,7 @@ def client(tmp_path: Path):
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    yield web_client(app), factory
+    return web_client(app), factory
 
 
 @pytest.fixture
@@ -108,7 +108,7 @@ def stranger_client(tmp_path: Path):
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    yield web_client(app)
+    return web_client(app)
 
 
 async def _capture(*_args, **kwargs):

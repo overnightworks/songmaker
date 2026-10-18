@@ -185,7 +185,7 @@ def admin_client(tmp_path: Path, monkeypatch):
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", role="admin", username="u-u-test"),
     )
-    yield web_client(app), factory
+    return web_client(app), factory
 
 
 def test_unknown_judge_provider_rejected_at_the_settings_boundary(admin_client) -> None:

@@ -17,7 +17,7 @@ def _run(coro):
 @pytest.fixture(autouse=True)
 def _isolate_pool(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(pool_mod, "_pool", None)
-    yield
+    return
 
 
 # ── init_arq_pool ─────────────────────────────────────────────────
