@@ -139,7 +139,9 @@
 	--viz-accent-b: 240;
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
-	--transport-bar-height: calc(88px + env(safe-area-inset-bottom, 0px));
+	--phone-tabs-height: 54px;
+	--transport-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+	--transport-bar-height: calc(88px + var(--transport-safe-area-bottom));
 	/* Room below the bar, zero until phone tabs arrive. Override only on html:
 	   --player-height resolves at :root, while components read the offset locally. */
 	--shell-bottom-offset: 0px;
@@ -194,18 +196,18 @@
 
 @media (max-width: 640px) {
 	:root {
-		--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
+		--transport-bar-height: calc(64px + var(--transport-safe-area-bottom));
 	}
 }
 
 @media (any-pointer: coarse) {
 	:root {
-		--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
+		--transport-bar-height: calc(64px + var(--transport-safe-area-bottom));
 	}
 }
 
 html[data-pointer='coarse'] {
-	--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
+	--transport-bar-height: calc(64px + var(--transport-safe-area-bottom));
 }
 
 /* --player-height is the room the transport bar takes right now: the bar
