@@ -56,6 +56,11 @@ bash scripts/download_models.sh       # Downloads all model variants to vendor/a
 
 ## Checks
 
+CI calls the pinned reusable quality gate; `quality / verdict` combines hygiene,
+Sonar findings and the mandatory jobs in `quality/config.toml`. Missing tokens
+or coverage fail closed. See [testing](docs/testing.md#static-analysis-sonarcloud)
+for coverage transport, enforcement activation and the native Sonar gate limit.
+
 **Agents and subagents never run the full suite on this machine.** The operator
 sits here; a `pytest tests/ -n auto` or `pnpm test` (all files) plus coverage
 blocks the desktop. Same rule as atelier-2: the land gate is GitHub CI.

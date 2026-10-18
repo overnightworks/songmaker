@@ -514,9 +514,11 @@ uses the selected line; PARTIAL prefixes it with `n/m completed, k failed: `.
 Job-level timeout, cancellation, recovery and reaper writes keep their own
 contracts; user cancellation clears both error fields and preserves saved takes.
 The `S8-*` cases in the scheduler, generation-failure, jobs and API tests verify
-this contract through persistence, GET and live SSE. Reload recovery of PARTIAL
-jobs and UI presentation remain later slices of #916. The client and
-worker contract is verified by the `S7-*` cases in
+this contract through persistence, GET and live SSE. Reload recovers timestamped
+OOM PARTIAL jobs until a newer generate-family attempt or a non-archived take
+created strictly after completion supersedes them. Historical PARTIAL rows without
+completion timestamps are not backfilled. UI presentation remains slice 14 of #916.
+The client and worker contract is verified by the `S7-*` cases in
 [`test_client.py`](../tests/test_client.py),
 [`test_task_store.py`](../tests/acestep_worker/test_task_store.py) and
 [`test_wrapper.py`](../tests/acestep_worker/test_wrapper.py).

@@ -83,7 +83,11 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.generation_params import BaseGenerationParams
-from songmaker_cli.jobs.generation_failure import generation_failure, musician_job_response
+from songmaker_cli.jobs.generation_failure import (
+    generation_failure,
+    is_visible_generation_failure,
+    musician_job_response,
+)
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
 from songmaker_cli.timestamps import aware_timestamp
 
@@ -354,24 +358,24 @@ def api_last_failed_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> LastFailedGenerationResponse:
-    """Whether the song's last generate/repaint/cover job is a failure that
-    is still the last word on the song's takes.
+    """Recover the latest FAILED or typed OOM PARTIAL job after reload.
 
-    A failed job leaving `activeJobs` is the only place the frontend learns
-    of it live (see `jobs.ts`); this lets a page reload or a later visit
-    recover the same cause. Two things supersede it: a newer job of any
-    outcome (queued, running, or completed -- the failure is no longer the
-    last attempt) and a non-archived take created after it (from an earlier
-    successful attempt the failed job didn't replace).
+    Any newer attempt supersedes the failure. Only an unarchived take
+    created strictly after completion hides it; the job's own saved takes
+    remain available alongside its partial result. Historical jobs without
+    a completion timestamp are not recoverable.
     """
     song = check_song_access(session, song_id, user)
     job = get_last_generate_job_for_song(session, song_id)
-    if job is None or job.status != JobStatus.FAILED or job.completed_at is None:
+    if job is None or job.completed_at is None or not (
+        job.status == JobStatus.FAILED
+        or (job.status == JobStatus.PARTIAL and is_visible_generation_failure(job.error_type))
+    ):
         return LastFailedGenerationResponse(job=None)
     newest_take = next((g for g in song.generations if not g.is_archived), None)
     if (
         newest_take is not None
-        and aware_timestamp(newest_take.created_at) >= aware_timestamp(job.completed_at)
+        and aware_timestamp(newest_take.created_at) > aware_timestamp(job.completed_at)
     ):
         return LastFailedGenerationResponse(job=None)
     return LastFailedGenerationResponse(job=musician_job_response(job))
@@ -683,59 +687,6 @@ def api_unshare_generation(
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return StatusResponse()
-
-
-@router.post(
-    "/generations/{gen_id}/remaster",
-    responses={404: {"description": "Raw WAV does not exist for this generation"}},
-)
-def api_remaster_generation(
-    gen_id: str,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-    ctx: AppContext = Depends(get_app_context),
-) -> GenerationResponse:
-    gen = check_generation_access(session, gen_id, user)
-
-    raw_wav_path = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".raw.wav")
-    if not raw_wav_path.exists():
-        raise HTTPException(404, "Raw WAV not found for this generation")
-
-    import shutil
-
-    from audio_engine import master_audio, read_wav_bytes, write_stereo_wav
-    from audio_engine.audio_io import encode_mp3
-
-    wav_path = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".wav")
-    mp3_path = Path(ctx.audio_dir) / gen.mp3_path
-    pre_remaster_wav = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".pre-remaster.wav")
-    pre_remaster_mp3 = Path(ctx.audio_dir) / gen.mp3_path.replace(".mp3", ".pre-remaster.mp3")
-
-    if wav_path.exists() and not pre_remaster_wav.exists():
-        shutil.copy2(str(wav_path), str(pre_remaster_wav))
-    if mp3_path.exists() and not pre_remaster_mp3.exists():
-        shutil.copy2(str(mp3_path), str(pre_remaster_mp3))
-
-    left, right, sample_rate = read_wav_bytes(raw_wav_path.read_bytes())
-    mastered_left, mastered_right = master_audio(left, right, sample_rate=sample_rate)
-
-    write_stereo_wav(str(wav_path), mastered_left, mastered_right, sample_rate)
-
-    id3_metadata = {}
-    if gen.song:
-        id3_metadata["title"] = gen.song.title
-        if gen.song.album:
-            id3_metadata["artist"] = gen.song.album.artist
-            id3_metadata["album"] = gen.song.album.title
-    encode_mp3(
-        mastered_left, mastered_right, str(mp3_path),
-        sample_rate=sample_rate, metadata=id3_metadata,
-    )
-
-    record_audit(session, user.id, AuditAction.REMASTER, ResourceType.GENERATION, gen_id)
-    session.commit()
-
-    return GenerationResponse.from_orm(gen)
 
 
 async def _generation_capacity_error(
