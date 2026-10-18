@@ -12,6 +12,7 @@ moving that clock, never by sleeping.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import shlex
 import stat
@@ -684,6 +685,26 @@ class Checkout:
 
     def set_clock(self, epoch_seconds: int) -> None:
         self._clock_file.write_text(str(epoch_seconds))
+
+    def observe_sweep_at_fetch(self, removed: Path, preserved: list[Path]) -> Path:
+        observed = self.root.parent / "sweep-observed"
+        checks = [f'[[ ! -e {shlex.quote(str(removed))} && ! -L {shlex.quote(str(removed))} ]]']
+        checks.extend(f'[[ -e {shlex.quote(str(path))} ]]' for path in preserved)
+        upload_pack = self._bin / "observing-upload-pack"
+        _write_executable(
+            upload_pack, "#!/bin/bash\n"
+            + " && ".join(checks) + f" && touch {shlex.quote(str(observed))}\n"
+            'exec /usr/bin/git-upload-pack "$@"\n',
+        )
+        _git(self.root, "config", "remote.origin.uploadpack", str(upload_pack))
+        return observed
+
+    def refuse_removal(self, path: Path) -> None:
+        _write_executable(
+            self._bin / "rm", "#!/bin/bash\n"
+            f'for arg; do [[ "$arg" == {shlex.quote(str(path))} ]] && exit 1; done\n'
+            'exec /bin/rm "$@"\n',
+        )
 
     def adopt_current_head_as_deployed(self) -> None:
         """Skip the first-run adoption tick the script does on a fresh state."""
@@ -1756,13 +1777,14 @@ def test_a_prune_timeout_resets_the_counters_like_any_successful_deploy(
     assert "deploy succeeded, now running" in checkout.journal
 
 
-def test_a_changed_alert_rule_file_reloads_and_verifies_prometheus_rules(
-    tmp_path: Path,
+@pytest.mark.parametrize("change", ["alert_rules", "prometheus_config"])
+def test_a_changed_prometheus_file_reloads_and_verifies_prometheus_rules(
+    tmp_path: Path, change: str,
 ) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
-    checkout.move_main_forward_with_changed_alert_rules()
+    getattr(checkout, f"move_main_forward_with_changed_{change}")()
 
     result = checkout.tick()
 
@@ -1775,25 +1797,6 @@ def test_a_changed_alert_rule_file_reloads_and_verifies_prometheus_rules(
     assert "compose ps -q prometheus" in checkout.docker_calls
     assert "kill -s HUP 0123456789ab" in checkout.docker_calls
     assert "deploy remains successful" not in checkout.journal
-
-
-def test_a_changed_prometheus_config_reloads_and_verifies_prometheus_rules(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.move_main_forward_with_changed_prometheus_config()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert checkout.curl_calls.splitlines() == [
-        "--fail --silent --show-error --max-time 30 --retry 5 --retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready",
-        "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/metrics",
-        "--fail --silent --show-error --max-time 30 http://127.0.0.1:9090/api/v1/rules",
-    ]
-    assert "kill -s HUP 0123456789ab" in checkout.docker_calls
 
 
 def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
@@ -1818,70 +1821,6 @@ def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
     assert checkout.failure_count_file.read_text() == "0"
 
 
-def test_a_failed_prometheus_hup_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_reload_exit_code(1)
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "Prometheus rule reload failed after deploy; deploy remains successful"
-        in checkout.journal
-    )
-    assert checkout.failure_count_file.read_text() == "0"
-    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip()
-    assert "Prometheus alert rule count mismatch" not in checkout.journal
-
-
-def test_a_missing_prometheus_container_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_container("")
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    missing_container_error = (
-        "cannot find the Prometheus container to reload rules after deploy; "
-        "deploy remains successful"
-    )
-    assert missing_container_error in checkout.journal
-    assert "kill -s HUP" not in checkout.docker_calls
-    assert checkout.failure_count_file.read_text() == "0"
-
-
-def test_an_invalid_prometheus_container_id_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_container("prometheus-container")
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "Prometheus container ID 'prometheus-container' contains unsupported characters "
-        "after deploy; deploy remains successful"
-    ) in checkout.journal
-    assert "kill -s HUP" not in checkout.docker_calls
-    assert checkout.failure_count_file.read_text() == "0"
-
-
 def test_prometheus_compose_warnings_do_not_contaminate_its_container_id(
     tmp_path: Path,
 ) -> None:
@@ -1899,117 +1838,6 @@ def test_prometheus_compose_warnings_do_not_contaminate_its_container_id(
     assert "Prometheus container ID" not in checkout.journal
 
 
-def test_a_failed_prometheus_config_reload_is_logged_without_failing_the_tick(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_metrics_response(
-        "prometheus_config_last_reload_successful 0\n",
-    )
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "-t songmaker-autodeploy -p user.err -- Prometheus reload did not apply; "
-        "deploy remains successful"
-    ) in checkout.journal.splitlines()
-    assert checkout.failure_count_file.read_text() == "0"
-    assert "failure count now" not in checkout.journal
-    assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls
-
-
-def test_an_unreadable_prometheus_reload_status_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_metrics_exit_code(1)
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "cannot read Prometheus reload status after deploy; deploy remains successful"
-        in checkout.journal
-    )
-    assert checkout.failure_count_file.read_text() == "0"
-    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip()
-    assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls
-    assert "Prometheus alert rule count mismatch" not in checkout.journal
-
-
-def test_a_missing_prometheus_reload_status_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_metrics_response("other_metric 1\n")
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "cannot determine Prometheus reload status after deploy; deploy remains successful"
-        in checkout.journal
-    )
-    assert "Prometheus reload did not apply" not in checkout.journal
-    assert checkout.failure_count_file.read_text() == "0"
-    assert "http://127.0.0.1:9090/api/v1/rules" not in checkout.curl_calls
-
-
-def test_a_prometheus_readiness_failure_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_ready_exit_code(1)
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "Prometheus did not become ready after rule reload; deploy remains successful"
-        in checkout.journal
-    )
-    assert checkout.failure_count_file.read_text() == "0"
-    assert "Prometheus alert rule count mismatch" not in checkout.journal
-
-
-def test_an_unavailable_prometheus_rule_api_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_rules_exit_code(1)
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "cannot read Prometheus rules after reload; deploy remains successful"
-        in checkout.journal
-    )
-    assert checkout.failure_count_file.read_text() == "0"
-    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip()
-    assert "Prometheus alert rule count mismatch" not in checkout.journal
-
-
 def test_an_empty_previous_deployed_sha_reloads_changed_prometheus_rules(
     tmp_path: Path,
 ) -> None:
@@ -2023,29 +1851,6 @@ def test_an_empty_previous_deployed_sha_reloads_changed_prometheus_rules(
 
     assert result.returncode == 0
     assert "kill -s HUP 0123456789ab" in checkout.docker_calls
-
-
-def test_an_invalid_prometheus_rule_api_response_keeps_a_successful_deploy_successful(
-    tmp_path: Path,
-) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_rules_response("not JSON")
-    checkout.move_main_forward_with_changed_alert_rules()
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert (
-        "cannot read Prometheus rules after reload; deploy remains successful"
-        in checkout.journal
-    )
-    assert checkout.failure_count_file.read_text() == "0"
-    assert checkout.deployed_sha_file.read_text() == subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip()
-    assert "Prometheus alert rule count mismatch" not in checkout.journal
 
 
 def test_an_unchanged_alert_rule_file_does_not_reload_prometheus(tmp_path: Path) -> None:
@@ -2207,3 +2012,142 @@ def test_post_merge_hook_is_not_run_by_the_deploy_fast_forward(tmp_path: Path) -
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == expected_head
+
+
+@pytest.mark.parametrize(
+    ("setter", "value", "diagnostic", "absent_journal", "absent_docker", "absent_curl"),
+    [
+        ('set_prometheus_reload_exit_code', 1,
+         'Prometheus rule reload failed after deploy; deploy remains successful',
+         ('Prometheus alert rule count mismatch',), (), ()),
+        ('set_prometheus_container', '',
+         'cannot find the Prometheus container to reload rules after deploy; '
+         'deploy remains successful',
+         (), ('kill -s HUP',), ()),
+        ('set_prometheus_container', 'prometheus-container',
+         "Prometheus container ID 'prometheus-container' contains unsupported characters "
+         "after deploy; deploy remains successful",
+         (), ('kill -s HUP',), ()),
+        ('set_prometheus_metrics_response', 'prometheus_config_last_reload_successful 0\n',
+         'Prometheus reload did not apply; deploy remains successful',
+         ('failure count now',), (), ('http://127.0.0.1:9090/api/v1/rules',)),
+        ('set_prometheus_metrics_exit_code', 1,
+         'cannot read Prometheus reload status after deploy; deploy remains successful',
+         ('Prometheus alert rule count mismatch',), (), ('http://127.0.0.1:9090/api/v1/rules',)),
+        ('set_prometheus_metrics_response', 'other_metric 1\n',
+         'cannot determine Prometheus reload status after deploy; deploy remains successful',
+         ('Prometheus reload did not apply',), (), ('http://127.0.0.1:9090/api/v1/rules',)),
+        ('set_prometheus_ready_exit_code', 1,
+         'Prometheus did not become ready after rule reload; deploy remains successful',
+         ('Prometheus alert rule count mismatch',), (), ()),
+        ('set_prometheus_rules_exit_code', 1,
+         'cannot read Prometheus rules after reload; deploy remains successful',
+         ('Prometheus alert rule count mismatch',), (), ()),
+        ('set_prometheus_rules_response', 'not JSON',
+         'cannot read Prometheus rules after reload; deploy remains successful',
+         ('Prometheus alert rule count mismatch',), (), ()),
+    ],
+)
+def test_prometheus_refusal_keeps_a_successful_deploy_successful(
+    tmp_path: Path, setter: str, value: str | int, diagnostic: str,
+    absent_journal: tuple[str, ...], absent_docker: tuple[str, ...], absent_curl: tuple[str, ...],
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    getattr(checkout, setter)(value)
+    checkout.move_main_forward_with_changed_alert_rules()
+
+    assert checkout.tick().returncode == 0
+    assert f"-t songmaker-autodeploy -p user.err -- {diagnostic}" in checkout.journal.splitlines()
+    assert checkout.failure_count_file.read_text() == "0"
+    assert checkout.deployed_sha_file.read_text() == checkout.head
+    assert all(text not in checkout.journal for text in absent_journal)
+    assert all(text not in checkout.docker_calls for text in absent_docker)
+    assert all(text not in checkout.curl_calls for text in absent_curl)
+
+
+@pytest.mark.parametrize(
+    "prefix", ["git-fetch", "compose-stderr", "prometheus-ps-stderr", "gh-stderr"],
+)
+@pytest.mark.parametrize("kind", ["file", "symlink", "dangling-symlink"])
+def test_stale_temp_sweep_removes_only_owned_entries_before_fetch(
+    tmp_path: Path, prefix: str, kind: str,
+) -> None:
+    """S1–S4: exact names, direct children only, targets and all state retained."""
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    admin = checkout.root / ".git"
+    preserved = [admin / f"songmaker-autodeploy.{name}" for name in (
+        "lock", "failcount", "busycount", "deployed-sha", "first-seen-commit",
+        "failure-escalated-at", "busy-escalated-at", "guard-reason",
+    )]
+    preserved += [
+        admin / "foreign.Abc123",
+        admin / "worktrees/other/songmaker-autodeploy.git-fetch.Abc123",
+    ]
+    preserved += [admin / f"songmaker-autodeploy.{prefix}.{suffix}"
+                  for suffix in ("Abc12", "Abc1234", "Abc_12", "Äbc123")]
+    for path in preserved:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch(exist_ok=True)
+    target = tmp_path / "target"
+    if kind != "dangling-symlink":
+        target.write_text("keep me")
+        preserved.append(target)
+    stale = admin / f"songmaker-autodeploy.{prefix}.Az09bZ"
+    if kind == "file":
+        stale.write_text("interrupted")
+    else:
+        stale.symlink_to(target)
+    observed = checkout.observe_sweep_at_fetch(stale, preserved)
+
+    assert checkout.tick().returncode == 0
+    assert observed.exists()
+    assert not stale.exists() and not stale.is_symlink()
+    assert f"-p user.info -- removed stale temp file: {stale}" in checkout.journal
+    if kind == "dangling-symlink":
+        assert not target.exists()
+    else:
+        assert target.read_text() == "keep me"
+
+
+@pytest.mark.parametrize("advance_origin", [False, True], ids=["up-to-date", "new-commit"])
+@pytest.mark.parametrize("kind", ["failed-rm", "directory"])
+def test_unremovable_stale_temp_refuses_before_fetch_and_alerts_on_third_tick(
+    tmp_path: Path, advance_origin: bool, kind: str,
+) -> None:
+    """S5–S6: no fetch, one counted refusal per tick, third-tick escalation."""
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    before = _git_output(checkout.root, "rev-parse", "origin/main")
+    if advance_origin:
+        checkout.move_main_forward()
+    stale = checkout.root / ".git/songmaker-autodeploy.git-fetch.Abc123"
+    if kind == "directory":
+        stale.mkdir()
+    else:
+        stale.touch()
+        checkout.refuse_removal(stale)
+    for count, status in enumerate((0, 0, 1), start=1):
+        assert checkout.tick().returncode == status
+        assert checkout.failure_count_file.read_text() == str(count)
+        assert _git_output(checkout.root, "rev-parse", "origin/main") == before
+    assert stale.exists()
+    assert f"-p user.err -- stale temp file could not be removed: {stale}" in checkout.journal
+    assert ("ALERT: 3 ticks in a row deferred/failed, "
+            "reason: stale temp file could not be removed") in checkout.journal
+
+
+def test_stale_temp_sweep_waits_for_the_deploy_lock(tmp_path: Path) -> None:
+    """S7: the losing tick cannot remove the active tick's temp files."""
+    checkout = Checkout(tmp_path)
+    stale = checkout.root / ".git/songmaker-autodeploy.git-fetch.Abc123"
+    stale.touch()
+    with (checkout.root / ".git/songmaker-autodeploy.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert checkout.tick().returncode == 0
+        assert stale.exists()
+    assert "another run is already in flight" in checkout.journal
