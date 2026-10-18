@@ -2,12 +2,11 @@
 
 from pathlib import Path
 
+import pytest
 from conftest import (
     login_and_csrf,
-    make_router_app,
-    make_router_ctx,
+    make_test_app,
     stored_hash,
-    web_client,
 )
 from sqlalchemy import select
 
@@ -16,12 +15,13 @@ from songmaker_cli.db.models import Album, AuditLog, Generation, Song, User
 from songmaker_cli.db.queries.auth import record_audit
 
 
-def test_remaster_returns_router_404_and_preserves_audio_and_history(
-    tmp_path: Path, make_stereo_wav_bytes,
+@pytest.mark.parametrize("authenticated", [True, False], ids=["owner", "unauthenticated"])
+def test_remaster_is_unavailable_and_preserves_audio_and_history(
+    tmp_path: Path, make_stereo_wav_bytes, authenticated: bool,
 ) -> None:
     """1301-F3-M-REMOVED; 1301-F3-M-PRESERVED: retirement never mutates assets."""
-    ctx = make_router_ctx(tmp_path)
-    ctx.audio_dir.mkdir()
+    client, db = make_test_app(tmp_path)
+    audio_dir = tmp_path / "audio"
     audio_before = {
         "generation.raw.wav": make_stereo_wav_bytes(),
         "generation.wav": b"existing mastered wav",
@@ -30,8 +30,8 @@ def test_remaster_returns_router_404_and_preserves_audio_and_history(
         "generation.pre-remaster.mp3": b"historical mp3 backup",
     }
     for name, content in audio_before.items():
-        (ctx.audio_dir / name).write_bytes(content)
-    with ctx.db() as session:
+        (audio_dir / name).write_bytes(content)
+    with db() as session:
         session.add(User(id="owner", username="owner", password_hash=stored_hash("password")))
         session.flush()
         session.add(Album(id="album", title="Album", artist="Artist", created_by="owner"))
@@ -46,25 +46,26 @@ def test_remaster_returns_router_404_and_preserves_audio_and_history(
         )
         session.commit()
 
-    app = make_router_app(ctx)
-    with web_client(app) as client:
-        login_and_csrf(client, "owner", "password")
-        with ctx.db() as session:
+    with client:
+        if authenticated:
+            login_and_csrf(client, "owner", "password")
+        with db() as session:
             generation_before = session.execute(select(Generation.__table__)).all()
             audits_before = session.execute(select(AuditLog.__table__).order_by(AuditLog.id)).all()
 
         response = client.post("/api/generations/generation/remaster")
 
-        assert response.status_code == 404
-        assert response.json() == {"detail": "Not Found"}
-        paths = client.get("/openapi.json").json()["paths"]
+        assert response.status_code in ({404} if authenticated else {401, 403, 404})
+        if response.status_code == 404:
+            assert response.json() == {"detail": "Not Found"}
+        paths = client.app.openapi()["paths"]
         assert "/api/generations/{gen_id}/remaster" not in paths
 
     assert {
-        path.relative_to(ctx.audio_dir).as_posix(): path.read_bytes()
-        for path in ctx.audio_dir.rglob("*") if path.is_file()
+        path.relative_to(audio_dir).as_posix(): path.read_bytes()
+        for path in audio_dir.rglob("*") if path.is_file()
     } == audio_before
-    with ctx.db() as session:
+    with db() as session:
         assert session.execute(select(Generation.__table__)).all() == generation_before
         audits_after = session.execute(select(AuditLog.__table__).order_by(AuditLog.id)).all()
         assert audits_after == audits_before
