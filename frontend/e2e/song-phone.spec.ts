@@ -10,7 +10,8 @@ import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
-	EDITOR_SAVE_ACCESSIBLE_LABEL,
+	SONG_MENU_LABEL,
+	SONG_MENU_SAVE_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	GENERATION_PHASE_LABELS,
@@ -94,6 +95,10 @@ async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersio
 	const version = seeded ? takeVersion(seeded.id, seeded.version_number) : null;
 	if (!version) throw new Error('Expected the seeded song to have a version');
 	return version;
+}
+
+function songBackButton(page: Page): Locator {
+	return page.locator('.mobile-strip').getByRole('button', { name: /^Back to / });
 }
 
 interface SongWithAnUnsavedDraft {
@@ -429,7 +434,6 @@ test.describe('song page at phone width', () => {
 				`1354_rule_32: clean song returns to ${origin}, and editor tabs keep its Back`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
-					await page.setViewportSize({ width: 390, height: 844 });
 					const { songPhoneAlbumId } = readSeededLibrary();
 					const { lyrics, savedLyrics, songHeading } = await openSongWithAnUnsavedDraft(
 						page,
@@ -481,16 +485,12 @@ test.describe('song page at phone width', () => {
 				`1354_rule_32: song ‹ asks first and honors ${choice}`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
-					await page.setViewportSize({ width: 390, height: 844 });
 					const { songPhoneAlbumId } = readSeededLibrary();
 					const { lyrics, savedLyrics, songHeading, unsavedDraftDialog } =
 						await openSongWithAnUnsavedDraft(page, songPhoneAlbumId);
 					const address = page.url();
 					const draft = await lyrics.inputValue();
-					await page
-						.locator('.mobile-strip')
-						.getByRole('button', { name: /^Back to / })
-						.click();
+					await songBackButton(page).click();
 					await expect(unsavedDraftDialog).toBeVisible();
 					await expect(page).toHaveURL(address);
 					await unsavedDraftDialog.getByRole('button', { name: choice, exact: true }).click();
@@ -513,37 +513,48 @@ test.describe('song page at phone width', () => {
 		}
 
 		test(
-			'1354_rule_32: cold song keeps typing and ‹ asks before replacing with its album',
+			'1354_rule_32: cold song ‹ names its album and asks before replacing the song',
 			{ tag: ONLY_IN_SHELL.mobile },
-			async ({ page }) => {
-				await page.setViewportSize(MOBILE_VIEWPORT);
+			async ({ page, context, browser }) => {
 				const { songPhoneAlbumId } = readSeededLibrary();
-				const { lyrics, savedLyrics, unsavedDraftDialog } = await openSongWithAnUnsavedDraft(
-					page,
-					songPhoneAlbumId
-				);
-				const address = page.url();
+				const { lyrics, savedLyrics } = await openSongWithAnUnsavedDraft(page, songPhoneAlbumId);
 				await lyrics.fill(savedLyrics);
-				await page.goto(address);
-				await expect(lyrics).toHaveValue(savedLyrics);
-				await expect(page.locator('.workspace-wrapper')).not.toHaveAttribute('inert');
-				await lyrics.fill(UNSAVED_DRAFT_LINE);
-				await expect(lyrics).toHaveValue(UNSAVED_DRAFT_LINE);
-				const readHistoryIndex = () =>
-					(window as unknown as { navigation: { currentEntry: { index: number } } }).navigation
-						.currentEntry.index;
-				const index = await page.evaluate(readHistoryIndex);
-				await page
-					.locator('.mobile-strip')
-					.getByRole('button', { name: /^Back to / })
-					.click();
-				await expect(unsavedDraftDialog).toBeVisible();
-				await expect(page).toHaveURL(address);
-				await unsavedDraftDialog
-					.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
-					.click();
-				await expect(page).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
-				expect(await page.evaluate(readHistoryIndex)).toBe(index);
+				const address = page.url();
+				const expectedName = await songBackButton(page).getAttribute('aria-label');
+				if (!expectedName) throw new Error('Expected the song Back name');
+				const coldContext = await browser.newContext({
+					storageState: await context.storageState(),
+					viewport: MOBILE_VIEWPORT,
+					isMobile: true,
+					hasTouch: true
+				});
+				try {
+					const cold = await coldContext.newPage();
+					await cold.goto(address);
+					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
+					await expect(coldLyrics).toHaveValue(savedLyrics);
+					await expect(cold.locator('.workspace-wrapper')).not.toHaveAttribute('inert');
+					await coldLyrics.fill(UNSAVED_DRAFT_LINE);
+					await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE);
+					const readHistoryIndex = () =>
+						(window as unknown as { navigation: { currentEntry: { index: number } } }).navigation
+							.currentEntry.index;
+					const index = await cold.evaluate(readHistoryIndex);
+					await cold
+						.locator('.mobile-strip')
+						.getByRole('button', { name: expectedName, exact: true })
+						.click();
+					const question = cold.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+					await expect(question).toBeVisible();
+					await expect(cold).toHaveURL(address);
+					await question
+						.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+						.click();
+					await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
+					expect(await cold.evaluate(readHistoryIndex)).toBe(index);
+				} finally {
+					await coldContext.close();
+				}
 			}
 		);
 
@@ -551,7 +562,6 @@ test.describe('song page at phone width', () => {
 			'defect:#1598 1354_rule_32: typing during a held save stays unsaved and ‹ asks',
 			{ tag: ONLY_IN_SHELL.mobile },
 			async ({ page }) => {
-				await page.setViewportSize(MOBILE_VIEWPORT);
 				const { lyrics, unsavedDraftDialog } = await openSongWithAnUnsavedDraft(
 					page,
 					readSeededLibrary().songPhoneAlbumId
@@ -568,8 +578,10 @@ test.describe('song page at phone width', () => {
 					(request) => request.method() === 'PUT' && /\/api\/songs\/[^/]+$/.test(request.url())
 				);
 				try {
+					await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
 					await page
-						.getByRole('button', { name: EDITOR_SAVE_ACCESSIBLE_LABEL, exact: true })
+						.getByRole('dialog', { name: SONG_MENU_LABEL })
+						.getByRole('button', { name: SONG_MENU_SAVE_LABEL, exact: true })
 						.click();
 					await sent;
 					const draft = `${await lyrics.inputValue()}\nmore typing during save`;
@@ -577,10 +589,7 @@ test.describe('song page at phone width', () => {
 					releaseSave();
 					await expect(page.getByText(/^Saved version \d+$/)).toBeVisible();
 					await expect(lyrics).toHaveValue(draft);
-					await page
-						.locator('.mobile-strip')
-						.getByRole('button', { name: /^Back to / })
-						.click();
+					await songBackButton(page).click();
 					await expect(unsavedDraftDialog).toBeVisible();
 					await expect(lyrics).toHaveValue(draft);
 				} finally {
@@ -594,7 +603,6 @@ test.describe('song page at phone width', () => {
 				`1354_rule_30: browser Back closes search over a ${dirty ? 'dirty' : 'clean'} song first`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
-					await page.setViewportSize({ width: 390, height: 844 });
 					const { lyrics, savedLyrics, unsavedDraftDialog, songHeading } =
 						await openSongWithAnUnsavedDraft(page, readSeededLibrary().songPhoneAlbumId);
 					if (!dirty) await lyrics.fill(savedLyrics);
@@ -620,7 +628,6 @@ test.describe('song page at phone width', () => {
 			'1354_rule_25: cold Settings ‹ replaces with Settings',
 			{ tag: ONLY_IN_SHELL.mobile },
 			async ({ page }) => {
-				await page.setViewportSize({ width: 390, height: 844 });
 				await page.goto('/settings/voices');
 				const length = await page.evaluate(() => history.length);
 				await page
@@ -657,16 +664,9 @@ test.describe('song page at phone width', () => {
 	);
 });
 
-// Leaving Now Playing on the phone (issue #1002): the full surface is a
-// pushed screen, so the phone's Back -- and × right after open -- shows the
-// screen it was opened from again, never the entry below that screen, and
-// leaves no copy of it behind for the next Back to land on. A take row opens
-// Now Playing on This take with its sheet up, whose backdrop never covers ×
-// (#1052), so one tap on × closes Now Playing there too; Back closes that sheet
-// first and Now Playing with the next one (#1119). A playlist row only
-// plays in place (#1010), so that origin opens Now Playing through the
-// mini-player's own entry, which brings no sheet up.
-// The base library's songs each carry one reimported take, their first.
+// Phone Back/× restores the origin without duplicate history (#1002). A take opens
+// a sheet clear of × (#1052); Back closes the sheet first (#1119). Playlists play
+// in place (#1010), so open through the mini-player. Imported songs have one take.
 const SEEDED_TAKE_NUMBER = 1;
 
 interface NowPlayingOrigin {

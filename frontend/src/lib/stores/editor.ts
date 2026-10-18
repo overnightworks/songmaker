@@ -44,6 +44,7 @@ interface EditorState {
 }
 
 const editorState = writable<EditorState | null>(null);
+let versionLoadCount = 0;
 
 function genParamsEqual(
 	a: VersionGenerationParams | null,
@@ -293,6 +294,7 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 	const songId = get(selectedSongId);
 	const state = get(editorState);
 	if (!state) return null;
+	versionLoadCount += 1;
 	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = state;
 	const isLatest = version.id === get(versions)[0]?.id;
 	const draft = isLatest ? { ...saved } : songDataFromVersion(version);
@@ -386,7 +388,8 @@ export function computeDraftVersionNumber(
 export async function handleSave(songId: string): Promise<SongItem> {
 	const state = get(editorState);
 	if (!state || state.songId !== songId) throw new Error('Cannot save a different song');
-	const { draft, loadedFrom } = state;
+	const { draft } = state;
+	const loadsBeforeSave = versionLoadCount;
 	const updated = await updateSong(songId, {
 		lyrics: draft.lyrics,
 		prompt: draft.prompt,
@@ -398,7 +401,11 @@ export async function handleSave(songId: string): Promise<SongItem> {
 	});
 	editorState.update((s) =>
 		s?.songId === songId
-			? { ...s, saved: draft, loadedFrom: s.loadedFrom === loadedFrom ? null : s.loadedFrom }
+			? {
+					...s,
+					saved: draft,
+					loadedFrom: versionLoadCount === loadsBeforeSave ? null : s.loadedFrom
+				}
 			: s
 	);
 	replaceSongInList(updated);
