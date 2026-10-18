@@ -110,7 +110,7 @@ def _parse_signed_cursor(cursor: str, secret: bytes) -> LibraryCursor:
     except ValueError as exc:
         raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID) from exc
     expected = hmac.new(secret, raw, sha256).hexdigest()
-    if not hmac.compare_digest(signature, expected):
+    if not hmac.compare_digest(signature.encode("utf-8"), expected.encode("utf-8")):
         raise LibraryCursorInvalidError(LIBRARY_CURSOR_INVALID)
     try:
         payload = json.loads(raw.decode("utf-8"))
