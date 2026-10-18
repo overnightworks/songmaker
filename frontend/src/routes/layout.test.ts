@@ -566,15 +566,15 @@ describe('app shell', () => {
 	// O1 (#1080): the offline strip rests on the transport bar, and the room
 	// every surface reserves for the bar grows by the strip while it shows, so
 	// the phone's Generate bar stays above the strip instead of under it.
-	it('adds the offline strip to the room the transport bar takes, and gives it back online', async () => {
+	it('1354_37b_66: adds the offline strip to the room the transport bar takes, and gives it back online', async () => {
 		await renderLayout(LIBRARY_ROUTE_PATH);
 		expect(document.documentElement.dataset.offline).toBeUndefined();
 
 		reportResourceStreamReachable(false);
 		await tick();
 		expect(document.documentElement.dataset.offline).toBe('');
-		expect(extractRule(appCss, ':root')).toContain(
-			'--player-height: calc(var(--transport-bar-height) + var(--offline-strip-room))'
+		expect(extractRule(appCss, ':root').replace(/\s+/g, '')).toContain(
+			'--player-height:calc(var(--shell-bottom-offset)+var(--transport-bar-height)+var(--offline-strip-room))'
 		);
 		expect(extractRule(appCss, 'html[data-offline]')).toContain(
 			'--offline-strip-room: var(--offline-strip-height)'

@@ -24,6 +24,9 @@ import {
 	type ExpectedRefusal
 } from './helpers';
 import {
+	control,
+	MOCK_STREAM_REFUSAL,
+	openMockSharedAlbum,
 	MOCK_ALBUM_TITLE,
 	MOCK_UNPLAYABLE_TITLE,
 	MOCK_URL,
@@ -70,8 +73,6 @@ const test = base.extend<{ visitor: Visitor }>({
 	}
 });
 
-const MOCK_STREAM_REFUSAL = { path: '/shared/mock-album/stream', statuses: [404] };
-
 function songs(page: Page): Locator {
 	return page.locator('.np-page-songs');
 }
@@ -84,18 +85,12 @@ function playingRow(page: Page): Locator {
 	return songs(page).locator('.queue-row[aria-current="true"]');
 }
 
-function control(page: Page, name: string): Locator {
-	return page.locator('.now-playing.page').getByRole('button', { name, exact: true });
-}
-
 async function openMockAlbum(
 	{ page, guard, expectedRefusals }: Visitor,
 	albumSongs = mockSongs(3)
 ): Promise<FlowGuard> {
 	expectedRefusals.push(MOCK_STREAM_REFUSAL);
-	await mockSharedAlbum(page, albumSongs);
-	await page.goto(MOCK_URL);
-	await expect(page.getByRole('heading', { level: 1 })).toHaveText(MOCK_ALBUM_TITLE);
+	await openMockSharedAlbum(page, albumSongs);
 	return guard;
 }
 
