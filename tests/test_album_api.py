@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import (
+    login_and_csrf,
+    make_test_app,
+    queries_without_session_auth,
+    stored_hash,
+)
 from sqlalchemy import event
 
 from songmaker_cli.db.models import (
@@ -186,6 +191,7 @@ def test_list_albums_computes_song_count_in_one_aggregate_query(picks_client) ->
         event.remove(engine, "before_cursor_execute", all_handle)
         event.remove(engine, "before_cursor_execute", handle)
 
+    all_queries = queries_without_session_auth(all_queries)
     assert resp.status_code == 200
     by_id = {a["id"]: a for a in resp.json()["items"]}
     assert by_id["no-songs"]["song_count"] == 0

@@ -9,7 +9,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_authenticated_user, make_test_app, stored_hash, web_client
+from conftest import (
+    login_and_csrf,
+    make_authenticated_user,
+    make_test_app,
+    queries_without_session_auth,
+    stored_hash,
+    web_client,
+)
 from fastapi import HTTPException
 
 from songmaker_cli import audio_files
@@ -1405,6 +1412,7 @@ def test_library_pool_queue_query_count_is_constant_not_per_song(
     finally:
         event.remove(engine, "before_cursor_execute", handle)
 
+    queries = queries_without_session_auth(queries)
     assert resp.status_code == 200
     assert len(resp.json()["takes"]) == song_count
     generation_queries = [q for q in queries if "from generations" in q.lower()]

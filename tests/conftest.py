@@ -96,6 +96,19 @@ def generation_failure_case(request):
     return error_class(cause), expected
 
 
+def queries_without_session_auth(statements: Sequence[str]) -> list[str]:
+    """defect:#1590: route budgets exclude DB session lookup and touch SQL.
+
+    Session authentication owns this per-request cost independently of the
+    route's row count; all other statements remain in the route budget.
+    """
+    session_prefixes = ("select user_sessions.", "update user_sessions set ")
+    return [
+        statement for statement in statements
+        if not " ".join(statement.lower().split()).startswith(session_prefixes)
+    ]
+
+
 def web_client(app, **kwargs) -> TestClient:
     """Build a TestClient that reaches a songmaker web app over its real HTTPS origin."""
     return TestClient(app, base_url=TEST_ORIGIN, **kwargs)
