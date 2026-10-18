@@ -49,6 +49,7 @@ ALLOWED_ROOT_ENTRIES: dict[str, str] = {
     "monitoring": "Grafana/Prometheus/Alertmanager configuration",
     "plans": "live multi-session coordination notes",
     "prompts": "review prompt templates",
+    "quality": "quality requires repository-root quality/config.toml",
     "scripts": "operational and CI helper scripts",
     "src": "the Python application source",
     "tests": "the Python test suite",
