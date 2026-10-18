@@ -200,6 +200,7 @@ import { fetchVersions, updateSong } from '$lib/api/client';
 import { fetchAlbums } from '$lib/api/albums';
 import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
+import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import { toasts } from '$lib/stores/toast';
 
 function openNavigationSheet(): Writable<boolean> {
@@ -1260,33 +1261,31 @@ describe('opening a song recovers its generation state', () => {
 		);
 		fetchLastFailedGeneration.mockReturnValue(new Promise(() => {}));
 		fetchActiveGeneration.mockResolvedValue(job);
-
 		await selectSong('s1');
-
 		expect(get(activeJobs)).toEqual([{ job, songId: 's1' }]);
 		expect(fetchActiveGeneration).toHaveBeenCalledWith('s1');
 	});
-
 	it.each([
-		{
-			failure: 'with no network answer',
-			error: new NetworkError('/api/songs/s1/active-generation', new TypeError('Failed to fetch')),
-			shown: API_ERROR_GENERIC_MESSAGE
-		},
-		{
-			failure: 'refused by the server',
-			error: new ApiError(503, 'Generation service unavailable', '/api/songs/s1/active-generation'),
-			shown: 'Generation service unavailable'
-		}
+		{ failure: 'network', offlineFirst: false },
+		{ failure: 'network', offlineFirst: true },
+		{ failure: 'refusal', offlineFirst: true }
 	])(
-		'says $shown once when the active generation lookup fails $failure, keeping the song open',
-		async ({ error, shown }) => {
+		'1160-F35-song: $failure, offline first=$offlineFirst, keeps selection and follows cause on return',
+		async ({ failure, offlineFirst }) => {
+			onTestFinished(resetConnectivityForTests);
+			const network = failure === 'network';
+			const error = network
+				? new NetworkError('/api/songs/s1/active-generation', new TypeError('fetch'))
+				: new ApiError(503, 'Unavailable', '/api/songs/s1/active-generation');
+			const shown = network ? API_ERROR_GENERIC_MESSAGE : 'Unavailable';
+			if (offlineFirst) reportResourceStreamReachable(false);
 			fetchActiveGeneration.mockRejectedValue(error);
-
 			await selectSong('s1');
-
 			expect(get(selectedSongId)).toBe('s1');
 			expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error', message: shown })]);
+			if (!offlineFirst) reportResourceStreamReachable(false);
+			reportResourceStreamReachable(true);
+			expect(get(toasts).map((toast) => toast.message)).toEqual(network ? [] : [shown]);
 		}
 	);
 

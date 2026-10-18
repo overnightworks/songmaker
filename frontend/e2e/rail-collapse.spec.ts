@@ -91,3 +91,69 @@ for (const { shell, name, viewport } of [
 		await expect(rail.getByRole('slider', { name: 'Resize rail' })).toBeVisible();
 	});
 }
+
+for (const shell of ['desktop', 'mobile'] as const) {
+	test(
+		`1160-F30-browser: ${shell} Library shows a total only after every page`,
+		{ tag: ONLY_IN_SHELL[shell] },
+		async ({ page }, testInfo) => {
+			await page.setViewportSize(
+				shell === 'mobile' ? { width: 390, height: 844 } : { width: 1440, height: 900 }
+			);
+			await page.addInitScript(() => localStorage.removeItem('songmaker.rail-collapsed'));
+			let releaseFullList!: () => void;
+			const fullListAllowed = new Promise<void>((resolve) => {
+				releaseFullList = resolve;
+			});
+			const response = await page.request.get('/api/albums?offset=0&limit=2');
+			expect(response.ok()).toBe(true);
+			const { items } = await response.json();
+			expect(items).toHaveLength(2);
+			await page.route('**/api/albums?**', async (route) => {
+				const params = new URL(route.request().url()).searchParams;
+				const browsing = params.has('sort');
+				if (!browsing) await fullListAllowed;
+				const offset = Number(params.get('offset'));
+				await route.fulfill({
+					json: {
+						items: [items[offset === 0 ? 0 : 1]],
+						total: 2,
+						offset,
+						limit: 1,
+						has_more: offset === 0
+					}
+				});
+			});
+			try {
+				await page.goto(shell === 'mobile' ? HOME_PATH : LIBRARY_PATH);
+				const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+				if (shell === 'mobile') {
+					const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+					await tabs.getByRole('button', { name: 'Library', exact: true }).click();
+					await expect(page).toHaveURL(LIBRARY_PATH);
+					await expect(rail).toHaveCount(0);
+					await expect(page.getByRole('dialog')).toHaveCount(0);
+				} else {
+					await expect(
+						rail.locator('.album-label').filter({ hasText: items[0].title })
+					).toBeVisible();
+					const heading = rail.getByRole('link', { name: /^Library/ });
+					await expect(heading.locator('.meta')).toHaveCount(0);
+					await testInfo.attach('partial-library', {
+						body: await page.screenshot(),
+						contentType: 'image/png'
+					});
+					releaseFullList();
+					await expect(heading.locator('.meta')).toHaveText('2');
+					await expect(rail.locator('.album-label')).toHaveCount(2);
+				}
+				await testInfo.attach(`library-${shell}`, {
+					body: await page.screenshot(),
+					contentType: 'image/png'
+				});
+			} finally {
+				releaseFullList();
+			}
+		}
+	);
+}

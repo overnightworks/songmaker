@@ -1,11 +1,21 @@
 import { expect, test, type Locator } from '@playwright/test';
 import {
+	API_ERROR_GENERIC_MESSAGE,
+	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_EVENT_HELLO,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SEARCH_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { FlowGuard, ONLY_IN_SHELL, appBar, nameStartingWith, workspace } from './helpers';
+import {
+	FlowGuard,
+	ONLY_IN_SHELL,
+	appBar,
+	nameStartingWith,
+	offlineStrip,
+	workspace
+} from './helpers';
 import { openSearchSheet } from './phone-search';
 import { readSeededLibrary } from './seed';
 
@@ -168,3 +178,94 @@ test('Settings keeps the shared shell without an album row', async ({ page }) =>
 	await expect(workspace(page).locator('.library-row-scrim')).toHaveCount(0);
 	guard.assertClean();
 });
+
+for (const shell of ['desktop', 'mobile'] as const) {
+	for (const failure of ['network', 'refusal'] as const) {
+		test(
+			`1160-F35-browser 1160-F36-browser: ${shell} song ${failure} toast follows its cause on reconnect`,
+			{ tag: ONLY_IN_SHELL[shell] },
+			async ({ page }, testInfo) => {
+				test.setTimeout(60000);
+				await page.setViewportSize(
+					shell === 'mobile' ? { width: 390, height: 844 } : { width: 1440, height: 900 }
+				);
+				const library = readSeededLibrary();
+				const stream = `**${RESOURCE_EVENT_STREAM_PATH}**`;
+				const session = '**/api/auth/me';
+				let unreachable = false;
+				let streamStarted = false;
+				let loseStream!: () => void;
+				const streamLost = new Promise<void>((resolve) => {
+					loseStream = resolve;
+				});
+				await page.route(stream, async (route) => {
+					if (!streamStarted) {
+						streamStarted = true;
+						await route.fulfill({
+							contentType: 'text/event-stream',
+							body: `event: ${RESOURCE_EVENT_HELLO}\ndata: {"high_water_mark":"0"}\n\n`
+						});
+						return;
+					}
+					await streamLost;
+					await route.abort('internetdisconnected');
+				});
+				await page.route(session, async (route) => {
+					if (streamStarted) await streamLost;
+					await (unreachable ? route.abort('internetdisconnected') : route.continue());
+				});
+				const reason =
+					failure === 'network' ? API_ERROR_GENERIC_MESSAGE : 'Generation service unavailable';
+				await page.route('**/api/songs/*/active-generation', (route) =>
+					failure === 'network'
+						? route.abort('internetdisconnected')
+						: route.fulfill({ status: 503, json: { detail: reason } })
+				);
+				try {
+					await page.goto(`/album/${library.albumId}`);
+					const openSong = workspace(page).getByRole('button', {
+						name: songEditorOpenLabel(library.pickedSongTitle)
+					});
+					await expect(openSong).toBeVisible();
+					await expect(offlineStrip(page)).toHaveCount(0);
+					if (failure === 'refusal') {
+						unreachable = true;
+						loseStream();
+						await expect(offlineStrip(page)).toBeVisible({ timeout: 20000 });
+					}
+					await openSong.click();
+					const toast = page.getByRole('alert').filter({ hasText: reason });
+					await expect(toast).toBeVisible();
+					await expect(page).toHaveURL(
+						`/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`
+					);
+					if (failure === 'network') {
+						await expect(offlineStrip(page)).toHaveCount(0);
+						unreachable = true;
+						loseStream();
+						await expect(offlineStrip(page)).toBeVisible({ timeout: 20000 });
+					}
+					await testInfo.attach(`song-${failure}-${shell}-offline`, {
+						body: await page.screenshot(),
+						contentType: 'image/png'
+					});
+					unreachable = false;
+					await page.unroute(stream);
+					await page.unroute(session);
+					await expect(offlineStrip(page)).toHaveCount(0, { timeout: 30000 });
+					await expect(toast).toHaveCount(failure === 'refusal' ? 1 : 0);
+					await testInfo.attach(`song-${failure}-${shell}-reconnected`, {
+						body: await page.screenshot(),
+						contentType: 'image/png'
+					});
+					if (failure === 'refusal') {
+						await toast.getByRole('button', { name: 'Dismiss' }).click();
+						await expect(toast).toHaveCount(0);
+					}
+				} finally {
+					loseStream();
+				}
+			}
+		);
+	}
+}

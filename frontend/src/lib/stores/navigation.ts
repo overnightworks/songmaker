@@ -452,7 +452,7 @@ function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
 	void hydrateActiveGeneration(songId).catch((err: unknown) => {
 		if (isNotFound(err)) return;
-		addToast(describeFailure(err, API_ERROR_GENERIC_MESSAGE), 'error');
+		addToast(describeFailure(err, API_ERROR_GENERIC_MESSAGE), 'error', err);
 	});
 	return ensureGenerationsLoaded(songId).catch(function acknowledgeOwnedFailure(err: unknown) {
 		if (isNotFound(err)) {

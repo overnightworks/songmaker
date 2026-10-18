@@ -81,10 +81,8 @@
 	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadFailure = $derived($allAlbumsLoadFailure);
-	// A list that has not loaded yet shows no count rather than claiming zero.
-	const albumCount = $derived(
-		albums.length > 0 || loadStatus === 'ready' ? albums.length : undefined
-	);
+	// Only a complete list can name the total, including an empty one.
+	const albumCount = $derived(loadStatus === 'ready' ? albums.length : undefined);
 	const visibleAlbums = $derived.by(() =>
 		inLibraryOrder(
 			'album',

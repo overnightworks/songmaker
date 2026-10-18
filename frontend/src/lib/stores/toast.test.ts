@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NEW_PLACE_OFFLINE } from '$lib/constants';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { get, writable } from 'svelte/store';
 import { toasts, addToast, addUndoToast, dismissToast } from './toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 
 beforeEach(() => {
-	toasts.set([]);
+	for (const toast of get(toasts)) dismissToast(toast.id);
 	vi.useFakeTimers();
 });
 
@@ -129,24 +131,53 @@ describe('toast store', () => {
 		expect(remaining[0].message).toBe('late');
 	});
 
-	it('clears the failures raised offline once the connection is back', () => {
-		addToast('Rating failed', 'error');
-		reportResourceStreamReachable(false);
-		addToast('Pick failed', 'error');
-		addToast('Keep failed', 'error');
-		expect(get(toasts)).toHaveLength(3);
-
+	it.each(
+		[
+			{
+				name: 'network',
+				cause: new NetworkError('/api/test', new TypeError('fetch')),
+				clears: true
+			},
+			{
+				name: 'timeout',
+				cause: new NetworkError('/api/test', new DOMException('timeout'), 'timeout'),
+				clears: true
+			},
+			{ name: 'refusal', cause: new ApiError(503, 'Unavailable', '/api/test'), clears: false },
+			{ name: 'unknown', cause: new TypeError('bug'), clears: false },
+			{ name: 'absent', cause: undefined, clears: false }
+		].flatMap((entry) => [true, false].map((offlineFirst) => ({ ...entry, offlineFirst })))
+	)('1160-F36-cause: $name with offline first=$offlineFirst', ({ cause, clears, offlineFirst }) => {
+		if (offlineFirst) reportResourceStreamReachable(false);
+		const id = addToast('Failure', 'error', cause);
+		expect(get(toasts)).toEqual([{ id, message: 'Failure', type: 'error' }]);
+		if (!offlineFirst) reportResourceStreamReachable(false);
 		reportResourceStreamReachable(true);
-
-		expect(get(toasts).map((toast) => toast.message)).toEqual(['Rating failed']);
+		expect(get(toasts).map((toast) => toast.id)).toEqual(clears ? [] : [id]);
 	});
 
-	it('clears the failures of every outage, not only the first', () => {
-		for (let outage = 0; outage < 3; outage++) {
-			reportResourceStreamReachable(false);
-			addToast('Pick failed', 'error');
+	it.each([true, false])(
+		'1160-F36-cause: unmigrated new-album toast retains offline-first=%s clearing',
+		(offlineFirst) => {
+			if (offlineFirst) reportResourceStreamReachable(false);
+			const id = addToast(NEW_PLACE_OFFLINE, 'error');
+			expect(get(toasts).map((toast) => toast.id)).toEqual([id]);
+			if (!offlineFirst) reportResourceStreamReachable(false);
 			reportResourceStreamReachable(true);
+			expect(get(toasts).map((toast) => toast.id)).toEqual(offlineFirst ? [] : [id]);
 		}
-		expect(get(toasts)).toEqual([]);
+	);
+
+	it('1160-F36-lifetime: each outage clears its network failures and leaves unrelated notices', () => {
+		const refusal = addToast('Refused', 'error');
+		for (let outage = 0; outage < 3; outage++) {
+			const cause = new NetworkError('/api/test', new TypeError('fetch'));
+			const dismissed = addToast('Dismissed', 'error', cause);
+			dismissToast(dismissed);
+			reportResourceStreamReachable(false);
+			addToast('Pick failed', 'error', cause);
+			reportResourceStreamReachable(true);
+			expect(get(toasts).map((toast) => toast.id)).toEqual([refusal]);
+		}
 	});
 });
