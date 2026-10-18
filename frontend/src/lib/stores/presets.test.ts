@@ -1,9 +1,11 @@
+import { makeSong } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { PresetItem } from '$lib/api/types';
 
 const api = vi.hoisted(() => ({
 	fetchPresets: vi.fn(),
+	fetchVersions: vi.fn().mockResolvedValue([]),
 	fetchBuiltinDefaults: vi.fn(),
 	fetchActiveModels: vi.fn(),
 	fetchDefaultConfig: vi.fn(),
@@ -17,7 +19,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock('$lib/api/client', () => api);
 
-import { setDraftGenParams } from '$lib/stores/editor';
+import { discardDraft, loadSongData, setDraftGenParams } from '$lib/stores/editor';
 import { recipeModel } from '$lib/stores/recipe';
 import {
 	activeModelIds,
@@ -60,6 +62,8 @@ function preset(id: string, overrides: Partial<PresetItem> = {}): PresetItem {
 }
 
 beforeEach(() => {
+	discardDraft();
+	loadSongData(makeSong());
 	vi.clearAllMocks();
 	presets.set([]);
 	builtinDefaults.set({});
@@ -67,7 +71,6 @@ beforeEach(() => {
 	activeModels.set([]);
 	generationDefaultsError.set(false);
 	recipeModel.set(null);
-	setDraftGenParams(null);
 });
 
 describe('preset store', () => {

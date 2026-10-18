@@ -60,6 +60,7 @@ import { menuRow } from '$lib/test-utils/collection-menu';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
 import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
 import {
+	discardDraft,
 	editLyrics,
 	pendingVersionLoad,
 	versionDeleteRequest,
@@ -311,6 +312,8 @@ function albumSongs(): SongItem[] {
 }
 
 beforeEach(() => {
+	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
+	discardDraft();
 	resetNavigationForTests();
 	pendingSource.set(null);
 	pinnedSeed.set(null);
