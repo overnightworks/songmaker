@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, tick } from 'svelte';
 	import {
 		listWorkers,
 		loadModelOnWorker,
@@ -15,11 +15,22 @@
 	import type { WorkerPoolResponse, WorkerInfoItem } from '$lib/api/types';
 	import { offline } from '$lib/stores/connectivity';
 	import {
+		DIALOG_CANCEL_LABEL,
+		WORKER_POOL_RESTART_LABEL,
+		WORKER_POOL_RESTART_CONFIRM,
+		WORKER_POOL_RESTART_TITLE,
+		WORKER_POOL_RESTART_WARNING,
+		WORKER_POOL_LAST_ERROR_LABEL,
+		WORKER_POOL_FULL_LOGS_LABEL,
 		WORKER_POOL_LOAD_FAILED,
 		WORKER_POOL_NO_MODEL_LABEL,
 		WORKER_POOL_REFRESH_FAILED,
 		WORKER_TRAINING_REMAINING_TEMPLATE
 	} from '$lib/constants';
+
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
+	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
+	import { localClockTime } from '$lib/utils/format';
 
 	import WorkerVramLine from './WorkerVramLine.svelte';
 	import WorkerModelsList from './WorkerModelsList.svelte';
@@ -42,6 +53,41 @@
 	let selectedMode = $state<Record<string, string>>({});
 	let actionError = $state('');
 	let busyAction = $state<Record<string, boolean>>({});
+	let confirmation = $state<{
+		workerId: string;
+		opener: HTMLButtonElement;
+		layer: ReturnType<typeof dialogHistoryLayer>;
+	} | null>(null);
+
+	function closeConfirmation(): void {
+		confirmation = null;
+	}
+
+	function openConfirmation(workerId: string, opener: HTMLButtonElement): void {
+		confirmation = {
+			workerId,
+			opener,
+			layer: dialogHistoryLayer('worker-restart', closeConfirmation)
+		};
+	}
+
+	function focusConfirmation(element: HTMLElement): () => void {
+		const opener = confirmation?.opener;
+		focusFirstIn(element);
+		return () => {
+			void tick().then(() => refocusIfDropped(opener));
+		};
+	}
+
+	$effect(() => {
+		if (
+			confirmation &&
+			(forbidden || !workers.some((worker) => worker.identity.id === confirmation?.workerId))
+		) {
+			closeConfirmation();
+		}
+	});
+
 	let trackedLoadJobIds = new Set<string>();
 
 	const loadingByWorker = $derived(
@@ -228,14 +274,10 @@
 	}
 
 	async function handleRestart(workerId: string): Promise<void> {
-		if (
-			typeof window !== 'undefined' &&
-			!window.confirm(`Restart worker ${workerId}? In-flight generations will fail.`)
-		) {
-			return;
-		}
-		actionError = '';
 		const key = `${workerId}:restart`;
+		const worker = workers.find((worker) => worker.identity.id === workerId);
+		if (!worker || worker.status === 'offline' || forbidden || busyAction[key]) return;
+		actionError = '';
 		busyAction = { ...busyAction, [key]: true };
 		try {
 			await restartWorker(workerId);
@@ -335,7 +377,7 @@
 						</div>
 					{/if}
 
-					<WorkerVramLine state={worker.state} />
+					<WorkerVramLine state={worker.state} {offline} />
 					{#if worker.state && !offline}
 						<div class="card-row">
 							<span class="row-label">Last seen:</span>
@@ -375,16 +417,66 @@
 							{busyAction[worker.identity.id] ? 'Loading…' : 'Load'}
 						</button>
 					</div>
+					{#if worker.state?.last_error}
+						{@const errorAt = worker.state.last_error_at
+							? new Date(worker.state.last_error_at)
+							: null}
+						<div class="last-error">
+							<div class="last-error-heading">
+								<strong><span aria-hidden="true">✕</span> {WORKER_POOL_LAST_ERROR_LABEL}</strong>
+								{#if errorAt && !Number.isNaN(errorAt.getTime())}
+									<time datetime={worker.state.last_error_at ?? undefined}
+										>{localClockTime(errorAt)} · {formatLastSeen(worker.state.last_error_at)}</time
+									>
+								{/if}
+							</div>
+							<p class="error-text">{worker.state.last_error}</p>
+							<p class="logs">
+								{WORKER_POOL_FULL_LOGS_LABEL} <code>docker compose logs {worker.identity.id}</code>
+							</p>
+						</div>
+					{/if}
 					<div class="card-actions">
 						<button
 							class="action-btn danger"
-							onclick={() => handleRestart(worker.identity.id)}
+							onclick={(event) => openConfirmation(worker.identity.id, event.currentTarget)}
 							disabled={offline || busyAction[`${worker.identity.id}:restart`]}
 							title={offline ? restartDisabledHint(worker) : undefined}
 						>
-							{busyAction[`${worker.identity.id}:restart`] ? 'Restarting…' : 'Restart'}
+							{busyAction[`${worker.identity.id}:restart`]
+								? 'Restarting…'
+								: WORKER_POOL_RESTART_LABEL}
 						</button>
 					</div>
+					{#if confirmation?.workerId === worker.identity.id}
+						{@const current = confirmation}
+						{@const title = WORKER_POOL_RESTART_TITLE.replace('{id}', worker.identity.id)}
+						<div
+							class="restart-confirmation"
+							role="dialog"
+							aria-label={title}
+							tabindex="-1"
+							{@attach current.layer.hold}
+							{@attach focusConfirmation}
+							onkeydown={(event) => handleFocusTrapKeydown(event.currentTarget, event)}
+						>
+							<strong>{title}</strong>
+							<p>{WORKER_POOL_RESTART_WARNING}</p>
+							<div class="confirmation-actions">
+								<button class="action-btn" onclick={current.layer.answer(closeConfirmation)}
+									>{DIALOG_CANCEL_LABEL}</button
+								>
+								<button
+									class="action-btn danger"
+									disabled={offline || forbidden || busyAction[`${worker.identity.id}:restart`]}
+									onclick={current.layer.answer(() => {
+										closeConfirmation();
+										void handleRestart(worker.identity.id);
+									})}>{WORKER_POOL_RESTART_CONFIRM}</button
+								>
+							</div>
+						</div>
+					{/if}
 				</div>
 			{/each}
 		</div>
@@ -523,6 +615,61 @@
 		gap: 0.4rem;
 		margin-top: 0.6rem;
 		max-width: 100%;
+	}
+
+	.card-actions {
+		border-top: 1px solid var(--border);
+		padding-top: 0.5rem;
+	}
+
+	.last-error {
+		margin-top: 0.35rem;
+		padding: 0.5rem 0.65rem;
+		border-left: 3px solid var(--score-bad);
+		background: color-mix(in srgb, var(--score-bad) 8%, transparent);
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		overflow-wrap: anywhere;
+	}
+
+	.last-error-heading,
+	.confirmation-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		align-items: baseline;
+	}
+
+	.last-error-heading strong {
+		color: var(--score-bad);
+	}
+	.last-error time,
+	.logs {
+		color: var(--text-muted);
+		font-size: 0.72rem;
+	}
+	.last-error p,
+	.restart-confirmation p {
+		margin: 0;
+	}
+	.error-text {
+		white-space: pre-wrap;
+	}
+	.restart-confirmation {
+		max-width: 24rem;
+		margin-top: 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--surface);
+		padding: 0.8rem 0.9rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+		overflow-wrap: anywhere;
+	}
+	.confirmation-actions {
+		justify-content: flex-end;
 	}
 
 	.load-row .mode-select {

@@ -227,6 +227,13 @@ export function takesDraftBanner(
 }
 export const EDITOR_QUEUED_LABEL = 'Queued';
 export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remaining)';
+export const WORKER_POOL_RESTART_LABEL = 'Restart worker…';
+export const WORKER_POOL_RESTART_CONFIRM = 'Restart';
+export const WORKER_POOL_RESTART_TITLE = 'Restart {id}?';
+export const WORKER_POOL_RESTART_WARNING = 'Running takes will stop.';
+export const WORKER_POOL_LAST_ERROR_LABEL = 'Last error';
+export const WORKER_POOL_FULL_LOGS_LABEL = 'Full logs:';
+export const WORKER_POOL_VRAM_OFFLINE = 'VRAM unavailable while the worker is offline.';
 // Named when an admin panel's first read fails while no offline strip says why.
 export const WORKER_POOL_LOAD_FAILED = 'Cannot reach the worker pool API.';
 export const WORKER_POOL_REFRESH_FAILED = 'Worker pool not updating — retrying…';
