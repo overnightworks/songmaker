@@ -1101,10 +1101,12 @@ and decoded-body inputs also have explicit count/byte bounds.
 GitHub Actions grants only `contents: read` and `issues: read`. Checkout never
 persists credentials, and `GITHUB_TOKEN` is passed as an environment variable
 only to the live-verifier step. The token-bearing job skips fork pull requests;
-the tokenless offline gate continues to validate those diffs. Live results are
-point-in-time observations,
-so pushes, manual runs, weekly checks, and approval-comment edit/delete events
-rerun verification. The binder re-fetches immediately before a local write, and
+the tokenless offline gate continues to validate those diffs.
+Live results prove the state observed during that run. Approval-comment edits
+or deletions do not trigger verification; they are detected by the next push to
+main, same-repository pull-request run, weekly scheduled run, or manual dispatch
+that executes the verifier. Scheduling guarantees no maximum detection delay.
+The binder re-fetches immediately before a local write, and
 the resulting pushed commit must pass the live workflow.
 
 Every third-party GitHub Action is pinned to the full commit SHA of its reviewed

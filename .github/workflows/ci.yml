@@ -25,6 +25,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
@@ -103,6 +105,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
@@ -129,12 +133,14 @@ jobs:
 
       - name: Verify acceptance evidence report
         if: always()
+        env:
+          EVIDENCE_STATUS: ${{ steps.evidence.outputs.status }}
         run: |
           report=artifacts/acceptance-evidence.json
           test -s "$report"
           sha256sum "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           git rev-parse HEAD | sed 's/^/Acceptance evidence HEAD: /' >> "$GITHUB_STEP_SUMMARY"
-          test "${{ steps.evidence.outputs.status }}" = "0"
+          test "$EVIDENCE_STATUS" = "0"
 
       - name: Upload acceptance evidence report
         if: always()
@@ -150,6 +156,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
 
       # The rules are Prometheus' own schema, so Prometheus' own tool is
       # the only honest checker — and it comes in the same image the
@@ -188,6 +196,8 @@ jobs:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # NOSONAR: disposable password for this isolated GitHub Actions service container.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
         with:
           python-version: "3.12"
@@ -212,6 +222,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.x
         with:

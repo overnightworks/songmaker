@@ -189,9 +189,10 @@ tests never need a token or make network calls. It covers strict witness parsing
 the empty no-network path, resource and time limits including the outer watchdog,
 fixed routes, fork-PR token isolation, pathological JSON, and mismatches at each
 link of the repository→issue→comment identity
-chain. A green live check proves only what GitHub returned during that run; the
-edited/deleted event hooks and weekly schedule reduce, but cannot eliminate, the
-time between a later invalidation and detection.
+chain. Live results prove the state observed during that run. Approval-comment edits
+or deletions do not trigger verification; they are detected by the next push to
+main, same-repository pull-request run, weekly scheduled run, or manual dispatch
+that executes the verifier. Scheduling guarantees no maximum detection delay.
 
 The local binder is covered separately by
 `tests/test_requirement_binder.py` and `tests/test_bind_requirement_revision.py`.

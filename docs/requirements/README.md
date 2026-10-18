@@ -70,10 +70,12 @@ oversized, noncanonical, symlinked, or unregistered data fail closed.
 The offline gate does not call GitHub. The separate live witness gate re-fetches
 the fixed repository, issue, and comment resources over verified TLS from fixed
 GitHub API routes and cross-checks their numeric identities, URLs, author,
-timestamps, and body against every witness. That result is point-in-time proof:
-an approval can be edited or deleted later. Edited/deleted comment events,
-pushes, same-repository pull requests, a weekly schedule, and manual dispatch
-rerun the live check. Fork pull requests deliberately skip the token-bearing
+timestamps, and body against every witness.
+Live results prove the state observed during that run. Approval-comment edits
+or deletions do not trigger verification; they are detected by the next push to
+main, same-repository pull-request run, weekly scheduled run, or manual dispatch
+that executes the verifier. Scheduling guarantees no maximum detection delay.
+Fork pull requests deliberately skip the token-bearing
 job while the offline pull-request gate still runs.
 
 The live gate follows the current repository full name. Witnesses captured
