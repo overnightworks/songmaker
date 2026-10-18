@@ -583,7 +583,11 @@ def test_login_commit_failure_leaves_no_session_or_cookie(
             attempted_cookies.append(sign_session_id(record.id, config.signing_key))
 
     def failing_session():
-        with factory() as db, session_commit_failure(db, observe=observe_session):
+        with factory() as db, session_commit_failure(
+            db,
+            observe=observe_session,
+            when=lambda session: session.query(UserSession).first() is not None,
+        ):
             yield db
 
     client.app.dependency_overrides[get_db_session] = failing_session

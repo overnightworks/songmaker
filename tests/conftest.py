@@ -723,10 +723,12 @@ def session_deletion_failure():
 
 @pytest.fixture
 def session_commit_failure():
-    """defect:#1590: fail commits, optionally observing the uncommitted state."""
+    """defect:#1590: fail matching commits, optionally observing uncommitted state."""
     @contextmanager
-    def fail_commit(target, *, message="commit failed", observe=None):
+    def fail_commit(target, *, message="commit failed", observe=None, when=None):
         def refuse_commit(session):
+            if when is not None and not when(session):
+                return
             if observe is not None:
                 observe(session)
             raise RuntimeError(message)
