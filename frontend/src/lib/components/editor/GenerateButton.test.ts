@@ -1,3 +1,4 @@
+import { currentUser } from '$lib/stores/auth';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -11,7 +12,7 @@ import {
 } from '$lib/constants';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { queued, running } from '$lib/test-utils/generate-states';
+import { failed, queued, running } from '$lib/test-utils/generate-states';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -39,6 +40,7 @@ let component: ReturnType<typeof mount>;
 
 beforeEach(() => {
 	vi.resetAllMocks();
+	currentUser.set(null);
 	injectHitboxStyles();
 	setPointer('coarse');
 });
@@ -49,6 +51,7 @@ afterEach(async () => {
 	clearHitboxStyles();
 	clearComponentStyles();
 	clearPointer();
+	currentUser.set(null);
 });
 
 async function render(state: GenerateState, props: { reasonInside?: boolean } = {}): Promise<void> {
@@ -204,12 +207,32 @@ describe('GenerateButton', () => {
 		}
 	);
 
+	it.each(
+		(['admin', 'user'] as const).flatMap((role) =>
+			[true, false].map((unavailable) => ({ role, unavailable }))
+		)
+	)(
+		'C1 C4: shows the adjacent worker-pool link only for $role unavailable=$unavailable',
+		async ({ role, unavailable }) => {
+			currentUser.set({ id: 'u1', username: 'tester', role });
+			await render({ ...failed, cause: "Generating isn't available right now.", unavailable });
+			const link = document.body.querySelector<HTMLAnchorElement>('a');
+			expect(link?.textContent).toBe(
+				role === 'admin' && unavailable ? 'Open worker pool' : undefined
+			);
+			if (link) expect(link.getAttribute('href')).toBe('/settings/users?tab=acestep');
+			expect(document.body.querySelector('.failure')?.textContent).toContain(
+				"Generating isn't available right now."
+			);
+		}
+	);
+
 	it.each([
 		'Too long for the GPU right now — try a shorter duration.',
 		"Generating isn't available right now.",
 		'Generating failed — try again.'
 	])('[defect:#1579] shows the complete failure without an expander: %s', async (cause) => {
-		await render({ kind: 'failed', mode: 'generate', cause });
+		await render({ ...failed, cause });
 		const sentence = document.body.querySelector<HTMLElement>('.failure');
 		if (!sentence) throw new Error('Expected the failure sentence');
 		injectComponentStyles(generateButtonSource, 'GenerateButton.svelte', sentence);

@@ -49,7 +49,12 @@ export const activeJobs = writable<ActiveJob[]>([]);
  * showing the cause until the next generation starts or the user
  * dismisses it.
  */
-export const generationFailures = writable<Record<string, string>>({});
+interface GenerationFailure {
+	message: string;
+	unavailable: boolean;
+}
+
+export const generationFailures = writable<Record<string, GenerationFailure>>({});
 
 // Bumped whenever a song's failure is resolved live (dismissed, or a fresh
 // generate starts). hydrateGenerationFailure captures the epoch before its
@@ -78,6 +83,10 @@ function failureMessage(job: JobStatus): string {
 	return job.error || `${job.type} failed`;
 }
 
+function generationFailure(job: JobStatus): GenerationFailure {
+	return { message: failureMessage(job), unavailable: job.error_type === 'generation_unavailable' };
+}
+
 /**
  * Recovers a song's failure banner after a reload or a later visit, when
  * the live SSE stream that would have reported it (see `streamJob` below)
@@ -100,9 +109,9 @@ export async function hydrateGenerationFailure(songId: string): Promise<void> {
 	if ((hydrationEpoch.get(songId) ?? 0) > 0) return;
 	const result = await fetchLastFailedGeneration(songId).catch(() => null);
 	if (!result?.job || (hydrationEpoch.get(songId) ?? 0) > 0) return;
-	const message = failureMessage(result.job);
+	const failure = generationFailure(result.job);
 	generationFailures.update((failures) =>
-		songId in failures ? failures : { ...failures, [songId]: message }
+		songId in failures ? failures : { ...failures, [songId]: failure }
 	);
 }
 
@@ -159,7 +168,7 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	}
 	const message = failureMessage(job);
 	if (songId && job.type === JOB_TYPE_GENERATE) {
-		generationFailures.update((failures) => ({ ...failures, [songId]: message }));
+		generationFailures.update((failures) => ({ ...failures, [songId]: generationFailure(job) }));
 	}
 	addToast(message, 'error');
 }

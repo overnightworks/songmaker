@@ -948,7 +948,7 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 
 	it('[defect:#1579] shows the full failure at Generate and retries through the same button', async () => {
 		const cause = 'Generating failed — try again.';
-		generationFailures.set({ s1: cause });
+		generationFailures.set({ s1: { message: cause, unavailable: false } });
 		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
 		const target = await renderView();
 		const action = target.querySelector<HTMLElement>('.generate-action');

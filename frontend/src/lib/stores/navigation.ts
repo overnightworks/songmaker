@@ -1,3 +1,4 @@
+import { ADMIN_WORKER_POOL_HREF } from '$lib/constants';
 import { listOfPage, SETTINGS_HREF } from '$lib/routes/pageBack';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
@@ -294,14 +295,23 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // page starts loading would abort it, which is why the push waits. The
 // library page it leaves keeps how it was left -- the wall's scroll -- for
 // Back (issue #1289).
-type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
+type AppPageHref =
+	Extract<RailSearchTarget, { kind: 'page' }>['href'] | typeof ADMIN_WORKER_POOL_HREF;
+
+export function resolveAppPageHref(href: AppPageHref): string {
+	return href === ADMIN_WORKER_POOL_HREF
+		? `${resolve('/settings/users')}?tab=acestep`
+		: resolve(href);
+}
 
 export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		closeSidebar();
 		await libraryHistoryStepsLanded();
 		await keepLibraryPageAsLeft();
-		await goto(resolve(href));
+		// The resolver above resolves the base route before appending the tab query.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		await goto(resolveAppPageHref(href));
 	});
 }
 

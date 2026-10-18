@@ -10,7 +10,7 @@ import {
 } from '$lib/test-utils/hitbox';
 import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { queued, running } from '$lib/test-utils/generate-states';
+import { failed, queued, running } from '$lib/test-utils/generate-states';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
@@ -64,7 +64,7 @@ describe('GenerationStatusSlot', () => {
 	it.each([
 		{ kind: 'idle', mode: 'generate' },
 		{ kind: 'disabled', mode: 'generate', reason: 'No models' },
-		{ kind: 'failed', mode: 'generate', cause: 'Worker error' }
+		failed
 	] as const)('renders nothing while the generate action is $kind', async (state) => {
 		await render(state);
 		expect(document.body.querySelector('.status-slot')).toBeNull();

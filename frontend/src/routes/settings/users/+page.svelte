@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { derived } from 'svelte/store';
 	import {
 		fetchUsers,
@@ -302,7 +303,17 @@
 		loadReloads[load].nameLoadFailure(e, LOAD_FAILURE_FALLBACKS[load]);
 	}
 
-	onMount(loadAll);
+	function selectRequestedTab(url: URL): void {
+		selectTab(parseAdminTab(url.searchParams.get('tab') ?? '') ?? 'users');
+	}
+
+	onMount(() => {
+		void loadAll();
+		selectRequestedTab(new URL(window.location.href));
+	});
+	afterNavigate(({ from, to }) => {
+		if (to && from?.url.pathname === to.url.pathname) selectRequestedTab(to.url);
+	});
 	onDestroy(() => {
 		for (const reloads of Object.values(loadReloads)) reloads.stop();
 	});

@@ -22,3 +22,10 @@ export const queued: Extract<GenerateState, { kind: 'queued' }> = {
 	reconnecting: false,
 	offline: false
 };
+
+export const failed: Extract<GenerateState, { kind: 'failed' }> = {
+	kind: 'failed',
+	mode: 'generate',
+	cause: 'Worker error',
+	unavailable: false
+};

@@ -1,8 +1,12 @@
 <script lang="ts">
+	import { isAdmin } from '$lib/stores/auth';
+	import { followAppPageLink, resolveAppPageHref } from '$lib/stores/navigation';
 	import {
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-		EDITOR_GENERATE_MODE_LABELS
+		EDITOR_GENERATE_MODE_LABELS,
+		EDITOR_OPEN_WORKER_POOL_LABEL,
+		ADMIN_WORKER_POOL_HREF
 	} from '$lib/constants';
 	import {
 		cancelGeneration,
@@ -105,7 +109,18 @@
 		{#if presentation.kind === 'disabled' && presentation.reason !== null && reasonInsideButton === null}
 			<p class="reason-below">{@render disabledReason(presentation.reason)}</p>
 		{:else if presentation.kind === 'failed'}
-			<p class="failure">{presentation.cause}</p>
+			<p class="failure">
+				{presentation.cause}{#if presentation.unavailable && $isAdmin}
+					<!-- resolveAppPageHref resolves the base route before appending the tab query. -->
+					<!-- eslint-disable svelte/no-navigation-without-resolve -->
+					<a
+						href={resolveAppPageHref(ADMIN_WORKER_POOL_HREF)}
+						onclick={(event) => followAppPageLink(event, ADMIN_WORKER_POOL_HREF)}
+						>{EDITOR_OPEN_WORKER_POOL_LABEL}</a
+					>
+					<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				{/if}
+			</p>
 		{/if}
 	{/if}
 </div>
@@ -227,8 +242,16 @@
 	}
 
 	.failure {
+		margin-bottom: var(--row-gap);
 		color: var(--score-bad);
 		white-space: pre-wrap;
+	}
+
+	.failure a {
+		color: var(--text-muted);
+		margin-inline-start: var(--row-gap);
+		white-space: normal;
+		text-decoration: underline;
 	}
 
 	.progress-fill.indeterminate {

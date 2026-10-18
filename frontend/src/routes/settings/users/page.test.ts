@@ -1,3 +1,6 @@
+import { startFakeRouter } from '$lib/test-utils/app-navigation';
+import { resolve } from '$app/paths';
+import { goto } from '$app/navigation';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -360,6 +363,7 @@ async function choose(select: HTMLSelectElement, value: string): Promise<void> {
 }
 
 beforeEach(() => {
+	window.history.replaceState({}, '', '/settings/users');
 	currentUser.set({ id: 'u1', username: 'felix', role: 'admin' });
 	api.fetchUsers.mockResolvedValue([ADMIN_USER, OTHER_USER]);
 	api.fetchAdminVoices.mockResolvedValue(VOICES);
@@ -397,6 +401,7 @@ beforeEach(() => {
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
+	window.history.replaceState({}, '', '/');
 	document.body.replaceChildren();
 	document.head.querySelectorAll('[data-compact-ui]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
@@ -405,6 +410,30 @@ afterEach(async () => {
 	vi.clearAllMocks();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
+});
+
+describe('C2: requested admin tab', () => {
+	it.each([
+		['?tab=acestep', 'acestep'],
+		['', 'users'],
+		['?tab=unknown', 'users']
+	] as const)('C2: selects %s on arrival and later navigation', async (query, expected) => {
+		window.history.replaceState({}, '', '/settings/users' + query);
+		startFakeRouter();
+		const target = await renderPage(true);
+		const select = requireElement<HTMLSelectElement>(
+			target,
+			`select[aria-label="${ADMIN_TABS_LABEL}"]`
+		);
+		expect(select.value).toBe(expected);
+		if (expected === 'acestep') expect(target.textContent).toContain('Worker');
+		await goto(resolve('/settings/users?tab=voices'));
+		await flush();
+		expect(select.value).toBe('voices');
+		await goto(resolve(`/settings/users${query}`));
+		await flush();
+		expect(select.value).toBe(expected);
+	});
 });
 
 describe('admin settings compact layout', () => {
@@ -886,6 +915,7 @@ describe('admin error ownership (#1447)', () => {
 	});
 
 	beforeEach(() => {
+		window.history.replaceState({}, '', '/settings/users');
 		api.updateUser.mockReset();
 		api.hardDeleteUser.mockReset();
 		api.fetchUserRateLimits.mockReset();
@@ -1266,6 +1296,7 @@ describe('admin models tab', () => {
 
 	describe('with the judge saved on the CLI route', () => {
 		beforeEach(() => {
+			window.history.replaceState({}, '', '/settings/users');
 			api.fetchJudgeSettings.mockResolvedValue(judgeSettings('claude', 'claude-sonnet', 'cli'));
 		});
 
