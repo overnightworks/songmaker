@@ -692,12 +692,11 @@ def test_body_limit_bounds_start_and_never_restarts_a_stream(failure):
             await anyio.sleep_forever()
 
     async def drive():
+        middleware = BodySizeLimitMiddleware(app, policy=policy)
+        scope = {"type": "http", "method": "POST", "path": "/api/proof", "headers": []}
         with anyio.fail_after(1):
             with pytest.raises(TimeoutError if failure == "blocked-start" else Exception) as raised:
-                await BodySizeLimitMiddleware(app, policy=policy)(
-                    {"type": "http", "method": "POST", "path": "/api/proof", "headers": []},
-                    receive, send,
-                )
+                await middleware(scope, receive, send)
             if failure == "body-after-start":
                 assert not isinstance(raised.value, TimeoutError)
 

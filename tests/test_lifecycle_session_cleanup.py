@@ -110,8 +110,9 @@ def test_cleanup_loop_runs_without_redis_and_recovers_after_database_failure(
             assert health.last_error is None
             raise asyncio.CancelledError
 
+    cleanup_loop = session_cleanup_loop(app, wait=advance_tick)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(session_cleanup_loop(app, wait=advance_tick))
+        asyncio.run(cleanup_loop)
 
     with factory() as db:
         assert db.get(UserSession, "expired") is None
