@@ -121,9 +121,9 @@ test.describe('cover suggestions retry', () => {
 		const retry = editing.getByRole('button', { name: ALBUM_COVER_SUGGESTIONS_RETRY_LABEL });
 		await expect(retry).toBeVisible({ timeout: retryBudget });
 		const box = await retry.boundingBox();
-		expect(box).not.toBeNull();
-		expect(box!.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
-		expect(box!.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+		if (!box) throw new Error('retry button has no bounding box');
+		expect(box.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+		expect(box.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 		await testInfo.attach('cover-retry', {
 			body: await page.screenshot(),
 			contentType: 'image/png'

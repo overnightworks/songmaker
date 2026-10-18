@@ -23,6 +23,7 @@ import {
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
+	csrfHeaders,
 	FlowGuard,
 	loseNetwork,
 	offlineStrip, // 1354_65_A3: shared status locator for the offline proofs.
@@ -612,14 +613,11 @@ test.describe(
 				const lastSeenBar = panel.getByRole('progressbar', {
 					name: EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
 				});
-
 				await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 				await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
 				await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
 				await expect(playButtons).toHaveCount(seededTakes);
-
 				await loseNetwork(page, context, { keepOpenStreams });
-
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
 					timeout: OFFLINE_NOTICE_MS
 				});
@@ -635,7 +633,6 @@ test.describe(
 				await expect(lastSeenBar.locator('span')).toHaveAttribute('style', /width: 40%/);
 				await expect(cancel).toHaveCSS('color', grey);
 				await expect(runningRing).toHaveCSS('color', grey);
-
 				await page.evaluate(
 					({ prefix, takesBefore }) => {
 						const takes = document.querySelector('[role="tabpanel"]');
@@ -651,7 +648,6 @@ test.describe(
 					},
 					{ prefix: playTakePrefix, takesBefore: seededTakes }
 				);
-
 				const songRefreshFailed = keepOpenStreams
 					? page.waitForEvent(
 							'requestfailed',
@@ -665,9 +661,7 @@ test.describe(
 				}
 				await expect(lastSeenBar).toBeVisible();
 				await expect(page.getByText(JOB_COMPLETED_TOAST)).toHaveCount(0);
-
 				await regainNetwork(page, context);
-
 				await expect(playButtons).toHaveCount(seededTakes + 2, { timeout: BACK_ONLINE_MS });
 				await expect(page.getByText(JOB_COMPLETED_TOAST)).toBeVisible();
 				await expect(panel.getByRole('progressbar')).toHaveCount(0);
@@ -677,13 +671,11 @@ test.describe(
 					() => (window as unknown as { takeArrivalGaps: { seen: boolean } }).takeArrivalGaps.seen
 				);
 				expect(sawNeitherCardNorTake).toBe(false);
-
 				console.log(`Offline running-take flow /api requests: ${guard.apiRequestCount}`);
 				guard.assertClean();
 				guard.assertWithinBudget(OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET);
 			});
 		}
-
 		test('restores the real queued position after reconnecting without navigation (1160-F10-queued-browser)', async ({
 			page,
 			context
@@ -702,6 +694,7 @@ test.describe(
 					expect(position).toBeGreaterThan(0);
 					await expect(panel.getByText(/Queued #/)).toHaveText(`Queued #${position}`);
 				}).toPass({ timeout: BACK_ONLINE_MS });
+			const cleanupErrors: unknown[] = [];
 			try {
 				await openOfflineTakes(page, library.songPhoneAlbumId, title);
 				await expectRealQueuedPosition();
@@ -716,10 +709,18 @@ test.describe(
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
 				await expect(page).toHaveURL(address);
 			} finally {
-				await regainNetwork(page, context);
-				const cancelled = await page.request.post(`/api/jobs/${jobId}/cancel`);
-				expect(cancelled.ok()).toBeTruthy();
+				try {
+					await regainNetwork(page, context);
+					const cancelled = await page.request.post(`/api/jobs/${jobId}/cancel`, {
+						headers: await csrfHeaders(page)
+					});
+					expect(cancelled.ok()).toBeTruthy();
+				} catch (error) {
+					cleanupErrors.push(error);
+					console.error('Queued job cleanup failed:', error);
+				}
 			}
+			if (cleanupErrors.length) throw cleanupErrors[0];
 		});
 
 		test('keeps the running card through three outages in one ride, with no red toast, and resumes it live', async ({
