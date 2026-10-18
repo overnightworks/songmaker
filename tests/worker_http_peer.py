@@ -21,7 +21,7 @@ from e2e_fixtures.fake_training_worker import (
     build_fake_worker_deps,
 )
 from starlette.responses import Response
-from starlette.types import Receive, Scope, Send
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.wrapper import create_app
@@ -42,6 +42,8 @@ class WorkerReply:
 @dataclass(frozen=True)
 class WorkerStream:
     events: tuple[tuple[str, dict], ...]
+    release: asyncio.Event | None = None
+    entered: asyncio.Event | None = None
 
     def response(self) -> Response:
         return Response(
@@ -98,6 +100,59 @@ class ReadyWorkerServer(uvicorn.Server):
         self.ready.set()
 
 
+class LoopbackServer:
+    """Own one HTTP server and its socket; callers bound the proof and cleanup."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+        self.server: ReadyWorkerServer | None = None
+        self.server_task: asyncio.Task | None = None
+        self.socket: socket.socket | None = None
+
+    async def start(self) -> str:
+        self.socket = socket.socket()
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind(("127.0.0.1", 0))
+        self.socket.listen()
+        self.socket.setblocking(False)
+        port = self.socket.getsockname()[1]
+        self.server = ReadyWorkerServer(
+            uvicorn.Config(
+                self.app,
+                host="127.0.0.1",
+                port=port,
+                lifespan="off",
+                log_config=None,
+                access_log=False,
+                timeout_graceful_shutdown=1,
+            )
+        )
+        self.server_task = asyncio.create_task(self.server.serve(sockets=[self.socket]))
+        ready_task = asyncio.create_task(self.server.ready.wait())
+        try:
+            done, _ = await asyncio.wait(
+                (ready_task, self.server_task),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if self.server_task in done:
+                await self.server_task
+                raise RuntimeError("HTTP server stopped before readiness")
+        finally:
+            ready_task.cancel()
+            await asyncio.gather(ready_task, return_exceptions=True)
+        return f"http://127.0.0.1:{port}"
+
+    async def stop(self) -> None:
+        if self.server is not None:
+            self.server.should_exit = True
+        try:
+            if self.server_task is not None:
+                await self.server_task
+        finally:
+            if self.socket is not None:
+                self.socket.close()
+
+
 async def load_peer_model(mode: str) -> LoadedModel:
     return LoadedModel(mode=mode, handle=object(), port=0)
 
@@ -148,9 +203,7 @@ class GenerationWorkerPeer:
             "stream": deque(scenario.stream_answers),
         }
         self.requests: list[tuple[str, str | None]] = []
-        self.server: ReadyWorkerServer | None = None
-        self.server_task: asyncio.Task | None = None
-        self.socket: socket.socket | None = None
+        self.http_server = LoopbackServer(self)
         self.transport_owner = httpx.ASGITransport(app=self)
         self.transport = BorrowedWorkerTransport(self.transport_owner)
 
@@ -180,6 +233,10 @@ class GenerationWorkerPeer:
                 send,
             )
         elif isinstance(answer, WorkerStream):
+            if answer.entered is not None:
+                answer.entered.set()
+            if answer.release is not None:
+                await answer.release.wait()
             await answer.response()(scope, receive, send)
         else:
             replayed = False
@@ -216,36 +273,8 @@ class GenerationWorkerPeer:
         ):
             raise ValueError("TransportFailure requires the ASGI transport, not a real server")
         self.phase = "server readiness"
-        self.socket = socket.socket()
-        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind(("127.0.0.1", 0))
-        self.socket.listen()
-        self.socket.setblocking(False)
-        port = self.socket.getsockname()[1]
-        self.server = ReadyWorkerServer(
-            uvicorn.Config(
-                self,
-                host="127.0.0.1",
-                port=port,
-                lifespan="off",
-                log_config=None,
-                access_log=False,
-                timeout_graceful_shutdown=1,
-            )
-        )
-        self.server_task = asyncio.create_task(self.server.serve(sockets=[self.socket]))
-        ready_task = asyncio.create_task(self.server.ready.wait())
-        try:
-            done, _ = await asyncio.wait(
-                (ready_task, self.server_task),
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if self.server_task in done:
-                await self.server_task
-                raise RuntimeError("Worker server stopped before readiness")
-        finally:
-            ready_task.cancel()
-            await asyncio.gather(ready_task, return_exceptions=True)
+        await self.http_server.start()
+        port = self.http_server.socket.getsockname()[1]
         with db_factory() as session:
             register_worker(
                 session,
@@ -268,14 +297,7 @@ class GenerationWorkerPeer:
                 raise result
 
     async def stop_server(self) -> None:
-        if self.server is not None:
-            self.server.should_exit = True
-        try:
-            if self.server_task is not None:
-                await self.server_task
-        finally:
-            if self.socket is not None:
-                self.socket.close()
+        await self.http_server.stop()
 
 
 @asynccontextmanager

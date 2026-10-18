@@ -31,6 +31,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
+    WORKER_ERROR_GPU_OUT_OF_MEMORY,
     WORKER_STREAM_WENT_SILENT,
     AllWorkersHeld,
     DispatchOptions,
@@ -39,6 +40,7 @@ from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerGenerationFailed,
     WorkerGenerationUnavailable,
+    WorkerGpuOutOfMemory,
     WorkerModeNotLoaded,
     WorkerProtocolError,
     WorkerTaskFailed,
@@ -356,6 +358,74 @@ def _patch_async_client(client_mock):
     return patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client_mock)
 
 
+def _peer_dispatch_options(peer):
+    return replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport)
+
+
+@pytest.mark.parametrize(
+    ("consume", "payload", "expected"),
+    [
+        (
+            consume_task_stream,
+            {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"},
+            WorkerGpuOutOfMemory,
+        ),
+        (consume_task_stream, {"error": "CUDA out of memory"}, WorkerGenerationFailed),
+        (
+            consume_task_stream,
+            {"error": "need 18.5 GB", "error_kind": None},
+            WorkerGenerationFailed,
+        ),
+        (
+            consume_task_stream,
+            {"error": "CUDA out of memory", "error_kind": "unknown"},
+            WorkerGenerationFailed,
+        ),
+        (consume_task_stream, {"error": "need 18.5 GB", "error_kind": 1}, WorkerGenerationFailed),
+        (
+            consume_task_stream,
+            {"error": "CUDA out of memory", "error_kind": ""},
+            WorkerGenerationFailed,
+        ),
+        (consume_task_stream, {"error_kind": "gpu_out_of_memory"}, WorkerProtocolError),
+        (
+            consume_task_stream,
+            {"error": "", "error_kind": "gpu_out_of_memory"},
+            WorkerProtocolError,
+        ),
+        (
+            consume_download_task_stream,
+            {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"},
+            WorkerTaskFailed,
+        ),
+    ],
+    ids=[
+        "typed",
+        "absent",
+        "null",
+        "unknown",
+        "integer",
+        "empty-kind",
+        "missing-error",
+        "empty-error",
+        "download",
+    ],
+)
+def test_s8_worker_error_kind(consume, payload, expected):
+    """S8-A/E: Only the generation wire kind selects GPU memory failure."""
+    from typing import get_args
+
+    from acestep_worker.models import TaskErrorKind
+
+    assert WORKER_ERROR_GPU_OUT_OF_MEMORY in get_args(TaskErrorKind)
+    body = "event: error\ndata: " + json.dumps(payload) + "\n\n"
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, text=body))
+    stream = consume(_make_picked(), "task-1", options=DispatchOptions(transport=transport))
+    with pytest.raises(WorkerTaskFailed) as raised:
+        _run(stream)
+    assert type(raised.value) is expected
+
+
 def test_consume_task_stream_done_returns_dto() -> None:
     worker = _make_picked()
     done_payload = {
@@ -553,7 +623,7 @@ def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_wor
             operation = consume_task_stream(
                 _make_picked(),
                 "gen-1",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable, match=WORKER_STREAM_WENT_SILENT):
                 await operation
@@ -862,7 +932,7 @@ def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
                     ace_config=_make_ace_config(),
                     target_mode="sft",
                     on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
-                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                    options=_peer_dispatch_options(peer),
                 )
                 assert Path(result.audio_path).is_file()
             assert [mode for kind, mode in peer.requests if kind == "load"] == ["sft"]
@@ -892,7 +962,7 @@ def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
                         ace_config=_make_ace_config(),
                         target_mode=mode,
                         on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
-                        options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                        options=_peer_dispatch_options(peer),
                     )
                     assert Path(result.audio_path).is_file()
             assert [mode for kind, mode in peer.requests if kind == "load"] == [
@@ -953,7 +1023,7 @@ def test_s5_load_transport_failure_before_response(generation_worker_peer, error
                 worker=_make_picked(loaded=["sft"] if reload else []),
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable, match="load lost") as raised:
                 await operation
@@ -981,7 +1051,7 @@ def test_s5_submit_transport_failure_before_response(generation_worker_peer, err
                 worker=_make_picked(loaded=["sft"]),
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable, match="submit lost") as raised:
                 await operation
@@ -1008,7 +1078,7 @@ def test_s5_mode_still_missing_after_reload(generation_worker_peer, load_fails):
                 worker=_make_picked(loaded=["sft"]),
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable) as raised:
                 await operation
@@ -1027,7 +1097,7 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
 
     async def exercise():
         async with generation_worker_peer(db_factory=db_factory) as peer:
-            address = peer.socket.getsockname()
+            address = peer.http_server.socket.getsockname()
             worker = await admit_generation_worker(
                 target_mode="sft",
                 redis=peer.redis,
@@ -1048,7 +1118,7 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
         assert not peer.deps.heartbeat.is_running
         assert peer.deps.cache.loaded_modes() == []
         assert all(task.done() for task in peer.generation_tasks)
-        assert peer.server_task.done()
+        assert peer.http_server.server_task.done()
         with socket.socket() as reused:
             reused.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             reused.bind(address)

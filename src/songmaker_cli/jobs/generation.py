@@ -81,7 +81,13 @@ from ._runtime import (
     _touch_heartbeat,
     _update_job,
 )
-from .generation_failure import generation_failure, partial_failure_error
+from .generation_failure import (
+    GenerationFailure,
+    generation_failure,
+    partial_failure_error,
+    running_failure_pair,
+    select_generation_failure,
+)
 
 log = logging.getLogger(__name__)
 
@@ -125,7 +131,7 @@ _GENERATION_PHASE_OF: Final[dict[AceStepPhase, GenerationPhase]] = {
 
 @dataclass
 class GenerationProgressTracker:
-    """The single writer of a running generate job's progress.
+    """The single writer of a running generate job's progress and visible failure pair.
 
     Every RUNNING write of a generate job goes through here, because
     ``update_job_status`` resets progress whenever a write omits it. The
@@ -149,6 +155,10 @@ class GenerationProgressTracker:
     phase: GenerationPhase | None = field(default=None, init=False)
     reached: float = field(default=0.0, init=False)
     last_write: float = field(default=-math.inf, init=False)
+    failure: GenerationFailure | None = field(default=None, init=False)
+
+    def record_failure(self, exc: Exception) -> None:
+        self.failure = select_generation_failure(self.failure, exc, self.job_id)
 
     def mark_running(self) -> None:
         self._write(worker_pid=os.getpid())
@@ -183,12 +193,15 @@ class GenerationProgressTracker:
         self.reached = max(self.reached, value)
 
     def _write(self, **fields: Any) -> None:
+        error, error_type = running_failure_pair(self.failure)
         _update_job(
             self.db_factory,
             self.job_id,
             JobStatus.RUNNING,
             progress=self.reached,
             phase=unset_if_none(self.phase),
+            error=error,
+            error_type=error_type,
             **fields,
         )
         self.last_write = self.clock()
@@ -669,7 +682,7 @@ def _finalize_generation_job(
     job_id: str,
     count: int,
     completed: int,
-    last_error: Exception | None,
+    failure: GenerationFailure | None,
 ) -> None:
     """Set final job status based on how many generations succeeded."""
     if _job_is_terminal(db_factory, job_id):
@@ -677,7 +690,7 @@ def _finalize_generation_job(
     if completed == count:
         _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
     elif completed > 0:
-        failure = generation_failure(last_error, job_id)
+        assert failure is not None
         _update_job(
             db_factory,
             job_id,
@@ -687,7 +700,7 @@ def _finalize_generation_job(
             error_type=failure.error_type,
         )
     else:
-        failure = generation_failure(last_error, job_id)
+        assert failure is not None
         _update_job(
             db_factory,
             job_id,
@@ -1108,7 +1121,6 @@ async def _generate_variants(
     progress: GenerationProgressTracker,
 ) -> None:
     completed = 0
-    last_error: Exception | None = None
     for index in range(count):
         if _job_is_terminal(db_factory, job_id):
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
@@ -1123,12 +1135,12 @@ async def _generate_variants(
             progress,
         )
         if error is not None:
-            last_error = error
+            progress.record_failure(error)
             continue
         completed += 1
         if persisted_gen_id:
             await _auto_score_generation(redis, db_factory, persisted_gen_id, song_id)
-    _finalize_generation_job(db_factory, job_id, count, completed, last_error)
+    _finalize_generation_job(db_factory, job_id, count, completed, progress.failure)
 
 
 async def _generate_variant(

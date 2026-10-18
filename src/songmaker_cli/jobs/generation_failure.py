@@ -2,17 +2,26 @@
 
 import re
 from dataclasses import dataclass
+from typing import Final
 
 from songmaker_cli.api_models import JobResponse
 from songmaker_cli.constants import (
     JOB_ERROR_GENERATION_FAILED,
     JOB_ERROR_GENERATION_UNAVAILABLE,
+    JOB_ERROR_GPU_OUT_OF_MEMORY,
     JobType,
 )
 from songmaker_cli.db.models import Job
-from songmaker_cli.scheduler import NoCapacityError, WorkerGenerationUnavailable, WorkerTaskFailed
+from songmaker_cli.scheduler import (
+    NoCapacityError,
+    WorkerGenerationUnavailable,
+    WorkerGpuOutOfMemory,
+    WorkerTaskFailed,
+)
 
 from ._runtime import _sanitize_error, generation_error_messages
+
+GPU_OUT_OF_MEMORY: Final = "gpu_out_of_memory"
 
 _PARTIAL_FAILURE_PREFIX = re.compile(r"\d+/\d+ completed, \d+ failed: ", re.ASCII)
 
@@ -31,11 +40,30 @@ class GenerationFailure:
 def generation_failure(exc: Exception, job_id: str) -> GenerationFailure:
     """Log the full cause and select the musician's line and its type together."""
     message = _sanitize_error(exc, job_id)
+    if isinstance(exc, WorkerGpuOutOfMemory):
+        return GenerationFailure(JOB_ERROR_GPU_OUT_OF_MEMORY, GPU_OUT_OF_MEMORY)
     if isinstance(exc, (WorkerGenerationUnavailable, NoCapacityError)):
         return GenerationFailure(JOB_ERROR_GENERATION_UNAVAILABLE, "generation_unavailable")
     if isinstance(exc, WorkerTaskFailed):
         message = JOB_ERROR_GENERATION_FAILED
     return GenerationFailure(message=message, error_type="generation_error")
+
+
+def select_generation_failure(
+    previous: GenerationFailure | None, exc: Exception, job_id: str,
+) -> GenerationFailure:
+    """Log each cause; GPU memory takes precedence, otherwise the latest wins."""
+    current = generation_failure(exc, job_id)
+    if previous is not None and previous.error_type == GPU_OUT_OF_MEMORY:
+        return previous
+    return current
+
+
+def running_failure_pair(failure: GenerationFailure | None) -> tuple[str | None, str | None]:
+    """Only a GPU-memory failure is visible before all takes finish."""
+    if failure is not None and failure.error_type == GPU_OUT_OF_MEMORY:
+        return failure.message, failure.error_type
+    return None, None
 
 
 def musician_error(error: str | None, error_type: str | None) -> str | None:

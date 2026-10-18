@@ -16,6 +16,9 @@ JOB_ERROR_SERVER_UNREACHABLE: Final[str] = "ACE-Step server not reachable"
 JOB_ERROR_GENERATION_TIMED_OUT: Final[str] = "Generation timed out"
 JOB_ERROR_NO_WORKERS: Final[str] = "No ACE-Step workers available"
 JOB_ERROR_GENERATION_UNAVAILABLE: Final[str] = "Generating isn't available right now."
+JOB_ERROR_GPU_OUT_OF_MEMORY: Final[str] = (
+    "Too long for the GPU right now — try a shorter duration."
+)
 JOB_ERROR_GENERATION_FAILED: Final[str] = "Generating failed — try again."
 JOB_ERROR_WORKER_TRAINING_FAILED: Final[str] = "Worker training failed"
 JOB_ERROR_WORKER_STREAM_SILENT: Final[str] = "Worker stream went silent"

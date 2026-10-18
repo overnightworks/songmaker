@@ -65,6 +65,7 @@ GenerationProgressCallback = Callable[[AceStepPhase, float], Awaitable[None] | N
 ProgressEventHandler = Callable[[dict], Awaitable[None]]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 WORKER_STREAM_WENT_SILENT = JOB_ERROR_WORKER_STREAM_SILENT
+WORKER_ERROR_GPU_OUT_OF_MEMORY: Final = "gpu_out_of_memory"
 NO_ONLINE_ACESTEP_WORKERS_DETAIL: Final = "No online ACE-Step workers"
 
 
@@ -82,6 +83,13 @@ class WorkerTaskFailed(RuntimeError):
 
 class WorkerGenerationFailed(WorkerTaskFailed):
     """Raised for a worker ``error`` event, preserving its diagnostic cause."""
+
+
+class WorkerGpuOutOfMemory(WorkerGenerationFailed):
+    """Raised only for the worker's typed GPU-memory failure."""
+
+
+WorkerErrorClassifier = Callable[[dict], type[WorkerTaskFailed]]
 
 
 class WorkerGenerationUnavailable(WorkerTaskFailed):
@@ -428,7 +436,7 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
     *,
     result_type: type[_TaskResultT],
     invalid_result_label: str,
-    error_exception_type: type[WorkerTaskFailed],
+    error_classifier: WorkerErrorClassifier,
     on_progress_event: ProgressEventHandler,
     silence_exception_type: type[WorkerTaskFailed] = WorkerTaskFailed,
     on_heartbeat: HeartbeatCallback | None = None,
@@ -436,10 +444,9 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
 ) -> _TaskResultT:
     """Consume a worker task stream. Returns the validated ``result_type`` DTO.
 
-    ``error_exception_type`` is raised for a real (non-empty) ``error``
-    event, so a caller can distinguish a generation failure — whose message
-    is ACE-Step's own cause, retained for logging — from any other
-    task kind's failure.
+    ``error_classifier`` selects the exception for a validated non-empty
+    error event. Generation consumes typed causes; other task kinds retain
+    their own failure class. The diagnostic message is retained for logging.
 
     Raises ``WorkerProtocolError`` when an SSE event violates the wire
     contract: a ``done`` event missing ``result``, an ``error`` event
@@ -454,7 +461,7 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
                 data,
                 result_type=result_type,
                 invalid_result_label=invalid_result_label,
-                error_exception_type=error_exception_type,
+                error_classifier=error_classifier,
                 on_progress_event=on_progress_event,
             )
             if result is not None:
@@ -470,7 +477,7 @@ async def _consume_stream_event[_TaskResultT: BaseModel](
     *,
     result_type: type[_TaskResultT],
     invalid_result_label: str,
-    error_exception_type: type[WorkerTaskFailed],
+    error_classifier: WorkerErrorClassifier,
     on_progress_event: ProgressEventHandler,
 ) -> _TaskResultT | None:
     if event_type == "progress":
@@ -479,7 +486,7 @@ async def _consume_stream_event[_TaskResultT: BaseModel](
     if event_type == "done":
         return _validate_task_result(data, result_type, invalid_result_label)
     if event_type == "error":
-        _raise_worker_event_error(data, error_exception_type)
+        _raise_worker_event_error(data, error_classifier)
     return None
 
 
@@ -529,9 +536,15 @@ def _validate_task_result[_TaskResultT: BaseModel](
         ) from exc
 
 
+def _generation_error_class(data: dict) -> type[WorkerTaskFailed]:
+    if data.get("error_kind") == WORKER_ERROR_GPU_OUT_OF_MEMORY:
+        return WorkerGpuOutOfMemory
+    return WorkerGenerationFailed
+
+
 def _raise_worker_event_error(
     data: dict,
-    error_exception_type: type[WorkerTaskFailed],
+    error_classifier: WorkerErrorClassifier,
 ) -> None:
     if "error" not in data:
         raise WorkerProtocolError("Worker error event missing 'error' field")
@@ -539,7 +552,7 @@ def _raise_worker_event_error(
     if not message:
         log.warning("Worker error event has empty 'error' field")
         raise WorkerProtocolError("Worker error event has an empty 'error' field")
-    raise error_exception_type(message)
+    raise error_classifier(data)(message)
 
 
 async def consume_task_stream(
@@ -561,7 +574,7 @@ async def consume_task_stream(
             task_id,
             result_type=GenerationTaskResultDTO,
             invalid_result_label="invalid result",
-            error_exception_type=WorkerGenerationFailed,
+            error_classifier=_generation_error_class,
             silence_exception_type=WorkerGenerationUnavailable,
             on_progress_event=_generation_progress_events(on_progress),
             on_heartbeat=on_heartbeat,
@@ -590,7 +603,7 @@ async def consume_download_task_stream(
         task_id,
         result_type=DownloadTaskResultDTO,
         invalid_result_label="invalid download result",
-        error_exception_type=WorkerTaskFailed,
+        error_classifier=lambda _data: WorkerTaskFailed,
         on_progress_event=_plain_progress_events(on_progress),
         on_heartbeat=on_heartbeat,
         options=options,

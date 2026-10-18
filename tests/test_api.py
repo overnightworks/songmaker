@@ -4331,6 +4331,219 @@ def _read_musician_job(client, job_id, read_path):
     return events[0]
 
 
+@pytest.mark.parametrize("transition", ["start", "report", "saving"])
+def test_s8_running_failure_survives_progress(client, stored_musician_job, transition):
+    """S8-B: Every take-2 progress write retains OOM in storage and a fresh GET."""
+    import asyncio
+
+    import httpx
+
+    from songmaker_cli.constants import GenerationPhase
+    from songmaker_cli.jobs.generation import GenerationProgressTracker
+    from songmaker_cli.scheduler import WorkerGpuOutOfMemory
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        job = session.get(Job, stored_musician_job)
+        job.status = "running"
+        job.completed_at = None
+        session.commit()
+    tracker = GenerationProgressTracker(factory, stored_musician_job, 2)
+    tracker.record_failure(WorkerGpuOutOfMemory("need 18.5 GB"))
+    tracker.start_take(1)
+    if transition == "report":
+        tracker.report(GenerationPhase.WRITING, 0.5)
+    elif transition == "saving":
+        tracker.start_saving_take()
+    expected = ("Too long for the GPU right now — try a shorter duration.", "gpu_out_of_memory")
+    with factory() as session:
+        job = session.get(Job, stored_musician_job)
+        stored_error = (job.error, job.error_type)
+        assert stored_error == expected
+        assert job.status == "running"
+        assert session.query(Generation).count() == 2
+
+    async def read():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+        ) as fresh:
+            response = await fresh.get(f"/api/jobs/{stored_musician_job}")
+            assert response.status_code == 200
+            return response.json()
+
+    response = asyncio.run(asyncio.wait_for(read(), timeout=5))
+    response_error = (response["error"], response["error_type"])
+    assert response_error == expected
+    assert (response["status"], response["take_index"]) == ("running", 2)
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (
+            {"error": "first", "error_type": "gpu_out_of_memory"},
+            {"error": "second", "error_type": "gpu_out_of_memory"},
+        ),
+        (
+            {"error": "same", "error_type": "gpu_out_of_memory"},
+            {"error": "same", "error_type": "timeout"},
+        ),
+    ],
+    ids=["error-only", "type-only"],
+)
+def test_s8_stream_error_only_changes(client, before, after):
+    """S8-C: The real SSE route emits error-only and type-only changes."""
+    import asyncio
+
+    from songmaker_cli import redis_client
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+
+    ctx = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
+        job_id = job.id
+        update_job_status(session, job_id, JobStatusUpdate("running", **before))
+        session.commit()
+    cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
+
+    async def drive():
+        frames = []
+        status = None
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            elif message["type"] == "http.response.body":
+                for line in message.get("body", b"").decode().splitlines():
+                    if not line.startswith("data: "):
+                        continue
+                    frames.append(json.loads(line.removeprefix("data: ")))
+                    if len(frames) <= 2:
+                        with ctx.db() as session:
+                            update_job_status(
+                                session,
+                                job_id,
+                                JobStatusUpdate(
+                                    "running" if len(frames) == 1 else "cancelled",
+                                    **after,
+                                ),
+                            )
+                            session.commit()
+
+        try:
+            await client.app(_job_stream_scope(job_id, cookie=cookie), receive, send)
+        finally:
+            await redis_client.drain_lease_releases()
+        assert status == 200
+        first, second = frames[:2]
+        assert {key: first[key] for key in before} == before
+        assert {key: second[key] for key in after} == after
+        assert first["status"] == second["status"] == "running"
+        assert first["progress"] == second["progress"]
+
+    asyncio.run(asyncio.wait_for(drive(), timeout=8))
+
+
+def test_s8_live_stream_during_second_take(client, generation_worker_peer):
+    """S8-B/C: Live SSE delivers persisted OOM while the second worker take is gated."""
+    import asyncio
+
+    import httpx
+    from worker_http_peer import (
+        PEER_CLEANUP_DEADLINE_SECONDS,
+        LoopbackServer,
+        WorkerScenario,
+        WorkerStream,
+    )
+
+    from songmaker_cli import redis_client
+    from songmaker_cli.acestep_state import read_queue_depth
+    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.jobs import run_generation_job
+
+    ctx = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID, song_id="s1")
+        job_id = job.id
+        session.commit()
+    cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
+
+    async def drive():
+        entered, release = asyncio.Event(), asyncio.Event()
+        failure = (("error", {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"}),)
+        scenario = WorkerScenario(
+            loaded_modes=("sft",),
+            stream_answers=(
+                WorkerStream(failure),
+                WorkerStream(failure, release=release, entered=entered),
+            ),
+        )
+        async with generation_worker_peer(scenario, db_factory=ctx.db) as peer:
+            generation = asyncio.create_task(
+                run_generation_job(
+                    job_id,
+                    "s1",
+                    "v1",
+                    2,
+                    _DEFAULT_USER_ID,
+                    db_factory=ctx.db,
+                    audio_dir=peer.audio_dir,
+                    data_dir=peer.data_dir,
+                    redis=peer.redis,
+                    target_model="sft",
+                )
+            )
+            server = LoopbackServer(client.app)
+            try:
+                base_url = await server.start()
+                await entered.wait()
+                async with httpx.AsyncClient(
+                    base_url=base_url,
+                    cookies={DEFAULT_SESSION_COOKIE_NAME: cookie},
+                ) as fresh:
+                    async with fresh.stream("GET", f"/api/jobs/{job_id}/stream") as stream:
+                        assert stream.status_code == 200
+                        frames = (
+                            json.loads(line.removeprefix("data: "))
+                            async for line in stream.aiter_lines()
+                            if line.startswith("data: ")
+                        )
+                        response = await anext(frames)
+                        assert (response["status"], response["take_index"]) == ("running", 2)
+                        assert response["error"] == (
+                            "Too long for the GPU right now — try a shorter duration."
+                        )
+                        assert response["error_type"] == "gpu_out_of_memory"
+                        assert not generation.done()
+                        assert not release.is_set()
+                        reloaded = await fresh.get(f"/api/jobs/{job_id}")
+                        assert reloaded.status_code == 200
+                        assert reloaded.json()["error"] == response["error"]
+                        release.set()
+                        await generation
+                        remaining = [frame async for frame in frames]
+                        assert remaining[-1]["status"] == "failed"
+                assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
+            finally:
+                release.set()
+                tasks = [generation]
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                try:
+                    async with asyncio.timeout(PEER_CLEANUP_DEADLINE_SECONDS):
+                        await server.stop()
+                finally:
+                    await redis_client.drain_lease_releases()
+
+    asyncio.run(drive())
+
+
 @pytest.mark.parametrize("read_path", ["get", "stream", "reload"])
 @pytest.mark.parametrize("status", ["failed", "partial"])
 @pytest.mark.parametrize("role", ["user", "admin"])

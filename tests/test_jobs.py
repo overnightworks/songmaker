@@ -886,23 +886,20 @@ def test_generation_job_rejects_foreign_reference_before_dispatch(
         assert job.error == "Reference audio not found"
 
 
+async def _run_peer_generation(factory, peer, count):
+    await run_generation_job(
+        "j1", "s1", "v1", count, "u1", db_factory=factory,
+        audio_dir=peer.audio_dir, data_dir=peer.data_dir, redis=peer.redis,
+        target_model="sft",
+    )
+
+
 def test_generation_job_no_capacity(seeded_db, generation_worker_peer) -> None:
     """S5-B/D, L10: Real admission without a registered worker fails before any take."""
 
     async def exercise() -> None:
         async with generation_worker_peer() as peer:
-            await run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=peer.audio_dir,
-                data_dir=peer.data_dir,
-                redis=peer.redis,
-                target_model="sft",
-            )
+            await _run_peer_generation(seeded_db, peer, 1)
             assert peer.requests == []
 
     _run(exercise())
@@ -959,18 +956,7 @@ def test_generation_job_selects_musician_line(
             stream_answers=(None,) * completed + (stream,),
         )
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
-            await run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                completed + 1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=peer.audio_dir,
-                data_dir=peer.data_dir,
-                redis=peer.redis,
-                target_model="sft",
-            )
+            await _run_peer_generation(seeded_db, peer, completed + 1)
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
 
     _run(exercise())
@@ -1024,18 +1010,7 @@ def test_generation_job_sanitizes_auto_load_response(
     async def exercise() -> None:
         scenario = WorkerScenario(load_answers=(reply,))
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
-            await run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=peer.audio_dir,
-                data_dir=peer.data_dir,
-                redis=peer.redis,
-                target_model="sft",
-            )
+            await _run_peer_generation(seeded_db, peer, 1)
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
             assert peer.requests == [("load", "sft")]
 
@@ -1062,18 +1037,7 @@ def test_s5_generation_job_worker_disappears_before_request(
         scenario = WorkerScenario(loaded_modes=("sft",) if loaded else ())
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
             await peer.stop_server()
-            await run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=peer.audio_dir,
-                data_dir=peer.data_dir,
-                redis=peer.redis,
-                target_model="sft",
-            )
+            await _run_peer_generation(seeded_db, peer, 1)
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
             assert peer.requests == []
 
@@ -1113,18 +1077,7 @@ def test_s5_generation_job_reload_unavailable(
             load_answers=(WorkerReply(503, "reload unavailable"),) if load_fails else (),
         )
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
-            await run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                completed + 1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=peer.audio_dir,
-                data_dir=peer.data_dir,
-                redis=peer.redis,
-                target_model="sft",
-            )
+            await _run_peer_generation(seeded_db, peer, completed + 1)
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
             assert [kind for kind, _ in peer.requests] == ["submit", "stream"] * completed + [
                 "submit",
@@ -1143,6 +1096,71 @@ def test_s5_generation_job_reload_unavailable(
         for generation in generations:
             assert (tmp_path / "audio" / generation.mp3_path).is_file()
             assert (tmp_path / "audio" / generation.wav_path).is_file()
+
+
+@pytest.mark.parametrize(
+    ("outcomes", "status", "completed", "prefix", "gated_take"),
+    [
+        (("oom",), "failed", 0, "", None),
+        (("oom", "success"), "partial", 1, "1/2 completed, 1 failed: ", None),
+        (("success", "oom"), "partial", 1, "1/2 completed, 1 failed: ", None),
+        (("oom", "oom"), "failed", 0, "", None),
+        (("oom", "generic"), "failed", 0, "", None),
+        (("generic", "oom"), "failed", 0, "", (2, None, None)),
+    ],
+    ids=["oom", "oom-success", "success-oom", "oom-oom", "oom-generic", "generic-oom"],
+)
+def test_s8_take_outcomes(
+    seeded_db, generation_worker_peer, tmp_path, outcomes, status, completed, prefix, gated_take,
+):
+    """S8-B/D/E/F: Real worker takes continue and retain the selected OOM cause."""
+
+    answers = {
+        "success": None,
+        "oom": WorkerStream(
+            (("error", {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"}),)
+        ),
+        "generic": WorkerStream((("error", {"error": "CUDA out of memory"}),)),
+    }
+
+    async def exercise():
+        release = asyncio.Event()
+        entered = asyncio.Event()
+        streams = [answers[outcome] for outcome in outcomes]
+        if gated_take is not None:
+            index = gated_take[0] - 1
+            streams[index] = WorkerStream(streams[index].events, release=release, entered=entered)
+        scenario = WorkerScenario(loaded_modes=("sft",), stream_answers=tuple(streams))
+        async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
+            task = asyncio.create_task(_run_peer_generation(seeded_db, peer, len(outcomes)))
+            try:
+                if gated_take is not None:
+                    await entered.wait()
+                    with seeded_db() as session:
+                        job = get_job(session, "j1")
+                        assert (job.take_index, job.error, job.error_type) == gated_take
+                    release.set()
+                await task
+                assert [kind for kind, _ in peer.requests].count("submit") == len(outcomes)
+                assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
+            finally:
+                release.set()
+                if not task.done():
+                    task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    _run(exercise())
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == status
+        assert job.error == prefix + "Too long for the GPU right now — try a shorter duration."
+        assert job.error_type == "gpu_out_of_memory"
+        generations = session.query(Generation).filter_by(song_id="s1").all()
+        assert len(generations) == completed
+        for generation in generations:
+            assert (tmp_path / "audio" / generation.mp3_path).is_file()
+            assert (tmp_path / "audio" / generation.wav_path).is_file()
+        assert session.query(Job).filter_by(type="score", song_id="s1").count() == completed
 
 
 def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
@@ -1896,6 +1914,56 @@ def test_a_take_never_shows_an_earlier_phase_once_writing_began(
     assert [phase for phase, _, _ in observed] == [
         "loading_model", "writing", "writing", "writing", "rendering",
     ]
+
+
+def test_s8_cancel_after_oom(seeded_db, generation_worker_peer, tmp_path):
+    """S8-F: Cancellation clears OOM, preserves a saved take, blocks writes and take 4."""
+
+    async def exercise():
+        entered, release = asyncio.Event(), asyncio.Event()
+        failure = (("error", {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"}),)
+        scenario = WorkerScenario(
+            loaded_modes=("sft",),
+            stream_answers=(
+                None,
+                WorkerStream(failure),
+                WorkerStream(
+                    (("progress", {"phase": "writing", "progress": 0.5}),) + failure,
+                    release=release,
+                    entered=entered,
+                ),
+            ),
+        )
+        async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
+            task = asyncio.create_task(_run_peer_generation(seeded_db, peer, 4))
+            try:
+                await entered.wait()
+                with seeded_db() as session:
+                    job = get_job(session, "j1")
+                    assert (job.status, job.error_type) == ("running", "gpu_out_of_memory")
+                    saved = session.query(Generation).one()
+                    paths = [
+                        tmp_path / "audio" / saved.mp3_path,
+                        tmp_path / "audio" / saved.wav_path,
+                    ]
+                    assert all(path.is_file() for path in paths)
+                _cancel_job(seeded_db, "j1")
+                release.set()
+                await task
+                assert [kind for kind, _ in peer.requests].count("submit") == 3
+                assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
+                with seeded_db() as session:
+                    job = get_job(session, "j1")
+                    assert (job.status, job.error, job.error_type) == ("cancelled", None, None)
+                    assert session.query(Generation).count() == 1
+                    assert all(path.is_file() for path in paths)
+            finally:
+                release.set()
+                if not task.done():
+                    task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    _run(exercise())
 
 
 def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
