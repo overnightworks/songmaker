@@ -701,20 +701,20 @@ test.describe('Back and Forward between the library and Settings', () => {
 		guard.assertClean();
 	});
 
-	// The drawer belongs to the mobile shell.
+	// Search is a phone layer.
 	test(
-		'the phone drawer left open over a reload is gone, and one Back reaches the wall',
+		'the search sheet left open over a reload on the playlist is gone, and one Back reaches the wall',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page, request }) => {
 			const guard = new FlowGuard(page);
 			const { pages } = await openSeededPlaylist(page, request);
-			await openRailDrawer(page);
+			await openSearchSheet(page);
 
 			await page.reload();
 
-			await expect(railDrawer(page)).toBeHidden();
+			await expect(searchSheet(page)).toBeHidden();
 			await expectPlaylistStands(page, pages);
-			// The library steps off the drawer's own entry by itself once it runs.
+			// The library steps off the sheet's own entry by itself once it runs.
 			await expect
 				.poll(() => page.evaluate(() => JSON.stringify(history.state).includes('"layer"')))
 				.toBe(false);
