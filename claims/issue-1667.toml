@@ -1,0 +1,8 @@
+claim_id = "2cc920198fc343d581cdf97981bbac43"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "16fed090bc6af29a588ba0fbc8778a05754916cc"
+branch = "claude/issue-1667-ci-hygiene-before-gate"
+scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml", ".github/workflows/requirement-witnesses.yml", ".github/workflows/security.yml", "docs/requirements/README.md", "docs/security.md", "docs/testing.md", "tests/test_check_requirement_witnesses.py", "tests/test_requirement_witness.py"]
+opened_commit = "2c0a25bd172dbdbcdac8ccc488924f2163df0fbc"
+whole_reason = "One small hygiene preparation removes the eleven measured findings and synchronizes the witness contract."
