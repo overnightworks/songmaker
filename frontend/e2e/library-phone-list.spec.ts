@@ -22,6 +22,7 @@ import {
 	openRailNav,
 	playingAudioState,
 	scrollWallHalfway,
+	shellOf,
 	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	type Shell,
 	wallBody,
@@ -745,32 +746,48 @@ for (const [shell, surfaces, proof] of [
 	}
 }
 
-test(
-	"1354_rule_8 1354_rule_14: a place played with the rail standing leads Home's Listen and the Library visited after it, on one Listen read",
-	{ tag: ONLY_IN_SHELL.desktop },
-	async ({ page }) => {
-		const [newest, older] = [fixture.albums[2], fixture.albums[42]];
-		await listenIn(page, await firstSongOf(page, older.id));
-		await page.goto(LIBRARY_PATH);
-		await page.getByRole('button', { name: 'Last played', exact: true }).click();
-		const tileTitles = workspace(page).locator('.library-wall .tile-grid .tile-title');
-		await expect(tileTitles.first()).toHaveText(older.title);
-		await playFirstTakeFromTheWall(page, 'desktop', newest);
-		let listenReads = 0;
-		page.on('request', (request) => {
-			if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
-				listenReads++;
-		});
-		await openHome(page, 'desktop');
-		await expect(listenRegion(page).locator('.wall-tile-body').first()).toHaveAttribute(
-			'aria-label',
-			`Open album ${newest.title}`
-		);
+test("1354_rule_8 1354_rule_14: a place played leads Home's Listen and the Library visited after it, on one Listen read", async ({
+	page
+}, testInfo) => {
+	const shell = shellOf(testInfo);
+	const [newest, older] = [fixture.albums[2], fixture.albums[42]];
+	await listenIn(page, await firstSongOf(page, older.id));
+	await recordPaintedOrders(page, {
+		wall: '.library-wall .tile-grid .tile-title',
+		rail: '.album-label .row-title'
+	});
+	await page.goto(LIBRARY_PATH);
+	await page.getByRole('button', { name: 'Last played', exact: true }).click();
+	const tileTitles = workspace(page).locator('.library-wall .tile-grid .tile-title');
+	await expect(tileTitles.first()).toHaveText(older.title);
+	await playFirstTakeFromTheWall(page, shell, newest);
+	let listenReads = 0;
+	page.on('request', (request) => {
+		if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
+			listenReads++;
+	});
+	await openHome(page, shell);
+	await expect(listenRegion(page).locator('.wall-tile-body').first()).toHaveAttribute(
+		'aria-label',
+		`Open album ${newest.title}`
+	);
 
-		await openLibraryWall(page, 'desktop');
+	const paintMark = (await paintedOrders(page)).wall.length;
+	await openLibraryWall(page, shell);
 
-		await expect(tileTitles.first()).toHaveText(newest.title);
-		await expect(tileTitles.nth(1)).toHaveText(older.title);
-		expect(listenReads, 'Listen reads on Home and the Library visited after it').toBe(1);
-	}
-);
+	await expect(tileTitles.first()).toHaveText(newest.title);
+	await expect(tileTitles.nth(1)).toHaveText(older.title);
+	const lastPlayed = [
+		newest.title,
+		older.title,
+		...fixture.albums
+			.filter((album) => album !== newest && album !== older)
+			.map((album) => album.title)
+	];
+	await expect
+		.poll(async () => (await paintedOrders(page)).wall.slice(paintMark).at(-1))
+		.toEqual(lastPlayed);
+	for (const order of (await paintedOrders(page)).wall.slice(paintMark))
+		expect(order).toEqual(lastPlayed);
+	expect(listenReads, 'Listen reads on Home and the Library visited after it').toBe(1);
+});
