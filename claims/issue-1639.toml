@@ -1,7 +1,0 @@
-claim_id = "5e8f2922e9ff4741a386847577f645d8"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "da5b58c50ea7c3e07e4e8deff04d1e2162cfc51e"
-branch = "claude/issue-1639-dirty-song-arrangement"
-scope = ["frontend/e2e/library.spec.ts", "frontend/src/lib/stores/navigation.test.ts"]
-opened_commit = "bae0d16cc4ee32832c2830dd5bc9fe9a19f1e210"
