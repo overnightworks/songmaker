@@ -27,7 +27,8 @@ import {
 	SONG_TITLE_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	songEditorOpenLabel
+	songEditorOpenLabel,
+	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
 import { appBar, FlowGuard, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary, runMarker, seedRunningGenerationJob, seedSongPhoneSong } from './seed';
@@ -297,7 +298,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		guard.assertClean();
 	});
 
-	test('1354_37b_64: going back from a focused co-writer composer shows the album page with its own app bar', async ({
+	test('1354_37b_71_label 1354_37b_64: going back from a focused co-writer composer shows the album page with its own app bar', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
@@ -308,7 +309,9 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await page.goBack();
 
 		await expect(page).toHaveURL(new RegExp(`/album/${readSeededLibrary().songPhoneAlbumId}$`));
-		await expect(appBar(page).getByRole('button', { name: 'Search', exact: true })).toBeVisible();
+		await expect(
+			appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true })
+		).toBeVisible();
 		await expect(appBar(page).getByRole('button', { name: /^Back to / })).toBeVisible();
 		await expect(page.getByRole('contentinfo')).toBeVisible();
 

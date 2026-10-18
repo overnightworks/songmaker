@@ -20,7 +20,8 @@ import {
 	openNowPlayingLabel,
 	PLAYLISTS_PAGE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	songEditorOpenLabel
+	songEditorOpenLabel,
+	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -610,7 +611,7 @@ test.describe('song page at phone width', () => {
 					const address = page.url();
 					await page
 						.locator('.mobile-strip')
-						.getByRole('button', { name: 'Search', exact: true })
+						.getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true })
 						.click();
 					const search = page.getByRole('dialog', { name: 'Search', exact: true });
 					await expect(search).toBeVisible();

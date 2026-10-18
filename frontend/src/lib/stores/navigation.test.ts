@@ -201,6 +201,13 @@ import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
 
+function openNavigationSheet(): Writable<boolean> {
+	const sheet = historyLayerState('search-sheet', false);
+	onTestFinished(sheet.subscribe(() => undefined));
+	sheet.set(true);
+	return sheet;
+}
+
 // A layer's entry is a copy of the page it covers, so the entry itself -- not
 // the library it carries -- tells whether history stands on the layer.
 async function expectStandingLayer(layer: string): Promise<void> {
@@ -681,14 +688,15 @@ describe('the library pages opened over a collection', () => {
 	});
 
 	describe('the Playlists page (#1402)', () => {
-		it('defect:#1402 chosen in the phone drawer leaves no drawer entry behind, so Forward returns to it', async () => {
+		it('defect:#1402 1354_37b_71_history: chosen from a sheet leaves no sheet entry behind, so Forward returns to it', async () => {
 			await openAlbum('a1');
-			toggleSidebar();
+			const sheet = openNavigationSheet();
 			await libraryHistoryStepsLanded();
 
+			closeTopLayer();
 			await openPlaylistsBySearch();
 			await libraryHistoryStepsLanded();
-			expect(get(sidebarOpen)).toBe(false);
+			expect(get(sheet)).toBe(false);
 
 			await pressBack();
 			await libraryHistoryStepsLanded();
@@ -1712,27 +1720,29 @@ describe('a dirty draft guards song switch / leave', () => {
 	describe.each([
 		['an album', () => openAlbum('a2'), { kind: 'album', id: 'a2' }],
 		['a playlist', () => openPlaylist('p1'), { kind: 'playlist', id: 'p1' }]
-	] as const)('opening %s from the phone drawer (issue #1143)', (_name, open, opened) => {
-		async function openFromTheDrawerWithADirtyDraft(): Promise<void> {
+	] as const)('opening %s from a sheet (issue #1143)', (_name, open, opened) => {
+		let sheet: Writable<boolean>;
+		async function openFromSheetWithADirtyDraft(): Promise<void> {
 			await openAlbum('a1');
 			await selectSong('s1');
 			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 			setDraftLyrics('unsaved edit');
-			toggleSidebar();
+			sheet = openNavigationSheet();
+			closeTopLayer();
 			await open();
 		}
 
-		it('holds the leave for the unsaved-changes dialog and closes the drawer over it', async () => {
-			await openFromTheDrawerWithADirtyDraft();
+		it('1354_37b_71_dirty: holds the leave for the unsaved-changes dialog and closes the sheet over it', async () => {
+			await openFromSheetWithADirtyDraft();
 
 			expect(get(pendingDirtyNavigation)).not.toBeNull();
 			expect(get(selectedSongId)).toBe('s1');
 			expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
-			expect(get(sidebarOpen)).toBe(false);
+			expect(get(sheet)).toBe(false);
 		});
 
-		it('leaves on Discard', async () => {
-			await openFromTheDrawerWithADirtyDraft();
+		it('1354_37b_71_dirty: leaves on Discard', async () => {
+			await openFromSheetWithADirtyDraft();
 			discardDraft();
 			await get(pendingDirtyNavigation)?.();
 			pendingDirtyNavigation.set(null);
@@ -1741,8 +1751,8 @@ describe('a dirty draft guards song switch / leave', () => {
 			expect(get(openCollection)).toEqual(opened);
 		});
 
-		it('stays with the draft on Keep editing', async () => {
-			await openFromTheDrawerWithADirtyDraft();
+		it('1354_37b_71_dirty: stays with the draft on Keep editing', async () => {
+			await openFromSheetWithADirtyDraft();
 			pendingDirtyNavigation.set(null);
 
 			expect(get(selectedSongId)).toBe('s1');
@@ -1758,26 +1768,28 @@ describe('a dirty draft guards song switch / leave', () => {
 		],
 		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/voices' })]
 	] as const)('leaving for an app page through %s (issue #1143)', (_name, leave) => {
+		let sheet: Writable<boolean>;
 		async function leaveWithADirtyDraft(): Promise<void> {
 			await openAlbum('a1');
 			await selectSong('s1');
 			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 			setDraftLyrics('unsaved edit');
-			toggleSidebar();
+			sheet = openNavigationSheet();
+			closeTopLayer();
 			vi.mocked(goto).mockClear();
 			await leave();
 		}
 
-		it('holds the leave for the unsaved-changes dialog and keeps the route', async () => {
+		it('1354_37b_71_dirty: holds the leave for the unsaved-changes dialog and keeps the route', async () => {
 			await leaveWithADirtyDraft();
 
 			expect(get(pendingDirtyNavigation)).not.toBeNull();
 			expect(window.location.pathname).toBe('/album/a1/s1');
 			expect(vi.mocked(goto)).not.toHaveBeenCalled();
-			expect(get(sidebarOpen)).toBe(false);
+			expect(get(sheet)).toBe(false);
 		});
 
-		it('leaves for the page on Discard', async () => {
+		it('1354_37b_71_dirty: leaves for the page on Discard', async () => {
 			await leaveWithADirtyDraft();
 			discardDraft();
 			await get(pendingDirtyNavigation)?.();
@@ -1786,7 +1798,7 @@ describe('a dirty draft guards song switch / leave', () => {
 			expect(window.location.pathname).toBe('/settings/voices');
 		});
 
-		it('keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
+		it('1354_37b_71_dirty: keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
 			const stopNavigation = initNavigation();
 			try {
 				await leaveWithADirtyDraft();
@@ -2799,12 +2811,13 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		playlistStands(below);
 	});
 
-	it('an album row in the drawer over an open menu, which closes that menu, lands on the album and one Back leaves it', async () => {
+	it('1354_37b_71_layers: an album chosen from a sheet over an open menu, which closes that menu, lands on the album and one Back leaves it', async () => {
 		const menu = ownedMenu();
 		const below = await openOnTopOfPlaylist(menu);
-		toggleSidebar();
-		await expectStandingLayer('rail-drawer');
+		openNavigationSheet();
+		await expectStandingLayer('search-sheet');
 
+		closeTopLayer();
 		const going = openAlbum('a1');
 		menu.set(false);
 		await going;
@@ -2916,22 +2929,22 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 });
 
 describe('overlays outside the library', () => {
-	it('Back closes the topmost overlay on /settings before it leaves the page', async () => {
+	it('1354_37b_71_layers: Back closes the topmost overlay on /settings before it leaves the page', async () => {
 		replaceHistoryEntry('/settings/voices');
 		const menu = historyLayerState('a-menu', false);
 		const leaveOwner = menu.subscribe(() => undefined);
-		toggleSidebar();
+		const sheet = openNavigationSheet();
 		menu.set(true);
 
 		await pressBack();
 
 		expect(get(menu)).toBe(false);
-		expect(get(sidebarOpen)).toBe(true);
+		expect(get(sheet)).toBe(true);
 		expect(location.pathname).toBe('/settings/voices');
 
 		await pressBack();
 
-		expect(get(sidebarOpen)).toBe(false);
+		expect(get(sheet)).toBe(false);
 		expect(location.pathname).toBe('/settings/voices');
 		leaveOwner();
 	});
@@ -3086,24 +3099,26 @@ describe('openRailSearchTarget', () => {
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		selectedSongId.set('s1');
 		librarySurface.set('detail');
-		toggleSidebar();
+		const sheet = openNavigationSheet();
 
+		closeTopLayer();
 		await openRailSearchTarget({ kind: 'page', href: LIBRARY_ROUTE_PATH });
 
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySurface)).toBe('browse');
 		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
-		expect(get(sidebarOpen)).toBe(false);
+		expect(get(sheet)).toBe(false);
 	});
 
-	it('opens one page target and closes the rail drawer', async () => {
+	it('1354_37b_71_page: opens one page target after closing the sheet', async () => {
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
-		toggleSidebar();
-		expect(get(sidebarOpen)).toBe(true);
+		const sheet = openNavigationSheet();
+		expect(get(sheet)).toBe(true);
 
+		closeTopLayer();
 		await openRailSearchTarget({ kind: 'page', href: '/settings/voices' });
 
-		expect(get(sidebarOpen)).toBe(false);
+		expect(get(sheet)).toBe(false);
 		expect(window.location.pathname).toBe('/settings/voices');
 		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/voices');
 	});

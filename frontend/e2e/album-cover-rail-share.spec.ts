@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
 import { LIBRARY_PAGE_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
-import { BASE_URL } from './seed';
+import { archiveOwnedAlbum, BASE_URL } from './seed';
 import { boundingBoxes, csrfHeaders, FlowGuard, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -83,16 +83,6 @@ async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void
 	).toBeTruthy();
 }
 
-async function archiveOwnedAlbum(page: Page, albumId: string): Promise<void> {
-	const response = await page.request.post(`/api/albums/${albumId}/archive`, {
-		headers: await csrfHeaders(page)
-	});
-	expect(
-		response.ok(),
-		`POST /api/albums/${albumId}/archive failed: ${await response.text()}`
-	).toBeTruthy();
-}
-
 async function createCoveredAlbum(
 	page: Page
 ): Promise<{ album: CreatedResource; albumTitle: string }> {
@@ -105,7 +95,7 @@ async function createCoveredAlbum(
 	return { album, albumTitle };
 }
 
-test('1354_37a_A6: a fresh album cover reaches wall, album header, desktop rail, and every share page at desktop and 375 px', async ({
+test('1354_65_C1 1354_37a_A6: a fresh album cover reaches wall, album header, desktop rail, and every share page at desktop and 375 px', async ({
 	page,
 	browser,
 	isMobile
@@ -174,11 +164,11 @@ test('1354_37a_A6: a fresh album cover reaches wall, album header, desktop rail,
 			await publicContext.close();
 		}
 	} finally {
-		await archiveOwnedAlbum(page, album.id);
+		await archiveOwnedAlbum(page.request, album.id);
 	}
 });
 
-test('1354_37b_62_A: a shared playlist replaces its upload with the current mosaic and disappears after unshare at desktop and 375 px', async ({
+test('1354_65_C2 1354_37b_62_A: a shared playlist replaces its upload with the current mosaic and disappears after unshare at desktop and 375 px', async ({
 	page,
 	browser,
 	isMobile
@@ -249,7 +239,7 @@ test('1354_37b_62_A: a shared playlist replaces its upload with the current mosa
 		try {
 			if (playlistId) await deleteOwnedPlaylist(page, playlistId);
 		} finally {
-			await archiveOwnedAlbum(page, album.id);
+			await archiveOwnedAlbum(page.request, album.id);
 		}
 	}
 });
@@ -267,7 +257,7 @@ const PHONE_SCREENS = [
 // The words keep room for a few lines however short the screen.
 const WORDS_MIN_HEIGHT_PX = 80;
 
-test('1354_37b_62_B: a shared song shows Play and its words in one screen at every phone height (#1391)', async ({
+test('1354_65_C3 1354_37b_62_B: a shared song shows Play and its words in one screen at every phone height (#1391)', async ({
 	page,
 	browser,
 	isMobile
@@ -319,7 +309,7 @@ test('1354_37b_62_B: a shared song shows Play and its words in one screen at eve
 			}
 		}
 	} finally {
-		await archiveOwnedAlbum(page, album.id);
+		await archiveOwnedAlbum(page.request, album.id);
 	}
 });
 

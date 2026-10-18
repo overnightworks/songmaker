@@ -19,7 +19,8 @@ import {
 	HITBOX_FREQUENT_PX,
 	HOME_PAGE_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
-	RAIL_SEARCH_LABEL
+	RAIL_SEARCH_LABEL,
+	SEARCH_OPEN_LABEL
 } from '$lib/constants';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
@@ -40,11 +41,7 @@ import { playlistList, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { resetRailSearchForTests } from '$lib/stores/railSearch';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { buildAlbum, buildPlaylist, buildSong } from './shell/rail-test-fixtures';
-import PhoneAppBar, {
-	SEARCH_CLOSE_LABEL,
-	SEARCH_OPEN_LABEL,
-	SEARCH_SHEET_LABEL
-} from './PhoneAppBar.svelte';
+import PhoneAppBar, { SEARCH_CLOSE_LABEL, SEARCH_SHEET_LABEL } from './PhoneAppBar.svelte';
 
 vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 

@@ -406,7 +406,7 @@
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
 		display: flex;
 		align-items: center;
-		padding: 10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+		padding: 10px 18px calc(10px + var(--transport-safe-area-bottom));
 		z-index: 100;
 		overflow: hidden;
 		transition: box-shadow 0.3s;
@@ -579,7 +579,7 @@
 
 	@media (max-width: 900px) {
 		.player-bar {
-			padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+			padding: 8px 10px calc(8px + var(--transport-safe-area-bottom));
 		}
 		.player-content {
 			grid-template-columns: auto minmax(80px, 1fr) minmax(90px, 1fr) auto;
@@ -614,7 +614,7 @@
 		--phone-bar-edge: 14px;
 		touch-action: none;
 		overflow: visible;
-		padding: 0 0 env(safe-area-inset-bottom, 0px);
+		padding: 0 0 var(--transport-safe-area-bottom);
 	}
 	.mobile-transport .mobile-progress {
 		display: block;

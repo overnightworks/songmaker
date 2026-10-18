@@ -1232,10 +1232,14 @@ export async function seedPhoneLibrary(
 	return { albums, playlist: { id: playlist.id, title }, tracks };
 }
 
+export async function archiveOwnedAlbum(api: APIRequestContext, albumId: string): Promise<void> {
+	const seed = await SeedApi.fromSession(api);
+	await seed.postJson(`/api/albums/${albumId}/archive`, {});
+}
+
 export async function archivePhoneLibrary(
 	api: APIRequestContext,
 	fixture: PhoneLibraryFixture
 ): Promise<void> {
-	const seed = await SeedApi.fromSession(api);
-	for (const album of fixture.albums) await seed.postJson(`/api/albums/${album.id}/archive`, {});
+	for (const album of fixture.albums) await archiveOwnedAlbum(api, album.id);
 }
