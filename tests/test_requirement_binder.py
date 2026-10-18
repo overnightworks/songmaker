@@ -714,9 +714,7 @@ def test_ignored_contract_entries_exceed_a_fixed_bound_before_network(
 
 
 @pytest.fixture
-def spawned_processes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[list[subprocess.Popen[bytes]]]:
+def spawned_processes(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[subprocess.Popen[bytes]]]:
     original = binder.subprocess.Popen
     processes: list[subprocess.Popen[bytes]] = []
 
@@ -768,10 +766,9 @@ def test_git_runner_refuses_a_bad_command_and_leaves_no_child(
     """1346-F12-reaped, 1346-F13-killed: reject, kill and reap before returning."""
     monkeypatch.setattr(binder, "GIT_BINARY", Path(git_binary))
     monkeypatch.setattr(binder, "GIT_TIMEOUT_SECONDS", timeout_seconds)
-    runner = binder.GitRunner(tmp_path)
 
     with pytest.raises(binder.RequirementBinderError, match=message):
-        runner.run(*arguments, maximum=maximum)
+        binder.GitRunner(tmp_path).run(*arguments, maximum=maximum)
 
     (process,) = spawned_processes
     assert process.returncode == returncode
