@@ -222,10 +222,12 @@ def test_postgresql_serializes_publication_and_cancellation(
 
     image_started = threading.Event()
     allow_image = threading.Event()
+    image_returned = threading.Event()
 
     def generate_after_cancellation(*args, **kwargs):
         image_started.set()
         assert allow_image.wait(10)
+        image_returned.set()
         return b"image"
 
     if winner == "cancellation":
@@ -248,6 +250,7 @@ def test_postgresql_serializes_publication_and_cancellation(
             finally:
                 allow_image.set()
             await task
+            assert image_returned.is_set()
         else:
             contender = asyncio.create_task(asyncio.to_thread(cancel_cover))
             try:
