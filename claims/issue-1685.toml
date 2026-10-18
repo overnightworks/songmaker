@@ -1,8 +1,0 @@
-claim_id = "7955285537fe4e8ca15e1de0c4d7c269"
-agent = "claude"
-role = "builder"
-base = "8725870097d5d05785b621792302dbc755088c5c"
-branch = "claude/issue-1685-cowriter-owner-only"
-scope = ["docs/security.md", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/mcp_server/tools.py", "tests/test_conversation_api.py", "tests/test_cowriter_ownership.py", "tests/test_mcp_server.py"]
-opened_commit = "a18b8d67e1465e5d19bb09c82fa6c2ac178b2255"
-whole_reason = "The shared authorization decision, every tool caller and both dispatch paths must agree."
