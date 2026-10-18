@@ -843,11 +843,15 @@ def test_update_job_status_does_not_overwrite_terminal(
     seeded_session: Session,
     terminal: str,
 ) -> None:
+    """S9-A: Terminal state and completion time resist late writes."""
     job = create_job(seeded_session, "generate")
     seeded_session.commit()
     applied = update_job_status(seeded_session, job.id, JobStatusUpdate(terminal, progress=0.4))
     seeded_session.commit()
     assert applied is True
+    seeded_session.expire_all()
+    completed_at = get_job(seeded_session, job.id).completed_at
+    assert completed_at is not None
 
     applied = update_job_status(seeded_session, job.id, JobStatusUpdate("running", progress=0.9))
     seeded_session.commit()
@@ -855,23 +859,36 @@ def test_update_job_status_does_not_overwrite_terminal(
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == terminal
     assert fetched.progress == 0.4
+    assert fetched.completed_at == completed_at
 
 
-def test_update_job_status_cancelled_sets_completed_at(seeded_session: Session) -> None:
-    job = create_job(seeded_session, "generate")
+@pytest.mark.parametrize(
+    ("kind", "terminal"),
+    [("generate", status) for status in ("partial", "failed", "completed", "cancelled")]
+    + [("score", "partial")],
+    ids=["partial", "failed", "completed", "cancelled", "score-partial"],
+)
+def test_update_job_status_stamps_completed_at_for_every_terminal_status(
+    seeded_session, kind, terminal,
+) -> None:
+    """S9-A: Every terminal transition persists its completion clock."""
+    job = create_job(seeded_session, kind)
     seeded_session.commit()
-    update_job_status(seeded_session, job.id, JobStatusUpdate("cancelled"))
+    before = datetime.now(timezone.utc)
+    update_job_status(seeded_session, job.id, JobStatusUpdate(terminal))
     seeded_session.commit()
+    seeded_session.expire_all()
     fetched = get_job(seeded_session, job.id)
-    assert fetched.status == "cancelled"
-    assert fetched.completed_at is not None
+    assert fetched.status == terminal
+    assert before <= fetched.completed_at.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc)
 
     completed_at = fetched.completed_at
     update_job_status(seeded_session, job.id, JobStatusUpdate("completed", progress=1.0))
     update_job_status(seeded_session, job.id, JobStatusUpdate("failed", error="late"))
     seeded_session.commit()
+    seeded_session.expire_all()
     fetched = get_job(seeded_session, job.id)
-    assert fetched.status == "cancelled"
+    assert fetched.status == terminal
     assert fetched.completed_at == completed_at
     assert fetched.error is None
 

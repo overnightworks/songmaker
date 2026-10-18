@@ -53,7 +53,7 @@ def _seed_rate_limit_data(session) -> None:
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path, seed_db=_seed_rate_limit_data)
-    yield client
+    return client
 
 
 def _login_as(client: TestClient, role: str) -> None:

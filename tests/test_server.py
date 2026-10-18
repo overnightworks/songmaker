@@ -66,7 +66,7 @@ def server_app(tmp_path: Path) -> TestClient:
     user_dir.mkdir(parents=True, exist_ok=True)
     (user_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
     login_and_csrf(client, "admin", "admin12345")
-    yield client
+    return client
 
 
 def test_get_player(server_app: TestClient) -> None:
@@ -259,7 +259,7 @@ def auth_server_app(tmp_path: Path):
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    yield client, owner_sid, other_sid, DEFAULT_SESSION_COOKIE_NAME, owner_id, other_id
+    return client, owner_sid, other_sid, DEFAULT_SESSION_COOKIE_NAME, owner_id, other_id
 
 
 def test_get_audio_own_files_allowed(auth_server_app) -> None:
@@ -1555,7 +1555,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
 def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
     tmp_path: Path, mock_arq_pool,
 ) -> None:
-    """The single sample an alert needs: when a job last failed.
+    """S9-F: The failure sample excludes newer timestamped PARTIAL jobs.
 
     A counter would have to be compared against an earlier sample, which
     is exactly what Prometheus does not have for the first failure of a
@@ -1566,7 +1566,11 @@ def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
     client = _make_metrics_client(tmp_path)
     older = datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
     newest = datetime(2026, 8, 31, 8, 30, tzinfo=timezone.utc)
+    partial = datetime(2026, 9, 1, tzinfo=timezone.utc)
     with client.app.state.ctx.db() as session:
+        session.add(Job(
+            type="generate", status="partial", started_at=partial, completed_at=partial,
+        ))
         session.add(Job(type="generate", status="failed", started_at=older, completed_at=older))
         session.add(Job(type="score", status="failed", started_at=newest, completed_at=newest))
         session.add(

@@ -32,7 +32,7 @@ _UNTRUSTED_PEER = "203.0.113.50"
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path)
-    yield client
+    return client
 
 
 def _seed_admin(client: TestClient) -> None:
