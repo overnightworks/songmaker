@@ -24,7 +24,7 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from songmaker_cli import audio_files
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.config import build_ace_config
-from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
+from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, JobStatus
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     SONG_SLUG_MAX_LENGTH,
@@ -1285,7 +1285,7 @@ def _mock_worker(mock_pool=None):
     return _ctx()
 
 
-def _mock_worker_process_health(mock_pool=None):
+def _mock_worker_process_health(mock_pool=None, *, music_healthy=True):
     """Like _mock_worker, but leaves _has_online_acestep_worker real — for
     tests that must exercise its own GPU-health decision rather than have
     it stubbed away."""
@@ -1301,7 +1301,7 @@ def _mock_worker_process_health(mock_pool=None):
             patch("songmaker_cli.generation_api.get_arq_pool", return_value=mock_pool),
             patch(
                 "songmaker_cli.generation_api.is_music_worker_healthy",
-                AsyncMock(return_value=True),
+                AsyncMock(return_value=music_healthy),
             ),
             patch(
                 "songmaker_cli.generation_api.is_scoring_worker_healthy",
@@ -1313,10 +1313,10 @@ def _mock_worker_process_health(mock_pool=None):
     return _ctx()
 
 
-def _register_worker_with_broken_gpu(client: TestClient, mock_pool) -> None:
-    """Issue #367 finding 1: a registered worker whose only heartbeat says
-    gpu_healthy: false must never look online to the generate/repaint/cover
-    preflight — simulated NVML failure, not a lucky real GPU."""
+def _register_worker_with_gpu_health(
+    client: TestClient, mock_pool, *, gpu_healthy: bool,
+) -> None:
+    """Control worker eligibility through its heartbeat without a real GPU."""
     import json
     from unittest.mock import AsyncMock
 
@@ -1325,13 +1325,13 @@ def _register_worker_with_broken_gpu(client: TestClient, mock_pool) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
         register_worker(
-            session, worker_id="broken-gpu-w", host="h", port=8001,
+            session, worker_id="gpu-worker", host="h", port=8001,
             gpu_id=0, vram_total_gb=24.0,
         )
         session.commit()
 
     mock_pool.get = AsyncMock(
-        return_value=json.dumps({"loaded": ["sft"], "gpu_healthy": False}).encode(),
+        return_value=json.dumps({"loaded": ["sft"], "gpu_healthy": gpu_healthy}).encode(),
     )
 
 
@@ -1706,27 +1706,6 @@ def test_repaint_submits_job(client: TestClient) -> None:
     assert repaint["repainting_end"] == 0.8
 
 
-def test_repaint_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
-    client: TestClient,
-) -> None:
-    from unittest.mock import AsyncMock
-
-    mock_pool = AsyncMock()
-    _register_worker_with_broken_gpu(client, mock_pool)
-
-    with _mock_worker_process_health(mock_pool):
-        resp = client.post("/api/generations/g1/repaint", json={
-            "src_generation_id": "g1",
-            "repainting_start": 0.2,
-            "repainting_end": 0.8,
-            "model": "sft",
-        })
-
-    assert resp.status_code == 503
-    assert "No worker can generate music right now" in resp.json()["detail"]
-    mock_pool.enqueue_job.assert_not_called()
-
-
 def test_repaint_invalid_range(client: TestClient) -> None:
     resp = client.post("/api/generations/g1/repaint", json={
         "src_generation_id": "g1",
@@ -1899,27 +1878,6 @@ def test_cover_submits_job(client: TestClient) -> None:
     assert cover["prompt"] == "jazz version"
 
 
-def test_cover_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
-    client: TestClient,
-) -> None:
-    from unittest.mock import AsyncMock
-
-    mock_pool = AsyncMock()
-    _register_worker_with_broken_gpu(client, mock_pool)
-
-    with _mock_worker_process_health(mock_pool):
-        resp = client.post("/api/generations/g1/cover", json={
-            "src_generation_id": "g1",
-            "audio_cover_strength": 0.7,
-            "prompt": "jazz version",
-            "model": "sft",
-        })
-
-    assert resp.status_code == 503
-    assert "No worker can generate music right now" in resp.json()["detail"]
-    mock_pool.enqueue_job.assert_not_called()
-
-
 def test_cover_no_audio(client: TestClient) -> None:
     resp = client.post("/api/generations/g2/cover", json={
         "src_generation_id": "g2",
@@ -2045,26 +2003,103 @@ def test_upload_reference_audio_too_small(client: TestClient) -> None:
     assert "too small" in resp.json()["detail"]
 
 
-def test_generate_song_returns_503_and_enqueues_nothing_when_worker_gpu_is_broken(
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        pytest.param("/api/songs/s1/generate", {"count": 1, "model": "sft"}, id="generate"),
+        pytest.param(
+            "/api/generations/g1/repaint",
+            {"src_generation_id": "g1", "repainting_start": 0.2,
+             "repainting_end": 0.8, "model": "sft"},
+            id="repaint",
+        ),
+        pytest.param(
+            "/api/generations/g1/cover",
+            {"src_generation_id": "g1", "audio_cover_strength": 0.7, "model": "sft"},
+            id="cover",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    ("cause", "expected_detail", "expected_type"),
+    [
+        pytest.param(
+            cause, "Generating isn't available right now.", "generation_unavailable", id=cause,
+        )
+        for cause in ("music-absent", "no-registered-worker", "broken-gpu")
+    ],
+)
+def test_s6_unavailable_generation_is_persisted(
     client: TestClient,
+    path: str,
+    payload: dict,
+    cause: str,
+    expected_detail: str,
+    expected_type: str,
 ) -> None:
+    """S6-A–D: refusal is safe, committed, recoverable, and never enqueued."""
     from unittest.mock import AsyncMock
 
-    mock_pool = AsyncMock()
-    _register_worker_with_broken_gpu(client, mock_pool)
-
-    with _mock_worker_process_health(mock_pool):
-        resp = client.post(
-            "/api/songs/s1/generate",
-            json={"count": 1, "model": "sft"},
+    pool = AsyncMock()
+    if cause != "no-registered-worker":
+        _register_worker_with_gpu_health(
+            client, pool, gpu_healthy=cause == "music-absent",
         )
 
-    assert resp.status_code == 503
-    assert "No worker can generate music right now" in resp.json()["detail"]
-    mock_pool.enqueue_job.assert_not_called()
+    with _mock_worker_process_health(pool, music_healthy=cause != "music-absent"):
+        response = client.post(path, json=payload)
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body == {
+        "detail": expected_detail, "error_type": expected_type, "job_id": body["job_id"],
+    }
+    assert list(body)[0] == "detail"
+    with client.app.state.ctx.db() as session:
+        job = session.get(Job, body["job_id"])
+        assert job is not None
+        assert job.song_id == "s1"
+        assert job.status == JobStatus.FAILED
+        assert job.error == expected_detail
+        assert job.error_type == expected_type
+        assert job.completed_at is not None
+        completed_at = job.completed_at.isoformat()
+
+    recovered = client.get("/api/songs/s1/last-failed-generation")
+    assert recovered.status_code == 200
+    recovered_job = recovered.json()["job"]
+    assert recovered_job["id"] == body["job_id"]
+    assert recovered_job["status"] == JobStatus.FAILED
+    assert recovered_job["error"] == expected_detail
+    assert recovered_job["error_type"] == expected_type
+    assert recovered_job["completed_at"] == completed_at
+    pool.enqueue_job.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_description"),
+    [
+        pytest.param(path, "Generation worker or job queue is unavailable", id=route)
+        for route, path in (
+            ("generate", "/api/songs/{song_id}/generate"),
+            ("repaint", "/api/generations/{gen_id}/repaint"),
+            ("cover", "/api/generations/{gen_id}/cover"),
+        )
+    ],
+)
+def test_s6_generation_openapi(
+    client: TestClient, path: str, expected_description: str,
+) -> None:
+    """S6-E: mixed 503 shapes stay unmodelled; success keeps JobResponse."""
+    responses = client.app.openapi()["paths"][path]["post"]["responses"]
+    assert responses["503"] == {"description": expected_description}
+    assert responses["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/JobResponse",
+    }
 
 
 def test_generate_song_redis_down(client: TestClient) -> None:
+    """S6-E: queue failure retains its existing response."""
     from unittest.mock import AsyncMock, patch
 
     with (
@@ -2095,6 +2130,7 @@ def test_generate_song_redis_down(client: TestClient) -> None:
 
 
 def test_score_generation_redis_down(client: TestClient) -> None:
+    """S6-E: queue failure retains its existing response."""
     from unittest.mock import AsyncMock, patch
 
     with (
@@ -2124,29 +2160,6 @@ def test_score_generation_redis_down(client: TestClient) -> None:
     ("path", "payload", "health_check"),
     [
         pytest.param(
-            "/api/songs/s1/generate",
-            {"count": 1, "model": "sft"},
-            "is_music_worker_healthy",
-            id="generate",
-        ),
-        pytest.param(
-            "/api/generations/g1/repaint",
-            {
-                "src_generation_id": "g1",
-                "repainting_start": 0.2,
-                "repainting_end": 0.8,
-                "model": "sft",
-            },
-            "is_music_worker_healthy",
-            id="repaint",
-        ),
-        pytest.param(
-            "/api/generations/g1/cover",
-            {"src_generation_id": "g1", "audio_cover_strength": 0.7, "model": "sft"},
-            "is_music_worker_healthy",
-            id="cover",
-        ),
-        pytest.param(
             "/api/generations/g1/score",
             {},
             "is_scoring_worker_healthy",
@@ -2160,6 +2173,7 @@ def test_worker_preflight_reports_an_unavailable_worker(
     payload: dict,
     health_check: str,
 ) -> None:
+    """S6-E: score keeps "Worker not running"."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     with (
