@@ -104,9 +104,9 @@ import {
  * the CI recipe (desktop / 375px): 13/13 for the sign-in, 19/19 for the reload,
  * 14/14 for the sign-out and the refused return, 18/15 for the refused admin
  * page, 13/12 for the expired session, 23/26 for the deep-link sign-in, 28 at
- * 375px for the former menu-triggered session loss, and 20 at 390px for the
- * former drawer album selection after expiry. Their Search replacements
- * retain the ceiling below; branch CI must measure their new request costs.
+ * 375px for the session loss behind a fresh Search query
+ * (`1354_37a_A5_song`), and 24 at 390px for the album selected in Search
+ * after expiry (`1354_37a_A5_album`; measured on #1605's branch CI).
  * The admin flows were measured at 1440 /
  * 390 instead: 27 to 28/25 to 26 for the own session, its two stale revokes,
  * the revoke that works and the create refusal (#1397), 11/9 for the Users
