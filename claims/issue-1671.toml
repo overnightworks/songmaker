@@ -1,8 +1,0 @@
-claim_id = "ff7cb28d144f422cba0571f5f1483622"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "16fed090bc6af29a588ba0fbc8778a05754916cc"
-branch = "claude/issue-1671-fixtures-return-ab"
-scope = ["tests/test_arq_pool.py", "tests/test_conversation_api.py", "tests/test_cowriter_providers.py", "tests/test_env_override.py", "tests/test_internal_api.py", "tests/test_jobs.py", "tests/test_lora_api.py", "tests/test_memory.py", "tests/test_mentions.py", "tests/test_playlists.py", "tests/test_scheduler.py", "tests/test_scoring_jobs.py", "tests/test_scoring_pipeline.py", "tests/test_takes.py"]
-opened_commit = "60d0c8eaeea775910eda419d679ef1a50ab6a644"
-whole_reason = "One mechanical conversion pattern across disjoint test modules; each file is a few lines."
