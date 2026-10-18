@@ -465,7 +465,7 @@ for (const [origin, railWord] of [
 ] as const) {
 	for (const shell of ['desktop', 'mobile'] as const) {
 		test(
-			`1354_61_C${origin === PLAYLISTS ? '09' : '08'} defect:#1523 1354_rule_40 1354_37b_64 1354_rule_31: ${origin.name}, Settings and Back restore current navigation in one document`,
+			`1354_61_C${origin === PLAYLISTS ? '09' : '08'} defect:#1523 1354_rule_40 1354_37b_64 1354_rule_31: ${origin.name}, Settings and Back restore current navigation in one document (${shell})`,
 			{ tag: ONLY_IN_SHELL[shell] },
 			async ({ page }) => {
 				const guard = new FlowGuard(page);

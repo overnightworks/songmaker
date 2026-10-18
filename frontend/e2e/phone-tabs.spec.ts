@@ -79,6 +79,9 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 				expect(
 					await page.evaluate(() => ({ address: location.href, length: history.length }))
 				).toEqual(before);
+				await tabs(page).getByRole('button', { name: 'Home', exact: true }).click();
+				await expectCurrent(page, 'Home');
+				expect(await page.evaluate(() => history.length)).toBe(before.length + 1);
 			}
 		}
 		await page.screenshot({ path: testInfo.outputPath('phone-tabs.png') });

@@ -647,12 +647,7 @@ async function applyLanding(state: unknown): Promise<void> {
 // Full Now Playing lives in a store, so the layout follows its history layer
 // for as long as it is mounted, on every page.
 export function followShellLayers(): () => void {
-	const stopFollowingNowPlaying = nowPlayingFullChosen.subscribe(
-		layerSwitch('now-playing', escapeNowPlaying)
-	);
-	return () => {
-		stopFollowingNowPlaying();
-	};
+	return nowPlayingFullChosen.subscribe(layerSwitch('now-playing', escapeNowPlaying));
 }
 
 // The history controller's landing handler: by the time a landing reaches
