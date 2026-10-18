@@ -273,10 +273,19 @@
 		}
 	}
 
+	function canRestart(worker: WorkerInfoItem | undefined): boolean {
+		return (
+			!!worker &&
+			worker.status !== 'offline' &&
+			!forbidden &&
+			!busyAction[`${worker.identity.id}:restart`]
+		);
+	}
+
 	async function handleRestart(workerId: string): Promise<void> {
 		const key = `${workerId}:restart`;
 		const worker = workers.find((worker) => worker.identity.id === workerId);
-		if (!worker || worker.status === 'offline' || forbidden || busyAction[key]) return;
+		if (!canRestart(worker)) return;
 		actionError = '';
 		busyAction = { ...busyAction, [key]: true };
 		try {
@@ -440,7 +449,7 @@
 						<button
 							class="action-btn danger"
 							onclick={(event) => openConfirmation(worker.identity.id, event.currentTarget)}
-							disabled={offline || busyAction[`${worker.identity.id}:restart`]}
+							disabled={!canRestart(worker)}
 							title={offline ? restartDisabledHint(worker) : undefined}
 						>
 							{busyAction[`${worker.identity.id}:restart`]
@@ -468,7 +477,7 @@
 								>
 								<button
 									class="action-btn danger"
-									disabled={offline || forbidden || busyAction[`${worker.identity.id}:restart`]}
+									disabled={!canRestart(worker)}
 									onclick={current.layer.answer(() => {
 										closeConfirmation();
 										void handleRestart(worker.identity.id);

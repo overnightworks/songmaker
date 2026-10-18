@@ -26,6 +26,21 @@ function findButtonByText(root: HTMLElement, text: string): HTMLButtonElement | 
 	);
 }
 
+async function openRestartConfirmation(root: HTMLElement) {
+	const opener = findButtonByText(root, 'Restart worker…');
+	if (!opener) throw new Error('Expected restart opener');
+	opener.focus();
+	opener.click();
+	await tick();
+	const dialog = root.querySelector<HTMLElement>('[role="dialog"]');
+	if (!dialog) throw new Error('Expected confirmation');
+	const cancel = findButtonByText(dialog, 'Cancel');
+	if (!cancel) throw new Error('Expected Cancel');
+	const restart = findButtonByText(dialog, 'Restart');
+	if (!restart) throw new Error('Expected Restart');
+	return { opener, dialog, cancel, restart };
+}
+
 function workerPool(vramMeasured: boolean | null): WorkerPoolResponse {
 	return {
 		workers: [
@@ -739,20 +754,10 @@ describe('WorkerPoolPanel restart confirmation', () => {
 				requests.push(path);
 				return fetchWorkers();
 			});
-			const opener = findButtonByText(target, 'Restart worker…');
-			if (!opener) throw new Error('Expected restart opener');
 			for (let attempt = 0; attempt < 2; attempt++) {
-				opener.focus();
-				opener.click();
-				await tick();
-				const dialog = target.querySelector<HTMLElement>('[role="dialog"]');
-				if (!dialog) throw new Error('Expected confirmation');
+				const { opener, dialog, cancel, restart } = await openRestartConfirmation(target);
 				expect(dialog).toHaveAttribute('aria-label', 'Restart acestep-worker-0?');
 				expect(dialog).toHaveTextContent('Running takes will stop.');
-				const cancel = findButtonByText(dialog, 'Cancel');
-				if (!cancel) throw new Error('Expected Cancel');
-				const restart = findButtonByText(dialog, 'Restart');
-				if (!restart) throw new Error('Expected Restart');
 				expect(cancel).toHaveFocus();
 				cancel.dispatchEvent(
 					new KeyboardEvent('keydown', {
@@ -801,20 +806,13 @@ describe('WorkerPoolPanel restart confirmation', () => {
 				});
 			});
 			const card = target.querySelectorAll<HTMLElement>('.card')[1];
-			const opener = findButtonByText(card, 'Restart worker…');
-			if (!opener) throw new Error('Expected restart opener');
-			opener.click();
-			await tick();
+			const { opener, restart } = await openRestartConfirmation(card);
 			expect(target.querySelectorAll('[role="dialog"]')).toHaveLength(1);
 			expect(card.querySelector('[role="dialog"]')).toHaveAttribute(
 				'aria-label',
 				'Restart acestep-worker-1?'
 			);
 			expect(requests).toEqual([]);
-			const dialog = card.querySelector<HTMLElement>('[role="dialog"]');
-			if (!dialog) throw new Error('Expected confirmation');
-			const restart = findButtonByText(dialog, 'Restart');
-			if (!restart) throw new Error('Expected Restart');
 			restart.click();
 			await tick();
 			expect(opener).toBeDisabled();
@@ -834,14 +832,9 @@ describe('WorkerPoolPanel restart confirmation', () => {
 				expect(
 					get(toasts).some((toast) => toast.message === 'Restart requested for acestep-worker-1')
 				).toBe(true);
-			opener.click();
-			await tick();
+			const { restart: retry } = await openRestartConfirmation(card);
 			expect(card.querySelector('[role="dialog"]')).not.toBeNull();
 			expect(requests).toHaveLength(1);
-			const retryDialog = card.querySelector<HTMLElement>('[role="dialog"]');
-			if (!retryDialog) throw new Error('Expected retry confirmation');
-			const retry = findButtonByText(retryDialog, 'Restart');
-			if (!retry) throw new Error('Expected retry control');
 			retry.click();
 			await tick();
 			expect(requests).toHaveLength(2);
@@ -856,10 +849,7 @@ describe('WorkerPoolPanel restart confirmation', () => {
 		async (change) => {
 			vi.useFakeTimers();
 			const target = await renderWorkerPool(onlineWorkerPool());
-			const opener = findButtonByText(target, 'Restart worker…');
-			if (!opener) throw new Error('Expected restart opener');
-			opener.click();
-			await tick();
+			const { cancel, restart } = await openRestartConfirmation(target);
 			const requests: string[] = [];
 			vi.stubGlobal('fetch', (path: string) => {
 				if (path === '/api/admin/workers') return fetchWorkers();
@@ -876,15 +866,9 @@ describe('WorkerPoolPanel restart confirmation', () => {
 				mounted = undefined;
 			} else await vi.advanceTimersByTimeAsync(3000);
 			if (change === 'offline') {
-				const dialog = target.querySelector<HTMLElement>('[role="dialog"]');
-				if (!dialog) throw new Error('Expected confirmation');
-				const restart = findButtonByText(dialog, 'Restart');
-				if (!restart) throw new Error('Expected Restart');
 				expect(restart).toBeDisabled();
 				restart.click();
 				expect(target).toHaveTextContent('VRAM unavailable while the worker is offline.');
-				const cancel = findButtonByText(dialog, 'Cancel');
-				if (!cancel) throw new Error('Expected Cancel');
 				cancel.click();
 				await tick();
 			}
