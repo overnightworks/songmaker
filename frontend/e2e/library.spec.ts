@@ -29,7 +29,6 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_NAV_LABEL,
 	PLAYING_MARK_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
@@ -65,6 +64,7 @@ import {
 	ONLY_IN_SHELL,
 	openLibraryWall,
 	openPlaylistsPage,
+	openRailNav,
 	openSettingsSection,
 	playlistEntryRows,
 	RAIL_FLOW_API_REQUEST_BUDGET,
@@ -187,23 +187,6 @@ async function closeNowPlaying(page: Page, shell: Shell): Promise<void> {
 		await page.keyboard.press('Escape');
 	}
 	await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
-}
-
-/**
- * The one navigation landmark (#263): on desktop it stands on its own, on
- * mobile it only exists once the header opens its drawer — a navigation to
- * a settings section closes that drawer again (`RailDrawer`'s
- * `afterNavigate`), so a caller that keeps interacting with the rail after
- * such a click must open it again.
- */
-async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
-	if (shell === 'mobile') {
-		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-		if (!(await drawer.isVisible())) {
-			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-		}
-	}
-	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
 async function openAlbumFromNavigation(page: Page, shell: Shell, title: string): Promise<void> {
