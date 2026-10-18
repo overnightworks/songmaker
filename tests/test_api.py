@@ -1582,11 +1582,11 @@ def test_last_failed_generation_returns_the_most_recent_of_several(
     "status", ["queued", "running", "completed", "cancelled", "partial"],
     ids=["queued", "running", "completed", "cancelled", "partial-other"],
 )
-def test_last_failed_generation_suppressed_by_a_newer_non_terminal_job(
+def test_last_failed_generation_suppressed_by_a_newer_attempt_of_any_outcome(
     client: TestClient, status,
 ) -> None:
     """S9-C: A failure isn't the song's last word once a newer job of any outcome
-    -- queued, running, or completed -- exists; that newer job supersedes it
+    -- queued, running, completed, cancelled, or partial -- exists; the newer job supersedes it
     on its own, before the take-suppression check even runs."""
     factory = client.app.state.ctx.db
     with factory() as session:

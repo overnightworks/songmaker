@@ -868,7 +868,9 @@ def test_update_job_status_does_not_overwrite_terminal(
     + [("score", "partial")],
     ids=["partial", "failed", "completed", "cancelled", "score-partial"],
 )
-def test_update_job_status_cancelled_sets_completed_at(seeded_session, kind, terminal) -> None:
+def test_update_job_status_stamps_completed_at_for_every_terminal_status(
+    seeded_session, kind, terminal,
+) -> None:
     """S9-A: Every terminal transition persists its completion clock."""
     job = create_job(seeded_session, kind)
     seeded_session.commit()
