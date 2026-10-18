@@ -869,116 +869,116 @@ async function expectRailRowCollapsed(row: Locator, song: Locator): Promise<void
 	await expect(song).not.toBeInViewport();
 }
 
-test('the one-target rail tree and pin promises hold in a real browser', async ({
-	page
-}, testInfo) => {
-	const shell = shellOf(testInfo);
-	const library = readSeededLibrary();
-	const surface = workspace(page);
+test(
+	'1354_37a_A6: the one-target rail tree and pin promises hold in a real browser',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }, testInfo) => {
+		const shell = shellOf(testInfo);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
 
-	// A cold playlist open, not a rail click: PLAYLISTS' own bare chevron has
-	// no accessible name once a title click is wired (same RailGroup gap as
-	// LIBRARY's), so like the album below, it only opens once a playlist is
-	// already open (its own expandTrigger). Doing this before any album is
-	// open also keeps LIBRARY collapsed for it -- avoiding the deep-scroll
-	// edge this test found while building #326: with LIBRARY's own 30-plus
-	// seeded rows already open, the browser's native scrollIntoView() can
-	// leave the very last row straddling the scroll container's clip edge,
-	// where the pinned Settings row intercepts the click.
-	await page.goto(`/playlist/${playlist.slug}`);
-	await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
+		// A cold playlist open, not a rail click: PLAYLISTS' own bare chevron has
+		// no accessible name once a title click is wired (same RailGroup gap as
+		// LIBRARY's), so like the album below, it only opens once a playlist is
+		// already open (its own expandTrigger). Doing this before any album is
+		// open also keeps LIBRARY collapsed for it -- avoiding the deep-scroll
+		// edge this test found while building #326: with LIBRARY's own 30-plus
+		// seeded rows already open, the browser's native scrollIntoView() can
+		// leave the very last row straddling the scroll container's clip edge,
+		// where the pinned Settings row intercepts the click.
+		await page.goto(`/playlist/${playlist.slug}`);
+		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 
-	// Rebuilt after every click that navigates (#263): on mobile the drawer's
-	// own afterNavigate hook closes it, so the rail's nav landmark stops
-	// existing until openRailNav opens it again -- a locator built from an
-	// earlier `rail` would silently match nothing rather than prove anything.
-	let rail = await openRailNav(page, shell);
+		// Rebuilt after every click that navigates (#263): on mobile the drawer's
+		// own afterNavigate hook closes it, so the rail's nav landmark stops
+		// existing until openRailNav opens it again -- a locator built from an
+		// earlier `rail` would silently match nothing rather than prove anything.
+		let rail = await openRailNav(page, shell);
 
-	// The PLAYLISTS group, touched by a real browser for the first time
-	// (#326 finding 1): entering it force-expands its own row, and a track
-	// row inside it plays and judges the same way a library track does.
-	const [firstPlaylistSongTitle] = playlist.songTitles;
-	await rail
-		.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
-		.getByRole('button', { name: nameStartingWith(firstPlaylistSongTitle) })
-		.click();
-	await expectTakeShownInNowPlaying(page, shell, firstPlaylistSongTitle);
-	await expect(
-		shellTransport(page, shell, firstPlaylistSongTitle).getByRole('button', {
-			name: TRANSPORT_PAUSE_LABEL,
-			exact: true
-		})
-	).toBeVisible();
-	await closeNowPlaying(page, shell);
+		// The PLAYLISTS group, touched by a real browser for the first time
+		// (#326 finding 1): entering it force-expands its own row, and a track
+		// row inside it plays and judges the same way a library track does.
+		const [firstPlaylistSongTitle] = playlist.songTitles;
+		await rail
+			.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+			.getByRole('button', { name: nameStartingWith(firstPlaylistSongTitle) })
+			.click();
+		await expectTakeShownInNowPlaying(page, shell, firstPlaylistSongTitle);
+		await expect(
+			shellTransport(page, shell, firstPlaylistSongTitle).getByRole('button', {
+				name: TRANSPORT_PAUSE_LABEL,
+				exact: true
+			})
+		).toBeVisible();
+		await closeNowPlaying(page, shell);
 
-	// A cold album open, not a wall click: the wall's default 'newest' sort
-	// would otherwise chase the seeded filler albums below (see
-	// RAIL_FILLER_ALBUM_COUNT in seed.ts), and this test is about the rail,
-	// not the wall's own grid. Opening the address still sets openCollection
-	// the same way a wall click does, which is what the rail reads. Neither
-	// playing the playlist entry nor closing Now Playing navigated, so this
-	// is the flow's second real navigation.
-	await page.goto(`/album/${library.albumId}`);
-	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
+		// A cold album open, not a wall click: the wall's default 'newest' sort
+		// would otherwise chase the seeded filler albums below (see
+		// RAIL_FILLER_ALBUM_COUNT in seed.ts), and this test is about the rail,
+		// not the wall's own grid. Opening the address still sets openCollection
+		// the same way a wall click does, which is what the rail reads. Neither
+		// playing the playlist entry nor closing Now Playing navigated, so this
+		// is the flow's second real navigation.
+		await page.goto(`/album/${library.albumId}`);
+		await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
-	rail = await openRailNav(page, shell);
-	function firstAlbumRow(): Locator {
-		return railAlbumRow(rail, library.albumTitle);
-	}
-	function firstAlbumSong(): Locator {
-		return firstAlbumRow().getByRole('button', { name: nameStartingWith(library.pickedSongTitle) });
-	}
-	// Entering an album force-expands its own row without a row click,
-	// and that force-expand is what pulled the whole LIBRARY group open too.
-	await expectRailRowExpanded(firstAlbumRow(), firstAlbumSong());
-	// #1354 rule 40: the word LIBRARY opens the covers, so no row of the list does.
-	await expect(rail.getByRole('button', { name: nameStartingWith('All albums') })).toHaveCount(0);
+		rail = await openRailNav(page, shell);
+		function firstAlbumRow(): Locator {
+			return railAlbumRow(rail, library.albumTitle);
+		}
+		function firstAlbumSong(): Locator {
+			return firstAlbumRow().getByRole('button', {
+				name: nameStartingWith(library.pickedSongTitle)
+			});
+		}
+		// Entering an album force-expands its own row without a row click,
+		// and that force-expand is what pulled the whole LIBRARY group open too.
+		await expectRailRowExpanded(firstAlbumRow(), firstAlbumSong());
+		// #1354 rule 40: the word LIBRARY opens the covers, so no row of the list does.
+		await expect(rail.getByRole('button', { name: nameStartingWith('All albums') })).toHaveCount(0);
 
-	function secondAlbumRow(): Locator {
-		return railAlbumRow(rail, library.secondAlbumTitle);
-	}
-	const secondAlbumButton = secondAlbumRow().getByRole('button', {
-		name: containing(library.secondAlbumTitle)
-	});
-	function secondAlbumSong(): Locator {
-		return secondAlbumRow().getByRole('button', {
-			name: nameStartingWith(library.secondAlbumSongTitle)
+		function secondAlbumRow(): Locator {
+			return railAlbumRow(rail, library.secondAlbumTitle);
+		}
+		const secondAlbumButton = secondAlbumRow().getByRole('button', {
+			name: containing(library.secondAlbumTitle)
 		});
-	}
+		function secondAlbumSong(): Locator {
+			return secondAlbumRow().getByRole('button', {
+				name: nameStartingWith(library.secondAlbumSongTitle)
+			});
+		}
 
-	// An album row has one action: it opens that album and its tracks together.
-	// Its caret is display only, so the old chevron-only destination is gone.
-	await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'false');
-	await expectRailRowCollapsed(secondAlbumRow(), secondAlbumSong());
-	await secondAlbumButton.click();
-	// Album rows navigate, so the compact shell closes its drawer. Re-open the
-	// tree before judging the same one-target row in its new album context.
-	rail = await openRailNav(page, shell);
-	await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'true');
-	// The one-slot rule is visible as well as navigable: opening one album
-	// closes the former row and takes the surface to the selected album.
-	await expectRailRowExpanded(secondAlbumRow(), secondAlbumSong());
-	await expectRailRowCollapsed(firstAlbumRow(), firstAlbumSong());
-	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
+		// An album row has one action: it opens that album and its tracks together.
+		// Its caret is display only, so the old chevron-only destination is gone.
+		await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'false');
+		await expectRailRowCollapsed(secondAlbumRow(), secondAlbumSong());
+		await secondAlbumButton.click();
+		// Album rows navigate, so the compact shell closes its drawer. Re-open the
+		// tree before judging the same one-target row in its new album context.
+		rail = await openRailNav(page, shell);
+		await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'true');
+		// The one-slot rule is visible as well as navigable: opening one album
+		// closes the former row and takes the surface to the selected album.
+		await expectRailRowExpanded(secondAlbumRow(), secondAlbumSong());
+		await expectRailRowCollapsed(firstAlbumRow(), firstAlbumSong());
+		await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
-	// The group header changes only the tree, and native keyboard activation
-	// works in the real browser. The surface remains the selected album.
-	const selectedAlbumUrl = page.url();
-	rail = await openRailNav(page, shell);
-	const libraryGroupToggle = rail.getByRole('button', {
-		name: nameStartingWith(LIBRARY_PAGE_LABEL)
-	});
-	await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'true');
-	await libraryGroupToggle.press('Enter');
-	await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'false');
-	await libraryGroupToggle.press(' ');
-	await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'true');
-	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
-	expect(page.url()).toBe(selectedAlbumUrl);
+		// The group header changes only the tree, and native keyboard activation
+		// works in the real browser. The surface remains the selected album.
+		const selectedAlbumUrl = page.url();
+		rail = await openRailNav(page, shell);
+		const libraryGroupToggle = rail.getByRole('button', {
+			name: nameStartingWith(LIBRARY_PAGE_LABEL)
+		});
+		await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'true');
+		await libraryGroupToggle.press('Enter');
+		await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'false');
+		await libraryGroupToggle.press(' ');
+		await expect(libraryGroupToggle).toHaveAttribute('aria-expanded', 'true');
+		await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
+		expect(page.url()).toBe(selectedAlbumUrl);
 
-	if (shell === 'mobile') {
-		await expectPhoneDrawerIsNavigationOnly(page);
-	} else {
 		// SETTINGS is the same kind of group header: both its visible text and
 		// caret only disclose its children. Neither can choose an admin page.
 		rail = await openRailNav(page, shell);
@@ -1023,21 +1023,20 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 		// content has scrolled past. Its exact pixel position is an implementation
 		// detail while the disclosure's height is animating.
 		await expect(settingsToggle).toBeInViewport();
+		await openLibraryWall(page, shell);
+		rail = await openRailNav(page, shell);
+		// #1354 rule 40 (D1): the Library page leaves its own group unfolded and current.
+		await expect(
+			rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) })
+		).toHaveAttribute('aria-expanded', 'true');
+		await expect(
+			rail.getByRole('link', { name: nameStartingWith(LIBRARY_PAGE_LABEL) })
+		).toHaveAttribute('aria-current', 'page');
+
+		console.log(`Rail flow /api requests (${shell}): ${guard.apiRequestCount}`);
+		guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
 	}
-
-	await openLibraryWall(page, shell);
-	rail = await openRailNav(page, shell);
-	// #1354 rule 40 (D1): the Library page leaves its own group unfolded and current.
-	await expect(
-		rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) })
-	).toHaveAttribute('aria-expanded', 'true');
-	await expect(
-		rail.getByRole('link', { name: nameStartingWith(LIBRARY_PAGE_LABEL) })
-	).toHaveAttribute('aria-current', 'page');
-
-	console.log(`Rail flow /api requests (${shell}): ${guard.apiRequestCount}`);
-	guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
-});
+);
 
 /** Plays one of the attempt's playlist songs from that playlist, as the player reports it. */
 async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<void> {
@@ -1116,59 +1115,60 @@ test('1354_rule_7 1354_rule_13 1354_rule_14 1354_rule_31: the Library keeps phon
 	await expect(listenTitles).toHaveText(listenOrder);
 });
 
-test('the rail lists albums and playlists in the order the Library and Playlists walls are switched to', async ({
-	page,
-	request
-}, testInfo) => {
-	const shell = shellOf(testInfo);
-	const surface = workspace(page);
-	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
-	const choice = (group: string, order: LibraryWallOrder) =>
-		surface
-			.getByRole('group', { name: group })
-			.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
+test(
+	'1354_37a_A6: the rail lists albums and playlists in the order the Library and Playlists walls are switched to',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page, request }, testInfo) => {
+		const shell = shellOf(testInfo);
+		const surface = workspace(page);
+		const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
+		const choice = (group: string, order: LibraryWallOrder) =>
+			surface
+				.getByRole('group', { name: group })
+				.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
 
-	async function railOrderMatchingWall(railRows: string): Promise<string[]> {
-		const rail = await openRailNav(page, shell);
-		const wallTitles = () => tiles.locator('.tile-title').allTextContents();
-		const railTitles = () => rail.locator(`${railRows} .row-title`).allTextContents();
-		await expect.poll(async () => (await railTitles()).length).toBeGreaterThan(1);
-		await expect
-			.poll(async () => JSON.stringify(await railTitles()) === JSON.stringify(await wallTitles()))
-			.toBe(true);
-		return railTitles();
+		async function railOrderMatchingWall(railRows: string): Promise<string[]> {
+			const rail = await openRailNav(page, shell);
+			const wallTitles = () => tiles.locator('.tile-title').allTextContents();
+			const railTitles = () => rail.locator(`${railRows} .row-title`).allTextContents();
+			await expect.poll(async () => (await railTitles()).length).toBeGreaterThan(1);
+			await expect
+				.poll(async () => JSON.stringify(await railTitles()) === JSON.stringify(await wallTitles()))
+				.toBe(true);
+			return railTitles();
+		}
+
+		// Of two playlists, a listen in the one A–Z puts second brings it to the
+		// front under Last played: the rail can only show that by leaving A–Z.
+		const second = await seedPlaylist(request, readSeededLibrary());
+		const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
+			compareTitles(a.title, b.title)
+		);
+		await listenInPlaylist(page, laterInAlphabet);
+
+		await page.goto(LIBRARY_PATH);
+		await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'title')).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+		const albums = await railOrderMatchingWall('.album-label');
+		expect(albums).toEqual([...albums].sort(compareTitles));
+		await page.goto('/playlists');
+		const playlists = await railOrderMatchingWall('.playlist-label');
+		expect(playlists).toEqual([...playlists].sort(compareTitles));
+
+		await page.reload();
+		await choice(PLAYLISTS_WALL_ORDER_GROUP_LABEL, 'played').click();
+		await expect(tiles.first()).toContainText(laterInAlphabet.title);
+		expect((await railOrderMatchingWall('.playlist-label'))[0]).toBe(laterInAlphabet.title);
+		await page.goto(LIBRARY_PATH);
+		await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'played')).toHaveAttribute(
+			'aria-pressed',
+			'true'
+		);
+		await railOrderMatchingWall('.album-label');
 	}
-
-	// Of two playlists, a listen in the one A–Z puts second brings it to the
-	// front under Last played: the rail can only show that by leaving A–Z.
-	const second = await seedPlaylist(request, readSeededLibrary());
-	const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
-		compareTitles(a.title, b.title)
-	);
-	await listenInPlaylist(page, laterInAlphabet);
-
-	await page.goto(LIBRARY_PATH);
-	await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'title')).toHaveAttribute(
-		'aria-pressed',
-		'true'
-	);
-	const albums = await railOrderMatchingWall('.album-label');
-	expect(albums).toEqual([...albums].sort(compareTitles));
-	await page.goto('/playlists');
-	const playlists = await railOrderMatchingWall('.playlist-label');
-	expect(playlists).toEqual([...playlists].sort(compareTitles));
-
-	await page.reload();
-	await choice(PLAYLISTS_WALL_ORDER_GROUP_LABEL, 'played').click();
-	await expect(tiles.first()).toContainText(laterInAlphabet.title);
-	expect((await railOrderMatchingWall('.playlist-label'))[0]).toBe(laterInAlphabet.title);
-	await page.goto(LIBRARY_PATH);
-	await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'played')).toHaveAttribute(
-		'aria-pressed',
-		'true'
-	);
-	await railOrderMatchingWall('.album-label');
-});
+);
 
 /** Every playlist the server holds, by title in A–Z: the flows before this one seed their own. */
 async function playlistTitlesInAlphabet(page: Page): Promise<string[]> {
@@ -1182,7 +1182,7 @@ async function playlistTitlesInAlphabet(page: Page): Promise<string[]> {
 // listing playlists alone in the one switch the Library uses (#1354 rules 7
 // and 8, frame D3). On the phone it is a list the app opens on, so it carries
 // no ‹, and a playlist opened with nothing before it returns there.
-test('the Playlists page opens by address and by search, lists only playlists in the one sort, and stays put on reload, Back and Forward', async ({
+test('1354_37a_A6: the Playlists page opens by address and by search, lists only playlists in the one sort, and stays put on reload, Back and Forward', async ({
 	page,
 	request
 }, testInfo) => {
@@ -1228,15 +1228,6 @@ test('the Playlists page opens by address and by search, lists only playlists in
 
 	await choice('played').click();
 	await expectPlaylistsStandFirst(laterInAlphabet.title);
-	const wallTitles = await tiles.locator('.tile-title').allTextContents();
-	const rail = await openRailNav(page, shell);
-	await expect
-		.poll(async () => rail.locator('.playlist-label .row-title').allTextContents())
-		.toEqual(wallTitles);
-	if (shell === 'mobile') {
-		await page.keyboard.press('Escape');
-		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
-	}
 
 	await page.reload();
 	await expectPlaylistsStandFirst(laterInAlphabet.title);
@@ -1284,40 +1275,53 @@ test('the Playlists page opens by address and by search, lists only playlists in
 	await fresh.close();
 });
 
-test('#1354 rule 40: the word Library or Playlists opens its covers, the arrow only folds, and each page leaves its group current and unfolded', async ({
-	page
-}, testInfo) => {
-	const shell = shellOf(testInfo);
-	const surface = workspace(page);
-	const groupWord = async (label: string) =>
-		(await openRailNav(page, shell)).getByRole('link', { name: nameStartingWith(label) });
-	const groupArrow = async (label: string) =>
-		(await openRailNav(page, shell)).getByRole('button', { name: label, exact: true });
+test(
+	'1354_37a_A6: #1354 rule 40: the word Library or Playlists opens its covers, the arrow only folds, and each page leaves its group current and unfolded',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }, testInfo) => {
+		const shell = shellOf(testInfo);
+		const surface = workspace(page);
+		const groupWord = async (label: string) =>
+			(await openRailNav(page, shell)).getByRole('link', { name: nameStartingWith(label) });
+		const groupArrow = async (label: string) =>
+			(await openRailNav(page, shell)).getByRole('button', { name: label, exact: true });
 
-	await page.goto(LIBRARY_PATH);
-	await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
-	await expect(await groupWord(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
-	await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
-	await expect(
-		(await openRailNav(page, shell)).getByRole('button', { name: nameStartingWith('All albums') })
-	).toHaveCount(0);
+		await page.goto(LIBRARY_PATH);
+		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+		await expect(await groupWord(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
+		await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
+		await expect(
+			(await openRailNav(page, shell)).getByRole('button', { name: nameStartingWith('All albums') })
+		).toHaveCount(0);
 
-	await (await groupArrow(LIBRARY_PAGE_LABEL)).click();
-	await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'false');
-	await expect(page).toHaveURL(LIBRARY_URL);
+		await (await groupArrow(LIBRARY_PAGE_LABEL)).click();
+		await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'false');
+		await expect(page).toHaveURL(LIBRARY_URL);
 
-	await (await groupWord(PLAYLISTS_PAGE_LABEL)).click();
-	await expect(page).toHaveURL(/\/playlists$/);
-	await expect(await groupWord(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
-	await expect(await groupArrow(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
+		await (await groupWord(PLAYLISTS_PAGE_LABEL)).click();
+		await expect(page).toHaveURL(/\/playlists$/);
+		await expect(await groupWord(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
+		await expect(await groupArrow(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
 
-	await (await groupArrow(PLAYLISTS_PAGE_LABEL)).click();
-	await expect(await groupArrow(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'false');
-	await expect(page).toHaveURL(/\/playlists$/);
+		await (await groupArrow(PLAYLISTS_PAGE_LABEL)).click();
+		await expect(await groupArrow(PLAYLISTS_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'false');
+		await expect(page).toHaveURL(/\/playlists$/);
 
-	await (await groupWord(LIBRARY_PAGE_LABEL)).click();
-	await expect(page).toHaveURL(LIBRARY_URL);
-	await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
-	await expect(await groupWord(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
-	await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
-});
+		await (await groupWord(LIBRARY_PAGE_LABEL)).click();
+		await expect(page).toHaveURL(LIBRARY_URL);
+		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
+		await expect(await groupWord(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
+		await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
+	}
+);
+
+test(
+	'1354_37a_A6: the phone drawer remains navigation-only',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const library = readSeededLibrary();
+		await page.goto(`/album/${library.albumId}`);
+		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
+		await expectPhoneDrawerIsNavigationOnly(page);
+	}
+);

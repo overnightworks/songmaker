@@ -15,6 +15,7 @@
 // database (`seedSongPhoneSong`, `seedRunningGenerationJob`), into the album
 // song-phone.spec.ts already owns for phone-only songs.
 
+import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
 	COWRITER_TURN_PATH,
@@ -219,7 +220,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		guard.assertClean();
 	});
 
-	test('the mini-player and the Generate bar come back when a focused field leaves the page', async ({
+	test('1354_37a_A4: the mini-player and the Generate bar come back when a focused field leaves the page', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
@@ -243,8 +244,8 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await expect(miniPlayer).toBeVisible();
 		await expect(generateButton(page)).toBeVisible();
 
-		await appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-		await page.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).click();
+		const search = await openSearchSheet(page);
+		await search.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).click();
 		await expect(miniPlayer).toBeHidden();
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
