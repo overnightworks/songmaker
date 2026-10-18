@@ -1,5 +1,5 @@
 import { makeGeneration, makeSong, makeVersion } from '$lib/test-utils/factories';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 vi.mock('$lib/api/client', () => ({
@@ -60,6 +60,10 @@ const songDefaults = {
 	created_at: ''
 } satisfies Partial<SongItem>;
 
+beforeEach(() => {
+	discardDraft();
+});
+
 describe('editGenParams dirty tracking', () => {
 	it('is not dirty after loading a song', () => {
 		loadSongData(makeSong(songDefaults));
@@ -101,6 +105,45 @@ describe('editGenParams dirty tracking', () => {
 });
 
 describe('loadSongData', () => {
+	it.each([
+		{ scenario: 'same song clean', dirty: false, songId: 's1', late: false, discard: false },
+		{ scenario: 'same song dirty', dirty: true, songId: 's1', late: false, discard: false },
+		{ scenario: 'different song dirty', dirty: true, songId: 's2', late: false, discard: false },
+		{
+			scenario: 'load finishes after typing',
+			dirty: true,
+			songId: 's1',
+			late: true,
+			discard: false
+		},
+		{ scenario: 'discard after late load', dirty: true, songId: 's1', late: true, discard: true }
+	])('defect:#1598 load preserves typing: $scenario', async ({ dirty, songId, late, discard }) => {
+		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		const serverSong = makeSong({ ...songDefaults, id: songId, lyrics: 'newer server text' });
+		let finishLoad!: (song: SongItem) => void;
+		const loading = late
+			? new Promise<SongItem>((resolve) => {
+					finishLoad = resolve;
+				}).then(loadSongData)
+			: null;
+		if (dirty) setDraftLyrics('typed draft');
+		if (loading) {
+			finishLoad(serverSong);
+			await loading;
+		} else {
+			loadSongData(serverSong);
+		}
+		const preserved = dirty && songId === 's1';
+		expect(get(editLyrics)).toBe(preserved ? 'typed draft' : 'newer server text');
+		expect(get(savedSongData).lyrics).toBe('newer server text');
+		expect(get(isDirty)).toBe(preserved);
+		if (discard) {
+			discardDraft();
+			expect(get(editLyrics)).toBe('newer server text');
+			expect(get(isDirty)).toBe(false);
+		}
+	});
+
 	it('defect:#940 S9383 shows a toast when the versions cannot be loaded, and the song still opens at once', async () => {
 		const { fetchVersions } = await import('$lib/api/client');
 		toasts.set([]);
@@ -551,6 +594,36 @@ describe('versionDeleteEditorLoss', () => {
 });
 
 describe('handleSave', () => {
+	it.each([false, true])(
+		'defect:#1598 save keeps intervening typing dirty: %s',
+		async (typeDuringSave) => {
+			const { updateSong } = await import('$lib/api/client');
+			let finishSave!: (song: SongItem) => void;
+			vi.mocked(updateSong).mockReturnValueOnce(
+				new Promise((resolve) => {
+					finishSave = resolve;
+				})
+			);
+			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+			setDraftLyrics('sent draft');
+			const saving = handleSave('s1');
+			if (typeDuringSave) setDraftLyrics('typed during save');
+			finishSave(makeSong({ ...songDefaults, id: 's1', lyrics: 'sent draft' }));
+			await saving;
+			expect(get(savedSongData).lyrics).toBe('sent draft');
+			expect(get(editLyrics)).toBe(typeDuringSave ? 'typed during save' : 'sent draft');
+			expect(get(isDirty)).toBe(typeDuringSave);
+			if (typeDuringSave) {
+				vi.mocked(updateSong).mockResolvedValueOnce(
+					makeSong({ ...songDefaults, lyrics: 'typed during save' })
+				);
+				await handleSave('s1');
+				expect(get(savedSongData).lyrics).toBe('typed during save');
+				expect(get(isDirty)).toBe(false);
+			}
+		}
+	);
+
 	it('calls updateSong, resets dirty state, and returns the saved song', async () => {
 		vi.clearAllMocks();
 		const { updateSong } = await import('$lib/api/client');

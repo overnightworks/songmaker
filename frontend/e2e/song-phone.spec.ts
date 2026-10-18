@@ -538,7 +538,7 @@ test.describe('song page at phone width', () => {
 		}
 
 		test(
-			'1354_rule_32: cold song ‹ names its album and asks before replacing the song',
+			'defect:#1598 1354_rule_32: repeated cold opens keep typing and ‹ asks, with and without a warm tab',
 			{ tag: ONLY_IN_SHELL.mobile },
 			async ({ page, context, browser }) => {
 				const { songPhoneAlbumId } = readSeededLibrary();
@@ -550,42 +550,46 @@ test.describe('song page at phone width', () => {
 					.getByRole('button', { name: /^Back to / })
 					.getAttribute('aria-label');
 				if (!expectedName) throw new Error('Expected the song Back name');
-				const coldContext = await browser.newContext({
-					storageState: await context.storageState(),
-					viewport: MOBILE_VIEWPORT,
-					isMobile: true,
-					hasTouch: true
-				});
-				try {
-					const cold = await coldContext.newPage();
-					await cold.setViewportSize({ width: 390, height: 844 });
-					await cold.goto(address);
-					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
-					await expect(coldLyrics).toHaveValue(savedLyrics);
-					// A late editor reload can overwrite typing; #1598 removes this retry.
-					await expect(async () => {
-						await coldLyrics.fill(UNSAVED_DRAFT_LINE);
-						await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE, { timeout: 1000 });
-					}).toPass();
-					await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE);
-					const readHistoryIndex = () =>
-						(window as unknown as { navigation: { currentEntry: { index: number } } }).navigation
-							.currentEntry.index;
-					const index = await cold.evaluate(readHistoryIndex);
-					await cold
-						.locator('.mobile-strip')
-						.getByRole('button', { name: expectedName, exact: true })
-						.click();
-					const question = cold.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
-					await expect(question).toBeVisible();
-					await expect(cold).toHaveURL(address);
-					await question
-						.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
-						.click();
-					await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
-					expect(await cold.evaluate(readHistoryIndex)).toBe(index);
-				} finally {
-					await coldContext.close();
+				for (const warmTab of [true, false]) {
+					if (!warmTab) {
+						await page.goto('/');
+						await expect(lyrics).toBeHidden();
+					}
+					for (let attempt = 0; attempt < 5; attempt += 1) {
+						const coldContext = await browser.newContext({
+							storageState: await context.storageState(),
+							viewport: MOBILE_VIEWPORT,
+							isMobile: true,
+							hasTouch: true
+						});
+						try {
+							const cold = await coldContext.newPage();
+							await cold.setViewportSize({ width: 390, height: 844 });
+							await cold.goto(address);
+							const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
+							await expect(coldLyrics).toHaveValue(savedLyrics);
+							await coldLyrics.fill(UNSAVED_DRAFT_LINE);
+							await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE);
+							const readHistoryIndex = () =>
+								(window as unknown as { navigation: { currentEntry: { index: number } } })
+									.navigation.currentEntry.index;
+							const index = await cold.evaluate(readHistoryIndex);
+							await cold
+								.locator('.mobile-strip')
+								.getByRole('button', { name: expectedName, exact: true })
+								.click();
+							const question = cold.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+							await expect(question).toBeVisible();
+							await expect(cold).toHaveURL(address);
+							await question
+								.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+								.click();
+							await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
+							expect(await cold.evaluate(readHistoryIndex)).toBe(index);
+						} finally {
+							await coldContext.close();
+						}
+					}
 				}
 			}
 		);

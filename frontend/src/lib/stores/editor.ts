@@ -36,17 +36,14 @@ const EMPTY_SONG_DATA: SongData = {
 };
 
 interface EditorState {
+	songId: string;
 	saved: SongData;
 	draft: SongData;
 	/** The version number an older version was loaded from into the draft, until it is saved. */
 	loadedFrom: number | null;
 }
 
-const editorState = writable<EditorState>({
-	saved: { ...EMPTY_SONG_DATA },
-	draft: { ...EMPTY_SONG_DATA },
-	loadedFrom: null
-});
+const editorState = writable<EditorState | null>(null);
 
 function genParamsEqual(
 	a: VersionGenerationParams | null,
@@ -84,49 +81,66 @@ function draftIsSaved(s: EditorState): boolean {
  * version even when its text matches the latest (#1245 rules 3 and 6). The one
  * rule for the `· draft` chip and the "Loaded from vN" hint together.
  */
-function draftAwaitsSave(s: EditorState): boolean {
+function draftAwaitsSave(s: EditorState | null): boolean {
+	if (!s) return false;
 	return s.loadedFrom !== null || !draftIsSaved(s);
 }
 
 export const isDirty = derived(editorState, draftAwaitsSave);
 
-export const savedSongData = derived(editorState, (s) => s.saved);
+export const savedSongData = derived(editorState, (s) => s?.saved ?? EMPTY_SONG_DATA);
 
 /** Which older version the draft came from, until it is saved; see {@link draftAwaitsSave}. */
-export const draftLoadedFrom = derived(editorState, (s) => s.loadedFrom);
+export const draftLoadedFrom = derived(editorState, (s) => s?.loadedFrom ?? null);
 
 /** A draft loaded from an older version is saved as the next version, never over the latest. */
 export const draftSavesAsNewVersion = derived(draftLoadedFrom, (from) => from !== null);
 
-export const editLyrics = derived(editorState, (s) => s.draft.lyrics);
-export const editPrompt = derived(editorState, (s) => s.draft.prompt);
-export const editBpm = derived(editorState, (s) => s.draft.bpm);
-export const editAudioDuration = derived(editorState, (s) => s.draft.audio_duration);
-export const editKeyScale = derived(editorState, (s) => s.draft.key_scale);
-export const editGenParams = derived(editorState, (s) => s.draft.genParams);
+export const editLyrics = derived(editorState, (s) => s?.draft.lyrics ?? EMPTY_SONG_DATA.lyrics);
+export const editPrompt = derived(editorState, (s) => s?.draft.prompt ?? EMPTY_SONG_DATA.prompt);
+export const editBpm = derived(editorState, (s) => s?.draft.bpm ?? EMPTY_SONG_DATA.bpm);
+export const editAudioDuration = derived(
+	editorState,
+	(s) => s?.draft.audio_duration ?? EMPTY_SONG_DATA.audio_duration
+);
+export const editKeyScale = derived(
+	editorState,
+	(s) => s?.draft.key_scale ?? EMPTY_SONG_DATA.key_scale
+);
+export const editGenParams = derived(
+	editorState,
+	(s) => s?.draft.genParams ?? EMPTY_SONG_DATA.genParams
+);
+
+function updateDraft(changes: Partial<SongData>): void {
+	editorState.update((s) => {
+		if (!s) throw new Error('Cannot edit before loading a song');
+		return { ...s, draft: { ...s.draft, ...changes } };
+	});
+}
 
 export function setDraftLyrics(lyrics: string): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, lyrics } }));
+	updateDraft({ lyrics });
 }
 
 export function setDraftPrompt(prompt: string): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, prompt } }));
+	updateDraft({ prompt });
 }
 
 export function setDraftBpm(bpm: number): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, bpm } }));
+	updateDraft({ bpm });
 }
 
 export function setDraftAudioDuration(audio_duration: number): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, audio_duration } }));
+	updateDraft({ audio_duration });
 }
 
 export function setDraftKeyScale(key_scale: string): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, key_scale } }));
+	updateDraft({ key_scale });
 }
 
 export function setDraftGenParams(genParams: VersionGenerationParams | null): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.draft, genParams } }));
+	updateDraft({ genParams });
 }
 
 // --- Versions ---
@@ -143,8 +157,9 @@ function holdsUnversionedChanges(s: EditorState, held: VersionItem[]): boolean {
 	return !held.some((version) => songDataEqual(s.draft, songDataFromVersion(version)));
 }
 
-export const draftHasUnversionedChanges = derived([editorState, versions], ([s, all]) =>
-	holdsUnversionedChanges(s, all)
+export const draftHasUnversionedChanges = derived(
+	[editorState, versions],
+	([s, all]) => s !== null && holdsUnversionedChanges(s, all)
 );
 
 /** A version to load into a song's draft once that song's page shows it (Open vN in Now Playing). */
@@ -203,13 +218,17 @@ function songDataFromVersion(v: VersionItem): SongData {
 
 export function loadSongData(s: SongItem): void {
 	const data = songDataFromSong(s);
-	editorState.set({ saved: data, draft: { ...data }, loadedFrom: null });
+	editorState.update((current) =>
+		current?.songId === s.id && draftAwaitsSave(current)
+			? { ...current, saved: data }
+			: { songId: s.id, saved: data, draft: { ...data }, loadedFrom: null }
+	);
 	loadVersions(s.id).catch(() => addToast(VERSIONS_LOAD_FAILED, 'error'));
 }
 
 /** Resets the draft back to the last-saved values, discarding unsaved edits. */
 export function discardDraft(): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.saved }, loadedFrom: null }));
+	editorState.update((s) => s && { ...s, draft: { ...s.saved }, loadedFrom: null });
 }
 
 async function loadVersions(songId: string): Promise<void> {
@@ -217,9 +236,9 @@ async function loadVersions(songId: string): Promise<void> {
 	currentVersionIndex.set(0);
 }
 
-function resetToVersion(v: VersionItem): void {
+function resetToVersion(songId: string, v: VersionItem): void {
 	const data = songDataFromVersion(v);
-	editorState.set({ saved: data, draft: { ...data }, loadedFrom: null });
+	editorState.set({ songId, saved: data, draft: { ...data }, loadedFrom: null });
 }
 
 /**
@@ -242,7 +261,7 @@ interface OfferedVersionLoad {
 	load: symbol;
 	setAside: boolean;
 	/** Whether the editor still shows exactly what the load left: same song, saved version and draft. */
-	stands: (currentSongId: string | null, s: EditorState) => boolean;
+	stands: (currentSongId: string | null, s: EditorState | null) => boolean;
 }
 
 const offeredVersionLoad = writable<OfferedVersionLoad | null>(null);
@@ -273,7 +292,9 @@ export const versionLoadUndoOutstanding = derived(
  */
 export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null {
 	const songId = get(selectedSongId);
-	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = get(editorState);
+	const state = get(editorState);
+	if (!state) return null;
+	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = state;
 	const isLatest = version.id === get(versions)[0]?.id;
 	const draft = isLatest ? { ...saved } : songDataFromVersion(version);
 	const loadedFrom = isLatest ? null : version.version_number;
@@ -282,9 +303,9 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 		return null;
 	}
 	const thisLoad = Symbol('version load');
-	editorState.update((s) => ({ ...s, draft, loadedFrom }));
-	const standsIn = (currentSongId: string | null, s: EditorState) =>
-		currentSongId === songId && s.saved === saved && s.draft === draft;
+	editorState.update((s) => s && { ...s, draft, loadedFrom });
+	const standsIn = (currentSongId: string | null, s: EditorState | null) =>
+		currentSongId === songId && s?.saved === saved && s.draft === draft;
 	const holds = derived(
 		[offeredVersionLoad, selectedSongId, editorState],
 		([$offered, $selectedSongId, $editorState]) =>
@@ -300,7 +321,7 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 		undo: () => {
 			if (!get(holds) || get(setAside)) return;
 			offeredVersionLoad.set(null);
-			editorState.update((s) => ({ ...s, draft: replaced, loadedFrom: replacedLoadedFrom }));
+			editorState.update((s) => s && { ...s, draft: replaced, loadedFrom: replacedLoadedFrom });
 		},
 		expire: () =>
 			offeredVersionLoad.update((offered) => (offered?.load === thisLoad ? null : offered))
@@ -364,7 +385,9 @@ export function computeDraftVersionNumber(
  * against a stale version) aborts rather than proceeding silently.
  */
 export async function handleSave(songId: string): Promise<SongItem> {
-	const { draft } = get(editorState);
+	const state = get(editorState);
+	if (!state || state.songId !== songId) throw new Error('Cannot save a different song');
+	const { draft } = state;
 	const updated = await updateSong(songId, {
 		lyrics: draft.lyrics,
 		prompt: draft.prompt,
@@ -374,7 +397,11 @@ export async function handleSave(songId: string): Promise<SongItem> {
 		generation_params: draft.genParams,
 		new_version: get(draftSavesAsNewVersion)
 	});
-	editorState.update((s) => ({ ...s, saved: { ...s.draft }, loadedFrom: null }));
+	editorState.update((s) =>
+		s?.songId === songId
+			? { ...s, saved: draft, loadedFrom: s.draft === draft ? null : s.loadedFrom }
+			: s
+	);
 	replaceSongInList(updated);
 	await loadVersions(songId);
 	return updated;
@@ -395,6 +422,7 @@ function untouchedLoadSource(s: EditorState, all: VersionItem[]): VersionItem | 
  */
 export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEditorLoss | null {
 	const state = get(editorState);
+	if (!state) return null;
 	const all = get(versions);
 	const survivors = all.filter((candidate) => candidate.id !== version.id);
 	const nextLatest = survivors[0];
@@ -440,6 +468,6 @@ export async function handleDeleteVersion(
 	if (get(selectedSongId) !== songId) return;
 	retireVersionLoadUndo();
 	const latest = get(versions)[0];
-	if (latest) resetToVersion(latest);
+	if (latest) resetToVersion(songId, latest);
 	else loadSongData(updated);
 }
