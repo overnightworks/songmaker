@@ -141,7 +141,7 @@ def client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user(_DEFAULT_USER_ID, username="test"),
     )
-    yield web_client(app)
+    return web_client(app)
 
 
 # ── DB query tests ────────────────────────────────────────────────────

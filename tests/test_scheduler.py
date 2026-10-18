@@ -105,7 +105,7 @@ class _InMemoryRedis:
 
 @pytest.fixture
 def db_factory(tmp_path: Path):
-    yield init_db(tmp_path / "scheduler.db")
+    return init_db(tmp_path / "scheduler.db")
 
 
 @pytest.fixture

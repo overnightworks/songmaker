@@ -14,7 +14,7 @@ from songmaker_cli.db.queries import get_worker_identity, list_worker_identities
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path)
-    yield client
+    return client
 
 
 def _payload(**overrides) -> dict:

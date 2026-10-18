@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
 
 import pytest
 
@@ -13,9 +12,9 @@ _KEY = "SONGMAKER_TEST_OVERRIDE"
 
 
 @pytest.fixture(autouse=True)
-def _clean_key(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def _clean_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(_KEY, raising=False)
-    yield
+    return
 
 
 def test_override_is_visible_inside_the_block() -> None:
