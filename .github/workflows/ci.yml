@@ -268,8 +268,7 @@ jobs:
 
   # #679: SonarCloud runs as CI-based analysis so it receives the backend and
   # frontend coverage reports. The job turns red when SonarCloud reports
-  # findings; the auto-deploy tick treats exactly this job as advisory, so a
-  # red result is visible without holding back a rollout (#623, #1318).
+  # findings, blocking the candidate from auto-deploy like every Actions job.
   sonar:
     name: SonarCloud scan
     needs: [backend, frontend]

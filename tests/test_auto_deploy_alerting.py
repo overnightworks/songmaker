@@ -13,7 +13,6 @@ moving that clock, never by sleeping.
 from __future__ import annotations
 
 import json
-import re
 import shlex
 import stat
 import subprocess
@@ -23,11 +22,9 @@ from enum import Enum
 from pathlib import Path
 
 import pytest
-import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "auto-deploy.sh"
-CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert-config.sh"
 PROMETHEUS_RULE_PATH = Path("monitoring/rules/alert.rules.yml")
 
@@ -61,7 +58,7 @@ prometheus_config_last_reload_successful 1
 CLOCK_START_EPOCH = 1_756_000_000
 CHECK_RUN_FIELD_SEPARATOR = "\x1f"
 REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.12)"
-ADVISORY_ACTIONS_JOB_NAME = "SonarCloud scan"
+SONAR_ACTIONS_JOB_NAME = "SonarCloud scan"
 
 REQUIRED_GRAFANA_PASSWORD = (
     "${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env (see docker/.env.docker.example)}"
@@ -527,11 +524,11 @@ class Checkout:
             "exit 1\n",
         )
 
-    def make_check_lookup_hang(self) -> None:
+    def make_check_lookup_terminate(self, *, kill: bool) -> None:
         _write_executable(
             self._bin / "gh",
             "#!/bin/bash\n"
-            'exec sleep "$GH_CHECK_RUN_LOOKUP_HANG_SECONDS"\n',
+            + ("kill -KILL $$\n" if kill else 'exec sleep "$GH_CHECK_RUN_LOOKUP_HANG_SECONDS"\n'),
         )
 
     def write_alert_config(self, content: str = VALID_ALERT_ENV) -> None:
@@ -721,7 +718,7 @@ class Checkout:
                 "GH_CHECK_RUNS_DIRECTORY": str(self.check_runs_directory),
                 "GH_CHECK_RUNS_RAW_RESPONSE_FILE": str(self.check_runs_raw_response_file),
                 "GH_CHECK_RUNS_STDERR": self.check_runs_stderr,
-                "GH_CHECK_RUN_LOOKUP_HANG_SECONDS": "2",
+                "GH_CHECK_RUN_LOOKUP_HANG_SECONDS": "10",
                 "GH_AFTER_CHECK_LOOKUP_SCRIPT": (
                     str(self._after_check_lookup_script)
                     if self._after_check_lookup_script is not None
@@ -1202,7 +1199,7 @@ def test_a_fetch_that_cannot_finish_is_a_counted_refusal_that_leaves_no_process_
     transport: FailingTransport,
     journal_wording: str,
 ) -> None:
-    """defect:#1479 cell 10 -- a fetch that hangs, whose transport ignores TERM, or whose
+    """A4; defect:#1479 cell 10 -- a fetch that hangs, whose transport ignores TERM, or whose
     git is SIGKILLed is cut off within the deadline with everything it started, counts as
     a refusal worded as what happened, and the next healthy tick recovers."""
     new_pin = acestep_fork.commit()
@@ -1233,6 +1230,7 @@ def test_a_fetch_that_cannot_finish_is_a_counted_refusal_that_leaves_no_process_
     assert acestep_checkout.deployed_sha_file.read_text() == deployed_before
     assert acestep_checkout.head == head_before
     assert acestep_checkout.acestep_head == pin_before
+    assert not list((acestep_checkout.root / ".git").glob("songmaker-autodeploy.git-fetch.*"))
 
     acestep_checkout.make_fetches_work_again(failing_repository)
     acestep_checkout.git_fetch_timeout_seconds = GIT_FETCH_TIMEOUT_SECONDS
@@ -1241,6 +1239,7 @@ def test_a_fetch_that_cannot_finish_is_a_counted_refusal_that_leaves_no_process_
     assert recovered.returncode == 0
     assert acestep_checkout.acestep_head == new_pin
     assert acestep_checkout.deployed_sha_file.read_text() == acestep_checkout.head
+    assert not list((acestep_checkout.root / ".git").glob("songmaker-autodeploy.git-fetch.*"))
 
 
 def test_an_unchanged_acestep_pin_does_not_rebuild_the_bases(
@@ -1390,11 +1389,17 @@ NOTHING_VERIFIED_VERDICT = "failed (no required GitHub Actions check run succeed
 RUNNING_CHECKS_VERDICT = "waiting (one or more GitHub Actions check runs are still running)"
 
 
+@pytest.mark.parametrize(
+    "job_name", [UNJUDGED_ACTIONS_JOB_NAME, SONAR_ACTIONS_JOB_NAME],
+    ids=["codeql", "old-sonar"],
+)
 @pytest.mark.parametrize("conclusion", ["skipped", "neutral"])
 def test_a_skipped_or_neutral_actions_job_does_not_block_a_green_candidate(
     tmp_path: Path,
     conclusion: str,
+    job_name: str,
 ) -> None:
+    """A2: unjudged Actions jobs neither block nor prove success."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -1402,7 +1407,7 @@ def test_a_skipped_or_neutral_actions_job_does_not_block_a_green_candidate(
     expected_head = checkout.remote_main_sha()
     checkout.set_check_runs(
         ("completed", "success"),
-        ("github-actions", UNJUDGED_ACTIONS_JOB_NAME, "completed", conclusion),
+        ("github-actions", job_name, "completed", conclusion),
     )
 
     result = checkout.tick()
@@ -1423,13 +1428,17 @@ def test_a_skipped_or_neutral_actions_job_does_not_block_a_green_candidate(
             )
             for conclusion in ("failure", "cancelled", "timed_out")
         ),
-        pytest.param(
-            [
-                ("completed", "success"),
-                ("github-actions", "Sonarcloud scan", "completed", "failure"),
-            ],
-            UNSUCCESSFUL_CHECKS_VERDICT,
-            id="failure-of-a-near-advisory-name",
+        *(
+            pytest.param(
+                [("completed", "success"), ("github-actions", name, "completed", "failure")],
+                UNSUCCESSFUL_CHECKS_VERDICT,
+                id=case,
+            )
+            for case, name in (
+                ("old-sonar", SONAR_ACTIONS_JOB_NAME),
+                ("quality-sonar", "quality / sonar"),
+                ("quality-verdict", "quality / verdict"),
+            )
         ),
         pytest.param([("completed", "skipped")], NOTHING_VERIFIED_VERDICT, id="skipped-only"),
         pytest.param(
@@ -1453,6 +1462,7 @@ def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
     runs: list[tuple[str, ...]],
     verdict: str,
 ) -> None:
+    """A1: every failed Actions job rejects the candidate, regardless of name."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -1482,23 +1492,19 @@ def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
     ("app_slug", "name", "advisory_log"),
     [
         ("sonarcloud", "SonarCloud Code Analysis", "app 'sonarcloud' is advisory, ignored"),
-        (
-            "github-actions",
-            ADVISORY_ACTIONS_JOB_NAME,
-            f"GitHub Actions job '{ADVISORY_ACTIONS_JOB_NAME}' is advisory, ignored",
-        ),
     ],
 )
 @pytest.mark.parametrize(
     "through_github_api_filter", [False, True], ids=["projected", "raw-api-response"],
 )
-def test_a_failed_advisory_check_does_not_block_a_green_github_actions_candidate(
+def test_a_failed_other_app_check_does_not_block_a_green_github_actions_candidate(
     tmp_path: Path,
     app_slug: str,
     name: str,
     advisory_log: str,
     through_github_api_filter: bool,
 ) -> None:
+    """A2: an external app failure is ignored for projected and raw API answers."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -1534,16 +1540,6 @@ def test_a_failed_advisory_check_does_not_block_a_green_github_actions_candidate
     assert checkout.deployed_sha_file.read_text() == expected_head
     assert "compose build" in checkout.docker_calls
     assert advisory_log in checkout.journal
-
-
-def test_the_advisory_job_name_is_the_sonarcloud_job_name_in_ci() -> None:
-    script_value = re.search(
-        r'^ADVISORY_ACTIONS_JOB_NAME="([^"]+)"$', DEPLOY_SCRIPT.read_text(), re.MULTILINE,
-    )
-    ci_jobs = yaml.safe_load(CI_WORKFLOW.read_text())["jobs"]
-
-    assert script_value is not None
-    assert ci_jobs["sonar"]["name"] == script_value.group(1)
 
 
 def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
@@ -1635,7 +1631,15 @@ def test_running_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> No
     assert f"selected newest fully green deploy candidate {green_predecessor}" in checkout.journal
 
 
-def test_failed_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "job_name",
+    [SONAR_ACTIONS_JOB_NAME, "quality / sonar", "quality / verdict"],
+    ids=["old-sonar", "quality-sonar", "quality-verdict"],
+)
+def test_failed_head_deploys_the_newest_green_predecessor(
+    tmp_path: Path, job_name: str,
+) -> None:
+    """A1: a red Actions candidate leaves its newest green predecessor eligible."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -1643,7 +1647,9 @@ def test_failed_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> Non
     green_predecessor = checkout.remote_main_sha()
     checkout.move_main_forward()
     failed_head = checkout.remote_main_sha()
-    checkout.set_check_runs_for_commit(failed_head, ("completed", "failure"))
+    checkout.set_check_runs_for_commit(
+        failed_head, ("github-actions", job_name, "completed", "failure"),
+    )
     checkout.set_check_runs_for_commit(green_predecessor, ("completed", "success"))
 
     result = checkout.tick()
@@ -1652,6 +1658,8 @@ def test_failed_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> Non
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == green_predecessor
+    assert checkout.deployed_sha_file.read_text() == green_predecessor
+    assert "compose build" in checkout.docker_calls
     assert f"skipping deploy candidate {failed_head}: failed" in checkout.journal
     assert f"selected newest fully green deploy candidate {green_predecessor}" in checkout.journal
 
@@ -2118,19 +2126,30 @@ def test_future_commit_timestamp_cannot_starve_first_seen_grace_alarm(
     assert "compose build" not in checkout.docker_calls
 
 
-def test_a_check_run_lookup_timeout_counts_as_a_failed_tick(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("kill", "diagnostic"),
+    [
+        pytest.param(False, "check-run lookup timed out", id="term"),
+        pytest.param(True, "check-run lookup was killed by SIGKILL", id="kill"),
+    ],
+)
+def test_a_check_run_lookup_timeout_counts_as_a_failed_tick(
+    tmp_path: Path, kill: bool, diagnostic: str,
+) -> None:
+    """A3: both lookup terminations keep their diagnostic and count one refusal."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
-    checkout.check_run_lookup_timeout_seconds = 1
-    checkout.make_check_lookup_hang()
+    if not kill:
+        checkout.check_run_lookup_timeout_seconds = 3
+    checkout.make_check_lookup_terminate(kill=kill)
 
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "check-run lookup timed out" in checkout.journal
-    assert "failure count now 1 (this tick: check-run lookup timed out)" in checkout.journal
+    assert diagnostic in checkout.journal
+    assert "failure count now 1 (this tick: GitHub check status undetermined)" in checkout.journal
     assert "compose build" not in checkout.docker_calls
 
 
