@@ -68,7 +68,7 @@ def client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user(_DEFAULT_USER_ID, username="test_user"),
     )
-    yield web_client(app)
+    return web_client(app)
 
 
 @pytest.fixture
@@ -78,7 +78,7 @@ def unauthed_client(tmp_path: Path) -> TestClient:
         _seed_db(session)
 
     app = make_router_app(make_router_ctx(tmp_path, db=factory))
-    yield web_client(app)
+    return web_client(app)
 
 
 def _whisper_cues_payload(word_count: int) -> list[dict]:
@@ -136,7 +136,7 @@ def gzip_client(tmp_path: Path) -> TestClient:
         minimum_size=GZIP_MINIMUM_SIZE_BYTES,
         compresslevel=GZIP_COMPRESS_LEVEL,
     )
-    yield web_client(app)
+    return web_client(app)
 
 
 def test_song_detail_response_is_gzip_compressed(gzip_client: TestClient) -> None:
