@@ -11,7 +11,13 @@ vi.mock('$lib/api/client', () => ({
 
 import { get } from 'svelte/store';
 import { fetchVersions } from '$lib/api/client';
-import { loadSongData, setDraftLyrics, versionDeleteRequest, versions } from '$lib/stores/editor';
+import {
+	discardDraft,
+	loadSongData,
+	setDraftLyrics,
+	versionDeleteRequest,
+	versions
+} from '$lib/stores/editor';
 import { closeTopLayer, resetLayersForTests } from '$lib/stores/layers';
 import {
 	VERSIONS_SHEET_LABEL,
@@ -61,6 +67,8 @@ const SONG = makeSong({
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(async () => {
+	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
+	discardDraft();
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 	vi.mocked(fetchVersions).mockResolvedValueOnce(VERSION_ROWS);

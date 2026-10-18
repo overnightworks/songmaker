@@ -144,6 +144,27 @@ describe('loadSongData', () => {
 		}
 	});
 
+	it.each([
+		{ scenario: 'only provenance differs', lyrics: 'hello', typed: false, preserved: false },
+		{ scenario: 'version text differs', lyrics: 'older text', typed: false, preserved: true },
+		{ scenario: 'typing after version load', lyrics: 'hello', typed: true, preserved: true }
+	])(
+		'defect:#1598 background load after a version: $scenario',
+		async ({ lyrics, typed, preserved }) => {
+			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+			await Promise.resolve();
+			const older = makeVersion({ id: 'v1', version_number: 1, ...songDefaults, lyrics });
+			versions.set([makeVersion({ id: 'v2', version_number: 2 }), older]);
+			loadVersionAsDraft(older);
+			if (typed) setDraftLyrics('typed draft');
+			loadSongData(makeSong({ ...songDefaults, id: 's1', lyrics: 'server text' }));
+			expect(get(editLyrics)).toBe(preserved ? (typed ? 'typed draft' : lyrics) : 'server text');
+			expect(get(savedSongData).lyrics).toBe('server text');
+			expect(get(draftLoadedFrom)).toBe(preserved ? 1 : null);
+			expect(get(isDirty)).toBe(preserved);
+		}
+	);
+
 	it('defect:#940 S9383 shows a toast when the versions cannot be loaded, and the song still opens at once', async () => {
 		const { fetchVersions } = await import('$lib/api/client');
 		toasts.set([]);
@@ -709,23 +730,29 @@ describe('computeDraftVersionNumber', () => {
 });
 
 describe('handleDeleteVersion', () => {
-	it('calls deleteVersion and refreshes', async () => {
-		vi.clearAllMocks();
-		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
-		loadSongData(makeSong({ ...songDefaults, lyrics: 'deleted version' }));
-		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchSong).mockResolvedValueOnce(
-			makeSong({ ...songDefaults, lyrics: 'remaining lyrics' })
-		);
-		vi.mocked(fetchVersions).mockResolvedValueOnce([
-			makeVersion({ lyrics: 'remaining lyrics', prompt: 'rock' })
-		]);
+	it.each([true, false])(
+		'defect:#1598 confirmed delete replaces a dirty draft; surviving version: %s',
+		async (survives) => {
+			vi.clearAllMocks();
+			const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+			loadSongData(makeSong({ ...songDefaults, lyrics: 'deleted version' }));
+			selectedSongId.set('s1');
+			setDraftLyrics('typed draft');
+			vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
+			vi.mocked(fetchSong).mockResolvedValueOnce(
+				makeSong({ ...songDefaults, lyrics: 'remaining lyrics' })
+			);
+			vi.mocked(fetchVersions).mockResolvedValueOnce(
+				survives ? [makeVersion({ lyrics: 'remaining lyrics', prompt: 'rock' })] : []
+			);
 
-		await handleDeleteVersion('s1', 'v1', false);
+			await handleDeleteVersion('s1', 'v1', false);
 
-		expect(deleteVersion).toHaveBeenCalledWith('v1', false);
-		expect(get(editLyrics)).toBe('remaining lyrics');
-	});
+			expect(deleteVersion).toHaveBeenCalledWith('v1', false);
+			expect(get(editLyrics)).toBe('remaining lyrics');
+			expect(get(isDirty)).toBe(false);
+		}
+	);
 
 	it('does not overwrite another song editor if the user navigates away', async () => {
 		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');

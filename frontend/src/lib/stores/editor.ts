@@ -219,7 +219,7 @@ function songDataFromVersion(v: VersionItem): SongData {
 export function loadSongData(s: SongItem): void {
 	const data = songDataFromSong(s);
 	editorState.update((current) =>
-		current?.songId === s.id && draftAwaitsSave(current)
+		current?.songId === s.id && !draftIsSaved(current)
 			? { ...current, saved: data }
 			: { songId: s.id, saved: data, draft: { ...data }, loadedFrom: null }
 	);
@@ -236,8 +236,7 @@ async function loadVersions(songId: string): Promise<void> {
 	currentVersionIndex.set(0);
 }
 
-function resetToVersion(songId: string, v: VersionItem): void {
-	const data = songDataFromVersion(v);
+function replaceDraft(songId: string, data: SongData): void {
 	editorState.set({ songId, saved: data, draft: { ...data }, loadedFrom: null });
 }
 
@@ -468,6 +467,5 @@ export async function handleDeleteVersion(
 	if (get(selectedSongId) !== songId) return;
 	retireVersionLoadUndo();
 	const latest = get(versions)[0];
-	if (latest) resetToVersion(songId, latest);
-	else loadSongData(updated);
+	replaceDraft(songId, latest ? songDataFromVersion(latest) : songDataFromSong(updated));
 }

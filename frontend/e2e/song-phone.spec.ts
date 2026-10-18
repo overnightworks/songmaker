@@ -8,12 +8,9 @@
 // staying desktop-only. The one desktop row is the unsaved-draft dialog on
 // the rail's Settings group, which shares the phone rows' arrangement (#1143).
 //
-// CI's e2e stack (docker-compose.ci.yml) runs no ACE-Step worker, so every
-// job state below is seeded directly against the database
-// (scripts/seed_e2e_job_states.py) rather than produced by a real
-// generation — the same reasoning kinetic-strip.spec.ts's own takes and the
-// rail's filler albums already use (issue #344). The running job is failed
-// on the *same* job id while its SSE stream is still open
+// CI has no ACE-Step worker: scripts/seed_e2e_job_states.py seeds job states
+// directly, as kinetic-strip.spec.ts seeds takes and rail filler (#344).
+// The running job is failed on the *same* job id while its SSE stream is open
 // (/api/jobs/{id}/stream polls the row every second), so the frontend picks
 // up the transition live, the way a real worker crash would report it — no
 // reload, and no dependence on the reaper ever running.
@@ -60,7 +57,6 @@ import {
 	boundingBoxes,
 	containing,
 	FlowGuard,
-	MOBILE_VIEWPORT,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openSettingsSection,
@@ -558,13 +554,12 @@ test.describe('song page at phone width', () => {
 					for (let attempt = 0; attempt < 5; attempt += 1) {
 						const coldContext = await browser.newContext({
 							storageState: await context.storageState(),
-							viewport: MOBILE_VIEWPORT,
+							viewport: { width: 390, height: 844 },
 							isMobile: true,
 							hasTouch: true
 						});
 						try {
 							const cold = await coldContext.newPage();
-							await cold.setViewportSize({ width: 390, height: 844 });
 							await cold.goto(address);
 							const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
 							await expect(coldLyrics).toHaveValue(savedLyrics);

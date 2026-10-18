@@ -40,6 +40,7 @@ import {
 	updateSong
 } from '$lib/api/client';
 import {
+	discardDraft,
 	isDirty,
 	loadSongData,
 	pinnedSeed,
@@ -80,6 +81,8 @@ const queuedJob: JobItem = {
 };
 
 beforeEach(async () => {
+	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
+	discardDraft();
 	vi.resetAllMocks();
 	resetGenerationFailuresForTests();
 	vi.stubGlobal(
