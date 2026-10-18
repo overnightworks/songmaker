@@ -24,6 +24,7 @@ from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskPa
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     JOB_ERROR_GENERATION_FAILED,
+    JOB_ERROR_GENERATION_UNAVAILABLE,
     GenerationPhase,
     JobFunction,
     JobStatus,
@@ -888,12 +889,20 @@ def test_generation_job_rejects_foreign_reference_before_dispatch(
 
 def test_generation_job_no_capacity(seeded_db, generation_worker_peer) -> None:
     """S5-B/D, L10: Real admission without a registered worker fails before any take."""
+
     async def exercise() -> None:
         async with generation_worker_peer() as peer:
             await run_generation_job(
-                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
-                audio_dir=peer.audio_dir, data_dir=peer.data_dir,
-                redis=peer.redis, target_model="sft",
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=peer.audio_dir,
+                data_dir=peer.data_dir,
+                redis=peer.redis,
+                target_model="sft",
             )
             assert peer.requests == []
 
@@ -901,7 +910,8 @@ def test_generation_job_no_capacity(seeded_db, generation_worker_peer) -> None:
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == "No ACE-Step workers available"
+        assert job.error == JOB_ERROR_GENERATION_UNAVAILABLE
+        assert job.error_type == "generation_unavailable"
         assert session.query(Generation).count() == 0
 
 
@@ -909,19 +919,23 @@ _GENERATION_STREAM_FAILURES = [
     pytest.param(WorkerStream((("error", {"error": "need 18.5 GB"}),)), "need 18.5 GB", id="vram"),
     pytest.param(
         WorkerStream((("error", {"error": "generation failed (no detail from ACE-Step)"}),)),
-        "generation failed (no detail from ACE-Step)", id="no-detail",
+        "generation failed (no detail from ACE-Step)",
+        id="no-detail",
     ),
     pytest.param(
-        WorkerStream((("done", {}),)), "Worker done event missing 'result' field",
+        WorkerStream((("done", {}),)),
+        "Worker done event missing 'result' field",
         id="missing-result",
     ),
     pytest.param(
-        WorkerStream((("done", {"result": {"mode": "sft"}}),)), "Worker returned invalid result:",
+        WorkerStream((("done", {"result": {"mode": "sft"}}),)),
+        "Worker returned invalid result:",
         id="invalid-result",
     ),
     pytest.param(WorkerStream(()), "SSE stream ended without done/error event", id="stream-end"),
     pytest.param(
-        WorkerStream((("error", {"error": "Generation timed out"}),)), "Generation timed out",
+        WorkerStream((("error", {"error": "Generation timed out"}),)),
+        "Generation timed out",
         id="worker-mimics-own-line",
     ),
 ]
@@ -930,20 +944,34 @@ _GENERATION_STREAM_FAILURES = [
 @pytest.mark.parametrize(("stream", "cause"), _GENERATION_STREAM_FAILURES)
 @pytest.mark.parametrize("completed", [0, 1], ids=["failed", "partial"])
 def test_generation_job_selects_musician_line(
-    seeded_db, generation_worker_peer, tmp_path, stream, cause, completed, caplog,
+    seeded_db,
+    generation_worker_peer,
+    tmp_path,
+    stream,
+    cause,
+    completed,
+    caplog,
 ) -> None:
     """S5-B/D, L6: HTTP worker failures preserve real takes and sanitize stored detail."""
     from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
         scenario = WorkerScenario(
-            loaded_modes=("sft",), stream_answers=(None,) * completed + (stream,),
+            loaded_modes=("sft",),
+            stream_answers=(None,) * completed + (stream,),
         )
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
             await run_generation_job(
-                "j1", "s1", "v1", completed + 1, "u1", db_factory=seeded_db,
-                audio_dir=peer.audio_dir, data_dir=peer.data_dir,
-                redis=peer.redis, target_model="sft",
+                "j1",
+                "s1",
+                "v1",
+                completed + 1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=peer.audio_dir,
+                data_dir=peer.data_dir,
+                redis=peer.redis,
+                target_model="sft",
             )
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
 
@@ -977,16 +1005,22 @@ def _worker_failure_response(status_code: int, response_format: str, cause: str)
     return response, cause
 
 
-@pytest.mark.parametrize("status_code", [409, 502])
+@pytest.mark.parametrize("status_code", [400, 409, 500, 502])
 @pytest.mark.parametrize("response_format", ["text", "json", "empty", "whitespace"])
 def test_generation_job_sanitizes_auto_load_response(
-    seeded_db, generation_worker_peer, status_code: int, response_format: str, caplog,
+    seeded_db,
+    generation_worker_peer,
+    status_code: int,
+    response_format: str,
+    caplog,
 ) -> None:
-    """S5-B/D, L3/L6: Auto-load causes stay in logs while HTTP jobs store the generic line."""
+    """S5-B/D, L3/L6: Auto-load causes stay in logs while HTTP jobs store availability."""
     from songmaker_cli.acestep_state import read_queue_depth
 
     response, cause = _worker_failure_response(
-        status_code, response_format, "Model sft requires 12.0GB > budget 8.0GB",
+        status_code,
+        response_format,
+        "Model sft requires 12.0GB > budget 8.0GB",
     )
     reply = WorkerReply(response.status_code, response.text, response.headers["content-type"])
 
@@ -994,9 +1028,16 @@ def test_generation_job_sanitizes_auto_load_response(
         scenario = WorkerScenario(load_answers=(reply,))
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
             await run_generation_job(
-                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
-                audio_dir=peer.audio_dir, data_dir=peer.data_dir,
-                redis=peer.redis, target_model="sft",
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=peer.audio_dir,
+                data_dir=peer.data_dir,
+                redis=peer.redis,
+                target_model="sft",
             )
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
             assert peer.requests == [("load", "sft")]
@@ -1005,10 +1046,103 @@ def test_generation_job_sanitizes_auto_load_response(
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error_type == "generation_error"
-        assert job.error == JOB_ERROR_GENERATION_FAILED
+        assert job.error_type == "generation_unavailable"
+        assert job.error == JOB_ERROR_GENERATION_UNAVAILABLE
     assert "j1" in caplog.text
     assert cause in caplog.text
+
+
+@pytest.mark.parametrize("loaded", [False, True], ids=["before-load", "before-submit"])
+def test_s5_generation_job_worker_disappears_before_request(
+    seeded_db,
+    generation_worker_peer,
+    loaded,
+    caplog,
+):
+    """S5-A/B, L3/L6/L10: A stopped admitted peer fails cleanly and releases occupancy."""
+    from songmaker_cli.acestep_state import read_queue_depth
+
+    async def exercise():
+        scenario = WorkerScenario(loaded_modes=("sft",) if loaded else ())
+        async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
+            await peer.stop_server()
+            await run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=peer.audio_dir,
+                data_dir=peer.data_dir,
+                redis=peer.redis,
+                target_model="sft",
+            )
+            assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
+            assert peer.requests == []
+
+    _run(exercise())
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == "failed"
+        assert job.error == JOB_ERROR_GENERATION_UNAVAILABLE
+        assert job.error_type == "generation_unavailable"
+        assert session.query(Generation).count() == 0
+    assert "j1" in caplog.text
+    assert "connect" in caplog.text.lower()
+
+
+@pytest.mark.parametrize("completed", [0, 1], ids=["failed", "partial"])
+@pytest.mark.parametrize("load_fails", [False, True], ids=["still-missing", "reload-failed"])
+def test_s5_generation_job_reload_unavailable(
+    seeded_db,
+    generation_worker_peer,
+    completed,
+    load_fails,
+    tmp_path,
+):
+    """S5-A/B/D, L3/L6/L10: Reload failure preserves completed takes and frees occupancy."""
+    from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
+    from songmaker_cli.acestep_state import read_queue_depth
+
+    async def exercise():
+        missing = WorkerReply(409, MODE_NOT_LOADED_DETAIL.format(mode="sft"))
+        scenario = WorkerScenario(
+            loaded_modes=("sft",),
+            submit_answers=(None,) * completed + (missing, missing),
+            load_answers=(WorkerReply(503, "reload unavailable"),) if load_fails else (),
+        )
+        async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
+            await run_generation_job(
+                "j1",
+                "s1",
+                "v1",
+                completed + 1,
+                "u1",
+                db_factory=seeded_db,
+                audio_dir=peer.audio_dir,
+                data_dir=peer.data_dir,
+                redis=peer.redis,
+                target_model="sft",
+            )
+            assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
+            assert [kind for kind, _ in peer.requests] == ["submit", "stream"] * completed + [
+                "submit",
+                "load",
+            ] + ([] if load_fails else ["submit"])
+
+    _run(exercise())
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert job.status == ("partial" if completed else "failed")
+        prefix = "1/2 completed, 1 failed: " if completed else ""
+        assert job.error == prefix + JOB_ERROR_GENERATION_UNAVAILABLE
+        assert job.error_type == "generation_unavailable"
+        generations = session.query(Generation).all()
+        assert len(generations) == completed
+        for generation in generations:
+            assert (tmp_path / "audio" / generation.mp3_path).is_file()
+            assert (tmp_path / "audio" / generation.wav_path).is_file()
 
 
 def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:

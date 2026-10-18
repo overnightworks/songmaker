@@ -37,6 +37,7 @@ from songmaker_cli.scheduler import (
     GenerationTaskResultDTO,
     NoCapacityError,
     WorkerGenerationFailed,
+    WorkerGenerationUnavailable,
     WorkerProtocolError,
     WorkerTaskFailed,
     _iterate_task_events,
@@ -501,13 +502,18 @@ def test_consume_task_stream_empty_error_is_a_protocol_error_for_both_task_kinds
 
 def test_consume_task_stream_reconnects_on_transport_drop(generation_worker_peer) -> None:
     """S5-D, L9: A dropped connection reconnects to the same real completed task."""
+
     async def exercise() -> None:
         scenario = WorkerScenario(stream_answers=(TransportFailure(httpx.ConnectError, "refused"),))
         async with generation_worker_peer(scenario) as peer:
             result = await dispatch_generation_on_worker(
-                worker=_make_picked(loaded=[]), ace_config=_make_ace_config(), target_mode="sft",
+                worker=_make_picked(loaded=[]),
+                ace_config=_make_ace_config(),
+                target_mode="sft",
                 options=replace(
-                    _PEER_DISPATCH_OPTIONS, transport=peer.transport, max_sse_reconnects=2,
+                    _PEER_DISPATCH_OPTIONS,
+                    transport=peer.transport,
+                    max_sse_reconnects=2,
                 ),
             )
             assert Path(result.audio_path).is_file()
@@ -518,15 +524,22 @@ def test_consume_task_stream_reconnects_on_transport_drop(generation_worker_peer
 
 def test_consume_task_stream_gives_up_after_max_reconnects(generation_worker_peer) -> None:
     """S5-A/D, L10: The transport boundary exhausts exactly the existing retry budget."""
+
     async def exercise() -> None:
         scenario = WorkerScenario(
             stream_answers=(TransportFailure(httpx.ConnectError, "refused"),) * 3,
         )
         async with generation_worker_peer(scenario) as peer:
-            with pytest.raises(httpx.ConnectError, match="refused"):
-                await consume_task_stream(_make_picked(), "gen-1", options=replace(
-                    _PEER_DISPATCH_OPTIONS, transport=peer.transport, max_sse_reconnects=2,
-                ))
+            with pytest.raises(WorkerGenerationUnavailable, match="refused"):
+                await consume_task_stream(
+                    _make_picked(),
+                    "gen-1",
+                    options=replace(
+                        _PEER_DISPATCH_OPTIONS,
+                        transport=peer.transport,
+                        max_sse_reconnects=2,
+                    ),
+                )
             assert [kind for kind, _ in peer.requests] == ["stream"] * 3
 
     _run(exercise())
@@ -534,17 +547,56 @@ def test_consume_task_stream_gives_up_after_max_reconnects(generation_worker_pee
 
 def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_worker_peer) -> None:
     """S5-A/D, L10: A read timeout is a stream failure without a reconnect."""
+
     async def exercise() -> None:
         scenario = WorkerScenario(
             stream_answers=(TransportFailure(httpx.ReadTimeout, "stream went silent"),),
         )
         async with generation_worker_peer(scenario) as peer:
-            with pytest.raises(WorkerGenerationFailed, match=WORKER_STREAM_WENT_SILENT):
+            with pytest.raises(WorkerGenerationUnavailable, match=WORKER_STREAM_WENT_SILENT):
                 await consume_task_stream(
-                    _make_picked(), "gen-1",
+                    _make_picked(),
+                    "gen-1",
                     options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
                 )
             assert [kind for kind, _ in peer.requests] == ["stream"]
+
+    _run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("transport_error", "expected_error", "message", "attempts"),
+    [
+        (httpx.ReadTimeout, WorkerTaskFailed, WORKER_STREAM_WENT_SILENT, 1),
+        (httpx.ConnectError, httpx.ConnectError, "download lost", 3),
+    ],
+)
+def test_s5_download_transport_contract(
+    generation_worker_peer,
+    transport_error,
+    expected_error,
+    message,
+    attempts,
+):
+    """S5-D, L10: Downloads retain their own silence and exhausted-reconnect errors."""
+
+    async def exercise():
+        scenario = WorkerScenario(
+            stream_answers=(TransportFailure(transport_error, "download lost"),) * attempts,
+        )
+        async with generation_worker_peer(scenario) as peer:
+            with pytest.raises(expected_error, match=message) as raised:
+                await consume_download_task_stream(
+                    _make_picked(),
+                    "download",
+                    options=replace(
+                        _PEER_DISPATCH_OPTIONS,
+                        transport=peer.transport,
+                        max_sse_reconnects=2,
+                    ),
+                )
+            assert type(raised.value) is expected_error
+            assert peer.requests == [("stream", None)] * attempts
 
     _run(exercise())
 
@@ -837,13 +889,18 @@ def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
                     (turbo_job_view, "turbo", []),
                 ):
                     result = await dispatch_generation_on_worker(
-                        worker=view, ace_config=_make_ace_config(), target_mode=mode,
+                        worker=view,
+                        ace_config=_make_ace_config(),
+                        target_mode=mode,
                         on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
                         options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
                     )
                     assert Path(result.audio_path).is_file()
             assert [mode for kind, mode in peer.requests if kind == "load"] == [
-                "sft", "turbo", "sft", "turbo",
+                "sft",
+                "turbo",
+                "sft",
+                "turbo",
             ]
 
     _run(run_two_jobs_whose_takes_alternate())
@@ -851,15 +908,18 @@ def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
 
 
 @pytest.mark.parametrize(
-    "error_type", [httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout],
+    "error_type",
+    [httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout],
 )
 def test_generation_worker_peer_replays_transport_answers(generation_worker_peer, error_type):
     """S5-A/D, L3/L9: The shared transport scripts failures and survives client exits."""
+
     async def exercise():
         failure = TransportFailure(error_type, "peer transport failure")
         recovered = WorkerReply(200, "recovered")
         scenario = WorkerScenario(
-            load_answers=(failure, recovered), submit_answers=(failure, recovered),
+            load_answers=(failure, recovered),
+            submit_answers=(failure, recovered),
             stream_answers=(failure, recovered),
         )
         async with generation_worker_peer(scenario) as peer:
@@ -880,17 +940,103 @@ def test_generation_worker_peer_replays_transport_answers(generation_worker_peer
     _run(exercise())
 
 
+@pytest.mark.parametrize(
+    "error_type", [httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout]
+)
+@pytest.mark.parametrize("reload", [False, True], ids=["initial", "reload"])
+def test_s5_load_transport_failure_before_response(generation_worker_peer, error_type, reload):
+    """S5-A/B, L3/L6/L10: Load transport causes survive, without another load attempt."""
+
+    async def exercise():
+        scenario = WorkerScenario(load_answers=(TransportFailure(error_type, "load lost"),))
+        async with generation_worker_peer(scenario) as peer:
+            with pytest.raises(WorkerGenerationUnavailable, match="load lost") as raised:
+                await dispatch_generation_on_worker(
+                    worker=_make_picked(loaded=["sft"] if reload else []),
+                    ace_config=_make_ace_config(),
+                    target_mode="sft",
+                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                )
+            assert type(raised.value.__cause__) is error_type
+            assert peer.requests == ([("submit", "sft")] if reload else []) + [("load", "sft")]
+
+    _run(exercise())
+
+
+@pytest.mark.parametrize(
+    "error_type", [httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout]
+)
+@pytest.mark.parametrize("reload", [False, True], ids=["initial", "reload"])
+def test_s5_submit_transport_failure_before_response(generation_worker_peer, error_type, reload):
+    """S5-A/B, L6/L9/L10: Submit transport failures never resubmit an uncertain request."""
+
+    async def exercise():
+        failure = TransportFailure(error_type, "submit lost")
+        scenario = WorkerScenario(
+            loaded_modes=() if reload else ("sft",),
+            submit_answers=(None, failure) if reload else (failure,),
+        )
+        async with generation_worker_peer(scenario) as peer:
+            with pytest.raises(WorkerGenerationUnavailable, match="submit lost") as raised:
+                await dispatch_generation_on_worker(
+                    worker=_make_picked(loaded=["sft"]),
+                    ace_config=_make_ace_config(),
+                    target_mode="sft",
+                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                )
+            assert type(raised.value.__cause__) is error_type
+            assert peer.requests == ([("submit", "sft"), ("load", "sft")] if reload else []) + [
+                ("submit", "sft")
+            ]
+
+    _run(exercise())
+
+
+@pytest.mark.parametrize("load_fails", [False, True], ids=["still-missing", "reload-failed"])
+def test_s5_mode_still_missing_after_reload(generation_worker_peer, load_fails):
+    """S5-A/B, L3/L10: Exactly one reload precedes final typed unavailability."""
+    from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
+    from songmaker_cli.scheduler import WorkerModeNotLoaded
+
+    async def exercise():
+        missing = WorkerReply(409, MODE_NOT_LOADED_DETAIL.format(mode="sft"))
+        scenario = WorkerScenario(
+            submit_answers=(missing, missing),
+            load_answers=(WorkerReply(503, "load failed"),) if load_fails else (),
+        )
+        async with generation_worker_peer(scenario) as peer:
+            with pytest.raises(WorkerGenerationUnavailable) as raised:
+                await dispatch_generation_on_worker(
+                    worker=_make_picked(loaded=["sft"]),
+                    ace_config=_make_ace_config(),
+                    target_mode="sft",
+                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                )
+            expected_cause = httpx.HTTPStatusError if load_fails else WorkerModeNotLoaded
+            assert isinstance(raised.value.__cause__, expected_cause)
+            assert peer.requests == [("submit", "sft"), ("load", "sft")] + (
+                [] if load_fails else [("submit", "sft")]
+            )
+
+    _run(exercise())
+
+
 @pytest.mark.parametrize("stop_early", [False, True], ids=["normal", "stopped-worker"])
 def test_generation_worker_peer_releases_resources(generation_worker_peer, db_factory, stop_early):
     """S5-D, L9/L10: Normal and deliberately stopped workers release tasks and sockets."""
+
     async def exercise():
         async with generation_worker_peer(db_factory=db_factory) as peer:
             address = peer.socket.getsockname()
             worker = await admit_generation_worker(
-                target_mode="sft", redis=peer.redis, db_factory=db_factory,
+                target_mode="sft",
+                redis=peer.redis,
+                db_factory=db_factory,
             )
             result = await dispatch_generation_on_worker(
-                worker=worker, ace_config=_make_ace_config(), target_mode="sft",
+                worker=worker,
+                ace_config=_make_ace_config(),
+                target_mode="sft",
                 options=_PEER_DISPATCH_OPTIONS,
             )
             assert Path(result.audio_path).is_file()

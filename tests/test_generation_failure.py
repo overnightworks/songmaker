@@ -31,12 +31,12 @@ def test_worker_family_gets_generic_message_and_type(error_class, cause, caplog)
     assert cause in caplog.text
 
 
-def test_songmaker_message_stays_with_existing_sanitizer(generation_failure_case, caplog):
-    """L11: Songmaker's existing sanitization and raw logging survive."""
-    cause, expected = generation_failure_case
+def test_songmaker_message_stays_with_existing_sanitizer(generation_write_failure_case, caplog):
+    """S5-B/D, L6/L10: Availability changes while other sanitization and logging survive."""
+    cause, expected, error_type = generation_write_failure_case
     failure = generation_failure(cause, "own-job")
     assert failure.message == expected
-    assert failure.error_type == "generation_error"
+    assert failure.error_type == error_type
     assert "own-job" in caplog.text
     assert str(cause) in caplog.text
 
@@ -155,3 +155,23 @@ def test_response_preserves_fields_queue_position_and_stored_error(job_type):
     assert musician_job_response(job, queue_position=3).model_dump() == expected
     assert job.error == "need 18.5 GB"
     assert job.error_type == "generation_error"
+
+
+@pytest.mark.parametrize("prefix", ["", "1/2 completed, 1 failed: "])
+def test_s5_response_preserves_unavailable_and_stored_row(prefix):
+    """S5-C, L5/L6/L10: New availability passes reads unchanged, including partials."""
+    from songmaker_cli.db.models import Job
+    from songmaker_cli.jobs.generation_failure import musician_job_response
+
+    message = prefix + "Generating isn't available right now."
+    job = Job(
+        id="unavailable",
+        type="generate",
+        status="failed",
+        progress=0.0,
+        error=message,
+        error_type="generation_unavailable",
+    )
+    response = musician_job_response(job)
+    assert response.error == job.error == message
+    assert response.error_type == job.error_type == "generation_unavailable"
