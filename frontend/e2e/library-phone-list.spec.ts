@@ -670,10 +670,14 @@ const LAST_PLAYED_PAGES = [
 	}
 ] as const;
 
-for (const shell of ['mobile', 'desktop'] as const) {
+for (const [shell, surfaces, proof] of [
+	['mobile', ['wall'], 'a fresh mobile'],
+	['desktop', ['wall', 'rail'], 'a fresh desktop'],
+	['mobile', ['rail'], 'drawer-only, retired by #1354 row 61: a late-mounted phone']
+] as const) {
 	for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 		test(
-			`1354_rule_8: a fresh ${shell} ${lastPlayedPage.name} page under Last played, with a take restored, never paints A–Z first and reads Listen once`,
+			`1354_rule_8: ${proof} ${lastPlayedPage.name} page under Last played, with a take restored, never paints A–Z first and reads Listen once`,
 			{ tag: ONLY_IN_SHELL[shell] },
 			async ({ page }) => {
 				const { alphabetical, listenedLast } = await lastPlayedPage.arrange(page);
@@ -686,8 +690,7 @@ for (const shell of ['mobile', 'desktop'] as const) {
 					wall: '.library-wall .tile-grid .tile-title',
 					rail: lastPlayedPage.railRows
 				});
-				const restoredAlbum = fixture.albums[2];
-				await pauseATakeToRestore(page, shell, restoredAlbum);
+				await pauseATakeToRestore(page, shell, fixture.albums[2]);
 				await page.goto(lastPlayedPage.path);
 				await page.getByRole('button', { name: 'Last played', exact: true }).click();
 				await expect(workspace(page).locator('.tile-title').first()).toHaveText(lastPlayed[0]);
@@ -699,7 +702,7 @@ for (const shell of ['mobile', 'desktop'] as const) {
 						await route.continue();
 					}
 				);
-				// Restore the saved take only after the wall applies the ranking.
+				// Restore the take after the ranking, whatever order the server answers in.
 				let takeReleased: Promise<void> = Promise.resolve();
 				let releaseTake = () => {};
 				await page.route(
@@ -714,7 +717,6 @@ for (const shell of ['mobile', 'desktop'] as const) {
 					if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
 						listenReads++;
 				});
-
 				for (answerDelayMs of [LISTEN_ANSWER_DELAY_MS, 0]) {
 					listenReads = 0;
 					takeReleased = new Promise<void>((release) => (releaseTake = release));
@@ -722,14 +724,12 @@ for (const shell of ['mobile', 'desktop'] as const) {
 					await expect(workspace(page).locator('.library-wall .tile-title')).toHaveText(lastPlayed);
 					releaseTake();
 					await expect(page.getByRole('contentinfo')).toContainText(
-						fixture.tracks[restoredAlbum.id][0].title
+						fixture.tracks[fixture.albums[2].id][0].title
 					);
-					if (shell === 'desktop') {
-						const rail = await openRailNav(page, 'desktop');
+					if (surfaces.some((surface) => surface === 'rail')) {
+						const rail = await openRailNav(page, shell);
 						await expect(rail.locator(lastPlayedPage.railRows)).toHaveCount(lastPlayed.length);
 					}
-					const surfaces: (keyof PaintedOrders)[] =
-						shell === 'desktop' ? ['wall', 'rail'] : ['wall'];
 					for (const surface of surfaces)
 						await expect
 							.poll(async () => (await paintedOrders(page))[surface].at(-1))

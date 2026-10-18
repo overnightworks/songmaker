@@ -215,7 +215,7 @@ const LIST_PAGES = [
 
 for (const shell of ['mobile', 'desktop'] as const) {
 	test(
-		`1354_rule_9 an empty ${shell} account reads one line on Library and Playlists and points to + New on Home`,
+		`1354_rule_9 an empty ${shell} account reads one line on Library and Playlists${shell === 'desktop' ? ', keeps both rail groups,' : ''} and points to + New on Home`,
 		{ tag: ONLY_IN_SHELL[shell] },
 		async ({ page }) => {
 			await answerTheLibraryEmpty(page);
@@ -224,11 +224,7 @@ for (const shell of ['mobile', 'desktop'] as const) {
 				await page.goto(address);
 
 				await expect(workspace(page).locator('.wall-body .empty')).toHaveText(emptyLine);
-				if (shell === 'desktop') {
-					const rail = await openRailNav(page, 'desktop');
-					for (const group of [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL])
-						await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
-				}
+				if (shell === 'desktop') await expectBothRailGroups(await openRailNav(page, shell));
 			}
 
 			await page.goto(HOME_PATH);
@@ -236,6 +232,23 @@ for (const shell of ['mobile', 'desktop'] as const) {
 		}
 	);
 }
+
+async function expectBothRailGroups(rail: Locator): Promise<void> {
+	for (const group of [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL])
+		await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
+}
+
+test(
+	'1354_rule_9 drawer-only, retired by #1354 row 61: an empty phone account keeps both rail groups',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		await answerTheLibraryEmpty(page);
+		for (const { address } of LIST_PAGES) {
+			await page.goto(address);
+			await expectBothRailGroups(await openRailNav(page, 'mobile'));
+		}
+	}
+);
 
 test.describe('1354_rule_14 the Library and Playlists heads', () => {
 	test(
