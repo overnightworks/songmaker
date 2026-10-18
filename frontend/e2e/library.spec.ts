@@ -25,13 +25,10 @@ import {
 	playlistEntryOverflowLabel,
 	PLAYLISTS_PAGE_LABEL,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-	RAIL_DRAWER_LABEL,
-	RAIL_DRAWER_OPEN_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	PLAYING_MARK_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL,
-	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
@@ -198,34 +195,6 @@ async function openAlbumFromNavigation(page: Page, shell: Shell, title: string):
 			.getByRole('button', { name: containing(title) })
 			.click();
 	}
-}
-
-/**
- * The phone drawer is navigation only (#1174, frame H3 of navigation.html):
- * brand, search, Library and Playlists. Settings, the theme and Log out live
- * in the account circle's menu on the Library, so the drawer repeats none of
- * them, and an album opened from another page carries ‹ instead of the circle
- * (#1354 rule 25, frame I3).
- */
-async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
-	const rail = await openRailNav(page, 'mobile');
-	await expect(rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL })).toBeVisible();
-	await expect(
-		rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) })
-	).toBeVisible();
-	await expect(rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })).toHaveCount(0);
-	await expect(rail.getByRole('button', { name: 'Logout', exact: true })).toHaveCount(0);
-	await page.keyboard.press('Escape');
-	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
-	const back = appBar(page).getByRole('button', { name: /^Back to / });
-	await expect(back).toBeVisible();
-	await expect(accountCircle(page)).toHaveCount(0);
-	// ‹ starts right after ☰, inside the first touch square beside it.
-	const [drawerTrigger, chevron] = await boundingBoxes(
-		appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }),
-		back.locator('svg')
-	);
-	expect(chevron.x - (drawerTrigger.x + drawerTrigger.width)).toBeLessThan(HITBOX_FREQUENT_PX);
 }
 
 /**
@@ -1277,23 +1246,5 @@ test(
 		await expect(surface.getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
 		await expect(await groupWord(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-current', 'page');
 		await expect(await groupArrow(LIBRARY_PAGE_LABEL)).toHaveAttribute('aria-expanded', 'true');
-	}
-);
-
-test(
-	'1354_37a_A6: phone drawer stays navigation-only and Library stays expanded in Settings (retired by #1354 row 61)',
-	{ tag: ONLY_IN_SHELL.mobile },
-	async ({ page }) => {
-		const library = readSeededLibrary();
-		await page.goto(`/album/${library.albumId}`);
-		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
-		await expectPhoneDrawerIsNavigationOnly(page);
-		await openLibraryWall(page, 'mobile');
-		await openSettingsSection(page, 'mobile', 'Voices');
-		await expect(page).toHaveURL(/\/settings\/voices$/);
-		const rail = await openRailNav(page, 'mobile');
-		await expect(
-			rail.getByRole('button', { name: LIBRARY_PAGE_LABEL, exact: true })
-		).toHaveAttribute('aria-expanded', 'true');
 	}
 );

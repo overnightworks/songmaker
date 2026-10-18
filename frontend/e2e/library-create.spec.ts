@@ -1,3 +1,4 @@
+import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // + NEW on Home's head makes an album or a playlist at both widths, even from
 // an empty library (#1149, #1166, #915 F2a/F2b, #1529; pictures N1–N5 in
 // docs/design/navigation.html, I1 in the same file for Home). The desktop
@@ -239,13 +240,18 @@ async function expectBothRailGroups(rail: Locator): Promise<void> {
 }
 
 test(
-	'1354_rule_9 drawer-only, retired by #1354 row 61: an empty phone account keeps both rail groups',
+	'1354_61_C06 1354_rule_9: an empty phone account keeps all three tabs',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		await answerTheLibraryEmpty(page);
 		for (const { address } of LIST_PAGES) {
 			await page.goto(address);
-			await expectBothRailGroups(await openRailNav(page, 'mobile'));
+			const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+			await expect(tabs.getByRole('button')).toHaveText([
+				'Home',
+				LIBRARY_PAGE_LABEL,
+				PLAYLISTS_PAGE_LABEL
+			]);
 		}
 	}
 );

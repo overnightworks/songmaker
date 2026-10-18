@@ -8,7 +8,10 @@
 	import { installRefusalReactions, signInAddress } from '$lib/api/fetch';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
-	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
+	import PhoneTabs from '$lib/components/shell/PhoneTabs.svelte';
+	import { standingPathname } from '$lib/routes/standingAddress';
+	import { isSongRoutePath, LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
+	import type { Place } from '$lib/stores/libraryContext';
 	import NowPlaying from '$lib/components/NowPlaying.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
 	import { APP_NAME } from '$lib/constants';
@@ -29,7 +32,9 @@
 		followShellLayers,
 		initNavigation,
 		isLibraryWorkspacePath,
-		openLibraryWall
+		openLibraryWall,
+		openHome,
+		openRailSearchTarget
 	} from '$lib/stores/navigation';
 	import { closeTopLayer } from '$lib/stores/layers';
 	import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
@@ -107,6 +112,28 @@
 	const sessionUnreachable = $derived($authCheckUnreachable && me === null);
 
 	let compact = $state(false);
+	const pathname = $derived(standingPathname(page.state));
+	const phoneTabsShown = $derived(
+		compact && me !== null && !isPublicRoute && !$transportBarHidden && !isSongRoutePath(pathname)
+	);
+
+	function selectPhoneTab(place: Place): void {
+		if (place === 'home') void openHome();
+		else
+			void openRailSearchTarget({
+				kind: 'page',
+				href: place === 'library' ? LIBRARY_ROUTE_PATH : PLAYLISTS_ROUTE_PATH
+			});
+	}
+
+	$effect(() => {
+		const shown = phoneTabsShown;
+		if (!browser) return;
+		const root = document.documentElement;
+		if (shown) root.dataset.phoneTabs = '';
+		else delete root.dataset.phoneTabs;
+		return () => delete root.dataset.phoneTabs;
+	});
 
 	$effect(() => {
 		return subscribeCompactLayout((value) => {
@@ -141,7 +168,7 @@
 	// and Now Playing's own sheet all follow from one declaration instead of
 	// each carrying its own exception.
 	$effect(() => {
-		const barHidden = hasPrivatePlayer && $transportBarHidden;
+		const barHidden = !isPublicRoute && hasPrivatePlayer && $transportBarHidden;
 		if (!browser) return;
 		const root = document.documentElement;
 		if (barHidden) root.dataset.transportBar = 'hidden';
@@ -301,9 +328,9 @@
 {:else if me}
 	{#if compact}
 		<PhoneAppBar username={me.username} onlogout={logout} />
-		<RailDrawer>
-			<Rail showCollapseControl={false} showResizeHandle={false} />
-		</RailDrawer>
+		{#if phoneTabsShown}
+			<PhoneTabs {pathname} onSelect={selectPhoneTab} />
+		{/if}
 		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
 			{@render children()}
 		</div>

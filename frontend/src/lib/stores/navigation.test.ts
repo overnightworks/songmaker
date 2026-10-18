@@ -79,7 +79,6 @@ import {
 	removeJob,
 	resetGenerationFailuresForTests
 } from '$lib/stores/jobs';
-import { closeSidebar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
@@ -1146,21 +1145,6 @@ describe('Back and Forward across an app page', () => {
 
 		expect(lastNavigation()).toEqual({ type: 'popstate', pathname: '/playlist/night-drive' });
 		expect(historyEntry()).toEqual(left);
-	});
-});
-
-describe.each([
-	['openAlbum', () => openAlbum('a1')],
-	['openPlaylist', () => openPlaylist('p1')],
-	['openLibraryWall', () => openLibraryWall()],
-	['1354_rule_40: openHome', () => openHome()],
-	['the Playlists page from search', () => openPlaylistsBySearch()]
-])('%s closes the rail drawer', (_name, action) => {
-	it('closes an open drawer instead of leaving it over the new surface', async () => {
-		toggleSidebar();
-		expect(get(sidebarOpen)).toBe(true);
-		await action();
-		expect(get(sidebarOpen)).toBe(false);
 	});
 });
 
@@ -2542,108 +2526,6 @@ describe('full Now Playing owns one history entry', () => {
 	});
 });
 
-describe('the phone rail drawer owns one history entry', () => {
-	let stopNavigation: () => void = () => undefined;
-
-	beforeEach(async () => {
-		stopNavigation = initNavigation();
-		await openPlaylist('p1');
-	});
-
-	afterEach(() => {
-		stopNavigation();
-		closeSidebar();
-	});
-
-	async function openDrawer(): Promise<{
-		below: number;
-		page: ReturnType<typeof standingHistoryEntry>;
-		path: string;
-	}> {
-		const below = historyEntry().index;
-		const page = standingHistoryEntry();
-		const path = location.pathname;
-		toggleSidebar();
-		await expectStandingLayer('rail-drawer');
-		return { below, page, path };
-	}
-
-	it('Back closes the drawer and keeps the address and the playlist', async () => {
-		const { below, path } = await openDrawer();
-
-		await pressBack();
-
-		await vi.waitFor(() => expect(get(sidebarOpen)).toBe(false));
-		expect(location.pathname).toBe(path);
-		expect(historyEntry()).toMatchObject({
-			index: below,
-			collection: { kind: 'playlist', id: 'p1' }
-		});
-	});
-
-	it('closing the drawer by its own control steps back off its entry', async () => {
-		const { page, path } = await openDrawer();
-
-		closeSidebar();
-
-		await expectStandingOn(page);
-		expect(location.pathname).toBe(path);
-	});
-
-	it.each([
-		{ way: 'a row that opens an album', go: () => openAlbum('a1') },
-		{
-			way: 'C2 worker-pool link',
-			go: () => followAppPageLink(new MouseEvent('click', { button: 0 }), ADMIN_WORKER_POOL_HREF)
-		},
-		{
-			way: 'a rail search page target',
-			go: () => openRailSearchTarget({ kind: 'page', href: '/settings/voices' })
-		},
-		{
-			way: 'a Settings link',
-			go: () => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices')
-		}
-	])(
-		'leaving the drawer by $way leaves no entry behind: one Back lands on the playlist entry',
-		async ({ go }) => {
-			const { below, path } = await openDrawer();
-
-			await go();
-			await vi.waitFor(() => expect(location.pathname).not.toBe(path));
-			expect(get(sidebarOpen)).toBe(false);
-			await pressBack();
-
-			await vi.waitFor(() => expect(location.pathname).toBe(path));
-			expect(historyEntry()).toMatchObject({
-				index: below,
-				collection: { kind: 'playlist', id: 'p1' }
-			});
-		}
-	);
-
-	// Issue #1165: a page written over the drawer's entry would keep that
-	// entry's place among the router's navigations, and Back onto the playlist
-	// would then move the address without loading the playlist's page.
-	it('a Settings link pushes Settings over the playlist: Back navigates to the playlist, Forward to Settings', async () => {
-		const { below, path } = await openDrawer();
-
-		followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices');
-		await vi.waitFor(() => expect(location.pathname).toBe('/settings/voices'));
-		await pressBack();
-
-		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: path });
-		expect(historyEntry()).toMatchObject({
-			index: below,
-			collection: { kind: 'playlist', id: 'p1' }
-		});
-
-		await pressForward();
-
-		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/settings/voices' });
-	});
-});
-
 describe('a menu kept in historyLayerState owns one history entry while open', () => {
 	let stopNavigation: () => void = () => undefined;
 	const owners: Array<() => void> = [];
@@ -2710,10 +2592,6 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		},
 		{ kind: 'a dialog', layer: confirmDialog },
 		{
-			kind: 'the drawer',
-			layer: () => ({ open: toggleSidebar, isOpen: () => get(sidebarOpen) })
-		},
-		{
 			kind: 'full Now Playing',
 			layer: () => ({ open: () => openNowPlaying('take'), isOpen: () => get(nowPlayingOpen) })
 		}
@@ -2724,8 +2602,6 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		{ way: 'Back', close: pressBack }
 	])('$way closes the topmost layer and nothing below it (issue #1182)', ({ close }) => {
 		beforeEach(() => nowPlayingDockable.set(false));
-
-		afterEach(closeSidebar);
 
 		it.each(layerKinds)('closes $kind and keeps the playlist below it', async ({ layer }) => {
 			const shown = layer();
@@ -3002,32 +2878,6 @@ describe('openRailSearchTarget', () => {
 			panel: get(selectedSongId) === null ? null : get(detailTab)
 		};
 	}
-
-	it.each(destinations)(
-		'defect:#1582: choosing the visible $name in the drawer dismisses it without navigating',
-		async ({ target }) => {
-			const stopNavigation = initNavigation();
-			onTestFinished(stopNavigation);
-			fetchPlaylists.mockResolvedValue([playlistItem({ share_slug: null })]);
-			await openAppPage('/settings/voices');
-			await openRailSearchTarget(target);
-			const address = location.href;
-			const selection = visibleSelection();
-			toggleSidebar();
-			await libraryHistoryStepsLanded();
-			const entries = historyLength();
-			expect(get(sidebarOpen)).toBe(true);
-
-			await openRailSearchTarget(target);
-
-			expect(get(sidebarOpen)).toBe(false);
-			expect(location.href).toBe(address);
-			expect(visibleSelection()).toEqual(selection);
-			expect(historyLength()).toBe(entries);
-			await pressBack();
-			expect(location.pathname).toBe('/settings/voices');
-		}
-	);
 
 	it.each(destinations)(
 		'defect:#1582: choosing the visible $name preserves its address, history and selection',

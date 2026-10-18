@@ -700,11 +700,6 @@ export const ALBUM_YEAR_MAX_LENGTH = String(ALBUM_YEAR_MAX).length;
 // every private route, settings included (issue #263).
 export const RAIL_NAV_LABEL = 'Primary';
 export const RAIL_SETTINGS_LABEL = 'Settings';
-// The drawer the compact shell puts the rail in — its accessible name, which
-// is how a flow scopes to it while another overlay may be open.
-export const RAIL_DRAWER_LABEL = 'Navigation';
-export const RAIL_DRAWER_OPEN_LABEL = 'Open menu';
-export const RAIL_DRAWER_CLOSE_LABEL = 'Close menu';
 export const RAIL_CONTEXT_NO_TAKES = '—';
 // Remembers whether the rail's Settings disclosure was left open, so it
 // doesn't snap shut the moment the viewer navigates back into the library.

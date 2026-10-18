@@ -15,16 +15,6 @@ interface PhoneAppBarState {
 
 export const phoneAppBar = writable<PhoneAppBarState | null>(null);
 
-export const sidebarOpen = writable(false);
-
-export function toggleSidebar(): void {
-	sidebarOpen.update((v) => !v);
-}
-
-export function closeSidebar(): void {
-	sidebarOpen.set(false);
-}
-
 const KEYBOARD_INPUT_TYPES: ReadonlySet<string> = new Set([
 	'text',
 	'search',

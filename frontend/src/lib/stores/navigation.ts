@@ -34,7 +34,6 @@ import {
 	selectedPlaylist
 } from '$lib/stores/playlists';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
-import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
 import {
@@ -143,16 +142,13 @@ export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | nu
 // leaving and runs it immediately (#1296). Every song-switch/leave entry
 // point must route through this — never re-implement the if/else inline. A
 // way out that has already moved history puts the song back first, through
-// `beforeAsking`. The phone drawer closes over a parked navigation: the
-// question now belongs to the song behind it, and Keep editing must land on
-// that draft, not on the drawer (issue #1143).
+// `beforeAsking`, so Keep editing stays on that draft (issue #1143).
 async function guardDirtyNavigation(
 	action: () => void | Promise<void>,
 	beforeAsking: () => void = () => undefined
 ): Promise<void> {
 	if (get(draftHasUnversionedChanges)) {
 		beforeAsking();
-		closeSidebar();
 		pendingDirtyNavigation.set(action);
 		return;
 	}
@@ -230,7 +226,6 @@ export function openAlbum(albumId: string): Promise<void> {
 		selectedGenerationId.set(null);
 		void loadSongsForAlbum(albumId);
 		setLibrarySurface('detail');
-		closeSidebar();
 		await pushLibraryHistory();
 	});
 }
@@ -250,17 +245,15 @@ export function openPlaylist(playlistId: string): Promise<void> {
 		// (issue #286).
 		await ensurePlaylistsLoaded();
 		setLibrarySurface('detail');
-		closeSidebar();
 		await pushLibraryHistory();
 	});
 }
 
 // The rail search has one selected result and therefore one destination. Its
 // data owner only describes that destination; this navigation owner performs
-// the transition and closes the compact drawer on every successful choice.
+// the transition. Phone tabs use the same page targets.
 export async function openRailSearchTarget(target: RailSearchTarget): Promise<void> {
 	if (targetAlreadyShown(target)) {
-		closeSidebar();
 		await libraryHistoryStepsLanded();
 		return;
 	}
@@ -289,21 +282,13 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 
 // An app-page link (a Settings row, the account name or its menu, a search hit
 // that names a page) leaves the song for an app page, so it asks the same
-// dirty-draft question as every other way out before it navigates. The phone
-// drawer closes first and its entry steps back, and the page is pushed only
-// once that step has landed: SvelteKit keeps a replaced entry's navigation
-// index, so a page written over the drawer's shallow entry would share its
-// index with the library entry below, and Back onto it would move the address
-// without loading the library (issue #1165). A step still in flight when the
-// page starts loading would abort it, which is why the push waits. The
-// library page it leaves keeps how it was left -- the wall's scroll -- for
-// Back (issue #1289).
+// dirty-draft question as every other way out before it navigates. Pending
+// history-layer steps must land before pushing the page (#1165, #1289).
 type AppPageHref =
 	Extract<RailSearchTarget, { kind: 'page' }>['href'] | typeof ADMIN_WORKER_POOL_HREF;
 
 export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
-		closeSidebar();
 		await libraryHistoryStepsLanded();
 		await keepLibraryPageAsLeft();
 		await goto(resolve(href));
@@ -363,7 +348,6 @@ function showLibraryWall(): void {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	setLibrarySurface('browse');
-	closeSidebar();
 }
 
 // The rail's "Library" link always pushes a fresh history entry, so the
@@ -393,7 +377,6 @@ function showPageOverCollection(surface: 'home' | 'playlists'): () => void {
 // returns to what was open.
 export async function openHome(): Promise<void> {
 	await guardDirtyNavigation(async () => {
-		closeSidebar();
 		await pushLibraryHistory(showPageOverCollection('home'));
 	});
 }
@@ -401,7 +384,6 @@ export async function openHome(): Promise<void> {
 // Like Home and the Library, a fresh history entry.
 async function openPlaylistsWall(): Promise<void> {
 	await guardDirtyNavigation(async () => {
-		closeSidebar();
 		await pushLibraryHistory(showPageOverCollection('playlists'));
 	});
 }
@@ -507,7 +489,6 @@ function applySelectedSong(
 	void loadSongContext(songId);
 	showSongTab(songId, tab === 'keep' ? get(detailTab) : rememberedSongTab(songId));
 	setLibrarySurface('detail');
-	closeSidebar();
 	if (historyMode === 'replace') return replaceLibraryHistory();
 	return pushLibraryHistory();
 }
@@ -663,17 +644,14 @@ async function applyLanding(state: unknown): Promise<void> {
 	if (applied && state.songId) await loadSongContext(state.songId);
 }
 
-// The shell's own overlays -- full Now Playing and the phone drawer -- live in
-// stores rather than in one component, so the app layout follows them here for
-// as long as it is mounted, on every page.
+// Full Now Playing lives in a store, so the layout follows its history layer
+// for as long as it is mounted, on every page.
 export function followShellLayers(): () => void {
 	const stopFollowingNowPlaying = nowPlayingFullChosen.subscribe(
 		layerSwitch('now-playing', escapeNowPlaying)
 	);
-	const stopFollowingRailDrawer = sidebarOpen.subscribe(layerSwitch('rail-drawer', closeSidebar));
 	return () => {
 		stopFollowingNowPlaying();
-		stopFollowingRailDrawer();
 	};
 }
 

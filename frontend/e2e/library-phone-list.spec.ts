@@ -673,8 +673,7 @@ const LAST_PLAYED_PAGES = [
 
 for (const [shell, surfaces, proof] of [
 	['mobile', ['wall'], 'a fresh mobile'],
-	['desktop', ['wall', 'rail'], 'a fresh desktop'],
-	['mobile', ['rail'], 'drawer-only, retired by #1354 row 61: a late-mounted phone']
+	['desktop', ['wall', 'rail'], 'a fresh desktop']
 ] as const) {
 	for (const lastPlayedPage of LAST_PLAYED_PAGES) {
 		test(

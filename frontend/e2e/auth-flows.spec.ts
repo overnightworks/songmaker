@@ -5,7 +5,7 @@
 // absolute maximum age -- and, since #1215, a logged-out deep link that signs
 // in onto the address it asked for. Since #1230 the phone also loses its
 // session behind an open song page and is sent to the door from there, and
-// since #1340 a drawer tap after the loss returns there to the tapped album.
+// since #1340 a Search result after the loss returns there to the tapped album.
 // Since #1322 an admin with two sessions finds its own marked as this device,
 // and a create refusal in the form clears on typing while an error on the page
 // stays. Since #1397 a revoke that another tab beat drops the dead row and says
@@ -36,7 +36,7 @@
 // spec's own throwaway user.
 //
 // Both shells drive all seven flows: the compact one at 375px, which is where
-// the rail is a drawer and Log out is reached through the account circle in
+// bottom tabs replace the rail and Log out is reached through the account circle in
 // the app bar (issue #1158). The session lost behind Search is the phone's
 // own flow.
 
@@ -118,7 +118,7 @@ import {
  * one the lock refuses, then one every ten seconds until it lifts.
  * The #1340 sign-outs were measured at 1440 / 390: 29 and
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
- * on the phone the walk through the drawer to the album -- and 23/23 for the
+ * on the phone the former drawer walk to the album (pre-tabs baseline; re-measure in CI) -- and 23/23 for the
  * sign-out the lost network keeps from the server. The #925 M3 media-refusal
  * flow was measured over ten runs at 1440 / 390: 46 to 47/45 to 48 for
  * the take's audio refused. One ceiling for the
@@ -952,7 +952,7 @@ test(
 
 // The wide window signs out from its rail beside the song; the phone's account
 // circle lives on Home and the Library (#1354 rule 25), so the phone walks on to
-// the Library through its drawer, the take still playing, and signs out there.
+// the Library through Search, the take still playing, and signs out there.
 // The door then brings it back to `/library`, which it names in `redirect`;
 // Home, where every sign-in lands, needs no parameter.
 test(

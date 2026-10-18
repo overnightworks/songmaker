@@ -1,5 +1,6 @@
+import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 import { expect, test } from '@playwright/test';
-import { RAIL_DRAWER_LABEL, RAIL_DRAWER_OPEN_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
+import { RAIL_NAV_LABEL } from '../src/lib/constants';
 import { HOME_PATH, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
 
 for (const { shell, name, viewport } of [
@@ -10,11 +11,11 @@ for (const { shell, name, viewport } of [
 	},
 	{
 		shell: 'mobile',
-		name: 'the 375 px drawer stays expanded despite the desktop collapse preference',
-		viewport: { width: 375, height: 812 }
+		name: '1354_61_C30: phone tabs ignore the desktop collapse preference',
+		viewport: { width: 390, height: 844 }
 	}
 ] as const) {
-	test(`1354_37a_A6: ${name}`, { tag: ONLY_IN_SHELL[shell] }, async ({ page }) => {
+	test(`1354_61_C18 1354_37a_A6: ${name}`, { tag: ONLY_IN_SHELL[shell] }, async ({ page }) => {
 		const isMobile = shell === 'mobile';
 		await page.setViewportSize(viewport);
 		await page.addInitScript((mobile) => {
@@ -31,15 +32,8 @@ for (const { shell, name, viewport } of [
 		await page.goto(HOME_PATH);
 
 		if (isMobile) {
-			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-			const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-			const rail = drawer.getByRole('navigation', { name: RAIL_NAV_LABEL });
-
-			await expect(rail).not.toHaveClass(/rail-collapsed/);
-			await expect(rail.getByRole('button', { name: 'Collapse rail' })).toHaveCount(0);
-			await expect(rail.getByRole('button', { name: 'Expand rail' })).toHaveCount(0);
-			await expect(rail.getByRole('slider', { name: 'Resize rail' })).toHaveCount(0);
-			await expect(drawer).toHaveCSS('width', '315px');
+			await expect(page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })).toBeVisible();
+			await expect(page.getByRole('navigation', { name: RAIL_NAV_LABEL })).toHaveCount(0);
 			return;
 		}
 

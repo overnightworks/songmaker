@@ -8,7 +8,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
-import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type {
 	GenerationItem,
 	LibraryPoolQueue,
@@ -353,7 +352,6 @@ afterEach(() => {
 	registerNowPlayingTrigger(null);
 	setDesktopNowPlayingSurface('docked');
 	localStorage.removeItem('nowPlayingDesktopSurface');
-	sidebarOpen.set(false);
 	localStorage.removeItem('queueShuffleEnabled');
 	localStorage.removeItem('libraryTakePool');
 });
@@ -4249,13 +4247,9 @@ describe('playTakeAndShowNowPlaying', () => {
 });
 
 describe('openNowPlaying / closeNowPlaying', () => {
-	it('openNowPlaying closes the sidebar and opens on the requested panel', () => {
-		toggleSidebar();
-		expect(get(sidebarOpen)).toBe(true);
-
+	it('openNowPlaying opens on the requested panel', () => {
 		openNowPlaying('take');
 
-		expect(get(sidebarOpen)).toBe(false);
 		expect(get(nowPlayingPanel)).toBe('take');
 		expect(get(nowPlayingOpen)).toBe(true);
 	});

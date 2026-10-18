@@ -18,8 +18,6 @@ import {
 	openNowPlayingLabel,
 	playlistEntryOverflowLabel,
 	PLAYLISTS_PAGE_LABEL,
-	RAIL_DRAWER_LABEL,
-	RAIL_DRAWER_OPEN_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_SEARCH_LABEL,
@@ -51,7 +49,6 @@ import {
 	wallBody,
 	nameStartingWith,
 	ONLY_IN_SHELL,
-	openLibraryWall,
 	openRailNav,
 	openSettingsSectionFromSearch,
 	playlistEntryRows,
@@ -97,15 +94,6 @@ interface OverlayRow {
 	leave: (page: Page, playlist: SeededPlaylist) => Promise<void>;
 	expectLeft: (page: Page, pages: Pages, playlist: SeededPlaylist) => Promise<void>;
 	afterwards: (page: Page, pages: Pages, playlist: SeededPlaylist) => Promise<void>;
-}
-
-function railDrawer(page: Page): Locator {
-	return page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-}
-
-async function openRailDrawer(page: Page): Promise<void> {
-	await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-	await expect(railDrawer(page)).toBeVisible();
 }
 
 async function expandNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
@@ -378,8 +366,7 @@ async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
 	await expectSettingsStands(page);
 }
 
-// The rail's library list, with its group expanded -- inside the drawer on the
-// phone.
+// The desktop rail's library list, with its group expanded.
 async function railLibrary(page: Page, shell: Shell): Promise<Locator> {
 	const rail = await openRailNav(page, shell);
 	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
@@ -399,31 +386,6 @@ async function backThenForwardReturnsToSettings(page: Page, pages: Pages): Promi
 }
 
 const OVERLAY_ROWS: OverlayRow[] = [
-	{
-		name: 'Back closes the phone rail drawer and keeps the playlist',
-		shell: 'mobile',
-		open: openRailDrawer,
-		leave: goBack,
-		expectLeft: async (page, pages) => {
-			await expect(railDrawer(page)).toBeHidden();
-			await expectPlaylistStands(page, pages);
-		},
-		afterwards: backReaches('wall')
-	},
-	{
-		name: 'a row tap in the phone rail drawer leaves one Back to the playlist',
-		shell: 'mobile',
-		open: openRailDrawer,
-		leave: async (page) => {
-			await openLibraryWall(page, 'mobile');
-		},
-		expectLeft: async (page) => {
-			await expect(
-				workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL })
-			).toBeVisible();
-		},
-		afterwards: backReaches('playlist')
-	},
 	{
 		name: 'defect:#1583: a Settings page found in the Search sheet closes it, and Back then Forward return to Settings',
 		shell: 'mobile',
@@ -972,64 +934,6 @@ test('one Back right after a song opens from its album returns to the album', as
 	}
 	guard.assertClean();
 });
-
-// Issue #1289: the phone drawer opened while the song a tap opened is still
-// loading its route stays open once that route has mounted, and Back closes
-// only the drawer. The race is one of milliseconds, so the menu is tapped from
-// inside the page, a fixed gap after the song, and many times over.
-const MENU_TAPS_AFTER_SONG = 10;
-
-async function tapSongThenMenu(page: Page, songRow: Locator, gapMs: number): Promise<void> {
-	await songRow.evaluate(
-		(row, { menuLabel, gap }) =>
-			new Promise<void>((tapped) => {
-				(row as HTMLElement).click();
-				setTimeout(() => {
-					document.querySelector<HTMLElement>(`button[aria-label="${menuLabel}"]`)?.click();
-					tapped();
-				}, gap);
-			}),
-		{ menuLabel: RAIL_DRAWER_OPEN_LABEL, gap: gapMs }
-	);
-}
-
-for (const gapMs of [5, 20]) {
-	// The drawer belongs to the mobile shell.
-	test(
-		`the menu tapped ${gapMs} ms after a song stays open, and Back closes only the menu`,
-		{ tag: ONLY_IN_SHELL.mobile },
-		async ({ page }) => {
-			const guard = new FlowGuard(page);
-			const library = readSeededLibrary();
-			const surface = workspace(page);
-			await page.goto(LIBRARY_PATH);
-			await wallTileNamed(page, library.albumTitle).click();
-			const album = surface.getByRole('heading', { name: library.albumTitle });
-			await expect(album).toBeVisible();
-			const albumAddress = page.url();
-			const songRow = surface.getByRole('button', {
-				name: songEditorOpenLabel(library.pickedSongTitle)
-			});
-
-			for (let tap = 1; tap <= MENU_TAPS_AFTER_SONG; tap += 1) {
-				await tapSongThenMenu(page, songRow, gapMs);
-				await expect(railDrawer(page), `the menu on tap ${tap}`).toBeVisible();
-				await expect(page).toHaveURL(SONG_ADDRESS);
-
-				await page.goBack();
-
-				await expect(railDrawer(page), `the menu after Back on tap ${tap}`).toBeHidden();
-				await expectSongStands(page, 'mobile', library.pickedSongTitle);
-
-				await page.goBack();
-
-				await expect(album).toBeVisible();
-				expect(page.url(), `the album's address after tap ${tap}`).toBe(albumAddress);
-			}
-			guard.assertClean();
-		}
-	);
-}
 
 // Issue #1165: a crossing the phone opens out of a history layer -- an album
 // selected in Search, Go to song in Now Playing -- is written behind

@@ -1,3 +1,4 @@
+import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Phone Takes and generation states (#995, #914 L12); Settings also runs on desktop (#1143).
 // CI seeds jobs without a worker; the health override exposes their failure state.
 
@@ -102,6 +103,31 @@ function songBackButton(page: Page): Locator {
 	return page.locator('.mobile-strip').getByRole('button', { name: /^Back to / });
 }
 
+const phoneTabs = (page: Page) => page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+
+async function observeTabAttachments(page: Page): Promise<void> {
+	await page.addInitScript((label) => {
+		const selector = `nav[aria-label="${label}"]`;
+		const attachments: { at: number; sinceWindowMs: number; window: string }[] = [];
+		Reflect.set(window, 'phoneTabAttachments', attachments);
+		Reflect.set(window, 'phoneTabWindow', 'startup');
+		Reflect.set(window, 'phoneTabWindowStarted', performance.now());
+		new MutationObserver((records) => {
+			for (const record of records)
+				for (const node of record.addedNodes) {
+					if (!(node instanceof Element)) continue;
+					const count = Number(node.matches(selector)) + node.querySelectorAll(selector).length;
+					for (let i = 0; i < count; i++)
+						attachments.push({
+							at: performance.now(),
+							sinceWindowMs: performance.now() - Reflect.get(window, 'phoneTabWindowStarted'),
+							window: Reflect.get(window, 'phoneTabWindow')
+						});
+				}
+		}).observe(document, { childList: true, subtree: true });
+	}, PHONE_TABS_NAV_LABEL);
+}
+
 interface SongWithAnUnsavedDraft {
 	songHeading: Locator;
 	lyrics: Locator;
@@ -111,9 +137,9 @@ interface SongWithAnUnsavedDraft {
 
 async function openSongWithAnUnsavedDraft(
 	page: Page,
-	albumId: string
+	albumId: string,
+	title = `${SONG_PHONE_SONG_TITLE} ${runMarker()} draft`
 ): Promise<SongWithAnUnsavedDraft> {
-	const title = `${SONG_PHONE_SONG_TITLE} ${runMarker()} draft`;
 	await seedSongPhoneSong(albumId, title, 1, 1);
 	const songHeading = page.getByRole('heading', { name: title });
 	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
@@ -396,16 +422,22 @@ test.describe('song page at phone width', () => {
 	);
 
 	test(
-		'Back with an unsaved draft asks first: Cancel keeps the draft on the song, Discard leaves without saving (#1143)',
+		'1354_61_C13b: Back with an unsaved draft asks first: Cancel keeps the draft on the song, Discard leaves without saving (#1143)',
 		{ tag: ONLY_IN_SHELL.mobile },
-		async ({ page }) => {
+		async ({ page }, testInfo) => {
+			await observeTabAttachments(page);
 			const library = readSeededLibrary();
 			const { songHeading, lyrics, savedLyrics, unsavedDraftDialog } =
 				await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
 			const songAddress = page.url();
 
+			await page.evaluate(() => {
+				Reflect.set(window, 'phoneTabWindow', 'cancel');
+				Reflect.set(window, 'phoneTabWindowStarted', performance.now());
+			});
 			await page.goBack();
 			await expect(unsavedDraftDialog).toBeVisible();
+			await expect(phoneTabs(page)).toHaveCount(0);
 			await expect(page).toHaveURL(songAddress);
 			await unsavedDraftDialog
 				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
@@ -413,18 +445,31 @@ test.describe('song page at phone width', () => {
 			await expect(unsavedDraftDialog).toBeHidden();
 			await expect(page).toHaveURL(songAddress);
 			await expect(songHeading).toBeVisible();
+			await expect(phoneTabs(page)).toHaveCount(0);
 			await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
 
+			await page.evaluate(() => {
+				Reflect.set(window, 'phoneTabWindow', 'discard');
+				Reflect.set(window, 'phoneTabWindowStarted', performance.now());
+			});
 			await page.goBack();
 			await expect(unsavedDraftDialog).toBeVisible();
+			await expect(phoneTabs(page)).toHaveCount(0);
+			await page.evaluate(() => Reflect.set(window, 'phoneTabWindow', 'discard-confirmed'));
 			await unsavedDraftDialog
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 				.click();
 			await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}$`));
 			await expect(songHeading).toBeHidden();
+			await expect(phoneTabs(page)).toBeVisible();
+			await testInfo.attach('tab-attachments.json', {
+				body: JSON.stringify(await page.evaluate(() => Reflect.get(window, 'phoneTabAttachments'))),
+				contentType: 'application/json'
+			});
 
 			await page.goForward();
 			await expect(songHeading).toBeVisible();
+			await expect(phoneTabs(page)).toHaveCount(0);
 			await expect(lyrics).toHaveValue(savedLyrics);
 		}
 	);
@@ -432,13 +477,14 @@ test.describe('song page at phone width', () => {
 	test.describe('song bar Back (#1591)', () => {
 		for (const origin of ['album', 'Home'] as const) {
 			test(
-				`1354_rule_32: clean song returns to ${origin}, and editor tabs keep its Back`,
+				`1354_61_C12 1354_rule_32: clean song returns to ${origin}, and editor tabs keep its Back`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
 					const { songPhoneAlbumId } = readSeededLibrary();
 					const { lyrics, savedLyrics, songHeading } = await openSongWithAnUnsavedDraft(
 						page,
-						songPhoneAlbumId
+						songPhoneAlbumId,
+						`QA ${runMarker().slice(-8)}`
 					);
 					const title = await songHeading.innerText();
 					await lyrics.fill(savedLyrics);
@@ -460,6 +506,16 @@ test.describe('song page at phone width', () => {
 					}
 					const back = bar.getByRole('button', { name, exact: true });
 					await expect(back).toBeVisible();
+					expect(title).toHaveLength(11);
+					expect(await bar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+						true
+					);
+					const titleBox = await bar.getByRole('heading', { name: title }).boundingBox();
+					const backBox = await back.boundingBox();
+					if (!titleBox || !backBox) throw new Error('Expected title and Back');
+					expect(backBox.x + backBox.width).toBeLessThanOrEqual(titleBox.x);
+					await expect(phoneTabs(page)).toHaveCount(0);
+					await expect(bar.getByRole('button', { name: 'Open menu' })).toHaveCount(0);
 					const address = page.url();
 					const length = await page.evaluate(() => history.length);
 					for (const tab of [EDITOR_VIEW_COWRITER_LABEL, EDITOR_TAB_EDIT_LABEL]) {
@@ -472,6 +528,7 @@ test.describe('song page at phone width', () => {
 					await back.click();
 					await expect(page).toHaveURL(new URL(destination, address).href);
 					await expect(songHeading).toBeHidden();
+					await expect(phoneTabs(page)).toBeVisible();
 					expect(await page.evaluate(() => history.length)).toBe(length);
 				}
 			);
@@ -483,7 +540,7 @@ test.describe('song page at phone width', () => {
 			EDITOR_UNSAVED_SAVE_LABEL
 		]) {
 			test(
-				`1354_rule_32: song ‹ asks first and honors ${choice}`,
+				`1354_61_C${choice === DIALOG_CANCEL_LABEL ? '13' : choice === EDITOR_UNSAVED_SAVE_LABEL ? '14' : '15'} 1354_rule_32: song ‹ asks first and honors ${choice}`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
 					const { songPhoneAlbumId } = readSeededLibrary();
@@ -493,6 +550,7 @@ test.describe('song page at phone width', () => {
 					const draft = await lyrics.inputValue();
 					await songBackButton(page).click();
 					await expect(unsavedDraftDialog).toBeVisible();
+					await expect(phoneTabs(page)).toHaveCount(0);
 					await expect(page).toHaveURL(address);
 					await unsavedDraftDialog.getByRole('button', { name: choice, exact: true }).click();
 					await expect(unsavedDraftDialog).toBeHidden();
@@ -500,9 +558,11 @@ test.describe('song page at phone width', () => {
 						await expect(page).toHaveURL(address);
 						await expect(songHeading).toBeVisible();
 						await expect(lyrics).toHaveValue(draft);
+						await expect(phoneTabs(page)).toHaveCount(0);
 					} else {
 						await expect(page).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
 						await expect(songHeading).toBeHidden();
+						await expect(phoneTabs(page)).toBeVisible();
 						await page.goForward();
 						await expect(songHeading).toBeVisible();
 						await expect(lyrics).toHaveValue(
@@ -514,7 +574,7 @@ test.describe('song page at phone width', () => {
 		}
 
 		test(
-			'1354_rule_32: cold song ‹ names its album and asks before replacing the song',
+			'1354_61_C16 1354_rule_32: cold song ‹ names its album and asks before replacing the song',
 			{ tag: ONLY_IN_SHELL.mobile },
 			async ({ page, context, browser }) => {
 				const { songPhoneAlbumId } = readSeededLibrary();
@@ -531,9 +591,11 @@ test.describe('song page at phone width', () => {
 				});
 				try {
 					const cold = await coldContext.newPage();
+					await observeTabAttachments(cold);
 					await cold.goto(address);
 					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
 					await expect(coldLyrics).toHaveValue(savedLyrics);
+					expect(await cold.evaluate(() => Reflect.get(window, 'phoneTabAttachments'))).toEqual([]);
 					await expect(cold.locator('.workspace-wrapper')).not.toHaveAttribute('inert');
 					await coldLyrics.fill(UNSAVED_DRAFT_LINE);
 					await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE);
@@ -553,6 +615,7 @@ test.describe('song page at phone width', () => {
 						.click();
 					await expect(cold).toHaveURL(new RegExp(`/album/${songPhoneAlbumId}$`));
 					expect(await cold.evaluate(readHistoryIndex)).toBe(index);
+					await expect(phoneTabs(cold)).toBeVisible();
 				} finally {
 					await coldContext.close();
 				}
@@ -642,7 +705,7 @@ test.describe('song page at phone width', () => {
 	});
 
 	// The defect #1144 fixed reproduced on the desktop rail as well; the phone
-	// rows above cover the drawer, this one the 1440 px rail's Settings group.
+	// rows above cover Search, this one the 1440 px rail's Settings group.
 	test(
 		'Discard on a desktop rail Settings link with an unsaved draft lands on the page (#1143)',
 		{ tag: ONLY_IN_SHELL.desktop },

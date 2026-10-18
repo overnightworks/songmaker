@@ -1,3 +1,4 @@
+import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Typing on the phone (issues #999, #1017): while a text field has focus and
 // the on-screen keyboard is open, the keyboard owns the bottom of the screen,
 // so the mini-player and the Generate bar step aside and come back once the
@@ -19,6 +20,9 @@ import { openSearchSheet } from './phone-search';
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
 	COWRITER_TURN_PATH,
+	LIBRARY_NEW_MENU_LABEL,
+	LIBRARY_NEW_ALBUM_LABEL,
+	NEW_ALBUM_TITLE_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
@@ -30,7 +34,15 @@ import {
 	songEditorOpenLabel,
 	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
-import { appBar, FlowGuard, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import {
+	appBar,
+	FlowGuard,
+	loseNetwork,
+	offlineStrip,
+	nameStartingWith,
+	ONLY_IN_SHELL,
+	workspace
+} from './helpers';
 import { readSeededLibrary, runMarker, seedRunningGenerationJob, seedSongPhoneSong } from './seed';
 
 const PHONE_TYPING_SONG_TITLE = 'Phone Typing';
@@ -298,7 +310,7 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		guard.assertClean();
 	});
 
-	test('1354_37b_71_label 1354_37b_64: going back from a focused co-writer composer shows the album page with its own app bar', async ({
+	test('1354_61_C25 1354_37b_71_label 1354_37b_64: going back from a focused co-writer composer shows the album page with its own app bar', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
@@ -306,6 +318,8 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 
 		await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 		await page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER).click();
+		await showOnScreenKeyboard(page, true);
+		await expect(page.getByRole('contentinfo')).toBeHidden();
 		await page.goBack();
 
 		await expect(page).toHaveURL(new RegExp(`/album/${readSeededLibrary().songPhoneAlbumId}$`));
@@ -314,7 +328,52 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		).toBeVisible();
 		await expect(appBar(page).getByRole('button', { name: /^Back to / })).toBeVisible();
 		await expect(page.getByRole('contentinfo')).toBeVisible();
+		await expect(page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })).toBeVisible();
 
 		guard.assertClean();
 	});
 });
+
+for (const surface of ['Home name', 'Search'] as const) {
+	test(
+		`1354_61_C${surface === 'Search' ? '17' : '24'}: ${surface} keyboard gives back tabs and transport when dismissed with focus retained`,
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page, context }) => {
+			await page.goto('/');
+			const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
+			await expect(tabs).toBeVisible();
+			let field: Locator;
+			if (surface === 'Home name') {
+				await workspace(page)
+					.getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true })
+					.click();
+				await page
+					.getByRole('dialog', { name: LIBRARY_NEW_MENU_LABEL })
+					.getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL })
+					.click();
+				field = workspace(page).getByLabel(NEW_ALBUM_TITLE_LABEL);
+			} else {
+				field = (await openSearchSheet(page)).getByRole('combobox', { name: RAIL_SEARCH_LABEL });
+			}
+			await field.focus();
+			await showOnScreenKeyboard(page, true);
+			await expect(tabs).toHaveCount(0);
+			await expect(page.getByRole('contentinfo')).toBeHidden();
+			await expect.poll(() => reservedTransportBarRoom(page)).toBe(NO_RESERVED_ROOM);
+			await showOnScreenKeyboard(page, false);
+			await expect(field).toBeFocused();
+			await expect(tabs).toBeVisible();
+			await expect(page.getByRole('contentinfo')).toBeVisible();
+			if (surface === 'Search') {
+				await page.keyboard.press('Escape');
+				await loseNetwork(page, context);
+				const strip = offlineStrip(page);
+				await expect(strip).toBeVisible();
+				const bounds = await strip.boundingBox();
+				const bar = await page.getByRole('contentinfo').boundingBox();
+				if (!bounds || !bar) throw new Error('Expected the offline strip and transport');
+				expect(bounds.y + bounds.height).toBe(bar.y);
+			}
+		}
+	);
+}

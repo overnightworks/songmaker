@@ -74,7 +74,7 @@ import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { closeSidebar, phoneAppBar, railCollapsed, railWidth } from '$lib/stores/ui';
+import { phoneAppBar, railCollapsed, railWidth } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { liveStream } = vi.hoisted(() => ({
@@ -261,7 +261,6 @@ afterEach(async () => {
 	currentUser.set(null);
 	authLoading.set(false);
 	authCheckError.set(null);
-	closeSidebar();
 	phoneAppBar.set(null);
 	railCollapsed.set(false);
 	localStorage.removeItem('songmaker.rail-collapsed');
@@ -389,12 +388,13 @@ describe('app shell', () => {
 		await tick();
 		expect(privateTarget.querySelector('.player-bar')).toBeNull();
 		expect(privateTarget.querySelector('.app-shell')).toBeNull();
+		expect(privateTarget.querySelector('.phone-tabs')).toBeNull();
+		expect(document.documentElement.dataset.phoneTabs).toBeUndefined();
 	});
 
-	it('keeps the mobile strip trigger, brand and account circle inside 320px', async () => {
+	it('keeps the mobile strip brand and account circle inside 320px', async () => {
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
-		const trigger = requireElement<HTMLButtonElement>(strip, '.drawer-trigger');
 		const brand = requireElement<HTMLButtonElement>(strip, '.brand');
 		const accountCircle = requireElement<HTMLButtonElement>(strip, '.account-menu .menu-trigger');
 
@@ -404,26 +404,71 @@ describe('app shell', () => {
 		const stripStyle = getComputedStyle(strip);
 		const pad = px(stripStyle.paddingLeft) + px(stripStyle.paddingRight);
 		const gap = px(stripStyle.gap);
-		expect(minUsedWidth(trigger)).toBe(HITBOX_FREQUENT_PX);
 		expect(minUsedWidth(accountCircle)).toBe(HITBOX_FREQUENT_PX);
 		const used =
-			pad +
-			minUsedWidth(trigger) +
-			gap +
-			px(getComputedStyle(brand).minWidth || '0') +
-			gap +
-			minUsedWidth(accountCircle);
+			pad + px(getComputedStyle(brand).minWidth || '0') + gap + minUsedWidth(accountCircle);
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
+	});
+
+	it.each([
+		['/', true],
+		['/library', true],
+		['/playlists', true],
+		['/album/summer', true],
+		['/playlist/favourites', true],
+		['/album/summer/song', false],
+		['/album/summer/song/take/3', false],
+		['/settings', true],
+		['/settings/voices', true],
+		['/loras', true],
+		['/share/public', false],
+		['/login', false],
+		['/setup', false],
+		['/legal/privacy', false]
+	])('1354_rule_28 1354_rule_33 1354_49: mount-time tabs at %s are %s', async (path, shown) => {
+		replaceHistoryEntry(path);
+		selectedSongId.set('retained-song');
+		const target = await renderLayout(path);
+		expect(target.querySelector('.phone-tabs') !== null).toBe(shown);
+		expect(document.documentElement.hasAttribute('data-phone-tabs')).toBe(shown);
+		expect(target.querySelector('[aria-label="Open menu"]')).toBeNull();
+		if (path.startsWith('/settings') || path === '/loras')
+			expect(target.querySelector('.phone-tabs [aria-current]')).toBeNull();
+		await unmountCurrentLayout();
+		expect(document.documentElement.hasAttribute('data-phone-tabs')).toBe(false);
+	});
+
+	it('1354_61_C29: tabs own the safe area once, through the shared room tokens', () => {
+		expect(extractRule(appCss, ':root')).toContain(
+			'--phone-tabs-room: calc(var(--phone-tabs-height) + env(safe-area-inset-bottom, 0px))'
+		);
+		const rule = extractRule(appCss, 'html[data-phone-tabs]');
+		expect(rule).toContain('--shell-bottom-offset: var(--phone-tabs-room)');
+		expect(rule).toContain('--transport-safe-area-bottom: 0px');
+	});
+
+	it('leaves public transport room intact with retained user and full-player state', async () => {
+		nowPlayingSurface.set('full');
+		await renderLayout('/share/public');
+		expect(document.documentElement.dataset.transportBar).toBeUndefined();
+		expect(document.documentElement.dataset.phoneTabs).toBeUndefined();
+	});
+
+	it('hides tabs with full Now Playing and restores them on close', async () => {
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
+		nowPlayingSurface.set('full');
+		await tick();
+		expect(target.querySelector('.phone-tabs')).toBeNull();
+		nowPlayingSurface.set('closed');
+		await tick();
+		expect(target.querySelector('.phone-tabs')).not.toBeNull();
 	});
 
 	it('1354_rule_40: acts as the Home link when the mobile-strip brand is clicked', async () => {
 		librarySurface.set('detail');
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
-		// Named after what it is (the wordmark), not what it does -- GitHub's own
-		// logo pattern -- so it never collides with the LIBRARY rail group's own
-		// "Library" name once the drawer (which nests the whole Rail, including
-		// that group) is open alongside this strip.
+		// The wordmark is named after the app.
 		expect(brand.hasAttribute('aria-label')).toBe(false);
 		expect(brand.textContent).toBe('Hallucinai');
 		brand.click();
@@ -433,7 +478,7 @@ describe('app shell', () => {
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('1354_rule_32: keeps song Back and actions in the same strip beside the drawer', async () => {
+	it('1354_rule_32: keeps song Back and actions in the same strip without a menu', async () => {
 		phoneAppBar.set({
 			kind: 'song',
 			title: 'Sommerlicht',
@@ -448,41 +493,19 @@ describe('app shell', () => {
 		expect(strip.querySelector('button[aria-label="Back to Album"]')).not.toBeNull();
 		expect(strip.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
 		expect(strip.querySelector('.brand')).toBeNull();
-		requireElement<HTMLButtonElement>(strip, '.drawer-trigger').click();
-		await tick();
-		expect(document.body.querySelector('.rail')).not.toBeNull();
+		expect(strip.querySelector('[aria-label="Open menu"]')).toBeNull();
 		phoneAppBar.set(null);
 		await tick();
 		expect(strip.querySelector('.brand')).toBeNull();
 		expect(strip.querySelector('.back')?.textContent?.trim()).toBe('Album');
 	});
 
-	it('opens the rail drawer from the trigger on every private route', async () => {
-		const target = await renderLayout('/loras');
-		expect(document.body.querySelector('.rail')).toBeNull();
-		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
-		await tick();
-		const rail = requireElement<HTMLElement>(document.body, '.rail');
-		expect(requireElement<HTMLButtonElement>(rail, '.brand').textContent).toBeTruthy();
-	});
-
-	it('keeps the phone drawer to navigation, leaving Settings and the user row to the account circle', async () => {
-		const target = await renderLayout(LIBRARY_ROUTE_PATH);
-		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
-		await tick();
-		const drawer = requireElement<HTMLElement>(document.body, '.drawer-panel');
-
-		expect(requireElement(drawer, '.rail-search')).toBeTruthy();
-		expect(drawer.textContent).not.toContain(RAIL_SETTINGS_LABEL);
-		expect(drawer.textContent).not.toContain(USER.username);
-		expect(drawer.querySelector('button.logout')).toBeNull();
-	});
-
-	it('renders the rail inline instead of a drawer on wide layouts, keeping its Settings group and user row', async () => {
+	it('renders the rail inline on wide layouts, keeping its Settings group and user row', async () => {
 		stubMatchMedia(false);
 		delete document.documentElement.dataset.pointer;
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		expect(target.querySelector('.mobile-strip')).toBeNull();
+		expect(target.querySelector('.phone-tabs')).toBeNull();
 		const rail = requireElement<HTMLElement>(target, '.rail');
 		expect(rail.textContent).toContain(RAIL_SETTINGS_LABEL);
 		expect(requireElement(rail, '.rail-bottom').textContent).toContain(USER.username);
@@ -515,17 +538,6 @@ describe('app shell', () => {
 		expect(rail.style.width).toBe('');
 	});
 
-	it('keeps the drawer full-width when this browser collapsed the desktop rail', async () => {
-		railCollapsed.set(true);
-		const target = await renderLayout(LIBRARY_ROUTE_PATH);
-		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
-		await tick();
-		const rail = requireElement<HTMLElement>(document.body, '.drawer-panel .rail');
-
-		expect(rail.classList.contains('rail-collapsed')).toBe(false);
-		expect(rail.querySelector('.rail-collapse')).toBeNull();
-	});
-
 	// T1/T2/T6 (#999, #1017): the shell alone decides that a field has focus
 	// on the phone with its keyboard open; the bar and its reserved room step aside for the keyboard.
 	// The room collapses through the one transport-bar fact, so the shell,
@@ -540,6 +552,7 @@ describe('app shell', () => {
 		lyrics.focus();
 		await tick();
 		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(target.querySelector('.phone-tabs')).toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBe('hidden');
 		expect(requireElement(target, '.mobile-strip')).toBeTruthy();
 

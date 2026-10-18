@@ -5,12 +5,7 @@
 
 <script lang="ts">
 	import { page } from '$app/state';
-	import {
-		APP_NAME,
-		RAIL_DRAWER_OPEN_LABEL,
-		SEARCH_OPEN_LABEL,
-		SONG_TITLE_LABEL
-	} from '$lib/constants';
+	import { APP_NAME, SEARCH_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
 	import { backLabel, backTargetName, pageBackShown } from '$lib/routes/pageBack';
 	import { standingPage } from '$lib/routes/standingAddress';
 	import { historyLayerState } from '$lib/stores/layers';
@@ -18,7 +13,7 @@
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import { openHome, stepBackFromPage } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
-	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+	import { phoneAppBar } from '$lib/stores/ui';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import AccountMenu from './AccountMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
@@ -106,27 +101,6 @@
 {/snippet}
 
 <header class="mobile-strip">
-	<button
-		class="drawer-trigger"
-		data-hitbox="frequent"
-		aria-haspopup="dialog"
-		aria-expanded={$sidebarOpen}
-		aria-label={RAIL_DRAWER_OPEN_LABEL}
-		onclick={toggleSidebar}
-	>
-		<svg
-			width="20"
-			height="20"
-			viewBox="0 0 24 24"
-			fill="none"
-			stroke="currentColor"
-			stroke-width="2"
-			stroke-linecap="round"
-			aria-hidden="true"
-		>
-			<path d="M4 7h16M4 12h16M4 17h16" />
-		</svg>
-	</button>
 	{#if $phoneAppBar}
 		{#if backShown}
 			<button
@@ -217,7 +191,6 @@
 		z-index: 200;
 	}
 
-	.drawer-trigger,
 	.bar-icon {
 		flex: none;
 		border: none;

@@ -1,9 +1,8 @@
 import { backLabel } from '$lib/routes/pageBack';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
 import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
-import { phoneAppBar, sidebarOpen } from '$lib/stores/ui';
+import { phoneAppBar } from '$lib/stores/ui';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import {
 	clearHitboxStyles,
@@ -18,7 +17,6 @@ import {
 	APP_NAME,
 	HITBOX_FREQUENT_PX,
 	HOME_PAGE_LABEL,
-	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SEARCH_LABEL,
 	SEARCH_OPEN_LABEL
 } from '$lib/constants';
@@ -165,7 +163,6 @@ beforeEach(async () => {
 	injectHitboxStyles();
 	setPointer('coarse');
 	phoneAppBar.set(null);
-	sidebarOpen.set(false);
 	sessionStorage.clear();
 	await enterAppOn(LIBRARY_ROUTE_PATH);
 	seedLibrary();
@@ -176,7 +173,6 @@ beforeEach(async () => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	phoneAppBar.set(null);
-	sidebarOpen.set(false);
 	libraryAddressOverlayActive.set(false);
 	resetHistoryControllerForTests();
 	resetLayersForTests();
@@ -227,18 +223,10 @@ describe('PhoneAppBar', () => {
 		expect(target.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
 		expect(target.querySelector('.brand')).toBeNull();
 		expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).toBeNull();
-		for (const name of [
-			backLabel('Cold Harbour'),
-			RAIL_DRAWER_OPEN_LABEL,
-			SEARCH_OPEN_LABEL,
-			'Share song',
-			'Song menu'
-		]) {
+		for (const name of [backLabel('Cold Harbour'), SEARCH_OPEN_LABEL, 'Share song', 'Song menu']) {
 			expectFrequentHitbox(getByRoleButton(target, name), name);
 		}
-		getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL).click();
 		await tick();
-		expect(get(sidebarOpen)).toBe(true);
 		getByRoleButton(target, 'Song menu').click();
 		await tick();
 		getByRoleButton(target, 'Rename').click();
@@ -262,13 +250,10 @@ describe('PhoneAppBar', () => {
 			getByRoleButton(target, 'Share song'),
 			getByRoleButton(target, 'Song menu')
 		];
-		const otherControls = [
-			getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL),
-			getByRoleButton(target, SEARCH_OPEN_LABEL)
-		];
+		const otherControls = [getByRoleButton(target, SEARCH_OPEN_LABEL)];
 
 		expect(songControls().map(isInert)).toEqual([true, true, true]);
-		expect(otherControls.map(isInert)).toEqual([false, false]);
+		expect(otherControls.map(isInert)).toEqual([false]);
 
 		libraryAddressOverlayActive.set(false);
 		await tick();
