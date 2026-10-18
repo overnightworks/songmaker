@@ -1,8 +1,0 @@
-claim_id = "cb8713dadf0c419d9e570cc461becc96"
-agent = "claude"
-role = "builder"
-base = "605d4c526300afa1a54da6f10d7f2fa93aefe98d"
-branch = "claude/issue-1682-remove-remaster"
-scope = ["frontend/src/lib/api/client.ts", "frontend/src/lib/api/generations.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/generation_api.py", "tests/test_remaster_retirement.py"]
-opened_commit = "3eb0747c7d00002d96b8d097f3e671617378800a"
-whole_reason = "One endpoint retirement with its client references, regression evidence and security documentation."
