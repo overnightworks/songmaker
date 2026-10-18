@@ -4,7 +4,7 @@ import {
 	makeSong as song
 } from '$lib/test-utils/factories';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
 	HITBOX_COMPACT_PX,
@@ -20,8 +20,9 @@ import { albumList, songList } from '$lib/stores/libraryData';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { currentUser, authLoading } from '$lib/stores/auth';
-import { closeSidebar, sidebarOpen, theme, toggleSidebar } from '$lib/stores/ui';
+import { theme } from '$lib/stores/ui';
 import { get } from 'svelte/store';
+import { historyLayerState } from '$lib/stores/layers';
 import { HITBOX_STYLE } from '$lib/styles/hitbox';
 import {
 	clearHitboxStyles,
@@ -426,7 +427,6 @@ afterEach(async () => {
 	resetLibraryContextForTests();
 	selectedPlaylistDetail.set(null);
 	currentUser.set(null);
-	closeSidebar();
 	resetCollectionForTests();
 	vi.unstubAllGlobals();
 });
@@ -483,8 +483,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	mounted.push(mount(PlayerBar, { target: playerTarget }));
 	await tick();
 	await Promise.resolve();
-	await tick();
-	toggleSidebar();
 	await tick();
 	return { root, playlistPickerOnClose };
 }
@@ -716,12 +714,15 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 		);
 	}
 
-	it('closes the drawer opened last, then the PlaylistPicker, and never runs the global one-level-up navigation', async () => {
+	it('1354_37b_71_escape: closes the sheet opened last, then the PlaylistPicker, and never runs the global one-level-up navigation', async () => {
 		const { playlistPickerOnClose } = await renderInventory();
+		const sheet = historyLayerState('a-sheet', false);
+		onTestFinished(sheet.subscribe(() => undefined));
+		sheet.set(true);
 
 		pressEscape();
 		await tick();
-		expect(get(sidebarOpen)).toBe(false);
+		expect(get(sheet)).toBe(false);
 		expect(playlistPickerOnClose).not.toHaveBeenCalled();
 
 		pressEscape();
