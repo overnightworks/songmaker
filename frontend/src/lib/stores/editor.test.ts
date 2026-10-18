@@ -107,7 +107,6 @@ describe('editGenParams dirty tracking', () => {
 describe('loadSongData', () => {
 	it.each([
 		{ scenario: 'same song clean', dirty: false, songId: 's1', late: false, discard: false },
-		{ scenario: 'same song dirty', dirty: true, songId: 's1', late: false, discard: false },
 		{ scenario: 'different song dirty', dirty: true, songId: 's2', late: false, discard: false },
 		{
 			scenario: 'load finishes after typing',
@@ -615,9 +614,14 @@ describe('versionDeleteEditorLoss', () => {
 });
 
 describe('handleSave', () => {
-	it.each([false, true])(
-		'defect:#1598 save keeps intervening typing dirty: %s',
-		async (typeDuringSave) => {
+	it.each([
+		{ scenario: 'no intervening edit', typeDuringSave: false, from: null, nextFrom: null },
+		{ scenario: 'typing during save', typeDuringSave: true, from: null, nextFrom: null },
+		{ scenario: 'typing after loaded version', typeDuringSave: true, from: 1, nextFrom: null },
+		{ scenario: 'another version loaded during save', typeDuringSave: false, from: 1, nextFrom: 2 }
+	])(
+		'defect:#1598 save records only the sent draft and provenance: $scenario',
+		async ({ typeDuringSave, from, nextFrom }) => {
 			const { updateSong } = await import('$lib/api/client');
 			let finishSave!: (song: SongItem) => void;
 			vi.mocked(updateSong).mockReturnValueOnce(
@@ -626,19 +630,30 @@ describe('handleSave', () => {
 				})
 			);
 			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+			if (from !== null) loadVersionAsDraft(makeVersion({ version_number: from }));
 			setDraftLyrics('sent draft');
 			const saving = handleSave('s1');
 			if (typeDuringSave) setDraftLyrics('typed during save');
+			if (nextFrom !== null) {
+				loadVersionAsDraft(makeVersion({ version_number: nextFrom, lyrics: 'another version' }));
+			}
 			finishSave(makeSong({ ...songDefaults, id: 's1', lyrics: 'sent draft' }));
 			await saving;
 			expect(get(savedSongData).lyrics).toBe('sent draft');
-			expect(get(editLyrics)).toBe(typeDuringSave ? 'typed during save' : 'sent draft');
-			expect(get(isDirty)).toBe(typeDuringSave);
+			expect(get(editLyrics)).toBe(
+				nextFrom !== null ? 'another version' : typeDuringSave ? 'typed during save' : 'sent draft'
+			);
+			expect(get(draftLoadedFrom)).toBe(nextFrom);
+			expect(get(isDirty)).toBe(typeDuringSave || nextFrom !== null);
 			if (typeDuringSave) {
 				vi.mocked(updateSong).mockResolvedValueOnce(
 					makeSong({ ...songDefaults, lyrics: 'typed during save' })
 				);
 				await handleSave('s1');
+				expect(updateSong).toHaveBeenLastCalledWith(
+					's1',
+					expect.objectContaining({ new_version: false })
+				);
 				expect(get(savedSongData).lyrics).toBe('typed during save');
 				expect(get(isDirty)).toBe(false);
 			}

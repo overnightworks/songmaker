@@ -386,7 +386,7 @@ export function computeDraftVersionNumber(
 export async function handleSave(songId: string): Promise<SongItem> {
 	const state = get(editorState);
 	if (!state || state.songId !== songId) throw new Error('Cannot save a different song');
-	const { draft } = state;
+	const { draft, loadedFrom } = state;
 	const updated = await updateSong(songId, {
 		lyrics: draft.lyrics,
 		prompt: draft.prompt,
@@ -398,7 +398,7 @@ export async function handleSave(songId: string): Promise<SongItem> {
 	});
 	editorState.update((s) =>
 		s?.songId === songId
-			? { ...s, saved: draft, loadedFrom: s.draft === draft ? null : s.loadedFrom }
+			? { ...s, saved: draft, loadedFrom: s.loadedFrom === loadedFrom ? null : s.loadedFrom }
 			: s
 	);
 	replaceSongInList(updated);
