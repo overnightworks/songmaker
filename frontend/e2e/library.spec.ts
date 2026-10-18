@@ -206,6 +206,17 @@ async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
+async function openAlbumFromNavigation(page: Page, shell: Shell, title: string): Promise<void> {
+	if (shell === 'mobile') {
+		await (await phoneSearchResult(page, 'Albums', title, nameStartingWith(title))).click();
+	} else {
+		const rail = await openRailNav(page, shell);
+		await railAlbumRow(rail, title)
+			.getByRole('button', { name: containing(title) })
+			.click();
+	}
+}
+
 /**
  * The phone drawer is navigation only (#1174, frame H3 of navigation.html):
  * brand, search, Library and Playlists. Settings, the theme and Log out live
@@ -288,14 +299,7 @@ async function expectSettingsRailRoundTrip(
 		expect(Math.abs(mainBox.x - (railBox.x + railBox.width))).toBeLessThanOrEqual(2);
 	}
 
-	if (shell === 'mobile') {
-		await (
-			await phoneSearchResult(page, 'Albums', albumTitle, nameStartingWith(albumTitle))
-		).click();
-	} else {
-		const rail = await openRailNav(page, shell);
-		await rail.getByRole('button', { name: containing(albumTitle) }).click();
-	}
+	await openAlbumFromNavigation(page, shell, albumTitle);
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
 
@@ -769,21 +773,7 @@ test('1354_37b_64: an album with nothing to play dims its circle and leaves the 
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 
 	// The second seeded album holds songs without a take (see seed.ts).
-	if (shell === 'mobile') {
-		await (
-			await phoneSearchResult(
-				page,
-				'Albums',
-				library.secondAlbumTitle,
-				nameStartingWith(library.secondAlbumTitle)
-			)
-		).click();
-	} else {
-		const rail = await openRailNav(page, shell);
-		await railAlbumRow(rail, library.secondAlbumTitle)
-			.getByRole('button', { name: containing(library.secondAlbumTitle) })
-			.click();
-	}
+	await openAlbumFromNavigation(page, shell, library.secondAlbumTitle);
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
 	await expect(albumCircle).toBeDisabled();
@@ -1314,12 +1304,18 @@ test(
 );
 
 test(
-	'1354_37a_A6: the phone drawer remains navigation-only',
+	'1354_37a_A6: phone drawer stays navigation-only and Library stays expanded in Settings (retired by #1354 row 61)',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		const library = readSeededLibrary();
 		await page.goto(`/album/${library.albumId}`);
 		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
 		await expectPhoneDrawerIsNavigationOnly(page);
+		await openLibraryWall(page, 'mobile');
+		await openSettingsSection(page, 'mobile', 'Voices');
+		const rail = await openRailNav(page, 'mobile');
+		await expect(
+			rail.getByRole('button', { name: LIBRARY_PAGE_LABEL, exact: true })
+		).toHaveAttribute('aria-expanded', 'true');
 	}
 );

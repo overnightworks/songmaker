@@ -124,13 +124,22 @@ async function expectSettingsShown(page: Page, shell: Shell): Promise<void> {
 type RailWord = typeof LIBRARY_PAGE_LABEL | typeof PLAYLISTS_PAGE_LABEL;
 const RAIL_WORDS: readonly RailWord[] = [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL];
 
-async function expectCurrentRailWord(page: Page, current: RailWord | null): Promise<void> {
-	const rail = await openRailNav(page, 'desktop');
+async function expectCurrentRailWord(
+	page: Page,
+	current: RailWord | null,
+	shell: Shell = 'desktop'
+): Promise<void> {
+	const rail = await openRailNav(page, shell);
 	for (const label of RAIL_WORDS) {
 		const word = rail.getByRole('link', { name: nameStartingWith(label) });
 		if (label === current) await expect(word).toHaveAttribute('aria-current', 'page');
 		else await expect(word).not.toHaveAttribute('aria-current', 'page');
 	}
+}
+
+async function expectCurrentPhoneDrawerWord(page: Page, current: RailWord | null): Promise<void> {
+	await expectCurrentRailWord(page, current, 'mobile');
+	await page.keyboard.press('Escape');
 }
 
 // The album a page was left holding as its open collection is the one the idle
@@ -453,24 +462,30 @@ for (const [origin, railWord] of [
 	[LIBRARY, LIBRARY_PAGE_LABEL],
 	[PLAYLISTS, PLAYLISTS_PAGE_LABEL]
 ] as const) {
-	for (const shell of ['desktop', 'mobile'] as const) {
+	for (const [shell, drawerOnly] of [
+		['desktop', false],
+		['mobile', false],
+		['mobile', true]
+	] as const) {
+		const readsWord = shell === 'desktop' || drawerOnly;
+		const expectWord = drawerOnly ? expectCurrentPhoneDrawerWord : expectCurrentRailWord;
 		test(
-			`defect:#1523 1354_rule_40: ${origin.name}, Settings, then Back restores the page${shell === 'desktop' ? ` and its current ${railWord} word` : ''}, with no reload`,
+			`${readsWord ? 'defect:#1523 1354_rule_40' : '1354_rule_31'}: ${origin.name}, Settings, then Back restores the page${readsWord ? ` and its current ${railWord} word` : ''}, with no reload${drawerOnly ? ' (phone drawer-only, retired by #1354 row 61)' : ''}`,
 			{ tag: ONLY_IN_SHELL[shell] },
 			async ({ page }) => {
 				const guard = new FlowGuard(page);
 				const library = readSeededLibrary();
 				await origin.open(page, shell, library);
-				if (shell === 'desktop') await expectCurrentRailWord(page, railWord);
+				if (readsWord) await expectWord(page, railWord);
 				await page.evaluate((key) => Reflect.set(window, key, true), SAME_DOCUMENT_KEY);
 
 				await openSettings(page, shell);
 				await expectSettingsShown(page, shell);
-				if (shell === 'desktop') await expectCurrentRailWord(page, null);
+				if (readsWord) await expectWord(page, null);
 				await page.goBack();
 
 				await origin.expectStands(page, shell, library);
-				if (shell === 'desktop') await expectCurrentRailWord(page, railWord);
+				if (readsWord) await expectWord(page, railWord);
 				expect(
 					await page.evaluate((key) => Reflect.get(window, key), SAME_DOCUMENT_KEY),
 					'the journey stayed in one document'
@@ -751,3 +766,27 @@ test(
 		guard.assertClean();
 	}
 );
+
+for (const [row, path, current, retainAlbum] of [
+	['1354_rule_31 row 1', HOME_PATH, null, false],
+	['1354_rule_31 row 2', LIBRARY_PATH, LIBRARY_PAGE_LABEL, false],
+	['1354_R1prime row 10c', HOME_PATH, null, true]
+] as const) {
+	test(
+		`${row}: phone drawer current word follows the address (retired by #1354 row 61)`,
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			await page.goto(path);
+			if (retainAlbum) {
+				await expectHomeShown(page);
+				await ageEntryToBrowseAtHome(page, { kind: 'album', id: readSeededLibrary().albumId });
+				await page.reload();
+			}
+			if (path === HOME_PATH) await expectHomeShown(page);
+			else await expectWallShown(page);
+			await expectCurrentPhoneDrawerWord(page, current);
+			guard.assertClean();
+		}
+	);
+}
