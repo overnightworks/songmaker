@@ -4358,7 +4358,8 @@ def test_s8_running_failure_survives_progress(client, stored_musician_job, trans
     expected = ("Too long for the GPU right now — try a shorter duration.", "gpu_out_of_memory")
     with factory() as session:
         job = session.get(Job, stored_musician_job)
-        assert (job.error, job.error_type) == expected
+        stored_error = (job.error, job.error_type)
+        assert stored_error == expected
         assert job.status == "running"
         assert session.query(Generation).count() == 2
 
@@ -4371,7 +4372,8 @@ def test_s8_running_failure_survives_progress(client, stored_musician_job, trans
             return response.json()
 
     response = asyncio.run(asyncio.wait_for(read(), timeout=5))
-    assert (response["error"], response["error_type"]) == expected
+    response_error = (response["error"], response["error_type"])
+    assert response_error == expected
     assert (response["status"], response["take_index"]) == ("running", 2)
 
 

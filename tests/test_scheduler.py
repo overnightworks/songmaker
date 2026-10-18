@@ -420,8 +420,9 @@ def test_s8_worker_error_kind(consume, payload, expected):
     assert WORKER_ERROR_GPU_OUT_OF_MEMORY in get_args(TaskErrorKind)
     body = "event: error\ndata: " + json.dumps(payload) + "\n\n"
     transport = httpx.MockTransport(lambda request: httpx.Response(200, text=body))
+    stream = consume(_make_picked(), "task-1", options=DispatchOptions(transport=transport))
     with pytest.raises(WorkerTaskFailed) as raised:
-        _run(consume(_make_picked(), "task-1", options=DispatchOptions(transport=transport)))
+        _run(stream)
     assert type(raised.value) is expected
 
 
