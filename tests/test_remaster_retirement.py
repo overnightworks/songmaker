@@ -17,7 +17,7 @@ from songmaker_cli.db.queries.auth import record_audit
 
 @pytest.mark.parametrize("authenticated", [True, False], ids=["owner", "unauthenticated"])
 def test_remaster_is_unavailable_and_preserves_audio_and_history(
-    tmp_path: Path, make_stereo_wav_bytes, authenticated: bool,
+    tmp_path: Path, make_stereo_wav_bytes, authenticated: bool, mock_arq_pool,
 ) -> None:
     """1301-F3-M-REMOVED; 1301-F3-M-PRESERVED: retirement never mutates assets."""
     client, db = make_test_app(tmp_path)
