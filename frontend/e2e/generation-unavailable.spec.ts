@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import type { JobItem } from '../src/lib/api/types';
 import {
 	ADMIN_TABS_LABEL,
@@ -10,14 +10,30 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
-import { ONLY_IN_SHELL } from './helpers';
+import { csrfHeaders, ONLY_IN_SHELL } from './helpers';
 import {
+	archiveOwnedAlbum,
 	failGenerationJob,
-	readSeededLibrary,
 	runMarker,
 	seedRunningGenerationJob,
 	seedSongPhoneSong
 } from './seed';
+
+const test = base.extend<{ albumId: string }>({
+	albumId: async ({ page }, use) => {
+		const response = await page.request.post('/api/albums', {
+			headers: await csrfHeaders(page),
+			data: { title: `E2E Generation Unavailable ${runMarker()}` }
+		});
+		expect(response.ok()).toBe(true);
+		const album: { id: string } = await response.json();
+		try {
+			await use(album.id);
+		} finally {
+			await archiveOwnedAlbum(page.request, album.id);
+		}
+	}
+});
 
 const UNAVAILABLE = "Generating isn't available right now.";
 const WIDTHS = [390, 1440] as const;
@@ -69,10 +85,9 @@ for (const width of WIDTHS) {
 			test(
 				`C1 C3 C4: ${role} ${source} at ${width}px`,
 				{ tag: ONLY_IN_SHELL.desktop },
-				async ({ page }, testInfo) => {
+				async ({ page, albumId }, testInfo) => {
 					await page.setViewportSize({ width, height: 900 });
 					await arrangeAudience(page, role);
-					const { songPhoneAlbumId: albumId } = readSeededLibrary();
 					const title = `QA unavailable ${runMarker()}`;
 					const songId = await seedSongPhoneSong(albumId, title, 1, 1);
 					const address = `/album/${albumId}/${title.toLowerCase().replace(/\s+/g, '-')}`;
