@@ -44,8 +44,13 @@ def test_g1_caller_contract(key, expected):
 def test_g1_caller_identity_and_pin():
     assert "name" not in JOBS["quality"]
     assert "sonar" not in JOBS
+    reference = JOBS["quality"]["uses"]
+    assert re.fullmatch(
+        r"overnightworks/quality/\.github/workflows/gate\.yml@[0-9a-f]{40}",
+        reference,
+    )
     assert re.search(
-        r"uses: overnightworks/quality/\.github/workflows/gate\.yml@[0-9a-f]{40} # v0\.2\.1$",
+        rf"^\s+uses: {re.escape(reference)} # v0\.2\.1$",
         WORKFLOW_TEXT,
         re.MULTILINE,
     )
