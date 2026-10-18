@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from collections.abc import Awaitable, Callable, Iterable
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ from unittest.mock import MagicMock
 import fakeredis.aioredis
 import httpx
 import pytest
+from acestep_http import acestep_http
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.routing import BaseRoute
@@ -935,54 +937,137 @@ def test_default_generate_runner_emits_the_engines_phase_and_fraction(
     assert events[-1].type == "done"
 
 
-def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_engine_modules(monkeypatch, MagicMock(side_effect=RuntimeError("kaboom")))
+@pytest.fixture
+def real_generate_worker(tmp_path: Path):
+    """Use the public dependency seam while retaining the production runner."""
+    with acestep_http() as boundary:
+        async def loader(mode: str) -> LoadedModel:
+            return LoadedModel(mode=mode, handle="test-model", port=boundary.port)
 
-    async def go():
-        store = TaskStore()
-        task_id = await store.create("generate")
-        await default_generate_runner(
-            store,
-            task_id,
-            mode="sft",
-            config=AceStepConfig(prompt="x", lyrics=""),
-            port=8101,
-            audio_output_dir=tmp_path / "audio",
-        )
-        return await store.get(task_id)
+        deps, _ = _make_deps(tmp_path, model_loader=loader)
+        completed = asyncio.Event()
 
-    snap = _run(go())
-    assert snap is not None
-    assert snap.state == "error"
-    assert snap.error == "RuntimeError: kaboom"
+        async def runner(store, task_id, **kwargs):
+            try:
+                await default_generate_runner(store, task_id, **kwargs)
+            finally:
+                # Observe the route's resource-release edge after the runner returns.
+                asyncio.get_running_loop().call_soon(completed.set)
+
+        deps.generate_runner = runner
+
+        async def generate(client):
+            completed.clear()
+            response = await client.post(
+                "/generate", json={"mode": "sft", "config": {"prompt": "x", "lyrics": ""}},
+            )
+            assert response.status_code == 200
+            await asyncio.wait_for(completed.wait(), timeout=10)
+            assert deps.cache.in_use_count("sft") == 0
+            assert not deps.gpu_hold_generation_tasks
+            snapshot = await client.get(f"/tasks/{response.json()['task_id']}")
+            assert snapshot.status_code == 200
+            return snapshot.json()
+
+        @asynccontextmanager
+        async def worker():
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=create_app(deps)),
+                base_url="http://worker", headers=_INTERNAL_HEADERS,
+            ) as client:
+                loaded = await client.post("/load_model", json={"mode": "sft"})
+                assert loaded.status_code == 200
+                yield client, deps, boundary, generate
+
+        yield worker
 
 
-def test_default_generate_runner_reports_acestep_cause_verbatim(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("scenario, expected_kind, diagnostic", [
+    ("gpu", "gpu_out_of_memory", "Generation stopped"),
+    ("generic", None, "MemoryError: host allocation failed"),
+    ("submission", None, "CUDA out of memory"),
+    ("success", None, None),
+    ("write-error", None, "FileExistsError:"),
+])
+def test_default_generate_runner_error_kind_over_get_and_stream(
+    real_generate_worker, scenario: str, expected_kind: str | None, diagnostic: str | None,
 ) -> None:
-    from acestep_engine.errors import GenerationFailedError
+    """S7-04/S7-05/S7-06: Real runner, GET and reconnecting SSE share classification."""
+    async def go():
+        async with real_generate_worker() as (client, deps, boundary, generate):
+            if scenario == "submission":
+                boundary.submission_status = "CUDA out of memory"
+            elif scenario in {"success", "write-error"}:
+                boundary.succeed()
+                if scenario == "write-error":
+                    deps.audio_output_dir.write_text("occupied")
+            else:
+                detail = (
+                    "CUDA out of memory\nGeneration stopped"
+                    if scenario == "gpu" else diagnostic
+                )
+                boundary.result = json.dumps([{"error": detail}])
+            snapshot = await generate(client)
+            assert snapshot["state"] == ("done" if scenario == "success" else "error")
+            assert snapshot["error_kind"] == expected_kind
+            if diagnostic is None:
+                assert snapshot["error"] is None
+                assert Path(snapshot["result"]["audio_path"]).read_bytes() == boundary.wav_bytes
+            else:
+                assert diagnostic in snapshot["error"]
+                if scenario in {"gpu", "generic"}:
+                    assert snapshot["error"] == diagnostic
+                elif scenario == "submission":
+                    assert snapshot["error"].startswith("ACE-Step returned no task_id:")
+            for _ in range(2):
+                response = await client.get(f"/tasks/{snapshot['task_id']}/stream")
+                assert response.status_code == 200
+                events = [line for line in response.text.splitlines() if line.startswith("event:")]
+                assert events == [f"event: {snapshot['state']}"]
+                data = [
+                    line[6:] for line in response.text.splitlines() if line.startswith("data: ")
+                ]
+                assert [json.loads(item) for item in data] == [snapshot]
 
-    cause = "Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available"
-    _patch_engine_modules(monkeypatch, MagicMock(side_effect=GenerationFailedError(cause)))
+    _run(go())
+
+
+def test_gpu_memory_last_error_survives_audio_success_and_is_replaced(real_generate_worker) -> None:
+    """S7-08: Real failures retain heartbeat identity across a real WAV download."""
+    from songmaker_cli.acestep_state import read_worker_state
 
     async def go():
-        store = TaskStore()
-        task_id = await store.create("generate")
-        await default_generate_runner(
-            store,
-            task_id,
-            mode="sft",
-            config=AceStepConfig(prompt="x", lyrics=""),
-            port=8101,
-            audio_output_dir=tmp_path / "audio",
-        )
-        return await store.get(task_id)
+        async with real_generate_worker() as (client, deps, boundary, generate):
+            previous = None
+            for failure in ("CUDA out of memory", None, "Invalid model"):
+                if failure is None:
+                    boundary.succeed()
+                else:
+                    boundary.status = 2
+                    boundary.result = json.dumps([{"error": failure}])
+                snapshot = await generate(client)
+                if failure is None:
+                    assert snapshot["state"] == "done"
+                    assert snapshot["error_kind"] is None
+                    assert Path(snapshot["result"]["audio_path"]).read_bytes() == boundary.wav_bytes
+                else:
+                    assert snapshot["state"] == "error"
+                    assert snapshot["error"] == failure
+                    assert snapshot["error_kind"] == (
+                        "gpu_out_of_memory" if previous is None else None
+                    )
+                    current = (
+                        snapshot["error"],
+                        datetime.fromisoformat(snapshot["updated_at"]).isoformat(),
+                    )
+                    assert current != previous
+                    previous = current
+                for _ in range(2):
+                    await deps.heartbeat.publish_once()
+                    state = await read_worker_state(deps.redis, deps.worker_id)
+                    assert (state["last_error"], state["last_error_at"]) == previous
 
-    snap = _run(go())
-    assert snap is not None
-    assert snap.state == "error"
-    assert snap.error == cause
+    _run(go())
 
 
 def test_build_state_payload(tmp_path: Path) -> None:
