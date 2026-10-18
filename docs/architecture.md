@@ -71,8 +71,12 @@ Redis with a 15s TTL. The music-worker is now a thin orchestrator: its
 arq `generate` job calls the scheduler (`scheduler.py`), which picks an
 online worker, INCRs queue depth atomically, dispatches via HTTP, and
 consumes the worker's task SSE stream until `done`. A stream that stays silent
-for 630 seconds fails the generation with `Worker stream went silent`; transport
-drops still use the scheduler's bounded reconnect policy. The music-worker then
+for 630 seconds retains `Worker stream went silent` as its logged diagnosis; transport
+drops still use the scheduler's bounded reconnect policy. Failed model loading,
+no worker at admission, unreachable workers, a mode still missing after one reload, stream silence, and
+exhausted reconnects show musicians “Generating isn't available right now.”
+The [failure contract](acestep.md#failure-cause-contract) defines classification
+and persistence. The music-worker then
 post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.

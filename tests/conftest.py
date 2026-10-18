@@ -39,10 +39,11 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.dependencies import AuthenticatedUser  # noqa: E402
+from worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
 from acestep_engine.errors import AudioDownloadError  # noqa: E402
 from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402
-from songmaker_cli.scheduler import NoCapacityError  # noqa: E402
+from songmaker_cli.scheduler import NoCapacityError, WorkerGenerationUnavailable  # noqa: E402
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
@@ -69,29 +70,95 @@ OTHER_GENERATION_ERROR_TYPES = [
 
 
 SONGMAKER_FAILURE_CASES = [
-    pytest.param((TimeoutError, "private timeout", "Generation timed out"), id="timeout"),
     pytest.param(
-        (AudioDownloadError, "private download", "Failed to download generated audio"),
-        id="download",
+        (
+            TimeoutError,
+            "private timeout",
+            "Generation timed out",
+            "Generation timed out",
+            "generation_error",
+        ),
+        id="S5-B-D-timeout",
     ),
     pytest.param(
-        (ConnectionError, "private connection", "ACE-Step server not reachable"), id="connection"
+        (
+            AudioDownloadError,
+            "private download",
+            "Failed to download generated audio",
+            "Failed to download generated audio",
+            "generation_error",
+        ),
+        id="S5-B-D-download",
     ),
     pytest.param(
-        (NoCapacityError, "private capacity", "No ACE-Step workers available"), id="capacity"
+        (
+            ConnectionError,
+            "private connection",
+            "ACE-Step server not reachable",
+            "ACE-Step server not reachable",
+            "generation_error",
+        ),
+        id="S5-B-D-connection",
     ),
     pytest.param(
-        (RuntimeError, "private runtime", "Internal error during processing"), id="runtime"
+        (
+            NoCapacityError,
+            "private capacity",
+            "No ACE-Step workers available",
+            "Generating isn't available right now.",
+            "generation_unavailable",
+        ),
+        id="S5-B-L10-capacity",
     ),
-    pytest.param((ValueError, "private unknown", "An unexpected error occurred"), id="unknown"),
+    pytest.param(
+        (
+            RuntimeError,
+            "private runtime",
+            "Internal error during processing",
+            "Internal error during processing",
+            "generation_error",
+        ),
+        id="S5-B-D-runtime",
+    ),
+    pytest.param(
+        (
+            ValueError,
+            "private unknown",
+            "An unexpected error occurred",
+            "An unexpected error occurred",
+            "generation_error",
+        ),
+        id="S5-B-D-unknown",
+    ),
 ]
 
 
 @pytest.fixture(params=SONGMAKER_FAILURE_CASES)
 def generation_failure_case(request):
-    """L11: Fresh exceptions for the shared Songmaker counterexamples."""
-    error_class, cause, expected = request.param
-    return error_class(cause), expected
+    """S5-C/D, L6: Historical stored lines retain their read contract."""
+    error_class, cause, historical, _, _ = request.param
+    return error_class(cause), historical
+
+
+@pytest.fixture(
+    params=[
+        *SONGMAKER_FAILURE_CASES,
+        pytest.param(
+            (
+                WorkerGenerationUnavailable,
+                "need 18.5 GB",
+                None,
+                "Generating isn't available right now.",
+                "generation_unavailable",
+            ),
+            id="S5-A-B-L6-L10-load-http",
+        ),
+    ]
+)
+def generation_write_failure_case(request):
+    """S5-B, L6/L10: New writes select the line and type together."""
+    error_class, cause, _, message, error_type = request.param
+    return error_class(cause), message, error_type
 
 
 def web_client(app, **kwargs) -> TestClient:

@@ -4,9 +4,13 @@ import re
 from dataclasses import dataclass
 
 from songmaker_cli.api_models import JobResponse
-from songmaker_cli.constants import JOB_ERROR_GENERATION_FAILED, JobType
+from songmaker_cli.constants import (
+    JOB_ERROR_GENERATION_FAILED,
+    JOB_ERROR_GENERATION_UNAVAILABLE,
+    JobType,
+)
 from songmaker_cli.db.models import Job
-from songmaker_cli.scheduler import WorkerTaskFailed
+from songmaker_cli.scheduler import NoCapacityError, WorkerGenerationUnavailable, WorkerTaskFailed
 
 from ._runtime import _sanitize_error, generation_error_messages
 
@@ -27,6 +31,8 @@ class GenerationFailure:
 def generation_failure(exc: Exception, job_id: str) -> GenerationFailure:
     """Log the full cause and select the musician's line and its type together."""
     message = _sanitize_error(exc, job_id)
+    if isinstance(exc, (WorkerGenerationUnavailable, NoCapacityError)):
+        return GenerationFailure(JOB_ERROR_GENERATION_UNAVAILABLE, "generation_unavailable")
     if isinstance(exc, WorkerTaskFailed):
         message = JOB_ERROR_GENERATION_FAILED
     return GenerationFailure(message=message, error_type="generation_error")

@@ -7,7 +7,7 @@ import pytest
 
 from acestep_engine.progress import AceStepPhase
 from acestep_worker.clock import utcnow
-from acestep_worker.models import GenerationTaskResult
+from acestep_worker.models import GenerationTaskResult, TaskErrorKind, TaskKind
 from acestep_worker.task_store import TaskStore
 
 
@@ -174,10 +174,12 @@ def test_done_event_carries_the_result_as_json() -> None:
     }
 
 
-def test_fail_terminal() -> None:
+@pytest.mark.parametrize("kind", ["generate", "download", "train_lora"])
+def test_fail_terminal(kind: TaskKind) -> None:
+    """S7-07: Two-argument failure remains compatible for every task kind."""
     async def go():
         store = TaskStore()
-        task_id = await store.create("generate")
+        task_id = await store.create(kind)
         await store.fail(task_id, "boom")
         return await store.get(task_id)
 
@@ -185,6 +187,7 @@ def test_fail_terminal() -> None:
     assert snap is not None
     assert snap.state == "error"
     assert snap.error == "boom"
+    assert snap.error_kind is None
 
 
 def test_update_unknown_raises() -> None:
@@ -247,19 +250,50 @@ def test_subscribe_already_terminal_yields_only_initial() -> None:
     assert events[0].type == "done"
 
 
-def test_subscribe_already_failed_yields_only_initial() -> None:
+@pytest.mark.parametrize("error_kind", [None, "gpu_out_of_memory"])
+def test_subscribe_already_failed_yields_only_initial(error_kind: TaskErrorKind | None) -> None:
+    """S7-05/S7-06: Live and late subscribers receive the identical failure snapshot."""
     async def go():
         store = TaskStore()
-        task_id = await store.create("download")
-        await store.fail(task_id, "nope")
-        events = []
-        async for ev in store.subscribe(task_id):
-            events.append(ev)
-        return events
+        task_id = await store.create("generate")
+        live = store.subscribe(task_id)
+        initial = await anext(live)
+        assert initial.data["error_kind"] is None
+        await store.fail(task_id, "nope", error_kind=error_kind)
+        events = [event async for event in live]
+        replay = [event async for event in store.subscribe(task_id)]
+        snapshot = await store.get(task_id)
+        assert snapshot is not None
+        assert snapshot.error_kind == error_kind
+        assert len(events) == 1
+        assert events == replay
+        assert events[0].type == "error"
+        assert events[0].data == snapshot.model_dump(mode="json")
 
-    events = _run(go())
-    assert len(events) == 1
-    assert events[0].type == "error"
+    _run(go())
+
+
+@pytest.mark.parametrize("state", ["pending", "running", "done"])
+def test_error_kind_is_null_without_failure(state: str) -> None:
+    """S7-06: Non-failure snapshots and events explicitly serialize null."""
+    async def go():
+        store = TaskStore()
+        task_id = await store.create("generate")
+        if state == "running":
+            await store.mark_running(task_id)
+        elif state == "done":
+            await store.complete(task_id, _generated())
+        snapshot = await store.get(task_id)
+        assert snapshot is not None
+        assert snapshot.state == state
+        assert snapshot.model_dump(mode="json")["error_kind"] is None
+        events = store.subscribe(task_id)
+        try:
+            assert (await anext(events)).data["error_kind"] is None
+        finally:
+            await events.aclose()
+
+    _run(go())
 
 
 def test_subscribe_progress_then_done() -> None:
