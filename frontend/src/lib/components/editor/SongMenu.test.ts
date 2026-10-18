@@ -47,7 +47,7 @@ async function focusSettled(): Promise<void> {
 }
 
 describe('SongMenu', () => {
-	it('names the song on the first row', async () => {
+	it('defect:#1495: names the song on the first row', async () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
@@ -76,7 +76,7 @@ describe('SongMenu', () => {
 	});
 
 	it.each([true, false])(
-		'enables saving only when the draft is dirty (disabled: %s)',
+		'defect:#1495: enables saving only when the draft is dirty (disabled: %s)',
 		async (saveDisabled) => {
 			const { target, props } = await renderMenu({ saveDisabled });
 			openSongMenu(target);
@@ -95,21 +95,24 @@ describe('SongMenu', () => {
 		{ label: SONG_MENU_RENAME_LABEL, handler: 'onrename' as const },
 		{ label: SONG_MENU_ADD_TO_PLAYLIST_LABEL, handler: 'onaddtoplaylist' as const },
 		{ label: SONG_MENU_DELETE_LABEL, handler: 'ondelete' as const }
-	])('1495: runs only $handler and closes the menu on $label', async ({ label, handler }) => {
-		const { target, props } = await renderMenu({ saveDisabled: false });
-		openSongMenu(target);
-		await tick();
-		menuRow(target, label).click();
-		await tick();
-		for (const [name, action] of Object.entries(props)) {
-			if (typeof action === 'function') {
-				expect(action).toHaveBeenCalledTimes(name === handler ? 1 : 0);
+	])(
+		'defect:#1495: runs only $handler and closes the menu on $label',
+		async ({ label, handler }) => {
+			const { target, props } = await renderMenu({ saveDisabled: false });
+			openSongMenu(target);
+			await tick();
+			menuRow(target, label).click();
+			await tick();
+			for (const [name, action] of Object.entries(props)) {
+				if (typeof action === 'function') {
+					expect(action).toHaveBeenCalledTimes(name === handler ? 1 : 0);
+				}
 			}
+			expect(target.querySelector('.menu-panel')).toBeNull();
 		}
-		expect(target.querySelector('.menu-panel')).toBeNull();
-	});
+	);
 
-	it('closes on Escape without triggering an action and hands focus back to its trigger', async () => {
+	it('defect:#1495: closes on Escape without triggering an action and hands focus back to its trigger', async () => {
 		const { target } = await renderMenu();
 		openSongMenu(target);
 		await tick();
@@ -133,7 +136,7 @@ describe('SongMenu', () => {
 	});
 
 	it.each([SONG_MENU_ADD_TO_PLAYLIST_LABEL, SONG_MENU_DELETE_LABEL])(
-		'1495: hands focus back to its trigger after %s',
+		'defect:#1495: hands focus back to its trigger after %s',
 		async (label) => {
 			const { target } = await renderMenu();
 			openSongMenu(target);

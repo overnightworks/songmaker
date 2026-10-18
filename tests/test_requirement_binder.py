@@ -4,9 +4,11 @@ import fcntl
 import hashlib
 import os
 import shutil
+import signal
 import stat
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -712,61 +714,72 @@ def test_ignored_contract_entries_exceed_a_fixed_bound_before_network(
 
 
 @pytest.fixture
-def spawned_pids(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+def spawned_processes(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[subprocess.Popen[bytes]]]:
     original = binder.subprocess.Popen
-    pids: list[int] = []
+    processes: list[subprocess.Popen[bytes]] = []
 
     def recording_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
         process = original(*args, **kwargs)
-        pids.append(process.pid)
+        processes.append(process)
         return process
 
     monkeypatch.setattr(binder.subprocess, "Popen", recording_popen)
-    return pids
+    try:
+        yield processes
+    finally:
+        for process in processes:
+            process.kill()
+            process.wait(timeout=5)
+            for pipe in (process.stdout, process.stderr):
+                if pipe is not None:
+                    pipe.close()
 
 
 @pytest.mark.parametrize(
-    ("git_binary", "arguments", "timeout_seconds", "maximum", "message"),
+    ("git_binary", "arguments", "timeout_seconds", "maximum", "message", "returncode"),
     (
         pytest.param(
             "/bin/sleep", ("30",), 0.3, binder.MAX_GIT_OUTPUT_BYTES,
-            "local Git command exceeded its deadline", id="deadline",
+            "local Git command exceeded its deadline", -signal.SIGKILL, id="deadline",
         ),
         pytest.param(
             "/usr/bin/yes", (), binder.GIT_TIMEOUT_SECONDS, 64,
-            "local Git output exceeds its size limit", id="size-limit",
+            "local Git output exceeds its size limit", -signal.SIGKILL, id="size-limit",
         ),
         pytest.param(
             "/bin/false", (), binder.GIT_TIMEOUT_SECONDS, binder.MAX_GIT_OUTPUT_BYTES,
-            "local Git command refused the repository state", id="refused-exit-status",
+            "local Git command refused the repository state", 1, id="refused-exit-status",
         ),
     ),
 )
 def test_git_runner_refuses_a_bad_command_and_leaves_no_child(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    spawned_pids: list[int],
+    spawned_processes: list[subprocess.Popen[bytes]],
     git_binary: str,
     arguments: tuple[str, ...],
     timeout_seconds: float,
     maximum: int,
     message: str,
+    returncode: int,
 ) -> None:
+    """1346-F12-reaped, 1346-F13-killed: reject, kill and reap before returning."""
     monkeypatch.setattr(binder, "GIT_BINARY", Path(git_binary))
     monkeypatch.setattr(binder, "GIT_TIMEOUT_SECONDS", timeout_seconds)
     runner = binder.GitRunner(tmp_path)
-
     with pytest.raises(binder.RequirementBinderError, match=message):
         runner.run(*arguments, maximum=maximum)
 
-    (child_pid,) = spawned_pids
+    (process,) = spawned_processes
+    assert process.returncode == returncode
     with pytest.raises(ProcessLookupError):
-        os.kill(child_pid, 0)
+        os.kill(process.pid, 0)
 
 
 def test_git_runner_reports_a_binary_it_cannot_launch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """1346-F15-ids: report an unlaunchable Git binary."""
     unlaunchable = tmp_path / "git"
     unlaunchable.write_text("#!/bin/sh\n")
     unlaunchable.chmod(0o644)
@@ -780,6 +793,7 @@ def test_git_runner_reports_a_binary_it_cannot_launch(
 def test_git_runner_refuses_a_missing_binary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """1346-F15-ids: refuse a missing Git binary."""
     monkeypatch.setattr(binder, "GIT_BINARY", tmp_path / "absent")
 
     with pytest.raises(binder.RequirementBinderError, match="binary is unavailable"):
