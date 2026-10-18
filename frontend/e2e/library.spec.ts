@@ -1313,6 +1313,7 @@ test(
 		await expectPhoneDrawerIsNavigationOnly(page);
 		await openLibraryWall(page, 'mobile');
 		await openSettingsSection(page, 'mobile', 'Voices');
+		await expect(page).toHaveURL(/\/settings\/voices$/);
 		const rail = await openRailNav(page, 'mobile');
 		await expect(
 			rail.getByRole('button', { name: LIBRARY_PAGE_LABEL, exact: true })

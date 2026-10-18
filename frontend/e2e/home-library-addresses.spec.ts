@@ -20,6 +20,7 @@ import {
 	LIBRARY_NEW_MENU_LABEL,
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
+	RAIL_DRAWER_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
@@ -139,7 +140,9 @@ async function expectCurrentRailWord(
 
 async function expectCurrentPhoneDrawerWord(page: Page, current: RailWord | null): Promise<void> {
 	await expectCurrentRailWord(page, current, 'mobile');
+	const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
 	await page.keyboard.press('Escape');
+	await expect(drawer).toBeHidden();
 }
 
 // The album a page was left holding as its open collection is the one the idle
@@ -470,7 +473,7 @@ for (const [origin, railWord] of [
 		const readsWord = shell === 'desktop' || drawerOnly;
 		const expectWord = drawerOnly ? expectCurrentPhoneDrawerWord : expectCurrentRailWord;
 		test(
-			`${readsWord ? 'defect:#1523 1354_rule_40' : '1354_rule_31'}: ${origin.name}, Settings, then Back restores the page${readsWord ? ` and its current ${railWord} word` : ''}, with no reload${drawerOnly ? ' (phone drawer-only, retired by #1354 row 61)' : ''}`,
+			`${readsWord ? 'defect:#1523 1354_rule_40' : origin === PLAYLISTS ? '1354_37b_64' : '1354_rule_31'}: ${origin.name}, Settings, then Back restores the page${readsWord ? ` and its current ${railWord} word` : ''}, with no reload${drawerOnly ? ' (phone drawer-only, retired by #1354 row 61)' : ''}`,
 			{ tag: ONLY_IN_SHELL[shell] },
 			async ({ page }) => {
 				const guard = new FlowGuard(page);
