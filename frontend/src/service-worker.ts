@@ -13,6 +13,7 @@ declare const self: ServiceWorkerGlobalScope;
 
 /** Versioned cache name for the SvelteKit app shell. */
 const APP_SHELL_CACHE = `app-shell-${version}`;
+const APP_SHELL_URL = '/index.html';
 
 /**
  * The hashed Web Worker chunks, rewritten into the built file by
@@ -31,7 +32,9 @@ self.addEventListener('install', (event) => {
 	event.waitUntil(
 		caches
 			.open(APP_SHELL_CACHE)
-			.then((cache) => cache.addAll([...PRECACHE_URLS]))
+			.then((cache) =>
+				cache.addAll([...PRECACHE_URLS, new Request(APP_SHELL_URL, { cache: 'reload' })])
+			)
 			.then(() => self.skipWaiting())
 	);
 });
@@ -67,7 +70,7 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
-	// 2. SPA navigation → serve cached index.html (offline shell).
+	// 2. Let the server resolve navigations; the cached shell is for connection failures.
 	if (event.request.mode === 'navigate') {
 		event.respondWith(serveNavigation(event.request));
 		return;
@@ -84,8 +87,12 @@ async function serveAppShell(request: Request, pathname: string): Promise<Respon
 }
 
 async function serveNavigation(request: Request): Promise<Response> {
-	const cache = await caches.open(APP_SHELL_CACHE);
-	return (await cache.match('/index.html')) ?? fetch(request);
+	try {
+		return await fetch(request);
+	} catch {
+		const cache = await caches.open(APP_SHELL_CACHE);
+		return (await cache.match(APP_SHELL_URL)) ?? Response.error();
+	}
 }
 
 async function serveOfflineNamespace(request: Request): Promise<Response> {
