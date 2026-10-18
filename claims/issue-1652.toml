@@ -1,0 +1,8 @@
+claim_id = "5bd7e5a4046749ef8137359ef74d1c14"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
+branch = "claude/issue-1652-no-stale-admin-failure"
+scope = ["frontend/src/lib/components/ModelRegistryPanel.svelte", "frontend/src/lib/components/ModelRegistryPanel.test.ts", "frontend/src/lib/stores/adminPolling.test.ts", "frontend/src/lib/stores/adminPolling.ts"]
+opened_commit = "368fc8835ad8bb55b43ee33429b8effcc64e9bd6"
+whole_reason = "One bundle of small test-or-presentation cards from the same distributor; each card is too small to land alone and their files are disjoint from every open lane."
