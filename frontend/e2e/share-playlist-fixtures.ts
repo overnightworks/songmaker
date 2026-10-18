@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { expect, type Page, type Route } from '@playwright/test';
 import type { AlbumCoverUrls, SharedPlaylistPayload } from '../src/lib/api/types';
 import { csrfHeaders } from './helpers';
-import { BASE_URL, TAKE_FIXTURE, runMarker } from './seed';
+import { BASE_URL, TAKE_FIXTURE, archiveOwnedAlbum, runMarker } from './seed';
 
 export const PLAYLIST_TITLE = 'E2E Shared Journey';
 export const PLAYLIST_SLUG = 'proof-playlist';
@@ -165,7 +165,8 @@ export async function createRealPlaylist(owner: Page): Promise<RealPlaylist> {
 	const cleanup = async () => {
 		const removed = await owner.request.delete(`/api/playlists/${playlist.id}`, { headers });
 		expect(removed.ok()).toBeTruthy();
-		for (const id of albums) await post(`/api/albums/${id}/archive`, {});
+		// 1354_65_D5: shared-playlist proofs archive each member through the seed owner.
+		for (const id of albums) await archiveOwnedAlbum(owner.request, id);
 	};
 	try {
 		for (const position of [1, 2, 3]) {

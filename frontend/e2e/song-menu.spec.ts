@@ -28,6 +28,7 @@ import {
 	workspace
 } from './helpers';
 import { expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
+import { archiveOwnedAlbum } from './seed';
 
 const VIEWPORT_HEIGHT_PX = 844;
 const SONG_RESOLVING_TEXT = 'Loading song...';
@@ -110,8 +111,8 @@ async function onOwnSong(
 		await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
 		await flow({ songId: song.id, albumId });
 	} finally {
-		const archived = await page.request.post(`/api/albums/${albumId}/archive`, { headers });
-		expect(archived.ok()).toBe(true);
+		// 1354_65_D2: every menu flow archives through the seed owner.
+		await archiveOwnedAlbum(page.request, albumId);
 	}
 }
 

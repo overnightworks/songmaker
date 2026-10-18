@@ -58,7 +58,7 @@ import {
 	HOME_PATH,
 	LIBRARY_PATH
 } from './helpers';
-import { readSeededLibrary, type SeededLibrary } from './seed';
+import { archiveOwnedAlbum, readSeededLibrary, type SeededLibrary } from './seed';
 
 /**
  * Sized before the first CI measurement from the cold wall open (auth, the
@@ -444,19 +444,12 @@ for (const { failure, tag, arrange, toast, alsoSaid } of FAILED_CREATES) {
 	);
 }
 
-async function archiveAlbum(page: Page, albumId: string): Promise<void> {
-	const archived = await page.request.post(`${ALBUMS_API}/${albumId}/archive`, {
-		headers: await csrfHeaders(page)
-	});
-	expect(archived.ok()).toBe(true);
-}
-
 function albumIdOfAddress(address: string): string {
 	return new URL(address).pathname.split('/')[2];
 }
 
 test(
-	'915_E3 refusals in a row leave one toast, × clears it, and a made album clears the next',
+	'1354_65_D1 915_E3 refusals in a row leave one toast, × clears it, and a made album clears the next',
 	{ tag: REFUSED_CREATE_TAG },
 	async ({ page }, testInfo) => {
 		const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
@@ -488,13 +481,13 @@ test(
 			createdAlbumId = albumIdOfAddress(page.url());
 			await expect(toastMessages(page)).toHaveCount(0);
 		} finally {
-			if (createdAlbumId) await archiveAlbum(page, createdAlbumId);
+			if (createdAlbumId) await archiveOwnedAlbum(page.request, createdAlbumId);
 		}
 	}
 );
 
 test(
-	'915_E4 a long unbroken album title ends in … on the New song card and leaves × on screen',
+	'1354_65_D1 915_E4 a long unbroken album title ends in … on the New song card and leaves × on screen',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		const albumTitle = `${'Nightdrive'.repeat(15)}${Date.now()}`;
@@ -524,7 +517,7 @@ test(
 			}));
 			expect(clipping).toEqual({ overflow: 'hidden', textOverflow: 'ellipsis', cutShort: true });
 		} finally {
-			await archiveAlbum(page, albumId);
+			await archiveOwnedAlbum(page.request, albumId);
 		}
 	}
 );

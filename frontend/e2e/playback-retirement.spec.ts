@@ -19,7 +19,14 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import { BASE_URL, STORAGE_STATE_FILE, createAccount, runMarker, seedOwnTakeAddress } from './seed';
+import {
+	BASE_URL,
+	STORAGE_STATE_FILE,
+	archiveOwnedAlbum,
+	createAccount,
+	runMarker,
+	seedOwnTakeAddress
+} from './seed';
 
 // The gate runs both configured shells: 390×844 and 1440×900. No synthetic
 // playing/ended events: the same short fixture as queue-continuity really ends.
@@ -47,12 +54,6 @@ interface ProofLibrary {
 	api: APIRequestContext;
 }
 
-async function apiHeaders(api: APIRequestContext): Promise<Record<string, string>> {
-	const csrf = (await api.storageState()).cookies.find((cookie) => cookie.name === 'csrf_token');
-	if (!csrf) throw new Error('Proof account has no CSRF cookie');
-	return { 'x-csrf-token': csrf.value, origin: BASE_URL };
-}
-
 async function withProofLibrary(flow: (library: ProofLibrary) => Promise<void>): Promise<void> {
 	const admin = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
 	const api = await request.newContext({ baseURL: BASE_URL });
@@ -74,12 +75,8 @@ async function withProofLibrary(flow: (library: ProofLibrary) => Promise<void>):
 		// Retain the recognizable E2E album and its evidence, archived rather
 		// than deleting the account and cascading away its music.
 		try {
-			if (albumId) {
-				const archived = await api.post(`/api/albums/${albumId}/archive`, {
-					headers: await apiHeaders(api)
-				});
-				expect(archived.ok()).toBe(true);
-			}
+			// 1354_65_D4: archive failure still reaches the context-disposal finally.
+			if (albumId) await archiveOwnedAlbum(api, albumId);
 		} finally {
 			await api.dispose();
 			await admin.dispose();
