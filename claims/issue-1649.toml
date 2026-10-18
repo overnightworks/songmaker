@@ -1,0 +1,7 @@
+claim_id = "ae4815055083432dacb6d665471b37ae"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "b1aa92ffcb846018a12f8783852be2d5710e5b77"
+branch = "claude/issue-1649-internal-token-bytes"
+scope = ["docs/security.md", "src/songmaker_cli/internal_api.py", "tests/test_internal_api.py"]
+opened_commit = "2d3d7c7eaaae349abbf670be6e2499c65e32462d"
