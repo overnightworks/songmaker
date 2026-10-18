@@ -8,7 +8,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import fakeredis.aioredis
-import httpx
 import pytest
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -95,38 +94,38 @@ def lora_auth_db(tmp_path: Path):
     return factory
 
 
-@pytest.mark.parametrize("credential", ["configured", "missing", "wrong"])
+@pytest.mark.parametrize(
+    ("accepted_token_suffix", "lora_status", "job_status", "adapter_published", "paths"),
+    [
+        pytest.param(
+            "", LoraStatus.READY, JobStatus.COMPLETED, True,
+            ["/load_model", "/tasks/training/stream"], id="configured",
+        ),
+        pytest.param(
+            "-different", LoraStatus.FAILED, JobStatus.FAILED, False,
+            ["/gpu_hold/reserve"], id="mismatched",
+        ),
+    ],
+)
 def test_lora_load_and_stream_require_configured_token(
-    credential: str,
+    accepted_token_suffix: str,
+    lora_status: LoraStatus,
+    job_status: JobStatus,
+    adapter_published: bool,
+    paths: list[str],
     internal_token: str,
     lora_auth_db,
     tmp_path: Path,
 ) -> None:
-    """1301-F10-HTTP: real job sends both headers; missing/wrong ones are refused."""
+    """1301-F10-HTTP: real job sends both headers; a token mismatch fails without an adapter."""
 
     async def exercise() -> None:
-        peer = LoraAuthPeer(internal_token)
+        peer = LoraAuthPeer(internal_token + accepted_token_suffix)
         server = LoopbackServer(peer.app)
         async with fakeredis.aioredis.FakeRedis() as redis:
             try:
                 async with asyncio.timeout(15):
                     base_url = await server.start()
-                    if credential != "configured":
-                        headers = (
-                            {}
-                            if credential == "missing"
-                            else {
-                                INTERNAL_TOKEN_HEADER: internal_token + "-wrong",
-                            }
-                        )
-                        async with httpx.AsyncClient(base_url=base_url) as client:
-                            for method, path in [
-                                ("POST", "/load_model"),
-                                ("GET", "/tasks/training/stream"),
-                            ]:
-                                response = await client.request(method, path, headers=headers)
-                                assert response.status_code == 401
-                        return
                     with lora_auth_db() as session:
                         register_worker(
                             session,
@@ -158,9 +157,12 @@ def test_lora_load_and_stream_require_configured_token(
                         training_config=get_settings().lora_training_config,
                     )
                     with lora_auth_db() as session:
-                        assert get_user_lora(session, "lora").status == LoraStatus.READY
-                        assert get_job(session, "job").status == JobStatus.COMPLETED
-                    for path in ["/load_model", "/tasks/training/stream"]:
+                        lora = get_user_lora(session, "lora")
+                        assert lora.status == lora_status
+                        assert get_job(session, "job").status == job_status
+                        assert (lora.storage_path is not None) == adapter_published
+                    assert bool(list(tmp_path.rglob("adapter_config.json"))) == adapter_published
+                    for path in paths:
                         assert (path, internal_token) in peer.requests
             finally:
                 async with asyncio.timeout(3):
