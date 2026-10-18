@@ -84,13 +84,16 @@ describe('settings index on the phone', () => {
 		expect(document.title).toBe(`${RAIL_SETTINGS_LABEL} — ${APP_NAME}`);
 	});
 
-	it('shows the signed-in username beside Account', async () => {
+	it('1346-F16-name: shows the signed-in username beside Account', async () => {
+		currentUser.set(makeAuthUser({ role: 'admin', username: 'account-owner' }));
 		const target = await render();
 		const account = listRows(target).find(
 			(row) => row.getAttribute('href') === '/settings/account'
 		);
 
-		expect(account?.querySelector('.settings-row-value')?.textContent?.trim()).toBe('felix');
+		expect(account?.querySelector('.settings-row-value')?.textContent?.trim()).toBe(
+			'account-owner'
+		);
 	});
 });
 

@@ -522,7 +522,7 @@ describe('CollectionHeader', () => {
 	});
 
 	it.each(['awaiting-network', 'gave-up-on-network'] as const)(
-		'(#1330) the header withdraws its %s start even when it has nothing new to play',
+		'defect:#1330: the header withdraws its %s start even when it has nothing new to play',
 		async (notice) => {
 			const props = { ...baseProps(), onplay: null };
 			albumList.set([makeAlbum({ id: props.collectionId })]);

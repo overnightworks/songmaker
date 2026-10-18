@@ -759,7 +759,7 @@ describe('NowPlaying when the take details cannot load', () => {
 	];
 
 	it.each(settlingAfterUnmount)(
-		'shows and loads nothing for a take-details load $way after it unmounted',
+		'defect:#1494: shows and loads nothing for a take-details load $way after it unmounted',
 		async ({ settle }) => {
 			vi.useFakeTimers();
 			let load!: PendingFetch;

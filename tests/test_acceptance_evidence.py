@@ -155,6 +155,7 @@ MALFORMED_MARKERS = (
 def test_collect_claims_rejects_malformed_markers(
     tmp_path: Path, source: str, message: str
 ) -> None:
+    """1346-F15-ids: each malformed marker reports its specific refusal."""
     source_path = write_test_source(tmp_path, source)
     with pytest.raises(AcceptanceEvidenceError, match=re.escape(message)):
         collect_claims(source_path.parent)
