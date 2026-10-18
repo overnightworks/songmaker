@@ -48,6 +48,7 @@ ALLOWED_ROOT_ENTRIES: dict[str, str] = {
     "frontend": "the SvelteKit application",
     "monitoring": "Grafana/Prometheus/Alertmanager configuration",
     "plans": "live multi-session coordination notes",
+    "quality": "quality requires repository-root quality/config.toml",
     "prompts": "review prompt templates",
     "scripts": "operational and CI helper scripts",
     "src": "the Python application source",
