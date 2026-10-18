@@ -6,10 +6,15 @@ import { goto } from '$app/navigation';
 import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '$lib/constants';
 import { visibleSettingsSections } from '$lib/settingsSections';
 import { currentUser } from '$lib/stores/auth';
-import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
+import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { makeAuthUser } from '$lib/test-utils/factories';
+import { makeAuthUser, makeSong } from '$lib/test-utils/factories';
 import { createComponentMount, requireElement } from './rail-test-fixtures';
+
+vi.mock('$lib/api/songs', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/songs')>()),
+	fetchVersions: vi.fn().mockResolvedValue([])
+}));
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
@@ -52,6 +57,8 @@ function itemLabels(target: HTMLElement): string[] {
 }
 
 beforeEach(() => {
+	discardDraft();
+	loadSongData(makeSong());
 	localStorage.clear();
 	pageState.url = new URL('https://songmaker.test/');
 	currentUser.set(makeAuthUser({ role: 'admin' }));

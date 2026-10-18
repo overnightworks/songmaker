@@ -1,12 +1,18 @@
+import { makeSong } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
 import { signOutFailed } from '$lib/stores/auth';
-import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
+import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import UserRow from './UserRow.svelte';
+
+vi.mock('$lib/api/songs', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/songs')>()),
+	fetchVersions: vi.fn().mockResolvedValue([])
+}));
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
@@ -29,6 +35,11 @@ async function renderRow(): Promise<HTMLElement> {
 	await tick();
 	return target;
 }
+
+beforeEach(() => {
+	discardDraft();
+	loadSongData(makeSong());
+});
 
 afterEach(async () => {
 	if (mounted) await unmount(mounted);

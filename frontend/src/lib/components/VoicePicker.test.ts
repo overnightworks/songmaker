@@ -1,8 +1,14 @@
+import { makeSong } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 const listLoras = vi.fn();
+
+vi.mock('$lib/api/songs', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/songs')>()),
+	fetchVersions: vi.fn().mockResolvedValue([])
+}));
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
@@ -13,7 +19,13 @@ vi.mock('$lib/api/loras', () => ({
 
 import { goto } from '$app/navigation';
 import type { UserLoraItem } from '$lib/api/types';
-import { discardDraft, editGenParams, setDraftGenParams, setDraftLyrics } from '$lib/stores/editor';
+import {
+	discardDraft,
+	loadSongData,
+	editGenParams,
+	setDraftGenParams,
+	setDraftLyrics
+} from '$lib/stores/editor';
 import { loras } from '$lib/stores/loras';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { recipeModel } from '$lib/stores/recipe';
@@ -24,9 +36,10 @@ import VoicePicker from './VoicePicker.svelte';
 let mounted: ReturnType<typeof mount> | undefined;
 
 beforeEach(() => {
+	discardDraft();
+	loadSongData(makeSong());
 	listLoras.mockReset().mockResolvedValue([]);
 	loras.set([]);
-	setDraftGenParams(null);
 	recipeModel.set('sft');
 });
 
