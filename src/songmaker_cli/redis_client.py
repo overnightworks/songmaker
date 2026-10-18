@@ -142,7 +142,9 @@ def release_lease_in_background(
 async def drain_lease_releases() -> None:
     """Wait for pending background lease releases before closing their event loop."""
     while _LEASE_RELEASE_TASKS:
-        await asyncio.gather(*_LEASE_RELEASE_TASKS)
+        pending = tuple(_LEASE_RELEASE_TASKS)
+        await asyncio.gather(*pending)
+        _LEASE_RELEASE_TASKS.difference_update(pending)
 
 
 class RedisHttpMetrics:

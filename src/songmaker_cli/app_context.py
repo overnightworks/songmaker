@@ -16,13 +16,10 @@ from webauth.passwords import Argon2idPasswordHasher
 from webauth.ports import PasswordHasher
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
-from webauth.session_store import RedisSessionCache, SessionKeyPrefixes
 
 from songmaker_cli.constants import (
     HTTP_MAX_USER_AGENT_LENGTH,
     REDIS_RL_IP_PREFIX,
-    REDIS_SESSION_PREFIX,
-    REDIS_USER_SESSIONS_PREFIX,
     ROLE_ADMIN,
 )
 
@@ -52,17 +49,6 @@ def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
         raise ValueError(f"TRUSTED_PROXIES is invalid: {exc}") from exc
 
 
-def build_session_cache(redis: Redis) -> RedisSessionCache:
-    """The Redis session cache the server reads and the reset-password CLI clears."""
-    return RedisSessionCache(
-        redis,
-        SessionKeyPrefixes(
-            session=REDIS_SESSION_PREFIX,
-            user_sessions=REDIS_USER_SESSIONS_PREFIX,
-        ),
-    )
-
-
 def build_password_hasher() -> PasswordHasher:
     """The one password hasher every stored hash in this deployment comes from."""
     return Argon2idPasswordHasher()
@@ -75,7 +61,6 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
         password_hasher=build_password_hasher(),
         rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
         trusted_proxies=ctx.trusted_proxies,
-        session_cache=build_session_cache(ctx.redis),
         allowed_hosts_exact=ctx.allowed_hosts_exact,
         allowed_hosts_patterns=tuple(ctx.allowed_hosts_patterns),
         session_max_age_seconds=settings.session_max_age_seconds,

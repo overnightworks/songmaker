@@ -1031,7 +1031,7 @@ events.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.11.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.14.0`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is still `webauth`, so nothing in
 `songmaker_cli` changed when the source moved. Its own tests moved with it.
@@ -1039,9 +1039,9 @@ needs `git`. The import package is still `webauth`, so nothing in
 Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
 `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity
 decision, `ports.py` names the stores, password hasher, rate backend, session
-liveness and optional session cache the host supplies, `policies.py` the four
+liveness the host supplies, `policies.py` the four
 request policies it supplies, `liveness.py` the expiry-column and idle-window
-session policies, `session_store.py` the Redis session cache,
+session policies,
 `rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF,
 body-size and security-header middlewares, `dependencies.py` the
 `current_user_dependency` factory that yields the account, admin, and
@@ -1060,7 +1060,7 @@ successful password change.
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, password hasher, rate backend, session liveness
-policy, optional session cache, cookie and header names, allowed hosts, idle
+policy, cookie and header names, allowed hosts, idle
 session age, and login rate/lockout values arrive
 as one frozen `WebAuthConfig`, built by
 `songmaker_cli/app_context.py::build_web_auth_config(ctx, settings)` and
@@ -1068,16 +1068,20 @@ installed on the application in `server.create_app`. Middleware and endpoints
 read it through `webauth.config.web_auth_config(request)`; an application that
 never installed one fails loudly at its first auth-protected request. Songmaker
 binds `Argon2idPasswordHasher`, `RedisRateLimitBackend`, `ExpiryColumnLiveness`
-(with the configured absolute age), and `RedisSessionCache` to those ports;
-the Redis adapters own the connection and key prefixes. The cache is read
-from the installed configuration, including by the lifecycle sync loop.
-songmaker's own data — users, sessions, login attempts, audit entries — reaches
+(with the configured absolute age) to those ports. Redis remains the rate-limit
+backend; session validity comes from the DB on every authenticated request.
+`session_cleanup_loop` periodically deletes expired DB sessions without Redis.
+Songmaker's own data — users, sessions, login attempts, audit entries — reaches
 the library through the `webauth.ports` protocols, implemented in
 `songmaker_cli/auth_stores.py` over `db/queries/auth.py`. No store commits: the
-endpoint owns the request's transaction. `DatabaseSessionRecordStore.touch(now=)`
+endpoint owns its business transaction. `auth_dependencies.get_current_user`
+owns a separate short transaction that commits session renewal and identity
+audit before the endpoint runs. Manual stream callers commit authentication
+and close the connection before streaming. `DatabaseSessionRecordStore.touch(now=)`
 derives `expires_at` from that timestamp plus the installed configuration's
-`session_max_age_seconds`. `auth_dependencies.user_management` constructs one
-management instance per request from these stores and the installed config.
+`session_max_age_seconds` and returns whether exactly one existing row was
+updated; a missing row is refused, never recreated.
+`auth_dependencies.user_management` constructs one management instance per request from these stores and the installed config.
 `DatabaseWriteLock` commits preceding auth work before acquiring advisory lock
 9 (SQLite: `BEGIN IMMEDIATE`); endpoints must have no business changes before
 entry. Nested helpers share that lock and transaction. Exiting does not commit
@@ -1097,8 +1101,12 @@ are; which of songmaker's paths each applies to is a product decision built in
 `songmaker_cli/request_policies.py` — the budget classes and their paths, the
 CSRF-protected and token-exempt routes, the upload routes that may exceed the
 JSON body cap, and the CSP line with its inline-script hashes and cacheability
-rules. `server.create_app` hands each policy to the middleware that reads it;
-no middleware reads songmaker's settings.
+rules. `server.create_app` installs them with one
+`install_web_auth_middleware()` call; no middleware reads songmaker's settings.
+The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
+SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → CsrfOrigin →
+CsrfToken → AccessLog → Router. Library refusals therefore carry security
+headers; CORS preflights remain outside the library stack.
 
 ### The provider library (`agent_providers`, external)
 
@@ -1812,7 +1820,7 @@ never been observed; with a newer observation, it is `alive`.
 
 - `stale_job_reaper_loop()` ticks every `JOB_REAPER_INTERVAL_SECONDS` (2
   minutes), behind the same
-  single-flight Redis lock idiom as `session_sync_loop` / `score_backfill_loop`
+  single-flight Redis lock idiom as `score_backfill_loop`
   so only one web replica reaps a given tick.
 - A queued job reports `No worker alive for this job type — please retry.`
   when its known-dead execution worker exceeded its grace, or `Queued too long — please retry.`
@@ -1875,7 +1883,7 @@ its current usage via heartbeat. The music-worker has no GPU access at all.
 | Worker split | Separate arq queues per job type | Independent scaling, device config per worker |
 | Scoring subprocess | Long-lived child process, killed on timeout | Real cleanup via SIGKILL, GPU memory freed immediately |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
-| Session auth | Cookies + Redis cache | Revocable, HttpOnly, Redis-first reads. Redis TTL is authoritative for session expiry; DB synced every 5 min as backup |
+| Session auth | Signed cookies + DB sessions | Revocable, HttpOnly; DB expiry, absolute age and active account checked on every authenticated request. See [session lifetime](security.md#authentication) |
 | Redis required | Fail-fast at startup, fail-closed rate limiting | Server won't start without Redis; if Redis drops mid-operation, IP rate limiting returns 503 |
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |

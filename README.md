@@ -100,7 +100,7 @@ cd frontend && pnpm install && pnpm test:coverage && pnpm lint && pnpm check && 
 Tests run against an in-memory SQLite database (no Postgres needed for unit tests) and `fakeredis`. The live Docker stack and the test suite are fully independent — you can run tests while the Docker stack is up.
 
 The auth layer and the provider layer are external dependencies:
-`overnightworks-webauth` is pinned to the `v0.11.0` release wheel of
+`overnightworks-webauth` is pinned to the `v0.14.0` release wheel of
 [overnightworks/webauth](https://github.com/overnightworks/webauth), and
 `overnightworks-agent-providers` to the `v0.1.3` release wheel of
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers).

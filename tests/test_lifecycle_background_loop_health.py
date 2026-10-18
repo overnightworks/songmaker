@@ -54,6 +54,7 @@ def test_successful_fake_tick_resets_a_failing_loop() -> None:
 
 
 def test_loop_error_detail_does_not_expose_its_message() -> None:
+    # defect:#1590 — cleanup loop replaces TTL reconciliation.
     registry = BackgroundLoopRegistry()
 
     registry.record_failure(
@@ -66,11 +67,11 @@ def test_loop_error_detail_does_not_expose_its_message() -> None:
     assert "api_key" not in health.last_error
 
     registry.mark_dead(
-        BackgroundLoopName.SESSION_SYNC,
+        BackgroundLoopName.SESSION_CLEANUP,
         asyncio.CancelledError("token=top-secret"),
     )
 
-    health = registry.loop_health()[BackgroundLoopName.SESSION_SYNC]
+    health = registry.loop_health()[BackgroundLoopName.SESSION_CLEANUP]
     assert health.last_error == "CancelledError"
     assert "token" not in health.last_error
 
@@ -127,27 +128,29 @@ def test_score_backfill_generation_failure_marks_the_tick_failed(monkeypatch) ->
 def test_finished_lifecycle_loop_is_dead_outside_shutdown(
     tmp_path, monkeypatch, mock_arq_pool, caplog,
 ) -> None:
+    # defect:#1590 — cleanup loop replaces TTL reconciliation.
     async def stopped_loop(_app) -> None:
         return None
 
-    monkeypatch.setattr(server, "session_sync_loop", stopped_loop)
+    monkeypatch.setattr(server, "session_cleanup_loop", stopped_loop)
     client, _ = make_test_app(tmp_path)
     with client:
         response = client.get("/health")
 
-    health = response.json()["background_loops"][BackgroundLoopName.SESSION_SYNC]
+    health = response.json()["background_loops"][BackgroundLoopName.SESSION_CLEANUP]
     assert health["state"] == BackgroundLoopStatus.DEAD
     assert health["last_error"] == "task ended"
-    assert "Background loop session_sync ended" in caplog.text
+    assert "Background loop session_cleanup ended" in caplog.text
 
 
 def test_failed_lifecycle_loop_logs_its_exception(
     tmp_path, monkeypatch, mock_arq_pool, caplog,
 ) -> None:
+    # defect:#1590 — cleanup loop replaces TTL reconciliation.
     async def failed_loop(_app) -> None:
         raise RuntimeError("redis unavailable")
 
-    monkeypatch.setattr(server, "session_sync_loop", failed_loop)
+    monkeypatch.setattr(server, "session_cleanup_loop", failed_loop)
     client, _ = make_test_app(tmp_path)
     with client:
         response = client.get("/health")
@@ -155,7 +158,7 @@ def test_failed_lifecycle_loop_logs_its_exception(
     assert response.status_code == 200
     matching_records = [
         record for record in caplog.records
-        if record.getMessage() == "Background loop session_sync ended"
+        if record.getMessage() == "Background loop session_cleanup ended"
     ]
     assert len(matching_records) == 1
     assert isinstance(matching_records[0].exc_info[1], RuntimeError)
@@ -164,6 +167,7 @@ def test_failed_lifecycle_loop_logs_its_exception(
 def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
     tmp_path, monkeypatch, mock_arq_pool,
 ) -> None:
+    # defect:#1590 — cleanup loop replaces TTL reconciliation.
     import songmaker_cli.arq_pool as arq_pool
 
     monkeypatch.setenv("COVER_EXECUTOR", "music")
@@ -176,7 +180,7 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
         assert before_cancellation.json()["status"] == "ok"
 
         tasks = client.app.state.background_loop_tasks
-        task = tasks[BackgroundLoopName.SESSION_SYNC]
+        task = tasks[BackgroundLoopName.SESSION_CLEANUP]
 
         async def cancel_and_wait_for_loop() -> None:
             task.cancel()
@@ -189,11 +193,11 @@ def test_externally_cancelling_one_lifecycle_loop_marks_only_that_loop_dead(
     assert after_cancellation.status_code == 200
     assert after_cancellation.json()["status"] == "ok"
     loop_health = after_cancellation.json()["background_loops"]
-    assert loop_health[BackgroundLoopName.SESSION_SYNC]["state"] == BackgroundLoopStatus.DEAD
+    assert loop_health[BackgroundLoopName.SESSION_CLEANUP]["state"] == BackgroundLoopStatus.DEAD
     assert {
         name: health["state"]
         for name, health in loop_health.items()
-        if name != BackgroundLoopName.SESSION_SYNC
+        if name != BackgroundLoopName.SESSION_CLEANUP
     } == {
         BackgroundLoopName.RESOURCE_EVENT_CLEANUP: BackgroundLoopStatus.OK,
         BackgroundLoopName.SCORE_BACKFILL: BackgroundLoopStatus.OK,

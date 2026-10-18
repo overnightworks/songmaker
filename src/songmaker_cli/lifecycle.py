@@ -1,4 +1,4 @@
-"""Application lifecycle helpers -- admin auto-setup and session sync."""
+"""Application lifecycle helpers -- admin auto-setup and session cleanup."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 import shutil
 import subprocess
 import threading
-from collections.abc import Collection, Mapping
+from collections.abc import Awaitable, Callable, Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from typing import Final, Literal
@@ -15,8 +15,6 @@ from typing import Final, Literal
 from arq.connections import ArqRedis
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
-from webauth.config import installed_web_auth_config
-from webauth.ports import SessionCache
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -414,7 +412,7 @@ async def backfill_unscored_generations(
 async def score_backfill_loop(app: FastAPI) -> None:
     """Run the throttled score-backfill tick for the server lifetime.
 
-    Uses the same single-flight Redis lock idiom as ``session_sync_loop`` so
+    Uses a single-flight Redis lock so
     only one web replica dispatches a given tick's batch.
     """
     from songmaker_cli.arq_pool import get_arq_pool
@@ -516,8 +514,7 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
     """Run stale-job reaping and LoRA reconciliation for the server lifetime.
 
     The lifecycle loop is the one periodic job-reaper owner. It uses the same
-    single-flight Redis lock idiom as ``session_sync_loop`` /
-    ``score_backfill_loop`` so one web replica handles each tick.
+    single-flight Redis lock idiom as ``score_backfill_loop`` so one web replica handles each tick.
     """
     ctx: AppContext = app.state.ctx
     registry = background_loop_registry(app)
@@ -649,111 +646,38 @@ async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified
     return "ok"
 
 
-def _sync_sessions(ctx: AppContext, session_cache: SessionCache) -> int:
-    """Sync Redis session TTLs to the database. Returns count of synced sessions.
-
-    Removes cached sessions for inactive users or sessions missing from the DB.
-    Also purges expired sessions from the database (they accumulate because Redis
-    evicts them on TTL but the DB rows stay forever).
-    """
-    from songmaker_cli.db.models import User as UserModel
-    from songmaker_cli.db.models import UserSession
+def _cleanup_sessions(ctx: AppContext) -> int:
+    """Commit expired-session removal without changing surviving sessions."""
     from songmaker_cli.db.queries import delete_expired_sessions
-
-    active = session_cache.get_all_sessions()
 
     with ctx.db() as db:
         purged = delete_expired_sessions(db)
-        if purged:
-            log.info("Session sync: purged %d expired sessions from DB", purged)
-
-        if not active:
-            db.commit()
-            return 0
-
-        session_ids = [sid for sid, _ in active]
-        ttl_by_id = dict(active)
-        synced = 0
-
-        db_sessions = (
-            db.query(UserSession)
-            .filter(UserSession.id.in_(session_ids))
-            .all()
-        )
-        db_session_by_id = {s.id: s for s in db_sessions}
-        found_user_ids = {s.user_id for s in db_sessions}
-
-        inactive_user_ids: set[str] = set()
-        if found_user_ids:
-            inactive_users = (
-                db.query(UserModel.id)
-                .filter(
-                    UserModel.id.in_(found_user_ids),
-                    UserModel.is_active.is_(False),
-                )
-                .all()
-            )
-            inactive_user_ids = {u.id for u in inactive_users}
-
-        for session_id in session_ids:
-            user_session = db_session_by_id.get(session_id)
-            if not user_session:
-                cached = session_cache.get(session_id)
-                if cached:
-                    session_cache.delete(session_id, cached.user_id)
-                continue
-            if user_session.user_id in inactive_user_ids:
-                session_cache.delete_user_sessions(user_session.user_id)
-                continue
-            ttl = ttl_by_id[session_id]
-            real_expires = datetime.now(timezone.utc) + timedelta(seconds=ttl)
-            user_session.expires_at = real_expires
-            synced += 1
         db.commit()
+    return purged
 
-    return synced
 
-
-async def session_sync_loop(app: FastAPI) -> None:
-    from songmaker_cli.constants import (
-        REDIS_SESSION_SYNC_INTERVAL_SECONDS,
-        SESSION_SYNC_LOCK_KEY,
-        SESSION_SYNC_LOCK_TTL_SECONDS,
-    )
+async def session_cleanup_loop(
+    app: FastAPI, *, wait: Callable[[float], Awaitable[None]] = asyncio.sleep,
+) -> None:
+    from songmaker_cli.constants import SESSION_CLEANUP_INTERVAL_SECONDS
 
     ctx: AppContext = app.state.ctx
-    session_cache = installed_web_auth_config(app).session_cache
-    if session_cache is None:
-        raise RuntimeError(
-            "Session sync needs the session cache the application installs at startup.",
-        )
     registry = background_loop_registry(app)
 
     while True:
-        await asyncio.sleep(REDIS_SESSION_SYNC_INTERVAL_SECONDS)
+        await wait(SESSION_CLEANUP_INTERVAL_SECONDS)
         try:
-            acquired = await asyncio.to_thread(
-                ctx.redis.set,
-                SESSION_SYNC_LOCK_KEY, "1",
-                ex=SESSION_SYNC_LOCK_TTL_SECONDS, nx=True,
-            )
-            if not acquired:
-                registry.record_success(BackgroundLoopName.SESSION_SYNC)
-                continue
-            try:
-                synced = await asyncio.to_thread(_sync_sessions, ctx, session_cache)
-                if synced:
-                    log.info("Session sync: updated %d sessions", synced)
-            finally:
-                await asyncio.to_thread(ctx.redis.delete, SESSION_SYNC_LOCK_KEY)
+            purged = await asyncio.to_thread(_cleanup_sessions, ctx)
+            if purged:
+                log.info("Session cleanup: purged %d expired sessions from DB", purged)
         except Exception as exc:
-            consecutive_failures = registry.record_failure(BackgroundLoopName.SESSION_SYNC, exc)
+            consecutive_failures = registry.record_failure(BackgroundLoopName.SESSION_CLEANUP, exc)
             if consecutive_failures >= BACKGROUND_LOOP_FAILURE_THRESHOLD:
                 log.exception(
-                    "Session sync failed %d consecutive times",
+                    "Session cleanup failed %d consecutive times",
                     consecutive_failures,
                 )
             else:
-                log.warning("Session sync failed", exc_info=True)
+                log.warning("Session cleanup failed", exc_info=True)
         else:
-            registry.record_success(BackgroundLoopName.SESSION_SYNC)
+            registry.record_success(BackgroundLoopName.SESSION_CLEANUP)

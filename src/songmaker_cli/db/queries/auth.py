@@ -142,6 +142,23 @@ def get_session_with_user(session: Session, session_id: str) -> UserSession | No
     return query.first()
 
 
+def renew_session(
+    session: Session,
+    session_id: str,
+    *,
+    expires_at: datetime,
+    ip_address: str,
+    user_agent: str,
+) -> bool:
+    """Renew an existing row without recreating a revoked session."""
+    rowcount = session.query(UserSession).filter_by(id=session_id).update({
+        UserSession.expires_at: expires_at,
+        UserSession.ip_address: ip_address,
+        UserSession.user_agent: user_agent,
+    })
+    return rowcount == 1
+
+
 def delete_session(session: Session, session_id: str) -> None:
     user_session = session.query(UserSession).filter_by(id=session_id).first()
     if user_session:

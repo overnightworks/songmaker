@@ -17,7 +17,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import (
+    login_and_csrf,
+    make_test_app,
+    queries_without_session_auth,
+    stored_hash,
+)
 from sqlalchemy import event
 
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
@@ -132,6 +137,7 @@ def test_list_songs_computes_generation_count_in_one_aggregate_query(
         event.remove(engine, "before_cursor_execute", all_handle)
         event.remove(engine, "before_cursor_execute", aggregate_handle)
 
+    all_queries = queries_without_session_auth(all_queries)
     assert resp.status_code == 200
     assert len(resp.json()["items"]) == 4
     assert len(aggregate_queries) == 1, (
@@ -244,6 +250,7 @@ def test_get_song_issues_one_flat_query_per_collection_not_a_cross_join(
     finally:
         event.remove(engine, "before_cursor_execute", all_handle)
 
+    all_queries = queries_without_session_auth(all_queries)
     assert resp.status_code == 200
     assert len(all_queries) == 4, (
         f"expected exactly 4 queries for GET /api/songs/{{id}} against this "

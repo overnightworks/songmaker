@@ -23,13 +23,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from webauth.middleware import (
-    BodySizeLimitMiddleware,
-    CsrfOriginMiddleware,
-    CsrfTokenMiddleware,
-    IpRateLimitMiddleware,
-    SecurityHeadersMiddleware,
-)
+from webauth.middleware import install_web_auth_middleware
 
 from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.app_context import (
@@ -65,7 +59,7 @@ from songmaker_cli.lifecycle import (
     report_codex_image_sandbox_runtime,
     resource_event_cleanup_loop,
     score_backfill_loop,
-    session_sync_loop,
+    session_cleanup_loop,
     stale_job_reaper_loop,
 )
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
@@ -182,7 +176,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     app.state.startup_time = datetime.now(timezone.utc)
     loop_tasks = [
-        (BackgroundLoopName.SESSION_SYNC, asyncio.create_task(session_sync_loop(app))),
+        (BackgroundLoopName.SESSION_CLEANUP, asyncio.create_task(session_cleanup_loop(app))),
         (
             BackgroundLoopName.RESOURCE_EVENT_CLEANUP,
             asyncio.create_task(resource_event_cleanup_loop(app)),
@@ -250,12 +244,12 @@ def create_app(
     #   1. ResourceStreamDeadlineMiddleware -- bound the complete resource SSE exchange
     #   2. SelectiveGZipMiddleware    -- compress the finished response body
     #   3. CORS middleware            -- add configured cross-origin policy
-    #   4. BodySizeLimitMiddleware    -- reject oversized bodies before processing
-    #   5. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   6. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #   7. CsrfTokenMiddleware        -- verify double-submit CSRF token
-    #   8. AccessLogMiddleware        -- log all requests (after security checks)
-    #   9. SecurityHeadersMiddleware  -- add security headers to responses
+    #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
+    #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
+    #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
+    #   7. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #   8. CsrfTokenMiddleware        -- verify double-submit CSRF token
+    #   9. AccessLogMiddleware        -- log all requests (after security checks)
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the true outermost layer) and outside everything else, on purpose:
@@ -278,14 +272,15 @@ def create_app(
     script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     settings = get_settings()
     csrf_policy = build_csrf_policy()
-    app.add_middleware(
-        SecurityHeadersMiddleware, policy=build_security_headers_policy(script_hashes),
-    )
     app.add_middleware(AccessLogMiddleware)
-    app.add_middleware(CsrfTokenMiddleware, policy=csrf_policy)
-    app.add_middleware(CsrfOriginMiddleware, policy=csrf_policy)
-    app.add_middleware(IpRateLimitMiddleware, policy=build_rate_limit_policy(settings))
-    app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(settings))
+    install_web_auth_middleware(
+        app,
+        security_headers=build_security_headers_policy(script_hashes),
+        body_size=build_body_size_policy(settings),
+        rate_limit=build_rate_limit_policy(settings),
+        csrf_origin=csrf_policy,
+        csrf_token=csrf_policy,
+    )
 
     app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
         CORSMiddleware,

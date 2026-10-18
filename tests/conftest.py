@@ -24,6 +24,7 @@ import struct  # noqa: E402
 import subprocess  # noqa: E402
 import wave  # noqa: E402
 from collections.abc import Callable, Mapping, Sequence  # noqa: E402
+from contextlib import contextmanager  # noqa: E402
 from http.client import HTTPResponse  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -36,6 +37,7 @@ import pytest  # noqa: E402
 import structlog  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.dependencies import AuthenticatedUser  # noqa: E402
@@ -168,6 +170,27 @@ def generation_write_failure_case(request):
     """S8-A; S5-B, L6/L10: New writes select the line and type together."""
     error_class, cause, _, message, error_type = request.param
     return error_class(cause), message, error_type
+
+
+def queries_without_session_auth(statements: Sequence[str]) -> list[str]:
+    """defect:#1590: route budgets exclude DB session lookup and touch SQL.
+
+    Session authentication owns this per-request cost independently of the
+    route's row count; all other statements remain in the route budget.
+    """
+    session_prefixes = ("select user_sessions.", "update user_sessions set ")
+    removed, kept = [], []
+    for statement in statements:
+        normalized = " ".join(statement.lower().split())
+        if normalized.startswith(session_prefixes):
+            removed.append(normalized)
+        else:
+            kept.append(statement)
+    expected = ("select user_sessions.", "update user_sessions set expires_at")
+    assert len(removed) == 2 and all(
+        sum(statement.startswith(prefix) for statement in removed) == 1 for prefix in expected
+    ), f"Expected exactly one {expected[0]!r} and one {expected[1]!r}; removed: {removed!r}"
+    return kept
 
 
 def web_client(app, **kwargs) -> TestClient:
@@ -763,3 +786,54 @@ def fake_queue_stream_build(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(queue_streams, "probe_audio_duration", lambda _path: 10.0)
     monkeypatch.setattr(queue_streams, "run_ffmpeg_concat", _write_stream)
+
+
+@pytest.fixture
+def session_deletion_failure():
+    """defect:#1590: fail a session DELETE after it executes, before commit."""
+    from songmaker_cli.db.models import UserSession
+
+    @contextmanager
+    def fail_deletion(factory, *, after=1, message="session deletion failed"):
+        with factory() as db:
+            engine = db.get_bind()
+        deletions = 0
+
+        def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
+            nonlocal deletions
+            if (
+                context.isdelete
+                and context.compiled.statement.table.name == UserSession.__tablename__
+            ):
+                deletions += 1
+                if deletions == after:
+                    raise RuntimeError(message)
+
+        event.listen(engine, "after_cursor_execute", fail_after_delete)
+        try:
+            yield
+        finally:
+            event.remove(engine, "after_cursor_execute", fail_after_delete)
+
+    return fail_deletion
+
+
+@pytest.fixture
+def session_commit_failure():
+    """defect:#1590: fail matching commits, optionally observing uncommitted state."""
+    @contextmanager
+    def fail_commit(target, *, message="commit failed", observe=None, when=None):
+        def refuse_commit(session):
+            if when is not None and not when(session):
+                return
+            if observe is not None:
+                observe(session)
+            raise RuntimeError(message)
+
+        event.listen(target, "before_commit", refuse_commit)
+        try:
+            yield
+        finally:
+            event.remove(target, "before_commit", refuse_commit)
+
+    return fail_commit

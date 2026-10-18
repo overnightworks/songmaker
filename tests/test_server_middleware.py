@@ -7,13 +7,17 @@ import gzip as gzip_stdlib
 import io
 import json
 import logging
+from dataclasses import replace
 from pathlib import Path
 
+import anyio
 import pytest
 from conftest import make_test_app
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
+from webauth.config import install_web_auth_config, installed_web_auth_config
+from webauth.cookies import generate_csrf_token, sign_session_id
 from webauth.middleware import (
     BodySizeLimitMiddleware,
     CsrfOriginMiddleware,
@@ -264,7 +268,7 @@ def test_streaming_json_response_is_compressed_chunk_by_chunk() -> None:
 def test_created_app_stacks_its_middleware_in_the_documented_security_order(
     tmp_path: Path,
 ) -> None:
-    """defect:#1521 -- the middleware order is security-critical and was only a comment.
+    """defect:#1590, defect:#1521 -- pin the security-critical middleware order.
 
     Outermost first, because Starlette runs the last-added layer first. CORS is
     registered for every configuration (`CORS_ORIGIN` only picks its policy), so
@@ -277,12 +281,12 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
         ResourceStreamDeadlineMiddleware,
         SelectiveGZipMiddleware,
         CORSMiddleware,
+        SecurityHeadersMiddleware,
         BodySizeLimitMiddleware,
         IpRateLimitMiddleware,
         CsrfOriginMiddleware,
         CsrfTokenMiddleware,
         AccessLogMiddleware,
-        SecurityHeadersMiddleware,
     ]
 
 
@@ -437,3 +441,270 @@ def test_access_log_passes_non_http_scopes_through(
         asyncio.run(drive())
     assert messages == [outgoing]
     assert not [r for r in caplog.records if r.name == "songmaker_cli.middleware.access_log"]
+
+
+@pytest.fixture
+def security_exchange(tmp_path: Path):
+    """Drive the installed host stack without a TestClient worker thread."""
+    client, _ = make_test_app(tmp_path)
+    app = client.app
+
+    @app.post("/api/internal/security-proof")
+    async def read_body(request: Request) -> Response:
+        await request.body()
+        return Response(b"ok")
+
+    @app.post("/api/security-proof")
+    async def protected() -> Response:
+        return Response(b"ok")
+
+    @app.get("/api/security-proof/failure")
+    async def fail() -> Response:
+        raise RuntimeError("route failed")
+
+    @app.get("/api/security-proof/validate")
+    async def validate(count: int) -> Response:
+        return Response(str(count))
+
+    async def exchange(
+        path="/api/internal/security-proof", method="POST", headers=(), body=b"",
+        *, expected_error=None,
+    ):
+        messages = []
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        async def send(message):
+            messages.append(message)
+
+        scope = {
+            "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
+            "http_version": "1.1", "scheme": "http", "method": method,
+            "path": path, "raw_path": path.encode(), "query_string": b"",
+            "root_path": "", "headers": list(headers),
+            "client": ("203.0.113.9", 1234), "server": ("localhost", 80),
+        }
+        if expected_error is None:
+            await app(scope, receive, send)
+        else:
+            with pytest.raises(expected_error):
+                await app(scope, receive, send)
+        starts = [m for m in messages if m["type"] == "http.response.start"]
+        assert len(starts) == 1
+        return (
+            starts[0]["status"], dict(starts[0]["headers"]),
+            b"".join(m.get("body", b"") for m in messages if m["type"] == "http.response.body"),
+        )
+
+    return app, exchange
+
+
+@pytest.mark.parametrize("outcome", ["declared", "streamed", "error", "origin", "token"])
+def test_installed_stack_adds_security_headers_to_refusals(security_exchange, outcome):
+    """defect:#1590 -- 413, unhandled 500 and both CSRF 403 paths keep policy headers."""
+    from songmaker_cli.settings import get_settings
+
+    app, exchange = security_exchange
+    arguments = {}
+    expected = 403
+    if outcome in {"declared", "streamed"}:
+        size = get_settings().max_request_body_bytes + 1
+        arguments = (
+            {"headers": [(b"content-length", str(size).encode())]}
+            if outcome == "declared" else {"body": b"x" * size}
+        )
+        expected = 413
+    elif outcome == "error":
+        app.debug = True
+        arguments = {
+            "path": "/api/security-proof/failure", "method": "GET",
+            "expected_error": RuntimeError,
+        }
+        expected = 500
+    elif outcome == "origin":
+        arguments = {"headers": [(b"origin", b"https://foreign.example")]}
+    else:
+        arguments = {"path": "/api/security-proof"}
+    status, headers, body = asyncio.run(exchange(**arguments))
+    assert status == expected
+    assert headers[b"x-content-type-options"] == b"nosniff"
+    assert headers[b"x-frame-options"] == b"DENY"
+    assert headers[b"referrer-policy"] == b"strict-origin-when-cross-origin"
+    assert b"content-security-policy" in headers
+    assert b"permissions-policy" in headers
+    assert headers[b"cache-control"] == b"no-store"
+    if outcome == "error":
+        assert body == b"Internal Server Error"
+
+
+def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
+    monkeypatch, tmp_path: Path,
+):
+    """defect:#1590 -- the rate limiter runs before CSRF and remains inside headers."""
+    import httpx
+
+    monkeypatch.setenv("IP_RATE_LIMIT", "1")
+    client, _ = make_test_app(tmp_path)
+
+    async def drive():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=client.app), base_url="http://localhost",
+        ) as http:
+            for expected in (403, 429):
+                response = await http.post(
+                    "/api/auth/login", headers={"Origin": "https://foreign.example"},
+                )
+                assert response.status_code == expected
+                assert response.headers["x-content-type-options"] == "nosniff"
+                assert response.headers["x-frame-options"] == "DENY"
+                assert "content-security-policy" in response.headers
+                if expected == 429:
+                    assert int(response.headers["retry-after"]) > 0
+
+    asyncio.run(drive())
+
+
+@pytest.mark.parametrize(("allowed", "origin", "expected"), [
+    ("app.example", "https://app.example", 200),
+    ("app.example", "https://app.example:8443", 200),
+    ("app.example:8443", "https://app.example:8443", 200),
+    ("app.example:8443", "https://app.example:443", 403),
+    ("app.example", "https://app.example.foreign", 403),
+    ("app.example", "https://user@app.example", 403),
+    ("app.example", "https://user:password@app.example", 403),
+    ("app.example", "https:///missing", 403),
+    ("*.example", "https://sub.example:8443", 200),
+    ("*.example", "https://sub.example.foreign", 403),
+    ("[::1]", "http://[::1]:8080", 200),
+    ("[::1]:8080", "http://[::1]:8080", 200),
+    ("[::1]:8080", "http://[::1]:8081", 403),
+    ("[::1]", "http://user@[::1]", 403),
+    ("[::1]", "http://[::1", 403),
+])
+def test_host_origin_parser_applies_exact_port_pattern_and_ipv6_rules(
+    security_exchange, monkeypatch, allowed, origin, expected,
+):
+    """defect:#1590 -- host configuration feeds the library's parsed origin checks."""
+    from songmaker_cli.server import parse_allowed_hosts
+    from songmaker_cli.settings import get_settings
+
+    app, exchange = security_exchange
+    monkeypatch.setenv("ALLOWED_HOSTS", allowed)
+    get_settings.cache_clear()
+    exact, patterns = parse_allowed_hosts()
+    install_web_auth_config(app, replace(
+        installed_web_auth_config(app), allowed_hosts_exact=exact,
+        allowed_hosts_patterns=tuple(patterns),
+    ))
+    status, _, _ = asyncio.run(exchange(headers=[(b"origin", origin.encode())]))
+    assert status == expected
+
+
+@pytest.mark.parametrize("path", ["/api/auth/login", "/api/auth/setup", "/api/internal/proof"])
+def test_token_exempt_paths_still_reject_foreign_origins(security_exchange, path):
+    """defect:#1590 -- every host token exemption remains behind origin protection."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange(path, headers=[(b"origin", b"https://foreign.example")]))
+    assert status == 403
+
+
+@pytest.mark.parametrize(("cookie_kind", "token_kind", "expected"), [
+    ("valid", "valid", 200),
+    ("valid", "missing", 403),
+    ("valid", "wrong", 403),
+    ("valid", "non-ascii", 403),
+    ("tampered", "valid", 403),
+    ("non-ascii", "valid", 403),
+])
+def test_installed_csrf_stack_rejects_bad_tokens_and_cookies_without_500(
+    security_exchange, cookie_kind, token_kind, expected,
+):
+    """defect:#1590 -- malformed input cannot turn a CSRF refusal into an exception."""
+    app, exchange = security_exchange
+    config = installed_web_auth_config(app)
+    cookie = sign_session_id("proof-session", config.signing_key)
+    token = generate_csrf_token("proof-session", config.signing_key)
+    if cookie_kind == "tampered":
+        cookie = "altered-" + cookie
+    elif cookie_kind == "non-ascii":
+        cookie = "é"
+    if token_kind == "wrong":
+        token = "wrong"
+    elif token_kind == "non-ascii":
+        token = "é"
+    headers = [
+        (b"cookie", f"{config.session_cookie_name}={cookie}".encode("latin-1")),
+        (b"origin", b"http://localhost"),
+    ]
+    if token_kind != "missing":
+        headers.append((config.csrf_header_name.encode(), token.encode("latin-1")))
+    status, _, _ = asyncio.run(exchange("/api/security-proof", headers=headers))
+    assert status == expected
+
+
+@pytest.mark.parametrize(("path", "expected"), [
+    ("/api/security-proof/validate", 422), ("/api/security-proof/missing", 404),
+])
+def test_installed_stack_preserves_host_error_handlers(security_exchange, path, expected):
+    """defect:#1590 -- validation and API 404 responses retain the host's JSON contract."""
+    _, exchange = security_exchange
+    status, headers, body = asyncio.run(exchange(path, method="GET"))
+    assert status == expected
+    assert headers[b"content-type"] == b"application/json"
+    detail = json.loads(body)["detail"]
+    assert detail == ("Validation error on: query.count" if expected == 422 else "Not Found")
+
+
+def test_cors_preflight_remains_outside_security_stack(security_exchange):
+    """defect:#1590 -- a CORS preflight keeps its policy, bypassing the inner stack."""
+    _, exchange = security_exchange
+    status, headers, _ = asyncio.run(exchange(method="OPTIONS", headers=[
+        (b"origin", b"http://localhost"), (b"access-control-request-method", b"POST"),
+    ]))
+    assert status == 200
+    assert headers[b"access-control-allow-origin"] == b"http://localhost"
+    assert b"x-content-type-options" not in headers
+
+
+@pytest.mark.parametrize("failure", ["blocked-start", "body-after-start"])
+def test_body_limit_bounds_start_and_never_restarts_a_stream(failure):
+    """defect:#1590 -- stalled starts time out; an oversized late body aborts the stream."""
+    from songmaker_cli.request_policies import build_body_size_policy
+    from songmaker_cli.settings import get_settings
+
+    policy = build_body_size_policy(get_settings())
+    assert policy.start_send_seconds == 10.0
+    policy = replace(policy, default_max_bytes=1, start_send_seconds=0.01)
+    messages = []
+
+    async def app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"first", "more_body": True})
+        await receive()
+
+    async def receive():
+        return {"type": "http.request", "body": b"oversized", "more_body": False}
+
+    async def send(message):
+        messages.append(message)
+        if failure == "blocked-start":
+            await anyio.sleep_forever()
+
+    async def drive():
+        middleware = BodySizeLimitMiddleware(app, policy=policy)
+        scope = {"type": "http", "method": "POST", "path": "/api/proof", "headers": []}
+        with anyio.fail_after(1):
+            with pytest.raises(TimeoutError if failure == "blocked-start" else Exception) as raised:
+                await middleware(scope, receive, send)
+            if failure == "body-after-start":
+                assert not isinstance(raised.value, TimeoutError)
+
+    asyncio.run(drive())
+    assert [m["status"] for m in messages if m["type"] == "http.response.start"] == [200]
+    if failure == "body-after-start":
+        assert messages[-1] == {
+            "type": "http.response.body", "body": b"first", "more_body": True,
+        }
+    else:
+        assert len(messages) == 1

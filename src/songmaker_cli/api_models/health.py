@@ -26,7 +26,6 @@ class HealthSignals:
     scoring_running: bool
     music_queue_depth: int
     scoring_queue_depth: int
-    session_cache_failures: int
     workers_total: int
     workers_online: int
     queue_depth_cap_reached: bool
@@ -58,7 +57,6 @@ class HealthResponse(BaseModel):
     scoring_queue_depth: int
     db: Literal["ok", "error"]
     redis: Literal["ok", "error"]
-    redis_session_cache_failures: int
     acestep: Literal["healthy", "unknown", "unhealthy"]
     acestep_workers_total: int
     acestep_workers_online: int
@@ -107,7 +105,6 @@ class HealthResponse(BaseModel):
             scoring_queue_depth=signals.scoring_queue_depth,
             db="ok" if signals.db_ok else "error",
             redis="ok" if signals.redis_ok else "error",
-            redis_session_cache_failures=signals.session_cache_failures,
             acestep=acestep,
             acestep_workers_total=signals.workers_total,
             acestep_workers_online=signals.workers_online,

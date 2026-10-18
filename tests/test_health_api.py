@@ -222,19 +222,20 @@ def test_health_defaults_codex_image_sandbox_runtime_to_unverified_before_a_boot
 
 
 def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_arq_pool) -> None:
+    # defect:#1590 — cleanup loop replaces TTL reconciliation.
     client, _ = make_test_app(tmp_path)
     with client:
         registry = client.app.state.background_loop_registry
         for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
             registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
-        registry.mark_dead(BackgroundLoopName.SESSION_SYNC, None)
+        registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
 
         health = client.get("/health")
         metrics = client.get("/metrics")
 
     assert health.status_code == 200
     assert health.json()["background_loops"] == {
-        "session_sync": {
+        "session_cleanup": {
             "state": "dead", "consecutive_failures": 0, "last_error": "task ended",
         },
         "resource_event_cleanup": {
@@ -256,7 +257,7 @@ def test_health_and_metrics_report_background_loop_health(tmp_path: Path, mock_a
     assert metrics.status_code == 200
     assert 'songmaker_background_loop_consecutive_failures{loop="score_backfill"} 3' in metrics.text
     assert 'songmaker_background_loop_alive{loop="score_backfill"} 1' in metrics.text
-    assert 'songmaker_background_loop_alive{loop="session_sync"} 0' in metrics.text
+    assert 'songmaker_background_loop_alive{loop="session_cleanup"} 0' in metrics.text
 
 
 def test_health_reports_the_gates_most_recent_verdict_not_a_boot_snapshot(
@@ -357,17 +358,17 @@ def health_client(tmp_path, mock_arq_pool):
 
 
 @pytest.fixture
-def health_json_before_refactor() -> bytes:
+def expected_health_json() -> bytes:
     return (
         b'{"status":"$status","music_worker":"running","scoring_worker":"running",'
         b'"music_queue_depth":3,"scoring_queue_depth":2,"db":"ok","redis":"ok",'
-        b'"redis_session_cache_failures":0,"acestep":"$acestep",'
+        b'"acestep":"$acestep",'
         b'"acestep_workers_total":1,"acestep_workers_online":$online,'
         b'"queue_depth_cap_reached":false,"uptime_seconds":123,'
         b'"claude_cli_tool_surface":"$surface","codex_image_sandbox_runtime":"unverified",'
         b'"background_loops":{'
         b'"cover_runner":{"state":"ok","consecutive_failures":0,"last_error":null},'
-        b'"session_sync":{"state":"dead","consecutive_failures":0,"last_error":"task ended"},'
+        b'"session_cleanup":{"state":"dead","consecutive_failures":0,"last_error":"task ended"},'
         b'"resource_event_cleanup":{"state":"ok","consecutive_failures":0,"last_error":null},'
         b'"score_backfill":{"state":"failing","consecutive_failures":3,"last_error":"RuntimeError"},'
         b'"stale_job_reaper":{"state":"ok","consecutive_failures":0,"last_error":null},'
@@ -382,9 +383,10 @@ def health_json_before_refactor() -> bytes:
     ids=["worker-online", "worker-offline"],
 )
 def test_health_preserves_response_bytes(
-    health_client, health_json_before_refactor, monkeypatch,
+    health_client, expected_health_json, monkeypatch,
     tool_surface, worker_online, overall_status, acestep_status,
 ) -> None:
+    # defect:#1590 — health exposes only current service signals.
     import songmaker_cli.arq_pool as arq_mod
 
     now = datetime(2026, 9, 20, tzinfo=timezone.utc)
@@ -395,7 +397,7 @@ def test_health_preserves_response_bytes(
     )
     monkeypatch.setattr(provider, "claude_cli_tool_surface_health", lambda: tool_surface)
     registry = health_client.app.state.background_loop_registry
-    registry.mark_dead(BackgroundLoopName.SESSION_SYNC, None)
+    registry.mark_dead(BackgroundLoopName.SESSION_CLEANUP, None)
     for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
         registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
 
@@ -410,7 +412,7 @@ def test_health_preserves_response_bytes(
         response = health_client.get("/health")
 
     expected = (
-        health_json_before_refactor
+        expected_health_json
         .replace(b"$status", overall_status.encode())
         .replace(b"$acestep", acestep_status.encode())
         .replace(b"$online", str(int(worker_online)).encode())
@@ -577,11 +579,11 @@ def prometheus_output_before_refactor(without_probes) -> bytes:
         b'per background loop.\n'
         b'# TYPE songmaker_background_loop_consecutive_failures gauge\n'
         b'songmaker_background_loop_consecutive_failures{loop="score_backfill"} 3\n'
-        b'songmaker_background_loop_consecutive_failures{loop="session_sync"} 0\n'
+        b'songmaker_background_loop_consecutive_failures{loop="session_cleanup"} 0\n'
         b'# HELP songmaker_background_loop_alive Whether each background loop task is alive.\n'
         b'# TYPE songmaker_background_loop_alive gauge\n'
         b'songmaker_background_loop_alive{loop="score_backfill"} 1\n'
-        b'songmaker_background_loop_alive{loop="session_sync"} 0\n'
+        b'songmaker_background_loop_alive{loop="session_cleanup"} 0\n'
     )
 
 
@@ -589,6 +591,7 @@ def prometheus_output_before_refactor(without_probes) -> bytes:
 def test_prometheus_output_is_byte_identical(
     prometheus_output_before_refactor, without_probes,
 ) -> None:
+    # defect:#1590 — cleanup loop replaces TTL reconciliation.
     metrics = _PrometheusMetrics(
         http_snapshot={
             "http_requests_total": {"POST 201": 3, "GET 200": 10},
@@ -609,8 +612,8 @@ def test_prometheus_output_is_byte_identical(
         acestep_worker_queue_depths={"worker-b": 3, "worker-a": 1},
         acestep_worker_vram_used_gb={"worker-b": 0.0, "worker-a": 12.5},
         acestep_worker_vram_total_gb={"worker-b": 16.0, "worker-a": 24.0},
-        background_loop_consecutive_failures={"session_sync": 0, "score_backfill": 3},
-        background_loop_alive={"session_sync": False, "score_backfill": True},
+        background_loop_consecutive_failures={"session_cleanup": 0, "score_backfill": 3},
+        background_loop_alive={"session_cleanup": False, "score_backfill": True},
     )
     if without_probes:
         metrics = replace(

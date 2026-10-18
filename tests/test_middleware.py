@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from conftest import install_app_context, make_fake_redis, stored_hash, web_client
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.dependencies import AuthenticatedUser
 
@@ -252,126 +252,131 @@ def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
         entry = db.query(AuditLog).filter(AuditLog.action == "session_ua_change").first()
         assert entry is not None
 
-
-
-
-# -- Redis session cache integration -----------------------------------------
-
-
-def test_redis_cache_hit_skips_db_query(auth_app: TestClient, create_session_id) -> None:
-    from unittest.mock import patch
-
-    from webauth.ports import SessionCache
-
-    sid = create_session_id()
-    session_cache: SessionCache = installed_web_auth_config(auth_app.app).session_cache
-
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    auth_app.get("/protected")
-    assert session_cache.get(sid) is not None
-
-    with patch("songmaker_cli.auth_stores.get_session_with_user") as mock_db:
-        auth_app.get("/protected")
-        mock_db.assert_not_called()
-
-
-def test_redis_miss_falls_back_to_db_and_populates_cache(
-    auth_app: TestClient, create_session_id,
+@pytest.mark.parametrize("commit_fails", [False, True])
+def test_auth_transaction_commits_renewal_and_audit_together(
+    _db, commit_fails, session_commit_failure,
 ) -> None:
-    from webauth.ports import SessionCache
+    """defect:#1590: an auth commit failure leaves neither renewal nor audit."""
+    from starlette.requests import Request
 
-    sid = create_session_id()
-    session_cache: SessionCache = installed_web_auth_config(auth_app.app).session_cache
-
-    assert session_cache.get(sid) is None
-
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    resp = auth_app.get("/protected")
-    assert resp.status_code == 200
-
-    assert session_cache.get(sid) is not None
-
-
-def test_redis_failure_falls_back_to_db(_db, create_session_id) -> None:
-    from unittest.mock import MagicMock
-
-    broken_redis = MagicMock()
-    broken_redis.get.side_effect = ConnectionError("Redis down")
-
-    app = _build_auth_app(_db, redis=broken_redis)
-    client = web_client(app, cookies={})
-
-    sid = create_session_id()
-    client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    resp = client.get("/protected")
-    assert resp.status_code == 200
-
-
-def test_redis_path_checks_absolute_max_age(auth_app: TestClient, create_session_id) -> None:
-    import json
-
-    from songmaker_cli.constants import REDIS_SESSION_PREFIX
-
-    sid = create_session_id()
-
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    resp = auth_app.get("/protected")
-    assert resp.status_code == 200
-
-    key = f"{REDIS_SESSION_PREFIX}:{sid}"
-    redis = auth_app.app.state.ctx.redis
-    raw = json.loads(redis.get(key))
-    raw["created_at"] = (datetime.now(timezone.utc) - timedelta(days=91)).isoformat()
-    redis.set(key, json.dumps(raw), ex=86400)
-
-    resp = auth_app.get("/protected")
-    assert resp.status_code == 401
-
-
-def test_redis_path_ip_change_writes_audit(auth_app: TestClient, create_session_id) -> None:
     from songmaker_cli.db.models import AuditLog
+    from songmaker_cli.db.queries import get_session_with_user
 
-    sid = create_session_id()
-
-    factory = auth_app.app.state.ctx.db
-    with factory() as db:
-        from songmaker_cli.db.queries import get_session_with_user
-        sess = get_session_with_user(db, sid)
-        sess.ip_address = "1.2.3.4"
+    sid = _make_user_and_session(_db)
+    old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        record.expires_at = old_expiry
+        record.ip_address = "192.0.2.1"
+        record.user_agent = "Old/1.0"
         db.commit()
 
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    auth_app.get("/protected")
+    app = _build_auth_app(_db)
+    cookie = f"{DEFAULT_SESSION_COOKIE_NAME}={sign_session_id(sid, _TEST_SECRET)}"
+    request = Request({
+        "type": "http", "app": app, "method": "GET", "path": "/protected",
+        "headers": [(b"cookie", cookie.encode()), (b"user-agent", b"New/2.0")],
+        "client": ("192.0.2.2", 1234),
+    })
 
-    import json
+    failure_context = (
+        session_commit_failure(_db, message="Auth commit failed")
+        if commit_fails else nullcontext()
+    )
+    with failure_context:
+        if commit_fails:
+            with pytest.raises(RuntimeError, match="Auth commit failed"):
+                get_current_user(request)
+        else:
+            assert get_current_user(request).username.startswith("test_user")
 
-    from songmaker_cli.constants import REDIS_SESSION_PREFIX
-    key = f"{REDIS_SESSION_PREFIX}:{sid}"
-    raw = json.loads(auth_app.app.state.ctx.redis.get(key))
-    raw["ip_address"] = "9.9.9.9"
-    auth_app.app.state.ctx.redis.set(key, json.dumps(raw), ex=86400)
-
-    auth_app.get("/protected")
-
-    with factory() as db:
-        entry = db.query(AuditLog).filter(AuditLog.action == "session_ip_change").all()
-        ip_entries = [e for e in entry if "9.9.9.9" in (e.detail or "")]
-        assert len(ip_entries) >= 1
-
-
-def test_redis_path_refreshes_ttl(auth_app: TestClient, create_session_id) -> None:
-    from songmaker_cli.constants import REDIS_SESSION_PREFIX
-
-    sid = create_session_id()
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    auth_app.get("/protected")
-
-    key = f"{REDIS_SESSION_PREFIX}:{sid}"
-    redis = auth_app.app.state.ctx.redis
-    redis.expire(key, 100)
-
-    auth_app.get("/protected")
-    ttl = redis.ttl(key)
-    assert ttl > 100
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        expiry = record.expires_at.replace(tzinfo=timezone.utc)
+        if commit_fails:
+            assert expiry == old_expiry
+            assert (record.ip_address, record.user_agent) == ("192.0.2.1", "Old/1.0")
+            assert db.query(AuditLog).count() == 0
+        else:
+            assert expiry > old_expiry
+            assert (record.ip_address, record.user_agent) == ("192.0.2.2", "New/2.0")
+            assert {entry.action for entry in db.query(AuditLog).all()} == {
+                "session_ip_change", "session_ua_change",
+            }
 
 
+@pytest.mark.parametrize("endpoint_write", ["none", "uncommitted", "failed"])
+def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_write) -> None:
+    """defect:#1590: GET renewal/audit commit; endpoint work never piggybacks."""
+    from songmaker_cli.app_context import get_db_session
+    from songmaker_cli.db.models import AuditLog
+    from songmaker_cli.db.queries import get_session_with_user, get_user
+
+    sid = _make_user_and_session(_db)
+    old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        record.expires_at = old_expiry
+        record.ip_address = "192.0.2.1"
+        record.user_agent = "Old/1.0"
+        user_id = record.user_id
+        original_name = record.user.username
+        db.commit()
+
+    app = _build_auth_app(_db)
+
+    @app.get("/no-commit")
+    def no_commit(
+        user: AuthenticatedUser = Depends(get_current_user),
+        db: Session = Depends(get_db_session),
+    ):
+        if endpoint_write != "none":
+            get_user(db, user.id).username = "uncommitted-name"
+            db.flush()
+        if endpoint_write == "failed":
+            raise HTTPException(409, "Endpoint failed")
+        return {"username": user.username}
+
+    client = web_client(app, cookies={})
+    client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
+    response = client.get("/no-commit", headers={"user-agent": "New/2.0"})
+    assert response.status_code == (409 if endpoint_write == "failed" else 200)
+    assert "set-cookie" not in response.headers
+    with _db() as db:
+        record = get_session_with_user(db, sid)
+        assert record.expires_at.replace(tzinfo=timezone.utc) > old_expiry
+        assert record.user_agent == "New/2.0"
+        assert record.ip_address != "192.0.2.1"
+        assert get_user(db, user_id).username == original_name
+        assert {entry.action for entry in db.query(AuditLog).all()} == {
+            "session_ip_change", "session_ua_change",
+        }
+
+
+def test_failed_session_renewal_refuses_authentication(_db) -> None:
+    """defect:#1590: a vanished row makes touch return False and auth return 401."""
+    from sqlalchemy import event
+    from starlette.requests import Request
+
+    from songmaker_cli.db.models import UserSession
+
+    sid = _make_user_and_session(_db)
+    app = _build_auth_app(_db)
+    cookie = f"{DEFAULT_SESSION_COOKIE_NAME}={sign_session_id(sid, _TEST_SECRET)}"
+    request = Request({
+        "type": "http", "app": app, "method": "GET", "path": "/protected",
+        "headers": [(b"cookie", cookie.encode())], "client": ("192.0.2.1", 1234),
+    })
+    engine = _db.kw["bind"]
+
+    def remove_before_renewal(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().upper().startswith("UPDATE USER_SESSIONS"):
+            conn.execute(UserSession.__table__.delete().where(UserSession.id == sid))
+
+    event.listen(engine, "before_cursor_execute", remove_before_renewal)
+    try:
+        with pytest.raises(HTTPException) as refusal:
+            get_current_user(request)
+        assert refusal.value.status_code == 401
+    finally:
+        event.remove(engine, "before_cursor_execute", remove_before_renewal)

@@ -17,8 +17,6 @@ from songmaker_cli.app_context import (
 )
 from songmaker_cli.constants import (
     REDIS_RL_IP_PREFIX,
-    REDIS_SESSION_PREFIX,
-    REDIS_USER_SESSIONS_PREFIX,
     ROLE_ADMIN,
 )
 from songmaker_cli.db.engine import init_test_db
@@ -49,21 +47,6 @@ def test_the_configuration_carries_the_deployments_own_facts(ctx: AppContext) ->
     assert [pattern.pattern for pattern in config.allowed_hosts_patterns] == [
         r"^[^:]+\.example$",
     ]
-
-
-def test_the_session_cache_writes_to_songmakers_redis_keys(ctx: AppContext) -> None:
-    config = build_web_auth_config(ctx, get_settings())
-    now = datetime(2026, 9, 10, tzinfo=timezone.utc)
-
-    config.session_cache.store(
-        session_id="session-1", user_id="user-1", username="nina", role="user",
-        is_active=True, ip_address="1.2.3.4", user_agent="TestBrowser/1.0",
-        expires_at=now + timedelta(seconds=config.session_max_age_seconds),
-        created_at=now, max_age_seconds=config.session_max_age_seconds,
-    )
-
-    assert ctx.redis.exists(f"{REDIS_SESSION_PREFIX}:session-1")
-    assert ctx.redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:user-1") == {"session-1"}
 
 
 def test_the_rate_backend_spends_the_budget_in_songmakers_redis(ctx: AppContext) -> None:

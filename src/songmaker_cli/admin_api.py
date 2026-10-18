@@ -11,7 +11,6 @@ from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from webauth.config import web_auth_config
 from webauth.dependencies import AuthenticatedUser
 from webauth.ports import UnknownUserError, UsernameTakenError
 from webauth.session_ending import end_user_sessions
@@ -247,7 +246,7 @@ def hard_delete_user_endpoint(
                 f"username={user.username}, albums={album_count}, songs={len(song_ids)}",
             )
 
-            end_user_sessions(management.sessions, web_auth_config(request).session_cache, user_id)
+            end_user_sessions(management.sessions, user_id)
             paths, album_ids, playlist_ids = hard_delete_user(db, user_id)
     except UnknownUserError as error:
         raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error

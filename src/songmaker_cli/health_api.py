@@ -14,7 +14,6 @@ from agent_providers.claude import provider
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text
-from webauth.config import web_auth_config
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
 from songmaker_cli.api_models.health import HealthResponse, HealthSignals
@@ -336,10 +335,6 @@ async def health_check(request: Request) -> HealthResponse:
             workers_online += 1
 
     redis_ok = redis_client.redis_health(ctx.redis)
-    session_cache = web_auth_config(request).session_cache
-    session_cache_failures = (
-        session_cache.consecutive_failures if session_cache else 0
-    )
     return HealthResponse.from_signals(HealthSignals(
         db_ok=db_ok,
         redis_ok=redis_ok,
@@ -347,7 +342,6 @@ async def health_check(request: Request) -> HealthResponse:
         scoring_running=scoring_running,
         music_queue_depth=music_queue_depth,
         scoring_queue_depth=scoring_queue_depth,
-        session_cache_failures=session_cache_failures,
         workers_total=workers_total,
         workers_online=workers_online,
         queue_depth_cap_reached=queue_depth_cap_reached,

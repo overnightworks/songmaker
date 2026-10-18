@@ -1,9 +1,8 @@
 """songmaker's implementations of the `webauth` store ports.
 
 Each store wraps the matching query functions in `db/queries/auth.py` and
-carries the request's session, so everything the auth machinery writes lands
-in the transaction the endpoint already owns. None of them commits — the
-endpoint decides when the request's work becomes durable.
+carries its caller's session. None of them commits: authentication owns a
+short transaction, while endpoint and stream callers own their transactions.
 """
 
 from __future__ import annotations
@@ -40,6 +39,7 @@ from songmaker_cli.db.queries import (
     prune_overflow_sessions,
     record_audit,
     record_login_attempt,
+    renew_session,
     update_user,
     user_count,
 )
@@ -160,11 +160,12 @@ class DatabaseSessionRecordStore:
         ip_address: str,
         user_agent: str,
         now: datetime,
-    ) -> None:
-        record.ip_address = ip_address
-        record.user_agent = user_agent
-        record.expires_at = now + timedelta(seconds=self.session_max_age_seconds)
-        self.session.flush()
+    ) -> bool:
+        return renew_session(
+            self.session, record.id,
+            expires_at=now + timedelta(seconds=self.session_max_age_seconds),
+            ip_address=ip_address, user_agent=user_agent,
+        )
 
     def delete(self, session_id: str) -> None:
         delete_session(self.session, session_id)
