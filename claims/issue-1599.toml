@@ -1,8 +1,0 @@
-claim_id = "d30fbeeac05e46a0bdadf899a18494a8"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "ee1d648a62d138abf01be1577533ef0655af675d"
-branch = "claude/issue-1599-resume-retire-not-logout"
-scope = ["docs/architecture.md", "frontend/e2e/playback-retirement.spec.ts", "frontend/src/lib/stores/playbackResume.test.ts", "frontend/src/lib/stores/playbackResume.ts"]
-opened_commit = "16d97666638f04e822bfa39752295450b6771ac8"
-whole_reason = "One recovery-owner correction, its existing boundary regressions, public cross-tab proof and recovery documentation must land together."
