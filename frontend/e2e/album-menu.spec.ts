@@ -23,7 +23,7 @@ import {
 } from '../src/lib/constants';
 import { boundingBoxes, csrfHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
-import { readSeededLibrary, seedPlaylist } from './seed';
+import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';
 
 const LAPTOP_WIDTH_PX = 1280;
 const PHONE_WIDTH_PX = 390;
@@ -184,7 +184,7 @@ async function onOwnAlbum(
 	testInfo: TestInfo,
 	flow: (album: { id: string; title: string }) => Promise<void>
 ): Promise<void> {
-	const title = `Nightdrive ${shellOf(testInfo)} ${Date.now()}`;
+	const title = `E2E Nightdrive ${shellOf(testInfo)} ${Date.now()}`;
 	const created = await page.request.post('/api/albums', {
 		headers: await csrfHeaders(page),
 		data: { title, artist: '' }
@@ -195,11 +195,26 @@ async function onOwnAlbum(
 		await page.goto(`/album/${album.id}`);
 		await flow({ id: album.id, title });
 	} finally {
-		const removed = await page.request.delete(`/api/albums/${album.id}`, {
-			headers: await csrfHeaders(page)
-		});
-		expect(removed.ok()).toBe(true);
+		await archiveOwnedAlbum(page.request, album.id);
 	}
+}
+
+for (const outcome of ['success', 'throwing callback'] as const) {
+	test(`1346-F11-menu: ${outcome} retains an archived proof album`, async ({ page }, testInfo) => {
+		let albumId = '';
+		const failure = new Error('Menu proof callback failed');
+		const flow = onOwnAlbum(page, testInfo, async (album) => {
+			albumId = album.id;
+			expect(album.title).toMatch(/^E2E /);
+			if (outcome === 'throwing callback') throw failure;
+		});
+		if (outcome === 'throwing callback') await expect(flow).rejects.toBe(failure);
+		else await flow;
+
+		const retained = await page.request.get(`/api/albums/${albumId}`);
+		expect(retained.ok()).toBe(true);
+		expect(await retained.json()).toMatchObject({ id: albumId, is_archived: true });
+	});
 }
 
 test('Edit details changes title, subtitle and year; × and Back discard', async ({
