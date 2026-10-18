@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NEW_PLACE_OFFLINE } from '$lib/constants';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { get, writable } from 'svelte/store';
 import { toasts, addToast, addUndoToast, dismissToast } from './toast';
@@ -154,6 +155,18 @@ describe('toast store', () => {
 		reportResourceStreamReachable(true);
 		expect(get(toasts).map((toast) => toast.id)).toEqual(clears ? [] : [id]);
 	});
+
+	it.each([true, false])(
+		'1160-F36-cause: unmigrated new-album toast retains offline-first=%s clearing',
+		(offlineFirst) => {
+			if (offlineFirst) reportResourceStreamReachable(false);
+			const id = addToast(NEW_PLACE_OFFLINE, 'error');
+			expect(get(toasts).map((toast) => toast.id)).toEqual([id]);
+			if (!offlineFirst) reportResourceStreamReachable(false);
+			reportResourceStreamReachable(true);
+			expect(get(toasts).map((toast) => toast.id)).toEqual(offlineFirst ? [] : [id]);
+		}
+	);
 
 	it('1160-F36-lifetime: each outage clears its network failures and leaves unrelated notices', () => {
 		const refusal = addToast('Refused', 'error');

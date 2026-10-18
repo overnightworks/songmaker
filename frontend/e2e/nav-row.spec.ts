@@ -2,6 +2,7 @@ import { expect, test, type Locator } from '@playwright/test';
 import {
 	API_ERROR_GENERIC_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_EVENT_HELLO,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SEARCH_LABEL,
@@ -192,17 +193,27 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				const stream = `**${RESOURCE_EVENT_STREAM_PATH}**`;
 				const session = '**/api/auth/me';
 				let unreachable = false;
+				let streamStarted = false;
 				let loseStream!: () => void;
 				const streamLost = new Promise<void>((resolve) => {
 					loseStream = resolve;
 				});
 				await page.route(stream, async (route) => {
+					if (!streamStarted) {
+						streamStarted = true;
+						await route.fulfill({
+							contentType: 'text/event-stream',
+							body: `event: ${RESOURCE_EVENT_HELLO}\ndata: {"high_water_mark":"0"}\n\n`
+						});
+						return;
+					}
 					await streamLost;
 					await route.abort('internetdisconnected');
 				});
-				await page.route(session, (route) =>
-					unreachable ? route.abort('internetdisconnected') : route.continue()
-				);
+				await page.route(session, async (route) => {
+					if (streamStarted) await streamLost;
+					await (unreachable ? route.abort('internetdisconnected') : route.continue());
+				});
 				const reason =
 					failure === 'network' ? API_ERROR_GENERIC_MESSAGE : 'Generation service unavailable';
 				await page.route('**/api/songs/*/active-generation', (route) =>

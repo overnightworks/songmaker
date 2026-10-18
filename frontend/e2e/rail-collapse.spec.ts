@@ -125,7 +125,7 @@ for (const shell of ['desktop', 'mobile'] as const) {
 				});
 			});
 			try {
-				await page.goto(LIBRARY_PATH);
+				await page.goto(shell === 'mobile' ? HOME_PATH : LIBRARY_PATH);
 				const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 				if (shell === 'mobile') {
 					const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });

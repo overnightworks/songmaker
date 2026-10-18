@@ -1,7 +1,7 @@
-import { writable, type Readable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 
 import { NetworkError } from '$lib/api/fetch';
-import { whenBackOnline } from '$lib/stores/connectivity';
+import { offline, whenBackOnline } from '$lib/stores/connectivity';
 
 const TOAST_DURATION_MS = 5000;
 
@@ -76,28 +76,32 @@ function startCountdown(durationMs: number, onDone: () => void): Countdown {
 
 export const toasts = writable<Toast[]>([]);
 
-// Transport failures stop applying when reachability returns, even if they preceded the strip.
-const networkFailures = new Set<number>();
+// Unmigrated callers retain offline-time clearing until they pass a cause.
+const failuresToClearOnReturn = new Set<number>();
 let stopWaitingForReturn: (() => void) | null = null;
 
 function clearOnReturn(id: number): void {
-	networkFailures.add(id);
-	stopWaitingForReturn ??= whenBackOnline(clearNetworkFailures);
+	failuresToClearOnReturn.add(id);
+	stopWaitingForReturn ??= whenBackOnline(clearFailuresOnReturn);
 }
 
-function clearNetworkFailures(): void {
-	toasts.update((t) => t.filter((toast) => !networkFailures.has(toast.id)));
-	networkFailures.clear();
+function clearFailuresOnReturn(): void {
+	toasts.update((t) => t.filter((toast) => !failuresToClearOnReturn.has(toast.id)));
+	failuresToClearOnReturn.clear();
 	stopWaitingForReturn?.();
 	stopWaitingForReturn = null;
 }
 
 /** Answers the toast's id, so its raiser can dismiss it once it no longer holds. */
-export function addToast(message: string, type: ToastType = 'info', cause?: unknown): number {
+export function addToast(
+	message: string,
+	type: ToastType = 'info',
+	...cause: [] | [unknown]
+): number {
 	const id = nextId++;
 	toasts.update((t) => [...t, { id, message, type }]);
 	if (type === 'error') {
-		if (cause instanceof NetworkError) clearOnReturn(id);
+		if (cause.length === 0 ? get(offline) : cause[0] instanceof NetworkError) clearOnReturn(id);
 		return id;
 	}
 	setTimeout(() => {
@@ -154,8 +158,8 @@ export function addUndoToast(
 }
 
 export function dismissToast(id: number): void {
-	networkFailures.delete(id);
-	if (networkFailures.size === 0) {
+	failuresToClearOnReturn.delete(id);
+	if (failuresToClearOnReturn.size === 0) {
 		stopWaitingForReturn?.();
 		stopWaitingForReturn = null;
 	}
