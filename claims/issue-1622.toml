@@ -1,8 +1,0 @@
-claim_id = "87887faae7134c6b80b897fd3e18fa13"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
-branch = "claude/issue-1622-open-worker-pool-link"
-scope = ["docs/design/vocabulary.html", "frontend/e2e/generation-unavailable.spec.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/DetailTabs.test.ts", "frontend/src/lib/components/editor/GenerateButton.svelte", "frontend/src/lib/components/editor/GenerateButton.test.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/generate-states.ts", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts"]
-opened_commit = "6728eb4391352262e62a27a68d1b9630a2c77eb1"
-whole_reason = "One failure-to-destination flow; most additional files mechanically migrate consumers of the same failed-state type."
