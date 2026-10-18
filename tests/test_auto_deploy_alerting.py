@@ -524,12 +524,11 @@ class Checkout:
             "exit 1\n",
         )
 
-    def make_check_lookup_hang(self, *, ignore_term: bool = False) -> None:
+    def make_check_lookup_terminate(self, *, kill: bool) -> None:
         _write_executable(
             self._bin / "gh",
             "#!/bin/bash\n"
-            + ("trap '' TERM\n" if ignore_term else "")
-            + 'exec sleep "$GH_CHECK_RUN_LOOKUP_HANG_SECONDS"\n',
+            + ("kill -KILL $$\n" if kill else 'exec sleep "$GH_CHECK_RUN_LOOKUP_HANG_SECONDS"\n'),
         )
 
     def write_alert_config(self, content: str = VALID_ALERT_ENV) -> None:
@@ -720,7 +719,6 @@ class Checkout:
                 "GH_CHECK_RUNS_RAW_RESPONSE_FILE": str(self.check_runs_raw_response_file),
                 "GH_CHECK_RUNS_STDERR": self.check_runs_stderr,
                 "GH_CHECK_RUN_LOOKUP_HANG_SECONDS": "10",
-                "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS": "1",
                 "GH_AFTER_CHECK_LOOKUP_SCRIPT": (
                     str(self._after_check_lookup_script)
                     if self._after_check_lookup_script is not None
@@ -2129,22 +2127,23 @@ def test_future_commit_timestamp_cannot_starve_first_seen_grace_alarm(
 
 
 @pytest.mark.parametrize(
-    ("ignore_term", "diagnostic"),
+    ("kill", "diagnostic"),
     [
         pytest.param(False, "check-run lookup timed out", id="term"),
         pytest.param(True, "check-run lookup was killed by SIGKILL", id="kill"),
     ],
 )
 def test_a_check_run_lookup_timeout_counts_as_a_failed_tick(
-    tmp_path: Path, ignore_term: bool, diagnostic: str,
+    tmp_path: Path, kill: bool, diagnostic: str,
 ) -> None:
     """A3: both lookup terminations keep their diagnostic and count one refusal."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
-    checkout.check_run_lookup_timeout_seconds = 3
-    checkout.make_check_lookup_hang(ignore_term=ignore_term)
+    if not kill:
+        checkout.check_run_lookup_timeout_seconds = 3
+    checkout.make_check_lookup_terminate(kill=kill)
 
     result = checkout.tick()
 
