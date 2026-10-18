@@ -168,7 +168,7 @@ export type GenerateState =
 			offline: boolean;
 			ended: boolean;
 	  }
-	| { kind: 'failed'; mode: GenerateMode; cause: string }
+	| { kind: 'failed'; mode: GenerateMode; cause: string; unavailable: boolean }
 	| { kind: 'disabled'; mode: GenerateMode; reason: string | null };
 
 type GenerateBusyState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
@@ -283,7 +283,13 @@ const generatePresentation = derived(
 		if (disabled) {
 			return { kind: 'disabled', mode: actionMode, reason: isOffline ? null : disabledReason };
 		}
-		if (cause !== undefined) return { kind: 'failed', mode: actionMode, cause };
+		if (cause !== undefined)
+			return {
+				kind: 'failed',
+				mode: actionMode,
+				cause: cause.message,
+				unavailable: cause.unavailable
+			};
 		return { kind: 'idle', mode: actionMode };
 	}
 );

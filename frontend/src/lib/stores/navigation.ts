@@ -37,7 +37,11 @@ import { openCollection, setOpenCollection, type OpenCollection } from '$lib/sto
 import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
-import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
+import {
+	ADMIN_WORKER_POOL_HREF,
+	API_ERROR_GENERIC_MESSAGE,
+	SONG_LINK_NOT_FOUND_TOAST
+} from '$lib/constants';
 import {
 	isPlaylistRoutePath,
 	isSongRoutePath,
@@ -294,7 +298,8 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // page starts loading would abort it, which is why the push waits. The
 // library page it leaves keeps how it was left -- the wall's scroll -- for
 // Back (issue #1289).
-type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
+type AppPageHref =
+	Extract<RailSearchTarget, { kind: 'page' }>['href'] | typeof ADMIN_WORKER_POOL_HREF;
 
 export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {

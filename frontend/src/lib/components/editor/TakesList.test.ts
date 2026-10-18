@@ -1,3 +1,4 @@
+import { failed } from '$lib/test-utils/generate-states';
 import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -411,7 +412,7 @@ describe('TakesList', () => {
 	it.each([true, false])(
 		'keeps failures off Takes when existing takes are %s',
 		async (hasTakes) => {
-			generationFailures.set({ s1: VRAM_CAUSE });
+			generationFailures.set({ s1: { message: VRAM_CAUSE, unavailable: false } });
 			const { target } = await render({
 				song: song({
 					...versionedSongDefaults(),
@@ -478,7 +479,7 @@ describe('TakesList', () => {
 		},
 		{
 			name: 'a failed job',
-			state: { kind: 'failed', mode: 'generate', cause: 'boom' } satisfies GenerateState,
+			state: { ...failed, cause: 'boom' } satisfies GenerateState,
 			expectSlot: false,
 			expectEmpty: true
 		}

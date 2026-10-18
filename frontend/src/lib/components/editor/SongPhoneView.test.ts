@@ -1,3 +1,4 @@
+import { failed } from '$lib/test-utils/generate-states';
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detailTab, type DetailTab } from '$lib/stores/navigation';
@@ -229,8 +230,7 @@ describe('SongPhoneView', () => {
 		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		generateAction.set({
-			kind: 'failed',
-			mode: 'generate',
+			...failed,
 			cause: 'Generating failed — try again.'
 		});
 		const target = await render();

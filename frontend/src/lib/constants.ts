@@ -346,6 +346,9 @@ export const EDITOR_GENERATE_MODE_LABELS = {
 };
 export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
 export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
+export const EDITOR_OPEN_WORKER_POOL_LABEL = 'Open worker pool';
+export const ADMIN_WORKER_POOL_HREF = '/settings/users?tab=acestep';
+
 export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
 // Offline a running take cannot report anything (#1039 O2): it says so and
 // keeps the last progress it saw, instead of a percent and time that stand still.

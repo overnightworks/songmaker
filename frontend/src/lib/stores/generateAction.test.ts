@@ -320,21 +320,31 @@ describe('generate action presentation', () => {
 		}
 	);
 
-	it.each(['generate', 'repaint', 'cover'] as const)(
-		'exposes the selected song failure for %s and clears it on the next attempt',
-		async (mode) => {
+	it.each(
+		(['generate', 'repaint', 'cover'] as const).flatMap((mode) =>
+			[false, true].map((unavailable) => ({ mode, unavailable }))
+		)
+	)(
+		'C1 C3: exposes and clears the selected failure for $mode, unavailable=$unavailable',
+		async ({ mode, unavailable }) => {
 			if (mode !== 'generate') {
 				sourceGeneration.set(makeGeneration());
 				sourceMode.set(mode);
 			}
-			generationFailures.set({ s1: 'Worker exhausted GPU memory', s2: 'Another failure' });
+			generationFailures.set({
+				s1: { message: 'Worker exhausted GPU memory', unavailable },
+				s2: { message: 'Another failure', unavailable: false }
+			});
 			expect(get(generateAction)).toEqual({
 				kind: 'failed',
 				mode,
-				cause: 'Worker exhausted GPU memory'
+				cause: 'Worker exhausted GPU memory',
+				unavailable
 			});
 			const request = generate();
-			expect(get(generationFailures)).toEqual({ s2: 'Another failure' });
+			expect(get(generationFailures)).toEqual({
+				s2: { message: 'Another failure', unavailable: false }
+			});
 			await request;
 			expect(get(generateAction).kind).toBe('queued');
 		}
@@ -429,7 +439,7 @@ describe('generate action presentation', () => {
 	});
 
 	it('keeps unavailable and pending states ahead of a previous failure', () => {
-		generationFailures.set({ s1: 'Previous failure' });
+		generationFailures.set({ s1: { message: 'Previous failure', unavailable: false } });
 		recipeModel.set(null);
 		expect(get(generateAction).kind).toBe('disabled');
 		activeJobs.set([{ songId: 's1', job: queuedJob }]);
@@ -437,7 +447,7 @@ describe('generate action presentation', () => {
 	});
 
 	it('does not show another song failure', () => {
-		generationFailures.set({ s2: 'Another failure' });
+		generationFailures.set({ s2: { message: 'Another failure', unavailable: false } });
 		expect(get(generateAction)).toEqual({ kind: 'idle', mode: 'generate' });
 	});
 

@@ -85,6 +85,7 @@ import { ApiError, NetworkError } from '$lib/api/fetch';
 import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import {
 	API_ERROR_GENERIC_MESSAGE,
+	ADMIN_WORKER_POOL_HREF,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_SAVE_FAILED,
 	EDITOR_UNSAVED_DISCARD_LABEL,
@@ -187,6 +188,7 @@ import {
 import { closeTopLayer, historyLayerState } from '$lib/stores/layers';
 import {
 	discardDraft,
+	handleSave,
 	editLyrics,
 	isDirty,
 	loadSongData,
@@ -1304,23 +1306,31 @@ describe('opening a song recovers its generation state', () => {
 		}
 	);
 
-	it('shows the cause of the last failed generation for a song opened after reload', async () => {
-		fetchLastFailedGeneration.mockResolvedValue({
-			job: {
-				id: 'j1',
-				type: 'generate',
-				status: 'failed',
-				progress: 0,
-				error: 'boom',
-				error_type: null,
-				started_at: null,
-				completed_at: '2026-01-02T00:00:00+00:00'
-			}
-		});
-		await selectSong('s1');
-		await vi.waitFor(() => expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1'));
-		await vi.waitFor(() => expect(get(generationFailures).s1).toBe('boom'));
-	});
+	it.each([null, 'generation_unavailable'])(
+		'C3: opening a song hydrates the failure type %s',
+		async (errorType) => {
+			fetchLastFailedGeneration.mockResolvedValue({
+				job: {
+					id: 'j1',
+					type: 'generate',
+					status: 'failed',
+					progress: 0,
+					error: 'boom',
+					error_type: errorType,
+					started_at: null,
+					completed_at: '2026-01-02T00:00:00+00:00'
+				}
+			});
+			await selectSong('s1');
+			await vi.waitFor(() => expect(fetchLastFailedGeneration).toHaveBeenCalledWith('s1'));
+			await vi.waitFor(() =>
+				expect(get(generationFailures).s1).toEqual({
+					message: 'boom',
+					unavailable: errorType === 'generation_unavailable'
+				})
+			);
+		}
+	);
 
 	it('shows nothing when the API reports no failure to hydrate (e.g. a newer take supersedes it)', async () => {
 		fetchLastFailedGeneration.mockResolvedValue({ job: null });
@@ -1767,10 +1777,20 @@ describe('a dirty draft guards song switch / leave', () => {
 	describe.each([
 		[
 			'a Settings row',
-			() => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices')
+			() => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices'),
+			'/settings/voices'
 		],
-		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/voices' })]
-	] as const)('leaving for an app page through %s (issue #1143)', (_name, navigate) => {
+		[
+			'a page search hit',
+			() => openRailSearchTarget({ kind: 'page', href: '/settings/voices' }),
+			'/settings/voices'
+		],
+		[
+			'the worker pool',
+			() => followAppPageLink(new MouseEvent('click', { button: 0 }), ADMIN_WORKER_POOL_HREF),
+			ADMIN_WORKER_POOL_HREF
+		]
+	] as const)('C2: leaving for an app page through %s (issue #1143)', (_name, navigate, href) => {
 		it('1354_37b_71_dirty: holds the leave for the unsaved-changes dialog and keeps the route', async () => {
 			const sheet = await navigateFromSheetWithADirtyDraft(navigate);
 
@@ -1786,8 +1806,27 @@ describe('a dirty draft guards song switch / leave', () => {
 			await get(pendingDirtyNavigation)?.();
 			pendingDirtyNavigation.set(null);
 
-			expect(window.location.pathname).toBe('/settings/voices');
+			expect(window.location.pathname + window.location.search).toBe(href);
 		});
+
+		it.each(['Save', 'Cancel'] as const)(
+			'C2: preserves dirty navigation on %s',
+			async (outcome) => {
+				await navigateFromSheetWithADirtyDraft(navigate);
+				if (outcome === 'Save') {
+					vi.mocked(updateSong).mockResolvedValue(
+						song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' })
+					);
+					await handleSave('s1');
+					await get(pendingDirtyNavigation)?.();
+					expect(location.pathname + location.search).toBe(href);
+				} else {
+					expect(location.pathname).toBe('/album/a1/s1');
+					expect(get(editLyrics)).toBe('unsaved edit');
+				}
+				pendingDirtyNavigation.set(null);
+			}
+		);
 
 		it('1354_37b_71_dirty: keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
 			const stopNavigation = initNavigation();
@@ -1809,7 +1848,7 @@ describe('a dirty draft guards song switch / leave', () => {
 				})();
 				await Promise.all([dialogEntryLeft, leaving]);
 
-				expect(window.location.pathname).toBe('/settings/voices');
+				expect(window.location.pathname + window.location.search).toBe(href);
 			} finally {
 				stopNavigation();
 			}
@@ -2554,6 +2593,10 @@ describe('the phone rail drawer owns one history entry', () => {
 	it.each([
 		{ way: 'a row that opens an album', go: () => openAlbum('a1') },
 		{
+			way: 'C2 worker-pool link',
+			go: () => followAppPageLink(new MouseEvent('click', { button: 0 }), ADMIN_WORKER_POOL_HREF)
+		},
+		{
 			way: 'a rail search page target',
 			go: () => openRailSearchTarget({ kind: 'page', href: '/settings/voices' })
 		},
@@ -3128,23 +3171,26 @@ describe('album track neighbors', () => {
 	});
 });
 
-describe('1354_rule_40: app page link browser handling', () => {
-	it.each(modifiedClicks)(
-		'1354_rule_40: preserves the address and default for %o',
-		async (mouse) => {
-			const pathname = location.pathname;
-			const event = new MouseEvent('click', { cancelable: true, ...mouse });
-			followAppPageLink(event, '/settings/voices');
-			await tick();
-			expect(event.defaultPrevented).toBe(false);
-			expect(location.pathname).toBe(pathname);
-		}
-	);
+describe.each(['/settings/voices', ADMIN_WORKER_POOL_HREF] as const)(
+	'C2: app page link browser handling for %s',
+	(href) => {
+		it.each(modifiedClicks)(
+			'1354_rule_40: preserves the address and default for %o',
+			async (mouse) => {
+				const pathname = location.pathname;
+				const event = new MouseEvent('click', { cancelable: true, ...mouse });
+				followAppPageLink(event, href);
+				await tick();
+				expect(event.defaultPrevented).toBe(false);
+				expect(location.pathname).toBe(pathname);
+			}
+		);
 
-	it('1354_rule_40: a plain click opens the app page and prevents browser navigation', async () => {
-		const event = new MouseEvent('click', { cancelable: true });
-		followAppPageLink(event, '/settings/voices');
-		expect(event.defaultPrevented).toBe(true);
-		await vi.waitFor(() => expect(location.pathname).toBe('/settings/voices'));
-	});
-});
+		it('1354_rule_40: a plain click opens the app page and prevents browser navigation', async () => {
+			const event = new MouseEvent('click', { cancelable: true });
+			followAppPageLink(event, href);
+			expect(event.defaultPrevented).toBe(true);
+			await vi.waitFor(() => expect(location.pathname + location.search).toBe(href));
+		});
+	}
+);

@@ -18,7 +18,7 @@ import detailTabsSource from './DetailTabs.svelte?raw';
 import { watchTypingOnPhone } from '$lib/stores/ui';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
-import { running } from '$lib/test-utils/generate-states';
+import { failed, running } from '$lib/test-utils/generate-states';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -127,7 +127,7 @@ describe('DetailTabs', () => {
 		],
 		['idle', { kind: 'idle', mode: 'generate' }, false],
 		['disabled', { kind: 'disabled', mode: 'generate', reason: 'No models' }, false],
-		['failed', { kind: 'failed', mode: 'generate', cause: 'Worker error' }, false]
+		['failed', failed, false]
 	] as const)(
 		'[defect:#1568] carries a ring on Takes exactly while %s',
 		async (_label, state, expectRing) => {
