@@ -758,6 +758,34 @@ export async function seedTakeStripSong(
 	}
 }
 
+async function seedJobState(command: string, args: string[], audio?: Buffer): Promise<string> {
+	const commandArgs = [
+		...COMPOSE_ARGS,
+		'exec',
+		'-T',
+		'songmaker-web',
+		'/app/.venv/bin/python',
+		'scripts/seed_e2e_job_states.py',
+		command,
+		...args
+	];
+	try {
+		const { stdout } = audio
+			? await execWithStdin('docker', commandArgs, { cwd: REPO_ROOT }, audio)
+			: await execFileAsync('docker', commandArgs, { cwd: REPO_ROOT });
+		return stdout.trim();
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		const stderr = (err as { stderr?: string }).stderr ?? '';
+		throw new Error(`Seeding job state ${command} failed: ${detail}\n${stderr}`, { cause: err });
+	}
+}
+
+function requiredSeedId(id: string): string {
+	if (!id) throw new Error('seed_e2e_job_states.py printed no id on stdout');
+	return id;
+}
+
 /**
  * A song already at `versionNumber` with `takeCount` real takes on that
  * version, seeded directly against the database
@@ -773,17 +801,10 @@ export async function seedSongPhoneSong(
 	versionNumber: number,
 	takeCount: number
 ): Promise<string> {
-	try {
-		const { stdout } = await execWithStdin(
-			'docker',
+	return requiredSeedId(
+		await seedJobState(
+			'create-song',
 			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_job_states.py',
-				'create-song',
 				'--album-id',
 				albumId,
 				'--title',
@@ -795,16 +816,20 @@ export async function seedSongPhoneSong(
 				'--owner-username',
 				requiredEnv('ADMIN_USERNAME')
 			],
-			{ cwd: REPO_ROOT },
 			readFileSync(TAKE_FIXTURE)
-		);
-		const songId = stdout.trim();
-		if (!songId) throw new Error('seed_e2e_job_states.py printed no song id on stdout');
-		return songId;
-	} catch (err) {
-		const detail = err instanceof Error ? err.message : String(err);
-		throw new Error(`Seeding the song-phone flow's song failed: ${detail}`, { cause: err });
-	}
+		)
+	);
+}
+
+export async function seedQueuedGenerationJob(songId: string): Promise<string> {
+	return requiredSeedId(
+		await seedJobState('set-queued', [
+			'--song-id',
+			songId,
+			'--owner-username',
+			requiredEnv('ADMIN_USERNAME')
+		])
+	);
 }
 
 type GenerationPhase = NonNullable<JobItem['phase']>;
@@ -845,38 +870,21 @@ export async function seedRunningGenerationJob(
 		takeCount: number;
 	} & PhaseMove
 ): Promise<string> {
-	try {
-		const { stdout } = await execFileAsync(
-			'docker',
-			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_job_states.py',
-				'set-running',
-				'--song-id',
-				songId,
-				'--progress',
-				String(options.progress),
-				'--take-index',
-				String(options.takeIndex),
-				'--take-count',
-				String(options.takeCount),
-				...phaseArgs(options),
-				'--owner-username',
-				requiredEnv('ADMIN_USERNAME')
-			],
-			{ cwd: REPO_ROOT }
-		);
-		const jobId = stdout.trim();
-		if (!jobId) throw new Error('seed_e2e_job_states.py printed no job id on stdout');
-		return jobId;
-	} catch (err) {
-		const detail = err instanceof Error ? err.message : String(err);
-		throw new Error(`Seeding the running generate job failed: ${detail}`, { cause: err });
-	}
+	return requiredSeedId(
+		await seedJobState('set-running', [
+			'--song-id',
+			songId,
+			'--progress',
+			String(options.progress),
+			'--take-index',
+			String(options.takeIndex),
+			'--take-count',
+			String(options.takeCount),
+			...phaseArgs(options),
+			'--owner-username',
+			requiredEnv('ADMIN_USERNAME')
+		])
+	);
 }
 
 /**
@@ -888,31 +896,13 @@ export async function advanceGenerationJobPhase(
 	jobId: string,
 	options: { progress: number } & PhaseMove
 ): Promise<void> {
-	try {
-		await execFileAsync(
-			'docker',
-			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_job_states.py',
-				'set-phase',
-				'--job-id',
-				jobId,
-				'--progress',
-				String(options.progress),
-				...phaseArgs(options)
-			],
-			{ cwd: REPO_ROOT }
-		);
-	} catch (err) {
-		const detail = err instanceof Error ? err.message : String(err);
-		throw new Error(`Moving the generate job to its next phase failed: ${detail}`, {
-			cause: err
-		});
-	}
+	await seedJobState('set-phase', [
+		'--job-id',
+		jobId,
+		'--progress',
+		String(options.progress),
+		...phaseArgs(options)
+	]);
 }
 
 /**
@@ -923,32 +913,11 @@ export async function advanceGenerationJobPhase(
  * worker crash would report it. No reload needed.
  */
 export async function failGenerationJob(jobId: string, error: string): Promise<void> {
-	try {
-		await execFileAsync(
-			'docker',
-			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_job_states.py',
-				'set-failed',
-				'--job-id',
-				jobId,
-				'--error',
-				error
-			],
-			{ cwd: REPO_ROOT }
-		);
-	} catch (err) {
-		const detail = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failing the generate job failed: ${detail}`, { cause: err });
-	}
+	await seedJobState('set-failed', ['--job-id', jobId, '--error', error]);
 }
 
 /**
- * Completes an existing generate job with one new take on its song's latest
+ * Completes an existing generate job with its declared batch on its song's latest
  * version, in the same commit, so the job's own open
  * `/api/jobs/{id}/stream` reports the end only once the take is readable.
  * The `generation.created` resource event a real worker also writes is left
@@ -957,27 +926,7 @@ export async function failGenerationJob(jobId: string, error: string): Promise<v
  * so only the job's own terminal refresh can bring the take into the list.
  */
 export async function completeGenerationJobWithoutEvent(jobId: string): Promise<void> {
-	try {
-		await execWithStdin(
-			'docker',
-			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'songmaker-web',
-				'/app/.venv/bin/python',
-				'scripts/seed_e2e_job_states.py',
-				'set-completed',
-				'--job-id',
-				jobId
-			],
-			{ cwd: REPO_ROOT },
-			readFileSync(TAKE_FIXTURE)
-		);
-	} catch (err) {
-		const detail = err instanceof Error ? err.message : String(err);
-		throw new Error(`Completing the generate job failed: ${detail}`, { cause: err });
-	}
+	await seedJobState('set-completed', ['--job-id', jobId], readFileSync(TAKE_FIXTURE));
 }
 
 /**

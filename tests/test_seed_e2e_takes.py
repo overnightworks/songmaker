@@ -50,3 +50,121 @@ def test_seeded_takes_record_the_owner_as_their_maker(
 
         makers = {g.created_by for g in session.query(Generation).filter_by(song_id=song_id)}
         assert makers == {_OWNER_ID}
+
+
+@pytest.fixture
+def seeded_job(tmp_path):
+    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+
+    factory = init_test_db(tmp_path / "completion.db")
+    with factory() as session:
+        session.add(User(id=_OWNER_ID, username=_OWNER_ID, password_hash="x"))
+        session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
+        session.commit()
+        audio_dir = tmp_path / "audio"
+        song_id = _seed_song_at_version(session, audio_dir)
+        job = create_job(session, JobType.GENERATE, user_id=_OWNER_ID, song_id=song_id)
+        update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING, take_count=2))
+        session.commit()
+        yield session, audio_dir, job
+
+
+@pytest.mark.parametrize("take_count", [1, 2])
+def test_completion_preserves_takes_and_adds_the_declared_batch_without_events(
+    seeded_job, take_count,
+):
+    from songmaker_cli.constants import JobStatus
+    from songmaker_cli.db.models import ResourceEvent
+    from songmaker_cli.db.queries import get_song, update_song
+
+    session, audio_dir, job = seeded_job
+    existing_ids = {g.id for g in session.query(Generation)}
+    events_before = session.query(ResourceEvent).count()
+    # Completion belongs to the latest version, even if it changed after dispatch.
+    update_song(session, job.song_id, force_new_version=True)
+    job.take_count = take_count
+    session.commit()
+    version_id = get_song(session, job.song_id).latest_version.id
+
+    audio = (SCRIPTS.parent / "frontend/e2e/fixtures/take.mp3").read_bytes()
+    seed_e2e_job_states.complete_generation_job(session, audio_dir, audio, job_id=job.id)
+    session.expire_all()
+
+    takes = session.query(Generation).all()
+    additions = [g for g in takes if g.id not in existing_ids]
+    assert existing_ids <= {g.id for g in takes}
+    assert len(additions) == take_count
+    assert {(g.song_id, g.version_id, g.created_by) for g in additions} == {
+        (job.song_id, version_id, _OWNER_ID),
+    }
+    assert all((audio_dir / g.mp3_path).read_bytes() == audio for g in additions)
+    assert job.status == JobStatus.COMPLETED
+    assert job.progress == 1.0
+    assert session.query(ResourceEvent).count() == events_before
+
+
+@pytest.mark.parametrize("status,take_count,audio", [
+    ("completed", 2, b"mp3"), ("failed", 2, b"mp3"), ("cancelled", 2, b"mp3"),
+    ("queued", 2, b"mp3"), ("running", None, b"mp3"), ("running", 0, b"mp3"),
+    ("running", -1, b"mp3"), ("running", 2, b""),
+])
+def test_invalid_completion_writes_neither_takes_nor_audio(seeded_job, status, take_count, audio):
+    session, audio_dir, job = seeded_job
+    job.status, job.take_count = status, take_count
+    session.commit()
+    files_before = set(audio_dir.rglob("*.mp3"))
+    ids_before = {g.id for g in session.query(Generation)}
+
+    with pytest.raises(SystemExit):
+        seed_e2e_job_states.complete_generation_job(session, audio_dir, audio, job_id=job.id)
+
+    assert {g.id for g in session.query(Generation)} == ids_before
+    assert set(audio_dir.rglob("*.mp3")) == files_before
+    assert job.status == status
+
+
+def test_failed_second_take_rolls_back_the_batch_and_terminal_status(seeded_job):
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+
+    session, audio_dir, job = seeded_job
+    ids_before = {g.id for g in session.query(Generation)}
+    files_before = set(audio_dir.rglob("*.mp3"))
+    # A real database refusal on the second addition, after the first was flushed.
+    session.execute(text("""
+        CREATE TRIGGER reject_second_take BEFORE INSERT ON generations
+        WHEN (SELECT COUNT(*) FROM generations) >= 3
+        BEGIN SELECT RAISE(ABORT, 'fixture rejects second take'); END
+    """))
+    session.commit()
+
+    with pytest.raises(IntegrityError, match="fixture rejects second take"):
+        seed_e2e_job_states.complete_generation_job(session, audio_dir, b"mp3", job_id=job.id)
+    session.expire_all()
+
+    assert {g.id for g in session.query(Generation)} == ids_before
+    assert job.status == "running"
+    assert set(audio_dir.rglob("*.mp3")) == files_before
+
+
+def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_job, capsys):
+    import argparse
+
+    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.db.queries import create_job, get_job, get_queue_position
+
+    session, _, running = seeded_job
+    ahead = create_job(session, JobType.GENERATE, user_id=_OWNER_ID, song_id=running.song_id)
+    session.commit()
+    seed_e2e_job_states.cmd_set_queued(
+        session, argparse.Namespace(song_id=running.song_id, owner_username=_OWNER_ID),
+    )
+    job = get_job(session, capsys.readouterr().out.strip())
+
+    assert job is not None
+    assert (job.user_id, job.song_id, job.type, job.status) == (
+        _OWNER_ID, running.song_id, JobType.GENERATE, JobStatus.QUEUED,
+    )
+    assert get_queue_position(session, ahead) == 1
+    assert get_queue_position(session, job) == 2

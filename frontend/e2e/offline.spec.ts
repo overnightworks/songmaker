@@ -1,25 +1,6 @@
-// Losing the network on the phone (#1039 O1, O3, O5; slices #1080, #1098): within
-// about a second one calm strip, "You're offline — retrying", rests on the
-// top edge of the mini player, Generate is disabled without a reason of its
-// own and stays above the strip, and once the network is back the strip goes
-// by itself. A take generating meanwhile stops looking live (#1098): its card
-// reads "Reconnecting…" with the last progress it saw, in grey, its cancel and
-// the Takes ring grey too, and when the job ended while the network was gone
-// the card stays until its take is in the list. The card reads the same while
-// the browser is online but the job's stream stays refused. Mobile project
-// only: the phone's Generate bar is compact-shell UI, and the unit suite pins
-// the desktop placement (PlayerBar.test.ts). A take row tapped offline plays
-// by itself once the network is back (#1161), and the album header Play
-// pressed offline waits and starts the album then (#1288); both show the same
-// waiting transport from the tap (#1312), on the phone and the desktop alike.
-// While the album start waits, its header reads Pause, the bar and the lock
-// screen name its song, and the lock screen pauses and resumes it as it does a
-// take, with no blank moment once the network is back (#1330).
-//
-// The network is cut for real (`loseNetwork`): `setOffline` alone leaves an
-// already open event stream running, so the page's open loads are stopped
-// the way a dropped network ends them, and every reopen of the library's live
-// stream is refused until the network returns.
+// Network loss: phone Generate placement (#1039) and generation recovery (#1098),
+// plus server, take-play (#1161) and album-start (#1288) recovery in both shells.
+// loseNetwork also closes open streams; setOffline alone leaves them running.
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
@@ -42,6 +23,7 @@ import {
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
+	csrfHeaders,
 	FlowGuard,
 	loseNetwork,
 	offlineStrip, // 1354_65_A3: shared status locator for the offline proofs.
@@ -59,6 +41,7 @@ import {
 	readSeededLibrary,
 	runMarker,
 	seedRunningGenerationJob,
+	seedQueuedGenerationJob,
 	seedSongPhoneSong
 } from './seed';
 
@@ -343,11 +326,7 @@ test.describe(
 			const miniPlayer = page.getByRole('contentinfo');
 			const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
 
-			await page.goto(`/album/${library.songPhoneAlbumId}`);
-			await workspace(page)
-				.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-				.click();
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 			await page
 				.getByRole('tabpanel')
 				.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
@@ -579,38 +558,53 @@ test.describe('pressing the album header Play while the network is gone', () => 
 	});
 });
 
+async function seedOfflineRunningSong(suffix: string, progress: number) {
+	const library = readSeededLibrary();
+	const songTitle = `${OFFLINE_SONG_TITLE} ${suffix} ${runMarker()}`;
+	const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
+	const jobId = await seedRunningGenerationJob(songId, {
+		progress,
+		takeIndex: 1,
+		takeCount: 2,
+		phase: 'rendering',
+		generationStartedOffsetSeconds: 30
+	});
+	const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
+	return { library, songTitle, songId, jobId, takeCounter };
+}
+
+async function openOfflineTakes(page: Page, albumId: string, songTitle: string): Promise<void> {
+	await page.goto(`/album/${albumId}`);
+	await workspace(page)
+		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+		.click();
+	await page.getByRole('tab', { name: /Takes/ }).click();
+	// Wait for the song route before cutting the network during its module load.
+	await expect(page).toHaveURL(new RegExp(`/album/${albumId}/[^/]+$`));
+}
+
 test.describe(
 	'losing the network while a take generates on the phone',
 	{ tag: ONLY_IN_SHELL.mobile },
 	() => {
-		// The same shape as take-arrives.spec.ts's offline flow: the service
-		// worker stays out of the loads the returning network makes.
+		// Route the returning loads through the network, not the service worker.
 		test.use({ serviceWorkers: 'block' });
 
-		// The job's end reaches the page either on its stream reopened once the
-		// network is back, or on the stream still open when the network went --
-		// the end then arrives offline, while the song refresh it asks for cannot.
+		// Cover terminal events both after reconnect and on a stream left open offline.
 		for (const { endArrives, keepOpenStreams } of [
 			{ endArrives: 'once the network is back', keepOpenStreams: false },
 			{ endArrives: 'offline, on the job stream still open', keepOpenStreams: true }
 		]) {
-			test(`greys the running card with its last progress, and keeps it until the take that finished offline is in the list, when the end arrives ${endArrives}`, async ({
+			test(`1160-F15-arrival: greys the running card with its last progress, and keeps it until the take that finished offline is in the list, when the end arrives ${endArrives}`, async ({
 				page,
 				context
 			}) => {
 				const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
-				const library = readSeededLibrary();
-				const songTitle = `${OFFLINE_SONG_TITLE} Running ${runMarker()}`;
 				const seededTakes = 1;
-				const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, seededTakes);
-				const jobId = await seedRunningGenerationJob(songId, {
-					progress: 0.4,
-					takeIndex: 1,
-					takeCount: 2,
-					phase: 'rendering',
-					generationStartedOffsetSeconds: 30
-				});
-				const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
+				const { library, songTitle, songId, jobId, takeCounter } = await seedOfflineRunningSong(
+					'Running',
+					0.4
+				);
 				const panel = page.getByRole('tabpanel');
 				const takesTab = page.getByRole('tab', { name: /Takes/ });
 				const runningRing = takesTab.locator('.ring');
@@ -619,23 +613,11 @@ test.describe(
 				const lastSeenBar = panel.getByRole('progressbar', {
 					name: EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
 				});
-
-				await page.goto(`/album/${library.songPhoneAlbumId}`);
-				await workspace(page)
-					.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-					.click();
-				await takesTab.click();
+				await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 				await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
 				await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
 				await expect(playButtons).toHaveCount(seededTakes);
-				// The card shows before the song's route module has loaded, and the
-				// address moves to the song before it too; once it has moved,
-				// `loseNetwork` waits for that module, whose load a cut would fail
-				// into SvelteKit's error page.
-				await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
-
 				await loseNetwork(page, context, { keepOpenStreams });
-
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
 					timeout: OFFLINE_NOTICE_MS
 				});
@@ -651,7 +633,6 @@ test.describe(
 				await expect(lastSeenBar.locator('span')).toHaveAttribute('style', /width: 40%/);
 				await expect(cancel).toHaveCSS('color', grey);
 				await expect(runningRing).toHaveCSS('color', grey);
-
 				await page.evaluate(
 					({ prefix, takesBefore }) => {
 						const takes = document.querySelector('[role="tabpanel"]');
@@ -667,7 +648,6 @@ test.describe(
 					},
 					{ prefix: playTakePrefix, takesBefore: seededTakes }
 				);
-
 				const songRefreshFailed = keepOpenStreams
 					? page.waitForEvent(
 							'requestfailed',
@@ -681,10 +661,8 @@ test.describe(
 				}
 				await expect(lastSeenBar).toBeVisible();
 				await expect(page.getByText(JOB_COMPLETED_TOAST)).toHaveCount(0);
-
 				await regainNetwork(page, context);
-
-				await expect(playButtons).toHaveCount(seededTakes + 1, { timeout: BACK_ONLINE_MS });
+				await expect(playButtons).toHaveCount(seededTakes + 2, { timeout: BACK_ONLINE_MS });
 				await expect(page.getByText(JOB_COMPLETED_TOAST)).toBeVisible();
 				await expect(panel.getByRole('progressbar')).toHaveCount(0);
 				await expect(runningRing).toHaveCount(0);
@@ -693,38 +671,71 @@ test.describe(
 					() => (window as unknown as { takeArrivalGaps: { seen: boolean } }).takeArrivalGaps.seen
 				);
 				expect(sawNeitherCardNorTake).toBe(false);
-
 				console.log(`Offline running-take flow /api requests: ${guard.apiRequestCount}`);
 				guard.assertClean();
 				guard.assertWithinBudget(OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET);
 			});
 		}
+		test('restores the real queued position after reconnecting without navigation (1160-F10-queued-browser)', async ({
+			page,
+			context
+		}) => {
+			const library = readSeededLibrary();
+			const title = `${OFFLINE_SONG_TITLE} Queued ${runMarker()}`;
+			const songId = await seedSongPhoneSong(library.songPhoneAlbumId, title, 1, 0);
+			const jobId = await seedQueuedGenerationJob(songId);
+			const panel = page.getByRole('tabpanel');
+			const expectRealQueuedPosition = () =>
+				expect(async () => {
+					const response = await page.request.get(`/api/jobs/${jobId}`);
+					expect(response.ok()).toBeTruthy();
+					const { queue_position: position } = await response.json();
+					expect(Number.isInteger(position)).toBe(true);
+					expect(position).toBeGreaterThan(0);
+					await expect(panel.getByText(/Queued #/)).toHaveText(`Queued #${position}`);
+				}).toPass({ timeout: BACK_ONLINE_MS });
+			const cleanupErrors: unknown[] = [];
+			try {
+				await openOfflineTakes(page, library.songPhoneAlbumId, title);
+				await expectRealQueuedPosition();
+				const address = page.url();
+				await loseNetwork(page, context);
+				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+					timeout: OFFLINE_NOTICE_MS
+				});
+				await expect(panel.getByText(/Queued #/)).toHaveCount(0);
+				await regainNetwork(page, context);
+				await expectRealQueuedPosition();
+				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
+				await expect(page).toHaveURL(address);
+			} finally {
+				try {
+					await regainNetwork(page, context);
+					const cancelled = await page.request.post(`/api/jobs/${jobId}/cancel`, {
+						headers: await csrfHeaders(page)
+					});
+					expect(cancelled.ok()).toBeTruthy();
+				} catch (error) {
+					cleanupErrors.push(error);
+					console.error('Queued job cleanup failed:', error);
+				}
+			}
+			if (cleanupErrors.length) throw cleanupErrors[0];
+		});
 
 		test('keeps the running card through three outages in one ride, with no red toast, and resumes it live', async ({
 			page,
 			context
 		}) => {
 			const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
-			const library = readSeededLibrary();
-			const songTitle = `${OFFLINE_SONG_TITLE} Tunnels ${runMarker()}`;
-			const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
-			const jobId = await seedRunningGenerationJob(songId, {
-				progress: 0.4,
-				takeIndex: 1,
-				takeCount: 2,
-				phase: 'rendering',
-				generationStartedOffsetSeconds: 30
-			});
-			const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
+			const { library, songTitle, jobId, takeCounter } = await seedOfflineRunningSong(
+				'Tunnels',
+				0.4
+			);
 			const panel = page.getByRole('tabpanel');
 
-			await page.goto(`/album/${library.songPhoneAlbumId}`);
-			await workspace(page)
-				.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-				.click();
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 			await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
-			await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 
 			for (let outage = 0; outage < OUTAGES_IN_ONE_RIDE; outage++) {
 				const retryRefusedOffline = page.waitForEvent(
@@ -765,18 +776,11 @@ test.describe(
 			page
 		}) => {
 			test.setTimeout(REFUSED_JOB_STREAM_TEST_TIMEOUT_MS);
-			const library = readSeededLibrary();
-			const songTitle = `${OFFLINE_SONG_TITLE} Refused ${runMarker()}`;
-			const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
-			const jobId = await seedRunningGenerationJob(songId, {
-				progress: 0.55,
-				takeIndex: 1,
-				takeCount: 2,
-				phase: 'rendering',
-				generationStartedOffsetSeconds: 30
-			});
+			const { library, songTitle, jobId, takeCounter } = await seedOfflineRunningSong(
+				'Refused',
+				0.55
+			);
 			const jobStream = `/api/jobs/${jobId}/stream`;
-			const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
 			const panel = page.getByRole('tabpanel');
 			// Every reopen after the first stream is refused until the server has room again.
 			let streamOpens = 0;
@@ -787,11 +791,7 @@ test.describe(
 				return refusing ? route.fulfill({ status: 429 }) : route.continue();
 			});
 
-			await page.goto(`/album/${library.songPhoneAlbumId}`);
-			await workspace(page)
-				.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-				.click();
-			await page.getByRole('tab', { name: /Takes/ }).click();
+			await openOfflineTakes(page, library.songPhoneAlbumId, songTitle);
 
 			await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
 				timeout: BACK_ONLINE_MS

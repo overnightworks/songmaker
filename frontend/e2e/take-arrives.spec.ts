@@ -64,7 +64,7 @@ async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersio
 }
 
 test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
-	test('brings its take into the Takes list without navigation and drops its card, even when its resource event never arrives', async ({
+	test('1160-F15-arrival: brings its take into the Takes list without navigation and drops its card, even when its resource event never arrives', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
@@ -103,8 +103,8 @@ test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile 
 		await expect(
 			page.getByRole('alert').filter({ hasText: GENERATION_COMPLETED_TOAST })
 		).toBeVisible();
-		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toBeVisible();
-		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT + 1);
+		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 2))).toBeVisible();
+		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT + 2);
 		await expect(panel.getByRole('progressbar')).toHaveCount(0);
 		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveAttribute('aria-selected', 'true');
 

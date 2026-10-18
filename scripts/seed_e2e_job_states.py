@@ -45,8 +45,8 @@ mounted. Use the venv's Python directly:
 The ``set-failed`` example stores raw worker detail to verify that musician
 reads show "Generating failed — try again." instead (L6/L11).
 
-``create-song`` prints the created song's id on stdout, ``set-running`` the
-created job's id -- both mirroring ``scripts/seed_e2e_song_takes.py``'s own
+``create-song`` prints the created song's id on stdout, ``set-running`` and
+``set-queued`` the created job's id -- mirroring ``scripts/seed_e2e_song_takes.py``'s own
 convention. ``set-phase``, ``set-failed`` and ``set-completed`` print nothing.
 Connects to the database only -- never runs schema migrations, even
 implicitly, matching every other one-off script here (see ``connect_db()`` in ``db/engine.py``).
@@ -102,17 +102,21 @@ def add_take(
     """Write one take's audio file and its generation row on ``version_id``."""
     generation_id = str(uuid.uuid4())
     dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
-    dst.write_bytes(mp3_bytes)  # NOSONAR(S8707) Configured directory, owner ID, generated UUID.
-    return create_generation(
-        session,
-        song_id=song_id,
-        version_id=version_id,
-        mp3_path=f"{owner_id}/{generation_id}.mp3",
-        model_mode=MODEL_DEFAULT_MODE,
-        generation_id=generation_id,
-        audio_dir=audio_dir,
-        created_by=owner_id,
-    )
+    try:
+        dst.write_bytes(mp3_bytes)  # NOSONAR(S8707) Configured directory, owner ID, generated UUID.
+        return create_generation(
+            session,
+            song_id=song_id,
+            version_id=version_id,
+            mp3_path=f"{owner_id}/{generation_id}.mp3",
+            model_mode=MODEL_DEFAULT_MODE,
+            generation_id=generation_id,
+            audio_dir=audio_dir,
+            created_by=owner_id,
+        )
+    except BaseException:
+        dst.unlink(missing_ok=True)
+        raise
 
 
 def seed_song_at_version(
@@ -259,35 +263,61 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
     session.commit()
 
 
-def cmd_set_completed(session: Session, args: argparse.Namespace) -> None:
-    """Complete an existing generate job with one new take, and no resource event.
+def complete_generation_job(
+    session: Session, audio_dir: Path, mp3_bytes: bytes, *, job_id: str,
+) -> None:
+    """Commit the declared batch and completion together, without resource events.
 
-    The take lands on the song's latest version and the job turns
-    ``completed`` in one commit, so the job's own open stream never reports
-    the end before the take is readable. The ``generation.created`` event a
-    real worker also writes is left out on purpose: it stands in for the event
-    a phone's dropped resource stream never received (#1020), so only the
-    job's own terminal refresh can bring the take into the list.
+    Omitting generation.created proves the terminal job refresh recovers takes
+    when the phone missed the resource stream. Takes use the latest version.
     """
-    job = get_job(session, args.job_id)
-    if job is None or job.song_id is None or job.user_id is None:
-        raise SystemExit(f"Job {args.job_id} does not exist or belongs to no song")
-    mp3_bytes = sys.stdin.buffer.read()
+    job = get_job(session, job_id)
+    if job is None or job.type != JobType.GENERATE or job.status != JobStatus.RUNNING:
+        raise SystemExit(f"Job {job_id} is not a running generate job")
+    if job.song_id is None or job.user_id is None:
+        raise SystemExit(f"Job {job_id} belongs to no song or owner")
+    if type(job.take_count) is not int or job.take_count <= 0:
+        raise SystemExit(f"Job {job_id} has no positive take count")
     if not mp3_bytes:
         raise SystemExit("No MP3 bytes received on stdin")
     song = get_song(session, job.song_id)
     version = song.latest_version if song is not None else None
     if version is None:
         raise SystemExit(f"Song {job.song_id} does not exist or has no version")
-    add_take(
-        session, _resolve_audio_dir(), mp3_bytes,
-        song_id=job.song_id, version_id=version.id, owner_id=job.user_id,
+    written_files: list[Path] = []
+    try:
+        for _ in range(job.take_count):
+            take = add_take(
+                session, audio_dir, mp3_bytes,
+                song_id=job.song_id, version_id=version.id, owner_id=job.user_id,
+            )
+            written_files.append(audio_dir / take.mp3_path)
+        if not update_job_status(
+            session, job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
+        ):
+            raise SystemExit(f"Job {job_id} was already terminal")
+        session.commit()
+    except BaseException:
+        session.rollback()
+        for path in written_files:
+            path.unlink(missing_ok=True)
+        raise
+
+
+def cmd_set_completed(session: Session, args: argparse.Namespace) -> None:
+    complete_generation_job(
+        session, _resolve_audio_dir(), sys.stdin.buffer.read(), job_id=args.job_id,
     )
-    if not update_job_status(
-        session, args.job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
-    ):
-        raise SystemExit(f"Job {args.job_id} was already terminal")
+
+
+def cmd_set_queued(session: Session, args: argparse.Namespace) -> None:
+    """Create a genuine queued job; its position is computed by the job API."""
+    owner = get_user_by_username(session, args.owner_username)
+    if owner is None:
+        raise SystemExit(f"No user named {args.owner_username!r}")
+    job = create_job(session, JobType.GENERATE, user_id=owner.id, song_id=args.song_id)
     session.commit()
+    print(job.id)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -303,6 +333,11 @@ def main(argv: list[str] | None = None) -> int:
     p_song.add_argument("--take-count", type=int, required=True)
     p_song.add_argument("--owner-username", required=True)
     p_song.set_defaults(func=cmd_create_song)
+
+    p_queued = sub.add_parser("set-queued", help="Attach a queued generate job to a song.")
+    p_queued.add_argument("--song-id", required=True)
+    p_queued.add_argument("--owner-username", required=True)
+    p_queued.set_defaults(func=cmd_set_queued)
 
     p_running = sub.add_parser("set-running", help="Attach a running generate job to a song.")
     p_running.add_argument("--song-id", required=True)
@@ -336,7 +371,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_completed = sub.add_parser(
         "set-completed",
-        help="Complete an existing generate job with one take read from stdin, without its event.",
+        help="Complete a generate job with its declared batch from stdin, without its event.",
     )
     p_completed.add_argument("--job-id", required=True)
     p_completed.set_defaults(func=cmd_set_completed)
