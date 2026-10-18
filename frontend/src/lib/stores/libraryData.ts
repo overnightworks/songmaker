@@ -122,7 +122,7 @@ async function settleAlbumSongsLoad(albumId: string): Promise<void> {
 		albumSongsReloadsFor(albumId).nameLoadFailure(err, ALBUM_SONGS_LOAD_ERROR);
 		setAlbumSongsLoad(albumId, err instanceof NetworkError ? 'unreachable' : 'failed');
 	} finally {
-		albumSongLoads.delete(albumId);
+		if (generation === albumSongsGeneration) albumSongLoads.delete(albumId);
 	}
 }
 
@@ -349,6 +349,7 @@ export function removeGenerationFromSong(songId: string, genId: string): void {
 }
 
 export function resetLibraryDataForTests(): void {
+	cancelAlbumSongLoads();
 	allAlbumsReloads.stop();
 	for (const reloads of albumSongsReloads.values()) reloads.stop();
 	albumSongsReloads.clear();

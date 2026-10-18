@@ -35,6 +35,41 @@ function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 }
 
 describe('sseFetch', () => {
+	it.each(['timeout', 'caller'] as const)(
+		'1160-F38-body: preserves the cause of a mid-body %s abort',
+		async (cause) => {
+			vi.useFakeTimers();
+			onTestFinished(() => {
+				vi.useRealTimers();
+			});
+			mockFetch.mockImplementationOnce(async (_path: string, init: RequestInit) => ({
+				ok: true,
+				body: new ReadableStream<Uint8Array>({
+					start(stream) {
+						stream.enqueue(new TextEncoder().encode('data: {"type":"started"}\n\n'));
+						init.signal?.addEventListener('abort', () =>
+							stream.error(new DOMException('Aborted', 'AbortError'))
+						);
+					}
+				})
+			}));
+			const caller = new AbortController();
+			const events = sseFetch('/api/chat/turn', { signal: caller.signal }, 100);
+			await expect(events.next()).resolves.toEqual({ value: { type: 'started' }, done: false });
+			const failure = events.next().catch((error: unknown) => error);
+			if (cause === 'timeout') await vi.advanceTimersByTimeAsync(100);
+			else caller.abort();
+			const error = await failure;
+			if (cause === 'timeout') {
+				expect(error).toBeInstanceOf(NetworkError);
+				expect(error).toMatchObject({ path: '/api/chat/turn', reason: 'timeout' });
+			} else {
+				expect(error).not.toBeInstanceOf(NetworkError);
+				expect(error).toMatchObject({ name: 'AbortError' });
+			}
+		}
+	);
+
 	it('yields parsed events from SSE frames', async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: true,

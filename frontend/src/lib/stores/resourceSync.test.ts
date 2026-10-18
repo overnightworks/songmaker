@@ -897,33 +897,37 @@ describe('resource sync owner', () => {
 		}
 	);
 
-	it('fetches a rate-limited refresh again no sooner than its Retry-After, then brings the take in', async () => {
-		vi.useFakeTimers();
-		const retryAfterSeconds = 30;
-		let rateLimited = true;
-		const { controller, sources, store, fetchCalls, upserted } = setup({
-			fetchSong: async (songId) => {
-				if (!rateLimited) return song({ slug: 'track', title: 'Track', id: songId });
-				rateLimited = false;
-				throw new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`, retryAfterSeconds);
-			}
-		});
-		controller.start();
-		latestSource(sources).emit('hello', { high_water_mark: '0' });
-		await flush();
-		await controller.waitForReady();
-		await controller.requestSongRefresh('s1');
-		expect(get(store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
+	it.each([0, 1])(
+		'1160-F3-deadline: retries at the deadline when the timer fires %i ms early',
+		async (earlyMs) => {
+			vi.useFakeTimers();
+			const retryAfterSeconds = 30;
+			let rateLimited = true;
+			const { controller, sources, store, fetchCalls, upserted } = setup({
+				fetchSong: async (songId) => {
+					if (!rateLimited) return song({ slug: 'track', title: 'Track', id: songId });
+					rateLimited = false;
+					throw new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`, retryAfterSeconds);
+				}
+			});
+			controller.start();
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await controller.waitForReady();
+			await controller.requestSongRefresh('s1');
+			expect(get(store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
 
-		await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - 1);
-		expect(fetchCalls).toEqual(['s1']);
-		await vi.advanceTimersByTimeAsync(1);
+			vi.setSystemTime(Date.now() - earlyMs);
+			await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - 1 + earlyMs);
+			expect(fetchCalls).toEqual(['s1']);
+			await vi.advanceTimersByTimeAsync(1);
 
-		expect(fetchCalls).toEqual(['s1', 's1']);
-		expect(get(store)).toMatchObject({ status: 'live', error: null });
-		expect(upserted.at(-1)?.id).toBe('s1');
-		controller.stop();
-	});
+			expect(fetchCalls).toEqual(['s1', 's1']);
+			expect(get(store)).toMatchObject({ status: 'live', error: null });
+			expect(upserted.at(-1)?.id).toBe('s1');
+			controller.stop();
+		}
+	);
 
 	describe('a song rate-limited with a Retry-After of 30 s', () => {
 		const retryAfterSeconds = 30;
