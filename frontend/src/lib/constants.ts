@@ -512,6 +512,7 @@ export const RECIPE_STACKED_LABEL = 'Recipe summary';
 export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
+export const SEARCH_OPEN_LABEL = 'Search';
 export const RAIL_SEARCH_LABEL = 'Search or go to…';
 export const RAIL_SEARCH_CLEAR_LABEL = 'Clear search';
 export const LIBRARY_RETRY_LABEL = 'Retry';

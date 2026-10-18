@@ -1,12 +1,16 @@
 <script module lang="ts">
-	export const SEARCH_OPEN_LABEL = 'Search';
 	export const SEARCH_SHEET_LABEL = 'Search';
 	export const SEARCH_CLOSE_LABEL = 'Close search';
 </script>
 
 <script lang="ts">
 	import { page } from '$app/state';
-	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
+	import {
+		APP_NAME,
+		RAIL_DRAWER_OPEN_LABEL,
+		SEARCH_OPEN_LABEL,
+		SONG_TITLE_LABEL
+	} from '$lib/constants';
 	import { backLabel, backTargetName, pageBackShown } from '$lib/routes/pageBack';
 	import { standingPage } from '$lib/routes/standingAddress';
 	import { historyLayerState } from '$lib/stores/layers';
