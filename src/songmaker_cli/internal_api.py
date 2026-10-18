@@ -30,7 +30,7 @@ def verify_internal_token(
     expected = get_settings().songmaker_internal_token.get_secret_value()
     if not expected:
         raise HTTPException(503, "Internal API not configured")
-    if not hmac.compare_digest(x_internal_token, expected):
+    if not hmac.compare_digest(x_internal_token.encode(), expected.encode()):
         raise HTTPException(401, "Invalid internal token")
 
 

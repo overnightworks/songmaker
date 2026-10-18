@@ -29,68 +29,51 @@ def _payload(**overrides) -> dict:
     return base
 
 
-def test_register_missing_token_header(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("configured_token", "header_token", "expected_status"),
+    [
+        pytest.param("secret", None, 422, id="missing-header"),
+        pytest.param("secret", b"wrong", 401, id="wrong-token"),
+        pytest.param("secret", b"", 401, id="empty-token"),
+        pytest.param("secret", b"\xff", 401, id="raw-non-ascii-token"),
+        pytest.param("", b"anything", 503, id="unconfigured-server"),
+        pytest.param("secret", b"secret", 200, id="valid-registration"),
+    ],
+)
+def test_register_token_authentication(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    configured_token: str,
+    header_token: bytes | None,
+    expected_status: int,
 ) -> None:
-    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
+    """1301-F9-AUTH: token failures refuse registration; a valid token persists it."""
+    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", configured_token)
     from songmaker_cli.settings import get_settings
     get_settings.cache_clear()
-    resp = client.post("/api/internal/workers/register", json=_payload())
-    assert resp.status_code == 422
-
-
-def test_register_wrong_token_returns_401(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
+    headers = [] if header_token is None else [(b"X-Internal-Token", header_token)]
     resp = client.post(
         "/api/internal/workers/register",
         json=_payload(),
-        headers={"X-Internal-Token": "wrong"},
+        headers=headers,
     )
-    assert resp.status_code == 401
-
-
-def test_register_empty_token_returns_503(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
-    resp = client.post(
-        "/api/internal/workers/register",
-        json=_payload(),
-        headers={"X-Internal-Token": "anything"},
-    )
-    assert resp.status_code == 503
-
-
-def test_register_success_creates_row(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
-    resp = client.post(
-        "/api/internal/workers/register",
-        json=_payload(),
-        headers={"X-Internal-Token": "secret"},
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["worker_id"] == "acestep-worker-0"
-    assert data["registered_at"]
+    assert resp.status_code == expected_status
 
     factory = client.app.state.ctx.db
     with factory() as session:
         worker = get_worker_identity(session, "acestep-worker-0")
+        if expected_status != 200:
+            assert worker is None
+            return
         assert worker is not None
         assert worker.host == "acestep-worker-0"
         assert worker.port == 8001
         assert worker.gpu_id == 0
         assert worker.vram_total_gb == 24.0
+
+    data = resp.json()
+    assert data["worker_id"] == "acestep-worker-0"
+    assert data["registered_at"]
 
 
 def test_register_is_idempotent(
