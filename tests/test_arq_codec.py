@@ -232,6 +232,9 @@ def test_unsupported_values_cannot_be_enqueued(value, redis_socket, monkeypatch)
                 ("et", "0"),
                 ("t", True),
                 ("et", False),
+                ("et", 10**20),
+                ("et", -1),
+                ("t", -1),
             ]
         ],
     ],

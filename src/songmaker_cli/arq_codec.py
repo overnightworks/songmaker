@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import json
 import math
+from typing import Final
+
+# arq converts enqueue milliseconds to a datetime outside its job error handler.
+MAX_ENQUEUE_TIME_MS: Final = 253402300799999
 
 
 def _validate_json(value: object) -> None:
@@ -40,4 +44,8 @@ def deserialize_arq(data: bytes) -> dict[str, object]:
             raise ValueError(f"arq JSON field {field!r} must be {expected.__name__}")
     if "t" not in decoded or (decoded["t"] is not None and type(decoded["t"]) is not int):
         raise ValueError("arq JSON field 't' must be an int or null")
+    if not 0 <= decoded["et"] <= MAX_ENQUEUE_TIME_MS:
+        raise ValueError("arq JSON field 'et' must be between epoch and year 9999")
+    if decoded["t"] is not None and decoded["t"] < 0:
+        raise ValueError("arq JSON field 't' must be non-negative")
     return decoded
