@@ -1,0 +1,8 @@
+claim_id = "efaffe109cfc4b579809311295071d54"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "453029d914e205be29f353bc192b284af96c1267"
+branch = "claude/issue-1623-e2e-helper-budget-cleanup"
+scope = ["frontend/e2e/README.md", "frontend/e2e/helpers.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/offline.spec.ts", "frontend/e2e/share-playlist-player.spec.ts", "frontend/e2e/shell-bottom-geometry.spec.ts"]
+opened_commit = "82f8116585b014110ee7aa22e4bf9f2ebf982df3"
+whole_reason = "One behaviour-preserving e2e cleanup: the budget owner, the A6 rail locator, and two shared locators move to their existing owners, so every importer of each moves together."
