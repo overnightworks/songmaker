@@ -9,6 +9,7 @@ from uuid import uuid4
 from acestep_engine.progress import AceStepPhase
 from acestep_worker.clock import utcnow
 from acestep_worker.models import (
+    TaskErrorKind,
     TaskKind,
     TaskResult,
     TaskSnapshot,
@@ -32,6 +33,7 @@ class _Task:
     training_started_at: datetime | None = None
     result: TaskResult | None = None
     error: str | None = None
+    error_kind: TaskErrorKind | None = None
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
     terminal_at: datetime | None = None
@@ -49,6 +51,7 @@ class _Task:
             training_started_at=self.training_started_at,
             result=self.result,
             error=self.error,
+            error_kind=self.error_kind,
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
@@ -116,8 +119,12 @@ class TaskStore:
             task_id, state="done", progress=1.0, result=result, terminal=True
         )
 
-    async def fail(self, task_id: str, message: str) -> None:
-        await self._update(task_id, state="error", error=message, terminal=True)
+    async def fail(
+        self, task_id: str, message: str, *, error_kind: TaskErrorKind | None = None,
+    ) -> None:
+        await self._update(
+            task_id, state="error", error=message, error_kind=error_kind, terminal=True,
+        )
 
     async def _update(
         self,
@@ -130,6 +137,7 @@ class TaskStore:
         training_started_at: datetime | None = None,
         result: TaskResult | None = None,
         error: str | None = None,
+        error_kind: TaskErrorKind | None = None,
         terminal: bool = False,
     ) -> None:
         async with self._lock:
@@ -150,6 +158,7 @@ class TaskStore:
                 task.result = result
             if error is not None:
                 task.error = error
+                task.error_kind = error_kind
             task.updated_at = utcnow()
             if terminal:
                 task.terminal_at = task.updated_at

@@ -28,6 +28,7 @@ from acestep_engine.errors import (
     AudioDownloadError,
     GenerationFailedError,
     GenerationTimeoutError,
+    GpuOutOfMemoryError,
     TaskSubmissionError,
 )
 from acestep_engine.models import (
@@ -62,6 +63,12 @@ DOWNLOAD_DEADLINE_SECONDS: Final[float] = 60.0
 _DOWNLOAD_CHUNK_SIZE: Final[int] = 65536
 _NO_FAILURE_DETAIL: Final[str] = "generation failed (no detail from ACE-Step)"
 _MAX_CAUSE_CHARS: Final[int] = 300
+_GPU_MEMORY_FAILURE_MARKERS: Final[tuple[str, ...]] = (
+    "Insufficient free VRAM",
+    "CUDA out of memory",
+    "OutOfMemoryError",
+    "Insufficient KV cache to schedule sequence",
+)
 _AUDIO_UPLOAD_FIELDS: Final[tuple[tuple[str, str], ...]] = (
     ("src_audio_path", "ctx_audio"),
     ("reference_audio_path", "ref_audio"),
@@ -105,24 +112,22 @@ def _report_poll_progress(
         on_progress(progress)
 
 
-def _failure_cause(entry: TaskQueryEntry) -> str:
-    """Return ACE-Step's own text for a failed task, short enough to show.
-
-    A failed task carries its cause in the result entry's ``error``
-    field. The server records it as a full traceback, so only its last
-    line — the exception type and message — is user-facing; the full
-    text goes to the log. When the server sends no detail at all, the
-    caller still gets a named reason instead of an empty string.
-    """
+def _generation_failure(entry: TaskQueryEntry) -> GenerationFailedError:
+    """Classify the full cause before shortening its diagnostic message."""
     for item in entry.parse_result_items():
         detail = (item.error or item.status_message or "").strip()
         if detail:
             log.error("ACE-Step task %s failed: %s", entry.task_id, detail)
-            return _shorten_cause(detail)
+            error_type = (
+                GpuOutOfMemoryError
+                if any(marker in detail for marker in _GPU_MEMORY_FAILURE_MARKERS)
+                else GenerationFailedError
+            )
+            return error_type(_shorten_cause(detail))
     log.error(
         "ACE-Step task %s failed without detail: %.500s", entry.task_id, entry.result,
     )
-    return _NO_FAILURE_DETAIL
+    return GenerationFailedError(_NO_FAILURE_DETAIL)
 
 
 def _shorten_cause(detail: str) -> str:
@@ -542,7 +547,7 @@ class AceStepClient:
 
         entry = response.data[0]
         if entry.status == _TASK_STATUS_FAILED:
-            raise GenerationFailedError(_failure_cause(entry))
+            raise _generation_failure(entry)
         if entry.status == _TASK_STATUS_COMPLETE:
             return _completed_poll_result(entry, started_at)
 

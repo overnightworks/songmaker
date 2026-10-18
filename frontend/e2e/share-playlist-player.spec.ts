@@ -1,6 +1,8 @@
 import { expect, test as base, type Page, type Locator } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
+// 1354_65_A4: playlist transport proofs use the shared-player control owner.
+import { control } from './share-album-fixtures';
 import type { SharedPlaylistPayload } from '../src/lib/api/types';
 import {
 	FlowGuard,
@@ -68,8 +70,6 @@ const test = base.extend<{
 	}
 });
 
-const control = (page: Page, name: string) =>
-	page.locator('.now-playing.page').getByRole('button', { name, exact: true });
 const row = (page: Page, position: number) =>
 	page.locator('.queue-row').filter({
 		has: page.locator('.queue-title', { hasText: new RegExp(`^${songTitle(position)}$`) })

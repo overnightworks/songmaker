@@ -13,6 +13,7 @@ import {
 	ACCOUNT_MENU_LABEL,
 	APP_NAME,
 	COWRITER_TURN_PATH,
+	OFFLINE_STRIP_MESSAGE,
 	PLAYBACK_DIAGNOSTICS_PATH,
 	PLAYLISTS_PAGE_LABEL,
 	RAIL_DRAWER_LABEL,
@@ -23,7 +24,8 @@ import {
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	RESOURCE_EVENT_STREAM_PATH,
-	SETTINGS_NAV_LABEL
+	SETTINGS_NAV_LABEL,
+	SEARCH_OPEN_LABEL
 } from '../src/lib/constants';
 import {
 	HOME_ROUTE_PATH,
@@ -99,17 +101,11 @@ export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 };
 
 /**
- * What the rail's own disclosure/pin flow (`library.spec.ts`'s second test)
- * costs the API per shell, measured on a green run against a clean stack: 32
- * on desktop, 29 on mobile. One shared ceiling for both, matching
- * LIBRARY_FLOW_API_REQUEST_BUDGET's own convention -- a separate budget from
- * it, for a different flow, sharing only the one IP rate-limit window both
- * tests already share.
+ * 1354_65_A1: the desktop rail disclosure/pin flow's API ceiling. Its measured
+ * 32 requests leave room up to 34; this flow no longer runs on mobile.
+ * It shares the IP rate-limit window with the separate Library flow.
  */
-export const RAIL_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 34,
-	mobile: 34
-};
+export const RAIL_FLOW_API_REQUEST_BUDGET = 34;
 
 /**
  * What `song-phone.spec.ts` costs the API: a cold open of the song's own
@@ -322,6 +318,11 @@ export function workspace(page: Page): Locator {
 	return page.getByRole('main');
 }
 
+/** 1354_65_A3: the same offline status in the network and shell geometry proofs. */
+export function offlineStrip(page: Page): Locator {
+	return page.getByRole('status').filter({ hasText: OFFLINE_STRIP_MESSAGE });
+}
+
 /** Home's Listen list (`HomeListen.svelte`): the places last played. */
 export function listenRegion(page: Page): Locator {
 	return workspace(page).getByRole('region', { name: 'Listen', exact: true });
@@ -463,7 +464,7 @@ export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 export async function openSettingsSectionFromSearch(page: Page, section: string): Promise<void> {
 	const sheet = page.getByRole('dialog', { name: 'Search', exact: true });
 	if (!(await sheet.isVisible())) {
-		await appBar(page).getByRole('button', { name: 'Search', exact: true }).click();
+		await appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true }).click();
 	}
 	await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(section);
 	await sheet

@@ -71,8 +71,12 @@ Redis with a 15s TTL. The music-worker is now a thin orchestrator: its
 arq `generate` job calls the scheduler (`scheduler.py`), which picks an
 online worker, INCRs queue depth atomically, dispatches via HTTP, and
 consumes the worker's task SSE stream until `done`. A stream that stays silent
-for 630 seconds fails the generation with `Worker stream went silent`; transport
-drops still use the scheduler's bounded reconnect policy. The music-worker then
+for 630 seconds retains `Worker stream went silent` as its logged diagnosis; transport
+drops still use the scheduler's bounded reconnect policy. Failed model loading,
+no running music worker or online ACE-Step worker at admission, unreachable workers, a mode still missing after one reload, stream silence, and
+exhausted reconnects show musicians “Generating isn't available right now.”
+The [failure contract](acestep.md#failure-cause-contract) defines classification
+and persistence. The music-worker then
 post-processes the worker's WAV (decode → splice → master → MP3 → DB
 insert) and the job completes. See [acestep.md](acestep.md) for the
 worker API surface.
@@ -1457,7 +1461,7 @@ close the stream.
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |
 | PUT | `/api/songs/{id}/album` | user | Move song to different album |
 | POST | `/api/songs` | user | Create song in album |
-| POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue) |
+| POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue). Like repaint and cover, missing music/online ACE-Step workers return 503 {detail, error_type, job_id}: "Generating isn't available right now.", generation_unavailable, and the stored FAILED job ID. |
 | POST | `/api/songs/{id}/listen` | user | Record that a playable song was started; this moves the caller's own Listen without changing any edit time, and leaves the song itself alone. Every accepted listen stamps the caller's own `UserSongWork.played_at`, and one without a `playlist_id` also its `album_played_at`. An optional body `{ "playlist_id": … }` names the caller's playlist it was played from, which then also records `last_played_at` and `last_played_song_id` on that playlist without changing its edit time. Checks run in order: song ownership 404, unplayable song 422, playlist unknown or not the caller's (admins included) 404, playlist without a take of the song 422. A rejected request records nothing. |
 | GET | `/api/songs/{id}/active-generation` | user | The song's newest queued/running generate job, or `null` if none. Ownership 404. Hydrates the song on entry so the frontend can reopen the job's SSE stream after a reload. |
 | GET | `/api/songs/{id}/last-failed-generation` | user | The song's last generate/repaint/cover job if it's still a failure -- `null` once a newer job (any status) or a newer non-archived take supersedes it. Ownership 404. Hydrates the take-list failure banner on page load/reopen; live SSE always wins over it. |

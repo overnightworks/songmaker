@@ -30,7 +30,6 @@ import {
 	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
-	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
@@ -45,6 +44,7 @@ import {
 	boundingBoxes,
 	FlowGuard,
 	loseNetwork,
+	offlineStrip, // 1354_65_A3: shared status locator for the offline proofs.
 	OFFLINE_FLOW_API_REQUEST_BUDGET,
 	OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET,
 	ONLY_IN_SHELL,
@@ -109,10 +109,6 @@ const REFUSED_JOB_STREAM_TEST_TIMEOUT_MS = 30_000 + 2 * NEXT_JOB_STREAM_REOPEN_M
 
 function generateButton(page: Page): Locator {
 	return page.getByRole('tabpanel').getByRole('button', { name: nameStartingWith(GENERATE_LABEL) });
-}
-
-function offlineStrip(page: Page): Locator {
-	return page.getByRole('status').filter({ hasText: OFFLINE_STRIP_MESSAGE });
 }
 
 /** What a colour token resolves to on the page right now, as `getComputedStyle` reports it. */

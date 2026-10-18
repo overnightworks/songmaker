@@ -139,10 +139,17 @@
 	--viz-accent-b: 240;
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
-	--transport-bar-height: calc(88px + env(safe-area-inset-bottom, 0px));
+	--phone-tabs-height: 54px;
+	--transport-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+	--transport-bar-height: calc(88px + var(--transport-safe-area-bottom));
+	/* Room below the bar, zero until phone tabs arrive. Override only on html:
+	   --player-height resolves at :root, while components read the offset locally. */
+	--shell-bottom-offset: 0px;
 	--offline-strip-height: 36px;
 	--offline-strip-room: 0px;
-	--player-height: calc(var(--transport-bar-height) + var(--offline-strip-room));
+	--player-height: calc(
+		var(--shell-bottom-offset) + var(--transport-bar-height) + var(--offline-strip-room)
+	);
 	--editor-generate-bar-height: 56px;
 	--header-height: 46px;
 	--rail-width: 264px;
@@ -189,22 +196,23 @@
 
 @media (max-width: 640px) {
 	:root {
-		--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
+		--transport-bar-height: calc(64px + var(--transport-safe-area-bottom));
 	}
 }
 
 @media (any-pointer: coarse) {
 	:root {
-		--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
+		--transport-bar-height: calc(64px + var(--transport-safe-area-bottom));
 	}
 }
 
 html[data-pointer='coarse'] {
-	--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
+	--transport-bar-height: calc(64px + var(--transport-safe-area-bottom));
 }
 
 /* --player-height is the room the transport bar takes right now: the bar
-   itself (--transport-bar-height) plus, while offline, the offline strip on
+   itself (--transport-bar-height), the room below it (--shell-bottom-offset),
+   plus, while offline, the offline strip on
    its top edge, so everything that reserves space for the bar — the shell
    rows, the toast stack, the queue-stream chip, the editor's bottom padding
    and Generate bar, the collection views, Now Playing's own sheet — also

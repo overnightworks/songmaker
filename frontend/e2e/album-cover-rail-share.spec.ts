@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
 import { LIBRARY_PAGE_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
-import { BASE_URL } from './seed';
-import { boundingBoxes, FlowGuard, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
+import { archiveOwnedAlbum, BASE_URL } from './seed';
+import { boundingBoxes, csrfHeaders, FlowGuard, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -17,14 +17,6 @@ interface CreatedResource {
 
 interface ShareResult {
 	share_url: string;
-}
-
-async function csrfHeaders(page: Page): Promise<Record<string, string>> {
-	const csrf = (await page.context().cookies(BASE_URL)).find(
-		(cookie) => cookie.name === 'csrf_token'
-	);
-	if (!csrf) throw new Error('The E2E session has no CSRF token');
-	return { 'x-csrf-token': csrf.value, origin: BASE_URL };
 }
 
 async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
@@ -91,16 +83,6 @@ async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void
 	).toBeTruthy();
 }
 
-async function deleteOwnedAlbum(page: Page, albumId: string): Promise<void> {
-	const response = await page.request.delete(`/api/albums/${albumId}`, {
-		headers: await csrfHeaders(page)
-	});
-	expect(
-		response.ok(),
-		`DELETE /api/albums/${albumId} failed: ${await response.text()}`
-	).toBeTruthy();
-}
-
 async function createCoveredAlbum(
 	page: Page
 ): Promise<{ album: CreatedResource; albumTitle: string }> {
@@ -113,29 +95,7 @@ async function createCoveredAlbum(
 	return { album, albumTitle };
 }
 
-test(
-	'1354_37a_A6: a fresh album cover reaches the desktop rail',
-	{ tag: ONLY_IN_SHELL.desktop },
-	async ({ page }) => {
-		const { album, albumTitle } = await createCoveredAlbum(page);
-		try {
-			await page.goto(`/album/${album.id}`);
-			const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-			const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${LIBRARY_PAGE_LABEL}`) });
-			if ((await libraryGroup.getAttribute('aria-expanded')) === 'false')
-				await libraryGroup.click();
-			const railAlbum = rail
-				.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-				.getByRole('listitem')
-				.filter({ hasText: albumTitle });
-			await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
-		} finally {
-			await deleteOwnedAlbum(page, album.id);
-		}
-	}
-);
-
-test('1354_37a_A6: a fresh album cover reaches wall, album header, and every share page at desktop and 375 px', async ({
+test('1354_65_C1 1354_37a_A6: a fresh album cover reaches wall, album header, desktop rail, and every share page at desktop and 375 px', async ({
 	page,
 	browser,
 	isMobile
@@ -162,6 +122,17 @@ test('1354_37a_A6: a fresh album cover reaches wall, album header, and every sha
 
 		await page.goto(`/album/${album.id}`);
 		await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
+		if (!isMobile) {
+			const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+			const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${LIBRARY_PAGE_LABEL}`) });
+			if ((await libraryGroup.getAttribute('aria-expanded')) === 'false')
+				await libraryGroup.click();
+			const railAlbum = rail
+				.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+				.getByRole('listitem')
+				.filter({ hasText: albumTitle });
+			await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
+		}
 
 		const publicContext = await browser.newContext({
 			storageState: undefined,
@@ -193,11 +164,11 @@ test('1354_37a_A6: a fresh album cover reaches wall, album header, and every sha
 			await publicContext.close();
 		}
 	} finally {
-		await deleteOwnedAlbum(page, album.id);
+		await archiveOwnedAlbum(page.request, album.id);
 	}
 });
 
-test('a shared playlist replaces its upload with the current mosaic and disappears after unshare at desktop and 375 px', async ({
+test('1354_65_C2 1354_37b_62_A: a shared playlist replaces its upload with the current mosaic and disappears after unshare at desktop and 375 px', async ({
 	page,
 	browser,
 	isMobile
@@ -268,7 +239,7 @@ test('a shared playlist replaces its upload with the current mosaic and disappea
 		try {
 			if (playlistId) await deleteOwnedPlaylist(page, playlistId);
 		} finally {
-			await deleteOwnedAlbum(page, album.id);
+			await archiveOwnedAlbum(page.request, album.id);
 		}
 	}
 });
@@ -286,7 +257,7 @@ const PHONE_SCREENS = [
 // The words keep room for a few lines however short the screen.
 const WORDS_MIN_HEIGHT_PX = 80;
 
-test('a shared song shows Play and its words in one screen at every phone height (#1391)', async ({
+test('1354_65_C3 1354_37b_62_B: a shared song shows Play and its words in one screen at every phone height (#1391)', async ({
 	page,
 	browser,
 	isMobile
@@ -338,7 +309,7 @@ test('a shared song shows Play and its words in one screen at every phone height
 			}
 		}
 	} finally {
-		await deleteOwnedAlbum(page, album.id);
+		await archiveOwnedAlbum(page.request, album.id);
 	}
 });
 

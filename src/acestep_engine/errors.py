@@ -15,6 +15,10 @@ class GenerationFailedError(AceStepError):
     """ACE-Step generation failed on the server side."""
 
 
+class GpuOutOfMemoryError(GenerationFailedError):
+    """ACE-Step generation failed because GPU memory was insufficient."""
+
+
 class GenerationTimeoutError(AceStepError):
     """ACE-Step generation timed out."""
 

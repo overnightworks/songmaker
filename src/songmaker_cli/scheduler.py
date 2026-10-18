@@ -81,12 +81,11 @@ class WorkerTaskFailed(RuntimeError):
 
 
 class WorkerGenerationFailed(WorkerTaskFailed):
-    """Raised for a worker ``error`` event or scheduler-detected stream silence.
+    """Raised for a worker ``error`` event, preserving its diagnostic cause."""
 
-    Its message is ACE-Step's own cause from an ``error`` event, or the
-    scheduler's ``WORKER_STREAM_WENT_SILENT`` cause after ``httpx.ReadTimeout``.
-    The Generate job layer logs this cause and stores a generic musician-facing line.
-    """
+
+class WorkerGenerationUnavailable(WorkerTaskFailed):
+    """Raised when Generate cannot load, reach, or continue using its worker."""
 
 
 class WorkerModeNotLoaded(WorkerTaskFailed):
@@ -150,6 +149,7 @@ class DispatchOptions:
     sse_read_timeout_seconds: float = ACESTEP_SSE_READ_TIMEOUT_SECONDS
     initial_reconnect_backoff_seconds: float = 1.0
     max_reconnect_backoff_seconds: float = 30.0
+    transport: httpx.AsyncBaseTransport | None = None
 
 
 async def _list_online_workers(
@@ -284,16 +284,22 @@ async def _load_model(
         target_mode,
     )
     await _maybe_invoke(on_progress, AceStepPhase.LOADING_MODEL, 0.0)
-    async with httpx.AsyncClient(timeout=options.load_model_timeout_seconds) as client:
-        resp = await client.post(
-            f"{worker.base_url}/load_model",
-            json={"mode": target_mode},
-            headers=_internal_headers(),
-        )
+    async with httpx.AsyncClient(
+        timeout=options.load_model_timeout_seconds,
+        transport=options.transport,
+    ) as client:
+        try:
+            resp = await client.post(
+                f"{worker.base_url}/load_model",
+                json={"mode": target_mode},
+                headers=_internal_headers(),
+            )
+        except httpx.TransportError as exc:
+            raise WorkerGenerationUnavailable(str(exc)) from exc
         try:
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise WorkerTaskFailed(worker_response_cause(resp)) from exc
+            raise WorkerGenerationUnavailable(worker_response_cause(resp)) from exc
     worker.record_loaded(target_mode)
 
 
@@ -304,12 +310,18 @@ async def _submit_generation(
     options: DispatchOptions,
 ) -> str:
     config_payload = asdict(ace_config) if is_dataclass(ace_config) else dict(ace_config)
-    async with httpx.AsyncClient(timeout=options.generate_submit_timeout_seconds) as client:
-        resp = await client.post(
-            f"{worker.base_url}/generate",
-            json={"mode": target_mode, "config": config_payload},
-            headers=_internal_headers(),
-        )
+    async with httpx.AsyncClient(
+        timeout=options.generate_submit_timeout_seconds,
+        transport=options.transport,
+    ) as client:
+        try:
+            resp = await client.post(
+                f"{worker.base_url}/generate",
+                json={"mode": target_mode, "config": config_payload},
+                headers=_internal_headers(),
+            )
+        except httpx.TransportError as exc:
+            raise WorkerGenerationUnavailable(str(exc)) from exc
         if _answers_mode_not_loaded(resp, target_mode):
             raise WorkerModeNotLoaded(worker_response_cause(resp))
         resp.raise_for_status()
@@ -366,7 +378,7 @@ async def _worker_task_events(
         pool=options.sse_connect_timeout_seconds,
     )
     async with (
-        httpx.AsyncClient(timeout=timeout) as client,
+        httpx.AsyncClient(timeout=timeout, transport=options.transport) as client,
         client.stream(
             "GET",
             f"{worker.base_url}/tasks/{task_id}/stream",
@@ -418,6 +430,7 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
     invalid_result_label: str,
     error_exception_type: type[WorkerTaskFailed],
     on_progress_event: ProgressEventHandler,
+    silence_exception_type: type[WorkerTaskFailed] = WorkerTaskFailed,
     on_heartbeat: HeartbeatCallback | None = None,
     options: DispatchOptions = DispatchOptions(),
 ) -> _TaskResultT:
@@ -447,7 +460,7 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
             if result is not None:
                 return result
     except httpx.ReadTimeout as exc:
-        raise error_exception_type(WORKER_STREAM_WENT_SILENT) from exc
+        raise silence_exception_type(WORKER_STREAM_WENT_SILENT) from exc
     raise WorkerTaskFailed("SSE stream ended without done/error event")
 
 
@@ -540,17 +553,22 @@ async def consume_task_stream(
     """Consume a worker generate task stream. Returns the validated DTO.
 
     Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    Raises ``WorkerGenerationUnavailable`` on silence or exhausted reconnects.
     """
-    return await _consume_task_stream(
-        worker,
-        task_id,
-        result_type=GenerationTaskResultDTO,
-        invalid_result_label="invalid result",
-        error_exception_type=WorkerGenerationFailed,
-        on_progress_event=_generation_progress_events(on_progress),
-        on_heartbeat=on_heartbeat,
-        options=options,
-    )
+    try:
+        return await _consume_task_stream(
+            worker,
+            task_id,
+            result_type=GenerationTaskResultDTO,
+            invalid_result_label="invalid result",
+            error_exception_type=WorkerGenerationFailed,
+            silence_exception_type=WorkerGenerationUnavailable,
+            on_progress_event=_generation_progress_events(on_progress),
+            on_heartbeat=on_heartbeat,
+            options=options,
+        )
+    except httpx.TransportError as exc:
+        raise WorkerGenerationUnavailable(str(exc)) from exc
 
 
 async def consume_download_task_stream(
@@ -563,7 +581,9 @@ async def consume_download_task_stream(
 ) -> DownloadTaskResultDTO:
     """Consume a worker download task stream. Returns the validated DTO.
 
-    Raises ``WorkerTaskFailed`` on error events or invalid result payloads.
+    Raises ``WorkerTaskFailed`` on error events, invalid payloads, or silence.
+    Exhausted reconnects retain the transport error; only generation streams
+    translate silence and exhausted reconnects to ``WorkerGenerationUnavailable``.
     """
     return await _consume_task_stream(
         worker,
@@ -633,7 +653,10 @@ async def dispatch_generation_on_worker(
     except WorkerModeNotLoaded:
         log.info("Worker %s no longer has %s loaded — reloading it once", worker.id, target_mode)
         await _load_model(worker, target_mode, options, on_progress)
-        task_id = await _submit_generation(worker, ace_config, target_mode, options)
+        try:
+            task_id = await _submit_generation(worker, ace_config, target_mode, options)
+        except WorkerModeNotLoaded as exc:
+            raise WorkerGenerationUnavailable(str(exc)) from exc
     return await consume_task_stream(
         worker,
         task_id,

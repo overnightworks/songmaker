@@ -58,7 +58,7 @@ import {
 	HOME_PATH,
 	LIBRARY_PATH
 } from './helpers';
-import { readSeededLibrary, type SeededLibrary } from './seed';
+import { archiveOwnedAlbum, readSeededLibrary, type SeededLibrary } from './seed';
 
 /**
  * Sized before the first CI measurement from the cold wall open (auth, the
@@ -213,23 +213,42 @@ const LIST_PAGES = [
 	}
 ];
 
-test('1354_rule_9 an empty account reads one line on the Library and one on Playlists, points to + New on Home, and keeps both rail groups', async ({
-	page
-}, testInfo) => {
-	await answerTheLibraryEmpty(page);
+for (const shell of ['mobile', 'desktop'] as const) {
+	test(
+		`1354_rule_9 an empty ${shell} account reads one line on Library and Playlists${shell === 'desktop' ? ', keeps both rail groups,' : ''} and points to + New on Home`,
+		{ tag: ONLY_IN_SHELL[shell] },
+		async ({ page }) => {
+			await answerTheLibraryEmpty(page);
 
-	for (const { address, emptyLine } of LIST_PAGES) {
-		await page.goto(address);
+			for (const { address, emptyLine } of LIST_PAGES) {
+				await page.goto(address);
 
-		await expect(workspace(page).locator('.wall-body .empty')).toHaveText(emptyLine);
-		const rail = await openRailNav(page, shellOf(testInfo));
-		for (const group of [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL])
-			await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
+				await expect(workspace(page).locator('.wall-body .empty')).toHaveText(emptyLine);
+				if (shell === 'desktop') await expectBothRailGroups(await openRailNav(page, shell));
+			}
+
+			await page.goto(HOME_PATH);
+			await expect(newButton(page)).toBeVisible();
+		}
+	);
+}
+
+async function expectBothRailGroups(rail: Locator): Promise<void> {
+	for (const group of [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL])
+		await expect(rail.getByRole('button', { name: nameStartingWith(group) })).toBeVisible();
+}
+
+test(
+	'1354_rule_9 drawer-only, retired by #1354 row 61: an empty phone account keeps both rail groups',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		await answerTheLibraryEmpty(page);
+		for (const { address } of LIST_PAGES) {
+			await page.goto(address);
+			await expectBothRailGroups(await openRailNav(page, 'mobile'));
+		}
 	}
-
-	await page.goto(HOME_PATH);
-	await expect(newButton(page)).toBeVisible();
-});
+);
 
 test.describe('1354_rule_14 the Library and Playlists heads', () => {
 	test(
@@ -425,19 +444,12 @@ for (const { failure, tag, arrange, toast, alsoSaid } of FAILED_CREATES) {
 	);
 }
 
-async function archiveAlbum(page: Page, albumId: string): Promise<void> {
-	const archived = await page.request.post(`${ALBUMS_API}/${albumId}/archive`, {
-		headers: await csrfHeaders(page)
-	});
-	expect(archived.ok()).toBe(true);
-}
-
 function albumIdOfAddress(address: string): string {
 	return new URL(address).pathname.split('/')[2];
 }
 
 test(
-	'915_E3 refusals in a row leave one toast, × clears it, and a made album clears the next',
+	'1354_65_D1 915_E3 refusals in a row leave one toast, × clears it, and a made album clears the next',
 	{ tag: REFUSED_CREATE_TAG },
 	async ({ page }, testInfo) => {
 		const title = `Night Drive ${shellOf(testInfo)} ${Date.now()}`;
@@ -469,13 +481,13 @@ test(
 			createdAlbumId = albumIdOfAddress(page.url());
 			await expect(toastMessages(page)).toHaveCount(0);
 		} finally {
-			if (createdAlbumId) await archiveAlbum(page, createdAlbumId);
+			if (createdAlbumId) await archiveOwnedAlbum(page.request, createdAlbumId);
 		}
 	}
 );
 
 test(
-	'915_E4 a long unbroken album title ends in … on the New song card and leaves × on screen',
+	'1354_65_D1 915_E4 a long unbroken album title ends in … on the New song card and leaves × on screen',
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }) => {
 		const albumTitle = `${'Nightdrive'.repeat(15)}${Date.now()}`;
@@ -505,7 +517,7 @@ test(
 			}));
 			expect(clipping).toEqual({ overflow: 'hidden', textOverflow: 'ellipsis', cutShort: true });
 		} finally {
-			await archiveAlbum(page, albumId);
+			await archiveOwnedAlbum(page.request, albumId);
 		}
 	}
 );

@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { RAIL_SEARCH_LABEL } from '../src/lib/constants';
+import { RAIL_SEARCH_LABEL, SEARCH_OPEN_LABEL } from '../src/lib/constants';
 import { appBar } from './helpers';
 
 export function searchSheet(page: Page): Locator {
@@ -7,7 +7,7 @@ export function searchSheet(page: Page): Locator {
 }
 
 export async function openSearchSheet(page: Page): Promise<Locator> {
-	await appBar(page).getByRole('button', { name: 'Search', exact: true }).click();
+	await appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true }).click();
 	await expect(searchSheet(page)).toBeVisible();
 	return searchSheet(page);
 }

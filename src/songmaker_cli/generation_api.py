@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
@@ -32,6 +33,7 @@ from songmaker_cli.api_models import (
     CoverTaskParams,
     GenerateRequest,
     GenerationResponse,
+    GenerationUnavailableResponse,
     JobResponse,
     LastFailedGenerationResponse,
     RateRequest,
@@ -81,7 +83,8 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.generation_params import BaseGenerationParams
-from songmaker_cli.jobs.generation_failure import musician_job_response
+from songmaker_cli.jobs.generation_failure import generation_failure, musician_job_response
+from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
 from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
@@ -108,13 +111,6 @@ def _check_version_lora_ready(
     except Exception:
         return
     check_lora_ready_for_generation(session, params.user_lora_id, user)
-
-
-# Read verbatim by the frontend (ApiError.message -> addToast, issue #359) —
-# never a component name like "No online ACE-Step workers".
-NO_ONLINE_WORKER_DETAIL: Final = (
-    "No worker can generate music right now. Check the worker pool."
-)
 
 
 async def _has_online_acestep_worker(session: Session) -> bool:
@@ -284,6 +280,7 @@ def api_bulk_delete_generations(
 
 @router.post(
     "/songs/{song_id}/generate",
+    response_model=JobResponse,
     responses={
         400: {"description": "Generation request is invalid"},
         404: {"description": "Version does not exist"},
@@ -296,7 +293,7 @@ async def api_generate_song(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
-) -> JobResponse:
+) -> JobResponse | JSONResponse:
     song = check_song_access(session, song_id, user)
     if req.version_id:
         version = next((v for v in song.versions if v.id == req.version_id), None)
@@ -323,12 +320,9 @@ async def api_generate_song(
 
     try:
         pool = get_arq_pool()
-        if not await is_music_worker_healthy():
-            _fail_job(ctx, job.id)
-            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
-        if not await _has_online_acestep_worker(session):
-            _fail_job(ctx, job.id)
-            raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
+        rejection = await _generation_capacity_error(ctx, session, job.id)
+        if rejection is not None:
+            return rejection
         await pool.enqueue_job(
             JobFunction.GENERATE, job.id, song_id, version.id, req.count, user.id, req.seed,
             req.model,
@@ -385,6 +379,7 @@ def api_last_failed_generation(
 
 @router.post(
     "/generations/{gen_id}/repaint",
+    response_model=JobResponse,
     responses={
         400: {"description": "Repaint request or source audio is invalid"},
         404: {"description": "Version does not exist"},
@@ -398,7 +393,7 @@ async def api_repaint_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
-) -> JobResponse:
+) -> JobResponse | JSONResponse:
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
 
@@ -427,12 +422,9 @@ async def api_repaint_generation(
 
     try:
         pool = get_arq_pool()
-        if not await is_music_worker_healthy():
-            _fail_job(ctx, job.id)
-            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
-        if not await _has_online_acestep_worker(session):
-            _fail_job(ctx, job.id)
-            raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
+        rejection = await _generation_capacity_error(ctx, session, job.id)
+        if rejection is not None:
+            return rejection
         repaint_task = RepaintTaskParams(
             src_wav_path=str(wav_path),
             src_generation_id=gen_id,
@@ -459,6 +451,7 @@ async def api_repaint_generation(
 
 @router.post(
     "/generations/{gen_id}/cover",
+    response_model=JobResponse,
     responses={
         400: {"description": "Cover request or source audio is invalid"},
         404: {"description": "Version does not exist"},
@@ -472,7 +465,7 @@ async def api_cover_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
-) -> JobResponse:
+) -> JobResponse | JSONResponse:
     gen = check_generation_access(session, gen_id, user)
     song = gen.song
 
@@ -498,12 +491,9 @@ async def api_cover_generation(
 
     try:
         pool = get_arq_pool()
-        if not await is_music_worker_healthy():
-            _fail_job(ctx, job.id)
-            raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
-        if not await _has_online_acestep_worker(session):
-            _fail_job(ctx, job.id)
-            raise HTTPException(503, NO_ONLINE_WORKER_DETAIL)
+        rejection = await _generation_capacity_error(ctx, session, job.id)
+        if rejection is not None:
+            return rejection
         cover_task = CoverTaskParams(
             src_wav_path=str(wav_path),
             src_generation_id=gen_id,
@@ -748,13 +738,36 @@ def api_remaster_generation(
     return GenerationResponse.from_orm(gen)
 
 
-def _fail_job(ctx: AppContext, job_id: str) -> None:
+async def _generation_capacity_error(
+    ctx: AppContext, session: Session, job_id: str,
+) -> JSONResponse | None:
+    try:
+        if not await is_music_worker_healthy():
+            raise NoCapacityError(WORKER_NOT_RUNNING_DETAIL)
+        if not await _has_online_acestep_worker(session):
+            raise NoCapacityError(NO_ONLINE_ACESTEP_WORKERS_DETAIL)
+    except NoCapacityError as exc:
+        failure = generation_failure(exc, job_id)
+        _fail_job(ctx, job_id, error=failure.message, error_type=failure.error_type)
+        response = GenerationUnavailableResponse(
+            detail=failure.message, error_type=failure.error_type, job_id=job_id,
+        )
+        return JSONResponse(status_code=503, content=response.model_dump())
+    return None
+
+
+def _fail_job(
+    ctx: AppContext,
+    job_id: str,
+    error: str = JOB_QUEUE_UNAVAILABLE_DETAIL,
+    error_type: str | None = None,
+) -> None:
     try:
         with ctx.db() as session:
             update_job_status(
                 session,
                 job_id,
-                JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
+                JobStatusUpdate(JobStatus.FAILED, error=error, error_type=error_type),
             )
             session.commit()
     except Exception:

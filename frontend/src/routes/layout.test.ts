@@ -26,11 +26,11 @@ import {
 	COMPACT_LAYOUT_MEDIA,
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
-	RAIL_DRAWER_OPEN_LABEL,
 	RATE_LIMITED_TOAST_MESSAGE,
-	RAIL_SETTINGS_LABEL
+	RAIL_SETTINGS_LABEL,
+	SEARCH_OPEN_LABEL
 } from '$lib/constants';
-import { SEARCH_OPEN_LABEL, SEARCH_SHEET_LABEL } from '$lib/components/PhoneAppBar.svelte';
+import { SEARCH_SHEET_LABEL } from '$lib/components/PhoneAppBar.svelte';
 import { apiFetch } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
@@ -74,7 +74,7 @@ import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
+import { closeSidebar, phoneAppBar, railCollapsed, railWidth } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { liveStream } = vi.hoisted(() => ({
@@ -566,15 +566,15 @@ describe('app shell', () => {
 	// O1 (#1080): the offline strip rests on the transport bar, and the room
 	// every surface reserves for the bar grows by the strip while it shows, so
 	// the phone's Generate bar stays above the strip instead of under it.
-	it('adds the offline strip to the room the transport bar takes, and gives it back online', async () => {
+	it('1354_37b_66: adds the offline strip to the room the transport bar takes, and gives it back online', async () => {
 		await renderLayout(LIBRARY_ROUTE_PATH);
 		expect(document.documentElement.dataset.offline).toBeUndefined();
 
 		reportResourceStreamReachable(false);
 		await tick();
 		expect(document.documentElement.dataset.offline).toBe('');
-		expect(extractRule(appCss, ':root')).toContain(
-			'--player-height: calc(var(--transport-bar-height) + var(--offline-strip-room))'
+		expect(extractRule(appCss, ':root').replace(/\s+/g, '')).toContain(
+			'--player-height:calc(var(--shell-bottom-offset)+var(--transport-bar-height)+var(--offline-strip-room))'
 		);
 		expect(extractRule(appCss, 'html[data-offline]')).toContain(
 			'--offline-strip-room: var(--offline-strip-height)'
@@ -627,15 +627,15 @@ describe('global Escape', () => {
 		expect(get(selectedSongId)).toBe('s1');
 	});
 
-	it('closes the open rail drawer first and leaves the song only on the next Escape', async () => {
+	it('1354_37b_71_escape: closes the open Search sheet first and leaves the song only on the next Escape', async () => {
 		selectedSongId.set('s1');
-		await renderLayout(LIBRARY_ROUTE_PATH);
-		sidebarOpen.set(true);
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
+		getByRoleButton(target, SEARCH_OPEN_LABEL).click();
 		await tick();
 
 		pressEscape(window);
 		await tick();
-		expect(get(sidebarOpen)).toBe(false);
+		expect(target.querySelector(`[role="dialog"][aria-label="${SEARCH_SHEET_LABEL}"]`)).toBeNull();
 		expect(get(selectedSongId)).toBe('s1');
 
 		pressEscape(window);
@@ -1006,12 +1006,8 @@ describe('signing out on the phone', () => {
 	});
 });
 
-// The phone drawer holds a history entry of its own; a step back off it,
-// queued as the drawer closed with the shell, used to land after the sign-in
-// navigation and put the page's address back over an empty shell (#1230). A
-// lost session now loads the page afresh over the drawer's entry instead.
-describe('a session lost behind the open phone drawer', () => {
-	it("steps back nowhere, and loads the page afresh over the drawer's entry", async () => {
+describe('a session lost behind the open Search sheet', () => {
+	it('1354_37b_71_session: steps back nowhere, and loads the page afresh over the Search sheet entry (#1230)', async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
@@ -1020,8 +1016,8 @@ describe('a session lost behind the open phone drawer', () => {
 		const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
 		standInForDocumentLoadsForTests(documentLoads);
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
-		getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL).click();
-		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('rail-drawer'));
+		getByRoleButton(target, SEARCH_OPEN_LABEL).click();
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('search-sheet'));
 
 		const back = watchBack();
 		let backPresses: number;

@@ -4,7 +4,7 @@
 // and refuses the stream manifest, so each song plays from its own address.
 
 import { readFileSync } from 'node:fs';
-import type { Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { BASE_URL, TAKE_FIXTURE } from './seed';
 
 const AUDIO_FRAME_SYNC = Buffer.from([0xff, 0xf3, 0x40]);
@@ -16,6 +16,7 @@ export const MOCK_SLUG = 'mock-album';
 export const MOCK_ALBUM_TITLE = 'Mocked Long Album';
 export const MOCK_ARTIST = 'Mock Artist';
 export const MOCK_UNPLAYABLE_TITLE = 'Hidden Draft';
+export const MOCK_STREAM_REFUSAL = { path: `/shared/${MOCK_SLUG}/stream`, statuses: [404] };
 export const MOCK_URL = `${BASE_URL}/share/${MOCK_SLUG}`;
 
 export interface MockSong {
@@ -91,4 +92,14 @@ export async function mockSharedAlbum(page: Page, songs: MockSong[]): Promise<vo
 			body: audio.subarray(start, end + 1)
 		});
 	});
+}
+
+export function control(page: Page, name: string): Locator {
+	return page.locator('.now-playing.page').getByRole('button', { name, exact: true });
+}
+
+export async function openMockSharedAlbum(page: Page, songs = mockSongs(3)): Promise<void> {
+	await mockSharedAlbum(page, songs);
+	await page.goto(MOCK_URL);
+	await expect(page.getByRole('heading', { level: 1 })).toHaveText(MOCK_ALBUM_TITLE);
 }
