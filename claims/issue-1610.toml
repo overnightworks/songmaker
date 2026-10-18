@@ -1,7 +1,0 @@
-claim_id = "979516aff08b477d838785b0d29e5429"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "eb17e74010fc27631f302faf827e2ce6ccdf4228"
-branch = "claude/issue-1610-cover-proofs-one-flow"
-scope = ["frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/playlist-cover-rail.spec.ts"]
-opened_commit = "6af5f03106b84bda879e54169f9cab28f9e9ea0b"
