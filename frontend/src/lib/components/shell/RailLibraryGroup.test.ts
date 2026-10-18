@@ -115,14 +115,28 @@ function showAlbumDetail(albumId: string): void {
 }
 
 describe('RailLibraryGroup', () => {
-	it('shows the LIBRARY group with its icon and the current album count, collapsed with an album page elsewhere', async () => {
-		librarySurface.set('detail');
-		const target = await render();
-		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
-		expect(target.querySelector('.meta')?.textContent).toBe('1');
-		expect(toggle.getAttribute('aria-expanded')).toBe('false');
-	});
+	it.each([
+		{ status: 'idle', count: undefined, rows: 2, query: '' },
+		{ status: 'loading', count: undefined, rows: 2, query: '' },
+		{ status: 'unreachable', count: undefined, rows: 2, query: '' },
+		{ status: 'error', count: undefined, rows: 2, query: '' },
+		{ status: 'ready', count: '2', rows: 2, query: '' },
+		{ status: 'ready', count: '0', rows: 0, query: '' },
+		{ status: 'ready', count: '2', rows: 1, query: 'Other' }
+	] as const)(
+		'1160-F30-count 1160-F30-filter: $status total $count with $rows rows ($query)',
+		async ({ status, count, rows, query }) => {
+			fetchAlbums.mockReturnValue(new Promise(() => {}));
+			const target = await render();
+			albumList.set(count === '0' ? [] : [album(), album({ id: 'a2', title: 'Other' })]);
+			allAlbumsLoad.set({ status, error: null });
+			railTreeQuery.set(query);
+			await tick();
+			expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Library');
+			expect(target.querySelector('.meta')?.textContent).toBe(count);
+			expect(target.querySelectorAll('.album-label')).toHaveLength(rows);
+		}
+	);
 
 	it('#1354 rule 40: the arrow folds the LIBRARY group without navigating', async () => {
 		librarySurface.set('detail');
