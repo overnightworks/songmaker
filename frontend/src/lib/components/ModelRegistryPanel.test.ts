@@ -167,6 +167,43 @@ describe('ModelRegistryPanel failures', () => {
 		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 
+	it.each([false, true])(
+		'[1160-F27-banner, 1160-F28-return] hides offline and stale failures with existing data=%s',
+		async (hasData) => {
+			const registry = {
+				models: [{ mode: 'turbo', availability: 'downloaded', loaded_on: [], loading_on: [] }]
+			};
+			api.getRegistry.mockRejectedValue(lostNetwork());
+			if (hasData) api.getRegistry.mockResolvedValueOnce(registry);
+			const target = await renderPanel(false);
+			if (hasData) {
+				reportResourceStreamReachable(false);
+				reportResourceStreamReachable(true);
+				await flush();
+			}
+			const failureSelector = hasData ? '.banner-error' : '.panel-error';
+			expect(target.querySelector(failureSelector)).not.toBeNull();
+
+			reportResourceStreamReachable(false);
+			await flush();
+			expect(target.querySelector('.banner-error, .panel-error')).toBeNull();
+			expect(target.querySelector('.registry-table') !== null).toBe(hasData);
+
+			const reload = Promise.withResolvers<typeof registry>();
+			api.getRegistry.mockReturnValueOnce(reload.promise);
+			reportResourceStreamReachable(true);
+			await flush();
+			expect(target.querySelector('.banner-error, .panel-error')).toBeNull();
+			expect(target.querySelector('.registry-table') !== null).toBe(hasData);
+			if (!hasData) expect(target.textContent).toContain('Loading registry…');
+
+			reload.reject(new ApiError(403, 'Forbidden', '/api/admin/registry'));
+			await flush();
+			expect(requireElement(target, '.panel-error').textContent).toBe('Admin access required.');
+			expect(target.querySelector('.registry-table')).toBeNull();
+		}
+	);
+
 	it('under the offline strip shows no failure of its own and loads again once back online', async () => {
 		reportResourceStreamReachable(false);
 		api.getRegistry.mockRejectedValue(lostNetwork());

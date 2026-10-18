@@ -37,6 +37,7 @@ export function createPollingStore<T>(
 
 	async function tick(): Promise<void> {
 		if (isHidden()) return;
+		error.set(null);
 		loading.set(true);
 		try {
 			const result = await fetcher();

@@ -165,7 +165,7 @@
 				{/each}
 			</tbody>
 		</table>
-		{#if $error}
+		{#if $error && !$offline}
 			<p class="banner-error">⚠ Connection lost — retrying…</p>
 		{/if}
 	{/if}
