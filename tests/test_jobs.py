@@ -2766,10 +2766,18 @@ def test_job_duration_stats(db_factory) -> None:
 
 
 def test_job_duration_stats_no_completed(db_factory) -> None:
+    """S9-F: Timestamped PARTIAL jobs do not enter completed duration statistics."""
+    from datetime import datetime, timezone
+
     from songmaker_cli.db.queries import job_duration_stats
 
     with db_factory() as session:
         session.add(Job(type="generate", status="running"))
+        session.add(Job(
+            type="generate", status="partial",
+            started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            completed_at=datetime(2025, 1, 2, tzinfo=timezone.utc),
+        ))
         session.commit()
 
     with db_factory() as session:

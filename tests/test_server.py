@@ -1555,7 +1555,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
 def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
     tmp_path: Path, mock_arq_pool,
 ) -> None:
-    """The single sample an alert needs: when a job last failed.
+    """S9-F: The failure sample excludes newer timestamped PARTIAL jobs.
 
     A counter would have to be compared against an earlier sample, which
     is exactly what Prometheus does not have for the first failure of a
@@ -1566,7 +1566,11 @@ def test_metrics_last_job_failure_timestamp_names_the_newest_failure(
     client = _make_metrics_client(tmp_path)
     older = datetime(2026, 8, 30, 12, 0, tzinfo=timezone.utc)
     newest = datetime(2026, 8, 31, 8, 30, tzinfo=timezone.utc)
+    partial = datetime(2026, 9, 1, tzinfo=timezone.utc)
     with client.app.state.ctx.db() as session:
+        session.add(Job(
+            type="generate", status="partial", started_at=partial, completed_at=partial,
+        ))
         session.add(Job(type="generate", status="failed", started_at=older, completed_at=older))
         session.add(Job(type="score", status="failed", started_at=newest, completed_at=newest))
         session.add(

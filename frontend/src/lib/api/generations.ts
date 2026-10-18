@@ -171,7 +171,3 @@ export async function shareGeneration(genId: string): Promise<ShareResult> {
 export async function unshareGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}/share`, { method: 'DELETE' });
 }
-
-export async function remasterGeneration(genId: string): Promise<void> {
-	await apiFetch(`/api/generations/${genId}/remaster`, { method: 'POST' });
-}
