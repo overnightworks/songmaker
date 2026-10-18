@@ -1,7 +1,0 @@
-claim_id = "e58d16a9fb834c9688978f5e3f86db60"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
-branch = "claude/issue-1646-stop-tests-cover-dispatch"
-scope = ["tests/acestep_worker/test_subprocess_runner.py", "tests/test_cowriter_cover_dispatch.py", "tests/test_cowriter_dispatch.py"]
-opened_commit = "7af78c06c8a786b31ed1bfc413a7b74716cd8cf8"
