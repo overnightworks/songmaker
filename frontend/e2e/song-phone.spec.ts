@@ -27,6 +27,7 @@
 // standing in for the seeded heartbeat a real worker would publish, so the
 // failed generation's own persistent UI is what's on screen instead.
 
+import { phoneSearchResult } from './phone-search';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { VersionItem } from '../src/lib/api/types';
 import {
@@ -62,7 +63,6 @@ import {
 	MOBILE_VIEWPORT,
 	nameStartingWith,
 	ONLY_IN_SHELL,
-	openRailNav,
 	openSettingsSection,
 	openSettingsSectionFromSearch,
 	playlistEntryRows,
@@ -349,19 +349,25 @@ test.describe('song page at phone width', () => {
 	);
 
 	test(
-		'a drawer album tap with an unsaved draft asks first: Cancel keeps the draft, Discard leaves (#1143)',
+		'1354_37a_A4: a Search album selection with an unsaved draft asks first: Cancel keeps the draft, Discard leaves (#1143)',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			const library = readSeededLibrary();
 			const { songHeading, lyrics, savedLyrics, unsavedDraftDialog } =
 				await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
-			const tapTheOtherAlbumInTheDrawer = async () => {
-				const rail = await openRailNav(page, 'mobile');
-				await rail.getByRole('button', { name: containing(library.secondAlbumTitle) }).click();
+			const selectTheOtherAlbumFromSearch = async () => {
+				await (
+					await phoneSearchResult(
+						page,
+						'Albums',
+						library.secondAlbumTitle,
+						containing(library.secondAlbumTitle)
+					)
+				).click();
 				await expect(unsavedDraftDialog).toBeVisible();
 			};
 
-			await tapTheOtherAlbumInTheDrawer();
+			await selectTheOtherAlbumFromSearch();
 			await unsavedDraftDialog
 				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
 				.click();
@@ -369,7 +375,7 @@ test.describe('song page at phone width', () => {
 			await expect(songHeading).toBeVisible();
 			await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
 
-			await tapTheOtherAlbumInTheDrawer();
+			await selectTheOtherAlbumFromSearch();
 			await unsavedDraftDialog
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 				.click();

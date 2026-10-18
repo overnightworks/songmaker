@@ -13,6 +13,7 @@
 // suite (libraryContext.test.ts) with controlled promises. Row 9 (the legacy
 // `/?song=` redirect) lives in album-address.spec.ts, which is desktop-only.
 
+import { phoneSearchResult } from './phone-search';
 import { expect, test, type Page } from '@playwright/test';
 import {
 	HOME_PAGE_LABEL,
@@ -72,6 +73,14 @@ const historyLength = (page: Page) => page.evaluate(() => history.length);
 
 function albumAddress(library: SeededLibrary): RegExp {
 	return new RegExp(`/album/${library.albumId}$`);
+}
+
+async function openAlbumFromHome(page: Page, shell: Shell, title: string): Promise<void> {
+	if (shell === 'mobile') {
+		await (await phoneSearchResult(page, 'Albums', title, nameStartingWith(title))).click();
+	} else {
+		await openAlbumFromRail(page, shell, title);
+	}
 }
 
 async function expectHomeShown(page: Page): Promise<void> {
@@ -550,7 +559,7 @@ for (const origin of [HOME, LIBRARY]) {
 
 // The phone's ‹ names the page below the album, and goes there when clicked;
 // a cold album has none below it and goes to the Library. A Listen row opens
-// an album; this address proof uses the drawer's album row.
+// an album; this address proof uses phone search or the desktop rail.
 const BACK_ARROW_CELLS: readonly {
 	readonly origin: string;
 	readonly name: string;
@@ -562,7 +571,7 @@ const BACK_ARROW_CELLS: readonly {
 		name: HOME_PAGE_LABEL,
 		openAlbum: async (page, shell, library) => {
 			await HOME.open(page, shell, library);
-			await openAlbumFromRail(page, shell, library.albumTitle);
+			await openAlbumFromHome(page, shell, library.albumTitle);
 		},
 		returnsTo: HOME
 	},
@@ -589,7 +598,7 @@ const BACK_ARROW_CELLS: readonly {
 
 for (const cell of BACK_ARROW_CELLS) {
 	test(
-		`1354_rule_25 row 8: an album opened from ${cell.origin} reads Back to ${cell.name} and goes there`,
+		`1354_37a_A2 1354_rule_25 row 8: an album opened from ${cell.origin} reads Back to ${cell.name} and goes there`,
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			const guard = new FlowGuard(page);
@@ -627,7 +636,7 @@ test('1354_R1prime row 10a: a pre-switch {browse} entry at / reads as Home after
 	guard.assertClean();
 });
 
-test('1354_R1prime row 10b: a pre-switch {browse} entry at / reached by Back from an album reads as Home, never /library', async ({
+test('1354_37a_A2 1354_R1prime row 10b: a pre-switch {browse} entry at / reached by Back from an album reads as Home, never /library', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -636,7 +645,7 @@ test('1354_R1prime row 10b: a pre-switch {browse} entry at / reached by Back fro
 	await watchHistoryWrites(page);
 	await page.goto(HOME_PATH);
 	await expectHomeShown(page);
-	await openAlbumFromRail(page, shell, library.albumTitle);
+	await openAlbumFromHome(page, shell, library.albumTitle);
 	await expectAlbumShown(page, library);
 	const length = await historyLength(page);
 	await page.goBack();

@@ -37,9 +37,10 @@
 //
 // Both shells drive all seven flows: the compact one at 375px, which is where
 // the rail is a drawer and Log out is reached through the account circle in
-// the app bar (issue #1158). The session lost behind the drawer is the phone's
+// the app bar (issue #1158). The session lost behind Search is the phone's
 // own flow.
 
+import { openSearchSheet, phoneSearchResult } from './phone-search';
 import {
 	expect,
 	request,
@@ -50,6 +51,7 @@ import {
 	type Locator,
 	type Page,
 	type Response,
+	type Request,
 	type TestInfo
 } from '@playwright/test';
 
@@ -60,10 +62,8 @@ import {
 	ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
 	ADMIN_TABS_LABEL,
 	HITBOX_FREQUENT_PX,
-	RAIL_DRAWER_OPEN_LABEL,
-	LIBRARY_PAGE_LABEL,
-	RAIL_LIBRARY_NAV_LABEL,
 	SESSION_LOST_REDIRECT_PARAM,
+	RAIL_SEARCH_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
@@ -76,6 +76,7 @@ import {
 	openLibraryWall,
 	openRailNav,
 	containing,
+	coversPath,
 	loseNetwork,
 	nameStartingWith,
 	ONLY_IN_SHELL,
@@ -103,9 +104,10 @@ import {
  * the CI recipe (desktop / 375px): 13/13 for the sign-in, 19/19 for the reload,
  * 14/14 for the sign-out and the refused return, 18/15 for the refused admin
  * page, 13/12 for the expired session, 23/26 for the deep-link sign-in, 28 at
- * 375px for the phone's session lost behind its menu, and 20 at 390px for the
- * album tapped in its drawer after the session was lost; both run on the phone
- * only. The admin flows were measured at 1440 /
+ * 375px for the session loss behind a fresh Search query
+ * (`1354_37a_A5_song`), and 24 at 390px for the album selected in Search
+ * after expiry (`1354_37a_A5_album`; measured on #1605's branch CI).
+ * The admin flows were measured at 1440 /
  * 390 instead: 27 to 28/25 to 26 for the own session, its two stale revokes,
  * the revoke that works and the create refusal (#1397), 11/9 for the Users
  * tab error a create refusal leaves standing and a create that works clears
@@ -152,16 +154,10 @@ const REFUSED_PATHS = [
 	ADMIN_SESSIONS_PATH,
 	ADMIN_LOGIN_ATTEMPTS_PATH
 ];
-// The library lists the phone drawer reads as it opens, which a session lost
-// behind it refuses. Only the flow tagged with this expects that refusal; in
-// every other flow it still fails the guard.
-const LIBRARY_LISTS_REFUSED_TAG = '@library-lists-refused';
-const LIBRARY_LIST_PATHS = ['/api/albums', '/api/playlists'];
-// What a drawer album tap reads as it opens the album -- its songs, the album
-// the page resolves, and the active models the generation presets offer --
-// which a session lost before the tap refuses. The live-sync stream opens with
-// the album route before the first refusal is processed; every later start or
-// reconnect waits on the leave in resourceSync (#1340 C5).
+// Only the standing-song scenario expects a refused search query.
+const SEARCH_REFUSED_TAG = '@session-search-refused';
+const LIBRARY_SEARCH_PATH = '/api/library/search';
+// Album selection may race the overlay's Back with any of these opening reads (#1340).
 const ALBUM_OPENING_REFUSED_TAG = '@album-opening-refused';
 const ALBUM_OPENING_PATHS = [
 	'/api/songs',
@@ -526,20 +522,44 @@ function albumAddressOf(songAddress: string): string {
 
 /**
  * The run marker the seeded album's title and address share
- * (`seedOwnSongAddress`), which names its row in the rail.
+ * (`seedOwnSongAddress`), which identifies its Search result.
  */
 function albumMarkerOf(albumAddress: string): string {
 	return albumAddress.slice(albumAddress.lastIndexOf('-') + 1);
 }
 
-/** The account's own album in the rail's LIBRARY group, opened to show it. */
-async function albumInRail(page: Page, shell: Shell, albumAddress: string): Promise<Locator> {
-	const rail = await openRailNav(page, shell);
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) });
-	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-	return rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-		.getByRole('button', { name: containing(albumMarkerOf(albumAddress)) });
+/** Settle playlist reads started by mounting Search before aging the session. */
+async function settleSearchOpeningReads(
+	page: Page,
+	open: () => Promise<Locator>
+): Promise<Locator> {
+	const reads: Promise<Response | null>[] = [];
+	const record = (request: Request) => {
+		if (request.method() === 'GET' && new URL(request.url()).pathname === '/api/playlists') {
+			reads.push(request.response());
+		}
+	};
+	page.on('request', record);
+	try {
+		const result = await open();
+		for (const read of reads) {
+			const response = await read;
+			expect(response?.ok()).toBe(true);
+			await response?.finished();
+		}
+		return result;
+	} finally {
+		page.off('request', record);
+	}
+}
+
+function isSearchResponse(response: Response, query: string): boolean {
+	const url = new URL(response.url());
+	return (
+		response.request().method() === 'GET' &&
+		url.pathname === LIBRARY_SEARCH_PATH &&
+		url.searchParams.get('q') === query
+	);
 }
 
 /**
@@ -560,7 +580,7 @@ async function signInOnto(page: Page, songAddress: string): Promise<void> {
 /**
  * Every refusal this file drives is one of its sentences: the login it locks
  * out, the `/api/auth/me` a dead session answers, the admin calls a non-admin
- * makes, and for the tagged flows the library lists a lost session refuses,
+ * makes, and for the tagged flows the search query a lost session refuses,
  * the admin's stale revoke and taken username, and the take's audio the media
  * flows refuse. A refusal anywhere else, and any 5xx at all, still fails the
  * flow.
@@ -568,7 +588,7 @@ async function signInOnto(page: Page, songAddress: string): Promise<void> {
 function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
 	const refusedPaths = [
 		...REFUSED_PATHS,
-		...(testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG) ? LIBRARY_LIST_PATHS : []),
+		...(testInfo.tags.includes(SEARCH_REFUSED_TAG) ? [LIBRARY_SEARCH_PATH] : []),
 		...(testInfo.tags.includes(ALBUM_OPENING_REFUSED_TAG) ? ALBUM_OPENING_PATHS : [])
 	];
 	const sessionRefusals = refusedPaths.map((path) => ({
@@ -1056,18 +1076,25 @@ test('a logged-out deep link signs in onto the song it asked for', async ({ page
 	await attachShot(page, testInfo, 'auth-deep-link-returned');
 });
 
-// The drawer the menu opens is the phone shell.
+// Search opens over the standing song without changing its address.
 test(
-	'a session lost behind a song page on the phone is sent to sign-in from the menu',
-	{ tag: [LIBRARY_LISTS_REFUSED_TAG, ONLY_IN_SHELL.mobile] },
+	'1354_37a_A5_song: a fresh Search query after expiry returns sign-in to the standing song',
+	{ tag: [SEARCH_REFUSED_TAG, ONLY_IN_SHELL.mobile] },
 	async ({ page }, testInfo) => {
 		const songAddress = await seedOwnSong();
 		await signInOnto(page, songAddress);
 		const signedIn = await sessionCookie(page.context());
 		expect(signedIn).toBeDefined();
 
+		const sheet = await settleSearchOpeningReads(page, () => openSearchSheet(page));
+		await expect(page).toHaveURL(new RegExp(`${songAddress}$`));
+		const search = sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
+		await search.fill('');
 		await ageSessionPastAbsoluteLimit(sessionIdOf(signedIn as Cookie));
-		await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		const query = albumMarkerOf(albumAddressOf(songAddress));
+		const refusedSearch = page.waitForResponse((response) => isSearchResponse(response, query));
+		await search.fill(query);
+		expect(SESSION_REFUSAL_STATUSES).toContain((await refusedSearch).status());
 
 		// Not a dark page on the song's own address: the door, asked to bring the
 		// person back to that song, saying why they are there.
@@ -1084,9 +1111,9 @@ test(
 // Issue #1340, head ruling: a navigation the person already started counts as
 // where they meant to be. Which of the tap's requests the server refuses first
 // varies from run to run, and the address sign-in returns to must not. The
-// drawer is the phone shell.
+// Search sheet is a phone layer.
 test(
-	'a session lost behind the drawer on the phone returns to the album tapped in it',
+	'1354_37a_A5_album: an album selected in Search after expiry survives overlay Back at sign-in (#1340)',
 	{ tag: [ALBUM_OPENING_REFUSED_TAG, ONLY_IN_SHELL.mobile] },
 	async ({ page }, testInfo) => {
 		await page.setViewportSize(MOBILE_VIEWPORT);
@@ -1094,11 +1121,29 @@ test(
 		await signIn(page);
 		await page.goto(VOICES_PAGE_PATH);
 		await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
-		const album = await albumInRail(page, 'mobile', albumAddress);
-		await expect(album).toBeVisible();
+		const query = albumMarkerOf(albumAddress);
+		const found = page.waitForResponse((response) => isSearchResponse(response, query));
+		const album = await settleSearchOpeningReads(page, () =>
+			phoneSearchResult(page, 'Albums', query, containing(query))
+		);
+		expect((await found).ok()).toBe(true);
 
 		await ageSessionPastAbsoluteLimit(sessionIdOf((await sessionCookie(page.context())) as Cookie));
+		const albumRefusals: ExpectedRefusal[] = ALBUM_OPENING_PATHS.map((path) => ({
+			path,
+			statuses: SESSION_REFUSAL_STATUSES
+		}));
+		const refusedAlbum = page.waitForResponse((response) => {
+			const pathname = new URL(response.url()).pathname;
+			return (
+				response.request().method() === 'GET' &&
+				albumRefusals.some(
+					(refusal) => coversPath(refusal, pathname) && refusal.statuses.includes(response.status())
+				)
+			);
+		});
 		await album.click();
+		await refusedAlbum;
 
 		await expect(page).toHaveURL(
 			(url) =>

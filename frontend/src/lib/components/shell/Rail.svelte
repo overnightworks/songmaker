@@ -1,7 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { setRailCollapsed } from '$lib/contexts/rail-collapsed';
-	import { librarySurface, placeShown } from '$lib/stores/libraryContext';
+	import { librarySurface, placeShown, type Place } from '$lib/stores/libraryContext';
 	import { selectedSongId } from '$lib/stores/player';
 	import { page } from '$app/state';
 	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
@@ -47,8 +47,9 @@
 
 	// Each rail supplies its own state so the phone drawer stays expanded.
 	setRailCollapsed(() => collapsed);
+	const homePlace: Place = 'home';
 	const onHome = $derived(
-		placeShown('home', $librarySurface, $selectedSongId, standingPathname(page.state))
+		placeShown(homePlace, $librarySurface, $selectedSongId, standingPathname(page.state))
 	);
 
 	const collapseRailLabel = 'Collapse rail';
@@ -137,7 +138,7 @@
 			onclick={(event) => followPlainClick(event, openHome)}
 		>
 			<span class="home-fold-spacer" aria-hidden="true"></span>
-			<span aria-hidden="true"><Icon name="home" size={14} /></span>
+			<span aria-hidden="true"><Icon name={homePlace} size={14} /></span>
 			<span class="group-title">{HOME_PAGE_LABEL}</span>
 		</a>
 		<RailLibraryGroup />

@@ -1,4 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
+import { get } from 'svelte/store';
+import { toasts } from '$lib/stores/toast';
+import { closeTopLayer, dropLayersFrom } from '$lib/stores/layers';
+import { localClockTime } from '$lib/utils/format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkerPoolResponse } from '$lib/api/types';
@@ -20,6 +24,21 @@ function findButtonByText(root: HTMLElement, text: string): HTMLButtonElement | 
 	return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
 		button.textContent?.replace(/\s+/g, ' ').trim().includes(text)
 	);
+}
+
+async function openRestartConfirmation(root: HTMLElement) {
+	const opener = findButtonByText(root, 'Restart worker…');
+	if (!opener) throw new Error('Expected restart opener');
+	opener.focus();
+	opener.click();
+	await tick();
+	const dialog = root.querySelector<HTMLElement>('[role="dialog"]');
+	if (!dialog) throw new Error('Expected confirmation');
+	const cancel = findButtonByText(dialog, 'Cancel');
+	if (!cancel) throw new Error('Expected Cancel');
+	const restart = findButtonByText(dialog, 'Restart');
+	if (!restart) throw new Error('Expected Restart');
+	return { opener, dialog, cancel, restart };
 }
 
 function workerPool(vramMeasured: boolean | null): WorkerPoolResponse {
@@ -721,6 +740,199 @@ describe('WorkerPoolPanel load row', () => {
 			}
 			await vi.waitFor(() => expect(load).toBeEnabled());
 			expect(select).toBeEnabled();
+		}
+	);
+});
+
+describe('WorkerPoolPanel restart confirmation', () => {
+	it.each(['Cancel', 'Escape', 'Back'])(
+		'S18-1 S18-2 cancels with %s, restores focus and reopens without sending',
+		async (method) => {
+			const target = await renderWorkerPool(onlineWorkerPool());
+			const requests: string[] = [];
+			vi.stubGlobal('fetch', (path: string) => {
+				requests.push(path);
+				return fetchWorkers();
+			});
+			for (let attempt = 0; attempt < 2; attempt++) {
+				const { opener, dialog, cancel, restart } = await openRestartConfirmation(target);
+				expect(dialog).toHaveAttribute('aria-label', 'Restart acestep-worker-0?');
+				expect(dialog).toHaveTextContent('Running takes will stop.');
+				expect(cancel).toHaveFocus();
+				cancel.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'Tab',
+						shiftKey: true,
+						bubbles: true,
+						cancelable: true
+					})
+				);
+				expect(restart).toHaveFocus();
+				restart.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+				);
+				expect(cancel).toHaveFocus();
+				if (method === 'Cancel') cancel.click();
+				else if (method === 'Back') dropLayersFrom(0);
+				else
+					cancel.dispatchEvent(
+						new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+					);
+				await tick();
+				await tick();
+				expect(target.querySelector('[role="dialog"]')).toBeNull();
+				expect(opener).toHaveFocus();
+				expect(closeTopLayer()).toBe(false);
+			}
+			expect(requests).toEqual([]);
+		}
+	);
+
+	it.each([false, true])(
+		'S18-1 S18-2 S18-3 targets the selected worker once and recovers after refusal=%s',
+		async (refused) => {
+			const pool = onlineWorkerPool();
+			const second = structuredClone(pool.workers[0]);
+			second.identity.id = 'acestep-worker-1';
+			pool.workers.push(second);
+			const target = await renderWorkerPool(pool);
+			const requests: { path: string; method?: string }[] = [];
+			let finish!: (response: Response) => void;
+			vi.stubGlobal('fetch', (path: string, init: RequestInit) => {
+				if (path === '/api/admin/workers') return fetchWorkers();
+				requests.push({ path, method: init.method });
+				return new Promise<Response>((resolve) => {
+					finish = resolve;
+				});
+			});
+			const card = target.querySelectorAll<HTMLElement>('.card')[1];
+			const { opener, restart } = await openRestartConfirmation(card);
+			expect(target.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+			expect(card.querySelector('[role="dialog"]')).toHaveAttribute(
+				'aria-label',
+				'Restart acestep-worker-1?'
+			);
+			expect(requests).toEqual([]);
+			restart.click();
+			await tick();
+			expect(opener).toBeDisabled();
+			opener.click();
+			expect(requests).toEqual([
+				{ path: '/api/admin/workers/acestep-worker-1/restart', method: 'POST' }
+			]);
+			finish(
+				Response.json(refused ? { detail: 'Worker refused restart' } : {}, {
+					status: refused ? 503 : 200
+				})
+			);
+			await vi.waitFor(() => expect(opener).toBeEnabled());
+			if (refused)
+				expect(target.querySelector('.panel-error')).toHaveTextContent('Worker refused restart');
+			else
+				expect(
+					get(toasts).some((toast) => toast.message === 'Restart requested for acestep-worker-1')
+				).toBe(true);
+			const { restart: retry } = await openRestartConfirmation(card);
+			expect(card.querySelector('[role="dialog"]')).not.toBeNull();
+			expect(requests).toHaveLength(1);
+			retry.click();
+			await tick();
+			expect(requests).toHaveLength(2);
+			finish(Response.json({}));
+			await vi.waitFor(() => expect(opener).toBeEnabled());
+			expect(target.querySelector('.panel-error')).toBeNull();
+		}
+	);
+
+	it.each(['offline', 'removed', 'forbidden', 'unmounted'])(
+		'S18-2 S18-5 respects a worker becoming %s while confirmation is open',
+		async (change) => {
+			vi.useFakeTimers();
+			const target = await renderWorkerPool(onlineWorkerPool());
+			const { cancel, restart } = await openRestartConfirmation(target);
+			const requests: string[] = [];
+			vi.stubGlobal('fetch', (path: string) => {
+				if (path === '/api/admin/workers') return fetchWorkers();
+				requests.push(path);
+				return Promise.resolve(Response.json({}));
+			});
+			if (change === 'offline') poolResponse.workers[0].status = 'offline';
+			if (change === 'removed') poolResponse.workers = [];
+			if (change === 'forbidden')
+				poolFailure = Response.json({ detail: 'Forbidden' }, { status: 403 });
+			if (change === 'unmounted') {
+				if (!mounted) throw new Error('Expected mounted panel');
+				await unmount(mounted);
+				mounted = undefined;
+			} else await vi.advanceTimersByTimeAsync(3000);
+			if (change === 'offline') {
+				expect(restart).toBeDisabled();
+				restart.click();
+				expect(target).toHaveTextContent('VRAM unavailable while the worker is offline.');
+				cancel.click();
+				await tick();
+			}
+			expect(target.querySelector('[role="dialog"]')).toBeNull();
+			expect(closeTopLayer()).toBe(false);
+			expect(requests).toEqual([]);
+		}
+	);
+});
+
+describe('WorkerPoolPanel last error', () => {
+	it.each([
+		{
+			name: 'timestamp',
+			error: '<img src=x onerror=alert(1)> GPU failed',
+			timestamp: '2026-10-18T10:02:00Z'
+		},
+		{ name: 'missing timestamp', error: 'GPU failed', timestamp: null },
+		{ name: 'invalid timestamp', error: 'GPU failed', timestamp: 'invalid' },
+		{ name: 'no error', error: null, timestamp: '2026-10-18T10:02:00Z' },
+		{ name: 'old heartbeat', error: undefined, timestamp: undefined }
+	])('S18-4 S18-5 displays $name honestly as text', async ({ error, timestamp }) => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-10-18T10:05:00Z'));
+		const pool = onlineWorkerPool();
+		if (!pool.workers[0].state) throw new Error('Expected heartbeat');
+		Object.assign(pool.workers[0].state, { last_error: error, last_error_at: timestamp });
+		const target = await renderWorkerPool(pool);
+		const box = target.querySelector('.last-error');
+		if (!error) {
+			expect(box).toBeNull();
+			return;
+		}
+		expect(box).toHaveTextContent('Last error');
+		expect(box).toHaveTextContent(error);
+		expect(box).toHaveTextContent('Full logs: docker compose logs acestep-worker-0');
+		expect(box?.querySelector('img')).toBeNull();
+		expect(box?.previousElementSibling).toHaveClass('load-row');
+		expect(box?.nextElementSibling).toHaveTextContent('Restart worker…');
+		if (timestamp && timestamp !== 'invalid') {
+			expect(box?.querySelector('time')).toHaveAttribute('datetime', timestamp);
+			expect(box?.querySelector('time')).toHaveTextContent(
+				`${localClockTime(new Date(timestamp))} · 3m ago`
+			);
+		} else expect(box?.querySelector('time')).toBeNull();
+	});
+
+	it.each([true, false])(
+		'S18-7 hides offline VRAM with a heartbeat, measured=%s',
+		async (measured) => {
+			vi.useFakeTimers();
+			const pool = workerPool(measured);
+			pool.workers[0].status = 'offline';
+			const target = await renderWorkerPool(pool);
+			const row = target.querySelector('[aria-label="VRAM"]');
+			expect(row).toHaveTextContent('unknown');
+			expect(row).toHaveTextContent('VRAM unavailable while the worker is offline.');
+			expect(row).not.toHaveTextContent('GB');
+			expect(row).not.toHaveTextContent('No heartbeat');
+			expect(row?.querySelector('.bar span')).toBeNull();
+			poolResponse.workers[0].status = 'online';
+			await vi.advanceTimersByTimeAsync(3000);
+			expect(row).toHaveTextContent('12.4 / 24.0 GB');
+			expect(row).not.toHaveTextContent('unknown');
 		}
 	);
 });

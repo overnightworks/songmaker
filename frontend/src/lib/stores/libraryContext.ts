@@ -758,8 +758,10 @@ export function playlistsWallShows(surface: LibrarySurface, songId: string | nul
 	return surface === 'playlists' && songId === null;
 }
 
+export type Place = 'home' | 'library' | 'playlists';
+
 export function placeShown(
-	place: 'home' | 'library' | 'playlists',
+	place: Place,
 	surface: LibrarySurface,
 	songId: string | null,
 	pathname: string
