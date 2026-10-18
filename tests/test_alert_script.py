@@ -381,17 +381,21 @@ def test_env_file_is_not_exported_into_curls_environment(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
-    ("trace_flags", "shellopts", "separate_trace"),
+    ("trace_flags", "shellopts", "separate_trace", "outcome"),
     [
-        (["-x"], "", False),
-        ([], "xtrace", False),
-        (["-v"], "", False),
-        ([], "verbose", False),
-        (["-x"], "", True),
+        pytest.param(trace_flags, shellopts, separate_trace, outcome, id=f"{channel}-{outcome}")
+        for channel, trace_flags, shellopts, separate_trace in [
+            ("bash-x", ["-x"], "", False),
+            ("inherited-xtrace", [], "xtrace", False),
+            ("bash-v", ["-v"], "", False),
+            ("inherited-verbose", [], "verbose", False),
+            ("trace-fd", ["-x"], "", True),
+        ]
+        for outcome in ["sent", "smtp-failure", "missing-key", "journal"]
+        # Bash disables verbose mode inside the journal's command substitution.
+        if outcome != "journal" or channel not in {"bash-v", "inherited-verbose"}
     ],
-    ids=["bash-x", "inherited-xtrace", "bash-v", "inherited-verbose", "trace-fd"],
 )
-@pytest.mark.parametrize("outcome", ["sent", "smtp-failure", "missing-key", "journal"])
 def test_trace_channels_never_expose_config_values(
     tmp_path: Path,
     trace_flags: list[str],
