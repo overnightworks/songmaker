@@ -38,6 +38,9 @@ def test_empty_repository_check_needs_no_token_and_makes_no_network_request(
 
 
 def test_live_workflow_is_read_only_and_does_not_expose_a_token_to_forks() -> None:
+    """1667-H2: the witness workflow keeps push, pull_request, schedule
+    and workflow_dispatch and drops issue_comment.
+    """
     workflow = (PROJECT_ROOT / WORKFLOW).read_text(encoding="utf-8")
 
     assert "contents: read" in workflow

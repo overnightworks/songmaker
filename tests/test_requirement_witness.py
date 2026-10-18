@@ -324,44 +324,66 @@ def test_https_client_uses_only_the_fixed_origin_route_and_headers() -> None:
 
 
 @pytest.mark.parametrize(
-    ("resource", "response", "problem"),
+    ("call", "response", "problem"),
     [
-        ("comment", FakeResponse(b"{}", status=404), "request failed"),
-        ("repository", FakeResponse(b"{}", status=302), "request failed"),
-        ("repository", FakeResponse(b"{}", content_length="invalid"), "invalid Content-Length"),
         (
-            "repository",
+            lambda client: client.comment(123, 10.0),
+            FakeResponse(b"{}", status=404),
+            "request failed",
+        ),
+        (lambda client: client.repository(10.0), FakeResponse(b"{}", status=302), "request failed"),
+        (
+            lambda client: client.repository(10.0),
+            FakeResponse(b"{}", content_length="invalid"),
+            "invalid Content-Length",
+        ),
+        (
+            lambda client: client.repository(10.0),
             FakeResponse(b"{}", content_length=str(live.MAX_API_RESPONSE_BYTES + 1)),
             "exceeds the size limit",
         ),
         (
-            "repository",
+            lambda client: client.repository(10.0),
             FakeResponse(b"x" * (live.MAX_API_RESPONSE_BYTES + 1)),
             "exceeds the size limit",
         ),
-        ("repository", FakeResponse(b'{"x":1,"x":2}'), "duplicate JSON keys"),
-        ("repository", FakeResponse(b'{"x":NaN}'), "invalid JSON constant"),
-        ("repository", FakeResponse(b"\xff"), "non-UTF-8 data"),
-        ("repository", FakeResponse(b"{"), "malformed JSON"),
-        ("repository", FakeResponse(b'{"x":' + b"9" * 5000 + b"}"), "malformed JSON"),
         (
-            "repository",
+            lambda client: client.repository(10.0),
+            FakeResponse(b'{"x":1,"x":2}'),
+            "duplicate JSON keys",
+        ),
+        (
+            lambda client: client.repository(10.0),
+            FakeResponse(b'{"x":NaN}'),
+            "invalid JSON constant",
+        ),
+        (lambda client: client.repository(10.0), FakeResponse(b"\xff"), "non-UTF-8 data"),
+        (lambda client: client.repository(10.0), FakeResponse(b"{"), "malformed JSON"),
+        (
+            lambda client: client.repository(10.0),
+            FakeResponse(b'{"x":' + b"9" * 5000 + b"}"),
+            "malformed JSON",
+        ),
+        (
+            lambda client: client.repository(10.0),
             FakeResponse(b'{"x":' + b"[" * 10_000 + b"0" + b"]" * 10_000 + b"}"),
             "malformed JSON",
         ),
-        ("repository", FakeResponse(b"[]"), "non-object JSON"),
+        (lambda client: client.repository(10.0), FakeResponse(b"[]"), "non-object JSON"),
     ],
 )
 def test_https_client_rejects_untrusted_or_unbounded_responses(
-    resource: str, response: FakeResponse, problem: str
+    call: Callable[[live.HttpsGitHubClient], object],
+    response: FakeResponse,
+    problem: str,
 ) -> None:
+    """1667-H3: the client refuses untrusted or unbounded responses,
+    including a deleted comment's 404.
+    """
     client, _connection = client_for(response)
 
     with pytest.raises(live.LiveWitnessError, match=problem):
-        if resource == "comment":
-            client.comment(123, 10.0)
-        else:
-            client.repository(10.0)
+        call(client)
 
 
 def test_https_client_enforces_the_shared_monotonic_deadline() -> None:
