@@ -1,0 +1,8 @@
+claim_id = "52cddf991ea3405c942d9169066d1458"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "453029d914e205be29f353bc192b284af96c1267"
+branch = "claude/issue-1625-archive-owner-covers"
+scope = ["frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/playlist-cover-rail.spec.ts", "frontend/e2e/seed.ts"]
+opened_commit = "d4a3cb1a836635dcb23601818b0b701fc719c263"
+whole_reason = "A constant or helper moves to its one owner and every importer moves with it in the same landing."
