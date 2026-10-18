@@ -42,6 +42,8 @@ class WorkerReply:
 @dataclass(frozen=True)
 class WorkerStream:
     events: tuple[tuple[str, dict], ...]
+    release: asyncio.Event | None = None
+    entered: asyncio.Event | None = None
 
     def response(self) -> Response:
         return Response(
@@ -180,6 +182,10 @@ class GenerationWorkerPeer:
                 send,
             )
         elif isinstance(answer, WorkerStream):
+            if answer.entered is not None:
+                answer.entered.set()
+            if answer.release is not None:
+                await answer.release.wait()
             await answer.response()(scope, receive, send)
         else:
             replayed = False

@@ -75,6 +75,8 @@ for 630 seconds retains `Worker stream went silent` as its logged diagnosis; tra
 drops still use the scheduler's bounded reconnect policy. Failed model loading,
 no running music worker or online ACE-Step worker at admission, unreachable workers, a mode still missing after one reload, stream silence, and
 exhausted reconnects show musicians “Generating isn't available right now.”
+Typed GPU-memory failures show “Too long for the GPU right now — try a shorter duration.”
+while remaining takes continue.
 The [failure contract](acestep.md#failure-cause-contract) defines classification
 and persistence. The music-worker then
 post-processes the worker's WAV (decode → splice → master → MP3 → DB
@@ -1527,7 +1529,7 @@ persist. Queued cancelled jobs are skipped by `check_job_still_valid`.
 In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 ```
 
-The job stream emits on every change of status, progress, `phase`, take counters, `queue_reason` or `queue_position` — a phase-only or reason-only change included, never a change of `remaining_time_estimate` alone; it does not decide or mutate GPU admission.
+The job stream emits on every change of status, progress, `phase`, take counters, `queue_reason`, `queue_position`, `error` or `error_type` — a phase-only or reason-only change included, never a change of `remaining_time_estimate` alone; it does not decide or mutate GPU admission.
 
 ## Scoring Flow
 
@@ -1776,7 +1778,11 @@ never been observed; with a newer observation, it is `alive`.
   change is written at once while writes within a phase are throttled to one
   per two seconds, and saving the take sits at its phase start, so the job
   stays below 1.0 until `_finalize_generation_job` writes 1.0 after the take
-  row exists.
+  row exists. The tracker also retains the selected take failure, asking
+  `jobs/generation_failure.py` for precedence and the visible running pair.
+  Every RUNNING write carries that pair, so later progress cannot erase an OOM.
+  Finalization uses the same selected failure; the
+  [failure contract](acestep.md#gpu-memory-failures-in-worker-tasks) owns the policy.
 
   Every tracker write also carries the phase into `jobs.phase`
   (a `JobStatusUpdate` whose phase is `UNSET` keeps the stored value,

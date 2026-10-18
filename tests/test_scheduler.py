@@ -31,6 +31,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
+    WORKER_ERROR_GPU_OUT_OF_MEMORY,
     WORKER_STREAM_WENT_SILENT,
     AllWorkersHeld,
     DispatchOptions,
@@ -39,6 +40,7 @@ from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerGenerationFailed,
     WorkerGenerationUnavailable,
+    WorkerGpuOutOfMemory,
     WorkerModeNotLoaded,
     WorkerProtocolError,
     WorkerTaskFailed,
@@ -356,6 +358,73 @@ def _patch_async_client(client_mock):
     return patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client_mock)
 
 
+def _peer_dispatch_options(peer):
+    return replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport)
+
+
+@pytest.mark.parametrize(
+    ("consume", "payload", "expected"),
+    [
+        (
+            consume_task_stream,
+            {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"},
+            WorkerGpuOutOfMemory,
+        ),
+        (consume_task_stream, {"error": "CUDA out of memory"}, WorkerGenerationFailed),
+        (
+            consume_task_stream,
+            {"error": "need 18.5 GB", "error_kind": None},
+            WorkerGenerationFailed,
+        ),
+        (
+            consume_task_stream,
+            {"error": "CUDA out of memory", "error_kind": "unknown"},
+            WorkerGenerationFailed,
+        ),
+        (consume_task_stream, {"error": "need 18.5 GB", "error_kind": 1}, WorkerGenerationFailed),
+        (
+            consume_task_stream,
+            {"error": "CUDA out of memory", "error_kind": ""},
+            WorkerGenerationFailed,
+        ),
+        (consume_task_stream, {"error_kind": "gpu_out_of_memory"}, WorkerProtocolError),
+        (
+            consume_task_stream,
+            {"error": "", "error_kind": "gpu_out_of_memory"},
+            WorkerProtocolError,
+        ),
+        (
+            consume_download_task_stream,
+            {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"},
+            WorkerTaskFailed,
+        ),
+    ],
+    ids=[
+        "typed",
+        "absent",
+        "null",
+        "unknown",
+        "integer",
+        "empty-kind",
+        "missing-error",
+        "empty-error",
+        "download",
+    ],
+)
+def test_s8_worker_error_kind(consume, payload, expected):
+    """S8-A/E: Only the generation wire kind selects GPU memory failure."""
+    from typing import get_args
+
+    from acestep_worker.models import TaskErrorKind
+
+    assert WORKER_ERROR_GPU_OUT_OF_MEMORY in get_args(TaskErrorKind)
+    body = "event: error\ndata: " + json.dumps(payload) + "\n\n"
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, text=body))
+    with pytest.raises(WorkerTaskFailed) as raised:
+        _run(consume(_make_picked(), "task-1", options=DispatchOptions(transport=transport)))
+    assert type(raised.value) is expected
+
+
 def test_consume_task_stream_done_returns_dto() -> None:
     worker = _make_picked()
     done_payload = {
@@ -543,7 +612,7 @@ def test_consume_task_stream_gives_up_after_max_reconnects(generation_worker_pee
 
 
 def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_worker_peer) -> None:
-    """S5-A/D, L10: A read timeout is a stream failure without a reconnect."""
+    """S8-E; S5-A/D, L10: A read timeout is a stream failure without a reconnect."""
 
     async def exercise() -> None:
         scenario = WorkerScenario(
@@ -553,7 +622,7 @@ def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_wor
             operation = consume_task_stream(
                 _make_picked(),
                 "gen-1",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable, match=WORKER_STREAM_WENT_SILENT):
                 await operation
@@ -848,7 +917,7 @@ def test_ensure_loaded_posts_when_missing() -> None:
 def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
     generation_worker_peer,
 ) -> None:
-    """S5-D, L3/L9: Later takes reuse the loaded model over the real worker protocol."""
+    """S8-E; S5-D, L3/L9: Later takes reuse the loaded model over the real worker protocol."""
     admitted_cold = _make_picked(loaded=[])
     phases_per_take: list[list[AceStepPhase]] = []
 
@@ -862,7 +931,7 @@ def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
                     ace_config=_make_ace_config(),
                     target_mode="sft",
                     on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
-                    options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                    options=_peer_dispatch_options(peer),
                 )
                 assert Path(result.audio_path).is_file()
             assert [mode for kind, mode in peer.requests if kind == "load"] == ["sft"]
@@ -874,7 +943,7 @@ def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
 def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
     generation_worker_peer,
 ) -> None:
-    """S5-D, L3/L9: A real one-model cache evicts and the next take reloads once."""
+    """S8-E; S5-D, L3/L9: A real one-model cache evicts and the next take reloads once."""
     sft_job_view = _make_picked(loaded=[])
     turbo_job_view = _make_picked(loaded=[])
     sft_phases_per_take: list[list[AceStepPhase]] = []
@@ -892,7 +961,7 @@ def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
                         ace_config=_make_ace_config(),
                         target_mode=mode,
                         on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
-                        options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                        options=_peer_dispatch_options(peer),
                     )
                     assert Path(result.audio_path).is_file()
             assert [mode for kind, mode in peer.requests if kind == "load"] == [
@@ -944,7 +1013,7 @@ def test_generation_worker_peer_replays_transport_answers(generation_worker_peer
 )
 @pytest.mark.parametrize("reload", [False, True], ids=["initial", "reload"])
 def test_s5_load_transport_failure_before_response(generation_worker_peer, error_type, reload):
-    """S5-A/B, L3/L6/L10: Load transport causes survive, without another load attempt."""
+    """S8-E; S5-A/B, L3/L6/L10: Load transport causes survive, without another load attempt."""
 
     async def exercise():
         scenario = WorkerScenario(load_answers=(TransportFailure(error_type, "load lost"),))
@@ -953,7 +1022,7 @@ def test_s5_load_transport_failure_before_response(generation_worker_peer, error
                 worker=_make_picked(loaded=["sft"] if reload else []),
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable, match="load lost") as raised:
                 await operation
@@ -968,7 +1037,7 @@ def test_s5_load_transport_failure_before_response(generation_worker_peer, error
 )
 @pytest.mark.parametrize("reload", [False, True], ids=["initial", "reload"])
 def test_s5_submit_transport_failure_before_response(generation_worker_peer, error_type, reload):
-    """S5-A/B, L6/L9/L10: Submit transport failures never resubmit an uncertain request."""
+    """S8-E; S5-A/B, L6/L9/L10: Submit transport failures never resubmit an uncertain request."""
 
     async def exercise():
         failure = TransportFailure(error_type, "submit lost")
@@ -981,7 +1050,7 @@ def test_s5_submit_transport_failure_before_response(generation_worker_peer, err
                 worker=_make_picked(loaded=["sft"]),
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable, match="submit lost") as raised:
                 await operation
@@ -995,7 +1064,7 @@ def test_s5_submit_transport_failure_before_response(generation_worker_peer, err
 
 @pytest.mark.parametrize("load_fails", [False, True], ids=["still-missing", "reload-failed"])
 def test_s5_mode_still_missing_after_reload(generation_worker_peer, load_fails):
-    """S5-A/B, L3/L10: Exactly one reload precedes final typed unavailability."""
+    """S8-E; S5-A/B, L3/L10: Exactly one reload precedes final typed unavailability."""
 
     async def exercise():
         missing = WorkerReply(409, MODE_NOT_LOADED_DETAIL.format(mode="sft"))
@@ -1008,7 +1077,7 @@ def test_s5_mode_still_missing_after_reload(generation_worker_peer, load_fails):
                 worker=_make_picked(loaded=["sft"]),
                 ace_config=_make_ace_config(),
                 target_mode="sft",
-                options=replace(_PEER_DISPATCH_OPTIONS, transport=peer.transport),
+                options=_peer_dispatch_options(peer),
             )
             with pytest.raises(WorkerGenerationUnavailable) as raised:
                 await operation

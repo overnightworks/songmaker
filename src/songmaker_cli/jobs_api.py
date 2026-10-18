@@ -176,6 +176,8 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
             response.take_count,
             response.queue_reason,
             response.queue_position,
+            response.error,
+            response.error_type,
         )
         if observation != previous_observation:
             previous_observation = observation
