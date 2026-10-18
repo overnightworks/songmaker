@@ -1,7 +1,0 @@
-claim_id = "1a7f15df35ce45aa980988e8e0622938"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
-branch = "claude/issue-1648-sharing-log-no-slug"
-scope = ["src/songmaker_cli/db/queries/sharing.py", "tests/test_sharing.py"]
-opened_commit = "0eeb7f0ecf55f28d3f95cf364c6e06ab3d647d11"
