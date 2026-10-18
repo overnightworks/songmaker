@@ -20,7 +20,7 @@
 		position: fixed;
 		left: 0;
 		right: 0;
-		bottom: var(--transport-bar-height);
+		bottom: calc(var(--shell-bottom-offset) + var(--transport-bar-height));
 		z-index: 101;
 	}
 

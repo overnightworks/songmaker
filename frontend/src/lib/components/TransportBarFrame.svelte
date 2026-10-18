@@ -397,7 +397,7 @@
 <style>
 	.player-bar {
 		position: fixed;
-		bottom: 0;
+		bottom: var(--shell-bottom-offset);
 		left: 0;
 		right: 0;
 		height: var(--transport-bar-height);

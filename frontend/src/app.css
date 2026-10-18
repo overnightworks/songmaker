@@ -140,9 +140,12 @@
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
 	--transport-bar-height: calc(88px + env(safe-area-inset-bottom, 0px));
+	--shell-bottom-offset: 0px;
 	--offline-strip-height: 36px;
 	--offline-strip-room: 0px;
-	--player-height: calc(var(--transport-bar-height) + var(--offline-strip-room));
+	--player-height: calc(
+		var(--shell-bottom-offset) + var(--transport-bar-height) + var(--offline-strip-room)
+	);
 	--editor-generate-bar-height: 56px;
 	--header-height: 46px;
 	--rail-width: 264px;
