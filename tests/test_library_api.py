@@ -1293,6 +1293,7 @@ def test_insert_after_first_page_does_not_appear_on_second(tmp_path: Path) -> No
 
 
 def test_cursor_mismatch_and_tampering_are_rejected(alice: TestClient) -> None:
+    """1301-F13-HTTP: invalid signatures return the existing 422 error body."""
     first = alice.get(
         "/api/library/search",
         params={"q": "nachtstrom", "sort": LIBRARY_SORT_NEWEST, "limit": 1},
@@ -1314,19 +1315,17 @@ def test_cursor_mismatch_and_tampering_are_rejected(alice: TestClient) -> None:
     assert sort_mismatch.status_code == 422
     assert sort_mismatch.json()["detail"] == LIBRARY_CURSOR_MISMATCH
 
-    tampered = alice.get(
-        "/api/library/search",
-        params={"q": "nachtstrom", "cursor": cursor[:-1] + ("0" if cursor[-1] != "0" else "1")},
-    )
-    assert tampered.status_code == 422
-    assert tampered.json()["detail"] == LIBRARY_CURSOR_INVALID
-
-    garbage = alice.get(
-        "/api/library/search",
-        params={"q": "nachtstrom", "cursor": "not-a-cursor"},
-    )
-    assert garbage.status_code == 422
-    assert garbage.json()["detail"] == LIBRARY_CURSOR_INVALID
+    for invalid_cursor in (
+        cursor[:-1] + ("0" if cursor[-1] != "0" else "1"),
+        cursor + "é",
+        "not-a-cursor",
+    ):
+        response = alice.get(
+            "/api/library/search",
+            params={"q": "nachtstrom", "cursor": invalid_cursor},
+        )
+        assert response.status_code == 422
+        assert response.json() == {"detail": LIBRARY_CURSOR_INVALID}
 
 
 def test_like_metacharacters_are_literal(alice: TestClient) -> None:

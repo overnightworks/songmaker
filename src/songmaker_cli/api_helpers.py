@@ -429,8 +429,8 @@ def unique_playlist_slug(
     )
 
 
-def owner_filter(user: AuthenticatedUser) -> str | None:
-    if user.role == ROLE_ADMIN:
+def owner_filter(user: AuthenticatedUser, *, require_owner: bool = False) -> str | None:
+    if user.role == ROLE_ADMIN and not require_owner:
         return None
     return user.id
 
@@ -453,20 +453,23 @@ def can_access_album(album: Album | None, user: Actor, *, require_owner: bool = 
     return album is not None and album.created_by == user.id
 
 
-def check_album_access(album: Album | None, user: AuthenticatedUser) -> Album:
-    if not album or not can_access_album(album, user):
+def check_album_access(
+    album: Album | None, user: AuthenticatedUser, *, require_owner: bool = False,
+) -> Album:
+    if not album or not can_access_album(album, user, require_owner=require_owner):
         raise HTTPException(404, "Album not found")
     return album
 
 
 def check_song_access(
     session: Session, song_id: str, user: AuthenticatedUser,
+    *, require_owner: bool = False,
 ) -> Song:
     """Load a song and verify ownership. Returns the song or raises 404."""
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
-    if not can_access_album(song.album, user):
+    if not can_access_album(song.album, user, require_owner=require_owner):
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     return song
 

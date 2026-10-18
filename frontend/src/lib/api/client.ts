@@ -60,8 +60,7 @@ export {
 	unkeepGeneration,
 	unarchiveGeneration,
 	shareGeneration,
-	unshareGeneration,
-	remasterGeneration
+	unshareGeneration
 } from './generations';
 export { fetchJob, cancelJob } from './jobs';
 export { fetchHealth } from './health';

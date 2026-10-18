@@ -64,7 +64,9 @@ def test_cursor_rejects_sort_mismatch() -> None:
         )
 
 
-def test_cursor_rejects_bad_signature() -> None:
+@pytest.mark.parametrize("suffix", ["x", "é"], ids=["ascii", "non-ascii"])
+def test_cursor_rejects_bad_signature(suffix: str) -> None:
+    """1301-F13-SIGNATURE: malformed signatures raise the cursor invalid error."""
     cursor = LibraryCursor(
         q="nachtstrom",
         sort=LIBRARY_SORT_NEWEST,
@@ -75,7 +77,7 @@ def test_cursor_rejects_bad_signature() -> None:
     encoded = encode_library_cursor(cursor, TEST_SECRET)
     with pytest.raises(LibraryCursorInvalidError, match=LIBRARY_CURSOR_INVALID):
         decode_library_cursor(
-            encoded + "x", TEST_SECRET, q="nachtstrom", sort=LIBRARY_SORT_NEWEST,
+            encoded + suffix, TEST_SECRET, q="nachtstrom", sort=LIBRARY_SORT_NEWEST,
         )
 
 

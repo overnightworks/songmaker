@@ -23,6 +23,7 @@ DIRECTORY_ENTRIES = frozenset(
         "monitoring",
         "plans",
         "prompts",
+        "quality",
         "scripts",
         "src",
         "tests",
@@ -52,6 +53,7 @@ def _seed_allowlisted_root(repository_root: Path) -> None:
 
 
 def test_an_allowlist_only_root_reports_no_violations(tmp_path: Path) -> None:
+    """G1: Tool-owned root directories, including quality, are admitted."""
     _seed_allowlisted_root(tmp_path)
 
     assert check_root_layout.find_violations(tmp_path) == []

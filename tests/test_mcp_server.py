@@ -481,12 +481,13 @@ def test_write_tools_block_other_users(db_session: Session):
     ],
     ids=["lyrics", "prompt", "style", "rename"],
 )
-@pytest.mark.parametrize("editor_id", ["u-admin", "u1"], ids=["admin-on-foreign-song", "owner"])
+@pytest.mark.parametrize("role", ["admin", "user"])
 def test_co_writer_edits_record_the_editors_own_work_and_its_kind(
-    db_session: Session, tool, arguments, kind, editor_id,
+    db_session: Session, tool, arguments, kind, role,
 ):
-    _, _, _, song_id, _ = _seed(db_session)
-    db_session.add(User(id="u-admin", username="felix", password_hash="x", role="admin"))
+    """1301-F2-WORK: owned edits retain the acting musician and work kind."""
+    editor_id, _, _, song_id, _ = _seed(db_session)
+    db_session.get(User, editor_id).role = role
     db_session.commit()
     editor = _owner(db_session, editor_id)
 
@@ -519,12 +520,13 @@ def test_co_writer_writes_that_change_nothing_record_no_work(
     assert db_session.query(UserSongWork).count() == 0
 
 
-@pytest.mark.parametrize("creator_id", ["u-admin", "u1"], ids=["admin-in-foreign-album", "owner"])
+@pytest.mark.parametrize("role", ["admin", "user"])
 def test_co_writer_song_creation_records_the_creators_own_work(
-    db_session: Session, creator_id,
+    db_session: Session, role,
 ):
-    _, _, album_id, _, _ = _seed(db_session)
-    db_session.add(User(id="u-admin", username="felix", password_hash="x", role="admin"))
+    """1301-F2-WORK: owned creation records the acting musician."""
+    creator_id, _, album_id, _, _ = _seed(db_session)
+    db_session.get(User, creator_id).role = role
     db_session.commit()
 
     result = tools.tool_create_song(
