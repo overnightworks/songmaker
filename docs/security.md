@@ -1237,9 +1237,12 @@ Run host commands from the deployment checkout:
 
    If anything remains, postpone; never purge. Once both checks are clear, run
    `docker compose stop songmaker-music-worker songmaker-scoring-worker`.
-   Re-run both `ZCARD` checks after the workers stop: a cron entry added between
-   the drain check and shutdown is expected. Keep it; the JSON worker rejects
-   that legacy entry visibly with its job ID after restart.
+   Re-run both `ZCARD` checks after the workers stop; both must return `0`.
+   If either is nonzero, for example because a cron job was enqueued between
+   the drain check and shutdown, start the old workers again, let them drain,
+   stop them again and repeat both checks. Proceed only when both return `0`;
+   never purge. A pickle job that still appears is rejected visibly with its
+   job ID by the JSON worker after restart; keep that fallback evidence.
 5. With the timer still stopped, run one deploy tick:
    `sudo systemctl start songmaker-autodeploy.service`. The script owns fetch,
    fast-forward, submodule update, build and joint startup. Check
