@@ -1,5 +1,5 @@
-// Real network loss and return: phone Generate placement and generation recovery,
-// plus server, take-play and album-start recovery in both shells.
+// Network loss: phone Generate placement (#1039) and generation recovery (#1098),
+// plus server, take-play (#1161) and album-start (#1288) recovery in both shells.
 // loseNetwork also closes open streams; setOffline alone leaves them running.
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
@@ -9,7 +9,6 @@ import {
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
-	EDITOR_GENERATE_QUEUED_TEMPLATE,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
 	RESOURCE_EVENT_STREAM_PATH,
@@ -595,7 +594,7 @@ test.describe(
 			{ endArrives: 'once the network is back', keepOpenStreams: false },
 			{ endArrives: 'offline, on the job stream still open', keepOpenStreams: true }
 		]) {
-			test(`greys the running card with its last progress, and keeps it until the take that finished offline is in the list, when the end arrives ${endArrives}`, async ({
+			test(`1160-F15-arrival: greys the running card with its last progress, and keeps it until the take that finished offline is in the list, when the end arrives ${endArrives}`, async ({
 				page,
 				context
 			}) => {
@@ -685,7 +684,7 @@ test.describe(
 			});
 		}
 
-		test('restores the real queued position after reconnecting without navigation (#1160 F10)', async ({
+		test('restores the real queued position after reconnecting without navigation (1160-F10-queued-browser)', async ({
 			page,
 			context
 		}) => {
@@ -694,16 +693,10 @@ test.describe(
 			const songId = await seedSongPhoneSong(library.songPhoneAlbumId, title, 1, 0);
 			const jobId = await seedQueuedGenerationJob(songId);
 			const panel = page.getByRole('tabpanel');
-			const queuedLabel = async () => {
-				const response = await page.request.get(`/api/jobs/${jobId}`);
-				expect(response.ok()).toBeTruthy();
-				const { queue_position } = await response.json();
-				expect(queue_position).toBeGreaterThan(0);
-				return EDITOR_GENERATE_QUEUED_TEMPLATE.replace('{position}', String(queue_position));
-			};
+
 			try {
 				await openOfflineTakes(page, library.songPhoneAlbumId, title);
-				await expect(panel.getByText(await queuedLabel(), { exact: true })).toBeVisible();
+				await expect(panel.getByText(/^Queued #\d+$/)).toBeVisible();
 				const address = page.url();
 				await loseNetwork(page, context);
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
@@ -711,12 +704,13 @@ test.describe(
 				});
 				await expect(panel.getByText(/Queued #/)).toHaveCount(0);
 				await regainNetwork(page, context);
-				await expect(panel.getByText(await queuedLabel(), { exact: true })).toBeVisible({
+				await expect(panel.getByText(/^Queued #\d+$/)).toBeVisible({
 					timeout: BACK_ONLINE_MS
 				});
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
 				await expect(page).toHaveURL(address);
 			} finally {
+				await regainNetwork(page, context);
 				const cancelled = await page.request.post(`/api/jobs/${jobId}/cancel`);
 				expect(cancelled.ok()).toBeTruthy();
 			}

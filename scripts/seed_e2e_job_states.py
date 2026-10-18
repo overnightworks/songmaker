@@ -102,17 +102,21 @@ def add_take(
     """Write one take's audio file and its generation row on ``version_id``."""
     generation_id = str(uuid.uuid4())
     dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
-    dst.write_bytes(mp3_bytes)  # NOSONAR(S8707) Configured directory, owner ID, generated UUID.
-    return create_generation(
-        session,
-        song_id=song_id,
-        version_id=version_id,
-        mp3_path=f"{owner_id}/{generation_id}.mp3",
-        model_mode=MODEL_DEFAULT_MODE,
-        generation_id=generation_id,
-        audio_dir=audio_dir,
-        created_by=owner_id,
-    )
+    try:
+        dst.write_bytes(mp3_bytes)  # NOSONAR(S8707) Configured directory, owner ID, generated UUID.
+        return create_generation(
+            session,
+            song_id=song_id,
+            version_id=version_id,
+            mp3_path=f"{owner_id}/{generation_id}.mp3",
+            model_mode=MODEL_DEFAULT_MODE,
+            generation_id=generation_id,
+            audio_dir=audio_dir,
+            created_by=owner_id,
+        )
+    except BaseException:
+        dst.unlink(missing_ok=True)
+        raise
 
 
 def seed_song_at_version(
@@ -280,12 +284,14 @@ def complete_generation_job(
     version = song.latest_version if song is not None else None
     if version is None:
         raise SystemExit(f"Song {job.song_id} does not exist or has no version")
+    written_files: list[Path] = []
     try:
         for _ in range(job.take_count):
-            add_take(
+            take = add_take(
                 session, audio_dir, mp3_bytes,
                 song_id=job.song_id, version_id=version.id, owner_id=job.user_id,
             )
+            written_files.append(audio_dir / take.mp3_path)
         if not update_job_status(
             session, job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
         ):
@@ -293,6 +299,8 @@ def complete_generation_job(
         session.commit()
     except BaseException:
         session.rollback()
+        for path in written_files:
+            path.unlink(missing_ok=True)
         raise
 
 

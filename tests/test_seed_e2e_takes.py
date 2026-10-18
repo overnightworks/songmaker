@@ -130,6 +130,7 @@ def test_failed_second_take_rolls_back_the_batch_and_terminal_status(seeded_job)
 
     session, audio_dir, job = seeded_job
     ids_before = {g.id for g in session.query(Generation)}
+    files_before = set(audio_dir.rglob("*.mp3"))
     # A real database refusal on the second addition, after the first was flushed.
     session.execute(text("""
         CREATE TRIGGER reject_second_take BEFORE INSERT ON generations
@@ -144,6 +145,7 @@ def test_failed_second_take_rolls_back_the_batch_and_terminal_status(seeded_job)
 
     assert {g.id for g in session.query(Generation)} == ids_before
     assert job.status == "running"
+    assert set(audio_dir.rglob("*.mp3")) == files_before
 
 
 def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_job, capsys):

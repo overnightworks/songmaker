@@ -775,7 +775,9 @@ async function seedJobState(command: string, args: string[], audio?: Buffer): Pr
 			: await execFileAsync('docker', commandArgs, { cwd: REPO_ROOT });
 		return stdout.trim();
 	} catch (err) {
-		throw new Error(`Seeding job state ${command} failed`, { cause: err });
+		const detail = err instanceof Error ? err.message : String(err);
+		const stderr = (err as { stderr?: string }).stderr ?? '';
+		throw new Error(`Seeding job state ${command} failed: ${detail}\n${stderr}`, { cause: err });
 	}
 }
 

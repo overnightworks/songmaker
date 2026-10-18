@@ -64,7 +64,7 @@ async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersio
 }
 
 test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
-	test('brings its take into the Takes list without navigation and drops its card, even when its resource event never arrives', async ({
+	test('1160-F15-arrival: brings its take into the Takes list without navigation and drops its card, even when its resource event never arrives', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
