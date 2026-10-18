@@ -29,8 +29,8 @@ def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity
     entity.is_shared = True
     session.flush()
     log.info(
-        "Enabled sharing for %s %s (slug=%s)",
-        model_class.__name__.lower(), entity_id, entity.share_slug,
+        "Enabled sharing for %s %s",
+        model_class.__name__.lower(), entity_id,
     )
     return entity
 

@@ -2093,6 +2093,42 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
 # ── DB query functions ─────────────────────────────────────────────
 
 
+@pytest.mark.acceptance("1301-F6-LOG")
+@pytest.mark.parametrize(
+    ("entity_type", "entity_id"),
+    [("album", "test_album"), ("song", "s1"), ("generation", "g1"), ("playlist", "pl1")],
+)
+def test_enabling_sharing_logs_entity_without_capability(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    entity_type: str,
+    entity_id: str,
+) -> None:
+    """1301-F6-LOG: first and repeated sharing log identity without the capability."""
+    from songmaker_cli.db import queries
+
+    factory = init_db(tmp_path / "test.db")
+    with factory() as session:
+        _seed_song_with_two_takes(session)
+        session.commit()
+
+    enable_sharing = getattr(queries, f"enable_{entity_type}_sharing")
+    slug = None
+    for _ in range(2):
+        caplog.clear()
+        with caplog.at_level(logging.INFO), factory() as session:
+            entity = enable_sharing(session, entity_id)
+            assert entity.is_shared is True
+            assert entity.share_slug
+            if slug is not None:
+                assert entity.share_slug == slug
+            slug = entity.share_slug
+            session.commit()
+
+        assert entity_id in caplog.text
+        assert slug not in caplog.text
+
+
 def test_enable_disable_sharing(tmp_path: Path) -> None:
     from songmaker_cli.db.queries import (
         create_album,
