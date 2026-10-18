@@ -1,8 +1,0 @@
-claim_id = "253484b8b49d4b6cb3b9596e387636f3"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "9dbc4dcaee2ac4cc1139d922050068f368113d64"
-branch = "claude/issue-1631-unmounted-phone-tabs"
-scope = ["frontend/src/app.css", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/shell/PhoneTabs.svelte", "frontend/src/lib/components/shell/PhoneTabs.test.ts", "frontend/src/lib/constants/phone-tabs.ts"]
-opened_commit = "a589f62ece4a8fea756042ddadf7cc3a5632eb42"
-whole_reason = "One preparation step for the phone tab switch; its files move together and nothing is mounted or changed for users."
