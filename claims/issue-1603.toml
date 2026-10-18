@@ -1,8 +1,0 @@
-claim_id = "664e8a433c334e67af19782779456fea"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "cb7a4ee784749d630ff286d26e2117804d3e3001"
-branch = "claude/issue-1603-gpu-oom-error-kind"
-scope = ["docs/acestep.md", "src/acestep_engine/client.py", "src/acestep_engine/errors.py", "src/acestep_worker/models.py", "src/acestep_worker/task_store.py", "src/acestep_worker/wrapper.py", "tests/acestep_http.py", "tests/acestep_worker/test_task_store.py", "tests/acestep_worker/test_wrapper.py", "tests/test_client.py"]
-opened_commit = "a4ed53f8da738249730dd05c05d5ef7b2605e5c9"
-whole_reason = "Eine typisierte Fehlerursache muss zusammenhängend über Engine, Generate-Runner, Taskzustand und Worker-Vertrag geliefert und über dieselbe HTTP-Testgrenze geprüft werden; getrennte Landungen würden einen unvollständigen Transportvertrag hinterlassen."
