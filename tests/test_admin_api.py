@@ -22,7 +22,7 @@ from songmaker_cli.settings import get_settings
 @pytest.fixture
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path)
-    yield client
+    return client
 
 
 def _login_as_admin(client: TestClient) -> None:
