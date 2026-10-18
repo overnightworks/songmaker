@@ -179,8 +179,8 @@ async function reachSuggestionsLoads(count: number): Promise<void> {
 	await tick();
 }
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-	let resolve!: (value: T) => void;
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void } {
+	let resolve!: (value: T | PromiseLike<T>) => void;
 	return { promise: new Promise<T>((done) => (resolve = done)), resolve };
 }
 
@@ -1026,6 +1026,35 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 		expect(addToast).not.toHaveBeenCalled();
 	});
+
+	it.each(['failure before close', 'failure after close', 'success after close'])(
+		'1160-F44-disposal: a closed editor never reloads after %s',
+		async (settlement) => {
+			vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+			const pending = deferred<CoverSuggestionsResponse>();
+			fetchAlbumCoverSuggestions.mockImplementation(() => pending.promise);
+			const target = await renderDetail();
+			await openCoverEditing(target);
+			await reachSuggestionsLoads(1);
+			const settle = () =>
+				pending.resolve(
+					settlement === 'success after close' ? coverSuggestions() : Promise.reject(lostNetwork())
+				);
+			if (settlement === 'failure before close') {
+				settle();
+				await vi.advanceTimersByTimeAsync(0);
+			}
+			pressEditorButton(target, 'Close cover editing');
+			await editingClosed(target);
+			if (settlement !== 'failure before close') settle();
+			await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
+			reportResourceStreamReachable(false);
+			reportResourceStreamReachable(true);
+			await tick();
+			expect(editor(target)).toBeNull();
+			expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
+		}
+	);
 
 	it('reloads the suggestions once the connection is back', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });

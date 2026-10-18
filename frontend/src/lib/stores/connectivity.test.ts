@@ -95,6 +95,50 @@ describe('connectivity', () => {
 });
 
 describe('reloadWhileUnreachable', () => {
+	it.each(
+		[false, true].flatMap((offline) =>
+			['before failure', 'after failure', 'late success'].map((moment) => ({ offline, moment }))
+		)
+	)(
+		'1160-F44-disposal: disposal $moment prevents reloads, offline=$offline',
+		({ offline, moment }) => {
+			vi.useFakeTimers();
+			reportResourceStreamReachable(!offline);
+			const loaded: string[] = [];
+			const reloads = reloadWhileUnreachable(() => loaded.push('reloaded'));
+			if (moment === 'after failure') reloads.afterNetworkFailure();
+			reloads.dispose();
+			if (moment === 'late success') reloads.stop();
+			expect(reloads.afterNetworkFailure()).toBeNull();
+			expect(reloads.nameLoadFailure(lostNetwork(), 'Failed')).toBeNull();
+			expect(get(reloads.loadFailure)).toBeNull();
+			reportResourceStreamReachable(true);
+			vi.runAllTimers();
+			expect(loaded).toEqual([]);
+		}
+	);
+
+	it.each([false, true])(
+		'1160-F44-disposal: stop allows a new load to retry, offline=%s',
+		(offline) => {
+			vi.useFakeTimers();
+			reportResourceStreamReachable(!offline);
+			const loaded: string[] = [];
+			const reloads = reloadWhileUnreachable(() => loaded.push('reloaded'));
+			reloads.afterNetworkFailure();
+			reloads.stop();
+			reportResourceStreamReachable(true);
+			vi.runAllTimers();
+			expect(loaded).toEqual([]);
+			reportResourceStreamReachable(!offline);
+			reloads.afterNetworkFailure();
+			reportResourceStreamReachable(true);
+			vi.runAllTimers();
+			expect(loaded).toEqual(['reloaded']);
+			reloads.dispose();
+		}
+	);
+
 	it('while offline, reloads once when the connection is back', () => {
 		reportResourceStreamReachable(false);
 		const reload = vi.fn();

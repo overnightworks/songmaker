@@ -739,15 +739,14 @@ describe('NowPlaying when the take details cannot load', () => {
 
 	type PendingFetch = { resolve: (response: unknown) => void; reject: (error: Error) => void };
 
-	// Every call after the first fails, so a load armed after the unmount would
-	// reach a toast within the backoff instead of hanging unseen.
+	// A retry after unmount fails too, making an unwanted reload observable.
 	const settlingAfterUnmount = [
 		{
-			way: 'the network swallowed',
+			way: 'lost network',
 			settle: (load: PendingFetch) => load.reject(new TypeError('Failed to fetch'))
 		},
 		{
-			way: 'the server refused',
+			way: 'server refusal',
 			settle: (load: PendingFetch) =>
 				load.resolve({
 					ok: false,
@@ -758,9 +757,9 @@ describe('NowPlaying when the take details cannot load', () => {
 		}
 	];
 
-	it.each(settlingAfterUnmount)(
-		'defect:#1494: shows and loads nothing for a take-details load $way after it unmounted',
-		async ({ settle }) => {
+	it.each(settlingAfterUnmount.map(({ way, settle }) => [way, settle] as const))(
+		'1160-F46-wording defect:#1494: shows and loads nothing after unmount for %s',
+		async (_way, settle) => {
 			vi.useFakeTimers();
 			let load!: PendingFetch;
 			vi.stubGlobal(
