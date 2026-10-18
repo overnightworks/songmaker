@@ -1,0 +1,8 @@
+claim_id = "207dde84013048ab9f38fbcaeb99ac5e"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "6f5567945acfeedb657b67a496be1da2569188c0"
+branch = "claude/issue-1675-fixtures-return-c"
+scope = ["tests/test_admin_api.py", "tests/test_api.py", "tests/test_auth_api.py", "tests/test_rate_limit.py", "tests/test_server.py"]
+opened_commit = "ad1f08a424c54ad0892f25461e16c5b0bdd7259a"
+whole_reason = "One mechanical conversion pattern across five disjoint test modules; each file is a few lines."
