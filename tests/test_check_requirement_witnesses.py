@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import yaml
+
 PROJECT_ROOT = Path(__file__).parents[1]
 CHECKER = Path("scripts/check_requirement_witnesses.py")
 WORKFLOW = Path(".github/workflows/requirement-witnesses.yml")
@@ -45,8 +47,9 @@ def test_live_workflow_is_read_only_and_does_not_expose_a_token_to_forks() -> No
     assert "github.event.pull_request.head.repo.full_name == github.repository" in workflow
     assert "GITHUB_TOKEN: ${{ github.token }}" in workflow
     assert workflow.count("GITHUB_TOKEN:") == 1
-    assert "types: [edited, deleted]" in workflow
-    assert "schedule:" in workflow
+    events = yaml.safe_load(workflow)[True]
+    assert set(events) == {"push", "pull_request", "schedule", "workflow_dispatch"}
+    assert "issue_comment" not in events
     assert "timeout-minutes: 3" in workflow
     assert "timeout --signal=TERM --kill-after=5s 120s python" in workflow
     assert "python scripts/check_requirement_witnesses.py" in workflow

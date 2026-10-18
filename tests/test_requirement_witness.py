@@ -324,34 +324,44 @@ def test_https_client_uses_only_the_fixed_origin_route_and_headers() -> None:
 
 
 @pytest.mark.parametrize(
-    ("response", "problem"),
+    ("resource", "response", "problem"),
     [
-        (FakeResponse(b"{}", status=302), "request failed"),
-        (FakeResponse(b"{}", content_length="invalid"), "invalid Content-Length"),
+        ("comment", FakeResponse(b"{}", status=404), "request failed"),
+        ("repository", FakeResponse(b"{}", status=302), "request failed"),
+        ("repository", FakeResponse(b"{}", content_length="invalid"), "invalid Content-Length"),
         (
+            "repository",
             FakeResponse(b"{}", content_length=str(live.MAX_API_RESPONSE_BYTES + 1)),
             "exceeds the size limit",
         ),
-        (FakeResponse(b"x" * (live.MAX_API_RESPONSE_BYTES + 1)), "exceeds the size limit"),
-        (FakeResponse(b'{"x":1,"x":2}'), "duplicate JSON keys"),
-        (FakeResponse(b'{"x":NaN}'), "invalid JSON constant"),
-        (FakeResponse(b"\xff"), "non-UTF-8 data"),
-        (FakeResponse(b"{"), "malformed JSON"),
-        (FakeResponse(b'{"x":' + b"9" * 5000 + b"}"), "malformed JSON"),
         (
+            "repository",
+            FakeResponse(b"x" * (live.MAX_API_RESPONSE_BYTES + 1)),
+            "exceeds the size limit",
+        ),
+        ("repository", FakeResponse(b'{"x":1,"x":2}'), "duplicate JSON keys"),
+        ("repository", FakeResponse(b'{"x":NaN}'), "invalid JSON constant"),
+        ("repository", FakeResponse(b"\xff"), "non-UTF-8 data"),
+        ("repository", FakeResponse(b"{"), "malformed JSON"),
+        ("repository", FakeResponse(b'{"x":' + b"9" * 5000 + b"}"), "malformed JSON"),
+        (
+            "repository",
             FakeResponse(b'{"x":' + b"[" * 10_000 + b"0" + b"]" * 10_000 + b"}"),
             "malformed JSON",
         ),
-        (FakeResponse(b"[]"), "non-object JSON"),
+        ("repository", FakeResponse(b"[]"), "non-object JSON"),
     ],
 )
 def test_https_client_rejects_untrusted_or_unbounded_responses(
-    response: FakeResponse, problem: str
+    resource: str, response: FakeResponse, problem: str
 ) -> None:
     client, _connection = client_for(response)
 
     with pytest.raises(live.LiveWitnessError, match=problem):
-        client.repository(10.0)
+        if resource == "comment":
+            client.comment(123, 10.0)
+        else:
+            client.repository(10.0)
 
 
 def test_https_client_enforces_the_shared_monotonic_deadline() -> None:
