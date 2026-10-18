@@ -1189,6 +1189,8 @@ export interface WorkerEphemeralStateItem {
 	target_loading?: string | null;
 	loading_started_at?: string | null;
 	loading_last_log_line?: string | null;
+	last_error?: string | null;
+	last_error_at?: string | null;
 	queue_depth: number;
 	training_hold_seconds?: number | null;
 	vram_used_gb?: number | null;

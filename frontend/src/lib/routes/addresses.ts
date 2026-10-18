@@ -32,6 +32,11 @@ export function isSongRoutePath(pathname: string): boolean {
 	return slashIndex !== -1 && rest.length > slashIndex + 1;
 }
 
+export function songAlbumRoutePath(pathname: string): string | null {
+	if (!isSongRoutePath(pathname)) return null;
+	return pathname.slice(0, pathname.indexOf('/', ALBUM_ROUTE_PREFIX.length));
+}
+
 function isTakeRoutePath(pathname: string): boolean {
 	if (!isSongRoutePath(pathname)) return false;
 	const takeIndex = pathname.indexOf(TAKE_ROUTE_SEGMENT);

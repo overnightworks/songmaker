@@ -1069,6 +1069,152 @@ def test_list_workers_propagates_loading_last_log_line(client: TestClient) -> No
     assert state["loading_last_log_line"] == "vllm: loading shard 3/4"
 
 
+@pytest.mark.parametrize("heartbeat_kind", ["error", "fresh", "legacy", "missing"])
+def test_list_workers_last_error_transport(
+    client: TestClient, tmp_path: Path, heartbeat_kind: str,
+) -> None:
+    """S15-04: List workers last error transport."""
+    import asyncio
+    import json
+
+    from acestep_worker.clock import utcnow
+    from acestep_worker.heartbeat import HeartbeatLoop
+    from acestep_worker.last_error import LastError
+    from acestep_worker.model_cache import ModelCache
+    from acestep_worker.task_store import TaskStore
+    from acestep_worker.wrapper import WorkerDeps, build_state_payload
+    from songmaker_cli.acestep_state import worker_state_key
+
+    async def unused(*args, **kwargs):
+        raise AssertionError("No model operation is expected")
+
+    _login_as_admin(client)
+    _seed_worker(client, "w1")
+    pool = _make_fake_pool()
+    # The payload provider needs TTL; FakeRedis supplies the real Redis contract.
+    import fakeredis.aioredis
+
+    redis = fakeredis.aioredis.FakeRedis()
+    deps = WorkerDeps(
+        worker_id="w1", cache=ModelCache(
+            vram_budget_gb=24, model_sizes={}, loader=unused, unloader=unused,
+        ),
+        task_store=TaskStore(), heartbeat=None, redis=redis,
+        registry_client=None, registration=None, checkpoint_dir=tmp_path,
+        audio_output_dir=tmp_path, generate_runner=unused, internal_token="test-token",
+    )
+    error = LastError("ACE-Step failed\nworker diagnostic", utcnow())
+    if heartbeat_kind == "error":
+        deps.last_error = error
+
+    async def publish():
+        if heartbeat_kind == "missing":
+            return
+        if heartbeat_kind == "legacy":
+            await pool.set(worker_state_key("w1"), json.dumps({"loaded": [], "gpu_healthy": True}))
+            return
+        heartbeat = HeartbeatLoop(
+            redis=redis, worker_id="w1", state_provider=lambda: build_state_payload(deps),
+        )
+        await heartbeat.publish_once()
+        await pool.set(worker_state_key("w1"), await redis.get(worker_state_key("w1")))
+
+    asyncio.run(publish())
+    _override_pool(client, pool)
+    response = client.get("/api/admin/workers")
+    assert response.status_code == 200
+    state = response.json()["workers"][0]["state"]
+    if heartbeat_kind == "missing":
+        assert state is None
+    else:
+        assert state["last_error"] == (error.message if heartbeat_kind == "error" else None)
+        expected_at = error.at.isoformat() if heartbeat_kind == "error" else None
+        assert state["last_error_at"] == expected_at
+
+
+@pytest.mark.parametrize("role", ["anonymous", "user", "admin"])
+def test_last_error_worker_list_requires_admin(client: TestClient, role: str) -> None:
+    """S15-06: Last error worker list requires admin."""
+    import asyncio
+    import json
+
+    from songmaker_cli.acestep_state import worker_state_key
+
+    if role == "admin":
+        _login_as_admin(client)
+    elif role == "user":
+        _login_as_user(client)
+    _seed_worker(client, "w1")
+    pool = _make_fake_pool()
+    sentinel = "PRIVATE-WORKER-DIAGNOSTIC"
+    asyncio.run(pool.set(worker_state_key("w1"), json.dumps({
+        "loaded": [], "gpu_healthy": True,
+        "last_error": sentinel, "last_error_at": "2026-10-18T10:00:00+00:00",
+    })))
+    _override_pool(client, pool)
+    response = client.get("/api/admin/workers")
+    assert response.status_code == {"anonymous": 401, "user": 403, "admin": 200}[role]
+    assert (sentinel in response.text) is (role == "admin")
+
+
+def test_last_error_stays_out_of_public_and_musician_paths(
+    client: TestClient, mock_arq_pool,
+) -> None:
+    """S15-06: Last error stays out of public and musician paths."""
+    import asyncio
+    import json
+    from unittest.mock import AsyncMock
+
+    from acestep_worker.clock import utcnow
+    from songmaker_cli.acestep_state import worker_state_key
+    from songmaker_cli.arq_pool import init_arq_pool
+    from songmaker_cli.constants import ARQ_MUSIC_HEALTH_KEY
+    from songmaker_cli.db.queries import create_album, create_song, get_user_by_username
+    from songmaker_cli.lifecycle import BackgroundLoopName, BackgroundLoopRegistry
+    from songmaker_cli.worker_liveness import WorkerLiveness, acestep_worker_liveness
+
+    sentinel = "PRIVATE-WORKER-DIAGNOSTIC-18.5-GB"
+    payload = json.dumps({
+        "loaded": [], "gpu_healthy": True, "last_error": sentinel,
+        "last_error_at": "2026-10-18T10:00:00+00:00",
+    })
+    redis = _make_fake_pool()
+
+    async def prepare_pool():
+        pool = await init_arq_pool()
+        pool.get = AsyncMock(side_effect=redis.get)
+        pool.set = AsyncMock(side_effect=redis.set)
+        pool.exists = AsyncMock(return_value=True)
+        pool.zcard = AsyncMock(return_value=0)
+        await pool.set(worker_state_key("w1"), payload)
+        await pool.set(ARQ_MUSIC_HEALTH_KEY, "healthy")
+
+    asyncio.run(prepare_pool())
+    client.app.state.background_loop_registry = BackgroundLoopRegistry(tuple(BackgroundLoopName))
+    _seed_worker(client, "w1")
+    for path in ("/health", "/metrics"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert sentinel not in response.text
+    _login_as_user(client)
+    with client.app.state.ctx.db() as session:
+        user = get_user_by_username(session, "regular")
+        album = create_album(session, "last-error-proof", "Last error proof", created_by=user.id)
+        song = create_song(
+            session, "Proof", album.id, slug="proof", lyrics="Words", prompt="Jazz",
+            created_by=user.id,
+        )
+        song_id = song.id
+        session.commit()
+    response = client.post(f"/api/songs/{song_id}/generate", json={"model": "sft"})
+    assert response.status_code == 200
+    assert sentinel not in response.text
+    sync_redis = client.app.state.ctx.redis
+    sync_redis.set(worker_state_key("w1"), payload)
+    liveness = acestep_worker_liveness(sync_redis, ["w1"], now=utcnow())
+    assert liveness is WorkerLiveness.ALIVE
+
+
 def test_list_workers_loading(client: TestClient) -> None:
     import json
 

@@ -1,10 +1,14 @@
 import {
+	loadHistoryPageForTests,
+	resetHistoryControllerForTests
+} from '$lib/history/historyController';
+import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makePlaylistDetail as playlistDetail,
 	makeSong as song
 } from '$lib/test-utils/factories';
-import { historyLength } from '$lib/test-utils/library-history';
+import { historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -159,7 +163,10 @@ describe('detail views own no content back', () => {
 });
 
 describe('SongDetailView phone Co-writer is a tab, not a history step', () => {
-	it('opens and leaves the Co-writer tab with no back control and no browser-history entry', async () => {
+	it('1354_rule_32: keeps one named bar Back and no content Back across editor tabs', async () => {
+		resetHistoryControllerForTests();
+		replaceHistoryEntry('/album/a-local/local-only');
+		loadHistoryPageForTests();
 		document.documentElement.dataset.pointer = 'coarse';
 		selectedGenerationId.set(null);
 		const target = await renderView((target) => mount(SongDetailView, { target }));
@@ -175,11 +182,11 @@ describe('SongDetailView phone Co-writer is a tab, not a history step', () => {
 			expect(target.querySelector('[role="tab"][aria-selected="true"]')?.id).toBe(
 				`song-tab-${tab}`
 			);
-			const buttonTexts = Array.from(
-				[...bar.querySelectorAll('button'), ...target.querySelectorAll('button')],
-				(button) => button.textContent?.trim()
+			expect(target.querySelector('button[aria-label^="Back to "]')).toBeNull();
+			expect(bar.querySelector('button[aria-label^="Back to "]')?.getAttribute('aria-label')).toBe(
+				'Back to Local Album'
 			);
-			expect(buttonTexts).not.toContain('‹');
+			expect(location.pathname).toBe('/album/a-local/local-only');
 			expect(historyLength()).toBe(historyLengthBeforeSwitching);
 		}
 	});

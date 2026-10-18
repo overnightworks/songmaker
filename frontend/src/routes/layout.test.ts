@@ -1,3 +1,4 @@
+import { backLabel } from '$lib/routes/pageBack';
 import {
 	historyEntry,
 	pressBack,
@@ -29,11 +30,7 @@ import {
 	RATE_LIMITED_TOAST_MESSAGE,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
-import {
-	SEARCH_OPEN_LABEL,
-	SEARCH_SHEET_LABEL,
-	backLabel
-} from '$lib/components/PhoneAppBar.svelte';
+import { SEARCH_OPEN_LABEL, SEARCH_SHEET_LABEL } from '$lib/components/PhoneAppBar.svelte';
 import { apiFetch } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
@@ -436,7 +433,7 @@ describe('app shell', () => {
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('uses the same strip for song actions and opens the mounted drawer from it', async () => {
+	it('1354_rule_32: keeps song Back and actions in the same strip beside the drawer', async () => {
 		phoneAppBar.set({
 			kind: 'song',
 			title: 'Sommerlicht',
@@ -448,7 +445,7 @@ describe('app shell', () => {
 		const target = await renderLayout('/album/summer/sommerlicht');
 		expect(target.querySelectorAll('.mobile-strip')).toHaveLength(1);
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
-		expect(strip.children).toHaveLength(5);
+		expect(strip.querySelector('button[aria-label="Back to Album"]')).not.toBeNull();
 		expect(strip.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
 		expect(strip.querySelector('.brand')).toBeNull();
 		requireElement<HTMLButtonElement>(strip, '.drawer-trigger').click();
@@ -457,7 +454,7 @@ describe('app shell', () => {
 		phoneAppBar.set(null);
 		await tick();
 		expect(strip.querySelector('.brand')).toBeNull();
-		expect(strip.querySelector('.back')?.textContent?.trim()).toBe('Library');
+		expect(strip.querySelector('.back')?.textContent?.trim()).toBe('Album');
 	});
 
 	it('opens the rail drawer from the trigger on every private route', async () => {
@@ -1100,26 +1097,29 @@ describe('‹ on the page a phone tab was entered on', () => {
 			collection: { kind: 'playlist' as const, id: 'p1' },
 			list: { name: 'Playlists', address: '/playlists', surface: 'playlists' }
 		}
-	])('on $page shows the $list.name list in its place', async ({ address, collection, list }) => {
-		const opened = { ...libraryRootState(), surface: 'detail' as const, collection };
-		enterTabOn(address, opened);
-		openCollection.set(collection);
-		librarySurface.set('detail');
-		const target = await renderLayout(address);
-		await vi.waitFor(() => expect(historyEntry()).toEqual(opened));
-		await historyStandsStill();
-		const tabLength = history.length;
-		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel(list.name));
+	])(
+		'1354_rule_25: on $page shows the $list.name list in its place',
+		async ({ address, collection, list }) => {
+			const opened = { ...libraryRootState(), surface: 'detail' as const, collection };
+			enterTabOn(address, opened);
+			openCollection.set(collection);
+			librarySurface.set('detail');
+			const target = await renderLayout(address);
+			await vi.waitFor(() => expect(historyEntry()).toEqual(opened));
+			await historyStandsStill();
+			const tabLength = history.length;
+			expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel(list.name));
 
-		await pressBarBack(target, list.address);
+			await pressBarBack(target, list.address);
 
-		expect(get(librarySurface)).toBe(list.surface);
-		expect(historyEntry()).toMatchObject({ surface: list.surface, collection });
-		expect(history).toHaveLength(tabLength);
-		expect(barBack(target)).toBeNull();
-	});
+			expect(get(librarySurface)).toBe(list.surface);
+			expect(historyEntry()).toMatchObject({ surface: list.surface, collection });
+			expect(history).toHaveLength(tabLength);
+			expect(barBack(target)).toBeNull();
+		}
+	);
 
-	it('on a Settings section opens Settings, whose ‹ opens the Library wall', async () => {
+	it('1354_rule_25: on a Settings section opens Settings, whose ‹ opens the Library wall', async () => {
 		enterTabOn('/settings/voices');
 		const target = await renderLayout('/settings/voices');
 		await historyStandsStill();

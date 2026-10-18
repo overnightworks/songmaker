@@ -166,6 +166,22 @@ def test_state_from_dict_reads_vram_measured(
     assert state.vram_measured is expected
 
 
+@pytest.mark.parametrize("has_error", [False, True])
+def test_last_error_reader_preserves_pair(redis, event_loop, has_error: bool) -> None:
+    """S15-04: Last error reader preserves pair."""
+    from songmaker_cli.admin_api import _state_from_dict
+
+    payload = {"loaded": [], "gpu_healthy": True}
+    if has_error:
+        payload.update(
+            last_error="Worker failure\nunchanged", last_error_at="2026-10-18T10:00:00+00:00",
+        )
+    event_loop.run_until_complete(redis.set(worker_state_key("w1"), json.dumps(payload)))
+    state = _state_from_dict(event_loop.run_until_complete(read_worker_state(redis, "w1")))
+    assert state.last_error == payload.get("last_error")
+    assert state.last_error_at == payload.get("last_error_at")
+
+
 def test_worker_state_key_format() -> None:
     assert worker_state_key("acestep-worker-0") == "songmaker:acestep:worker:acestep-worker-0"
 

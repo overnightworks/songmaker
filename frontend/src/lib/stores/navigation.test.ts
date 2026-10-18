@@ -33,6 +33,7 @@ import {
 } from '$lib/test-utils/app-navigation';
 import {
 	installHistoryController,
+	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
 	stampNavigatedEntry
 } from '$lib/history/historyController';
@@ -161,6 +162,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 import {
 	albumTrackNeighbors,
 	backToCollection,
+	stepBackFromPage,
 	followAppPageLink,
 	followShellLayers,
 	initNavigation,
@@ -1472,21 +1474,56 @@ describe('selectNeighborSong', () => {
 });
 
 describe('backToCollection', () => {
-	it('leaves the song and returns to the open collection detail', async () => {
+	it('1354_rule_32: awaits the collection replacement when leaving the song', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		backToCollection();
+		await backToCollection();
 		expect(get(selectedSongId)).toBeNull();
 		expect(get(librarySurface)).toBe('detail');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+		expect(location.pathname).toBe('/album/a1');
 	});
 
-	it('falls back to the wall when there is no open collection', async () => {
+	it('1354_rule_32: falls back to the wall when there is no open collection', async () => {
 		await selectSong('s1');
 		openCollection.set(null);
-		backToCollection();
+		await backToCollection();
 		expect(get(librarySurface)).toBe('browse');
 	});
+});
+
+describe('1354_rule_32: cold song Back', () => {
+	afterEach(discardDraft);
+	it.each(['clean', 'cancel', 'discard'] as const)(
+		'replaces only after permission: %s',
+		async (answer) => {
+			await selectSong('s1');
+			replaceHistoryEntry(location.pathname, historyEntry());
+			loadHistoryPageForTests();
+			const length = history.length;
+			if (answer !== 'clean') {
+				loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+				setDraftLyrics('unsaved edit');
+			}
+			await stepBackFromPage(location.pathname);
+			if (answer !== 'clean') {
+				expect(location.pathname).toBe('/album/a1/s1');
+				expect(get(pendingDirtyNavigation)).not.toBeNull();
+				if (answer === 'cancel') {
+					pendingDirtyNavigation.set(null);
+					expect(get(editLyrics)).toBe('unsaved edit');
+					discardDraft();
+					return;
+				}
+				discardDraft();
+				await get(pendingDirtyNavigation)?.();
+				pendingDirtyNavigation.set(null);
+			}
+			expect(location.pathname).toBe('/album/a1');
+			expect(get(selectedSongId)).toBeNull();
+			expect(history).toHaveLength(length);
+		}
+	);
 });
 
 const LATEST_VERSION = makeVersion({ id: 'ver-2', version_number: 2, lyrics: 'second' });
@@ -1957,7 +1994,10 @@ describe('initNavigation', () => {
 // it, so a dirty draft puts the song's entry back and asks the same
 // unsaved-changes question as every other way out (issue #1143 U2): Back never
 // saves or discards the draft by itself.
-describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
+describe.each([
+	{ way: 'browser Back', leave: pressBack },
+	{ way: 'page Back', leave: () => stepBackFromPage(location.pathname) }
+])('1354_rule_32: $way with a dirty draft asks before it leaves', ({ leave }) => {
 	let target: HTMLElement;
 	let view: ReturnType<typeof mount>;
 	let stopNavigation: () => void;
@@ -1990,7 +2030,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 	}
 
 	async function pressBackAndSeeTheQuestion(): Promise<void> {
-		await pressBack();
+		await leave();
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
 		await libraryHistoryStepsLanded();
 	}

@@ -1,94 +1,18 @@
 <script module lang="ts">
-	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
-	import { HOME_PAGE_LABEL, RAIL_SETTINGS_LABEL } from '$lib/constants';
-	import {
-		albumRoutePath,
-		HOME_ROUTE_PATH,
-		isPlaylistRoutePath,
-		LIBRARY_ROUTE_PATH,
-		libraryRouteShape,
-		playlistRoutePath,
-		PLAYLISTS_ROUTE_PATH,
-		songRoutePath
-	} from '$lib/routes/addresses';
-	import type { PageList } from '$lib/stores/navigation';
-	import { visibleRailSearchPages } from '$lib/stores/railSearch';
-
 	export const SEARCH_OPEN_LABEL = 'Search';
 	export const SEARCH_SHEET_LABEL = 'Search';
 	export const SEARCH_CLOSE_LABEL = 'Close search';
-
-	const LIBRARY_HREF: PageList = LIBRARY_ROUTE_PATH;
-	const PLAYLISTS_HREF: PageList = PLAYLISTS_ROUTE_PATH;
-	const SETTINGS_HREF: PageList = '/settings';
-	// Home and the lists the app opens on, which carry the brand and the account
-	// circle instead of ‹ wherever they were opened from.
-	const PLACE_LISTS: ReadonlySet<string> = new Set([HOME_ROUTE_PATH, LIBRARY_HREF, PLAYLISTS_HREF]);
-	const ALBUM_NAME = 'Album';
-	const PLAYLIST_NAME = 'Playlist';
-	const SONG_NAME = 'Song';
-	const PREVIOUS_PAGE_NAME = 'Previous page';
-
-	export function backLabel(pageName: string): string {
-		return `Back to ${pageName}`;
-	}
-
-	interface LibraryTitles {
-		readonly albums: readonly AlbumItem[];
-		readonly playlists: readonly PlaylistItem[];
-		readonly songs: readonly SongItem[];
-	}
-
-	// The list a page belongs to, which its ‹ opens when no page of the tab's
-	// own lies below it (#1354 rule 25): a Settings section belongs to the
-	// Settings list, a playlist to the Playlists page, every other page to the
-	// Library.
-	export function listOfPage(pathname: string): PageList {
-		if (pathname.startsWith(`${SETTINGS_HREF}/`)) return SETTINGS_HREF;
-		return isPlaylistRoutePath(pathname) ? PLAYLISTS_HREF : LIBRARY_HREF;
-	}
-
-	// What ‹ calls the page it goes back to: an app page by the name the app
-	// gives it, an album, playlist or song by its title, or by its kind while
-	// the library has not loaded it.
-	export function pageName(pathname: string, titles: LibraryTitles): string {
-		if (pathname === HOME_ROUTE_PATH) return HOME_PAGE_LABEL;
-		if (pathname === SETTINGS_HREF) return RAIL_SETTINGS_LABEL;
-		const appPage = visibleRailSearchPages(true).find((page) => page.href === pathname);
-		if (appPage) return appPage.label;
-		switch (libraryRouteShape(pathname)) {
-			case 'album':
-				return (
-					titles.albums.find((album) => albumRoutePath(album.id) === pathname)?.title ?? ALBUM_NAME
-				);
-			case 'playlist':
-				return (
-					titles.playlists.find((playlist) => playlistRoutePath(playlist.slug) === pathname)
-						?.title ?? PLAYLIST_NAME
-				);
-			case 'album-song':
-			case 'album-song-take':
-				return titles.songs.find((song) => isSongAddress(pathname, song))?.title ?? SONG_NAME;
-			default:
-				return PREVIOUS_PAGE_NAME;
-		}
-	}
-
-	function isSongAddress(pathname: string, song: SongItem): boolean {
-		const songPath = songRoutePath(song.album_id, song.slug);
-		return pathname === songPath || pathname.startsWith(`${songPath}/`);
-	}
 </script>
 
 <script lang="ts">
 	import { page } from '$app/state';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
-	import { pageBelowStandingPage, stepBackOr } from '$lib/history/historyController';
-	import { standingPathname } from '$lib/routes/standingAddress';
+	import { backLabel, backTargetName, pageBackShown } from '$lib/routes/pageBack';
+	import { standingPage } from '$lib/routes/standingAddress';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { inertWhileAddressOverlay } from '$lib/stores/libraryAddressOverlay';
 	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openHome, openListOverPage } from '$lib/stores/navigation';
+	import { openHome, stepBackFromPage } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
@@ -105,34 +29,18 @@
 
 	const searchSheet = historyLayerState('search-sheet', false);
 
-	interface StandingPage {
-		readonly pathname: string;
-		readonly below: string | null;
-	}
-
-	// The bar reads again where history stands, and what lies below it, whenever
-	// `page.state` changes.
-	function standingPage(stateOfStandingEntry: unknown): StandingPage {
-		return {
-			pathname: standingPathname(stateOfStandingEntry),
-			below: pageBelowStandingPage()
-		};
-	}
-
 	const standing = $derived(standingPage(page.state));
-	const backTargetName = $derived.by((): string | null => {
-		if (PLACE_LISTS.has(standing.pathname)) return null;
-		const target =
-			standing.below === null ? listOfPage(standing.pathname) : new URL(standing.below).pathname;
-		return pageName(target, { albums: $albumList, playlists: $playlistList, songs: $songList });
-	});
+	const backShown = $derived(pageBackShown({ ...standing, shell: 'phone' }));
+	const targetName = $derived(
+		backTargetName({
+			...standing,
+			shell: 'phone',
+			titles: { albums: $albumList, playlists: $playlistList, songs: $songList }
+		})
+	);
 
-	// ‹ is the page's own Back: the history controller steps back onto the page
-	// below, or has the page's list written over the page, by the same question
-	// that names ‹ above. The song, the one page whose draft could be lost on
-	// the way, carries its own bar instead of ‹.
 	function goBack(): void {
-		void stepBackOr(() => openListOverPage(listOfPage(location.pathname)));
+		void stepBackFromPage(standing.pathname);
 	}
 
 	function closeSearch(): void {
@@ -216,6 +124,17 @@
 		</svg>
 	</button>
 	{#if $phoneAppBar}
+		{#if backShown}
+			<button
+				type="button"
+				class="bar-icon"
+				data-hitbox="frequent"
+				aria-label={backLabel(targetName)}
+				onclick={goBack}
+			>
+				{@render backChevron()}
+			</button>
+		{/if}
 		<h1 class="bar-title" aria-label={$phoneAppBar.title} {@attach inertWhileAddressOverlay}>
 			<EditableTitle
 				bind:this={titleEditor}
@@ -235,16 +154,16 @@
 				onrename={() => titleEditor?.startEdit()}
 			/>
 		</div>
-	{:else if backTargetName !== null}
+	{:else if backShown}
 		<button
 			type="button"
 			class="back"
 			data-hitbox="frequent"
-			aria-label={backLabel(backTargetName)}
+			aria-label={backLabel(targetName)}
 			onclick={goBack}
 		>
 			<span class="back-chevron">{@render backChevron()}</span>
-			<span class="back-name">{backTargetName}</span>
+			<span class="back-name">{targetName}</span>
 		</button>
 		{@render searchButton()}
 	{:else}
