@@ -23,6 +23,7 @@ interface PlaybackResumeRecord {
 }
 
 const STORAGE_KEY_PREFIX = 'playbackResume:';
+const LOGOUT_KEY_PREFIX = 'playbackLogout:';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROGRESS_SAVE_EVERY_SECONDS = 5;
 
@@ -30,10 +31,13 @@ function storageKey(userId: string): string {
 	return `${STORAGE_KEY_PREFIX}${userId}`;
 }
 
-// A logout in another tab removes the record, but this tab still holds the
-// user until its own session check fails; the take it keeps playing must not
-// write the record back, and a copy written before this tab heard of the
-// logout goes too (#1209). Saving resumes once the signed-in user changes.
+function logoutMarkerKey(userId: string): string {
+	return `${LOGOUT_KEY_PREFIX}${userId}`;
+}
+
+// A tab can keep playing after logout until its own session check fails.
+// Explicit logout suppresses saves until the next authenticated lifecycle;
+// ordinary queue exhaustion only retires the current record.
 let loggedOutInAnotherTab = false;
 
 function signedInUserId(): string | null {
@@ -44,13 +48,21 @@ function signedInUserId(): string | null {
 function stopSavingOnLogoutInAnotherTab(): void {
 	window.addEventListener('storage', (event) => {
 		const userId = signedInUserId();
-		if (userId === null || event.key !== storageKey(userId) || event.newValue !== null) return;
-		forgetPlaybackResume(userId);
+		if (
+			userId === null ||
+			event.storageArea !== localStorage ||
+			event.key !== logoutMarkerKey(userId) ||
+			event.newValue === null ||
+			event.newValue === event.oldValue
+		)
+			return;
+		retireCurrentPlaybackResume(userId);
 		stopSavingUntilTheUserChanges();
 	});
 }
 
 function stopSavingUntilTheUserChanges(): void {
+	if (loggedOutInAnotherTab) return;
 	loggedOutInAnotherTab = true;
 	let heardTheCurrentUser = false;
 	const stopListening = currentUser.subscribe(() => {
@@ -64,6 +76,12 @@ function stopSavingUntilTheUserChanges(): void {
 }
 
 export function forgetPlaybackResume(userId: string): void {
+	retireCurrentPlaybackResume(userId);
+	if (get(currentUser)?.id === userId) stopSavingUntilTheUserChanges();
+	writeStorage(logoutMarkerKey(userId), crypto.randomUUID());
+}
+
+function retireCurrentPlaybackResume(userId: string): void {
 	removeStorage(storageKey(userId));
 	if (knownRecord?.userId === userId) knownRecord = null;
 }
@@ -208,7 +226,7 @@ function saveTheTakeAfterTheEnd(follow: PlaybackToFollow): void {
 	if (userId === null) return;
 	const next = follow.takeAfterCurrent();
 	const source = follow.queueSource();
-	if (next === null || source === null) forgetPlaybackResume(userId);
+	if (next === null || source === null) retireCurrentPlaybackResume(userId);
 	else writeRecord(userId, recordOf(source, next, 0));
 }
 

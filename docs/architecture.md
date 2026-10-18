@@ -630,13 +630,19 @@ no storage per tick. A take is only ever saved under the user it started
 under, a pause saves the element's own clock, and a take that ended leaves the
 queue's next take (`nextQueueTake`) at 0; at a library window's end the ended
 take itself stays saved at 0, since its next window starts from it, and when
-nothing follows no record is left.
+nothing follows the current record is retired without suppressing later saves
+in this tab or other signed-in tabs.
 A take still loading, or failed to load, keeps the position its record
 already holds, and a take the app holds no queue for yet (a restored one, or
 one still playing while a library queue builds) keeps the queue its record
-names instead of the library settings of the moment. Share playback is never saved, a deliberate logout forgets the record (a session
-that merely ran out keeps it), and a logout in another tab stops this tab
-writing it back. After auth, the `(library)` layout calls
+names instead of the library settings of the moment. Share playback is never saved.
+Explicit logout retires the record, suppresses this tab’s saves, and writes a fresh
+opaque marker to `localStorage["playbackLogout:<userId>"]`, even without a current
+record. Only a changed, non-null local-storage marker for the matching viewer
+causes another tab to retire recovery and suppress saves, without rebroadcasting.
+Record removal alone is not logout. The next authenticated lifecycle permits
+saving again; ordinary session expiry preserves recovery. This does not preserve
+inactive checkpoints or protect pending writes from missed events. After auth, the `(library)` layout calls
 `restoreLastPlayback()` in `stores/player.ts`: with nothing loaded, it fetches
 the saved song, finds the take, and rebuilds the queue the record names around
 it with autoplay off at the saved position: `playLibraryFromGeneration`, after
