@@ -102,7 +102,7 @@ const songMenuOf = (page: Page, shell: Shell) =>
 	});
 
 // Runs in the existing desktop/mobile projects, with a private account and real API state.
-test('1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_20: Write composes Home, opens editors and follows offline, removal and Undo', async ({
+test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_20: Write composes Home, opens editors and follows offline, removal and Undo', async ({
 	page,
 	context,
 	browser
@@ -179,7 +179,11 @@ test('1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_20: Write co
 		for (const selector of ['.wall-tile-body', '.row-editor']) {
 			await writeRegion(page).locator(selector).first().click();
 			await expect(page).toHaveURL(new RegExp(`${editorPath}$`));
-			await openHome(page, shellOf(testInfo));
+			if (shellOf(testInfo) === 'mobile') {
+				await appBar(page).getByRole('button', { name: 'Back to Home', exact: true }).click();
+			} else {
+				await openHome(page, 'desktop');
+			}
 			await expect(listenRegion(page).getByRole('button', { name: /^Play / })).toBeVisible();
 			await expect(listenRegion(page).locator('.tile-subtitle')).toContainText('stopped at song 1');
 		}

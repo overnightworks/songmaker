@@ -3,13 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { expect, test, type Page } from '@playwright/test';
-import {
-	RAIL_DRAWER_LABEL,
-	RAIL_DRAWER_OPEN_LABEL,
-	LIBRARY_PAGE_LABEL,
-	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_NAV_LABEL
-} from '../src/lib/constants';
+import { LIBRARY_PAGE_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
 import { BASE_URL } from './seed';
 import { boundingBoxes, FlowGuard, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
 
@@ -107,34 +101,53 @@ async function deleteOwnedAlbum(page: Page, albumId: string): Promise<void> {
 	).toBeTruthy();
 }
 
-async function openRail(page: Page, isMobile: boolean) {
-	if (isMobile) {
-		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-		if (!(await drawer.isVisible())) {
-			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-		}
-	}
-	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+async function createCoveredAlbum(
+	page: Page
+): Promise<{ album: CreatedResource; albumTitle: string }> {
+	const albumTitle = `E2E Cover Rail ${Date.now().toString(36)}`;
+	const album = await postJson<CreatedResource>(page, '/api/albums', {
+		title: albumTitle,
+		artist: 'E2E Cover Artist'
+	});
+	await postCover(page, album.id);
+	return { album, albumTitle };
 }
 
-test('a fresh album cover reaches wall, album header, rail, and every share page at desktop and 375 px', async ({
+test(
+	'1354_37a_A6: a fresh album cover reaches the desktop rail',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const { album, albumTitle } = await createCoveredAlbum(page);
+		try {
+			await page.goto(`/album/${album.id}`);
+			const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+			const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${LIBRARY_PAGE_LABEL}`) });
+			if ((await libraryGroup.getAttribute('aria-expanded')) === 'false')
+				await libraryGroup.click();
+			const railAlbum = rail
+				.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+				.getByRole('listitem')
+				.filter({ hasText: albumTitle });
+			await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
+		} finally {
+			await deleteOwnedAlbum(page, album.id);
+		}
+	}
+);
+
+test('1354_37a_A6: a fresh album cover reaches wall, album header, and every share page at desktop and 375 px', async ({
 	page,
 	browser,
 	isMobile
 }) => {
 	if (isMobile) await page.setViewportSize({ width: 375, height: 844 });
 	const marker = Date.now().toString(36);
-	const albumTitle = `E2E Cover Rail ${marker}`;
-	const album = await postJson<CreatedResource>(page, '/api/albums', {
-		title: albumTitle,
-		artist: 'E2E Cover Artist'
-	});
+	const { album, albumTitle } = await createCoveredAlbum(page);
 	try {
 		const { song, take } = await createSongWithTake(page, album.id, {
 			title: `E2E Cover Song ${marker}`,
 			lyrics: 'A cover belongs to this album.'
 		});
-		await postCover(page, album.id);
 
 		const [albumShare, songShare, takeShare] = await Promise.all([
 			postJson<ShareResult>(page, `/api/albums/${album.id}/share`, {}),
@@ -149,14 +162,6 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 
 		await page.goto(`/album/${album.id}`);
 		await expect(page.locator('.collection-header .header-cover img')).toBeVisible();
-		const rail = await openRail(page, Boolean(isMobile));
-		const libraryGroup = rail.getByRole('button', { name: new RegExp(`^${LIBRARY_PAGE_LABEL}`) });
-		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-		const railAlbum = rail
-			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-			.getByRole('listitem')
-			.filter({ hasText: albumTitle });
-		await expect(railAlbum.getByRole('img', { name: `Album ${albumTitle}` })).toBeVisible();
 
 		const publicContext = await browser.newContext({
 			storageState: undefined,

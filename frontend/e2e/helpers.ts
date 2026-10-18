@@ -616,7 +616,7 @@ export interface FlowGuardOptions {
 const REFUSED_RESOURCE_CONSOLE_MESSAGE =
 	/^Failed to load resource: the server responded with a status of (\d{3})\b/;
 
-function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
+export function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
 	return refusal.path.endsWith('/') ? pathname.startsWith(refusal.path) : pathname === refusal.path;
 }
 

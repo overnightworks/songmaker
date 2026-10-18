@@ -1,3 +1,4 @@
+import { openSearchSheet, phoneSearchResult, searchSheet } from './phone-search';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
 	mockPlaylist,
@@ -21,7 +22,6 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -365,20 +365,6 @@ async function expectSettingsStands(page: Page): Promise<void> {
 
 function openVoicesFromSearch(page: Page): Promise<void> {
 	return openSettingsSectionFromSearch(page, SETTINGS_SECTION);
-}
-
-// The phone bar's 🔍 and the sheet it opens, both named as PhoneAppBar.svelte
-// names them (#1354 rule 26).
-const PHONE_SEARCH_LABEL = 'Search';
-
-function searchSheet(page: Page): Locator {
-	return page.getByRole('dialog', { name: PHONE_SEARCH_LABEL, exact: true });
-}
-
-async function openSearchSheet(page: Page): Promise<Locator> {
-	await appBar(page).getByRole('button', { name: PHONE_SEARCH_LABEL, exact: true }).click();
-	await expect(searchSheet(page)).toBeVisible();
-	return searchSheet(page);
 }
 
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
@@ -765,7 +751,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 // the route of the page under it. The history entry wins: Back shows the page
 // left, at its own address.
 test.describe('Back from Settings onto a page opened over another of its kind', () => {
-	test('album A, album B, Settings, Back shows album B at its address', async ({
+	test('1354_37a_A3: album A, album B, Settings, Back shows album B at its address', async ({
 		page
 	}, testInfo) => {
 		const shell = shellOf(testInfo);
@@ -777,7 +763,7 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 		await page.goto(`/album/${library.albumId}`);
 		await expect(albumA).toBeVisible();
 		const albumAAddress = page.url();
-		await openAlbumFromRail(page, shell, library.secondAlbumTitle);
+		await openAlbumFromNavigation(page, shell, library.secondAlbumTitle);
 		await expect(albumB).toBeVisible();
 		await expect(page).not.toHaveURL(albumAAddress);
 		const albumBAddress = page.url();
@@ -791,7 +777,7 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 		guard.assertClean();
 	});
 
-	test('a song, the next song, Settings, Back shows the next song at its address', async ({
+	test('1354_37a_A4: a song, the next song, Settings, Back shows the next song at its address', async ({
 		page
 	}, testInfo) => {
 		const shell = shellOf(testInfo);
@@ -803,11 +789,22 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 			.click();
 		await expectSongStands(page, shell, song.songTitle);
 		const songAddress = page.url();
-		await (
-			await railLibrary(page, shell)
-		)
-			.getByRole('button', { name: nameStartingWith(nextSong.songTitle) })
-			.click();
+		if (shell === 'mobile') {
+			await (
+				await phoneSearchResult(
+					page,
+					'Songs',
+					nextSong.songTitle,
+					nameStartingWith(nextSong.songTitle)
+				)
+			).click();
+		} else {
+			await (
+				await railLibrary(page, shell)
+			)
+				.getByRole('button', { name: nameStartingWith(nextSong.songTitle) })
+				.click();
+		}
 		await expectSongStands(page, shell, nextSong.songTitle);
 		await expect(page).not.toHaveURL(songAddress);
 		const nextSongAddress = page.url();
@@ -1035,12 +1032,22 @@ for (const gapMs of [5, 20]) {
 }
 
 // Issue #1165: a crossing the phone opens out of a history layer -- an album
-// tapped in the rail drawer, Go to song in Now Playing -- is written behind
+// selected in Search, Go to song in Now Playing -- is written behind
 // the layer's step back. Back pressed as soon as the page shows must still
 // step once, onto the playlist underneath, and not past it -- the race is one
 // of milliseconds, so each crossing is opened and left many times.
 const QUEUED_CROSSINGS = 20;
-async function openAlbumFromRail(page: Page, shell: Shell, albumTitle: string): Promise<void> {
+async function openAlbumFromNavigation(
+	page: Page,
+	shell: Shell,
+	albumTitle: string
+): Promise<void> {
+	if (shell === 'mobile') {
+		await (
+			await phoneSearchResult(page, 'Albums', albumTitle, nameStartingWith(albumTitle))
+		).click();
+		return;
+	}
 	await (
 		await railLibrary(page, shell)
 	)
@@ -1059,12 +1066,12 @@ async function goToPlayingSong(page: Page, title: string): Promise<void> {
 	await nowPlaying.getByRole('button', { name: NOW_PLAYING_GO_TO_SONG, exact: true }).click();
 }
 
-// The drawer and the full Now Playing are phone layers.
+// Search and the full Now Playing are phone layers.
 test.describe(
 	'one Back right after a crossing out of a phone layer',
 	{ tag: ONLY_IN_SHELL.mobile },
 	() => {
-		test('an album tapped in the rail drawer returns to the playlist', async ({
+		test('1354_37a_A3: an album selected in Search returns to the playlist', async ({
 			page,
 			request
 		}) => {
@@ -1074,7 +1081,7 @@ test.describe(
 			const album = workspace(page).getByRole('heading', { name: library.albumTitle });
 
 			for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
-				await openAlbumFromRail(page, 'mobile', library.albumTitle);
+				await openAlbumFromNavigation(page, 'mobile', library.albumTitle);
 				await expect(album).toBeVisible();
 
 				await page.goBack();
@@ -1312,27 +1319,25 @@ test.describe('Back closes the open overlay outside the library', () => {
 		}
 	});
 
-	// The drawer is a phone layer.
+	// Search is a phone layer.
 	test(
-		'an album tapped in the phone drawer over Voices leaves one Back to Voices',
+		'1354_37a_A3: an album selected in Search over Voices leaves one Back to Voices',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			const guard = new FlowGuard(page);
 			const library = readSeededLibrary();
 			await openVoicesOverTheWall(page, 'mobile');
-			const rail = await openRailNav(page, 'mobile');
-			await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();
 
-			await openAlbumFromRail(page, 'mobile', library.albumTitle);
+			await openAlbumFromNavigation(page, 'mobile', library.albumTitle);
 			await expect(
 				workspace(page).getByRole('heading', { name: library.albumTitle })
 			).toBeVisible();
-			await expect(railDrawer(page)).toBeHidden();
+			await expect(searchSheet(page)).toBeHidden();
 
 			await page.goBack();
 
 			await expectSettingsStands(page);
-			await expect(railDrawer(page)).toBeHidden();
+			await expect(searchSheet(page)).toBeHidden();
 			guard.assertClean();
 		}
 	);

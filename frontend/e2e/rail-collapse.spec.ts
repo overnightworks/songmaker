@@ -1,88 +1,99 @@
 import { expect, test } from '@playwright/test';
 import { RAIL_DRAWER_LABEL, RAIL_DRAWER_OPEN_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
-import { HOME_PATH, LIBRARY_PATH } from './helpers';
+import { HOME_PATH, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
 
-test('the desktop rail (defect:#1409) remembers its 52-px icon column while the 375 px drawer stays expanded', async ({
-	page,
-	isMobile
-}) => {
-	await page.setViewportSize(isMobile ? { width: 375, height: 812 } : { width: 1440, height: 900 });
-	await page.addInitScript((mobile) => {
-		if (sessionStorage.getItem('railCollapsePreferenceReset') === 'true') return;
-		if (mobile) {
-			localStorage.setItem('songmaker.rail-collapsed', 'true');
-			localStorage.setItem('songmaker.rail-width', '360');
-		} else {
-			localStorage.removeItem('songmaker.rail-collapsed');
-			localStorage.removeItem('songmaker.rail-width');
+for (const { shell, name, viewport } of [
+	{
+		shell: 'desktop',
+		name: 'the desktop rail remembers its 52-px icon column (defect:#1409)',
+		viewport: { width: 1440, height: 900 }
+	},
+	{
+		shell: 'mobile',
+		name: 'the 375 px drawer stays expanded despite the desktop collapse preference',
+		viewport: { width: 375, height: 812 }
+	}
+] as const) {
+	test(`1354_37a_A6: ${name}`, { tag: ONLY_IN_SHELL[shell] }, async ({ page }) => {
+		const isMobile = shell === 'mobile';
+		await page.setViewportSize(viewport);
+		await page.addInitScript((mobile) => {
+			if (sessionStorage.getItem('railCollapsePreferenceReset') === 'true') return;
+			if (mobile) {
+				localStorage.setItem('songmaker.rail-collapsed', 'true');
+				localStorage.setItem('songmaker.rail-width', '360');
+			} else {
+				localStorage.removeItem('songmaker.rail-collapsed');
+				localStorage.removeItem('songmaker.rail-width');
+			}
+			sessionStorage.setItem('railCollapsePreferenceReset', 'true');
+		}, Boolean(isMobile));
+		await page.goto(HOME_PATH);
+
+		if (isMobile) {
+			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+			const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
+			const rail = drawer.getByRole('navigation', { name: RAIL_NAV_LABEL });
+
+			await expect(rail).not.toHaveClass(/rail-collapsed/);
+			await expect(rail.getByRole('button', { name: 'Collapse rail' })).toHaveCount(0);
+			await expect(rail.getByRole('button', { name: 'Expand rail' })).toHaveCount(0);
+			await expect(rail.getByRole('slider', { name: 'Resize rail' })).toHaveCount(0);
+			await expect(drawer).toHaveCSS('width', '315px');
+			return;
 		}
-		sessionStorage.setItem('railCollapsePreferenceReset', 'true');
-	}, Boolean(isMobile));
-	await page.goto(HOME_PATH);
 
-	if (isMobile) {
-		await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-		const rail = drawer.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const resizeHandle = rail.getByRole('slider', { name: 'Resize rail' });
+		const railScroll = rail.locator('.rail-scroll');
+		await expect(resizeHandle).toBeVisible();
+		await resizeHandle.focus();
+		await resizeHandle.press('ArrowRight');
+		await expect(rail).toHaveCSS('width', '272px');
+		const scrollTop = await railScroll.evaluate((element) => {
+			element.scrollTop = Math.min(40, element.scrollHeight - element.clientHeight);
+			return element.scrollTop;
+		});
+		const resizeBox = await resizeHandle.boundingBox();
+		const railBox = await rail.boundingBox();
+		if (!resizeBox || !railBox) throw new Error('Expected a visible rail resize handle');
+		await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + 40);
+		await page.mouse.down();
+		await page.mouse.move(railBox.x + 330, resizeBox.y + 40);
+		await page.mouse.up();
+		await expect(rail).toHaveCSS('width', '330px');
+		await expect(resizeHandle).toBeFocused();
+		expect(await railScroll.evaluate((element) => element.scrollTop)).toBe(scrollTop);
 
+		const control = rail.getByRole('button', { name: 'Collapse rail' });
+		await expect(control).toBeVisible();
+		await control.click();
+		await expect(rail).toHaveClass(/rail-collapsed/);
+		await expect(rail).toHaveCSS('width', '52px');
+		await expect(rail.getByRole('button', { name: 'Expand rail' })).toBeVisible();
+		await expect(rail.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute(
+			'title',
+			'Settings'
+		);
+		// defect:#1409 (#1354 rule 40): the fold control hides, so the icon column fits the 52 px rail.
+		expect(await railScroll.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+			true
+		);
+		for (const [label, pathname] of [
+			['Playlists', '/playlists'],
+			['Library', LIBRARY_PATH]
+		]) {
+			const groupIcon = rail.getByRole('link', { name: new RegExp(`^${label}\\b`) });
+			await expect(groupIcon).toHaveAttribute('title', label);
+			await groupIcon.click();
+			await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
+		}
+
+		await page.reload();
+		await expect(rail).toHaveClass(/rail-collapsed/);
+		await rail.getByRole('button', { name: 'Expand rail' }).click();
 		await expect(rail).not.toHaveClass(/rail-collapsed/);
-		await expect(rail.getByRole('button', { name: 'Collapse rail' })).toHaveCount(0);
-		await expect(rail.getByRole('button', { name: 'Expand rail' })).toHaveCount(0);
-		await expect(rail.getByRole('slider', { name: 'Resize rail' })).toHaveCount(0);
-		await expect(drawer).toHaveCSS('width', '315px');
-		return;
-	}
-
-	const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-	const resizeHandle = rail.getByRole('slider', { name: 'Resize rail' });
-	const railScroll = rail.locator('.rail-scroll');
-	await expect(resizeHandle).toBeVisible();
-	await resizeHandle.focus();
-	await resizeHandle.press('ArrowRight');
-	await expect(rail).toHaveCSS('width', '272px');
-	const scrollTop = await railScroll.evaluate((element) => {
-		element.scrollTop = Math.min(40, element.scrollHeight - element.clientHeight);
-		return element.scrollTop;
+		await expect(rail).toHaveCSS('width', '330px');
+		await expect(rail.getByRole('slider', { name: 'Resize rail' })).toBeVisible();
 	});
-	const resizeBox = await resizeHandle.boundingBox();
-	const railBox = await rail.boundingBox();
-	if (!resizeBox || !railBox) throw new Error('Expected a visible rail resize handle');
-	await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + 40);
-	await page.mouse.down();
-	await page.mouse.move(railBox.x + 330, resizeBox.y + 40);
-	await page.mouse.up();
-	await expect(rail).toHaveCSS('width', '330px');
-	await expect(resizeHandle).toBeFocused();
-	expect(await railScroll.evaluate((element) => element.scrollTop)).toBe(scrollTop);
-
-	const control = rail.getByRole('button', { name: 'Collapse rail' });
-	await expect(control).toBeVisible();
-	await control.click();
-	await expect(rail).toHaveClass(/rail-collapsed/);
-	await expect(rail).toHaveCSS('width', '52px');
-	await expect(rail.getByRole('button', { name: 'Expand rail' })).toBeVisible();
-	await expect(rail.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute(
-		'title',
-		'Settings'
-	);
-	// defect:#1409 (#1354 rule 40): the fold control hides, so the icon column fits the 52 px rail.
-	expect(await railScroll.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
-		true
-	);
-	for (const [label, pathname] of [
-		['Playlists', '/playlists'],
-		['Library', LIBRARY_PATH]
-	]) {
-		const groupIcon = rail.getByRole('link', { name: new RegExp(`^${label}\\b`) });
-		await expect(groupIcon).toHaveAttribute('title', label);
-		await groupIcon.click();
-		await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
-	}
-
-	await page.reload();
-	await expect(rail).toHaveClass(/rail-collapsed/);
-	await rail.getByRole('button', { name: 'Expand rail' }).click();
-	await expect(rail).not.toHaveClass(/rail-collapsed/);
-	await expect(rail).toHaveCSS('width', '330px');
-	await expect(rail.getByRole('slider', { name: 'Resize rail' })).toBeVisible();
-});
+}
