@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { isAdmin } from '$lib/stores/auth';
-	import { followAppPageLink, resolveAppPageHref } from '$lib/stores/navigation';
+	import { followAppPageLink } from '$lib/stores/navigation';
 	import {
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
@@ -111,14 +112,11 @@
 		{:else if presentation.kind === 'failed'}
 			<p class="failure">
 				{presentation.cause}{#if presentation.unavailable && $isAdmin}
-					<!-- resolveAppPageHref resolves the base route before appending the tab query. -->
-					<!-- eslint-disable svelte/no-navigation-without-resolve -->
 					<a
-						href={resolveAppPageHref(ADMIN_WORKER_POOL_HREF)}
+						href={resolve(ADMIN_WORKER_POOL_HREF)}
 						onclick={(event) => followAppPageLink(event, ADMIN_WORKER_POOL_HREF)}
 						>{EDITOR_OPEN_WORKER_POOL_LABEL}</a
 					>
-					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				{/if}
 			</p>
 		{/if}

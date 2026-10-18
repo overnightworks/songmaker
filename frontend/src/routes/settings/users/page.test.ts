@@ -415,6 +415,7 @@ afterEach(async () => {
 describe('C2: requested admin tab', () => {
 	it.each([
 		['?tab=acestep', 'acestep'],
+		['?tab=sessions', 'sessions'],
 		['', 'users'],
 		['?tab=unknown', 'users']
 	] as const)('C2: selects %s on arrival and later navigation', async (query, expected) => {
@@ -426,6 +427,10 @@ describe('C2: requested admin tab', () => {
 			`select[aria-label="${ADMIN_TABS_LABEL}"]`
 		);
 		expect(select.value).toBe(expected);
+		// Each arrival loads the shared admin data once, including a Sessions deep link.
+		expect(api.fetchUsers).toHaveBeenCalledTimes(1);
+		expect(api.fetchSessions).toHaveBeenCalledTimes(1);
+		expect(api.fetchLoginAttempts).toHaveBeenCalledTimes(1);
 		if (expected === 'acestep') expect(target.textContent).toContain('Worker');
 		await goto(resolve('/settings/users?tab=voices'));
 		await flush();

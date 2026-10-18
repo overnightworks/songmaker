@@ -308,8 +308,8 @@
 	}
 
 	onMount(() => {
-		void loadAll();
 		selectRequestedTab(new URL(window.location.href));
+		if (tab !== 'sessions') void loadAll();
 	});
 	afterNavigate(({ from, to }) => {
 		if (to && from?.url.pathname === to.url.pathname) selectRequestedTab(to.url);

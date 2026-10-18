@@ -183,8 +183,7 @@ import {
 	openEditTab,
 	revealPlayingSong,
 	selectNeighborSong,
-	selectSong,
-	resolveAppPageHref
+	selectSong
 } from './navigation';
 import { closeTopLayer, historyLayerState } from '$lib/stores/layers';
 import {
@@ -3195,15 +3194,3 @@ describe.each(['/settings/voices', ADMIN_WORKER_POOL_HREF] as const)(
 		});
 	}
 );
-
-describe('C2: app page base paths', () => {
-	it.each(['', '/songmaker'])('C2: appends the worker tab after resolving base %s', (base) => {
-		vi.mocked(resolve).mockImplementation((path) => `${base}${path}`);
-		try {
-			expect(resolveAppPageHref(ADMIN_WORKER_POOL_HREF)).toBe(`${base}/settings/users?tab=acestep`);
-			expect(resolveAppPageHref('/settings/voices')).toBe(`${base}/settings/voices`);
-		} finally {
-			vi.mocked(resolve).mockImplementation((path) => path);
-		}
-	});
-});
