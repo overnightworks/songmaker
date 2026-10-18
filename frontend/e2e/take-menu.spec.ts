@@ -27,7 +27,7 @@ import {
 	type Shell
 } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
-import { seedTakeStripSong } from './seed';
+import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
 
 const VIEWPORT_HEIGHT_PX = 844;
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
@@ -113,8 +113,8 @@ async function onOwnTakes(
 		await expect(takeMenuTriggers(page)).toHaveCount(TAKE_COUNT);
 		await flow();
 	} finally {
-		const archived = await page.request.post(`/api/albums/${albumId}/archive`, { headers });
-		expect(archived.ok()).toBe(true);
+		// 1354_65_D3: every menu flow archives through the seed owner.
+		await archiveOwnedAlbum(page.request, albumId);
 	}
 }
 
