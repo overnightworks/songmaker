@@ -2108,7 +2108,8 @@ def test_stale_temp_sweep_removes_only_owned_entries_before_fetch(
 
     assert checkout.tick().returncode == 0
     assert observed.exists()
-    assert not stale.exists() and not stale.is_symlink()
+    assert not stale.exists()
+    assert not stale.is_symlink()
     assert f"-p user.info -- removed stale temp file: {stale}" in checkout.journal
     if kind == "dangling-symlink":
         assert not target.exists()
