@@ -35,4 +35,9 @@ def deserialize_arq(data: bytes) -> dict[str, object]:
     if not isinstance(decoded, dict):
         raise ValueError("arq JSON envelope must be an object")
     _validate_json(decoded)
+    for field, expected in (("f", str), ("a", list), ("k", dict), ("et", int)):
+        if type(decoded.get(field)) is not expected:
+            raise ValueError(f"arq JSON field {field!r} must be {expected.__name__}")
+    if "t" not in decoded or (decoded["t"] is not None and type(decoded["t"]) is not int):
+        raise ValueError("arq JSON field 't' must be an int or null")
     return decoded

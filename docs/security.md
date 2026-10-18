@@ -1237,6 +1237,9 @@ Run host commands from the deployment checkout:
 
    If anything remains, postpone; never purge. Once both checks are clear, run
    `docker compose stop songmaker-music-worker songmaker-scoring-worker`.
+   Re-run both `ZCARD` checks after the workers stop: a cron entry added between
+   the drain check and shutdown is expected. Keep it; the JSON worker rejects
+   that legacy entry visibly with its job ID after restart.
 5. With the timer still stopped, run one deploy tick:
    `sudo systemctl start songmaker-autodeploy.service`. The script owns fetch,
    fast-forward, submodule update, build and joint startup. Check
@@ -1281,6 +1284,7 @@ All request models use Pydantic with strict constraints:
 - Role fields: `Literal["admin", "user"]` — no arbitrary role injection
 - Password strength: Common password blocklist + minimum unique character count
 - No raw SQL — 100% SQLAlchemy ORM with parameterized queries
+- No Python `eval` or `exec`, `shell=True`, or `yaml.load` in `src/`.
 - Untrusted arq data uses the JSON boundary above; trusted local scorer-process
   serialization is a separate boundary, not a queue decoder.
 

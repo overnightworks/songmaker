@@ -6,17 +6,16 @@ import pickle
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from arq import cron, func
 from arq.connections import RedisSettings
-from arq.constants import job_key_prefix, result_key_prefix
+from arq.constants import in_progress_key_prefix, job_key_prefix, result_key_prefix
 from arq.jobs import DeserializationError, Job, JobStatus, SerializationError
 from arq.worker import create_worker
 
 from songmaker_cli import arq_pool
-from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
+from songmaker_cli.arq_codec import deserialize_arq
 from songmaker_cli.constants import JobFunction
 from songmaker_cli.generation_params import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.music_worker import MusicWorkerSettings
@@ -27,11 +26,7 @@ pytest_plugins = ["redis_server"]
 
 @asynccontextmanager
 async def codec_pool(socket, monkeypatch):
-    monkeypatch.setattr(
-        arq_pool,
-        "get_settings",
-        lambda: SimpleNamespace(redis_url=f"unix://{socket}"),
-    )
+    monkeypatch.setenv("REDIS_URL", f"unix://{socket}")
     pool = await arq_pool.init_arq_pool()
     try:
         yield pool
@@ -198,10 +193,20 @@ def test_results_remain_readable_with_correct_success(settings, outcome, redis_s
 @pytest.mark.parametrize(
     "value", [object(), b"bytes", {1, 2}, {1: "key"}, float("nan"), float("inf"), float("-inf")]
 )
-def test_unsupported_values_cannot_be_serialized(value):
-    """1301-F1-CODEC-REJECT: unsupported values fail even when nested."""
-    with pytest.raises((TypeError, ValueError)):
-        serialize_arq({"a": [value]})
+def test_unsupported_values_cannot_be_enqueued(value, redis_socket, monkeypatch):
+    """1301-F1-CODEC-REJECT: rejected values leave no partial job or queue entry."""
+
+    async def scenario():
+        async with codec_pool(redis_socket, monkeypatch) as pool:
+            job_id = "unsupported-value"
+            queue = MusicWorkerSettings.queue_name
+            with pytest.raises(SerializationError):
+                await pool.enqueue_job("rejected", value, _job_id=job_id, _queue_name=queue)
+            assert await pool.exists(job_key_prefix + job_id) == 0
+            assert await pool.zscore(queue, job_id) is None
+            assert await pool.zcard(queue) == 0
+
+    asyncio.run(asyncio.wait_for(scenario(), timeout=30))
 
 
 @pytest.mark.parametrize(
@@ -215,12 +220,59 @@ def test_unsupported_values_cannot_be_serialized(value):
         b'{"a":Infinity}',
         b'{"a":-Infinity}',
         b'{"a":1e400}',
+        *[
+            json.dumps(
+                {"f": "rejected", "a": [], "k": {}, "t": 1, "et": 0} | {field: value}
+            ).encode()
+            for field, value in [
+                ("f", ["rejected"]),
+                ("a", {}),
+                ("k", []),
+                ("t", "1"),
+                ("et", "0"),
+                ("t", True),
+                ("et", False),
+            ]
+        ],
     ],
 )
-def test_invalid_json_is_rejected(payload):
-    """1301-F1-CODEC-REJECT: malformed JSON and nonfinite numbers fail closed."""
-    with pytest.raises(ValueError):
-        deserialize_arq(payload)
+@pytest.mark.parametrize("settings", [MusicWorkerSettings, ScoringWorkerSettings])
+def test_invalid_json_fails_visibly_without_execution(
+    payload, settings, redis_socket, monkeypatch, caplog
+):
+    """1301-F1-CODEC-REJECT: poison messages finish failed without execution or retry."""
+    executed = []
+
+    async def rejected(ctx, *args, **kwargs):
+        executed.append(True)
+
+    async def scenario():
+        async with codec_pool(redis_socket, monkeypatch) as pool:
+            worker = codec_worker(settings, redis_socket, rejected, "rejected")
+            try:
+                job = await pool.enqueue_job("rejected", _queue_name=settings.queue_name)
+                await pool.set(job_key_prefix + job.job_id, payload)
+                await worker.async_run()
+                info = await job.result_info()
+                assert info.job_id == job.job_id
+                assert info.success is False
+                with pytest.raises(SerializationError):
+                    await job.result(timeout=1)
+                assert await job.status() == JobStatus.complete
+                assert await pool.exists(job_key_prefix + job.job_id) == 0
+                assert await pool.exists(in_progress_key_prefix + job.job_id) == 0
+                assert await pool.zscore(settings.queue_name, job.job_id) is None
+                assert any(
+                    job.job_id in record.getMessage()
+                    and isinstance(record.exc_info[1], DeserializationError)
+                    for record in caplog.records
+                    if record.exc_info
+                )
+            finally:
+                await worker.close()
+
+    asyncio.run(asyncio.wait_for(scenario(), timeout=30))
+    assert not executed
 
 
 class PickleSentinel:
