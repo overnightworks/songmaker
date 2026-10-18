@@ -26,7 +26,7 @@ Revises: c9d4a2f18e37
 Create Date: 2026-08-31 00:00:00.000000
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -34,9 +34,9 @@ from slugify import slugify as _slugify
 
 # revision identifiers, used by Alembic.
 revision: str = 'd5f8a3b21c46'
-down_revision: Union[str, Sequence[str], None] = 'c9d4a2f18e37'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'c9d4a2f18e37'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # Frozen copy of api_helpers.slugify()'s contract at this revision, mirroring
 # b8e3f1c07a25/c9d4a2f18e37 — a migration must keep producing the same slugs

@@ -5,15 +5,15 @@ Revises: 70d4935df72d
 Create Date: 2026-04-07 12:00:00.000000
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a7b8c9d0e1f2"
-down_revision: Union[str, Sequence[str], None] = "70d4935df72d"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "70d4935df72d"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
