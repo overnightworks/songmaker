@@ -59,6 +59,7 @@ class CoverSuggestionDailyLimitReachedError(CoverSuggestionRequestError):
 
 def request_cover_suggestions(
     session: Session, album_id: str, actor: Actor,
+    *, require_owner: bool = False,
 ) -> Job:
     """Prepare one single-image cover job after enforcing the album's request contract.
 
@@ -69,7 +70,7 @@ def request_cover_suggestions(
     conflict, limit, and job-creation decisions.
     """
     album = get_album(session, album_id)
-    if album is None or not can_access_album(album, actor):
+    if album is None or not can_access_album(album, actor, require_owner=require_owner):
         raise CoverSuggestionAlbumNotFoundError()
 
     _lock_cover_suggestion_request(session)

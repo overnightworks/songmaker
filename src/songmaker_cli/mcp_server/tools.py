@@ -77,7 +77,7 @@ def _to_tool_error(exc: HTTPException) -> MCPToolError:
 
 
 def tool_list_albums(session: Session, user: AuthenticatedUser) -> list[AlbumSummary]:
-    albums = list_albums(session, user_id=owner_filter(user))
+    albums = list_albums(session, user_id=owner_filter(user, require_owner=True))
     return [
         AlbumSummary.from_orm_with_count(
             album, count_songs(session, album_id=album.id),
@@ -92,11 +92,11 @@ def tool_list_songs(
     if album_id is not None:
         album = get_album(session, album_id)
         try:
-            check_album_access(album, user)
+            check_album_access(album, user, require_owner=True)
         except HTTPException as exc:
             raise _to_tool_error(exc) from exc
     songs = list_songs(
-        session, album_id=album_id, user_id=owner_filter(user), light=True,
+        session, album_id=album_id, user_id=owner_filter(user, require_owner=True), light=True,
     )
     return [SongSummary.from_orm(s) for s in songs]
 
@@ -110,7 +110,7 @@ def tool_search_songs(
         raise MCPToolError(
             f"limit must be between 1 and {MAX_SEARCH_RESULTS}",
         )
-    songs = list_songs(session, user_id=owner_filter(user), light=True)
+    songs = list_songs(session, user_id=owner_filter(user, require_owner=True), light=True)
     needle = query.strip().lower()
     matches = [s for s in songs if needle in s.title.lower()]
     return [SongSummary.from_orm(s) for s in matches[:limit]]
@@ -120,7 +120,7 @@ def tool_get_song(
     session: Session, user: AuthenticatedUser, song_id: str,
 ) -> SongDetail:
     try:
-        song = check_song_access(session, song_id, user)
+        song = check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     return SongDetail.from_orm(song)
@@ -130,7 +130,7 @@ def tool_get_version(
     session: Session, user: AuthenticatedUser, song_id: str, version_id: str,
 ) -> VersionSummary:
     try:
-        check_song_access(session, song_id, user)
+        check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     version = get_version(session, version_id, song_id)
@@ -143,7 +143,7 @@ def tool_get_generation(
     session: Session, user: AuthenticatedUser, generation_id: str,
 ) -> GenerationDetail:
     try:
-        gen = check_generation_access(session, generation_id, user)
+        gen = check_generation_access(session, generation_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     return GenerationDetail.from_orm(gen)
@@ -168,7 +168,7 @@ def tool_create_song(
         raise MCPToolError("title cannot be empty")
     album = get_album(session, album_id)
     try:
-        check_album_access(album, user)
+        check_album_access(album, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     slug = unique_song_slug(session, album_id, title)
@@ -188,7 +188,7 @@ def tool_update_song_lyrics(
     session: Session, user: AuthenticatedUser, song_id: str, lyrics: str,
 ) -> WriteResult:
     try:
-        check_song_access(session, song_id, user)
+        check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     version = db_update_song(
@@ -206,7 +206,7 @@ def tool_update_song_prompt(
     session: Session, user: AuthenticatedUser, song_id: str, prompt: str,
 ) -> WriteResult:
     try:
-        check_song_access(session, song_id, user)
+        check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     version = db_update_song(
@@ -233,7 +233,7 @@ def tool_update_song_style(
             "provide at least one of: bpm, key_scale, audio_duration",
         )
     try:
-        check_song_access(session, song_id, user)
+        check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     version = db_update_song(
@@ -261,7 +261,7 @@ def tool_rename_song(
     if not title.strip():
         raise MCPToolError("title cannot be empty")
     try:
-        song = check_song_access(session, song_id, user)
+        song = check_song_access(session, song_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     slug = unique_song_slug(session, song.album_id, title, exclude_song_id=song_id)
@@ -284,7 +284,7 @@ def tool_suggest_album_cover(
 ) -> CoverSuggestionRequestResult:
     """Queue one more cover suggestion through the album admission owner."""
     try:
-        job = request_cover_suggestions(session, album_id, user)
+        job = request_cover_suggestions(session, album_id, user, require_owner=True)
     except CoverSuggestionRequestError as exc:
         raise MCPToolError(str(exc)) from exc
     return CoverSuggestionRequestResult(
