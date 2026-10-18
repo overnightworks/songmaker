@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { OFFLINE_STRIP_MESSAGE, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
+import { TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
 import {
 	boundingBoxes,
 	DESKTOP_VIEWPORT,
@@ -9,6 +9,7 @@ import {
 	loseNetwork,
 	MOBILE_VIEWPORT,
 	ONLY_IN_SHELL,
+	offlineStrip,
 	workspace
 } from './helpers';
 import {
@@ -81,7 +82,7 @@ for (const cell of CASES) {
 			const lastContent = cell.lastContent(page);
 			await lastContent.scrollIntoViewIfNeeded();
 			const transport = page.locator('footer.player-bar');
-			const strip = page.getByRole('status').filter({ hasText: OFFLINE_STRIP_MESSAGE });
+			const strip = offlineStrip(page); // 1354_65_A3
 			await expect(transport).toBeVisible();
 			await expect(strip).toHaveCount(0);
 			const [onlineBar] = await boundingBoxes(transport);
