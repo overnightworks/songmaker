@@ -1,7 +1,0 @@
-claim_id = "6020b7ef6215408d80c597dfdb9a0883"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "eb17e74010fc27631f302faf827e2ce6ccdf4228"
-branch = "claude/issue-1611-list-proofs-without-drawer"
-scope = ["frontend/e2e/library-create.spec.ts", "frontend/e2e/library-phone-list.spec.ts"]
-opened_commit = "35743458aeaa31c9d3696447e491037af2d19779"
