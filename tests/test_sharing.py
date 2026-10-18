@@ -2093,7 +2093,6 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
 # ── DB query functions ─────────────────────────────────────────────
 
 
-@pytest.mark.acceptance("1301-F6-LOG")
 @pytest.mark.parametrize(
     ("entity_type", "entity_id"),
     [("album", "test_album"), ("song", "s1"), ("generation", "g1"), ("playlist", "pl1")],
