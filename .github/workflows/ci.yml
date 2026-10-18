@@ -48,7 +48,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
@@ -115,7 +115,7 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
@@ -183,7 +183,7 @@ jobs:
         image: postgres:16-alpine
         env:
           POSTGRES_USER: songmaker
-          POSTGRES_PASSWORD: songmaker # NOSONAR: disposable password for this isolated GitHub Actions service container.
+          POSTGRES_PASSWORD: songmaker # why: disposable password for this isolated GitHub Actions service container.
           POSTGRES_DB: songmaker_test
         ports:
           - 5432:5432
@@ -193,7 +193,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # NOSONAR: disposable password for this isolated GitHub Actions service container.
+      TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -203,7 +203,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra image # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
