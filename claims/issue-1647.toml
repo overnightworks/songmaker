@@ -1,0 +1,7 @@
+claim_id = "66e0a8b027b64cac9089835f2f013c88"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
+branch = "claude/issue-1647-proofs-archive-albums"
+scope = ["frontend/e2e/album-menu.spec.ts", "frontend/e2e/playback-restore.spec.ts"]
+opened_commit = "4f074a7dc5db77eb5571c941aeb5304e0d47b297"
