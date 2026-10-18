@@ -28,9 +28,10 @@ import {
 	OFFLINE_STRIP_MESSAGE,
 	RAIL_DRAWER_OPEN_LABEL,
 	RATE_LIMITED_TOAST_MESSAGE,
-	RAIL_SETTINGS_LABEL
+	RAIL_SETTINGS_LABEL,
+	SEARCH_OPEN_LABEL
 } from '$lib/constants';
-import { SEARCH_OPEN_LABEL, SEARCH_SHEET_LABEL } from '$lib/components/PhoneAppBar.svelte';
+import { SEARCH_SHEET_LABEL } from '$lib/components/PhoneAppBar.svelte';
 import { apiFetch } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
