@@ -1,0 +1,8 @@
+claim_id = "414afd5f106c4f32888502346ac61691"
+agent = "claude"
+role = "builder"
+base = "8725870097d5d05785b621792302dbc755088c5c"
+branch = "claude/issue-1677-oom-partial-survives-reload"
+scope = ["docs/acestep.md", "docs/architecture.md", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/jobs/generation_failure.py", "tests/test_api.py", "tests/test_db.py", "tests/test_jobs.py", "tests/test_server.py"]
+opened_commit = "6fd1c7d785fe57b6bd8ce640662b185eb291acd8"
+whole_reason = "One persistence-to-HTTP correction with its single visibility decider, the existing tests it extends and the two doc sentences that describe the endpoint."
