@@ -109,7 +109,6 @@ for (const cell of CASES) {
 			await lastContent.scrollIntoViewIfNeeded();
 			const transport = page.locator('footer.player-bar');
 			const strip = offlineStrip(page); // 1354_65_A3
-			await expect(transport).toBeVisible();
 			await expect(strip).toHaveCount(0);
 			const tabs = page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
 			if (cell.offset) {
@@ -121,6 +120,26 @@ for (const cell of CASES) {
 				await expect(tabs).toHaveCount(0);
 				await expect(page.locator('html')).not.toHaveAttribute('data-phone-tabs');
 			}
+			if (!cell.offline) {
+				await expect(page.locator('html')).not.toHaveAttribute('data-transport-bar');
+				expect(
+					await page
+						.locator('.shared-page')
+						.evaluate((node) =>
+							getComputedStyle(node).getPropertyValue('--shell-bottom-offset').trim()
+						)
+				).toBe('0px');
+				if (cell.shell === 'desktop') {
+					// The wide share keeps its inline player visible beside the scrolling songs.
+					await expect(control(page, 'Pause')).toBeInViewport({ ratio: 1 });
+					await expect(transport).toHaveCount(0);
+					await expect(lastContent).toBeInViewport({ ratio: 1 });
+					await page.screenshot({ path: testInfo.outputPath('bottom-geometry.png') });
+					guard.assertClean();
+					return;
+				}
+			}
+			await expect(transport).toBeVisible();
 			const [onlineBar] = await boundingBoxes(transport);
 			expect(onlineBar).toEqual({
 				x: 0,
@@ -134,13 +153,15 @@ for (const cell of CASES) {
 			await testInfo.attach('content-clearance.json', {
 				body: JSON.stringify({
 					gap: onlineBar.y - onlineContent.y - onlineContent.height,
-					padding: await workspace(page).evaluate((node) => {
-						const shell = node.closest('.app-shell');
-						return {
-							content: getComputedStyle(node).paddingBottom,
-							shell: shell ? getComputedStyle(shell).paddingBottom : null
-						};
-					})
+					padding: await (cell.offline ? workspace(page) : page.locator('.shared-page')).evaluate(
+						(node) => {
+							const shell = node.closest('.app-shell');
+							return {
+								content: getComputedStyle(node).paddingBottom,
+								shell: shell ? getComputedStyle(shell).paddingBottom : null
+							};
+						}
+					)
 				}),
 				contentType: 'application/json'
 			});

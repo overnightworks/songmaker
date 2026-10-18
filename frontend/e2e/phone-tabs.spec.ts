@@ -12,6 +12,7 @@ import {
 import {
 	appBar,
 	FlowGuard,
+	DESKTOP_VIEWPORT,
 	HOME_PATH,
 	MOBILE_VIEWPORT,
 	ONLY_IN_SHELL,
@@ -19,7 +20,7 @@ import {
 	workspace
 } from './helpers';
 import { openSearchSheet } from './phone-search';
-import { BASE_URL, readSeededLibrary } from './seed';
+import { readSeededLibrary } from './seed';
 
 const tabs = (page: Page) => page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL });
 
@@ -35,36 +36,43 @@ async function expectCurrent(page: Page, label: string | null): Promise<void> {
 	await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toHaveCount(0);
 }
 
+test(
+	'1354_61_C01 1354_61_C02 1354_61_C03 1354_rule_28: phone icons match the desktop rail in order',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const guard = new FlowGuard(page);
+		await page.setViewportSize(DESKTOP_VIEWPORT);
+		await page.goto(HOME_PATH);
+		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		await expect(rail).toBeVisible();
+		const links = rail.locator('.rail-page-link');
+		await expect(links).toHaveText(PHONE_TABS.map(({ label }) => new RegExp(label)));
+		const icons = await links
+			.locator('svg')
+			.evaluateAll((nodes) => nodes.map((node) => node.innerHTML));
+		await page.setViewportSize(MOBILE_VIEWPORT);
+		await expectCurrent(page, 'Home');
+		await expect(tabs(page).locator('svg')).toHaveCount(icons.length);
+		expect(
+			await tabs(page)
+				.locator('svg')
+				.evaluateAll((nodes) => nodes.map((node) => node.innerHTML))
+		).toEqual(icons);
+		guard.assertClean();
+	}
+);
+
 test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
-	test('1354_61_C01 1354_61_C02 1354_61_C03 1354_61_C27 1354_rule_28: desktop names, icons and order lead to the same places', async ({
-		page,
-		browser,
-		context
+	test('1354_61_C01 1354_61_C02 1354_61_C03 1354_61_C27 1354_rule_28: named tabs in order lead to their places without duplicate history', async ({
+		page
 	}, testInfo) => {
 		const guard = new FlowGuard(page);
-		const desktopContext = await browser.newContext({
-			storageState: await context.storageState(),
-			viewport: { width: 1440, height: 900 }
-		});
-		const icons: string[] = [];
-		try {
-			const desktop = await desktopContext.newPage();
-			await desktop.goto(new URL(HOME_PATH, BASE_URL).href);
-			const rail = desktop.getByRole('navigation', { name: RAIL_NAV_LABEL });
-			for (const { label } of PHONE_TABS) {
-				const control = rail.getByRole('link', { name: new RegExp(`^${label}`) });
-				icons.push(await control.locator('svg').innerHTML());
-			}
-		} finally {
-			await desktopContext.close();
-		}
 		await page.setViewportSize(MOBILE_VIEWPORT);
 		await page.goto(HOME_PATH);
 		await expectCurrent(page, 'Home');
-		for (const [index, { label, place }] of PHONE_TABS.entries()) {
+		for (const { label, place } of PHONE_TABS) {
 			const tab = tabs(page).getByRole('button', { name: label, exact: true });
 			await expect(tab.locator('svg')).toBeVisible();
-			expect(await tab.locator('svg').innerHTML()).toBe(icons[index]);
 			await tab.click();
 			await expect
 				.poll(() => new URL(page.url()).pathname)
@@ -129,8 +137,10 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 			page
 		}) => {
 			await page.goto(HOME_PATH);
-			if (destination === 'Settings section') await openSettingsSection(page, 'mobile', 'Account');
-			else await page.goto('/loras');
+			if (destination === 'Settings section') {
+				await openSettingsSection(page, 'mobile', 'Account');
+				await expect(page).toHaveURL(/\/settings\/account$/);
+			} else await page.goto('/loras');
 			await expectCurrent(page, null);
 			await expect(page.getByRole('contentinfo')).toBeVisible();
 			await tabs(page).getByRole('button', { name: 'Home', exact: true }).click();

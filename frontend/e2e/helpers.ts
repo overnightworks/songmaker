@@ -500,7 +500,7 @@ export async function openSettingsSection(
 		await openSettingsFromAccountMenu(page);
 		await page
 			.getByRole('navigation', { name: SETTINGS_NAV_LABEL })
-			.getByRole('link', { name: section, exact: true })
+			.getByRole('link', { name: nameStartingWith(section) })
 			.click();
 		return;
 	}
