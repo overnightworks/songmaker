@@ -264,8 +264,8 @@ async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
 	await expect(accountMenu(page)).toBeHidden();
 }
 
-// Settings keeps one navigation owner; the desktop rail and phone Search
-// each return to the album without a second settings column (#263, #264).
+// Settings has no second navigation column; the desktop rail and phone
+// navigation return to the album (#263, #264).
 async function expectSettingsRailRoundTrip(
 	page: Page,
 	shell: Shell,
@@ -864,7 +864,7 @@ async function expectRailRowCollapsed(row: Locator, song: Locator): Promise<void
 }
 
 test(
-	'1354_37a_A6: the one-target rail tree and pin promises hold in a real browser',
+	'1354_37a_A6 / 1354_65_A1 / 1354_65_A2: the one-target rail tree and pin promises hold in a real browser',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }, testInfo) => {
 		const shell = shellOf(testInfo);
@@ -883,7 +883,7 @@ test(
 		await page.goto(`/playlist/${playlist.slug}`);
 		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 
-		let rail = await openRailNav(page, shell);
+		const rail = await openRailNav(page, shell);
 
 		// The PLAYLISTS group, touched by a real browser for the first time
 		// (#326 finding 1): entering it force-expands its own row, and a track
@@ -912,7 +912,6 @@ test(
 		await page.goto(`/album/${library.albumId}`);
 		await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
-		rail = await openRailNav(page, shell);
 		function firstAlbumRow(): Locator {
 			return railAlbumRow(rail, library.albumTitle);
 		}
@@ -944,7 +943,6 @@ test(
 		await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'false');
 		await expectRailRowCollapsed(secondAlbumRow(), secondAlbumSong());
 		await secondAlbumButton.click();
-		rail = await openRailNav(page, shell);
 		await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'true');
 		// The one-slot rule is visible as well as navigable: opening one album
 		// closes the former row and takes the surface to the selected album.
@@ -955,7 +953,6 @@ test(
 		// The group header changes only the tree, and native keyboard activation
 		// works in the real browser. The surface remains the selected album.
 		const selectedAlbumUrl = page.url();
-		rail = await openRailNav(page, shell);
 		const libraryGroupToggle = rail.getByRole('button', {
 			name: nameStartingWith(LIBRARY_PAGE_LABEL)
 		});
@@ -969,7 +966,6 @@ test(
 
 		// SETTINGS is the same kind of group header: both its visible text and
 		// caret only disclose its children. Neither can choose an admin page.
-		rail = await openRailNav(page, shell);
 		const settingsGroupToggle = rail.getByRole('button', {
 			name: RAIL_SETTINGS_LABEL,
 			exact: true
@@ -986,14 +982,13 @@ test(
 		// a promise, not a CSS class assertion: seed.ts adds enough filler albums
 		// that the rail's own list genuinely overflows, so this really scrolls
 		// past content rather than measuring a page that never needed to scroll.
-		rail = await openRailNav(page, shell);
 		const libraryGroupTitle = rail.getByRole('button', {
 			name: nameStartingWith(LIBRARY_PAGE_LABEL)
 		});
 		const settingsToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
 		// defect:#1555: the album rows above left the rail scrolled wherever
-		// they were judged, and desktop openRailNav does not reset it, so this
-		// promise sets its own starting position at the top of the Library list.
+		// they were judged, so the pin promise sets its own starting position
+		// at the top of the Library list.
 		await libraryGroupTitle.scrollIntoViewIfNeeded();
 		await expect(libraryGroupTitle).toBeInViewport();
 		await expect(settingsToggle).toBeInViewport();
@@ -1012,7 +1007,6 @@ test(
 		// detail while the disclosure's height is animating.
 		await expect(settingsToggle).toBeInViewport();
 		await openLibraryWall(page, shell);
-		rail = await openRailNav(page, shell);
 		// #1354 rule 40 (D1): the Library page leaves its own group unfolded and current.
 		await expect(
 			rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) })
@@ -1022,7 +1016,7 @@ test(
 		).toHaveAttribute('aria-current', 'page');
 
 		console.log(`Rail flow /api requests (${shell}): ${guard.apiRequestCount}`);
-		guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
+		guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET);
 	}
 );
 
