@@ -1,0 +1,8 @@
+claim_id = "9aacf9dcfc894ebfa8fd76e0118442a6"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "453029d914e205be29f353bc192b284af96c1267"
+branch = "claude/issue-1621-generate-unavailable-503"
+scope = ["docs/acestep.md", "docs/architecture.md", "frontend/src/lib/api/types.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/generation_api.py", "tests/test_api.py"]
+opened_commit = "6a081fa5c8b4c2c87ce56816826e67ef43c75b50"
+whole_reason = "One public error contract (503 envelope, stored failed job) changes with its owner model, its generated types, its docs, its allowlist reasons and its tests in one landing."
