@@ -159,6 +159,30 @@ def test_publication_cleanup_preserves_only_committed_images(
     )
 
 
+def test_late_cancellation_preserves_publication_with_a_preloaded_job(
+    accounting_factory, running_cover,
+):
+    """1301-F3-C1-ATOMIC: cached RUNNING state cannot erase committed usage."""
+    with accounting_factory() as cancellation:
+        cached_job = cancellation.get(Job, "cover")
+        assert cached_job.status == JobStatus.RUNNING
+        with accounting_factory() as publication:
+            assert update_job_status(
+                publication, "cover", JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
+            )
+            publication.commit()
+        assert cached_job.status == JobStatus.RUNNING
+        assert not update_job_status(
+            cancellation, "cover", JobStatusUpdate(JobStatus.CANCELLED),
+        )
+        cancellation.commit()
+    with accounting_factory() as verification:
+        job = verification.get(Job, "cover")
+        assert job.status == JobStatus.COMPLETED
+        assert job.completed_at is not None
+        assert count_cover_jobs_since(verification, "album", STARTED) == 1
+
+
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(
     accounting_factory, running_cover, monkeypatch, winner,
@@ -177,11 +201,21 @@ def test_postgresql_serializes_publication_and_cancellation(
             assert allow_publication.wait(10)
 
     def observe_lock_request(connection, cursor, statement, parameters, context, executemany):
-        if "FOR UPDATE" in statement:
+        if (
+            "FOR UPDATE" in statement
+            and context.execution_options.get("populate_existing")
+            and (winner == "cancellation" or publication_locked.is_set())
+        ):
             contender_started.set()
+
+    cancellation_loaded = threading.Event()
 
     def cancel_cover():
         with accounting_factory() as session:
+            cached_job = session.get(Job, "cover")
+            assert cached_job.status == JobStatus.RUNNING
+            cancellation_loaded.set()
+            assert publication_locked.wait(10)
             accepted = update_job_status(session, "cover", JobStatusUpdate(JobStatus.CANCELLED))
             session.commit()
             return accepted
@@ -205,6 +239,8 @@ def test_postgresql_serializes_publication_and_cancellation(
             try:
                 assert await asyncio.to_thread(image_started.wait, 10)
                 with accounting_factory() as cancellation:
+                    cached_job = cancellation.get(Job, "cover")
+                    assert cached_job.status == JobStatus.RUNNING
                     assert update_job_status(
                         cancellation, "cover", JobStatusUpdate(JobStatus.CANCELLED),
                     )
@@ -216,19 +252,17 @@ def test_postgresql_serializes_publication_and_cancellation(
                 allow_image.set()
             await task
         else:
-            task = asyncio.create_task(
-                cover_runner.run_claimed_cover_suggestion_job(**running_cover),
-            )
-            contender = None
+            contender = asyncio.create_task(asyncio.to_thread(cancel_cover))
             try:
+                assert await asyncio.to_thread(cancellation_loaded.wait, 10)
+                task = asyncio.create_task(
+                    cover_runner.run_claimed_cover_suggestion_job(**running_cover),
+                )
                 assert await asyncio.to_thread(publication_locked.wait, 10)
-                contender_started.clear()
-                contender = asyncio.create_task(asyncio.to_thread(cancel_cover))
                 assert await asyncio.to_thread(contender_started.wait, 10)
             finally:
                 allow_publication.set()
             await task
-            assert contender is not None
             assert not await contender
 
     event.listen(engine, "before_cursor_execute", observe_lock_request)

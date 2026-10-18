@@ -29,8 +29,9 @@ from songmaker_cli.cover_suggestions import (
     remove_cover_suggestion_files,
     request_cover_suggestions,
 )
+from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
-from songmaker_cli.db.queries import get_album
+from songmaker_cli.db.queries import count_cover_jobs_since, get_album
 from songmaker_cli.settings import get_settings
 
 
@@ -162,6 +163,7 @@ def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_sugges
 def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """1301-F3-C1-COUNT: active work blocks; completed work consumes the limit."""
     _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     _add_cover_job(factory)
 
@@ -173,7 +175,7 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
 
     with factory() as session:
         active_job = session.query(Job).filter_by(album_id="alice-album").one()
-        active_job.status = JobStatus.FAILED
+        active_job.status = JobStatus.COMPLETED
         session.commit()
 
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
@@ -182,6 +184,32 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
         owner = _album_owner(session)
         with pytest.raises(CoverSuggestionDailyLimitReachedError):
             request_cover_suggestions(session, "alice-album", owner)
+
+
+@pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
+def test_unsuccessful_cover_attempts_allow_another_request(tmp_path, monkeypatch, status):
+    """1301-F3-C1-COUNT: failed and cancelled attempts leave the allowance free."""
+    _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
+    _add_cover_job(factory, status=status)
+    monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
+    get_settings.cache_clear()
+    with factory() as session:
+        job = request_cover_suggestions(session, "alice-album", _album_owner(session))
+        assert job.status == JobStatus.QUEUED
+        assert job.album_id == "alice-album"
+
+
+def test_completed_cover_at_daily_limit_returns_http_429(alice_app, monkeypatch):
+    """1301-F3-C1-COUNT: HTTP retains the daily-limit refusal contract."""
+    client, factory = alice_app
+    _add_cover_job(factory, status=JobStatus.COMPLETED)
+    monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
+    get_settings.cache_clear()
+
+    response = client.post("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 429
+    assert response.json() == {"detail": "Daily cover suggestion limit reached"}
 
 
 def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_job(
@@ -522,9 +550,6 @@ def test_only_completed_cover_jobs_on_this_utc_day_count(
     tmp_path: Path, status: JobStatus, offset: int,
 ) -> None:
     """1301-F3-C1-COUNT: status and the start-day boundary decide usage."""
-    from songmaker_cli.db.engine import init_test_db
-    from songmaker_cli.db.queries import count_cover_jobs_since
-
     factory = init_test_db(tmp_path / "accounting.db")
     midnight = datetime(2026, 9, 4, tzinfo=timezone.utc)
     with factory() as session:

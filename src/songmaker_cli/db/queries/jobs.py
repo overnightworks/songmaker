@@ -189,6 +189,7 @@ def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) ->
     job = (
         session.query(Job)
         .filter_by(id=job_id)
+        .execution_options(populate_existing=True)
         .with_for_update()
         .first()
     )
