@@ -109,3 +109,9 @@ class JobResponse(BaseModel):
             started_at=job.started_at.isoformat() if job.started_at else None,
             completed_at=job.completed_at.isoformat() if job.completed_at else None,
         )
+
+
+class GenerationUnavailableResponse(BaseModel):
+    detail: str
+    error_type: str
+    job_id: str

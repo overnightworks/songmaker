@@ -380,6 +380,12 @@ export interface GenerationRetentionReportResponse {
 	dry_run: boolean;
 }
 
+export interface GenerationUnavailableResponse {
+	detail: string;
+	error_type: string;
+	job_id: string;
+}
+
 export interface HealthResponse {
 	status: 'ok' | 'degraded';
 	music_worker: 'running' | 'stopped';
