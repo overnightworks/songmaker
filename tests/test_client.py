@@ -40,6 +40,7 @@ def test_is_acestep_available_true() -> None:
 def test_is_acestep_available_false() -> None:
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         from urllib.error import URLError
+
         mock_urlopen.side_effect = URLError("Connection refused")
         assert is_acestep_available() is False
 
@@ -48,10 +49,12 @@ def test_submit_task_success() -> None:
     client = AceStepClient()
     config = AceStepConfig(prompt="test", lyrics="[verse]\nHello")
 
-    response_data = json.dumps({
-        "data": {"task_id": "abc123", "status": "queued"},
-        "code": 200,
-    }).encode()
+    response_data = json.dumps(
+        {
+            "data": {"task_id": "abc123", "status": "queued"},
+            "code": 200,
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
@@ -97,13 +100,16 @@ def test_submit_task_success() -> None:
     ],
 )
 def test_submit_task_forwards_dit_params_and_seed_policy(
-    config: AceStepConfig, expected: dict[str, object],
+    config: AceStepConfig,
+    expected: dict[str, object],
 ) -> None:
     """The payload handed to the HTTP sender contains every visible DiT knob."""
     client = AceStepClient()
 
     with patch.object(
-        client, "_send_submit_request", return_value="abc123",
+        client,
+        "_send_submit_request",
+        return_value="abc123",
     ) as mock_send:
         assert client._submit_task(config) == "abc123"
 
@@ -120,6 +126,7 @@ def test_submit_task_failure() -> None:
         patch("acestep_engine.client.time.sleep"),
     ):
         from urllib.error import URLError
+
         mock_urlopen.side_effect = URLError("Connection refused")
         with pytest.raises(TaskSubmissionError, match="Connection refused"):
             client._submit_task(config)
@@ -129,10 +136,12 @@ def test_submit_task_retries_on_transient_error() -> None:
     client = AceStepClient()
     config = AceStepConfig(prompt="test", lyrics="[verse]\nHello")
 
-    success_data = json.dumps({
-        "data": {"task_id": "abc123", "status": "queued"},
-        "code": 200,
-    }).encode()
+    success_data = json.dumps(
+        {
+            "data": {"task_id": "abc123", "status": "queued"},
+            "code": 200,
+        }
+    ).encode()
 
     from urllib.error import URLError
 
@@ -154,9 +163,11 @@ def test_poll_result_success() -> None:
     client = AceStepClient()
 
     result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "42"}])
-    response_data = json.dumps({
-        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
-    }).encode()
+    response_data = json.dumps(
+        {
+            "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
@@ -176,15 +187,21 @@ def test_poll_result_surfaces_batch_reduction() -> None:
     """
     client = AceStepClient()
 
-    result_items = json.dumps([{
-        "file": "/v1/audio?path=test.wav",
-        "seed_value": "42",
-        "requested_batch_size": 2,
-        "delivered_batch_size": 1,
-    }])
-    response_data = json.dumps({
-        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
-    }).encode()
+    result_items = json.dumps(
+        [
+            {
+                "file": "/v1/audio?path=test.wav",
+                "seed_value": "42",
+                "requested_batch_size": 2,
+                "delivered_batch_size": 1,
+            }
+        ]
+    )
+    response_data = json.dumps(
+        {
+            "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
@@ -194,10 +211,7 @@ def test_poll_result_surfaces_batch_reduction() -> None:
     assert result.delivered_batch_size == 1
 
 
-_VRAM_CAUSE = (
-    "Music generation failed: Insufficient free VRAM: "
-    "need ~2.0 GB, only 1.3 GB available"
-)
+_VRAM_CAUSE = "Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available"
 _VRAM_TRACEBACK = (
     "Traceback (most recent call last):\n"
     '  File "/opt/acestep/acestep/api/job_execution_runtime.py", line 79, in _run\n'
@@ -227,6 +241,17 @@ def _failed_cache_entry(**overrides: object) -> str:
     return json.dumps([entry])
 
 
+def _failed_generation(
+    result: str,
+    error_type: type[GenerationFailedError],
+) -> pytest.ExceptionInfo[GenerationFailedError]:
+    with acestep_http(result) as boundary:
+        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
+        with pytest.raises(error_type) as excinfo:
+            client.generate(AceStepConfig(prompt="test", lyrics=""))
+    return excinfo
+
+
 @pytest.mark.parametrize(
     ("result", "expected_message"),
     [
@@ -234,63 +259,61 @@ def _failed_cache_entry(**overrides: object) -> str:
         (_failed_cache_entry(error=_VRAM_CAUSE), _VRAM_CAUSE),
         (_failed_cache_entry(error=None), _NO_DETAIL),
         (_failed_cache_entry(error=""), _NO_DETAIL),
-        (_failed_cache_entry(error=None, status_message="Model load failed"),
-         "Model load failed"),
+        (_failed_cache_entry(error=None, status_message="Model load failed"), "Model load failed"),
         ("not json at all", _NO_DETAIL),
     ],
 )
 def test_poll_result_failure_reports_acestep_cause(
-    result: str, expected_message: str,
+    result: str,
+    expected_message: str,
 ) -> None:
     """S7-03: Preserve diagnostic selection and missing-detail fallback."""
-    with acestep_http(result) as boundary:
-        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
-        with pytest.raises(GenerationFailedError) as excinfo:
-            client.generate(AceStepConfig(prompt="test", lyrics=""))
+    excinfo = _failed_generation(result, GenerationFailedError)
 
     assert str(excinfo.value) == expected_message
 
 
-@pytest.mark.parametrize("marker", [
-    "Insufficient free VRAM", "CUDA out of memory", "OutOfMemoryError",
-    "Insufficient KV cache to schedule sequence",
-])
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "Insufficient free VRAM",
+        "CUDA out of memory",
+        "OutOfMemoryError",
+        "Insufficient KV cache to schedule sequence",
+    ],
+)
 @pytest.mark.parametrize("tail", ["", "\nGeneration stopped"])
 def test_gpu_memory_failure_classified_before_shortening(marker: str, tail: str) -> None:
     """S7-01: Each precise GPU marker survives diagnostic shortening."""
     detail = marker + tail
-    with acestep_http(_failed_cache_entry(error=detail)) as boundary:
-        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
-        with pytest.raises(GpuOutOfMemoryError) as excinfo:
-            client.generate(AceStepConfig(prompt="test", lyrics=""))
+    excinfo = _failed_generation(_failed_cache_entry(error=detail), GpuOutOfMemoryError)
     assert str(excinfo.value) == detail.splitlines()[-1]
 
 
 @pytest.mark.parametrize("detail", ["MemoryError", "out of memory", "Invalid model"])
 def test_failure_without_gpu_marker_remains_generic(detail: str) -> None:
     """S7-02: Host memory and unrelated errors are not GPU failures."""
-    with acestep_http(_failed_cache_entry(error=detail)) as boundary:
-        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
-        with pytest.raises(GenerationFailedError) as excinfo:
-            client.generate(AceStepConfig(prompt="test", lyrics=""))
+    excinfo = _failed_generation(_failed_cache_entry(error=detail), GenerationFailedError)
     assert type(excinfo.value) is GenerationFailedError
     assert str(excinfo.value) == detail
 
 
-@pytest.mark.parametrize("detail, error_type", [
-    ("Traceback\nRuntimeError: " + "x" * 1000, GenerationFailedError),
-    ("CUDA out of memory\nRuntimeError: " + "x" * 1000, GpuOutOfMemoryError),
-    ("RuntimeError: " + "x" * 1000 + " CUDA out of memory", GpuOutOfMemoryError),
-])
+@pytest.mark.parametrize(
+    "detail, error_type",
+    [
+        ("Traceback\nRuntimeError: " + "x" * 1000, GenerationFailedError),
+        ("CUDA out of memory\nRuntimeError: " + "x" * 1000, GpuOutOfMemoryError),
+        ("RuntimeError: " + "x" * 1000 + " CUDA out of memory", GpuOutOfMemoryError),
+    ],
+)
 def test_poll_result_failure_caps_the_cause_and_logs_it_in_full(
-    caplog: pytest.LogCaptureFixture, detail: str, error_type: type[GenerationFailedError],
+    caplog: pytest.LogCaptureFixture,
+    detail: str,
+    error_type: type[GenerationFailedError],
 ) -> None:
     """S7-01/S7-03: Classify before the cap and retain the full cause in logs."""
-    with acestep_http(_failed_cache_entry(error=detail)) as boundary:
-        client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
-        with caplog.at_level("ERROR", logger="acestep_engine.client"):
-            with pytest.raises(error_type) as excinfo:
-                client.generate(AceStepConfig(prompt="test", lyrics=""))
+    with caplog.at_level("ERROR", logger="acestep_engine.client"):
+        excinfo = _failed_generation(_failed_cache_entry(error=detail), error_type)
 
     message = str(excinfo.value)
     assert len(message) == _MAX_CAUSE_CHARS
@@ -335,9 +358,11 @@ def test_submit_task_no_task_id() -> None:
 def test_poll_result_completed_no_audio() -> None:
     client = AceStepClient()
     result_items = json.dumps([{"file": "", "seed_value": "1"}])
-    response_data = json.dumps({
-        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
-    }).encode()
+    response_data = json.dumps(
+        {
+            "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
@@ -347,9 +372,11 @@ def test_poll_result_completed_no_audio() -> None:
 
 def test_poll_result_timeout() -> None:
     client = AceStepClient()
-    response_data = json.dumps({
-        "data": [{"task_id": "abc", "status": 0}],
-    }).encode()
+    response_data = json.dumps(
+        {
+            "data": [{"task_id": "abc", "status": 0}],
+        }
+    ).encode()
 
     call_count = 0
 
@@ -407,6 +434,7 @@ def test_download_audio_network_error() -> None:
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         from urllib.error import URLError
+
         mock_urlopen.side_effect = URLError("Connection refused")
         with pytest.raises(AudioDownloadError, match="Failed to download"):
             client._download_audio("/v1/audio?path=test.wav", 1)
@@ -417,13 +445,18 @@ def test_generate_full_flow() -> None:
     config = AceStepConfig(prompt="test", lyrics="[verse]\nHello")
     wav_header = b"RIFF" + b"\x00" * 40 + b"extra_data_here"
 
-    submit_resp = json.dumps({
-        "data": {"task_id": "t1", "status": "queued"}, "code": 200,
-    }).encode()
+    submit_resp = json.dumps(
+        {
+            "data": {"task_id": "t1", "status": "queued"},
+            "code": 200,
+        }
+    ).encode()
     result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "7"}])
-    poll_resp = json.dumps({
-        "data": [{"task_id": "t1", "status": 1, "result": result_items}],
-    }).encode()
+    poll_resp = json.dumps(
+        {
+            "data": [{"task_id": "t1", "status": 1, "result": result_items}],
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = [
@@ -449,18 +482,27 @@ def test_generate_full_flow_surfaces_batch_reduction() -> None:
     config = AceStepConfig(prompt="test", lyrics="[verse]\nHello")
     wav_header = b"RIFF" + b"\x00" * 40 + b"extra_data_here"
 
-    submit_resp = json.dumps({
-        "data": {"task_id": "t1", "status": "queued"}, "code": 200,
-    }).encode()
-    result_items = json.dumps([{
-        "file": "/v1/audio?path=test.wav",
-        "seed_value": "7",
-        "requested_batch_size": 2,
-        "delivered_batch_size": 1,
-    }])
-    poll_resp = json.dumps({
-        "data": [{"task_id": "t1", "status": 1, "result": result_items}],
-    }).encode()
+    submit_resp = json.dumps(
+        {
+            "data": {"task_id": "t1", "status": "queued"},
+            "code": 200,
+        }
+    ).encode()
+    result_items = json.dumps(
+        [
+            {
+                "file": "/v1/audio?path=test.wav",
+                "seed_value": "7",
+                "requested_batch_size": 2,
+                "delivered_batch_size": 1,
+            }
+        ]
+    )
+    poll_resp = json.dumps(
+        {
+            "data": [{"task_id": "t1", "status": 1, "result": result_items}],
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.side_effect = [
@@ -476,14 +518,16 @@ def test_generate_full_flow_surfaces_batch_reduction() -> None:
 
 def test_server_info_success() -> None:
     client = AceStepClient()
-    health_data = json.dumps({
-        "data": {
-            "loaded_model": "acestep-v15-turbo",
-            "loaded_lm_model": "acestep-5Hz-lm-4B",
-            "version": "1.0",
-        },
-        "code": 200,
-    }).encode()
+    health_data = json.dumps(
+        {
+            "data": {
+                "loaded_model": "acestep-v15-turbo",
+                "loaded_lm_model": "acestep-5Hz-lm-4B",
+                "version": "1.0",
+            },
+            "code": 200,
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(health_data)
@@ -500,6 +544,7 @@ def test_server_info_unavailable() -> None:
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         from urllib.error import URLError
+
         mock_urlopen.side_effect = URLError("Connection refused")
         info = client.server_info()
 
@@ -512,14 +557,17 @@ def test_server_info_unavailable() -> None:
 def test_submit_task_with_lm_negative_prompt() -> None:
     client = AceStepClient()
     config = AceStepConfig(
-        prompt="test", lyrics="[verse]\nHello",
+        prompt="test",
+        lyrics="[verse]\nHello",
         lm_negative_prompt="no drums",
     )
 
-    response_data = json.dumps({
-        "data": {"task_id": "abc123", "status": "queued"},
-        "code": 200,
-    }).encode()
+    response_data = json.dumps(
+        {
+            "data": {"task_id": "abc123", "status": "queued"},
+            "code": 200,
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
@@ -536,22 +584,26 @@ def test_submit_task_with_lm_negative_prompt() -> None:
 
 
 def test_repaint_payload_omits_protocol_defaults_and_forwards_explicit_values() -> None:
-    default_payload = _build_submit_payload(AceStepConfig(
-        prompt="test",
-        lyrics="la la",
-        task_type="repaint",
-    ))
+    default_payload = _build_submit_payload(
+        AceStepConfig(
+            prompt="test",
+            lyrics="la la",
+            task_type="repaint",
+        )
+    )
 
     assert "repaint_mode" not in default_payload
     assert "repaint_strength" not in default_payload
 
-    explicit_payload = _build_submit_payload(AceStepConfig(
-        prompt="test",
-        lyrics="la la",
-        task_type="repaint",
-        repaint_mode="balanced",
-        repaint_strength=0.0,
-    ))
+    explicit_payload = _build_submit_payload(
+        AceStepConfig(
+            prompt="test",
+            lyrics="la la",
+            task_type="repaint",
+            repaint_mode="balanced",
+            repaint_strength=0.0,
+        )
+    )
 
     assert explicit_payload["repaint_mode"] == "balanced"
     assert explicit_payload["repaint_strength"] == 0.0
@@ -562,15 +614,20 @@ def test_submit_task_repaint_uploads_source_audio(tmp_path) -> None:
     source_audio = tmp_path / "source.wav"
     source_audio.write_bytes(b"source audio")
     config = AceStepConfig(
-        prompt="test", lyrics="la la",
-        task_type="repaint", src_audio_path=str(source_audio),
-        repainting_start=10.0, repainting_end=20.0,
+        prompt="test",
+        lyrics="la la",
+        task_type="repaint",
+        src_audio_path=str(source_audio),
+        repainting_start=10.0,
+        repainting_end=20.0,
     )
 
-    response_data = json.dumps({
-        "data": {"task_id": "r1", "status": "queued"},
-        "code": 200,
-    }).encode()
+    response_data = json.dumps(
+        {
+            "data": {"task_id": "r1", "status": "queued"},
+            "code": 200,
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
@@ -593,14 +650,17 @@ def test_submit_task_uploads_reference_audio(tmp_path) -> None:
     reference_audio = tmp_path / "reference.wav"
     reference_audio.write_bytes(b"reference audio")
     config = AceStepConfig(
-        prompt="test", lyrics="la la",
+        prompt="test",
+        lyrics="la la",
         reference_audio_path=str(reference_audio),
     )
 
-    response_data = json.dumps({
-        "data": {"task_id": "ref1", "status": "queued"},
-        "code": 200,
-    }).encode()
+    response_data = json.dumps(
+        {
+            "data": {"task_id": "ref1", "status": "queued"},
+            "code": 200,
+        }
+    ).encode()
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
         mock_urlopen.return_value = _mock_response(response_data)
@@ -610,10 +670,7 @@ def test_submit_task_uploads_reference_audio(tmp_path) -> None:
     body = request.data.decode()
     audio_form_names = dict(_AUDIO_UPLOAD_FIELDS)
     assert request.headers["Content-type"].startswith("multipart/form-data; boundary=")
-    assert (
-        f'name="{audio_form_names["reference_audio_path"]}"; '
-        'filename="reference.wav"'
-    ) in body
+    assert (f'name="{audio_form_names["reference_audio_path"]}"; filename="reference.wav"') in body
     assert 'name="reference_audio_path"' not in body
     assert "reference audio" in body
 
@@ -622,8 +679,10 @@ def test_submit_task_rejects_missing_audio_file(tmp_path) -> None:
     client = AceStepClient()
     missing_audio = tmp_path / "missing.wav"
     config = AceStepConfig(
-        prompt="test", lyrics="la la",
-        task_type="repaint", src_audio_path=str(missing_audio),
+        prompt="test",
+        lyrics="la la",
+        task_type="repaint",
+        src_audio_path=str(missing_audio),
     )
 
     with patch("acestep_engine.client.urlopen") as mock_urlopen:
@@ -657,9 +716,11 @@ def test_poll_result_empty_data_continues() -> None:
 
     empty_resp = json.dumps({"data": []}).encode()
     result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "42"}])
-    success_resp = json.dumps({
-        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
-    }).encode()
+    success_resp = json.dumps(
+        {
+            "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+        }
+    ).encode()
 
     with (
         patch("acestep_engine.client.urlopen") as mock_urlopen,
@@ -690,13 +751,17 @@ def _running_entry(progress_text: str, **item: object) -> dict[str, object]:
 
 def _poll_reporting_progress(*running_entries: dict[str, object]) -> list[AceStepProgress]:
     reported: list[AceStepProgress] = []
-    success_resp = json.dumps({
-        "data": [{
-            "task_id": "abc",
-            "status": 1,
-            "result": json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}]),
-        }],
-    }).encode()
+    success_resp = json.dumps(
+        {
+            "data": [
+                {
+                    "task_id": "abc",
+                    "status": 1,
+                    "result": json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}]),
+                }
+            ],
+        }
+    ).encode()
     with (
         patch("acestep_engine.client.urlopen") as mock_urlopen,
         patch("acestep_engine.client.time.sleep"),
@@ -769,9 +834,11 @@ def test_poll_result_retries_on_transient_error() -> None:
     from urllib.error import URLError
 
     result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}])
-    success_resp = json.dumps({
-        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
-    }).encode()
+    success_resp = json.dumps(
+        {
+            "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+        }
+    ).encode()
 
     with (
         patch("acestep_engine.client.urlopen") as mock_urlopen,
