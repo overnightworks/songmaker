@@ -15,7 +15,7 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import { runMarker, seedSongPhoneSong } from './seed';
+import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
 
 /**
  * Measured locally (03.10.2026, #1270): 40 to 43 requests on either shell for
@@ -319,11 +319,43 @@ async function withAlbumOfItsOwn(
 		}
 		await flow(id);
 	} finally {
-		const removed = await page.request.delete(`/api/albums/${id}`, {
-			headers: await csrfHeaders(page)
-		});
-		expect(removed.ok()).toBe(true);
+		await archiveOwnedAlbum(page.request, id);
 	}
+}
+
+for (const outcome of ['success', 'throwing callback', 'failed song setup'] as const) {
+	test(`1346-F11-playback: ${outcome} retains an archived proof album`, async ({
+		page
+	}, testInfo) => {
+		const marker = `${shellOf(testInfo)} ${runMarker()} ${outcome}`;
+		const title = `E2E Playback Restore ${marker}`;
+		const failure = new Error('Playback proof callback failed');
+		let flowReached = false;
+		// An empty song title is rejected by the API before the take is imported.
+		const songs =
+			outcome === 'failed song setup' ? [{ title: '', takeAudio: Buffer.alloc(1) }] : [];
+		const flow = withAlbumOfItsOwn(page, marker, songs, async () => {
+			flowReached = true;
+			if (outcome === 'throwing callback') throw failure;
+		});
+		if (outcome === 'failed song setup') {
+			await expect(flow).rejects.toThrow('Song creation failed:');
+		} else if (outcome === 'throwing callback') {
+			await expect(flow).rejects.toBe(failure);
+		} else await flow;
+		expect(flowReached).toBe(outcome !== 'failed song setup');
+
+		const archived = await page.request.get('/api/albums', {
+			params: { archived: true, q: title }
+		});
+		expect(archived.ok()).toBe(true);
+		const { items } = (await archived.json()) as { items: { id: string; title: string }[] };
+		expect(items).toHaveLength(1);
+		expect(items[0].title).toBe(title);
+		const retained = await page.request.get(`/api/albums/${items[0].id}`);
+		expect(retained.ok()).toBe(true);
+		expect(await retained.json()).toMatchObject({ title, is_archived: true });
+	});
 }
 
 test('reload mid-take shows the same take at the same position, paused', async ({

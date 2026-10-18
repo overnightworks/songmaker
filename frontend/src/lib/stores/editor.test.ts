@@ -1,5 +1,5 @@
 import { makeGeneration, makeSong, makeVersion } from '$lib/test-utils/factories';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 vi.mock('$lib/api/client', () => ({
@@ -60,6 +60,8 @@ const songDefaults = {
 	created_at: ''
 } satisfies Partial<SongItem>;
 
+beforeEach(discardDraft);
+
 describe('editGenParams dirty tracking', () => {
 	it('is not dirty after loading a song', () => {
 		loadSongData(makeSong(songDefaults));
@@ -101,6 +103,59 @@ describe('editGenParams dirty tracking', () => {
 });
 
 describe('loadSongData', () => {
+	it.each([
+		{ scenario: 'same song clean', dirty: false, songId: 's1', late: false, discard: false },
+		{ scenario: 'different song dirty', dirty: true, songId: 's2', late: false, discard: false },
+		{ scenario: 'load after typing', dirty: true, songId: 's1', late: true, discard: false },
+		{ scenario: 'discard after late load', dirty: true, songId: 's1', late: true, discard: true }
+	])('defect:#1598 load preserves typing: $scenario', async ({ dirty, songId, late, discard }) => {
+		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		const serverSong = makeSong({ ...songDefaults, id: songId, lyrics: 'newer server text' });
+		let finishLoad!: (song: SongItem) => void;
+		const loading = late
+			? new Promise<SongItem>((resolve) => {
+					finishLoad = resolve;
+				}).then(loadSongData)
+			: null;
+		if (dirty) setDraftLyrics('typed draft');
+		if (loading) {
+			finishLoad(serverSong);
+			await loading;
+		} else {
+			loadSongData(serverSong);
+		}
+		const preserved = dirty && songId === 's1';
+		expect(get(editLyrics)).toBe(preserved ? 'typed draft' : 'newer server text');
+		expect(get(savedSongData).lyrics).toBe('newer server text');
+		expect(get(isDirty)).toBe(preserved);
+		if (discard) {
+			discardDraft();
+			expect(get(editLyrics)).toBe('newer server text');
+			expect(get(isDirty)).toBe(false);
+		}
+	});
+
+	it.each([
+		{ scenario: 'only provenance differs', lyrics: 'hello', typed: false, preserved: false },
+		{ scenario: 'version text differs', lyrics: 'older text', typed: false, preserved: true },
+		{ scenario: 'typing after version load', lyrics: 'hello', typed: true, preserved: true }
+	])(
+		'defect:#1598 background load after a version: $scenario',
+		async ({ lyrics, typed, preserved }) => {
+			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+			await Promise.resolve();
+			const older = makeVersion({ id: 'v1', version_number: 1, ...songDefaults, lyrics });
+			versions.set([makeVersion({ id: 'v2', version_number: 2 }), older]);
+			loadVersionAsDraft(older);
+			if (typed) setDraftLyrics('typed draft');
+			loadSongData(makeSong({ ...songDefaults, id: 's1', lyrics: 'server text' }));
+			expect(get(editLyrics)).toBe(preserved ? (typed ? 'typed draft' : lyrics) : 'server text');
+			expect(get(savedSongData).lyrics).toBe('server text');
+			expect(get(draftLoadedFrom)).toBe(preserved ? 1 : null);
+			expect(get(isDirty)).toBe(preserved);
+		}
+	);
+
 	it('defect:#940 S9383 shows a toast when the versions cannot be loaded, and the song still opens at once', async () => {
 		const { fetchVersions } = await import('$lib/api/client');
 		toasts.set([]);
@@ -551,6 +606,63 @@ describe('versionDeleteEditorLoss', () => {
 });
 
 describe('handleSave', () => {
+	const version = (number: number) =>
+		makeVersion({ id: 'v' + number, version_number: number, lyrics: 'loaded version' });
+
+	it.each`
+		scenario                                | from    | editBefore | action           | nextFrom | expectedLyrics         | dirty
+		${'no intervening edit'}                | ${null} | ${true}    | ${'none'}        | ${null}  | ${'sent draft'}        | ${false}
+		${'typing during save'}                 | ${null} | ${true}    | ${'type'}        | ${null}  | ${'typed during save'} | ${true}
+		${'typing after loaded version'}        | ${1}    | ${true}    | ${'type'}        | ${null}  | ${'typed during save'} | ${true}
+		${'another version loaded during save'} | ${1}    | ${true}    | ${'load v2'}     | ${2}     | ${'loaded version'}    | ${true}
+		${'same version reloaded during save'}  | ${1}    | ${true}    | ${'load v1'}     | ${1}     | ${'loaded version'}    | ${true}
+		${'unchanged-version no-op load'}       | ${1}    | ${false}   | ${'load v1'}     | ${null}  | ${'loaded version'}    | ${false}
+		${'load latest then Undo during save'}  | ${1}    | ${true}    | ${'undo latest'} | ${null}  | ${'sent draft'}        | ${false}
+		${'load v2, load v3, Save, then Undo'}  | ${2}    | ${false}   | ${'undo v3'}     | ${2}     | ${'loaded version'}    | ${true}
+	`(
+		'defect:#1598 save records only the sent draft and provenance: $scenario',
+		async ({ from, editBefore, action, nextFrom, expectedLyrics, dirty }) => {
+			const { updateSong } = await import('$lib/api/client');
+			let finishSave!: (song: SongItem) => void;
+			vi.mocked(updateSong).mockReturnValueOnce(
+				new Promise((resolve) => {
+					finishSave = resolve;
+				})
+			);
+			selectedSongId.set('s1');
+			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+			await Promise.resolve();
+			const latest = version(4);
+			versions.set([latest, version(3), version(2), version(1)]);
+			if (from !== null) loadVersionAsDraft(version(from));
+			if (editBefore) setDraftLyrics('sent draft');
+			const undo = action === 'undo v3' ? loadVersionAsDraft(version(3)) : null;
+			const sentLyrics = get(editLyrics);
+			const saving = handleSave('s1');
+			if (action === 'type') setDraftLyrics('typed during save');
+			if (action === 'load v1') loadVersionAsDraft(version(1));
+			if (action === 'load v2') loadVersionAsDraft(version(2));
+			if (action === 'undo latest') loadVersionAsDraft(latest)?.undo();
+			if (action === 'undo v3') undo?.undo();
+			finishSave(makeSong({ ...songDefaults, id: 's1', lyrics: sentLyrics }));
+			await saving;
+			expect(get(savedSongData).lyrics).toBe(sentLyrics);
+			expect(get(editLyrics)).toBe(expectedLyrics);
+			expect(get(draftLoadedFrom)).toBe(nextFrom);
+			expect(get(isDirty)).toBe(dirty);
+			vi.mocked(updateSong).mockResolvedValueOnce(
+				makeSong({ ...songDefaults, lyrics: expectedLyrics })
+			);
+			await handleSave('s1');
+			expect(updateSong).toHaveBeenLastCalledWith(
+				's1',
+				expect.objectContaining({ new_version: nextFrom !== null })
+			);
+			expect(get(savedSongData).lyrics).toBe(expectedLyrics);
+			expect(get(isDirty)).toBe(false);
+		}
+	);
+
 	it('calls updateSong, resets dirty state, and returns the saved song', async () => {
 		vi.clearAllMocks();
 		const { updateSong } = await import('$lib/api/client');
@@ -636,23 +748,29 @@ describe('computeDraftVersionNumber', () => {
 });
 
 describe('handleDeleteVersion', () => {
-	it('calls deleteVersion and refreshes', async () => {
-		vi.clearAllMocks();
-		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
-		loadSongData(makeSong({ ...songDefaults, lyrics: 'deleted version' }));
-		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchSong).mockResolvedValueOnce(
-			makeSong({ ...songDefaults, lyrics: 'remaining lyrics' })
-		);
-		vi.mocked(fetchVersions).mockResolvedValueOnce([
-			makeVersion({ lyrics: 'remaining lyrics', prompt: 'rock' })
-		]);
+	it.each([true, false])(
+		'defect:#1598 confirmed delete replaces a dirty draft; surviving version: %s',
+		async (survives) => {
+			vi.clearAllMocks();
+			const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+			loadSongData(makeSong({ ...songDefaults, lyrics: 'deleted version' }));
+			selectedSongId.set('s1');
+			setDraftLyrics('typed draft');
+			vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
+			vi.mocked(fetchSong).mockResolvedValueOnce(
+				makeSong({ ...songDefaults, lyrics: 'remaining lyrics' })
+			);
+			vi.mocked(fetchVersions).mockResolvedValueOnce(
+				survives ? [makeVersion({ lyrics: 'remaining lyrics', prompt: 'rock' })] : []
+			);
 
-		await handleDeleteVersion('s1', 'v1', false);
+			await handleDeleteVersion('s1', 'v1', false);
 
-		expect(deleteVersion).toHaveBeenCalledWith('v1', false);
-		expect(get(editLyrics)).toBe('remaining lyrics');
-	});
+			expect(deleteVersion).toHaveBeenCalledWith('v1', false);
+			expect(get(editLyrics)).toBe('remaining lyrics');
+			expect(get(isDirty)).toBe(false);
+		}
+	);
 
 	it('does not overwrite another song editor if the user navigates away', async () => {
 		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');

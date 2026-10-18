@@ -92,6 +92,53 @@ afterEach(() => {
 });
 
 describe('song list mutations', () => {
+	it.each(['success', 'failure'] as const)(
+		'1160-F45-reset: ignores a late %s and preserves the new album load after reset',
+		async (outcome) => {
+			vi.useFakeTimers();
+			let finishOld!: (page: PaginatedResponse<SongItem>) => void;
+			let failOld!: (error: unknown) => void;
+			let finishNew!: (page: PaginatedResponse<SongItem>) => void;
+			vi.mocked(fetchSongs)
+				.mockImplementationOnce(
+					() =>
+						new Promise((resolve, reject) => {
+							finishOld = resolve;
+							failOld = reject;
+						})
+				)
+				.mockImplementationOnce(
+					() =>
+						new Promise((resolve) => {
+							finishNew = resolve;
+						})
+				);
+			const oldLoad = loadSongsForAlbum('a1');
+			resetLibraryDataForTests();
+			expect(get(albumSongsLoad)).toEqual({});
+			const newLoad = loadSongsForAlbum('a1');
+			const page = {
+				items: [makeSong({ id: 'stale' })],
+				total: 1,
+				offset: 0,
+				limit: 200,
+				has_more: false
+			};
+			if (outcome === 'success') finishOld(page);
+			else failOld(OFFLINE);
+			await oldLoad;
+			await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+			expect(get(songList)).toEqual([]);
+			expect(get(albumSongsLoad)).toEqual({ a1: 'loading' });
+			expect(get(albumSongsLoadFailure('a1'))).toBeNull();
+			expect(loadSongsForAlbum('a1')).toBe(newLoad);
+			finishNew({ ...page, items: [makeSong({ id: 'fresh' })] });
+			await newLoad;
+			expect(get(songList).map((song) => song.id)).toEqual(['fresh']);
+			expect(get(albumSongsLoad)).toEqual({ a1: 'idle' });
+		}
+	);
+
 	it('replaceSongInList applies an authoritative empty generation list', () => {
 		songList.set([
 			makeSong({

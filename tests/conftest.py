@@ -45,7 +45,11 @@ from worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
 from acestep_engine.errors import AudioDownloadError  # noqa: E402
 from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402
-from songmaker_cli.scheduler import NoCapacityError, WorkerGenerationUnavailable  # noqa: E402
+from songmaker_cli.scheduler import (  # noqa: E402
+    NoCapacityError,
+    WorkerGenerationUnavailable,
+    WorkerGpuOutOfMemory,
+)
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
@@ -146,6 +150,11 @@ def generation_failure_case(request):
     params=[
         *SONGMAKER_FAILURE_CASES,
         pytest.param(
+            (WorkerGpuOutOfMemory, "need 18.5 GB", None,
+             "Too long for the GPU right now — try a shorter duration.", "gpu_out_of_memory"),
+            id="S8-A-oom",
+        ),
+        pytest.param(
             (
                 WorkerGenerationUnavailable,
                 "need 18.5 GB",
@@ -158,7 +167,7 @@ def generation_failure_case(request):
     ]
 )
 def generation_write_failure_case(request):
-    """S5-B, L6/L10: New writes select the line and type together."""
+    """S8-A; S5-B, L6/L10: New writes select the line and type together."""
     error_class, cause, _, message, error_type = request.param
     return error_class(cause), message, error_type
 

@@ -793,6 +793,11 @@ export class ResourceSyncController {
 	private startFailedSongRetryTimer(delayMs: number): void {
 		this.failedSongRetryDueAt = Date.now() + delayMs;
 		this.failedSongRetryTimer = setTimeout(() => {
+			const remainingMs = this.failedSongRetryDueAt - Date.now();
+			if (remainingMs > 0) {
+				this.startFailedSongRetryTimer(remainingMs);
+				return;
+			}
 			this.failedSongRetryTimer = null;
 			void this.retryFailedSongs();
 		}, delayMs);

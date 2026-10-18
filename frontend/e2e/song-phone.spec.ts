@@ -1,31 +1,5 @@
-// The song page at phone width (issue #995, #914's ruled sentence L12):
-// a Takes list with a real play control per take, a running generation's
-// progress in both the Generate button and the Takes status slot, and a
-// failed generation's literal worker sentence. Mobile project only —
-// everything this proves (the compact Edit/Takes tabs, the phone status
-// slot, the button's own failure state) is compact-shell UI with no desktop
-// counterpart to exercise, the same reason kinetic-strip.spec.ts gives for
-// staying desktop-only. The one desktop row is the unsaved-draft dialog on
-// the rail's Settings group, which shares the phone rows' arrangement (#1143).
-//
-// CI's e2e stack (docker-compose.ci.yml) runs no ACE-Step worker, so every
-// job state below is seeded directly against the database
-// (scripts/seed_e2e_job_states.py) rather than produced by a real
-// generation — the same reasoning kinetic-strip.spec.ts's own takes and the
-// rail's filler albums already use (issue #344). The running job is failed
-// on the *same* job id while its SSE stream is still open
-// (/api/jobs/{id}/stream polls the row every second), so the frontend picks
-// up the transition live, the way a real worker crash would report it — no
-// reload, and no dependence on the reaper ever running.
-//
-// The same absent worker also means `GET /health` reports
-// `acestep_workers_online: 0`, and `generateAction`'s derivation (see its own
-// comment) treats that as an unconditional disabled reason that outranks a
-// failed job's cause — so without help, the failed-job assertion below would
-// never see anything but "No ACE-Step worker online". A narrowly scoped
-// `page.route` on `**/health` reports one worker online for this page only,
-// standing in for the seeded heartbeat a real worker would publish, so the
-// failed generation's own persistent UI is what's on screen instead.
+// Phone Takes and generation states (#995, #914 L12); Settings also runs on desktop (#1143).
+// CI seeds jobs without a worker; the health override exposes their failure state.
 
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
@@ -36,6 +10,8 @@ import {
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
+	SONG_MENU_LABEL,
+	SONG_MENU_SAVE_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	GENERATION_PHASE_LABELS,
@@ -61,9 +37,9 @@ import {
 	boundingBoxes,
 	containing,
 	FlowGuard,
-	MOBILE_VIEWPORT,
 	nameStartingWith,
 	ONLY_IN_SHELL,
+	MOBILE_VIEWPORT,
 	openSettingsSection,
 	openSettingsSectionFromSearch,
 	playlistEntryRows,
@@ -120,6 +96,10 @@ async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersio
 	const version = seeded ? takeVersion(seeded.id, seeded.version_number) : null;
 	if (!version) throw new Error('Expected the seeded song to have a version');
 	return version;
+}
+
+function songBackButton(page: Page): Locator {
+	return page.locator('.mobile-strip').getByRole('button', { name: /^Back to / });
 }
 
 interface SongWithAnUnsavedDraft {
@@ -455,7 +435,6 @@ test.describe('song page at phone width', () => {
 				`1354_rule_32: clean song returns to ${origin}, and editor tabs keep its Back`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
-					await page.setViewportSize({ width: 390, height: 844 });
 					const { songPhoneAlbumId } = readSeededLibrary();
 					const { lyrics, savedLyrics, songHeading } = await openSongWithAnUnsavedDraft(
 						page,
@@ -507,16 +486,12 @@ test.describe('song page at phone width', () => {
 				`1354_rule_32: song ‹ asks first and honors ${choice}`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
-					await page.setViewportSize({ width: 390, height: 844 });
 					const { songPhoneAlbumId } = readSeededLibrary();
 					const { lyrics, savedLyrics, songHeading, unsavedDraftDialog } =
 						await openSongWithAnUnsavedDraft(page, songPhoneAlbumId);
 					const address = page.url();
 					const draft = await lyrics.inputValue();
-					await page
-						.locator('.mobile-strip')
-						.getByRole('button', { name: /^Back to / })
-						.click();
+					await songBackButton(page).click();
 					await expect(unsavedDraftDialog).toBeVisible();
 					await expect(page).toHaveURL(address);
 					await unsavedDraftDialog.getByRole('button', { name: choice, exact: true }).click();
@@ -546,10 +521,7 @@ test.describe('song page at phone width', () => {
 				const { lyrics, savedLyrics } = await openSongWithAnUnsavedDraft(page, songPhoneAlbumId);
 				await lyrics.fill(savedLyrics);
 				const address = page.url();
-				const expectedName = await page
-					.locator('.mobile-strip')
-					.getByRole('button', { name: /^Back to / })
-					.getAttribute('aria-label');
+				const expectedName = await songBackButton(page).getAttribute('aria-label');
 				if (!expectedName) throw new Error('Expected the song Back name');
 				const coldContext = await browser.newContext({
 					storageState: await context.storageState(),
@@ -559,15 +531,11 @@ test.describe('song page at phone width', () => {
 				});
 				try {
 					const cold = await coldContext.newPage();
-					await cold.setViewportSize({ width: 390, height: 844 });
 					await cold.goto(address);
 					const coldLyrics = cold.getByRole('textbox', { name: /^Lyrics/ });
 					await expect(coldLyrics).toHaveValue(savedLyrics);
-					// A late editor reload can overwrite typing; #1598 removes this retry.
-					await expect(async () => {
-						await coldLyrics.fill(UNSAVED_DRAFT_LINE);
-						await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE, { timeout: 1000 });
-					}).toPass();
+					await expect(cold.locator('.workspace-wrapper')).not.toHaveAttribute('inert');
+					await coldLyrics.fill(UNSAVED_DRAFT_LINE);
 					await expect(coldLyrics).toHaveValue(UNSAVED_DRAFT_LINE);
 					const readHistoryIndex = () =>
 						(window as unknown as { navigation: { currentEntry: { index: number } } }).navigation
@@ -591,12 +559,51 @@ test.describe('song page at phone width', () => {
 			}
 		);
 
+		test(
+			'defect:#1598 1354_rule_32: typing during a held save stays unsaved and ‹ asks',
+			{ tag: ONLY_IN_SHELL.mobile },
+			async ({ page }) => {
+				const { lyrics, unsavedDraftDialog } = await openSongWithAnUnsavedDraft(
+					page,
+					readSeededLibrary().songPhoneAlbumId
+				);
+				let releaseSave!: () => void;
+				const held = new Promise<void>((resolve) => {
+					releaseSave = resolve;
+				});
+				await page.route('**/api/songs/*', async (route) => {
+					if (route.request().method() === 'PUT') await held;
+					await route.continue();
+				});
+				const sent = page.waitForRequest(
+					(request) => request.method() === 'PUT' && /\/api\/songs\/[^/]+$/.test(request.url())
+				);
+				try {
+					await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
+					await page
+						.getByRole('dialog', { name: SONG_MENU_LABEL })
+						.getByRole('button', { name: SONG_MENU_SAVE_LABEL, exact: true })
+						.click();
+					await sent;
+					const draft = `${await lyrics.inputValue()}\nmore typing during save`;
+					await lyrics.fill(draft);
+					releaseSave();
+					await expect(page.getByText(/^Saved version \d+$/)).toBeVisible();
+					await expect(lyrics).toHaveValue(draft);
+					await songBackButton(page).click();
+					await expect(unsavedDraftDialog).toBeVisible();
+					await expect(lyrics).toHaveValue(draft);
+				} finally {
+					releaseSave();
+				}
+			}
+		);
+
 		for (const dirty of [false, true]) {
 			test(
 				`1354_rule_30: browser Back closes search over a ${dirty ? 'dirty' : 'clean'} song first`,
 				{ tag: ONLY_IN_SHELL.mobile },
 				async ({ page }) => {
-					await page.setViewportSize({ width: 390, height: 844 });
 					const { lyrics, savedLyrics, unsavedDraftDialog, songHeading } =
 						await openSongWithAnUnsavedDraft(page, readSeededLibrary().songPhoneAlbumId);
 					if (!dirty) await lyrics.fill(savedLyrics);
@@ -622,7 +629,6 @@ test.describe('song page at phone width', () => {
 			'1354_rule_25: cold Settings ‹ replaces with Settings',
 			{ tag: ONLY_IN_SHELL.mobile },
 			async ({ page }) => {
-				await page.setViewportSize({ width: 390, height: 844 });
 				await page.goto('/settings/voices');
 				const length = await page.evaluate(() => history.length);
 				await page
@@ -659,16 +665,9 @@ test.describe('song page at phone width', () => {
 	);
 });
 
-// Leaving Now Playing on the phone (issue #1002): the full surface is a
-// pushed screen, so the phone's Back -- and × right after open -- shows the
-// screen it was opened from again, never the entry below that screen, and
-// leaves no copy of it behind for the next Back to land on. A take row opens
-// Now Playing on This take with its sheet up, whose backdrop never covers ×
-// (#1052), so one tap on × closes Now Playing there too; Back closes that sheet
-// first and Now Playing with the next one (#1119). A playlist row only
-// plays in place (#1010), so that origin opens Now Playing through the
-// mini-player's own entry, which brings no sheet up.
-// The base library's songs each carry one reimported take, their first.
+// Phone Back/× restores the origin without duplicate history (#1002). A take opens
+// a sheet clear of × (#1052); Back closes the sheet first (#1119). Playlists play
+// in place (#1010), so open through the mini-player. Imported songs have one take.
 const SEEDED_TAKE_NUMBER = 1;
 
 interface NowPlayingOrigin {

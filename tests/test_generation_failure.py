@@ -8,9 +8,13 @@ from songmaker_cli.jobs.generation_failure import (
     generation_failure,
     musician_error,
     partial_failure_error,
+    running_failure_pair,
+    select_generation_failure,
 )
 from songmaker_cli.scheduler import (
     WorkerGenerationFailed,
+    WorkerGenerationUnavailable,
+    WorkerGpuOutOfMemory,
     WorkerModeNotLoaded,
     WorkerProtocolError,
     WorkerTaskFailed,
@@ -32,13 +36,63 @@ def test_worker_family_gets_generic_message_and_type(error_class, cause, caplog)
 
 
 def test_songmaker_message_stays_with_existing_sanitizer(generation_write_failure_case, caplog):
-    """S5-B/D, L6/L10: Availability changes while other sanitization and logging survive."""
+    """S8-A; S5-B/D, L6/L10: Availability changes while other sanitization and logging survive."""
     cause, expected, error_type = generation_write_failure_case
     failure = generation_failure(cause, "own-job")
     assert failure.message == expected
     assert failure.error_type == error_type
     assert "own-job" in caplog.text
     assert str(cause) in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("causes", "message", "error_type", "running"),
+    [
+        (
+            (WorkerGpuOutOfMemory,),
+            "Too long for the GPU right now — try a shorter duration.",
+            "gpu_out_of_memory",
+            True,
+        ),
+        (
+            (WorkerGpuOutOfMemory, WorkerGenerationFailed),
+            "Too long for the GPU right now — try a shorter duration.",
+            "gpu_out_of_memory",
+            True,
+        ),
+        (
+            (WorkerGenerationFailed, WorkerGpuOutOfMemory),
+            "Too long for the GPU right now — try a shorter duration.",
+            "gpu_out_of_memory",
+            True,
+        ),
+        (
+            (WorkerGenerationUnavailable, WorkerGenerationFailed),
+            "Generating failed — try again.",
+            "generation_error",
+            False,
+        ),
+        (
+            (WorkerGenerationUnavailable,),
+            "Generating isn't available right now.",
+            "generation_unavailable",
+            False,
+        ),
+    ],
+    ids=["oom", "oom-generic", "generic-oom", "unavailable-generic", "unavailable"],
+)
+def test_s8_failure_selection(causes, message, error_type, running, caplog):
+    """S8-A/D/E: One owner logs every cause and chooses stored and running pairs."""
+    selected = None
+    assert running_failure_pair(selected) == (None, None)
+    for index, cause in enumerate(causes):
+        diagnosis = f"private worker cause {index}"
+        selected = select_generation_failure(selected, cause(diagnosis), "s8-job")
+        assert diagnosis in caplog.text
+    assert "s8-job" in caplog.text
+    assert (selected.message, selected.error_type) == (message, error_type)
+    assert running_failure_pair(selected) == ((message, error_type) if running else (None, None))
+    assert musician_error(message, error_type) == message
 
 
 @pytest.mark.parametrize(

@@ -1,3 +1,4 @@
+import { makeSong } from '$lib/test-utils/factories';
 import { modifiedClicks } from '$lib/test-utils/modified-clicks';
 import { selectedSongId } from '$lib/stores/player';
 import { replaceHistoryEntry } from '$lib/test-utils/library-history';
@@ -7,7 +8,7 @@ import { get } from 'svelte/store';
 
 import { goto } from '$app/navigation';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
-import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
+import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
@@ -126,6 +127,8 @@ async function openRailGroup(root: ParentNode, index: number): Promise<void> {
 }
 
 beforeEach(() => {
+	discardDraft();
+	loadSongData(makeSong());
 	localStorage.clear();
 	railWidth.set(264);
 	railCollapsed.set(false);

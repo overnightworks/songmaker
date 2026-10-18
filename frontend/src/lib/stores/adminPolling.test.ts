@@ -168,6 +168,43 @@ describe('createPollingStore', () => {
 		store.stop();
 	});
 
+	it.each([
+		{ retained: null, maxErrors: 1 },
+		{ retained: 'previous', maxErrors: 1 },
+		{ retained: null, maxErrors: 5 },
+		{ retained: 'previous', maxErrors: 5 }
+	])(
+		'[1160-F28-return] clears a held failure during reconnect with $retained data and maxErrors=$maxErrors',
+		async ({ retained, maxErrors }) => {
+			const failure = new Error('offline');
+			const fetcher = vi.fn<() => Promise<string>>().mockRejectedValue(failure);
+			const store = createPollingStore(fetcher, 1000, { isHidden: () => false, maxErrors });
+			if (retained !== null) {
+				fetcher.mockResolvedValueOnce(retained);
+				await store.refresh();
+			}
+			store.start();
+			reportResourceStreamReachable(false);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(store.error)).toBe(failure);
+
+			const reload = Promise.withResolvers<string>();
+			fetcher.mockReturnValueOnce(reload.promise);
+			reportResourceStreamReachable(true);
+			expect(get(store.loading)).toBe(true);
+			expect(get(store.error)).toBeNull();
+			expect(get(store.data)).toBe(retained);
+
+			const refusal = new Error('reload refused');
+			reload.reject(refusal);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(store.loading)).toBe(false);
+			expect(get(store.error)).toBe(refusal);
+			expect(get(store.data)).toBe(retained);
+			store.stop();
+		}
+	);
+
 	it('once stopped by its caller, stays stopped when the connection comes back', async () => {
 		const fetcher = vi.fn().mockResolvedValue('ok');
 		const store = createPollingStore(fetcher, 1000, { isHidden: () => false });
