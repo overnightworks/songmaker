@@ -1,7 +1,0 @@
-claim_id = "40273cf9cdaf4fef906277d3d3b55496"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "eb17e74010fc27631f302faf827e2ce6ccdf4228"
-branch = "claude/issue-1612-nav-subjects-without-drawer"
-scope = ["frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/phone-typing.spec.ts"]
-opened_commit = "31421835b9622c900970f4a58b897ede5d802ac4"
