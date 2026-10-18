@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import closing, contextmanager
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
-from songmaker_cli.db.models import AuditLog, UserSession
+from songmaker_cli.db.models import AuditLog
 from songmaker_cli.db.queries import create_user, create_user_lora
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
@@ -23,35 +23,6 @@ from songmaker_cli.settings import get_settings
 def client(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path)
     yield client
-
-
-@pytest.fixture
-def session_deletion_failure(client: TestClient):
-    from sqlalchemy import event
-
-    @contextmanager
-    def fail_deletion(*, after: int = 1):
-        with client.app.state.ctx.db() as db:
-            engine = db.get_bind()
-        deletions = 0
-
-        def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
-            nonlocal deletions
-            if (
-                context.isdelete
-                and context.compiled.statement.table.name == UserSession.__tablename__
-            ):
-                deletions += 1
-                if deletions == after:
-                    raise RuntimeError("session deletion failed")
-
-        event.listen(engine, "after_cursor_execute", fail_after_delete)
-        try:
-            yield
-        finally:
-            event.remove(engine, "after_cursor_execute", fail_after_delete)
-
-    return fail_deletion
 
 
 def _login_as_admin(client: TestClient) -> None:
@@ -209,7 +180,7 @@ def test_a_later_failure_rolls_back_every_field_in_a_combined_update(
     with closing(web_client(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
-        with session_deletion_failure(after=2):
+        with session_deletion_failure(admin_client.app.state.ctx.db, after=2):
             response = failing_client.put(
                 f"/api/admin/users/{managed_account.user_id}",
                 json={"role": "admin", "password": "newpass12345"},
@@ -272,7 +243,7 @@ def test_db_failure_rolls_back_account_changes_and_session_deletion(
     with closing(web_client(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
-        with session_deletion_failure():
+        with session_deletion_failure(admin_client.app.state.ctx.db):
             response = failing_client.request(method, path, json=payload)
 
     assert response.status_code == 500
@@ -809,7 +780,9 @@ def test_hard_delete_user_rolls_back_when_session_deletion_fails(
             record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
         }
     assert old_session_ids
-    with session_deletion_failure(), pytest.raises(RuntimeError, match="session deletion failed"):
+    with session_deletion_failure(client.app.state.ctx.db), pytest.raises(
+        RuntimeError, match="session deletion failed",
+    ):
         client.delete(f"/api/admin/users/{user_id}/permanent")
 
     from songmaker_cli.db.queries import get_user

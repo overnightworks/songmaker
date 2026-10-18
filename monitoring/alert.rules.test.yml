@@ -90,6 +90,7 @@ tests:
               description: A background loop has stopped or failed three consecutive ticks.
 
   - interval: 1m
+    # defect:#1590: the DB session cleanup loop remains monitored.
     name: a failing background loop alerts after its hold period
     input_series:
       - series: 'songmaker_background_loop_consecutive_failures{loop="session_cleanup"}'

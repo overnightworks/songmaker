@@ -60,6 +60,7 @@ def _bind_user_to_log_context(user: AuthenticatedUser) -> None:
 
 _auth_dependencies = current_user_dependency(
     session_store=_session_record_store,
+    # The factory requires this provider; manual authentication supplies its own sink.
     audit_sink=_audit_sink,
     on_authenticated=_bind_user_to_log_context,
 )

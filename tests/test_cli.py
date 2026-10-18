@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
-from sqlalchemy import event
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.app_context import build_password_hasher
@@ -211,7 +210,7 @@ def test_reset_password_invalidates_a_replayed_host_session_cookie(served_app) -
 
 @pytest.mark.parametrize("failure", ["delete", "commit"])
 def test_reset_password_db_failure_leaves_password_and_sessions_unchanged(
-    served_app, capsys, failure,
+    served_app, capsys, failure, session_deletion_failure, session_commit_failure,
 ) -> None:
     """defect:#1590: reset rolls back both changes when deletion or commit fails."""
     from datetime import datetime, timedelta, timezone
@@ -227,23 +226,13 @@ def test_reset_password_db_failure_leaves_password_and_sessions_unchanged(
         ).id
         db.commit()
 
-    def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
-        if statement.lstrip().upper().startswith("DELETE FROM USER_SESSIONS"):
-            raise RuntimeError("Reset DB failure")
-
-    def fail_commit(session):
-        raise RuntimeError("Reset DB failure")
-
-    target, event_name, listener = (
-        (factory.kw["bind"], "after_cursor_execute", fail_after_delete)
-        if failure == "delete" else (factory, "before_commit", fail_commit)
+    failure_context = (
+        session_deletion_failure(factory, message="Reset DB failure")
+        if failure == "delete"
+        else session_commit_failure(factory, message="Reset DB failure")
     )
-    event.listen(target, event_name, listener)
-    try:
-        with pytest.raises(RuntimeError, match="Reset DB failure"):
-            _reset_password(NEW_PASSWORD)
-    finally:
-        event.remove(target, event_name, listener)
+    with failure_context, pytest.raises(RuntimeError, match="Reset DB failure"):
+        _reset_password(NEW_PASSWORD)
 
     assert capsys.readouterr().out == ""
     assert _hash_in_db(served_app) == OLD_PASSWORD_HASH

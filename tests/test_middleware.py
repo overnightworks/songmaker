@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -252,9 +253,10 @@ def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
         assert entry is not None
 
 @pytest.mark.parametrize("commit_fails", [False, True])
-def test_auth_transaction_commits_renewal_and_audit_together(_db, commit_fails) -> None:
+def test_auth_transaction_commits_renewal_and_audit_together(
+    _db, commit_fails, session_commit_failure,
+) -> None:
     """defect:#1590: an auth commit failure leaves neither renewal nor audit."""
-    from sqlalchemy import event
     from starlette.requests import Request
 
     from songmaker_cli.db.models import AuditLog
@@ -277,20 +279,16 @@ def test_auth_transaction_commits_renewal_and_audit_together(_db, commit_fails) 
         "client": ("192.0.2.2", 1234),
     })
 
-    def fail_commit(session):
-        raise RuntimeError("Auth commit failed")
-
-    if commit_fails:
-        event.listen(_db, "before_commit", fail_commit)
-    try:
+    failure_context = (
+        session_commit_failure(_db, message="Auth commit failed")
+        if commit_fails else nullcontext()
+    )
+    with failure_context:
         if commit_fails:
             with pytest.raises(RuntimeError, match="Auth commit failed"):
                 get_current_user(request)
         else:
             assert get_current_user(request).username.startswith("test_user")
-    finally:
-        if commit_fails:
-            event.remove(_db, "before_commit", fail_commit)
 
     with _db() as db:
         record = get_session_with_user(db, sid)

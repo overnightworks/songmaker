@@ -564,9 +564,10 @@ def test_login_prunes_oldest_session_over_cap(
         assert oldest_sid not in remaining_ids
 
 
-def test_login_commit_failure_leaves_no_session_or_cookie(client: TestClient) -> None:
+def test_login_commit_failure_leaves_no_session_or_cookie(
+    client: TestClient, session_commit_failure,
+) -> None:
     """defect:#1590: a failed session commit leaves no usable authentication."""
-    from sqlalchemy import event
     from webauth.cookies import sign_session_id
 
     from songmaker_cli.app_context import get_db_session
@@ -576,15 +577,13 @@ def test_login_commit_failure_leaves_no_session_or_cookie(client: TestClient) ->
     attempted_cookies: list[str] = []
     config = installed_web_auth_config(client.app)
 
-    def fail_session_commit(db) -> None:
+    def observe_session(db) -> None:
         record = db.query(UserSession).one_or_none()
         if record is not None:
             attempted_cookies.append(sign_session_id(record.id, config.signing_key))
-            raise RuntimeError("commit failed")
 
     def failing_session():
-        with factory() as db:
-            event.listen(db, "before_commit", fail_session_commit)
+        with factory() as db, session_commit_failure(db, observe=observe_session):
             yield db
 
     client.app.dependency_overrides[get_db_session] = failing_session
@@ -662,10 +661,9 @@ def _get_user_id(client: TestClient, username: str) -> str:
 
 @pytest.mark.parametrize("operation", ["password", "login", "logout"])
 def test_session_deletion_failure_rolls_back_auth_changes(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, operation: str,
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, operation: str, session_deletion_failure,
 ) -> None:
     """defect:#1590: DB failure leaves password, sessions and cookies unchanged."""
-    from sqlalchemy import event
 
     from songmaker_cli.db.models import User
     from songmaker_cli.settings import get_settings
@@ -677,11 +675,6 @@ def test_session_deletion_failure_rolls_back_auth_changes(
     with factory() as db:
         old_ids = {row.id for row in db.query(UserSession).all()}
         password_hash = db.query(User).one().password_hash
-        engine = db.get_bind()
-
-    def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
-        if context.isdelete and context.compiled.statement.table.name == UserSession.__tablename__:
-            raise RuntimeError("session deletion failed")
 
     method, path, payload = {
         "password": ("PUT", "/api/auth/password", {
@@ -692,14 +685,11 @@ def test_session_deletion_failure_rolls_back_auth_changes(
         }),
         "logout": ("DELETE", "/api/auth/session", None),
     }[operation]
-    event.listen(engine, "after_cursor_execute", fail_after_delete)
-    try:
+    with session_deletion_failure(factory):
         with closing(web_client(client.app, raise_server_exceptions=False)) as failing_client:
             failing_client.cookies.update(client.cookies)
             failing_client.headers.update(client.headers)
             response = failing_client.request(method, path, json=payload)
-    finally:
-        event.remove(engine, "after_cursor_execute", fail_after_delete)
 
     assert response.status_code == 500
     assert "set-cookie" not in response.headers

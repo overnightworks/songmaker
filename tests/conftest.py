@@ -24,6 +24,7 @@ import struct  # noqa: E402
 import subprocess  # noqa: E402
 import wave  # noqa: E402
 from collections.abc import Callable, Mapping, Sequence  # noqa: E402
+from contextlib import contextmanager  # noqa: E402
 from http.client import HTTPResponse  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -36,6 +37,7 @@ import pytest  # noqa: E402
 import structlog  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.dependencies import AuthenticatedUser  # noqa: E402
@@ -687,3 +689,52 @@ def fake_queue_stream_build(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(queue_streams, "probe_audio_duration", lambda _path: 10.0)
     monkeypatch.setattr(queue_streams, "run_ffmpeg_concat", _write_stream)
+
+
+@pytest.fixture
+def session_deletion_failure():
+    """defect:#1590: fail a session DELETE after it executes, before commit."""
+    from songmaker_cli.db.models import UserSession
+
+    @contextmanager
+    def fail_deletion(factory, *, after=1, message="session deletion failed"):
+        with factory() as db:
+            engine = db.get_bind()
+        deletions = 0
+
+        def fail_after_delete(conn, cursor, statement, parameters, context, executemany):
+            nonlocal deletions
+            if (
+                context.isdelete
+                and context.compiled.statement.table.name == UserSession.__tablename__
+            ):
+                deletions += 1
+                if deletions == after:
+                    raise RuntimeError(message)
+
+        event.listen(engine, "after_cursor_execute", fail_after_delete)
+        try:
+            yield
+        finally:
+            event.remove(engine, "after_cursor_execute", fail_after_delete)
+
+    return fail_deletion
+
+
+@pytest.fixture
+def session_commit_failure():
+    """defect:#1590: fail commits, optionally observing the uncommitted state."""
+    @contextmanager
+    def fail_commit(target, *, message="commit failed", observe=None):
+        def refuse_commit(session):
+            if observe is not None:
+                observe(session)
+            raise RuntimeError(message)
+
+        event.listen(target, "before_commit", refuse_commit)
+        try:
+            yield
+        finally:
+            event.remove(target, "before_commit", refuse_commit)
+
+    return fail_commit
