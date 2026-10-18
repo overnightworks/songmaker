@@ -1,8 +1,0 @@
-claim_id = "b2a9c910c2454cbf8dbecec27856e544"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
-branch = "claude/issue-1645-test-audit-leftovers"
-scope = ["frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/editor/SongMenu.test.ts", "frontend/src/routes/settings/page.test.ts", "tests/test_acceptance_evidence.py", "tests/test_requirement_binder.py"]
-opened_commit = "3cf7496d75e15e637325deac5bf2f2ac697b4843"
-whole_reason = "One bundle of small test-or-presentation cards from the same distributor; each card is too small to land alone and their files are disjoint from every open lane."
