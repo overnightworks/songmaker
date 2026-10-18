@@ -1,0 +1,8 @@
+claim_id = "5f802bc39e274a04893b74753901b32b"
+agent = "claude"
+role = "builder"
+base = "8725870097d5d05785b621792302dbc755088c5c"
+branch = "claude/issue-1683-cover-accounting"
+scope = [".github/workflows/ci.yml", "docs/architecture.md", "docs/testing.md", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/db/migrations/versions/1968214a67b1_keep_cover_jobs_after_album_deletion.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/jobs.py", "tests/test_album_cover_suggestions.py", "tests/test_cover_accounting.py", "tests/test_cover_runner.py", "tests/test_mcp_server.py"]
+opened_commit = "8ef7b16d256e50fe29a3f88abddaaf2e4bffbbc5"
+whole_reason = "Atomic publication, retained accounting rows and migration evidence form one accounting correction."
