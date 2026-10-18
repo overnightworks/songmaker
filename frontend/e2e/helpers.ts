@@ -16,8 +16,6 @@ import {
 	OFFLINE_STRIP_MESSAGE,
 	PLAYBACK_DIAGNOSTICS_PATH,
 	PLAYLISTS_PAGE_LABEL,
-	RAIL_DRAWER_LABEL,
-	RAIL_DRAWER_OPEN_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
@@ -33,6 +31,7 @@ import {
 	libraryRouteShape
 } from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
+import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -372,14 +371,11 @@ export async function scrollWallHalfway(page: Page): Promise<number> {
 
 /** Back to the wall through the word LIBRARY, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
-	const rail = await openRailNav(page, shell);
-	await rail.getByRole('link', { name: nameStartingWith(LIBRARY_PAGE_LABEL) }).click();
-	if (shell === 'mobile')
-		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	await openPlace(page, shell, LIBRARY_PAGE_LABEL);
 	await expect(page).toHaveURL(LIBRARY_URL);
 }
 
-/** An album through its row in the rail's Library list — behind the drawer on the phone. */
+/** An album through its row in the rail's Library list. */
 export async function openAlbumFromRail(
 	page: Page,
 	shell: Shell,
@@ -396,30 +392,56 @@ export async function openAlbumFromRail(
 		.click();
 }
 
-/**
- * Home through the brand: the phone bar's own where it shows one, otherwise
- * (an album or Settings page, whose bar shows ‹) the rail's, behind the drawer.
- */
+/** Home through the brand or the phone's guarded return to its tabs. */
 export async function openHome(page: Page, shell: Shell): Promise<void> {
 	const brand = { name: APP_NAME, exact: true };
-	const barBrand = appBar(page).getByRole('button', brand);
-	if (shell === 'desktop' || !(await barBrand.isVisible())) {
-		const rail = await openRailNav(page, shell);
-		await rail.getByRole('button', brand).click();
+	if (shell === 'desktop') {
+		await (await openRailNav(page, shell)).getByRole('button', brand).click();
 	} else {
-		await barBrand.click();
+		const barBrand = appBar(page).getByRole('button', brand);
+		const home = page
+			.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })
+			.getByRole('button', { name: 'Home', exact: true });
+		if (await barBrand.isVisible()) await barBrand.click();
+		else {
+			if (!(await home.isVisible()))
+				await appBar(page)
+					.getByRole('button', { name: /^Back to / })
+					.click();
+			await home.click();
+		}
 	}
-	if (shell === 'mobile')
-		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	await expect(page).toHaveURL(HOME_URL);
 }
 
-/** The Playlists page through its rail link, behind the drawer on the phone. */
+async function openPlace(page: Page, shell: Shell, label: string): Promise<void> {
+	if (shell === 'desktop') {
+		await (
+			await openRailNav(page, shell)
+		)
+			.getByRole('link', { name: nameStartingWith(label) })
+			.click();
+		return;
+	}
+	const tab = page
+		.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })
+		.getByRole('button', { name: label, exact: true });
+	if (await tab.isVisible()) await tab.click();
+	else {
+		await appBar(page).getByRole('button', { name: SEARCH_OPEN_LABEL, exact: true }).click();
+		const sheet = page.getByRole('dialog', { name: 'Search', exact: true });
+		await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(label);
+		await sheet
+			.getByRole('group', { name: 'Pages', exact: true })
+			.getByRole('option', { name: nameStartingWith(label) })
+			.click();
+		await expect(sheet).toBeHidden();
+	}
+}
+
+/** The Playlists page through the shell's navigation. */
 export async function openPlaylistsPage(page: Page, shell: Shell): Promise<void> {
-	const rail = await openRailNav(page, shell);
-	await rail.getByRole('link', { name: nameStartingWith(PLAYLISTS_PAGE_LABEL) }).click();
-	if (shell === 'mobile')
-		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	await openPlace(page, shell, PLAYLISTS_PAGE_LABEL);
 	await expect(page).toHaveURL(/\/playlists$/);
 }
 
@@ -432,14 +454,9 @@ export async function csrfHeaders(page: Page): Promise<Record<string, string>> {
 	return { 'x-csrf-token': csrf.value, origin: BASE_URL };
 }
 
-/** The rail's own navigation — behind the drawer on the compact shell. */
+/** The desktop rail; phone callers use tabs or Search. */
 export async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
-	if (shell === 'mobile') {
-		const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-		if (!(await drawer.isVisible())) {
-			await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-		}
-	}
+	if (shell === 'mobile') throw new Error('The phone has tabs, not a rail');
 	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
 }
 
@@ -473,11 +490,7 @@ export async function openSettingsSectionFromSearch(page: Page, section: string)
 		.click();
 }
 
-/**
- * A Settings section the way each shell reaches it: the desktop rail's Settings
- * group, or on the phone the account menu and then the Settings list, since
- * the phone drawer carries navigation only (#1174).
- */
+/** A Settings section through the desktop rail or the phone's account menu. */
 export async function openSettingsSection(
 	page: Page,
 	shell: Shell,
@@ -487,7 +500,7 @@ export async function openSettingsSection(
 		await openSettingsFromAccountMenu(page);
 		await page
 			.getByRole('navigation', { name: SETTINGS_NAV_LABEL })
-			.getByRole('link', { name: section, exact: true })
+			.getByRole('link', { name: nameStartingWith(section) })
 			.click();
 		return;
 	}

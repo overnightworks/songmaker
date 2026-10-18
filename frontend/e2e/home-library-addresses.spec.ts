@@ -1,3 +1,4 @@
+import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Home at `/` and the Library at `/library` (#1506, #1354 rules 25, 31 and 40),
 // driven the way a person reaches them: a pasted address, the brand, the word
 // Library, a reload, Back and Forward. The rows are those of #1506's scenario
@@ -20,7 +21,6 @@ import {
 	LIBRARY_NEW_MENU_LABEL,
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
-	RAIL_DRAWER_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
@@ -122,7 +122,7 @@ async function expectSettingsShown(page: Page, shell: Shell): Promise<void> {
 	await expect(page.getByRole('heading', { name: heading })).toBeVisible();
 }
 
-type RailWord = typeof LIBRARY_PAGE_LABEL | typeof PLAYLISTS_PAGE_LABEL;
+type RailWord = typeof HOME_PAGE_LABEL | typeof LIBRARY_PAGE_LABEL | typeof PLAYLISTS_PAGE_LABEL;
 const RAIL_WORDS: readonly RailWord[] = [LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL];
 
 async function expectCurrentRailWord(
@@ -130,19 +130,17 @@ async function expectCurrentRailWord(
 	current: RailWord | null,
 	shell: Shell = 'desktop'
 ): Promise<void> {
-	const rail = await openRailNav(page, shell);
-	for (const label of RAIL_WORDS) {
-		const word = rail.getByRole('link', { name: nameStartingWith(label) });
+	const rail =
+		shell === 'mobile'
+			? page.getByRole('navigation', { name: PHONE_TABS_NAV_LABEL })
+			: await openRailNav(page, shell);
+	for (const label of shell === 'mobile' ? [HOME_PAGE_LABEL, ...RAIL_WORDS] : RAIL_WORDS) {
+		const word = rail.getByRole(shell === 'mobile' ? 'button' : 'link', {
+			name: nameStartingWith(label)
+		});
 		if (label === current) await expect(word).toHaveAttribute('aria-current', 'page');
 		else await expect(word).not.toHaveAttribute('aria-current', 'page');
 	}
-}
-
-async function expectCurrentPhoneDrawerWord(page: Page, current: RailWord | null): Promise<void> {
-	await expectCurrentRailWord(page, current, 'mobile');
-	const drawer = page.getByRole('dialog', { name: RAIL_DRAWER_LABEL });
-	await page.keyboard.press('Escape');
-	await expect(drawer).toBeHidden();
 }
 
 // The album a page was left holding as its open collection is the one the idle
@@ -465,30 +463,24 @@ for (const [origin, railWord] of [
 	[LIBRARY, LIBRARY_PAGE_LABEL],
 	[PLAYLISTS, PLAYLISTS_PAGE_LABEL]
 ] as const) {
-	for (const [shell, drawerOnly] of [
-		['desktop', false],
-		['mobile', false],
-		['mobile', true]
-	] as const) {
-		const readsWord = shell === 'desktop' || drawerOnly;
-		const expectWord = drawerOnly ? expectCurrentPhoneDrawerWord : expectCurrentRailWord;
+	for (const shell of ['desktop', 'mobile'] as const) {
 		test(
-			`${readsWord ? 'defect:#1523 1354_rule_40' : origin === PLAYLISTS ? '1354_37b_64' : '1354_rule_31'}: ${origin.name}, Settings, then Back restores the page${readsWord ? ` and its current ${railWord} word` : ''}, with no reload${drawerOnly ? ' (phone drawer-only, retired by #1354 row 61)' : ''}`,
+			`1354_61_C${origin === PLAYLISTS ? '09' : '08'} defect:#1523 1354_rule_40 1354_37b_64 1354_rule_31: ${origin.name}, Settings and Back restore current navigation in one document (${shell})`,
 			{ tag: ONLY_IN_SHELL[shell] },
 			async ({ page }) => {
 				const guard = new FlowGuard(page);
 				const library = readSeededLibrary();
 				await origin.open(page, shell, library);
-				if (readsWord) await expectWord(page, railWord);
+				await expectCurrentRailWord(page, railWord, shell);
 				await page.evaluate((key) => Reflect.set(window, key, true), SAME_DOCUMENT_KEY);
 
 				await openSettings(page, shell);
 				await expectSettingsShown(page, shell);
-				if (readsWord) await expectWord(page, null);
+				await expectCurrentRailWord(page, null, shell);
 				await page.goBack();
 
 				await origin.expectStands(page, shell, library);
-				if (readsWord) await expectWord(page, railWord);
+				await expectCurrentRailWord(page, railWord, shell);
 				expect(
 					await page.evaluate((key) => Reflect.get(window, key), SAME_DOCUMENT_KEY),
 					'the journey stayed in one document'
@@ -771,12 +763,12 @@ test(
 );
 
 for (const [row, path, current, retainAlbum] of [
-	['1354_rule_31 row 1', HOME_PATH, null, false],
+	['1354_rule_31 row 1', HOME_PATH, HOME_PAGE_LABEL, false],
 	['1354_rule_31 row 2', LIBRARY_PATH, LIBRARY_PAGE_LABEL, false],
-	['1354_R1prime row 10c', HOME_PATH, null, true]
+	['1354_R1prime row 10c', HOME_PATH, HOME_PAGE_LABEL, true]
 ] as const) {
 	test(
-		`${row}: phone drawer current word follows the address (retired by #1354 row 61)`,
+		`${row}: 1354_61_C07: phone tab follows the address`,
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
 			const guard = new FlowGuard(page);
@@ -788,7 +780,7 @@ for (const [row, path, current, retainAlbum] of [
 			}
 			if (path === HOME_PATH) await expectHomeShown(page);
 			else await expectWallShown(page);
-			await expectCurrentPhoneDrawerWord(page, current);
+			await expectCurrentRailWord(page, current, 'mobile');
 			guard.assertClean();
 		}
 	);

@@ -44,7 +44,7 @@ import * as playerStore from '$lib/stores/player';
 import { dismissToast, toasts } from '$lib/stores/toast';
 import { openCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { sidebarOpen, toggleSidebar, watchTypingOnPhone } from '$lib/stores/ui';
+import { watchTypingOnPhone } from '$lib/stores/ui';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
@@ -803,20 +803,6 @@ describe('PlayerBar Now Playing', () => {
 		await tick();
 
 		expect(get(nowPlayingSurface)).toBe('full');
-	});
-
-	it('closes the drawer when Now Playing opens', async () => {
-		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
-		toggleSidebar();
-		expect(get(sidebarOpen)).toBe(true);
-
-		nowPlayingButton().click();
-		await tick();
-
-		expect(get(sidebarOpen)).toBe(false);
-		sidebarOpen.set(false);
 	});
 
 	// "One player, never two": the full surface carries the only transport.

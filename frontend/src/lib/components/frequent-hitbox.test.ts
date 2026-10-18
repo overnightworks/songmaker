@@ -143,7 +143,7 @@ import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import songRowSource from './SongRow.svelte?raw';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
-import layoutSource from '../../routes/+layout.svelte?raw';
+import phoneTabsSource from './shell/PhoneTabs.svelte?raw';
 import railSearchSource from './shell/RailSearch.svelte?raw';
 
 // Every target below is styled by exactly one of these components — never a
@@ -165,7 +165,7 @@ const COMPONENT_STYLE_SOURCES = {
 	SongRow: { source: songRowSource, filename: 'SongRow.svelte' },
 	TransportBarFrame: { source: transportBarFrameSource, filename: 'TransportBarFrame.svelte' },
 	RailSearch: { source: railSearchSource, filename: 'RailSearch.svelte' },
-	Layout: { source: layoutSource, filename: '+layout.svelte' }
+	PhoneTabs: { source: phoneTabsSource, filename: 'PhoneTabs.svelte' }
 } as const satisfies Record<string, { source: string; filename: string }>;
 
 type ComponentId = keyof typeof COMPONENT_STYLE_SOURCES;
@@ -211,9 +211,9 @@ const INVENTORY = [
 		component: 'PlaylistPicker'
 	},
 	{
-		name: 'drawer-trigger',
-		selector: '.drawer-trigger[data-hitbox="frequent"]',
-		component: 'Layout'
+		name: 'phone-tab',
+		selector: '.phone-tabs button[data-hitbox="frequent"]',
+		component: 'PhoneTabs'
 	},
 	{
 		name: 'collection-play',
@@ -256,8 +256,7 @@ const INVENTORY = [
 
 // Each inventory target's own component owns the scope class the DOM already
 // carries, so its stylesheet only needs compiling and injecting once per
-// component even though several targets can share one file. A target with no scope class at all (drawer-trigger:
-// nothing in +layout.svelte's <style> matches it) has no scoped rule reaching
+// component even though several targets can share one file. A target with no scope class at all has no scoped rule reaching
 // it either, so it is skipped rather than treated as a missing measurement.
 function injectInventoryComponentStyles(
 	found: ReadonlyArray<{ el: HTMLElement; component: ComponentId }>

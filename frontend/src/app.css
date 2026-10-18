@@ -140,9 +140,10 @@
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
 	--phone-tabs-height: 54px;
+	--phone-tabs-room: calc(var(--phone-tabs-height) + env(safe-area-inset-bottom, 0px));
 	--transport-safe-area-bottom: env(safe-area-inset-bottom, 0px);
 	--transport-bar-height: calc(88px + var(--transport-safe-area-bottom));
-	/* Room below the bar, zero until phone tabs arrive. Override only on html:
+	/* Room below the bar, reserved when phone tabs are visible. Override only on html:
 	   --player-height resolves at :root, while components read the offset locally. */
 	--shell-bottom-offset: 0px;
 	--offline-strip-height: 36px;
@@ -222,6 +223,11 @@ html[data-pointer='coarse'] {
    sets both attributes; a share page keeps its bar and never carries them. */
 html[data-offline] {
 	--offline-strip-room: var(--offline-strip-height);
+}
+
+html[data-phone-tabs] {
+	--shell-bottom-offset: var(--phone-tabs-room);
+	--transport-safe-area-bottom: 0px;
 }
 
 html[data-transport-bar='hidden'] {

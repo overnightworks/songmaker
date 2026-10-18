@@ -518,13 +518,6 @@ export function remountOverStandingEntry(url: string, state: App.PageState): Pro
 	return navigateTo(url, { ...loadingMount.options, state });
 }
 
-// A navigation the router reports at the address a route mount loads for
-// moved no page: it mounted the route of the page already on screen, so the
-// overlays opened over that page meanwhile still cover it (issue #1289).
-export function navigationOnlyMountedRoute(type: NavigationType): boolean {
-	return type === 'goto' && loadingMount !== null && location.href === loadingMount.address;
-}
-
 // A navigation another one superseded wrote no entry of its own, so only one
 // whose entry stands settles the page.
 function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {

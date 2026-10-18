@@ -75,7 +75,6 @@ import {
 	type ResumeQueueSource,
 	type SavedPlayback
 } from '$lib/stores/playbackResume';
-import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
@@ -1297,11 +1296,9 @@ function restoreNowPlayingTriggerFocus(closedFromFullSurface: boolean): void {
 // The single open/close owner for Now Playing: every surface that opens or
 // closes it (PlayerBar's button, a TakesList row via playTakeAndShowNowPlaying,
 // NowPlayingTake's Repaint/Cover action) routes through these two functions
-// instead of poking `nowPlayingSurface`/`nowPlayingPanel` directly, so closing
-// the mobile rail drawer on open and restoring focus on close happen exactly
-// once, the same way, regardless of entry point.
+// instead of poking `nowPlayingSurface`/`nowPlayingPanel` directly, so surface
+// selection and focus restoration happen the same way for every entry point.
 export function openNowPlaying(panel: NowPlayingPanel): void {
-	closeSidebar();
 	nowPlayingPanel.set(panel);
 	const surface = get(nowPlayingDockable) ? get(desktopNowPlayingSurface) : 'full';
 	nowPlayingSurface.set(surface);

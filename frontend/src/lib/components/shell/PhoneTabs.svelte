@@ -30,6 +30,7 @@
 	{#each PHONE_TABS as tab (tab.place)}
 		<button
 			type="button"
+			data-hitbox="frequent"
 			aria-current={currentPlace === tab.place ? 'page' : undefined}
 			onclick={() => onSelect(tab.place)}
 		>
@@ -41,10 +42,13 @@
 
 <style>
 	.phone-tabs {
+		position: fixed;
+		inset: auto 0 0;
+		z-index: 100;
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		flex: none;
-		height: calc(var(--phone-tabs-height) + env(safe-area-inset-bottom, 0px));
+		height: var(--phone-tabs-room);
 		padding-bottom: env(safe-area-inset-bottom, 0px);
 		background: var(--header-bg);
 	}
@@ -55,7 +59,6 @@
 		align-items: center;
 		justify-content: center;
 		gap: 4px;
-		min-width: 0;
 		border: none;
 		border-radius: 0;
 		background: transparent;
