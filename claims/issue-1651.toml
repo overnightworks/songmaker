@@ -1,8 +1,0 @@
-claim_id = "27e64ed430d6409397c6bf9b92572741"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
-branch = "claude/issue-1651-retry-deadline-reset"
-scope = ["frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts"]
-opened_commit = "d8bda19c78d762b12a3a0907482e16ffc4ab9022"
-whole_reason = "One bundle of small test-or-presentation cards from the same distributor; each card is too small to land alone and their files are disjoint from every open lane."
