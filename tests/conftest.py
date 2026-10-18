@@ -271,6 +271,14 @@ def fake_cli_process(
     return proc
 
 
+@pytest.fixture
+def internal_token() -> str:
+    """1301-F10-FIXTURE: configured credential expected at worker boundaries."""
+    from songmaker_cli.settings import get_settings
+
+    return get_settings().songmaker_internal_token.get_secret_value()
+
+
 @pytest.fixture(autouse=True)
 def _reset_settings_cache():
     """Clear the Settings lru_cache between tests so monkeypatched env wins."""

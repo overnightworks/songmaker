@@ -16,7 +16,6 @@ from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, Resourc
 from songmaker_cli.db.models import AuditLog
 from songmaker_cli.db.queries import create_user, create_user_lora
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
-from songmaker_cli.settings import get_settings
 
 
 @pytest.fixture
@@ -1413,11 +1412,8 @@ def test_load_model_on_worker_queue_unavailable(client: TestClient) -> None:
     assert resp.status_code == 503
 
 
-def _worker_token() -> str:
-    return get_settings().songmaker_internal_token.get_secret_value()
-
-
-def test_evict_model_proxies_to_worker(client: TestClient) -> None:
+def test_evict_model_proxies_to_worker(client: TestClient, internal_token: str) -> None:
+    """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     _login_as_admin(client)
@@ -1440,7 +1436,7 @@ def test_evict_model_proxies_to_worker(client: TestClient) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0] == "http://example:8001/evict_model"
     assert kwargs["json"] == {"mode": "sft"}
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
 def test_evict_model_unknown_worker(client: TestClient) -> None:
@@ -1503,7 +1499,8 @@ def test_evict_model_worker_returns_4xx(client: TestClient) -> None:
 # ── pin_model_on_worker_endpoint ────────────────────────────────────
 
 
-def test_pin_model_on_worker_success(client: TestClient) -> None:
+def test_pin_model_on_worker_success(client: TestClient, internal_token: str) -> None:
+    """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     _login_as_admin(client)
@@ -1523,7 +1520,7 @@ def test_pin_model_on_worker_success(client: TestClient) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/pin_model")
     assert kwargs["json"] == {"mode": "sft"}
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
 def test_pin_model_unknown_worker(client: TestClient) -> None:
@@ -1592,7 +1589,8 @@ def test_pin_model_requires_admin(client: TestClient) -> None:
 # ── unpin_model_on_worker_endpoint ──────────────────────────────────
 
 
-def test_unpin_model_on_worker_success(client: TestClient) -> None:
+def test_unpin_model_on_worker_success(client: TestClient, internal_token: str) -> None:
+    """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     _login_as_admin(client)
@@ -1611,7 +1609,7 @@ def test_unpin_model_on_worker_success(client: TestClient) -> None:
     assert resp.status_code == 200
     args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/unpin_model")
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
 def test_unpin_model_unknown_worker(client: TestClient) -> None:
@@ -1634,7 +1632,8 @@ def test_unpin_model_unknown_mode(client: TestClient) -> None:
 # ── restart_worker_endpoint ─────────────────────────────────────────
 
 
-def test_restart_worker_success(client: TestClient) -> None:
+def test_restart_worker_success(client: TestClient, internal_token: str) -> None:
+    """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     _login_as_admin(client)
@@ -1652,7 +1651,7 @@ def test_restart_worker_success(client: TestClient) -> None:
     assert resp.json()["status"] == "restarting"
     args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/restart")
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == _worker_token()
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
 def test_restart_worker_unknown_worker(client: TestClient) -> None:
