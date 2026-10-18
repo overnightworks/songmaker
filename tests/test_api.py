@@ -1488,13 +1488,33 @@ def test_active_generation_null_without_an_active_generate_job(
 # ── Last failed generation ───────────────────────────────────────────
 
 
-def test_last_failed_generation_null_when_no_failed_job(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    ("error_type", "has_end"),
+    [(None, None), ("generation_error", True), (None, True), ("gpu_out_of_memory", False)],
+    ids=["none", "partial-other", "partial-untyped", "partial-no-end"],
+)
+def test_last_failed_generation_null_when_no_failed_job(client, error_type, has_end) -> None:
+    """S9-E: Only typed, timestamped OOM partials recover; no historical backfill."""
+    if has_end is not None:
+        with client.app.state.ctx.db() as session:
+            session.query(Generation).update({"is_archived": True})
+            session.add(Job(
+                type="generate", status="partial", song_id="s1", error_type=error_type,
+                completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc) if has_end else None,
+            ))
+            session.commit()
     resp = client.get("/api/songs/s1/last-failed-generation")
     assert resp.status_code == 200
     assert resp.json()["job"] is None
 
 
-def test_last_failed_generation_returns_latest_failed_job(client: TestClient) -> None:
+@pytest.mark.parametrize("status", ["failed", "partial"], ids=["failed", "partial-oom"])
+def test_last_failed_generation_returns_latest_failed_job(client, status) -> None:
+    """S9-B: Reload preserves the typed failure, completion and musician line."""
+    message = "Too long for the GPU right now — try a shorter duration."
+    if status == "partial":
+        message = "1/2 completed, 1 failed: " + message
+    completed_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
     factory = client.app.state.ctx.db
     with factory() as session:
         # The existing takes are older than the failure below -- archive
@@ -1511,23 +1531,28 @@ def test_last_failed_generation_returns_latest_failed_job(client: TestClient) ->
     with factory() as session:
         job = session.query(Job).filter_by(id=job_id).one()
         assert job.song_id == "s1"
-        job.status = "failed"
-        job.error = "Insufficient free VRAM"
-        job.completed_at = datetime.now(timezone.utc)
+        job.status = status
+        job.error = message
+        job.error_type = "gpu_out_of_memory"
+        job.completed_at = completed_at
         session.commit()
 
     resp = client.get("/api/songs/s1/last-failed-generation")
     assert resp.status_code == 200
     body = resp.json()["job"]
     assert body["id"] == job_id
-    assert body["status"] == "failed"
-    assert body["error"] == "Insufficient free VRAM"
+    assert body["status"] == status
+    assert body["type"] == "generate"
+    assert body["error"] == message
+    assert body["error_type"] == "gpu_out_of_memory"
+    assert datetime.fromisoformat(body["completed_at"]).replace(tzinfo=timezone.utc) == completed_at
 
 
+@pytest.mark.parametrize("status", ["failed", "partial"], ids=["failed", "partial-oom"])
 def test_last_failed_generation_returns_the_most_recent_of_several(
-    client: TestClient,
+    client: TestClient, status,
 ) -> None:
-    """Ordered by started_at -- the actual attempt order -- not completed_at."""
+    """S9-C: Attempt order, not completion order, selects the latest failure."""
     factory = client.app.state.ctx.db
     with factory() as session:
         session.query(Generation).filter(Generation.id.in_(["g1", "g2"])).update(
@@ -1537,10 +1562,11 @@ def test_last_failed_generation_returns_the_most_recent_of_several(
             id="job-older", type="generate", status="failed", song_id="s1",
             error="older failure",
             started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-            completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            completed_at=datetime(2025, 7, 1, tzinfo=timezone.utc),
         ))
         session.add(Job(
-            id="job-newer", type="generate", status="failed", song_id="s1",
+            id="job-newer", type="generate", status=status, song_id="s1",
+            error_type="gpu_out_of_memory",
             error="newer failure",
             started_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
@@ -1552,11 +1578,15 @@ def test_last_failed_generation_returns_the_most_recent_of_several(
     assert resp.json()["job"]["id"] == "job-newer"
 
 
-def test_last_failed_generation_suppressed_by_a_newer_non_terminal_job(
-    client: TestClient,
+@pytest.mark.parametrize(
+    "status", ["queued", "running", "completed", "cancelled", "partial"],
+    ids=["queued", "running", "completed", "cancelled", "partial-other"],
+)
+def test_last_failed_generation_suppressed_by_a_newer_attempt_of_any_outcome(
+    client: TestClient, status,
 ) -> None:
-    """A failure isn't the song's last word once a newer job of any outcome
-    -- queued, running, or completed -- exists; that newer job supersedes it
+    """S9-C: A failure isn't the song's last word once a newer job of any outcome
+    -- queued, running, completed, cancelled, or partial -- exists; the newer job supersedes it
     on its own, before the take-suppression check even runs."""
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -1564,13 +1594,16 @@ def test_last_failed_generation_suppressed_by_a_newer_non_terminal_job(
             {"is_archived": True}, synchronize_session=False,
         )
         session.add(Job(
-            id="job-failed", type="generate", status="failed", song_id="s1",
+            id="job-failed", type="generate", status="partial", song_id="s1",
+            error_type="gpu_out_of_memory",
             error="stale failure",
             started_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
             completed_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
         ))
         session.add(Job(
-            id="job-queued", type="generate", status="queued", song_id="s1",
+            id="job-queued", type="generate", status=status, song_id="s1",
+            error_type="generation_error",
+            completed_at=datetime(2025, 1, 3, tzinfo=timezone.utc),
             started_at=datetime(2025, 1, 2, tzinfo=timezone.utc),
         ))
         session.commit()
@@ -1643,23 +1676,43 @@ def test_last_failed_generation_recoverable_after_cover(client: TestClient) -> N
     assert body["error"] == "cover failed"
 
 
-def test_last_failed_generation_suppressed_by_a_newer_take(client: TestClient) -> None:
-    factory = client.app.state.ctx.db
-    with factory() as session:
+@pytest.mark.parametrize(
+    ("offset", "archived", "song_id", "suppressed"),
+    [(-1, False, "s1", False), (0, False, "s1", False), (1, False, "s1", True),
+     (1, True, "s1", False), (1, False, "s2", False)],
+    ids=["before", "equal", "after", "archived-after", "other-song-after"],
+)
+def test_last_failed_generation_suppressed_by_a_newer_take(
+    client, offset, archived, song_id, suppressed,
+) -> None:
+    """S9-D: Only an unarchived same-song take strictly after completion supersedes."""
+    completed_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    with client.app.state.ctx.db() as session:
+        session.query(Generation).update({"is_archived": True})
+        if song_id != "s1":
+            session.add(Song(id=song_id, title="Other", album_id="rock", track_number=2))
+            session.flush()
+        take = session.get(Generation, "g1")
+        take.song_id = song_id
+        take.created_at = completed_at + timedelta(seconds=offset)
+        take.is_archived = archived
         session.add(Job(
-            id="job-stale", type="generate", status="failed", song_id="s1",
-            error="stale failure",
-            completed_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+            id="job-stale", type="generate", status="partial", song_id="s1",
+            error_type="gpu_out_of_memory", completed_at=completed_at,
         ))
         session.commit()
 
     resp = client.get("/api/songs/s1/last-failed-generation")
     assert resp.status_code == 200
-    assert resp.json()["job"] is None
+    if suppressed:
+        assert resp.json()["job"] is None
+    else:
+        assert resp.json()["job"]["id"] == "job-stale"
 
 
 @pytest.mark.parametrize("endpoint", ["last-failed-generation", "active-generation"])
 def test_song_generation_job_requires_ownership(client: TestClient, endpoint: str) -> None:
+    """S9-E: A foreign OOM partial is never disclosed."""
     factory = client.app.state.ctx.db
     with factory() as session:
         session.add(User(
@@ -1672,7 +1725,10 @@ def test_song_generation_job_requires_ownership(client: TestClient, endpoint: st
         ))
         session.add(Song(id="s-other", title="Their Song", album_id="other", track_number=1))
         session.flush()
-        session.add(Job(type="generate", status="running", song_id="s-other"))
+        session.add(Job(
+            type="generate", status="partial", song_id="s-other",
+            error_type="gpu_out_of_memory", completed_at=datetime.now(timezone.utc),
+        ))
         session.commit()
 
     resp = client.get(f"/api/songs/s-other/{endpoint}")
@@ -1681,6 +1737,13 @@ def test_song_generation_job_requires_ownership(client: TestClient, endpoint: st
 
 @pytest.mark.parametrize("endpoint", ["last-failed-generation", "active-generation"])
 def test_song_generation_job_song_not_found(client: TestClient, endpoint: str) -> None:
+    """S9-E: An existing OOM partial cannot disclose a missing song."""
+    with client.app.state.ctx.db() as session:
+        session.add(Job(
+            type="generate", status="partial", song_id="s1",
+            error_type="gpu_out_of_memory", completed_at=datetime.now(timezone.utc),
+        ))
+        session.commit()
     resp = client.get(f"/api/songs/nonexistent/{endpoint}")
     assert resp.status_code == 404
 
@@ -4542,6 +4605,56 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     await redis_client.drain_lease_releases()
 
     asyncio.run(drive())
+
+
+def test_partial_oom_reload_retains_successful_take(client, generation_worker_peer):
+    """S9-B, S9-D: A real saved take survives and does not hide its own OOM partial."""
+    from worker_http_peer import WorkerScenario, WorkerStream
+
+    from songmaker_cli import redis_client
+    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.jobs import run_generation_job
+
+    ctx = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, "generate", user_id=_DEFAULT_USER_ID, song_id="s1")
+        job_id = job.id
+        existing_takes = {take.id for take in session.query(Generation).all()}
+        session.commit()
+
+    async def drive():
+        scenario = WorkerScenario(
+            loaded_modes=("sft",),
+            stream_answers=(None, WorkerStream((
+                ("error", {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"}),
+            ))),
+        )
+        try:
+            async with generation_worker_peer(scenario, db_factory=ctx.db) as peer:
+                await run_generation_job(
+                    job_id, "s1", "v1", 2, _DEFAULT_USER_ID,
+                    db_factory=ctx.db, audio_dir=peer.audio_dir, data_dir=peer.data_dir,
+                    redis=peer.redis, target_model="sft",
+                )
+        finally:
+            await redis_client.drain_lease_releases()
+
+    asyncio.run(drive())
+    response = client.get("/api/songs/s1/last-failed-generation")
+    assert response.status_code == 200
+    recovered = response.json()["job"]
+    assert recovered["id"] == job_id
+    assert recovered["status"] == "partial"
+    assert recovered["completed_at"] is not None
+    assert recovered["error_type"] == "gpu_out_of_memory"
+    assert recovered["error"] == (
+        "1/2 completed, 1 failed: Too long for the GPU right now — try a shorter duration."
+    )
+    song = client.get("/api/songs/s1")
+    assert song.status_code == 200
+    saved = [take for take in song.json()["generations"] if take["id"] not in existing_takes]
+    assert len(saved) == 1
+    assert saved[0]["is_archived"] is False
 
 
 @pytest.mark.parametrize("read_path", ["get", "stream", "reload"])

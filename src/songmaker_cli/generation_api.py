@@ -83,7 +83,11 @@ from songmaker_cli.db.queries import (
     update_job_status,
 )
 from songmaker_cli.generation_params import BaseGenerationParams
-from songmaker_cli.jobs.generation_failure import generation_failure, musician_job_response
+from songmaker_cli.jobs.generation_failure import (
+    generation_failure,
+    is_visible_generation_failure,
+    musician_job_response,
+)
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
 from songmaker_cli.timestamps import aware_timestamp
 
@@ -354,24 +358,24 @@ def api_last_failed_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> LastFailedGenerationResponse:
-    """Whether the song's last generate/repaint/cover job is a failure that
-    is still the last word on the song's takes.
+    """Recover the latest FAILED or typed OOM PARTIAL job after reload.
 
-    A failed job leaving `activeJobs` is the only place the frontend learns
-    of it live (see `jobs.ts`); this lets a page reload or a later visit
-    recover the same cause. Two things supersede it: a newer job of any
-    outcome (queued, running, or completed -- the failure is no longer the
-    last attempt) and a non-archived take created after it (from an earlier
-    successful attempt the failed job didn't replace).
+    Any newer attempt supersedes the failure. Only an unarchived take
+    created strictly after completion hides it; the job's own saved takes
+    remain available alongside its partial result. Historical jobs without
+    a completion timestamp are not recoverable.
     """
     song = check_song_access(session, song_id, user)
     job = get_last_generate_job_for_song(session, song_id)
-    if job is None or job.status != JobStatus.FAILED or job.completed_at is None:
+    if job is None or job.completed_at is None or not (
+        job.status == JobStatus.FAILED
+        or (job.status == JobStatus.PARTIAL and is_visible_generation_failure(job.error_type))
+    ):
         return LastFailedGenerationResponse(job=None)
     newest_take = next((g for g in song.generations if not g.is_archived), None)
     if (
         newest_take is not None
-        and aware_timestamp(newest_take.created_at) >= aware_timestamp(job.completed_at)
+        and aware_timestamp(newest_take.created_at) > aware_timestamp(job.completed_at)
     ):
         return LastFailedGenerationResponse(job=None)
     return LastFailedGenerationResponse(job=musician_job_response(job))
