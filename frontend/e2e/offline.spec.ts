@@ -693,10 +693,18 @@ test.describe(
 			const songId = await seedSongPhoneSong(library.songPhoneAlbumId, title, 1, 0);
 			const jobId = await seedQueuedGenerationJob(songId);
 			const panel = page.getByRole('tabpanel');
-
+			const expectRealQueuedPosition = () =>
+				expect(async () => {
+					const response = await page.request.get(`/api/jobs/${jobId}`);
+					expect(response.ok()).toBeTruthy();
+					const { queue_position: position } = await response.json();
+					expect(Number.isInteger(position)).toBe(true);
+					expect(position).toBeGreaterThan(0);
+					await expect(panel.getByText(/Queued #/)).toHaveText(`Queued #${position}`);
+				}).toPass({ timeout: BACK_ONLINE_MS });
 			try {
 				await openOfflineTakes(page, library.songPhoneAlbumId, title);
-				await expect(panel.getByText(/^Queued #\d+$/)).toBeVisible();
+				await expectRealQueuedPosition();
 				const address = page.url();
 				await loseNetwork(page, context);
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
@@ -704,9 +712,7 @@ test.describe(
 				});
 				await expect(panel.getByText(/Queued #/)).toHaveCount(0);
 				await regainNetwork(page, context);
-				await expect(panel.getByText(/^Queued #\d+$/)).toBeVisible({
-					timeout: BACK_ONLINE_MS
-				});
+				await expectRealQueuedPosition();
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
 				await expect(page).toHaveURL(address);
 			} finally {
