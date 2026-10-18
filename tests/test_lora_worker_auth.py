@@ -103,11 +103,11 @@ def lora_auth_db(tmp_path: Path):
         ),
         pytest.param(
             "-different", LoraStatus.FAILED, JobStatus.FAILED, False,
-            ["/gpu_hold/reserve"], id="mismatched",
+            ["/gpu_hold/reserve"], id="mismatched-at-first-worker-request",
         ),
     ],
 )
-def test_lora_load_and_stream_require_configured_token(
+def test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch(
     accepted_token_suffix: str,
     lora_status: LoraStatus,
     job_status: JobStatus,
@@ -117,7 +117,11 @@ def test_lora_load_and_stream_require_configured_token(
     lora_auth_db,
     tmp_path: Path,
 ) -> None:
-    """1301-F10-HTTP: real job sends both headers; a token mismatch fails without an adapter."""
+    """1301-F10-HTTP: load and stream requests carry the configured token.
+
+    A mismatch fails the job at its first worker request, /gpu_hold/reserve,
+    without publishing an adapter.
+    """
 
     async def exercise() -> None:
         peer = LoraAuthPeer(internal_token + accepted_token_suffix)
