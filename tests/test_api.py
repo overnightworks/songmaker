@@ -1313,10 +1313,10 @@ def _mock_worker_process_health(mock_pool=None, *, music_healthy=True):
     return _ctx()
 
 
-def _register_worker_with_broken_gpu(client: TestClient, mock_pool) -> None:
-    """Issue #367 finding 1: a registered worker whose only heartbeat says
-    gpu_healthy: false must never look online to the generate/repaint/cover
-    preflight — simulated NVML failure, not a lucky real GPU."""
+def _register_worker_with_gpu_health(
+    client: TestClient, mock_pool, *, gpu_healthy: bool,
+) -> None:
+    """Control worker eligibility through its heartbeat without a real GPU."""
     import json
     from unittest.mock import AsyncMock
 
@@ -1325,13 +1325,13 @@ def _register_worker_with_broken_gpu(client: TestClient, mock_pool) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
         register_worker(
-            session, worker_id="broken-gpu-w", host="h", port=8001,
+            session, worker_id="gpu-worker", host="h", port=8001,
             gpu_id=0, vram_total_gb=24.0,
         )
         session.commit()
 
     mock_pool.get = AsyncMock(
-        return_value=json.dumps({"loaded": ["sft"], "gpu_healthy": False}).encode(),
+        return_value=json.dumps({"loaded": ["sft"], "gpu_healthy": gpu_healthy}).encode(),
     )
 
 
@@ -2041,8 +2041,10 @@ def test_s6_unavailable_generation_is_persisted(
     from unittest.mock import AsyncMock
 
     pool = AsyncMock()
-    if cause == "broken-gpu":
-        _register_worker_with_broken_gpu(client, pool)
+    if cause != "no-registered-worker":
+        _register_worker_with_gpu_health(
+            client, pool, gpu_healthy=cause == "music-absent",
+        )
 
     with _mock_worker_process_health(pool, music_healthy=cause != "music-absent"):
         response = client.post(path, json=payload)
@@ -2171,6 +2173,7 @@ def test_worker_preflight_reports_an_unavailable_worker(
     payload: dict,
     health_check: str,
 ) -> None:
+    """S6-E: score keeps "Worker not running"."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
     with (
