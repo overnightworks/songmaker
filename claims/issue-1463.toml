@@ -1,0 +1,8 @@
+claim_id = "ed69ebbe5c7c4852a64a775b0c0f5164"
+agent = "claude"
+role = "builder"
+base = "8725870097d5d05785b621792302dbc755088c5c"
+branch = "claude/issue-1463-quality-gate"
+scope = [".github/workflows/ci.yml", "CLAUDE.md", "docs/testing.md", "quality/config.toml", "scripts/check_root_layout.py", "sonar-project.properties", "tests/test_check_root_layout.py", "tests/test_quality_workflow.py"]
+opened_commit = "17951802e6c9faf5a66fd6b3f4b4ce386d924b47"
+whole_reason = "Reusable gate, coverage transport, root admission and contract verification form one adoption."
