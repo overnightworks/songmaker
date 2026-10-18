@@ -6,6 +6,7 @@
 // curates a playlist through the detailed take list; on mobile, the Edit tab
 // carries no take strip and the Takes tab is the one playback entry point.
 
+import { phoneSearchResult } from './phone-search';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
@@ -252,17 +253,8 @@ async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
 	await expect(accountMenu(page)).toBeHidden();
 }
 
-/**
- * One navigation, no modes (#263): on the desktop Settings is a disclosure
- * inside the same rail the album lives in, not a second column beside the
- * content; on the phone it is the account menu's Settings list (#1174).
- * Opening a section is a real navigation (#265), and the rail's own album
- * context row is the way back — the "click back into the album" promise that
- * made the disclosure worth building in the first place (#264). On the phone
- * the way to Settings leads through the Library wall, whose own page leaves
- * the drawer's Library group unfolded (#1354 rule 40, D1), so the album row is
- * one tap away.
- */
+// Settings keeps one navigation owner; the desktop rail and phone Search
+// each return to the album without a second settings column (#263, #264).
 async function expectSettingsRailRoundTrip(
 	page: Page,
 	shell: Shell,
@@ -296,13 +288,14 @@ async function expectSettingsRailRoundTrip(
 		expect(Math.abs(mainBox.x - (railBox.x + railBox.width))).toBeLessThanOrEqual(2);
 	}
 
-	const rail = await openRailNav(page, shell);
 	if (shell === 'mobile') {
-		await expect(
-			rail.getByRole('button', { name: nameStartingWith(LIBRARY_PAGE_LABEL) })
-		).toHaveAttribute('aria-expanded', 'true');
+		await (
+			await phoneSearchResult(page, 'Albums', albumTitle, nameStartingWith(albumTitle))
+		).click();
+	} else {
+		const rail = await openRailNav(page, shell);
+		await rail.getByRole('button', { name: containing(albumTitle) }).click();
 	}
-	await rail.getByRole('button', { name: containing(albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
 
@@ -410,7 +403,7 @@ async function expectMiniPlayerOpensNowPlaying(
 	await page.setViewportSize(MOBILE_VIEWPORT);
 }
 
-test('plays the album pick, curates a playlist and serves the public album link', async ({
+test('1354_37b_64: plays the album pick, curates a playlist and serves the public album link', async ({
 	page,
 	browser
 }, testInfo) => {
@@ -759,7 +752,7 @@ test(
 	}
 );
 
-test('an album with nothing to play dims its circle and leaves the running album playing on', async ({
+test('1354_37b_64: an album with nothing to play dims its circle and leaves the running album playing on', async ({
 	page
 }, testInfo) => {
 	const shell = shellOf(testInfo);
@@ -776,10 +769,21 @@ test('an album with nothing to play dims its circle and leaves the running album
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 
 	// The second seeded album holds songs without a take (see seed.ts).
-	const rail = await openRailNav(page, shell);
-	await railAlbumRow(rail, library.secondAlbumTitle)
-		.getByRole('button', { name: containing(library.secondAlbumTitle) })
-		.click();
+	if (shell === 'mobile') {
+		await (
+			await phoneSearchResult(
+				page,
+				'Albums',
+				library.secondAlbumTitle,
+				nameStartingWith(library.secondAlbumTitle)
+			)
+		).click();
+	} else {
+		const rail = await openRailNav(page, shell);
+		await railAlbumRow(rail, library.secondAlbumTitle)
+			.getByRole('button', { name: containing(library.secondAlbumTitle) })
+			.click();
+	}
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
 	await expect(albumCircle).toBeDisabled();
@@ -889,10 +893,6 @@ test(
 		await page.goto(`/playlist/${playlist.slug}`);
 		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 
-		// Rebuilt after every click that navigates (#263): on mobile the drawer's
-		// own afterNavigate hook closes it, so the rail's nav landmark stops
-		// existing until openRailNav opens it again -- a locator built from an
-		// earlier `rail` would silently match nothing rather than prove anything.
 		let rail = await openRailNav(page, shell);
 
 		// The PLAYLISTS group, touched by a real browser for the first time
@@ -954,8 +954,6 @@ test(
 		await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'false');
 		await expectRailRowCollapsed(secondAlbumRow(), secondAlbumSong());
 		await secondAlbumButton.click();
-		// Album rows navigate, so the compact shell closes its drawer. Re-open the
-		// tree before judging the same one-target row in its new album context.
 		rail = await openRailNav(page, shell);
 		await expect(secondAlbumButton).toHaveAttribute('aria-expanded', 'true');
 		// The one-slot rule is visible as well as navigable: opening one album
