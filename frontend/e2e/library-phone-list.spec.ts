@@ -22,7 +22,6 @@ import {
 	openRailNav,
 	playingAudioState,
 	scrollWallHalfway,
-	shellOf,
 	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	type Shell,
 	wallBody,
@@ -671,79 +670,79 @@ const LAST_PLAYED_PAGES = [
 	}
 ] as const;
 
-for (const lastPlayedPage of LAST_PLAYED_PAGES) {
-	test(`1354_rule_8: a fresh ${lastPlayedPage.name} page under Last played, with a take restored, never paints A–Z first and reads Listen once`, async ({
-		page
-	}, testInfo) => {
-		const { alphabetical, listenedLast } = await lastPlayedPage.arrange(page);
-		const lastPlayed = [
-			...listenedLast,
-			...alphabetical.filter((title) => !listenedLast.includes(title))
-		];
-		expect(lastPlayed, 'the listens change the order').not.toEqual(alphabetical);
-		await recordPaintedOrders(page, {
-			wall: '.library-wall .tile-grid .tile-title',
-			rail: lastPlayedPage.railRows
-		});
-		const restoredAlbum = fixture.albums[2];
-		await pauseATakeToRestore(page, shellOf(testInfo), restoredAlbum);
-		await page.goto(lastPlayedPage.path);
-		await page.getByRole('button', { name: 'Last played', exact: true }).click();
-		await expect(workspace(page).locator('.tile-title').first()).toHaveText(lastPlayed[0]);
-		let answerDelayMs = 0;
-		await page.route(
-			(url) => url.pathname === LISTEN_READ_PATH,
-			async (route) => {
-				await new Promise((resolve) => setTimeout(resolve, answerDelayMs));
-				await route.continue();
-			}
-		);
-		// The saved take's song read is not answered until the test releases it,
-		// which it does once the wall shows the Last played order, so the take is
-		// restored after the ranking was applied, whatever the order the server
-		// would have answered them in.
-		let takeReleased: Promise<void> = Promise.resolve();
-		let releaseTake = () => {};
-		await page.route(
-			(url) => SONG_READ_PATH.test(url.pathname),
-			async (route) => {
-				await takeReleased;
-				await route.continue();
-			}
-		);
-		let listenReads = 0;
-		page.on('request', (request) => {
-			if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
-				listenReads++;
-		});
+for (const shell of ['mobile', 'desktop'] as const) {
+	for (const lastPlayedPage of LAST_PLAYED_PAGES) {
+		test(
+			`1354_rule_8: a fresh ${shell} ${lastPlayedPage.name} page under Last played, with a take restored, never paints A–Z first and reads Listen once`,
+			{ tag: ONLY_IN_SHELL[shell] },
+			async ({ page }) => {
+				const { alphabetical, listenedLast } = await lastPlayedPage.arrange(page);
+				const lastPlayed = [
+					...listenedLast,
+					...alphabetical.filter((title) => !listenedLast.includes(title))
+				];
+				expect(lastPlayed, 'the listens change the order').not.toEqual(alphabetical);
+				await recordPaintedOrders(page, {
+					wall: '.library-wall .tile-grid .tile-title',
+					rail: lastPlayedPage.railRows
+				});
+				const restoredAlbum = fixture.albums[2];
+				await pauseATakeToRestore(page, shell, restoredAlbum);
+				await page.goto(lastPlayedPage.path);
+				await page.getByRole('button', { name: 'Last played', exact: true }).click();
+				await expect(workspace(page).locator('.tile-title').first()).toHaveText(lastPlayed[0]);
+				let answerDelayMs = 0;
+				await page.route(
+					(url) => url.pathname === LISTEN_READ_PATH,
+					async (route) => {
+						await new Promise((resolve) => setTimeout(resolve, answerDelayMs));
+						await route.continue();
+					}
+				);
+				// Restore the saved take only after the wall applies the ranking.
+				let takeReleased: Promise<void> = Promise.resolve();
+				let releaseTake = () => {};
+				await page.route(
+					(url) => SONG_READ_PATH.test(url.pathname),
+					async (route) => {
+						await takeReleased;
+						await route.continue();
+					}
+				);
+				let listenReads = 0;
+				page.on('request', (request) => {
+					if (request.method() === 'GET' && new URL(request.url()).pathname === LISTEN_READ_PATH)
+						listenReads++;
+				});
 
-		for (answerDelayMs of [LISTEN_ANSWER_DELAY_MS, 0]) {
-			listenReads = 0;
-			takeReleased = new Promise<void>((release) => (releaseTake = release));
-			await page.reload();
-			await expect(workspace(page).locator('.library-wall .tile-title')).toHaveText(lastPlayed);
-			releaseTake();
-			// The take comes back only once the wall shows the ranking, so the
-			// phone's drawer, which opens after the take is back, mounts its rail
-			// group on a page whose ranking is already applied and whose take was
-			// restored since: that group must rank from the read there is, not ask
-			// Listen again.
-			await expect(page.getByRole('contentinfo')).toContainText(
-				fixture.tracks[restoredAlbum.id][0].title
-			);
-			const rail = await openRailNav(page, shellOf(testInfo));
-			await expect(rail.locator(lastPlayedPage.railRows)).toHaveCount(lastPlayed.length);
-			for (const surface of ['wall', 'rail'] as const)
-				await expect
-					.poll(async () => (await paintedOrders(page))[surface].at(-1))
-					.toEqual(lastPlayed);
-			const painted = await paintedOrders(page);
-			for (const orders of [painted.wall, painted.rail])
-				for (const order of orders)
-					expect(order).toEqual(lastPlayed.filter((title) => order.includes(title)));
-			expect(listenReads, `Listen reads with its answer ${answerDelayMs} ms late`).toBe(1);
-		}
-	});
+				for (answerDelayMs of [LISTEN_ANSWER_DELAY_MS, 0]) {
+					listenReads = 0;
+					takeReleased = new Promise<void>((release) => (releaseTake = release));
+					await page.reload();
+					await expect(workspace(page).locator('.library-wall .tile-title')).toHaveText(lastPlayed);
+					releaseTake();
+					await expect(page.getByRole('contentinfo')).toContainText(
+						fixture.tracks[restoredAlbum.id][0].title
+					);
+					if (shell === 'desktop') {
+						const rail = await openRailNav(page, 'desktop');
+						await expect(rail.locator(lastPlayedPage.railRows)).toHaveCount(lastPlayed.length);
+					}
+					const surfaces: (keyof PaintedOrders)[] =
+						shell === 'desktop' ? ['wall', 'rail'] : ['wall'];
+					for (const surface of surfaces)
+						await expect
+							.poll(async () => (await paintedOrders(page))[surface].at(-1))
+							.toEqual(lastPlayed);
+					const painted = await paintedOrders(page);
+					for (const surface of surfaces)
+						for (const order of painted[surface])
+							expect(order).toEqual(lastPlayed.filter((title) => order.includes(title)));
+					expect(listenReads, `Listen reads with its answer ${answerDelayMs} ms late`).toBe(1);
+				}
+			}
+		);
+	}
 }
 
 test(
