@@ -1,0 +1,8 @@
+claim_id = "663c6a03e9374766b4f157b52d5ed2f7"
+agent = "claude"
+role = "builder"
+base = "df7a8c89665598c1d92bc1fe958b15f93d75e3a1"
+branch = "claude/issue-1700-offline-seed-cards"
+scope = ["frontend/e2e/README.md", "frontend/e2e/album-cover.spec.ts", "frontend/e2e/offline.spec.ts", "frontend/e2e/seed.ts", "frontend/e2e/take-arrives.spec.ts", "frontend/src/lib/components/AlbumCoverEditor.svelte", "scripts/seed_e2e_job_states.py", "tests/test_seed_e2e_takes.py"]
+opened_commit = "65e1745d081fe6d1dc7a2ca95133d187814f734e"
+whole_reason = "Bundle of three no-risk #1160 cards: F15 seed fix with its offline.spec case (lead), F8 cover retry hitbox (#1701), F14 e2e README row (#1702)."
