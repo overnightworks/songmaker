@@ -1,0 +1,7 @@
+claim_id = "d763ed097b314f83b34a8030bc90df9b"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "b1aa92ffcb846018a12f8783852be2d5710e5b77"
+branch = "claude/issue-1654-offline-cold-boot"
+scope = ["frontend/e2e/README.md", "frontend/e2e/offline-boot.spec.ts", "frontend/src/service-worker.ts"]
+opened_commit = "e7ea3dc6d4b9c1e64fb2e9d6c4984095f2847674"
