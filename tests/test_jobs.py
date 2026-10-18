@@ -895,7 +895,7 @@ async def _run_peer_generation(factory, peer, count):
 
 
 def test_generation_job_no_capacity(seeded_db, generation_worker_peer) -> None:
-    """S8-B/E; S5-B/D, L10: Real admission without a registered worker fails before any take."""
+    """S5-B/D, L10: Real admission without a registered worker fails before any take."""
 
     async def exercise() -> None:
         async with generation_worker_peer() as peer:
@@ -948,7 +948,7 @@ def test_generation_job_selects_musician_line(
     completed,
     caplog,
 ) -> None:
-    """S8-B/E; S5-B/D, L6: HTTP worker failures preserve real takes and sanitize stored detail."""
+    """S5-B/D, L6: HTTP worker failures preserve real takes and sanitize stored detail."""
 
     async def exercise() -> None:
         scenario = WorkerScenario(
@@ -998,7 +998,7 @@ def test_generation_job_sanitizes_auto_load_response(
     response_format: str,
     caplog,
 ) -> None:
-    """S8-B/E; S5-B/D, L3/L6: Auto-load causes stay in logs while HTTP jobs store availability."""
+    """S5-B/D, L3/L6: Auto-load causes stay in logs while HTTP jobs store availability."""
 
     response, cause = _worker_failure_response(
         status_code,
@@ -1031,7 +1031,7 @@ def test_s5_generation_job_worker_disappears_before_request(
     loaded,
     caplog,
 ):
-    """S8-B/E; S5-A/B, L3/L6/L10: A stopped admitted peer fails cleanly and releases occupancy."""
+    """S5-A/B, L3/L6/L10: A stopped admitted peer fails cleanly and releases occupancy."""
 
     async def exercise():
         scenario = WorkerScenario(loaded_modes=("sft",) if loaded else ())
@@ -1066,7 +1066,7 @@ def test_s5_generation_job_reload_unavailable(
     load_fails,
     tmp_path,
 ):
-    """S8-B/E; S5-A/B/D, L3/L6/L10: Reload failure preserves completed takes and frees occupancy."""
+    """S5-A/B/D, L3/L6/L10: Reload failure preserves completed takes and frees occupancy."""
     from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 
     async def exercise():
@@ -1099,22 +1099,21 @@ def test_s5_generation_job_reload_unavailable(
 
 
 @pytest.mark.parametrize(
-    ("outcomes", "status", "completed", "prefix"),
+    ("outcomes", "status", "completed", "prefix", "gated_take"),
     [
-        (("oom",), "failed", 0, ""),
-        (("oom", "success"), "partial", 1, "1/2 completed, 1 failed: "),
-        (("success", "oom"), "partial", 1, "1/2 completed, 1 failed: "),
-        (("oom", "oom"), "failed", 0, ""),
-        (("oom", "generic"), "failed", 0, ""),
-        (("generic", "oom"), "failed", 0, ""),
+        (("oom",), "failed", 0, "", None),
+        (("oom", "success"), "partial", 1, "1/2 completed, 1 failed: ", None),
+        (("success", "oom"), "partial", 1, "1/2 completed, 1 failed: ", None),
+        (("oom", "oom"), "failed", 0, "", None),
+        (("oom", "generic"), "failed", 0, "", None),
+        (("generic", "oom"), "failed", 0, "", (2, None, None)),
     ],
     ids=["oom", "oom-success", "success-oom", "oom-oom", "oom-generic", "generic-oom"],
 )
 def test_s8_take_outcomes(
-    seeded_db, generation_worker_peer, tmp_path, outcomes, status, completed, prefix,
+    seeded_db, generation_worker_peer, tmp_path, outcomes, status, completed, prefix, gated_take,
 ):
     """S8-B/D/E/F: Real worker takes continue and retain the selected OOM cause."""
-    import asyncio
 
     answers = {
         "success": None,
@@ -1128,17 +1127,18 @@ def test_s8_take_outcomes(
         release = asyncio.Event()
         entered = asyncio.Event()
         streams = [answers[outcome] for outcome in outcomes]
-        if outcomes == ("generic", "oom"):
-            streams[1] = WorkerStream(streams[1].events, release=release, entered=entered)
+        if gated_take is not None:
+            index = gated_take[0] - 1
+            streams[index] = WorkerStream(streams[index].events, release=release, entered=entered)
         scenario = WorkerScenario(loaded_modes=("sft",), stream_answers=tuple(streams))
         async with generation_worker_peer(scenario, db_factory=seeded_db) as peer:
             task = asyncio.create_task(_run_peer_generation(seeded_db, peer, len(outcomes)))
             try:
-                if outcomes == ("generic", "oom"):
+                if gated_take is not None:
                     await entered.wait()
                     with seeded_db() as session:
                         job = get_job(session, "j1")
-                        assert (job.take_index, job.error, job.error_type) == (2, None, None)
+                        assert (job.take_index, job.error, job.error_type) == gated_take
                     release.set()
                 await task
                 assert [kind for kind, _ in peer.requests].count("submit") == len(outcomes)

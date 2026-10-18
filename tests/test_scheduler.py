@@ -612,7 +612,7 @@ def test_consume_task_stream_gives_up_after_max_reconnects(generation_worker_pee
 
 
 def test_consume_task_stream_fails_when_worker_stream_goes_silent(generation_worker_peer) -> None:
-    """S8-E; S5-A/D, L10: A read timeout is a stream failure without a reconnect."""
+    """S5-A/D, L10: A read timeout is a stream failure without a reconnect."""
 
     async def exercise() -> None:
         scenario = WorkerScenario(
@@ -917,7 +917,7 @@ def test_ensure_loaded_posts_when_missing() -> None:
 def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
     generation_worker_peer,
 ) -> None:
-    """S8-E; S5-D, L3/L9: Later takes reuse the loaded model over the real worker protocol."""
+    """S5-D, L3/L9: Later takes reuse the loaded model over the real worker protocol."""
     admitted_cold = _make_picked(loaded=[])
     phases_per_take: list[list[AceStepPhase]] = []
 
@@ -943,7 +943,7 @@ def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(
 def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(
     generation_worker_peer,
 ) -> None:
-    """S8-E; S5-D, L3/L9: A real one-model cache evicts and the next take reloads once."""
+    """S5-D, L3/L9: A real one-model cache evicts and the next take reloads once."""
     sft_job_view = _make_picked(loaded=[])
     turbo_job_view = _make_picked(loaded=[])
     sft_phases_per_take: list[list[AceStepPhase]] = []
@@ -1013,7 +1013,7 @@ def test_generation_worker_peer_replays_transport_answers(generation_worker_peer
 )
 @pytest.mark.parametrize("reload", [False, True], ids=["initial", "reload"])
 def test_s5_load_transport_failure_before_response(generation_worker_peer, error_type, reload):
-    """S8-E; S5-A/B, L3/L6/L10: Load transport causes survive, without another load attempt."""
+    """S5-A/B, L3/L6/L10: Load transport causes survive, without another load attempt."""
 
     async def exercise():
         scenario = WorkerScenario(load_answers=(TransportFailure(error_type, "load lost"),))
@@ -1037,7 +1037,7 @@ def test_s5_load_transport_failure_before_response(generation_worker_peer, error
 )
 @pytest.mark.parametrize("reload", [False, True], ids=["initial", "reload"])
 def test_s5_submit_transport_failure_before_response(generation_worker_peer, error_type, reload):
-    """S8-E; S5-A/B, L6/L9/L10: Submit transport failures never resubmit an uncertain request."""
+    """S5-A/B, L6/L9/L10: Submit transport failures never resubmit an uncertain request."""
 
     async def exercise():
         failure = TransportFailure(error_type, "submit lost")
@@ -1064,7 +1064,7 @@ def test_s5_submit_transport_failure_before_response(generation_worker_peer, err
 
 @pytest.mark.parametrize("load_fails", [False, True], ids=["still-missing", "reload-failed"])
 def test_s5_mode_still_missing_after_reload(generation_worker_peer, load_fails):
-    """S8-E; S5-A/B, L3/L10: Exactly one reload precedes final typed unavailability."""
+    """S5-A/B, L3/L10: Exactly one reload precedes final typed unavailability."""
 
     async def exercise():
         missing = WorkerReply(409, MODE_NOT_LOADED_DETAIL.format(mode="sft"))
@@ -1096,7 +1096,7 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
 
     async def exercise():
         async with generation_worker_peer(db_factory=db_factory) as peer:
-            address = peer.socket.getsockname()
+            address = peer.http_server.socket.getsockname()
             worker = await admit_generation_worker(
                 target_mode="sft",
                 redis=peer.redis,
@@ -1117,7 +1117,7 @@ def test_generation_worker_peer_releases_resources(generation_worker_peer, db_fa
         assert not peer.deps.heartbeat.is_running
         assert peer.deps.cache.loaded_modes() == []
         assert all(task.done() for task in peer.generation_tasks)
-        assert peer.server_task.done()
+        assert peer.http_server.server_task.done()
         with socket.socket() as reused:
             reused.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             reused.bind(address)

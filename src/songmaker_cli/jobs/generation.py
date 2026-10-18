@@ -131,7 +131,7 @@ _GENERATION_PHASE_OF: Final[dict[AceStepPhase, GenerationPhase]] = {
 
 @dataclass
 class GenerationProgressTracker:
-    """The single writer of a running generate job's progress.
+    """The single writer of a running generate job's progress and visible failure pair.
 
     Every RUNNING write of a generate job goes through here, because
     ``update_job_status`` resets progress whenever a write omits it. The

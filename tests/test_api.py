@@ -4451,7 +4451,12 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
     import asyncio
 
     import httpx
-    from worker_http_peer import WorkerScenario, WorkerStream
+    from worker_http_peer import (
+        PEER_CLEANUP_DEADLINE_SECONDS,
+        LoopbackServer,
+        WorkerScenario,
+        WorkerStream,
+    )
 
     from songmaker_cli import redis_client
     from songmaker_cli.acestep_state import read_queue_depth
@@ -4466,7 +4471,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
     cookie = _sign_job_stream_session(ctx, _DEFAULT_USER_ID)
 
     async def drive():
-        entered, release, received = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        entered, release = asyncio.Event(), asyncio.Event()
         failure = (("error", {"error": "need 18.5 GB", "error_kind": "gpu_out_of_memory"}),)
         scenario = WorkerScenario(
             loaded_modes=("sft",),
@@ -4490,57 +4495,49 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
                     target_model="sft",
                 )
             )
-            stream = None
-            status = None
-            frames = []
-
-            async def receive():
-                return {"type": "http.request", "body": b"", "more_body": False}
-
-            async def send(message):
-                nonlocal status
-                if message["type"] == "http.response.start":
-                    status = message["status"]
-                elif message["type"] == "http.response.body":
-                    for line in message.get("body", b"").decode().splitlines():
-                        if line.startswith("data: "):
-                            frames.append(json.loads(line.removeprefix("data: ")))
-                            received.set()
-
+            server = LoopbackServer(client.app)
             try:
+                base_url = await server.start()
                 await entered.wait()
-                stream = asyncio.create_task(
-                    client.app(_job_stream_scope(job_id, cookie=cookie), receive, send)
-                )
-                await received.wait()
-                assert status == 200
-                response = frames[0]
-                assert (response["status"], response["take_index"]) == ("running", 2)
-                assert (
-                    response["error"] == "Too long for the GPU right now — try a shorter duration."
-                )
-                assert response["error_type"] == "gpu_out_of_memory"
-                assert not generation.done()
-                assert not release.is_set()
                 async with httpx.AsyncClient(
-                    transport=httpx.ASGITransport(app=client.app), base_url="https://testserver"
+                    base_url=base_url,
+                    cookies={DEFAULT_SESSION_COOKIE_NAME: cookie},
                 ) as fresh:
-                    reloaded = await fresh.get(f"/api/jobs/{job_id}")
-                    assert reloaded.status_code == 200
-                    assert reloaded.json()["error"] == response["error"]
-                release.set()
-                await generation
-                await stream
-                assert frames[-1]["status"] == "failed"
+                    async with fresh.stream("GET", f"/api/jobs/{job_id}/stream") as stream:
+                        assert stream.status_code == 200
+                        frames = (
+                            json.loads(line.removeprefix("data: "))
+                            async for line in stream.aiter_lines()
+                            if line.startswith("data: ")
+                        )
+                        response = await anext(frames)
+                        assert (response["status"], response["take_index"]) == ("running", 2)
+                        assert response["error"] == (
+                            "Too long for the GPU right now — try a shorter duration."
+                        )
+                        assert response["error_type"] == "gpu_out_of_memory"
+                        assert not generation.done()
+                        assert not release.is_set()
+                        reloaded = await fresh.get(f"/api/jobs/{job_id}")
+                        assert reloaded.status_code == 200
+                        assert reloaded.json()["error"] == response["error"]
+                        release.set()
+                        await generation
+                        remaining = [frame async for frame in frames]
+                        assert remaining[-1]["status"] == "failed"
                 assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
             finally:
                 release.set()
-                tasks = [task for task in (stream, generation) if task is not None]
+                tasks = [generation]
                 for task in tasks:
                     if not task.done():
                         task.cancel()
                 await asyncio.gather(*tasks, return_exceptions=True)
-                await redis_client.drain_lease_releases()
+                try:
+                    async with asyncio.timeout(PEER_CLEANUP_DEADLINE_SECONDS):
+                        await server.stop()
+                finally:
+                    await redis_client.drain_lease_releases()
 
     asyncio.run(drive())
 
