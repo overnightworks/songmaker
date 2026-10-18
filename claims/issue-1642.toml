@@ -1,7 +1,0 @@
-claim_id = "aa009b2018564ce5a704d078dffd5794"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "da5b58c50ea7c3e07e4e8deff04d1e2162cfc51e"
-branch = "claude/issue-1642-late-library-both-shells"
-scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/library-phone-list.spec.ts"]
-opened_commit = "726971288b02c062ec07e269004247a118d41a56"
