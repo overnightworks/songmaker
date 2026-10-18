@@ -9,8 +9,7 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL
 } from '../src/lib/constants';
-import { openPlaylistsPage, openRailNav } from './helpers';
-import { BASE_URL } from './seed';
+import { csrfHeaders, openPlaylistsPage, openRailNav } from './helpers';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -19,14 +18,6 @@ const COVER_PNG = readFileSync(path.join(E2E_DIR, '..', 'static', 'icon-192.png'
 interface CreatedResource {
 	id: string;
 	slug: string;
-}
-
-async function csrfHeaders(page: Page): Promise<Record<string, string>> {
-	const csrf = (await page.context().cookies(BASE_URL)).find(
-		(cookie) => cookie.name === 'csrf_token'
-	);
-	if (!csrf) throw new Error('The E2E session has no CSRF token');
-	return { 'x-csrf-token': csrf.value, origin: BASE_URL };
 }
 
 async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
