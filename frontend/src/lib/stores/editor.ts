@@ -386,7 +386,7 @@ export function computeDraftVersionNumber(
  */
 export async function handleSave(songId: string): Promise<SongItem> {
 	const state = get(editorState);
-	if (!state || state.songId !== songId) throw new Error('Cannot save a different song');
+	if (state?.songId !== songId) throw new Error('Cannot save a different song');
 	const { draft, provenance } = state;
 	const updated = await updateSong(songId, {
 		lyrics: draft.lyrics,
