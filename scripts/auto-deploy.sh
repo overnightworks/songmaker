@@ -232,6 +232,32 @@ safe_git() {
     "${SAFE_GIT_COMMAND[@]}" -C "$REPO_ROOT" "$@"
 }
 
+# Templates and the stale-file sweep share these names; keep existing prefixes
+# so an interrupted tick from an older revision is still cleaned up.
+declare -Ar TEMP_FILE_PREFIXES=(
+    [git-fetch]=songmaker-autodeploy.git-fetch.
+    [compose-stderr]=songmaker-autodeploy.compose-stderr.
+    [prometheus-ps-stderr]=songmaker-autodeploy.prometheus-ps-stderr.
+    [gh-stderr]=songmaker-autodeploy.gh-stderr.
+)
+
+sweep_stale_temp_files() {
+    local prefix path suffix failed=0 LC_ALL=C
+    for prefix in "${TEMP_FILE_PREFIXES[@]}"; do
+        for path in "$GIT_ADMIN_DIR/$prefix"*; do
+            suffix="${path#"$GIT_ADMIN_DIR/$prefix"}"
+            [[ "$suffix" =~ ^[A-Za-z0-9]{6}$ ]] || continue
+            if rm -f -- "$path"; then
+                log_info "removed stale temp file: $path"
+            else
+                log_err "stale temp file could not be removed: $path"
+                failed=1
+            fi
+        done
+    done
+    return "$failed"
+}
+
 # The only network-facing git commands of a tick, so the only ones with a
 # deadline. `timeout` cannot run the shell function above, but it can run the
 # same scrubbed command. It stops supervising once git itself has exited, so a
@@ -248,7 +274,7 @@ safe_git_fetch() {
     local repository="$1"
     shift
     local output_file fetch_group fetch_exit_code
-    if ! output_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.git-fetch.XXXXXX" 2>&1)"; then
+    if ! output_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[git-fetch]}XXXXXX" 2>&1)"; then
         printf 'cannot create a temporary file for the fetch output: %s' "$output_file"
         return 1
     fi
@@ -394,7 +420,7 @@ preserve_running_images() {
     local service_image
     local current_image
 
-    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.compose-stderr.XXXXXX" 2>/dev/null)"; then
+    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[compose-stderr]}XXXXXX" 2>/dev/null)"; then
         log_err "cannot create temporary file for Compose config stderr before recreate"
         return 1
     fi
@@ -430,7 +456,7 @@ preserve_running_images() {
             return 1
         fi
 
-        if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.compose-stderr.XXXXXX" 2>/dev/null)"; then
+        if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[compose-stderr]}XXXXXX" 2>/dev/null)"; then
             log_err "cannot create temporary file for Compose ps stderr before recreate"
             return 1
         fi
@@ -559,7 +585,7 @@ reload_prometheus_rules() {
         return 0
     fi
 
-    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.prometheus-ps-stderr.XXXXXX" 2>/dev/null)"; then
+    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[prometheus-ps-stderr]}XXXXXX" 2>/dev/null)"; then
         log_err "cannot create temporary file for Prometheus Compose ps stderr after deploy; deploy remains successful"
         return 0
     fi
@@ -982,7 +1008,7 @@ remote_check_status() {
         printf '%s' "GitHub CLI (gh) is unavailable on PATH"
         return 1
     fi
-    if ! gh_stderr_file="$(mktemp "$GIT_ADMIN_DIR/songmaker-autodeploy.gh-stderr.XXXXXX" 2>/dev/null)"; then
+    if ! gh_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[gh-stderr]}XXXXXX" 2>/dev/null)"; then
         printf '%s' 'cannot create temporary file for check-run lookup stderr'
         return 1
     fi
@@ -1105,6 +1131,8 @@ if ! flock -n 200; then
     log_debug "another run is already in flight, skipping this tick"
     exit 0
 fi
+
+sweep_stale_temp_files || fail_tick "stale temp file could not be removed"
 
 # --- 2. Cheap reads: local HEAD, then fetch, then remote HEAD. Neither
 # depends on which branch is currently checked out (rev-parse HEAD works
