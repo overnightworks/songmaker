@@ -1,0 +1,7 @@
+claim_id = "9734a725b2404911acf8a789a9c531c3"
+agent = "claude"
+role = "builder"
+base = "605d4c526300afa1a54da6f10d7f2fa93aefe98d"
+branch = "claude/issue-1686-cursor-signature-bytes"
+scope = ["src/songmaker_cli/library_cursor.py", "tests/test_library_api.py", "tests/test_library_cursor.py"]
+opened_commit = "34cf47316d7cba7ee70a4e0eb46c1ddcb249bc8a"
