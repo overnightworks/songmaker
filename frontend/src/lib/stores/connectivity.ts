@@ -65,7 +65,7 @@ export function whenBackOnline(callback: () => void): () => void {
 type UnreachableReload = 'on-reconnect' | 'scheduled' | 'exhausted';
 
 interface UnreachableReloads {
-	afterNetworkFailure(): UnreachableReload;
+	afterNetworkFailure(): UnreachableReload | null;
 	/**
 	 * A lost network schedules the reload and says which; any other failure
 	 * stops the reloads and answers null.
@@ -87,6 +87,8 @@ interface UnreachableReloads {
 	readonly loadFailure: Readable<string | null>;
 	/** The load answered, or the surface moved on: forget the reloads. */
 	stop(): void;
+	/** Permanently retire this owner, including loads that settle after unmount. */
+	dispose(): void;
 }
 
 interface NamedLoadFailure {
@@ -100,6 +102,7 @@ function shownLoadFailure(named: NamedLoadFailure | null, isOffline: boolean): s
 }
 
 export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
+	let disposed = false;
 	let reloadsSpent = 0;
 	let cancelPending: (() => void) | null = null;
 	const namedFailure = writable<NamedLoadFailure | null>(null);
@@ -115,7 +118,8 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 		reload();
 	}
 
-	function afterNetworkFailure(): UnreachableReload {
+	function afterNetworkFailure(): UnreachableReload | null {
+		if (disposed) return null;
 		stopPending();
 		if (get(offline)) {
 			reloadsSpent = 0;
@@ -150,6 +154,7 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 		afterNetworkFailure,
 		afterLoadFailure,
 		nameLoadFailure(err, fallback) {
+			if (disposed) return null;
 			const named = failureToName(afterLoadFailure(err), err, fallback);
 			namedFailure.set(named);
 			return shownLoadFailure(named, get(offline));
@@ -157,7 +162,11 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 		loadFailure: derived([namedFailure, offline], ([named, isOffline]) =>
 			shownLoadFailure(named, isOffline)
 		),
-		stop
+		stop,
+		dispose() {
+			disposed = true;
+			stop();
+		}
 	};
 }
 

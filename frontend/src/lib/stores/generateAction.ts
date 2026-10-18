@@ -211,7 +211,9 @@ function queuedState(
 	return {
 		kind: 'queued',
 		jobId: job.id,
-		label: queuedLabel(job.queue_position ?? null),
+		label: reconnecting
+			? EDITOR_GENERATE_RECONNECTING_LABEL
+			: queuedLabel(job.queue_position ?? null),
 		reason: job.queue_reason ?? null,
 		reconnecting,
 		offline

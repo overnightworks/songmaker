@@ -424,16 +424,20 @@ describe('generate action presentation', () => {
 			});
 		});
 
-		it('a queued take keeps its place in the queue and is marked reconnecting', () => {
-			activeJobs.set([{ songId: 's1', job: queuedJob }]);
-			reportResourceStreamReachable(false);
+		it.each([
+			{ connection: 'online', disconnected: false, stale: false, label: 'Queued #2' },
+			{ connection: 'offline', disconnected: true, stale: false, label: 'Reconnecting…' },
+			{ connection: 'stale', disconnected: false, stale: true, label: 'Reconnecting…' }
+		])('1160-F10-queue: a $connection queue shows $label', ({ disconnected, stale, label }) => {
+			activeJobs.set([{ songId: 's1', job: queuedJob, streamStale: stale }]);
+			reportResourceStreamReachable(!disconnected);
 			expect(get(generateAction)).toEqual({
 				kind: 'queued',
 				jobId: 'job1',
-				label: 'Queued #2',
+				label,
 				reason: queuedJob.queue_reason,
-				reconnecting: true,
-				offline: true
+				reconnecting: disconnected || stale,
+				offline: disconnected
 			});
 		});
 	});

@@ -165,7 +165,7 @@
 	);
 
 	const coverSuggestionsReloads = reloadWhileUnreachable(reloadCoverSuggestions);
-	$effect(() => () => coverSuggestionsReloads.stop());
+	$effect(() => () => coverSuggestionsReloads.dispose());
 
 	// Opening the editor only reads what exists: a suggestion spends today's
 	// quota, so only Suggest makes one, and a mistap closed at once costs
