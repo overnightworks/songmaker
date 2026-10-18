@@ -3,5 +3,5 @@ agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
 role = "builder"
 base = "44642eed1740890e1fa90e34feb0dabbe4c837e6"
 branch = "claude/issue-1653-versions-reload-reconnect"
-scope = ["frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts"]
+scope = ["frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/editorVersionsRecovery.test.ts"]
 opened_commit = "985248a9e4df42dccb5c204bd360042c4942e7ed"
