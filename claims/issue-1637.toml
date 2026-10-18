@@ -1,8 +1,0 @@
-claim_id = "a2741a2a6f5943c8948bd8fcf6e772d0"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "da5b58c50ea7c3e07e4e8deff04d1e2162cfc51e"
-branch = "claude/issue-1637-actions-results-block-deploy"
-scope = [".github/workflows/ci.yml", "docs/architecture.md", "docs/security.md", "docs/testing.md", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py"]
-opened_commit = "9017be06e02c770ae5daf02486c1dc22a764abcb"
-whole_reason = "Removing the advisory exception and F1/F3 edit remote_check_status, the main loop's candidate selection and their shared test tables; the three docs and the ci.yml comment name the same exception."
