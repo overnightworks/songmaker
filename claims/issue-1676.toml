@@ -1,8 +1,0 @@
-claim_id = "8a7e42eb82234584b90e1697c23a6d33"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "6f5567945acfeedb657b67a496be1da2569188c0"
-branch = "claude/issue-1676-offline-small-cards"
-scope = ["frontend/e2e/offline.spec.ts", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/stores/connectivity.test.ts", "frontend/src/lib/stores/connectivity.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts"]
-opened_commit = "1499d1b2f253b08f9308c270191c3b2408725771"
-whole_reason = "Three small cards from one distributor with disjoint concerns; bundling saves the lane overhead and no card carries material risk."
