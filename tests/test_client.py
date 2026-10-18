@@ -233,8 +233,9 @@ def _failed_generation(
 ) -> pytest.ExceptionInfo[GenerationFailedError]:
     with acestep_http(result) as boundary:
         client = AceStepClient(host="http://127.0.0.1", port=boundary.port)
+        config = AceStepConfig(prompt="test", lyrics="")
         with pytest.raises(error_type) as excinfo:
-            client.generate(AceStepConfig(prompt="test", lyrics=""))
+            client.generate(config)
     return excinfo
 
 
