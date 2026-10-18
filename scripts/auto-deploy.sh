@@ -6,8 +6,8 @@
 # fast-forwards + redeploys the local checkout when main has moved. Before it
 # pulls, it verifies through GitHub that every GitHub Actions check run for
 # the newest green commit in the fetched main history has completed
-# successfully; check runs from other apps and the "SonarCloud scan" job are
-# advisory. The script itself does not re-run tests.
+# successfully, skipped, or neutral, with at least one success; check runs
+# from other apps are advisory. The script itself does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -167,9 +167,6 @@ PROMETHEUS_HTTP_TIMEOUT_SECONDS=30
 # report check runs too, but their results are advisory rather than rollout
 # decisions.
 REQUIRED_CHECK_RUN_APP_SLUG="github-actions"
-# The one Actions job whose verdict is advisory: SonarCloud findings turn CI
-# red so they are seen, but they never hold back a rollout (#623, #1318).
-ADVISORY_ACTIONS_JOB_NAME="SonarCloud scan"
 # The one conclusion that proves a required Actions job ran and passed. A
 # deploy needs at least one such job.
 PASSED_CHECK_RUN_CONCLUSION="success"
@@ -1038,10 +1035,6 @@ remote_check_status() {
                     log_info "GitHub check run from app '$app_slug' is advisory, ignored"
                     continue
                 fi
-                if [[ "$name" == "$ADVISORY_ACTIONS_JOB_NAME" ]]; then
-                    log_info "GitHub Actions job '$name' is advisory, ignored"
-                    continue
-                fi
                 ((observed_required_check_count += 1))
                 case "$status" in
                     queued|in_progress|pending|requested|waiting)
@@ -1295,9 +1288,6 @@ while IFS= read -r CANDIDATE_COMMIT; do
 
     if ! CANDIDATE_CHECK_STATUS="$(remote_check_status "$CANDIDATE_COMMIT" "$CHECK_RUN_AGE_START")"; then
         log_err "cannot determine GitHub check status for deploy candidate $CANDIDATE_COMMIT — refusing to deploy: $CANDIDATE_CHECK_STATUS"
-        if [[ "$CANDIDATE_CHECK_STATUS" == "check-run lookup timed out" ]]; then
-            fail_tick "check-run lookup timed out"
-        fi
         fail_tick "GitHub check status undetermined"
     fi
 
