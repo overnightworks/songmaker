@@ -1,8 +1,0 @@
-claim_id = "721379014ce946b1b3283b7c3b95aa1f"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "453029d914e205be29f353bc192b284af96c1267"
-branch = "claude/issue-1624-search-label-owner"
-scope = ["frontend/e2e/phone-search.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/layout.test.ts"]
-opened_commit = "64f7b279cf41a8ea4bc57d84240572b640473174"
-whole_reason = "A constant or helper moves to its one owner and every importer moves with it in the same landing."
