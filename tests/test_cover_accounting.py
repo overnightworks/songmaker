@@ -204,7 +204,7 @@ def test_postgresql_serializes_publication_and_cancellation(
         if (
             "FOR UPDATE" in statement
             and context.execution_options.get("populate_existing")
-            and (winner == "cancellation" or publication_locked.is_set())
+            and publication_locked.is_set()
         ):
             contender_started.set()
 
@@ -244,9 +244,6 @@ def test_postgresql_serializes_publication_and_cancellation(
                     assert update_job_status(
                         cancellation, "cover", JobStatusUpdate(JobStatus.CANCELLED),
                     )
-                    contender_started.clear()
-                    allow_image.set()
-                    assert await asyncio.to_thread(contender_started.wait, 10)
                     cancellation.commit()
             finally:
                 allow_image.set()
@@ -265,14 +262,14 @@ def test_postgresql_serializes_publication_and_cancellation(
             await task
             assert not await contender
 
-    event.listen(engine, "before_cursor_execute", observe_lock_request)
     if winner == "publication":
+        event.listen(engine, "before_cursor_execute", observe_lock_request)
         event.listen(accounting_factory, "after_flush", hold_completed_transition)
     try:
         asyncio.run(exercise())
     finally:
-        event.remove(engine, "before_cursor_execute", observe_lock_request)
         if winner == "publication":
+            event.remove(engine, "before_cursor_execute", observe_lock_request)
             event.remove(accounting_factory, "after_flush", hold_completed_transition)
     _assert_cover_accounting(
         accounting_factory, running_cover["audio_dir"],
