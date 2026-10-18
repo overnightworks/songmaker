@@ -74,7 +74,6 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
-from songmaker_cli.settings import get_settings
 
 
 def _run(coro):
@@ -2920,7 +2919,8 @@ def _run(coro):
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
-def test_load_model_on_worker_success(seeded_db) -> None:
+def test_load_model_on_worker_success(seeded_db, internal_token: str) -> None:
+    """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import load_model_on_worker
@@ -2945,8 +2945,7 @@ def test_load_model_on_worker_success(seeded_db) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0] == "http://acestep-worker:8001/load_model"
     assert kwargs["json"] == {"mode": "sft"}
-    token = get_settings().songmaker_internal_token.get_secret_value()
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == token
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
 def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
@@ -3170,7 +3169,8 @@ def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
         assert job.error_type == "worker_error"
 
 
-def test_download_model_on_worker_happy_path(seeded_db) -> None:
+def test_download_model_on_worker_happy_path(seeded_db, internal_token: str) -> None:
+    """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock
 
     from songmaker_cli.jobs import download_model_on_worker
@@ -3210,8 +3210,7 @@ def test_download_model_on_worker_happy_path(seeded_db) -> None:
     args, kwargs = fake_client.post.call_args
     assert args[0].endswith("/download_model")
     assert kwargs["json"] == {"mode": "sft"}
-    token = get_settings().songmaker_internal_token.get_secret_value()
-    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == token
+    assert kwargs["headers"][INTERNAL_TOKEN_HEADER] == internal_token
 
 
 async def _instant_sleep(_seconds: float) -> None:
