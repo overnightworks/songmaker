@@ -10,6 +10,7 @@ import {
 	RAIL_PLAYLISTS_NAV_LABEL
 } from '../src/lib/constants';
 import { csrfHeaders, openPlaylistsPage, openRailNav } from './helpers';
+import { archiveOwnedAlbum } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -36,17 +37,7 @@ async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void
 	).toBeTruthy();
 }
 
-async function archiveOwnedAlbum(page: Page, albumId: string): Promise<void> {
-	const response = await page.request.post(`/api/albums/${albumId}/archive`, {
-		headers: await csrfHeaders(page)
-	});
-	expect(
-		response.ok(),
-		`POST /api/albums/${albumId}/archive failed: ${await response.text()}`
-	).toBeTruthy();
-}
-
-test('1354_37a_A6: playlist wall, detail and desktop rail covers follow mosaic, upload and removal', async ({
+test('1354_65_C4 1354_37a_A6: playlist wall, detail and desktop rail covers follow mosaic, upload and removal', async ({
 	page,
 	isMobile
 }) => {
@@ -86,7 +77,7 @@ test('1354_37a_A6: playlist wall, detail and desktop rail covers follow mosaic, 
 		await postJson(page, `/api/playlists/${playlist.id}/entries/generation`, {
 			generation_id: take.id
 		});
-		await archiveOwnedAlbum(page, album.id);
+		await archiveOwnedAlbum(page.request, album.id);
 
 		let foldedRailCoverRequests = 0;
 		let railIsFolded = false;
@@ -221,7 +212,7 @@ test('1354_37a_A6: playlist wall, detail and desktop rail covers follow mosaic, 
 		try {
 			if (playlist) await deleteOwnedPlaylist(page, playlist.id);
 		} finally {
-			await archiveOwnedAlbum(page, album.id);
+			await archiveOwnedAlbum(page.request, album.id);
 		}
 	}
 });
