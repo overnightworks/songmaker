@@ -1789,7 +1789,8 @@ def test_session_renewal_is_owned_by_the_callers_transaction(db_session: Session
     renewed = get_session_with_user(db_session, session_id)
     assert renewed.expires_at.replace(tzinfo=timezone.utc) == (new_expiry if commit else old_expiry)
     expected_origin = ("new", "new") if commit else ("old", "old")
-    assert (renewed.ip_address, renewed.user_agent) == expected_origin
+    actual_origin = (renewed.ip_address, renewed.user_agent)
+    assert actual_origin == expected_origin
 
 
 def test_delete_session(db_session: Session) -> None:
