@@ -207,7 +207,7 @@ jobs:
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py -n 0 -q --tb=short
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py -n 0 -q --tb=short
 
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})

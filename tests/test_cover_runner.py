@@ -27,7 +27,7 @@ from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, Job
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
-from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
+from songmaker_cli.db.queries import JobStatusUpdate, count_cover_jobs_since, update_job_status
 from songmaker_cli.settings import CoverExecutor, Settings
 
 
@@ -127,6 +127,7 @@ def _add_pending_suggestion(factory, audio_dir: Path) -> Path:
 def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_ones(
     tmp_path: Path, monkeypatch,
 ) -> None:
+    """1301-F3-C1-ATOMIC: image and terminal state agree with usage."""
     factory, audio_dir, job_id = _cover_job(tmp_path)
     pending_png = _add_pending_suggestion(factory, audio_dir)
     image_started = threading.Event()
@@ -170,6 +171,7 @@ def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_on
         suggestions = list(job.album.cover_suggestions)
         assert job.status == JobStatus.COMPLETED
         assert job.progress == 1.0
+        assert count_cover_jobs_since(session, "album", job.started_at) == 2
         assert sorted(item.job_id for item in suggestions) == ["earlier", job_id]
         assert all((audio_dir / item.png_path).is_file() for item in suggestions)
     assert len(image_calls) == 1
@@ -465,6 +467,7 @@ def _install_abortable_codex_cli(monkeypatch, tmp_path: Path) -> tuple[
 def test_web_cancel_reaps_the_codex_process_and_keeps_the_job_cancelled(
     tmp_path: Path, monkeypatch,
 ) -> None:
+    """1301-F3-C1-CLEANUP: image and terminal state agree with usage."""
     factory, audio_dir, job_id = _cover_job(tmp_path)
     spawned, abort_requested, allow_reap, reaped, process_pool = _install_abortable_codex_cli(
         monkeypatch, tmp_path,
@@ -500,6 +503,7 @@ def test_web_cancel_reaps_the_codex_process_and_keeps_the_job_cancelled(
         job = session.get(Job, job_id)
         assert job.status == JobStatus.CANCELLED
         assert not job.album.cover_suggestions
+        assert count_cover_jobs_since(session, "album", job.started_at) == 0
     assert not list(audio_dir.rglob(".*.staging"))
 
 

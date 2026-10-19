@@ -417,7 +417,7 @@ def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
     [
         ("missing", None, None, "Album not found"),
         ("album1", JobStatus.QUEUED, None, "Cover suggestions are already being generated"),
-        ("album1", JobStatus.FAILED, "1", "Daily cover suggestion limit reached"),
+        ("album1", JobStatus.COMPLETED, "1", "Daily cover suggestion limit reached"),
     ],
 )
 def test_suggest_album_cover_surfaces_the_admission_owner_errors(
@@ -428,6 +428,7 @@ def test_suggest_album_cover_surfaces_the_admission_owner_errors(
     daily_limit: str | None,
     message: str,
 ):
+    """1301-F3-C1-COUNT: only produced suggestions exhaust admission."""
     owner_id, _, _, _, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)
     if existing_status is not None:
