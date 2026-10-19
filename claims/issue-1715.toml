@@ -1,7 +1,0 @@
-claim_id = "a3b4061ee24e4f98babc8c424217a0bc"
-agent = "claude"
-role = "builder"
-base = "303d481a7d4144744e135ea23d1b30300864b4bb"
-branch = "claude/issue-1715-freeze-sign-in"
-scope = ["docs/design/README.md", "docs/design/sign-in.html"]
-opened_commit = "b9b276d76bdb456521e45bfadfa058720682768d"
