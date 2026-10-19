@@ -1,8 +1,0 @@
-claim_id = "f03c8ca667c84793a66967bf890fc277"
-agent = "claude"
-role = "builder"
-base = "df7a8c89665598c1d92bc1fe958b15f93d75e3a1"
-branch = "claude/issue-1696-drop-ineffective-nosonar"
-scope = [".github/workflows/ci.yml", ".github/workflows/security.yml", "docker/acestep-worker.Dockerfile", "docker/base/acestep-base.Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile"]
-opened_commit = "f0c05ab76734d9eef6e3f8a96067251a937cf681"
-whole_reason = "One mechanical sweep of ineffective markers across the two workflows and four Dockerfiles; it lands as one rebuild."
