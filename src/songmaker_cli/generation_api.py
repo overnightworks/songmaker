@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
-import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Final
@@ -14,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
@@ -46,11 +46,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
-from songmaker_cli.arq_pool import (
-    get_arq_pool,
-    is_music_worker_healthy,
-    is_scoring_worker_healthy,
-)
+from songmaker_cli.arq_pool import get_arq_pool, is_music_worker_healthy, is_scoring_worker_healthy
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
@@ -89,6 +85,7 @@ from songmaker_cli.jobs.generation_failure import (
     musician_job_response,
 )
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
+from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
@@ -106,9 +103,7 @@ def _check_model_active(session: Session, model: str) -> None:
         raise HTTPException(400, f"Model '{model}' is not currently available")
 
 
-def _check_version_lora_ready(
-    session: Session, version, user: AuthenticatedUser,
-) -> None:
+def _check_version_lora_ready(session: Session, version, user: AuthenticatedUser) -> None:
     params_dict = version.generation_params or {}
     try:
         params = BaseGenerationParams.model_validate(params_dict)
@@ -144,8 +139,7 @@ def _resolve_source_wav(audio_dir: Path, gen: Generation, session: Session) -> P
             raise HTTPException(503, "ffmpeg is not available")
         try:
             subprocess.run(
-                [ffmpeg, "-y", "-i", str(mp3), str(wav)],
-                check=True, capture_output=True,
+                [ffmpeg, "-y", "-i", str(mp3), str(wav)], check=True, capture_output=True
             )
         except FileNotFoundError as exc:
             raise HTTPException(503, "ffmpeg is not available") from exc
@@ -181,18 +175,23 @@ class ReferenceAudioResponse(BaseModel):
 
 @router.post(
     "/audio/upload",
-    responses={400: {"description": "Reference audio upload is invalid"}},
+    responses={
+        400: {"description": "Reference audio upload is invalid"},
+        409: {"description": "Reference audio storage limit reached"},
+        500: {"description": "Reference audio storage could not be checked"},
+    },
 )
 async def api_upload_reference_audio(
     file: UploadFile,
     user: AuthenticatedUser = Depends(get_current_user),
     ctx: AppContext = Depends(get_app_context),
 ) -> ReferenceAudioResponse:
-    from songmaker_cli.constants import (
-        REFERENCE_AUDIO_EXTENSIONS,
-        REFERENCE_AUDIO_MAX_BYTES,
+    from songmaker_cli.constants import REFERENCE_AUDIO_EXTENSIONS, REFERENCE_AUDIO_MAX_BYTES
+    from songmaker_cli.reference_audio import (
+        ReferenceAudioQuotaExceeded,
+        ReferenceAudioStorageError,
+        store_reference_audio,
     )
-    from songmaker_cli.reference_audio import owner_reference_audio_root
 
     if not file.filename:
         raise HTTPException(400, "No filename provided")
@@ -209,12 +208,14 @@ async def api_upload_reference_audio(
     if len(content) < 100:
         raise HTTPException(400, "File is empty or too small")
 
-    ref_dir = owner_reference_audio_root(ctx.audio_dir, user.id)
-    ref_dir.mkdir(parents=True, exist_ok=True)
-    file_id = str(uuid.uuid4())
-    dest = ref_dir / f"{file_id}{ext}"
-    rel_path = str(dest.relative_to(ctx.audio_dir))
-    dest.write_bytes(content)
+    try:
+        rel_path = await run_in_threadpool(
+            store_reference_audio, ctx.db, ctx.audio_dir, user.id, ext, content, get_settings()
+        )
+    except ReferenceAudioQuotaExceeded as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ReferenceAudioStorageError as exc:
+        raise HTTPException(500, str(exc)) from exc
 
     log.info("Reference audio uploaded: %s (%d bytes)", rel_path, len(content))
     return ReferenceAudioResponse(path=rel_path, filename=file.filename)
@@ -237,8 +238,7 @@ def api_get_generation(
 
 
 @router.delete(
-    "/generations/{gen_id}",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}", responses={404: {"description": "Generation does not exist"}}
 )
 def api_delete_generation(
     gen_id: str,
@@ -312,15 +312,15 @@ async def api_generate_song(
     _check_version_lora_ready(session, version, user)
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song_id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song_id, redis=ctx.redis
     )
     record_audit(
-        session, user.id, AuditAction.GENERATE, ResourceType.SONG,
-        song_id, f"count={req.count}",
+        session, user.id, AuditAction.GENERATE, ResourceType.SONG, song_id, f"count={req.count}"
     )
     session.commit()
-    log.info("Generate: song='%s', count=%d, job=%s, model=%s",
-             song.title, req.count, job.id, req.model)
+    log.info(
+        "Generate: song='%s', count=%d, job=%s, model=%s", song.title, req.count, job.id, req.model
+    )
 
     try:
         pool = get_arq_pool()
@@ -328,7 +328,13 @@ async def api_generate_song(
         if rejection is not None:
             return rejection
         await pool.enqueue_job(
-            JobFunction.GENERATE, job.id, song_id, version.id, req.count, user.id, req.seed,
+            JobFunction.GENERATE,
+            job.id,
+            song_id,
+            version.id,
+            req.count,
+            user.id,
+            req.seed,
             req.model,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
@@ -367,15 +373,18 @@ def api_last_failed_generation(
     """
     song = check_song_access(session, song_id, user)
     job = get_last_generate_job_for_song(session, song_id)
-    if job is None or job.completed_at is None or not (
-        job.status == JobStatus.FAILED
-        or (job.status == JobStatus.PARTIAL and is_visible_generation_failure(job.error_type))
+    if (
+        job is None
+        or job.completed_at is None
+        or not (
+            job.status == JobStatus.FAILED
+            or (job.status == JobStatus.PARTIAL and is_visible_generation_failure(job.error_type))
+        )
     ):
         return LastFailedGenerationResponse(job=None)
     newest_take = next((g for g in song.generations if not g.is_archived), None)
-    if (
-        newest_take is not None
-        and aware_timestamp(newest_take.created_at) > aware_timestamp(job.completed_at)
+    if newest_take is not None and aware_timestamp(newest_take.created_at) > aware_timestamp(
+        job.completed_at
     ):
         return LastFailedGenerationResponse(job=None)
     return LastFailedGenerationResponse(job=musician_job_response(job))
@@ -415,10 +424,14 @@ async def api_repaint_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis
     )
     record_audit(
-        session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
+        session,
+        user.id,
+        AuditAction.REPAINT,
+        ResourceType.GENERATION,
+        gen_id,
         f"range={req.repainting_start:.2f}-{req.repainting_end:.2f}",
     )
     session.commit()
@@ -442,8 +455,15 @@ async def api_repaint_generation(
             repaint_wav_crossfade_sec=req.repaint_wav_crossfade_sec,
         )
         await pool.enqueue_job(
-            JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
-            req.seed, req.model, repaint_task.model_dump(),
+            JobFunction.GENERATE,
+            job.id,
+            song.id,
+            version.id,
+            req.count,
+            user.id,
+            req.seed,
+            req.model,
+            repaint_task.model_dump(),
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
@@ -484,10 +504,14 @@ async def api_cover_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis
     )
     record_audit(
-        session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,
+        session,
+        user.id,
+        AuditAction.COVER,
+        ResourceType.GENERATION,
+        gen_id,
         f"strength={req.audio_cover_strength:.2f}",
     )
     session.commit()
@@ -507,8 +531,16 @@ async def api_cover_generation(
             cover_noise_strength=req.cover_noise_strength,
         )
         await pool.enqueue_job(
-            JobFunction.GENERATE, job.id, song.id, version.id, req.count, user.id,
-            req.seed, req.model, None, cover_task.model_dump(),
+            JobFunction.GENERATE,
+            job.id,
+            song.id,
+            version.id,
+            req.count,
+            user.id,
+            req.seed,
+            req.model,
+            None,
+            cover_task.model_dump(),
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
@@ -545,8 +577,7 @@ async def api_score_generation(
             _fail_job(ctx, job.id)
             raise HTTPException(503, WORKER_NOT_RUNNING_DETAIL)
         await get_arq_pool().enqueue_job(
-            JobFunction.SCORE, job.id, gen_id, req.scorers,
-            _queue_name=ARQ_SCORING_QUEUE_NAME,
+            JobFunction.SCORE, job.id, gen_id, req.scorers, _queue_name=ARQ_SCORING_QUEUE_NAME
         )
     except ConnectionError:
         _fail_job(ctx, job.id)
@@ -560,7 +591,8 @@ async def api_score_generation(
 
 @router.post("/generations/{gen_id}/rate")
 def api_rate_generation(
-    gen_id: str, req: RateRequest,
+    gen_id: str,
+    req: RateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> RateResponse:
@@ -570,13 +602,11 @@ def api_rate_generation(
     return RateResponse(generation_id=gen_id, rating=req.rating)
 
 
-
 # ── Pick ─────────────────────────────────────────────────────────────
 
 
 def _toggle_generation(
-    gen_id: str, user: AuthenticatedUser, session: Session,
-    action: Callable[[Session, str], None],
+    gen_id: str, user: AuthenticatedUser, session: Session, action: Callable[[Session, str], None]
 ) -> StatusResponse:
     check_generation_access(session, gen_id, user)
     try:
@@ -588,8 +618,7 @@ def _toggle_generation(
 
 
 @router.post(
-    "/generations/{gen_id}/pick",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}/pick", responses={404: {"description": "Generation does not exist"}}
 )
 def api_pick_generation(
     gen_id: str,
@@ -600,8 +629,7 @@ def api_pick_generation(
 
 
 @router.post(
-    "/generations/{gen_id}/unpick",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}/unpick", responses={404: {"description": "Generation does not exist"}}
 )
 def api_unpick_generation(
     gen_id: str,
@@ -612,8 +640,7 @@ def api_unpick_generation(
 
 
 @router.post(
-    "/generations/{gen_id}/keep",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}/keep", responses={404: {"description": "Generation does not exist"}}
 )
 def api_keep_generation(
     gen_id: str,
@@ -624,8 +651,7 @@ def api_keep_generation(
 
 
 @router.post(
-    "/generations/{gen_id}/unkeep",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}/unkeep", responses={404: {"description": "Generation does not exist"}}
 )
 def api_unkeep_generation(
     gen_id: str,
@@ -636,8 +662,7 @@ def api_unkeep_generation(
 
 
 @router.post(
-    "/generations/{gen_id}/unarchive",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}/unarchive", responses={404: {"description": "Generation does not exist"}}
 )
 def api_unarchive_generation(
     gen_id: str,
@@ -648,8 +673,7 @@ def api_unarchive_generation(
 
 
 @router.post(
-    "/generations/{gen_id}/share",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}/share", responses={404: {"description": "Generation does not exist"}}
 )
 def api_share_generation(
     gen_id: str,
@@ -665,14 +689,12 @@ def api_share_generation(
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return ShareResponse(
-        share_url=f"{base_url}/share/gen/{gen.share_slug}",
-        share_slug=gen.share_slug,
+        share_url=f"{base_url}/share/gen/{gen.share_slug}", share_slug=gen.share_slug
     )
 
 
 @router.delete(
-    "/generations/{gen_id}/share",
-    responses={404: {"description": "Generation does not exist"}},
+    "/generations/{gen_id}/share", responses={404: {"description": "Generation does not exist"}}
 )
 def api_unshare_generation(
     gen_id: str,
@@ -690,7 +712,7 @@ def api_unshare_generation(
 
 
 async def _generation_capacity_error(
-    ctx: AppContext, session: Session, job_id: str,
+    ctx: AppContext, session: Session, job_id: str
 ) -> JSONResponse | None:
     try:
         if not await is_music_worker_healthy():
@@ -701,7 +723,7 @@ async def _generation_capacity_error(
         failure = generation_failure(exc, job_id)
         _fail_job(ctx, job_id, error=failure.message, error_type=failure.error_type)
         response = GenerationUnavailableResponse(
-            detail=failure.message, error_type=failure.error_type, job_id=job_id,
+            detail=failure.message, error_type=failure.error_type, job_id=job_id
         )
         return JSONResponse(status_code=503, content=response.model_dump())
     return None

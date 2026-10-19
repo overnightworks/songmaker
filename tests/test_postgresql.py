@@ -1,10 +1,4 @@
-"""PostgreSQL-specific tests.
-
-Tests requiring a live PostgreSQL instance are skipped unless
-TEST_DATABASE_URL is set to a PostgreSQL URL.
-
-Run with: TEST_DATABASE_URL=postgresql://user:pass@localhost/test pytest tests/test_postgresql.py
-"""
+"""PostgreSQL contracts; shared pg_factory skips without TEST_DATABASE_URL."""
 
 from __future__ import annotations
 
@@ -25,10 +19,7 @@ from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
-from songmaker_cli.db.engine import (
-    init_test_db,
-    resolve_database_url,
-)
+from songmaker_cli.db.engine import init_test_db, resolve_database_url
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
@@ -72,22 +63,8 @@ from songmaker_cli.settings import get_settings
 
 TEST_PG_URL = os.environ.get("TEST_DATABASE_URL", "")
 SKIP_NO_PG = pytest.mark.skipif(
-    not TEST_PG_URL.startswith("postgresql"),
-    reason="TEST_DATABASE_URL not set to a PostgreSQL URL",
+    not TEST_PG_URL.startswith("postgresql"), reason="TEST_DATABASE_URL not set to a PostgreSQL URL"
 )
-
-
-def _pg_session_factory() -> sessionmaker[Session]:
-    settings = get_settings()
-    engine = create_engine(
-        TEST_PG_URL,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_pre_ping=True,
-    )
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)
 
 
 @pytest.fixture
@@ -95,27 +72,10 @@ def sqlite_factory(tmp_path: Path) -> sessionmaker[Session]:
     return init_test_db(tmp_path / "test.db")
 
 
-@pytest.fixture
-def pg_factory():
-    if not TEST_PG_URL.startswith("postgresql"):
-        pytest.skip("No PostgreSQL URL")
-    factory = _pg_session_factory()
-    yield factory
-    engine = factory.kw["bind"]
-    Base.metadata.drop_all(engine)
-    engine.dispose()
-
-
-# ── resolve_database_url ──────────────────────────────────────────
-
-
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host/db")
     url = resolve_database_url()
     assert url == "postgresql://user:pass@host/db"
-
-
-# ── PostgreSQL-specific tests ─────────────────────────────────────
 
 
 @SKIP_NO_PG
@@ -139,27 +99,43 @@ def test_duration_stats_postgresql_values(pg_factory) -> None:
 
 
 @SKIP_NO_PG
-def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
-    pg_factory,
-) -> None:
+def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(pg_factory) -> None:
     long_ago = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with pg_factory() as session:
-        session.add_all([
-            User(id="owner", username="leonardo", password_hash="x", role="user"),
-            User(id="admin", username="felix", password_hash="x", role="admin"),
-        ])
+        session.add_all(
+            [
+                User(id="owner", username="leonardo", password_hash="x", role="user"),
+                User(id="admin", username="felix", password_hash="x", role="admin"),
+            ]
+        )
         session.flush()
         session.add(Album(id="vernissage", title="Vernissage", artist="L", created_by="owner"))
-        session.add_all([
-            Song(id="first", title="First", album_id="vernissage", slug="first", track_number=1),
-            Song(id="second", title="Second", album_id="vernissage", slug="second", track_number=2),
-        ])
+        session.add_all(
+            [
+                Song(
+                    id="first", title="First", album_id="vernissage", slug="first", track_number=1
+                ),
+                Song(
+                    id="second",
+                    title="Second",
+                    album_id="vernissage",
+                    slug="second",
+                    track_number=2,
+                ),
+            ]
+        )
         session.add(Playlist(id="mix", title="Mix", slug="mix", created_by="admin"))
         session.flush()
-        session.add(Generation(
-            id="take", song_id="second", generation_number=1, mp3_path="take.mp3",
-            created_by="admin", created_at=long_ago,
-        ))
+        session.add(
+            Generation(
+                id="take",
+                song_id="second",
+                generation_number=1,
+                mp3_path="take.mp3",
+                created_by="admin",
+                created_at=long_ago,
+            )
+        )
         session.add(UserSongWork(user_id="admin", song_id="first", edited_at=long_ago))
         session.flush()
         session.add(PlaylistEntry(playlist_id="mix", generation_id="take", position=0))
@@ -167,7 +143,7 @@ def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
 
     for record_work in (
         lambda session: record_playlist_listen(
-            session, session.get(Playlist, "mix"), song=session.get(Song, "second"),
+            session, session.get(Playlist, "mix"), song=session.get(Song, "second")
         ),
         partial(record_song_played, user_id="admin", song_id="second", in_playlist=True),
         partial(record_song_edit, user_id="admin", song_id="second", kind=SongWorkKind.LYRICS),
@@ -183,7 +159,7 @@ def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
         listens = [
             (listen.place.id, listen.played_at, listen.song.id, listen.song_number)
             for listen in list_place_listens(
-                session, viewer_id="admin", owner_id=None, limit=PAGE_MAX_LIMIT,
+                session, viewer_id="admin", owner_id=None, limit=PAGE_MAX_LIMIT
             )
         ]
         works = [
@@ -210,58 +186,108 @@ HOME_LIST_STATEMENT_BUDGET_MS = 100.0
 
 
 def _seed_libraries_of_many_musicians(
-    session: Session, *, musicians: int, albums: int, songs: int,
+    session: Session, *, musicians: int, albums: int, songs: int
 ) -> None:
     """Every musician owns ``albums`` albums of ``songs`` songs and has worked on and
     listened to each song; playlist ``p<a>`` holds album ``a``'s takes, played from its first.
     """
     start = datetime(2026, 9, 1, tzinfo=timezone.utc)
     owners = [f"m{m}" for m in range(musicians)]
-    session.add_all([
-        User(id=owner, username=owner, password_hash="x", role="user") for owner in owners
-    ])
+    session.add_all(
+        [User(id=owner, username=owner, password_hash="x", role="user") for owner in owners]
+    )
     session.flush()
     session.add_all([Conversation(id=f"{owner}-c", user_id=owner) for owner in owners])
-    session.execute(insert(Album), [
-        {"id": f"{owner}-a{a}", "title": f"{owner}-a{a}", "artist": "A", "created_by": owner}
-        for owner in owners for a in range(albums)
-    ])
+    session.execute(
+        insert(Album),
+        [
+            {"id": f"{owner}-a{a}", "title": f"{owner}-a{a}", "artist": "A", "created_by": owner}
+            for owner in owners
+            for a in range(albums)
+        ],
+    )
     song_rows = [
         (owner, a, s, start + timedelta(seconds=index))
         for index, (owner, a, s) in enumerate(
             (owner, a, s) for owner in owners for a in range(albums) for s in range(songs)
         )
     ]
-    session.execute(insert(Song), [
-        {"id": f"{owner}-a{a}-s{s}", "title": f"s{s}", "album_id": f"{owner}-a{a}",
-         "slug": f"s{s}", "track_number": s}
-        for owner, a, s, _at in song_rows
-    ])
-    session.execute(insert(Playlist), [
-        {"id": f"{owner}-p{a}", "title": f"{owner}-p{a}", "slug": f"{owner}-p{a}",
-         "created_by": owner, "last_played_at": start + timedelta(seconds=a),
-         "last_played_song_id": f"{owner}-a{a}-s0"}
-        for owner in owners for a in range(albums)
-    ])
-    session.execute(insert(Generation), [
-        {"id": f"{owner}-a{a}-s{s}-g", "song_id": f"{owner}-a{a}-s{s}", "generation_number": 1,
-         "mp3_path": f"{owner}-a{a}-s{s}.mp3", "created_by": owner, "created_at": at}
-        for owner, a, s, at in song_rows
-    ])
-    session.execute(insert(PlaylistEntry), [
-        {"playlist_id": f"{owner}-p{a}", "generation_id": f"{owner}-a{a}-s{s}-g", "position": s}
-        for owner, a, s, _at in song_rows
-    ])
-    session.execute(insert(UserSongWork), [
-        {"user_id": owner, "song_id": f"{owner}-a{a}-s{s}", "edited_at": at,
-         "edit_kind": SongWorkKind.LYRICS, "album_played_at": at}
-        for owner, a, s, at in song_rows
-    ])
-    session.execute(insert(ChatMessage), [
-        {"conversation_id": f"{owner}-c", "song_id": f"{owner}-a{a}-s{s}", "role": role,
-         "content": "Tighten the chorus", "created_at": at}
-        for owner, a, s, at in song_rows for role in ("user", "assistant")
-    ])
+    session.execute(
+        insert(Song),
+        [
+            {
+                "id": f"{owner}-a{a}-s{s}",
+                "title": f"s{s}",
+                "album_id": f"{owner}-a{a}",
+                "slug": f"s{s}",
+                "track_number": s,
+            }
+            for owner, a, s, _at in song_rows
+        ],
+    )
+    session.execute(
+        insert(Playlist),
+        [
+            {
+                "id": f"{owner}-p{a}",
+                "title": f"{owner}-p{a}",
+                "slug": f"{owner}-p{a}",
+                "created_by": owner,
+                "last_played_at": start + timedelta(seconds=a),
+                "last_played_song_id": f"{owner}-a{a}-s0",
+            }
+            for owner in owners
+            for a in range(albums)
+        ],
+    )
+    session.execute(
+        insert(Generation),
+        [
+            {
+                "id": f"{owner}-a{a}-s{s}-g",
+                "song_id": f"{owner}-a{a}-s{s}",
+                "generation_number": 1,
+                "mp3_path": f"{owner}-a{a}-s{s}.mp3",
+                "created_by": owner,
+                "created_at": at,
+            }
+            for owner, a, s, at in song_rows
+        ],
+    )
+    session.execute(
+        insert(PlaylistEntry),
+        [
+            {"playlist_id": f"{owner}-p{a}", "generation_id": f"{owner}-a{a}-s{s}-g", "position": s}
+            for owner, a, s, _at in song_rows
+        ],
+    )
+    session.execute(
+        insert(UserSongWork),
+        [
+            {
+                "user_id": owner,
+                "song_id": f"{owner}-a{a}-s{s}",
+                "edited_at": at,
+                "edit_kind": SongWorkKind.LYRICS,
+                "album_played_at": at,
+            }
+            for owner, a, s, at in song_rows
+        ],
+    )
+    session.execute(
+        insert(ChatMessage),
+        [
+            {
+                "conversation_id": f"{owner}-c",
+                "song_id": f"{owner}-a{a}-s{s}",
+                "role": role,
+                "content": "Tighten the chorus",
+                "created_at": at,
+            }
+            for owner, a, s, at in song_rows
+            for role in ("user", "assistant")
+        ],
+    )
 
 
 @SKIP_NO_PG
@@ -281,15 +307,15 @@ def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory
         event.listen(engine, "before_cursor_execute", record)
         try:
             listens = list_place_listens(
-                session, viewer_id="m0", owner_id="m0", limit=PAGE_MAX_LIMIT,
+                session, viewer_id="m0", owner_id="m0", limit=PAGE_MAX_LIMIT
             )
             worked_songs = list_worked_songs(session, viewer_id="m0", owner_id="m0", limit=3)
         finally:
             event.remove(engine, "before_cursor_execute", record)
         timings = [
-            session.connection().exec_driver_sql(
-                f"EXPLAIN (ANALYZE, FORMAT JSON) {statement}", parameters,
-            ).scalar_one()[0]["Execution Time"]
+            session.connection()
+            .exec_driver_sql(f"EXPLAIN (ANALYZE, FORMAT JSON) {statement}", parameters)
+            .scalar_one()[0]["Execution Time"]
             for statement, parameters in statements
         ]
 
@@ -331,7 +357,7 @@ def test_concurrent_job_creation(pg_factory) -> None:
 
 @SKIP_NO_PG
 def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
-    pg_factory, monkeypatch: pytest.MonkeyPatch,
+    pg_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The advisory lock admits one of two simultaneous creates at the limit.
 
@@ -437,20 +463,30 @@ def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeyp
 
 @SKIP_NO_PG
 def test_concurrent_lora_reconciliation_claims_one_locked_row(
-    pg_factory, tmp_path, monkeypatch,
+    pg_factory, tmp_path, monkeypatch
 ) -> None:
     """PostgreSQL SKIP LOCKED permits exactly one failure audit per LoRA."""
     terminalized_at = datetime.now(timezone.utc)
     with pg_factory() as session:
         session.add(User(id="lora-user", username="lora-user", password_hash="x"))
-        session.add(Job(
-            id="lora-job", type=JobType.LORA_TRAINING, status=JobStatus.FAILED,
-            completed_at=terminalized_at,
-        ))
-        session.add(UserLora(
-            id="lora-1", user_id="lora-user", name="Lora", slug="lora",
-            status=LoraStatus.TRAINING, training_job_id="lora-job",
-        ))
+        session.add(
+            Job(
+                id="lora-job",
+                type=JobType.LORA_TRAINING,
+                status=JobStatus.FAILED,
+                completed_at=terminalized_at,
+            )
+        )
+        session.add(
+            UserLora(
+                id="lora-1",
+                user_id="lora-user",
+                name="Lora",
+                slug="lora",
+                status=LoraStatus.TRAINING,
+                training_job_id="lora-job",
+            )
+        )
         session.commit()
 
     ctx = AppContext(
@@ -614,11 +650,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
 
     assert not errors, f"Errors during concurrent session cap: {errors}"
     with pg_factory() as session:
-        remaining = (
-            session.query(UserSession)
-            .filter(UserSession.user_id == user_id)
-            .all()
-        )
+        remaining = session.query(UserSession).filter(UserSession.user_id == user_id).all()
         assert len(remaining) == max_sessions
 
 
@@ -666,30 +698,16 @@ def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
         session.add(User(id="rollback-user", username="rollback", password_hash="x"))
         session.flush()
         create_generation_created_event(
-            session,
-            user_id="rollback-user",
-            song_id="song-1",
-            generation_id="duplicate-generation",
+            session, user_id="rollback-user", song_id="song-1", generation_id="duplicate-generation"
         )
         session.commit()
 
     with pg_factory() as session:
         session.add(
-            Album(
-                id="rollback-album",
-                title="Rollback",
-                artist="Test",
-                created_by="rollback-user",
-            )
+            Album(id="rollback-album", title="Rollback", artist="Test", created_by="rollback-user")
         )
         session.flush()
-        session.add(
-            Song(
-                id="rollback-song",
-                title="Rollback",
-                album_id="rollback-album",
-            )
-        )
+        session.add(Song(id="rollback-song", title="Rollback", album_id="rollback-album"))
         session.flush()
         session.add(
             Generation(
@@ -713,10 +731,7 @@ def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
         assert session.get(Generation, "rolled-back-generation") is None
         assert get_resource_event_high_water_mark(session, "rollback-user") == 1
         event = create_generation_created_event(
-            session,
-            user_id="rollback-user",
-            song_id="song-3",
-            generation_id="generation-3",
+            session, user_id="rollback-user", song_id="song-3", generation_id="generation-3"
         )
         session.commit()
         assert event.sequence == 2
@@ -771,7 +786,7 @@ def test_alembic_migrations_on_postgresql() -> None:
             text(
                 "INSERT INTO users "
                 "(id, username, password_hash, role, is_active, created_at, updated_at) "
-                "VALUES (:id, :username, :password_hash, :role, :is_active, :now, :now)",
+                "VALUES (:id, :username, :password_hash, :role, :is_active, :now, :now)"
             ),
             [
                 {
@@ -803,7 +818,7 @@ def test_alembic_migrations_on_postgresql() -> None:
         conn.execute(
             text(
                 "INSERT INTO user_resource_cursors (user_id, high_water_mark) "
-                "VALUES ('migration-user', 2)",
+                "VALUES ('migration-user', 2)"
             )
         )
         conn.execute(
@@ -811,7 +826,7 @@ def test_alembic_migrations_on_postgresql() -> None:
                 "INSERT INTO user_resource_events "
                 "(id, user_id, sequence, kind, song_id, generation_id, created_at) "
                 "VALUES (:id, 'migration-user', :sequence, 'generation.created', "
-                ":song_id, :generation_id, :now)",
+                ":song_id, :generation_id, :now)"
             ),
             [
                 {
@@ -867,35 +882,18 @@ def test_alembic_migrations_on_postgresql() -> None:
         cursors = conn.execute(
             text(
                 "SELECT user_id, high_water_mark FROM resource_event_cursors "
-                "WHERE user_id LIKE 'migration-user%' ORDER BY user_id",
+                "WHERE user_id LIKE 'migration-user%' ORDER BY user_id"
             )
         ).all()
         events = conn.execute(
             text(
                 "SELECT id, sequence, kind, resource_type, resource_id, generation_id "
-                "FROM resource_events WHERE user_id = 'migration-user' ORDER BY sequence",
+                "FROM resource_events WHERE user_id = 'migration-user' ORDER BY sequence"
             )
         ).all()
     engine.dispose()
-    assert cursors == [
-        ("migration-user", 2),
-        ("migration-user-without-events", 0),
-    ]
+    assert cursors == [("migration-user", 2), ("migration-user-without-events", 0)]
     assert events == [
-        (
-            "legacy-event-1",
-            1,
-            "generation.created",
-            "song",
-            "legacy-song-1",
-            "legacy-generation-1",
-        ),
-        (
-            "legacy-event-2",
-            2,
-            "generation.created",
-            "song",
-            "legacy-song-2",
-            "legacy-generation-2",
-        ),
+        ("legacy-event-1", 1, "generation.created", "song", "legacy-song-1", "legacy-generation-1"),
+        ("legacy-event-2", 2, "generation.created", "song", "legacy-song-2", "legacy-generation-2"),
     ]

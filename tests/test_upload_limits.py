@@ -22,15 +22,18 @@ from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
 
 
-@pytest.mark.parametrize("path", [
-    "/api/loras/abc-id/samples/extra",
-    "/api/other/samples",
-    "/api/loras//samples",
-    "/api/songs//reimport",
-    "/api/other/song-id/reimport",
-    "/api/songs/song-id/reimport/extra",
-    "/api/playlists//cover",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/loras/abc-id/samples/extra",
+        "/api/other/samples",
+        "/api/loras//samples",
+        "/api/songs//reimport",
+        "/api/other/song-id/reimport",
+        "/api/songs/song-id/reimport/extra",
+        "/api/playlists//cover",
+    ],
+)
 def test_a_route_that_only_looks_like_an_upload_keeps_the_json_budget(path: str) -> None:
     assert build_body_size_policy(get_settings()).max_bytes(path, "POST") == (
         JSON_REQUEST_BODY_MAX_BYTES
@@ -71,6 +74,8 @@ def test_create_app_accepts_2mib_reference_audio(tmp_path: Path) -> None:
     )
     assert resp.status_code == 200, resp.text
     assert "refs/" in resp.json()["path"]
+    assert resp.json()["filename"] == "ref.wav"
+    assert (tmp_path / "audio" / resp.json()["path"]).read_bytes() == payload
 
 
 def test_create_app_accepts_2mib_lora_sample(tmp_path: Path) -> None:
@@ -115,7 +120,11 @@ def test_reimport_suffix_does_not_expand_unrelated_route_budget(tmp_path: Path) 
     [("mp3", "audio/mpeg", "MP3 file too large"), ("wav", "audio/wav", "WAV file too large")],
 )
 def test_reimport_keeps_per_file_limit_separate(
-    tmp_path: Path, monkeypatch, field: str, content_type: str, detail: str,
+    tmp_path: Path,
+    monkeypatch,
+    field: str,
+    content_type: str,
+    detail: str,
 ) -> None:
     client = _authed_app(tmp_path)
     song_resp = client.post("/api/songs", json={"title": "Song", "album_id": "a1"})
