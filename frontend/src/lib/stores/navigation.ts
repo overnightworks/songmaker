@@ -291,7 +291,7 @@ export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		await libraryHistoryStepsLanded();
 		await keepLibraryPageAsLeft();
-		await goto(resolve(href));
+		await goto(resolve(...([href] as Parameters<typeof resolve>)));
 	});
 }
 

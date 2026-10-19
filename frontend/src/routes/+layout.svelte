@@ -88,7 +88,9 @@
 		page.url.pathname === '/login' ||
 			page.url.pathname === '/setup' ||
 			page.url.pathname.startsWith('/share/') ||
-			page.url.pathname.startsWith('/legal')
+			page.url.pathname.startsWith('/legal') ||
+			page.url.pathname === '/impressum' ||
+			page.url.pathname === '/datenschutz'
 	);
 	const me = $derived($currentUser);
 	const hasPrivatePlayer = $derived(me !== null);

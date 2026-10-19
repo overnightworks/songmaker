@@ -360,7 +360,7 @@ describe('app shell', () => {
 		);
 	});
 
-	it.each(['/login', '/setup', '/legal', '/share/public-token'])(
+	it.each(['/login', '/setup', '/legal', '/impressum', '/datenschutz', '/share/public-token'])(
 		'keeps the PlayerBar and reservation out of public route %s',
 		async (path) => {
 			const target = await renderLayout(path);
