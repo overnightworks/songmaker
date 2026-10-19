@@ -1,25 +1,11 @@
 <script lang="ts">
-	import LegalContent from '$lib/components/LegalContent.svelte';
-	import { APP_NAME } from '$lib/constants';
-	import { SIGN_IN_PATH } from '$lib/api/fetch';
-	import { stepBackOrGoTo } from '$lib/history/historyController';
+	import { page } from '$app/state';
+	import LegalPage from '$lib/components/LegalPage.svelte';
+	import { LEGAL_SECTIONS, type LegalSection } from '$lib/components/LegalLinks.svelte';
 
-	function goBack(): void {
-		void stepBackOrGoTo(SIGN_IN_PATH);
+	function sectionOfHash(hash: string): LegalSection | undefined {
+		return LEGAL_SECTIONS.find(({ id }) => `#${id}` === hash)?.id;
 	}
 </script>
 
-<svelte:head>
-	<title>Legal | {APP_NAME}</title>
-</svelte:head>
-
-<div class="legal-standalone">
-	<LegalContent onback={goBack} />
-</div>
-
-<style>
-	.legal-standalone {
-		height: 100dvh;
-		overflow-y: auto;
-	}
-</style>
+<LegalPage title="Legal" section={sectionOfHash(page.url.hash)} />
