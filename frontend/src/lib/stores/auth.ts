@@ -4,7 +4,6 @@ import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/
 import { NetworkError, SIGN_IN_PATH } from '$lib/api/fetch';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { RATE_LIMITED_STATUS, SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
-import { forgetPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 import { loadAfresh, reloadAfresh } from '$lib/history/historyController';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
@@ -181,7 +180,6 @@ export async function logout(): Promise<void> {
 	audioPlayer.unload();
 	if (user) {
 		forgetPlaybackResume(user.id);
-		forgetPlaybackDiagnostics(user.id);
 	}
 	await loadAfresh(SIGN_IN_PATH);
 }

@@ -50,7 +50,6 @@ import {
 } from '$lib/history/historyController';
 import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
 import { followPlaybackForResume } from '$lib/stores/playbackResume';
-import { recordPlaybackEvent, startPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 import { audioPlayer, type AudioPlayerCallbacks } from '$lib/services/audioPlayer.svelte';
 import { holdRouteLoads } from '$lib/test-utils/app-navigation';
 import { documentLoads } from '$lib/test-utils/document-loads';
@@ -309,21 +308,6 @@ describe('logout', () => {
 
 		expect(order).toEqual(['server', `load ${window.location.origin}/login`]);
 		expect(documentLoads.replace).not.toHaveBeenCalled();
-	});
-
-	it('forgets the playback diagnostics recorded for the user', async () => {
-		const diagnosticsKey = 'playbackDiagnostics:u1';
-		const stopRecording = startPlaybackDiagnostics('u1');
-		recordPlaybackEvent({ kind: 'freeze', detail: '', take: null });
-		const recordedBefore = localStorage.getItem(diagnosticsKey);
-		currentUser.set(KNOWN_USER);
-		mockApiLogout.mockResolvedValueOnce(undefined);
-
-		await logout();
-		stopRecording();
-
-		expect(recordedBefore).not.toBeNull();
-		expect(localStorage.getItem(diagnosticsKey)).toBeNull();
 	});
 
 	it('925_M3_S5: stays a sign-out when a request is refused while it ends the session, or after', async () => {

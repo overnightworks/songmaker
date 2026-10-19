@@ -11,15 +11,6 @@ import {
 	type PlaybackInfo
 } from './audioPlayer.svelte';
 import { TakeNotAppended } from './continuousDeck';
-import { readThePlayingTakeFrom, recordPlaybackEvent } from './playbackDiagnostics';
-
-vi.mock('./playbackDiagnostics', () => ({
-	recordPlaybackEvent: vi.fn(),
-	readThePlayingTakeFrom: vi.fn()
-}));
-
-// What the page's own events (screen off, page hidden) record as playing.
-const [playingTakeForPageEvents] = vi.mocked(readThePlayingTakeFrom).mock.calls[0];
 
 interface HeldTake {
 	take: PlaybackInfo;
@@ -187,10 +178,6 @@ function preloadReady(
 	return standby;
 }
 
-function recordedNotes(): Parameters<typeof recordPlaybackEvent>[0][] {
-	return vi.mocked(recordPlaybackEvent).mock.calls.map(([note]) => note);
-}
-
 function recoveryUrlOf(url: string): RegExp {
 	const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	return new RegExp(`^${escaped}\\?recover=\\S+$`);
@@ -334,7 +321,6 @@ beforeEach(() => {
 	vi.stubGlobal('fetch', fetchMock);
 	audioPlayer.destroy();
 	audioPlayer.swapCallbacks(callbacks());
-	vi.mocked(recordPlaybackEvent).mockClear();
 });
 
 afterEach(() => {
@@ -998,43 +984,6 @@ describe('frozen-clock watchdog', () => {
 
 		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
 		expect(audioPlayer.status).not.toBe('loading');
-	});
-
-	it.each([
-		{ source: 'app', pauseIt: () => audioPlayer.pause() },
-		{ source: 'outside', pauseIt: () => fakeAudio.pause() },
-		{
-			source: 'ended',
-			pauseIt: () => {
-				fakeAudio.ended = true;
-				fakeAudio.pause();
-			}
-		}
-	])('records a pause that came from the $source', ({ source, pauseIt }) => {
-		startPlayingAt(40);
-
-		pauseIt();
-
-		expect(recordedNotes().at(-1)).toMatchObject({
-			kind: 'pause',
-			detail: expect.stringContaining(`source=${source}`)
-		});
-	});
-
-	it('records a later pause from outside after a take change swallowed the app pause event', () => {
-		startPlayingAt(40);
-		vi.spyOn(fakeAudio, 'pause').mockImplementationOnce(() => {
-			fakeAudio.paused = true;
-		});
-
-		audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'a1/other.mp3' }) }));
-		startPlayingAt(40);
-		fakeAudio.pause();
-
-		expect(recordedNotes().at(-1)).toMatchObject({
-			kind: 'pause',
-			detail: expect.stringContaining('source=outside')
-		});
 	});
 });
 
@@ -2688,49 +2637,6 @@ describe('standby deck', () => {
 		expect(standby.src).toBe('');
 	});
 
-	it.each([
-		{ decision: 'promote', readyState: 3, asked: next, matched: true },
-		{ decision: 'fresh_load', readyState: 2, asked: next, matched: true },
-		{ decision: 'fresh_load', readyState: 3, asked: other, matched: false }
-	])(
-		'records a $decision for a standby at readyState $readyState whose URL matched: $matched',
-		({ decision, readyState, asked, matched }) => {
-			playFirst();
-			preloadReady(next, readyState);
-			vi.mocked(recordPlaybackEvent).mockClear();
-
-			audioPlayer.load(asked);
-
-			expect(recordedNotes()).toContainEqual({
-				kind: decision,
-				detail: `standby_ready_state=${readyState} url_matched=${matched}`,
-				take: expect.objectContaining({ takeId: asked.generation.id, deck: 'active' })
-			});
-		}
-	);
-
-	it.each([
-		{ deck: 'standby', takeId: null, fire: (standby: FakeAudio) => standby.fire('canplay') },
-		{ deck: 'active', takeId: 'g1', fire: () => fakeAudio.fire('canplay') }
-	])("records a media event on the $deck deck with that deck's state", ({ deck, takeId, fire }) => {
-		playFirst();
-		const standby = preloadReady(next);
-		const firing = deck === 'standby' ? standby : fakeAudio;
-		firing.currentTime = 7;
-		firing.bufferedUntil = 42;
-		vi.mocked(recordPlaybackEvent).mockClear();
-
-		fire(standby);
-
-		expect(recordedNotes()).toEqual([
-			{
-				kind: 'media_event',
-				detail: expect.stringMatching(/^canplay .*buffered=42\.0/),
-				take: { takeId, position: 7, readyState: firing.readyState, deck }
-			}
-		]);
-	});
-
 	it('preloading the take already standing by does not fetch it again', () => {
 		const standby = preloadReady(next);
 		const loadSpy = vi.spyOn(standby, 'load');
@@ -2966,59 +2872,6 @@ describe('audio graph', () => {
 		audioPlayer.resumeAudioGraph();
 
 		expect(fake.context.resume).toHaveBeenCalledOnce();
-	});
-});
-
-describe('what the player writes down for diagnostics (#1250)', () => {
-	it('records a refused play by the error name', async () => {
-		audioPlayer.load(makeInfo(), { autoplay: false });
-		fakeAudio.fire('canplay');
-		fakeAudio.playMock.mockImplementation(() =>
-			Promise.reject(Object.assign(new Error('autoplay blocked'), { name: 'NotAllowedError' }))
-		);
-
-		audioPlayer.play();
-		await new Promise((resolve) => setTimeout(resolve, 0));
-
-		expect(recordedNotes()).toContainEqual(
-			expect.objectContaining({ kind: 'play_rejected', detail: 'NotAllowedError' })
-		);
-	});
-
-	it('tells page events the playing take, its position and readiness', () => {
-		audioPlayer.load(makeInfo(), { autoplay: false });
-		fakeAudio.readyState = 4;
-		fakeAudio.currentTime = 37;
-
-		expect(playingTakeForPageEvents()).toEqual({
-			takeId: 'g1',
-			position: 37,
-			readyState: 4,
-			deck: 'active'
-		});
-	});
-
-	it('records each reload with its reason and then the give-up', async () => {
-		vi.useFakeTimers();
-		audioPlayer.load(makeInfo(), { autoplay: false });
-		fakeAudio.fire('canplay');
-		fakeAudio.paused = false;
-		fakeAudio.fire('play');
-		fakeAudio.fire('playing');
-		fakeAudio.currentTime = 41;
-		fakeAudio.fire('timeupdate');
-		fakeAudio.fire('stalled');
-
-		await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE + 10 * SECOND);
-
-		const recovery = recordedNotes().filter(
-			(note) => note.kind === 'retry' || note.kind === 'give_up'
-		);
-		expect(recovery[0]).toMatchObject({
-			kind: 'retry',
-			detail: expect.stringContaining('reason=stall-timeout')
-		});
-		expect(recovery.at(-1)).toMatchObject({ kind: 'give_up', detail: 'stalled' });
 	});
 });
 
@@ -3441,9 +3294,6 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(deck().requests.map((request) => request.take)).toEqual([first, second, third]);
 		expect(audioPlayer.current?.generation.id).toBe('g1');
 		expect(audioPlayer.status).toBe('playing');
-		expect(recordedNotes().map((note) => note.detail)).toContain(
-			'deck_dropped take=g2 refused /audio/a1/second.mp3 answered 404'
-		);
 
 		holds([first, 0, 10], [third, 10, 5]);
 		fakeAudio.bufferedUntil = 15;
@@ -3531,10 +3381,6 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(left.closed).toBe(true);
 	});
 
-	function recordedDetails(): string[] {
-		return recordedNotes().map((note) => `${note.kind} ${note.detail}`);
-	}
-
 	it('keeps the deck on a stall and resumes its download on the same element with no seek back', () => {
 		vi.useFakeTimers();
 		playFirstWithSecondAppended();
@@ -3553,7 +3399,6 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(fakeAudio.currentTime).toBe(6);
 		expect(audioPlayer.currentTime).toBe(6);
 		expect(audioPlayer.transport).toBe('recovering');
-		expect(recordedDetails()).toContain('retry deck_resume reason=stall-timeout');
 
 		vi.advanceTimersByTime(5 * SECOND);
 		expect(deck().retries).toBe(2);
@@ -3572,7 +3417,6 @@ describe('continuous deck (#1187 M2)', () => {
 
 		expect(deck().retries).toBe(1);
 		expect(deck().closed).toBe(false);
-		expect(recordedDetails()).toContain('retry deck_resume reason=network-return');
 	});
 
 	it('a take ahead that fails on the network is neither skipped nor named, and plays once its bytes arrive', () => {
@@ -3592,7 +3436,6 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(deck().retries).toBe(1);
 		expect(deck().ended).toBe(false);
 		expect(onTakeSkipped).not.toHaveBeenCalled();
-		expect(recordedDetails().some((detail) => detail.includes('deck_dropped'))).toBe(false);
 		expect(audioPlayer.error).toBeNull();
 
 		holds([first, 0, 10], [second, 10, 20]);
@@ -3624,7 +3467,6 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(deck().retries).toBeGreaterThan(1);
 		expect(deck().closed).toBe(false);
 		expect(continuousDecks.attached).toHaveLength(1);
-		expect(recordedNotes().at(-1)).toMatchObject({ kind: 'give_up', detail: 'stalled' });
 	});
 
 	it.each([
@@ -3727,7 +3569,6 @@ describe('continuous deck (#1187 M2)', () => {
 
 		expect(deck().retries).toBe(1);
 		expect(deck().closed).toBe(false);
-		expect(recordedDetails()).toContain('retry deck_resume reason=play');
 	});
 
 	it('Play on a paused take with audio ahead of the playhead leaves its download alone', () => {
@@ -3801,7 +3642,6 @@ describe('continuous deck (#1187 M2)', () => {
 
 		audioPlayer.play();
 
-		expect(recordedDetails()).toContain('retry deck_resume reason=frozen-clock');
 		expect(deck().retries).toBe(1);
 		expect(fakeAudio.playMock).toHaveBeenCalledOnce();
 		expect(continuousDecks.attached).toHaveLength(1);
@@ -3842,28 +3682,5 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(continuousDecks.attached).toEqual([]);
 		expect(fakeAudio.src).toBe('/audio/a1/first.mp3');
 		expect(createdAudios.at(-1)?.src).toBe('/audio/a1/second.mp3');
-	});
-
-	it('writes down the deck opening, each append, the crossing, a resume and a fallback', async () => {
-		vi.useFakeTimers();
-		playFirstWithSecondAppended();
-		playTo(10.5);
-		fakeAudio.fire('stalled');
-		vi.advanceTimersByTime(5 * SECOND);
-		deck().requests[1].fail(new Error('The source buffer refused the appended audio'));
-		await Promise.resolve();
-
-		expect(recordedDetails()).toEqual(
-			expect.arrayContaining([
-				'fresh_load deck=continuous',
-				'media_event deck_append take=g1',
-				'media_event deck_append take=g2',
-				'media_event deck_crossing',
-				'retry deck_resume reason=stall-timeout',
-				expect.stringMatching(/^retry deck_fallback The source buffer refused/)
-			])
-		);
-		const crossing = recordedNotes().find((note) => note.detail === 'deck_crossing');
-		expect(crossing?.take).toEqual(expect.objectContaining({ takeId: 'g2', position: 0.5 }));
 	});
 });
