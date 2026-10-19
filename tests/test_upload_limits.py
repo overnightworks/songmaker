@@ -71,6 +71,8 @@ def test_create_app_accepts_2mib_reference_audio(tmp_path: Path) -> None:
     )
     assert resp.status_code == 200, resp.text
     assert "refs/" in resp.json()["path"]
+    assert resp.json()["filename"] == "ref.wav"
+    assert (tmp_path / "audio" / resp.json()["path"]).read_bytes() == payload
 
 
 def test_create_app_accepts_2mib_lora_sample(tmp_path: Path) -> None:

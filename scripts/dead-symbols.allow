@@ -70,7 +70,7 @@ songmaker_cli/generation_api.py:api_unarchive_generation # HTTP dispatcher: rout
 songmaker_cli/generation_api.py:api_unkeep_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unkeep', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/generation_api.py:api_unpick_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unpick', responses={404: {'description': 'Generation does not exist'}})
 songmaker_cli/generation_api.py:api_unshare_generation # HTTP dispatcher: router.delete('/generations/{gen_id}/share', responses={404: {'description': 'Generation does not exist'}})
-songmaker_cli/generation_api.py:api_upload_reference_audio # HTTP dispatcher: router.post('/audio/upload', responses={400: {'description': 'Reference audio upload is invalid'}})
+songmaker_cli/generation_api.py:api_upload_reference_audio # HTTP dispatcher: router.post('/audio/upload', responses={400: {'description': 'Reference audio upload is invalid'}, 409: {'description': 'Reference audio storage limit reached'}, 500: {'description': 'Reference audio storage could not be checked'}})
 songmaker_cli/health_api.py:health_check # HTTP dispatcher: router.get('/health')
 songmaker_cli/health_api.py:metrics_endpoint # HTTP dispatcher: router.get('/metrics')
 songmaker_cli/internal_api.py:register_worker_endpoint # HTTP dispatcher: router.post('/workers/register')

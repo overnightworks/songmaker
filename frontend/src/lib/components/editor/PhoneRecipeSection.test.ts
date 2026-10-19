@@ -301,6 +301,11 @@ describe('PhoneRecipeSection', () => {
 	it.each([
 		{ outcome: 'succeeds', error: null, shown: null },
 		{
+			outcome: '1301-F3-Q-SURFACE exhausts quota',
+			error: new ApiError(409, 'Reference audio storage limit reached.', '/api/audio/upload'),
+			shown: 'Reference audio storage limit reached.'
+		},
+		{
 			outcome: 'is refused by the server',
 			error: new ApiError(413, 'Upload refused', '/api/reference-audio'),
 			shown: 'Upload refused'
@@ -311,6 +316,8 @@ describe('PhoneRecipeSection', () => {
 			shown: PHONE_RECIPE_UPLOAD_ERROR
 		}
 	])('handles a reference upload that $outcome', async ({ error, shown }) => {
+		setDraftGenParams(null);
+		const previousDraft = get(editGenParams);
 		const response = Promise.withResolvers<{ path: string; filename: string }>();
 		vi.mocked(uploadReferenceAudio).mockReturnValueOnce(response.promise);
 		const target = await render();
@@ -321,13 +328,16 @@ describe('PhoneRecipeSection', () => {
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await tick();
 		expect(input.disabled).toBe(true);
-		if (error) response.reject(error);
-		else response.resolve({ path: '/reference.wav', filename: 'reference.wav' });
+		if (error) {
+			response.reject(error);
+		} else response.resolve({ path: '/reference.wav', filename: 'reference.wav' });
 		await tick();
 		await tick();
 		if (shown) {
 			expect(target.querySelector('[role="alert"]')?.textContent).toBe(shown);
+			expect(target.querySelectorAll('[role="alert"]')).toHaveLength(1);
 			expect(input.disabled).toBe(false);
+			expect(get(editGenParams)).toEqual(previousDraft);
 		} else {
 			expect(get(editGenParams)?.reference_audio_path).toBe('/reference.wav');
 			await click(target, 'Remove');

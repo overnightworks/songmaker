@@ -28,6 +28,7 @@ vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 import { goto } from '$app/navigation';
 import {
 	discardDraft,
+	editGenParams,
 	editBpm,
 	loadSongData,
 	pinnedSeed,
@@ -214,25 +215,36 @@ describe("RecipePanel at the editor's own width", () => {
 	];
 
 	it.each(
-		failingActions.flatMap((entry) => [
-			{
-				...entry,
-				failure: 'with no network answer',
-				error: new NetworkError('/api/presets', new TypeError('Failed to fetch')),
-				shown: entry.fallback
-			},
-			{
-				...entry,
-				failure: 'refused by the server',
-				error: new ApiError(413, 'That file is too large', '/api/presets'),
-				shown: 'That file is too large'
-			}
-		])
+		failingActions
+			.flatMap((entry) => [
+				{
+					...entry,
+					failure: 'with no network answer',
+					error: new NetworkError('/api/presets', new TypeError('Failed to fetch')),
+					shown: entry.fallback
+				},
+				{
+					...entry,
+					failure: 'refused by the server',
+					error: new ApiError(413, 'That file is too large', '/api/presets'),
+					shown: 'That file is too large'
+				}
+			])
+			.concat([
+				{
+					...failingActions[0],
+					failure: '1301-F3-Q-SURFACE quota exhausted',
+					error: new ApiError(409, 'Reference audio storage limit reached.', '/api/audio/upload'),
+					shown: 'Reference audio storage limit reached.'
+				}
+			])
 	)('says $shown once when $action fails $failure', async ({ fail, run, error, shown }) => {
 		vi.mocked(addToast).mockClear();
 		fail(error);
 		const target = await render();
+		const previousDraft = get(editGenParams);
 		await run(target);
 		await vi.waitFor(() => expect(vi.mocked(addToast).mock.calls).toEqual([[shown, 'error']]));
+		expect(get(editGenParams)).toEqual(previousDraft);
 	});
 });

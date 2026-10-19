@@ -847,3 +847,34 @@ def session_commit_failure():
             event.remove(target, "before_commit", refuse_commit)
 
     return fail_commit
+
+
+def _pg_session_factory() -> sessionmaker[Session]:
+    from sqlalchemy import create_engine
+
+    from songmaker_cli.db.models import Base
+    from songmaker_cli.settings import get_settings
+
+    settings = get_settings()
+    engine = create_engine(
+        os.environ["TEST_DATABASE_URL"],
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_pre_ping=True,
+    )
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)
+
+
+@pytest.fixture
+def pg_factory():
+    from songmaker_cli.db.models import Base
+
+    if not os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql"):
+        pytest.skip("No PostgreSQL URL")
+    factory = _pg_session_factory()
+    yield factory
+    engine = factory.kw["bind"]
+    Base.metadata.drop_all(engine)
+    engine.dispose()

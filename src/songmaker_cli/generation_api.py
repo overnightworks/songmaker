@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
-import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Final
@@ -14,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
@@ -89,6 +89,7 @@ from songmaker_cli.jobs.generation_failure import (
     musician_job_response,
 )
 from songmaker_cli.scheduler import NO_ONLINE_ACESTEP_WORKERS_DETAIL, NoCapacityError
+from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
@@ -181,7 +182,11 @@ class ReferenceAudioResponse(BaseModel):
 
 @router.post(
     "/audio/upload",
-    responses={400: {"description": "Reference audio upload is invalid"}},
+    responses={
+        400: {"description": "Reference audio upload is invalid"},
+        409: {"description": "Reference audio storage limit reached"},
+        500: {"description": "Reference audio storage could not be checked"},
+    },
 )
 async def api_upload_reference_audio(
     file: UploadFile,
@@ -192,7 +197,11 @@ async def api_upload_reference_audio(
         REFERENCE_AUDIO_EXTENSIONS,
         REFERENCE_AUDIO_MAX_BYTES,
     )
-    from songmaker_cli.reference_audio import owner_reference_audio_root
+    from songmaker_cli.reference_audio import (
+        ReferenceAudioQuotaExceeded,
+        ReferenceAudioStorageError,
+        store_reference_audio,
+    )
 
     if not file.filename:
         raise HTTPException(400, "No filename provided")
@@ -209,12 +218,14 @@ async def api_upload_reference_audio(
     if len(content) < 100:
         raise HTTPException(400, "File is empty or too small")
 
-    ref_dir = owner_reference_audio_root(ctx.audio_dir, user.id)
-    ref_dir.mkdir(parents=True, exist_ok=True)
-    file_id = str(uuid.uuid4())
-    dest = ref_dir / f"{file_id}{ext}"
-    rel_path = str(dest.relative_to(ctx.audio_dir))
-    dest.write_bytes(content)
+    try:
+        rel_path = await run_in_threadpool(
+            store_reference_audio, ctx.db, ctx.audio_dir, user.id, ext, content, get_settings()
+        )
+    except ReferenceAudioQuotaExceeded as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ReferenceAudioStorageError as exc:
+        raise HTTPException(500, str(exc)) from exc
 
     log.info("Reference audio uploaded: %s (%d bytes)", rel_path, len(content))
     return ReferenceAudioResponse(path=rel_path, filename=file.filename)

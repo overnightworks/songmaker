@@ -1,10 +1,4 @@
-"""PostgreSQL-specific tests.
-
-Tests requiring a live PostgreSQL instance are skipped unless
-TEST_DATABASE_URL is set to a PostgreSQL URL.
-
-Run with: TEST_DATABASE_URL=postgresql://user:pass@localhost/test pytest tests/test_postgresql.py
-"""
+"""PostgreSQL contracts; shared pg_factory skips without TEST_DATABASE_URL."""
 
 from __future__ import annotations
 
@@ -77,45 +71,15 @@ SKIP_NO_PG = pytest.mark.skipif(
 )
 
 
-def _pg_session_factory() -> sessionmaker[Session]:
-    settings = get_settings()
-    engine = create_engine(
-        TEST_PG_URL,
-        pool_size=settings.database_pool_size,
-        max_overflow=settings.database_max_overflow,
-        pool_pre_ping=True,
-    )
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)
-
-
 @pytest.fixture
 def sqlite_factory(tmp_path: Path) -> sessionmaker[Session]:
     return init_test_db(tmp_path / "test.db")
-
-
-@pytest.fixture
-def pg_factory():
-    if not TEST_PG_URL.startswith("postgresql"):
-        pytest.skip("No PostgreSQL URL")
-    factory = _pg_session_factory()
-    yield factory
-    engine = factory.kw["bind"]
-    Base.metadata.drop_all(engine)
-    engine.dispose()
-
-
-# ── resolve_database_url ──────────────────────────────────────────
 
 
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host/db")
     url = resolve_database_url()
     assert url == "postgresql://user:pass@host/db"
-
-
-# ── PostgreSQL-specific tests ─────────────────────────────────────
 
 
 @SKIP_NO_PG

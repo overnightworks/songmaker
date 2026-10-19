@@ -180,6 +180,8 @@ class Settings(BaseSettings):
     # guessing a scheme from the request.
     public_base_url: str = ""
     max_request_body_bytes: int = Field(default=JSON_REQUEST_BODY_MAX_BYTES)
+    reference_audio_quota_bytes: int = Field(default=500_000_000, gt=0)
+    reference_audio_quota_files: int = Field(default=50, gt=0)
     max_upload_body_bytes: int = Field(default=AUDIO_UPLOAD_BODY_MAX_BYTES)
     max_reimport_body_bytes: int = Field(default=REIMPORT_BODY_MAX_BYTES)
     max_cover_upload_body_bytes: int = Field(default=COVER_UPLOAD_BODY_MAX_BYTES)
