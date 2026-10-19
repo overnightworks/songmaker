@@ -26,9 +26,7 @@ def test_resolves_owned_regular_file(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     _write_ref(audio_dir, "user-a", "clip.wav")
     resolved = resolve_owned_reference_audio(
-        audio_dir,
-        "user-a",
-        f"user-a/{REFERENCE_AUDIO_DIR}/clip.wav",
+        audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/clip.wav",
     )
     assert resolved.is_file()
     assert resolved.name == "clip.wav"
@@ -39,9 +37,7 @@ def test_rejects_cross_user_path(tmp_path: Path) -> None:
     _write_ref(audio_dir, "user-b", "clip.wav")
     with pytest.raises(ReferenceAudioRejected):
         resolve_owned_reference_audio(
-            audio_dir,
-            "user-a",
-            f"user-b/{REFERENCE_AUDIO_DIR}/clip.wav",
+            audio_dir, "user-a", f"user-b/{REFERENCE_AUDIO_DIR}/clip.wav",
         )
 
 
@@ -50,9 +46,7 @@ def test_rejects_user_id_sibling_prefix(tmp_path: Path) -> None:
     _write_ref(audio_dir, "user-a-other", "clip.wav")
     with pytest.raises(ReferenceAudioRejected):
         resolve_owned_reference_audio(
-            audio_dir,
-            "user-a",
-            f"user-a-other/{REFERENCE_AUDIO_DIR}/clip.wav",
+            audio_dir, "user-a", f"user-a-other/{REFERENCE_AUDIO_DIR}/clip.wav",
         )
 
 
@@ -61,9 +55,7 @@ def test_rejects_traversal(tmp_path: Path) -> None:
     _write_ref(audio_dir, "user-a", "clip.wav")
     with pytest.raises(ReferenceAudioRejected):
         resolve_owned_reference_audio(
-            audio_dir,
-            "user-a",
-            f"user-a/{REFERENCE_AUDIO_DIR}/../clip.wav",
+            audio_dir, "user-a", f"user-a/{REFERENCE_AUDIO_DIR}/../clip.wav",
         )
 
 
@@ -74,9 +66,9 @@ def test_rejects_absolute_path(tmp_path: Path) -> None:
         resolve_owned_reference_audio(audio_dir, "user-a", str(dest))
 
 
-@pytest.mark.acceptance("1301-F3-Q-PATH")
 @pytest.mark.parametrize("operation", ["resolve", "admit"])
 def test_rejects_symlink_outside_owner_root(tmp_path: Path, operation: str) -> None:
+    """1301-F3-Q-PATH: issue criterion evidence."""
     audio_dir = tmp_path / "audio"
     foreign = _write_ref(audio_dir, "user-b", "secret.wav", b"SECRET")
     link_dir = audio_dir / "user-a" / REFERENCE_AUDIO_DIR
@@ -114,20 +106,14 @@ def test_rejects_missing_or_unsupported_owned_reference_audio(tmp_path: Path, na
 
 
 def _seed_users(session) -> None:
-    session.add_all(
-        [
-            User(
-                id="user-a",
-                username="owner",
-                password_hash=stored_hash("pass1234"),
-            ),
-            User(
-                id="user-b",
-                username="other",
-                password_hash=stored_hash("pass1234"),
-            ),
-        ]
-    )
+    session.add_all([
+        User(
+            id="user-a", username="owner", password_hash=stored_hash("pass1234"),
+        ),
+        User(
+            id="user-b", username="other", password_hash=stored_hash("pass1234"),
+        ),
+    ])
     session.flush()
     session.add(Album(id="album-a", title="A", artist="A", created_by="user-a"))
 
@@ -142,35 +128,28 @@ def test_song_write_accepts_owned_reference_and_rejects_foreign(
     _write_ref(audio_dir, "user-a", "mine.wav")
     _write_ref(audio_dir, "user-b", "secret.wav", b"SECRET")
 
-    own_resp = client.post(
-        "/api/songs",
-        json={
-            "title": "Own ref",
-            "album_id": "album-a",
-            "generation_params": {
-                "reference_audio_path": f"user-a/{REFERENCE_AUDIO_DIR}/mine.wav",
-            },
+    own_resp = client.post("/api/songs", json={
+        "title": "Own ref",
+        "album_id": "album-a",
+        "generation_params": {
+            "reference_audio_path": f"user-a/{REFERENCE_AUDIO_DIR}/mine.wav",
         },
-    )
+    })
     assert own_resp.status_code == 200, own_resp.text
 
-    foreign_resp = client.post(
-        "/api/songs",
-        json={
-            "title": "Foreign ref",
-            "album_id": "album-a",
-            "generation_params": {
-                "reference_audio_path": f"user-b/{REFERENCE_AUDIO_DIR}/secret.wav",
-            },
+    foreign_resp = client.post("/api/songs", json={
+        "title": "Foreign ref",
+        "album_id": "album-a",
+        "generation_params": {
+            "reference_audio_path": f"user-b/{REFERENCE_AUDIO_DIR}/secret.wav",
         },
-    )
+    })
     assert foreign_resp.status_code == 404
     assert foreign_resp.json()["detail"] == "Not Found"
     with factory() as session:
         assert session.query(Song).filter_by(title="Foreign ref").first() is None
 
 
-@pytest.mark.acceptance("1301-F3-Q-PATH")
 @pytest.mark.parametrize(
     "entry_kind",
     [
@@ -182,6 +161,7 @@ def test_song_write_accepts_owned_reference_and_rejects_foreign(
     ],
 )
 def test_admission_rejects_unsafe_owner_inventory(tmp_path, entry_kind):
+    """1301-F3-Q-PATH: issue criterion evidence."""
     import os
 
     from conftest import make_router_ctx

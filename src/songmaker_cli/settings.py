@@ -93,7 +93,6 @@ def _find_env_file() -> Path | None:
     monkeypatched env tests.
     """
     import os as _os
-
     if "SONGMAKER_SKIP_ENV_FILE" in _os.environ:
         return None
     cwd = Path.cwd().resolve()
@@ -198,16 +197,13 @@ class Settings(BaseSettings):
     # ── Sessions / auth ───────────────────────────────────────────────
     session_max_age_seconds: int = Field(default=60 * 60 * 24 * 30, alias="SESSION_MAX_AGE")
     session_absolute_max_age_seconds: int = Field(
-        default=60 * 60 * 24 * 90,
-        alias="SESSION_ABSOLUTE_MAX_AGE",
+        default=60 * 60 * 24 * 90, alias="SESSION_ABSOLUTE_MAX_AGE",
     )
     login_rate_limit: int = 5
     login_lockout_threshold: int = 15
     login_lockout_window_seconds: int = Field(default=3600, alias="LOGIN_LOCKOUT_WINDOW")
     max_concurrent_sessions_per_user: int = Field(
-        default=10,
-        alias="MAX_CONCURRENT_SESSIONS_PER_USER",
-        ge=1,
+        default=10, alias="MAX_CONCURRENT_SESSIONS_PER_USER", ge=1,
     )
     cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
 
@@ -222,8 +218,7 @@ class Settings(BaseSettings):
     cover_cli_deadline_seconds: int = Field(default=COVER_CLI_DEADLINE_SECONDS, ge=1)
     cover_job_budget_seconds: int = Field(default=COVER_JOB_BUDGET_SECONDS, ge=1)
     codex_cli_max_concurrent_processes: int = Field(
-        default=CODEX_CLI_MAX_CONCURRENT_PROCESSES,
-        ge=1,
+        default=CODEX_CLI_MAX_CONCURRENT_PROCESSES, ge=1,
     )
     cover_max_concurrent_runs: int = Field(default=COVER_MAX_CONCURRENT_RUNS, ge=1)
     cover_executor: CoverExecutor = DEFAULT_COVER_EXECUTOR
@@ -352,12 +347,10 @@ class Settings(BaseSettings):
     # after `generation_retention_days` and hard-deleted (files + row)
     # after `generation_hard_delete_days` additional days archived.
     generation_retention_days: int = Field(
-        default=7,
-        alias="GENERATION_RETENTION_DAYS",
+        default=7, alias="GENERATION_RETENTION_DAYS",
     )
     generation_hard_delete_days: int = Field(
-        default=30,
-        alias="GENERATION_HARD_DELETE_DAYS",
+        default=30, alias="GENERATION_HARD_DELETE_DAYS",
     )
 
     # ── Claude ────────────────────────────────────────────────────────

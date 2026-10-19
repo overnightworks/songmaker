@@ -29,7 +29,6 @@ import { goto } from '$app/navigation';
 import {
 	discardDraft,
 	editGenParams,
-	setDraftGenParams,
 	editBpm,
 	loadSongData,
 	pinnedSeed,
@@ -243,9 +242,9 @@ describe("RecipePanel at the editor's own width", () => {
 		vi.mocked(addToast).mockClear();
 		fail(error);
 		const target = await render();
-		setDraftGenParams({ reference_audio_path: 'owner/refs/previous.wav' });
+		const previousDraft = get(editGenParams);
 		await run(target);
 		await vi.waitFor(() => expect(vi.mocked(addToast).mock.calls).toEqual([[shown, 'error']]));
-		expect(get(editGenParams)?.reference_audio_path).toBe('owner/refs/previous.wav');
+		expect(get(editGenParams)).toEqual(previousDraft);
 	});
 });

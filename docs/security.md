@@ -387,7 +387,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 `reference_audio.py` owns the synchronous operation and its database session. A PostgreSQL transaction-scoped advisory lock keyed by namespace and user (SQLite: `BEGIN IMMEDIATE`) covers inventory through completed exclusive file creation, including after request cancellation. It does not lock the user row, so unrelated writes referencing that user can proceed. Waiting uploads hold database connections; the existing upload rate limit bounds this accepted cost. Future reference cleanup must acquire the same owner lock.
 
-Symlinked ancestors or files, unexpected nesting, nonregular entries and unreadable inventory fail closed with HTTP 500, `{"detail":"Reference audio storage could not be checked."}`. Logs identify the user and entry/error kind without content. A failed write removes only its own partial file under the lock; cleanup failure is surfaced and surviving regular bytes count on the next admission.
+Symlinked ancestors or files, unexpected nesting, nonregular entries and unreadable inventory fail closed with HTTP 500, `{"detail":"Reference audio storage could not be checked."}`. This refusal also covers the configured `audio_dir`'s own ancestors. Logs identify the user and entry/error kind without content. A failed write removes only its own partial file under the lock; cleanup failure is surfaced and surviving regular bytes count on the next admission.
 
 The `reference_audio_path` field on `GenerationParams` is validated at three levels:
 

@@ -152,13 +152,8 @@ def generation_failure_case(request):
     params=[
         *SONGMAKER_FAILURE_CASES,
         pytest.param(
-            (
-                WorkerGpuOutOfMemory,
-                "need 18.5 GB",
-                None,
-                "Too long for the GPU right now — try a shorter duration.",
-                "gpu_out_of_memory",
-            ),
+            (WorkerGpuOutOfMemory, "need 18.5 GB", None,
+             "Too long for the GPU right now — try a shorter duration.", "gpu_out_of_memory"),
             id="S8-A-oom",
         ),
         pytest.param(
@@ -238,12 +233,7 @@ def _close_fake_cli_pipes():
     yield
     for proc in _fake_cli_processes:
         for stream_name in (
-            "stdin",
-            "stdout",
-            "stderr",
-            "_stdin_reader",
-            "_stdout_writer",
-            "_stderr_writer",
+            "stdin", "stdout", "stderr", "_stdin_reader", "_stdout_writer", "_stderr_writer",
         ):
             stream = getattr(proc, stream_name)
             if not stream.closed:
@@ -252,7 +242,7 @@ def _close_fake_cli_pipes():
 
 
 def fake_cli_process(
-    first_line: bytes | None, *, still_running: bool = False, stdin_blocked: bool = False
+    first_line: bytes | None, *, still_running: bool = False, stdin_blocked: bool = False,
 ) -> MagicMock:
     """Build a pipe-backed stand-in for the ``subprocess.Popen`` CLI handle."""
     proc = MagicMock()
@@ -343,7 +333,9 @@ def override_provider_runtime(**deployment_facts) -> None:
         reset_config,
     )
 
-    replacement = ProviderRuntimeConfig(**{**current_config().model_dump(), **deployment_facts})
+    replacement = ProviderRuntimeConfig(
+        **{**current_config().model_dump(), **deployment_facts},
+    )
     reset_config()
     configure(replacement)
 
@@ -386,9 +378,15 @@ def _no_claude_cli_tool_surface_probe():
     from unittest.mock import AsyncMock
 
     with (
-        patch("agent_providers.claude.provider.verify_cli_tool_surface", AsyncMock()),
-        patch("agent_providers.claude.provider.averify_no_builtin_cli_tools", AsyncMock()),
-        patch("agent_providers.claude.provider.verify_no_builtin_cli_tools", MagicMock()),
+        patch(
+            "agent_providers.claude.provider.verify_cli_tool_surface", AsyncMock(),
+        ),
+        patch(
+            "agent_providers.claude.provider.averify_no_builtin_cli_tools", AsyncMock(),
+        ),
+        patch(
+            "agent_providers.claude.provider.verify_no_builtin_cli_tools", MagicMock(),
+        ),
     ):
         yield
 
@@ -401,7 +399,10 @@ def _no_codex_cover_sandbox_runtime_probe():
     that enter the web lifespan only need the boot contract, so they must not
     depend on bubblewrap or user namespaces being available in their runner.
     """
-    with patch("songmaker_cli.server.report_codex_image_sandbox_runtime", return_value="ready"):
+    with patch(
+        "songmaker_cli.server.report_codex_image_sandbox_runtime",
+        return_value="ready",
+    ):
         yield
 
 
@@ -415,7 +416,6 @@ def _no_provider_status_probe():
     reach provider model catalogs). The lifecycle-loop tests opt back into the
     real loop where they provide its dependencies explicitly.
     """
-
     async def _idle_provider_status_loop(app) -> None:
         from songmaker_cli.lifecycle import BackgroundLoopName, background_loop_registry
 
@@ -619,11 +619,17 @@ def seed_judge_route(session) -> None:
 
 
 def make_authenticated_user(
-    user_id: str, *, role: str = "user", username: str | None = None
+    user_id: str,
+    *,
+    role: str = "user",
+    username: str | None = None,
 ) -> AuthenticatedUser:
     """Build an active user, using the ID as the default username."""
     return AuthenticatedUser(
-        id=user_id, username=user_id if username is None else username, role=role, is_active=True
+        id=user_id,
+        username=user_id if username is None else username,
+        role=role,
+        is_active=True,
     )
 
 
@@ -671,7 +677,10 @@ def stored_hash(password: str) -> str:
     return build_password_hasher().hash(password)
 
 
-def make_test_app(tmp_path: Path, seed_db: Callable | None = None) -> tuple:
+def make_test_app(
+    tmp_path: Path,
+    seed_db: Callable | None = None,
+) -> tuple:
     """Create a full test app with real middleware.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
@@ -701,7 +710,8 @@ def make_test_app(tmp_path: Path, seed_db: Callable | None = None) -> tuple:
 
     redis = make_fake_redis()
     ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis
+        db=factory, audio_dir=audio_dir, data_dir=data_dir,
+        signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
@@ -721,10 +731,18 @@ def refresh_provider_snapshots() -> None:
 @pytest.fixture
 def every_provider_is_configured(monkeypatch):
     override_provider_runtime(
-        anthropic_api_key="test-key", xai_api_key="test-key", openai_api_key="test-key"
+        anthropic_api_key="test-key",
+        xai_api_key="test-key",
+        openai_api_key="test-key",
     )
-    monkeypatch.setattr("agent_providers.catalog._cli_is_logged_in", lambda _provider: True)
-    monkeypatch.setattr("agent_providers.catalog._anthropic_sdk_available", lambda: True)
+    monkeypatch.setattr(
+        "agent_providers.catalog._cli_is_logged_in",
+        lambda _provider: True,
+    )
+    monkeypatch.setattr(
+        "agent_providers.catalog._anthropic_sdk_available",
+        lambda: True,
+    )
     refresh_provider_snapshots()
 
 
@@ -813,7 +831,6 @@ def session_deletion_failure():
 @pytest.fixture
 def session_commit_failure():
     """defect:#1590: fail matching commits, optionally observing uncommitted state."""
-
     @contextmanager
     def fail_commit(target, *, message="commit failed", observe=None, when=None):
         def refuse_commit(session):

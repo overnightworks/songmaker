@@ -317,6 +317,7 @@ describe('PhoneRecipeSection', () => {
 		}
 	])('handles a reference upload that $outcome', async ({ error, shown }) => {
 		setDraftGenParams(null);
+		const previousDraft = get(editGenParams);
 		const response = Promise.withResolvers<{ path: string; filename: string }>();
 		vi.mocked(uploadReferenceAudio).mockReturnValueOnce(response.promise);
 		const target = await render();
@@ -328,15 +329,15 @@ describe('PhoneRecipeSection', () => {
 		await tick();
 		expect(input.disabled).toBe(true);
 		if (error) {
-			setDraftGenParams({ reference_audio_path: 'owner/refs/previous.wav' });
 			response.reject(error);
 		} else response.resolve({ path: '/reference.wav', filename: 'reference.wav' });
 		await tick();
 		await tick();
 		if (shown) {
 			expect(target.querySelector('[role="alert"]')?.textContent).toBe(shown);
-			expect(get(editGenParams)?.reference_audio_path).toBe('owner/refs/previous.wav');
-			expect(target.querySelector('input[type="file"]')).toBeNull();
+			expect(target.querySelectorAll('[role="alert"]')).toHaveLength(1);
+			expect(input.disabled).toBe(false);
+			expect(get(editGenParams)).toEqual(previousDraft);
 		} else {
 			expect(get(editGenParams)?.reference_audio_path).toBe('/reference.wav');
 			await click(target, 'Remove');

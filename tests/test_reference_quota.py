@@ -7,15 +7,18 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from sqlalchemy import event
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 
 from songmaker_cli.db.models import Album, Song, User, Version
@@ -30,7 +33,10 @@ from songmaker_cli.settings import Settings
 
 @pytest.fixture
 def quota_context(tmp_path, request):
-    factory = request.getfixturevalue("pg_factory") if "postgresql" in request.node.name else None
+    backend = getattr(request.node, "callspec", None)
+    backend = backend.params.get("backend") if backend else None
+    postgres = backend == "postgresql" if backend else "postgresql" in request.node.name
+    factory = request.getfixturevalue("pg_factory") if postgres else None
     ctx = make_router_ctx(tmp_path, db=factory)
     with ctx.db() as session:
         session.add_all(
@@ -43,10 +49,10 @@ def quota_context(tmp_path, request):
     return ctx
 
 
-@pytest.mark.acceptance("1301-F3-Q-BOUNDARY")
 @pytest.mark.parametrize("field", ["reference_audio_quota_bytes", "reference_audio_quota_files"])
 @pytest.mark.parametrize("value", [0, -1])
 def test_reference_quotas_must_be_positive(field, value):
+    """1301-F3-Q-BOUNDARY: issue criterion evidence."""
     with pytest.raises(ValidationError):
         Settings(**{field: value})
 
@@ -57,7 +63,6 @@ def test_reference_quota_defaults_are_decimal_bytes_and_fifty_files():
     assert settings.reference_audio_quota_files == 50
 
 
-@pytest.mark.acceptance("1301-F3-Q-BOUNDARY")
 @pytest.mark.parametrize(
     "files,size,byte_limit,file_limit,accepted",
     [
@@ -74,6 +79,7 @@ def test_reference_quota_defaults_are_decimal_bytes_and_fifty_files():
 def test_reference_admission_boundaries(
     quota_context, files, size, byte_limit, file_limit, accepted
 ):
+    """1301-F3-Q-BOUNDARY: issue criterion evidence."""
     ctx = quota_context
     root = owner_reference_audio_root(ctx.audio_dir, "owner")
     root.mkdir(parents=True)
@@ -109,9 +115,39 @@ def test_reference_admission_boundaries(
     assert all((root / name).read_bytes() == content for name, content in before.items())
 
 
-@pytest.mark.acceptance("1301-F3-Q-FAILURE")
+@pytest.mark.parametrize(
+    "files,retained_bytes,accepted",
+    [
+        pytest.param(1, 499_999_998, True, id="499999999-bytes"),
+        pytest.param(1, 499_999_999, True, id="500000000-bytes"),
+        pytest.param(1, 500_000_000, False, id="500000001-bytes"),
+        pytest.param(48, 48, True, id="49th-file"),
+        pytest.param(49, 49, True, id="50th-file"),
+        pytest.param(50, 50, False, id="51st-file"),
+    ],
+)
+def test_default_reference_admission_boundaries(quota_context, files, retained_bytes, accepted):
+    """1301-F3-Q-BOUNDARY: real defaults with sparse retained references."""
+    ctx = quota_context
+    root = owner_reference_audio_root(ctx.audio_dir, "owner")
+    root.mkdir(parents=True)
+    for index in range(files):
+        with (root / f"retained-{index}.wav").open("wb") as retained:
+            retained.truncate(retained_bytes if files == 1 else 1)
+    before = {entry.name: entry.stat().st_size for entry in root.iterdir()}
+    if accepted:
+        stored = store_reference_audio(ctx.db, ctx.audio_dir, "owner", ".wav", b"a", Settings())
+        assert (ctx.audio_dir / stored).read_bytes() == b"a"
+    else:
+        with pytest.raises(ReferenceAudioQuotaExceeded):
+            store_reference_audio(ctx.db, ctx.audio_dir, "owner", ".wav", b"a", Settings())
+    assert len(list(root.iterdir())) == files + int(accepted)
+    assert all((root / name).stat().st_size == size for name, size in before.items())
+
+
 @pytest.mark.parametrize("state", ["unused-upload", "crash-remnant"])
 def test_fresh_session_inventory_preserves_all_regular_usage(quota_context, state):
+    """1301-F3-Q-FAILURE: issue criterion evidence."""
     ctx = quota_context
     settings = Settings(reference_audio_quota_bytes=100, reference_audio_quota_files=2)
     root = owner_reference_audio_root(ctx.audio_dir, "owner")
@@ -126,7 +162,6 @@ def test_fresh_session_inventory_preserves_all_regular_usage(quota_context, stat
     assert [entry.read_bytes() for entry in root.iterdir()] == [b"r" * 100]
 
 
-@pytest.mark.acceptance("1301-F3-Q-FAILURE")
 @pytest.mark.parametrize(
     "state,status,detail",
     [
@@ -137,6 +172,7 @@ def test_fresh_session_inventory_preserves_all_regular_usage(quota_context, stat
     ],
 )
 def test_upload_refusals_are_exact_and_preserve_inventory(quota_context, state, status, detail):
+    """1301-F3-Q-FAILURE: issue criterion evidence."""
     ctx = quota_context
     root = owner_reference_audio_root(ctx.audio_dir, "owner")
     root.mkdir(parents=True)
@@ -168,28 +204,73 @@ def test_upload_refusals_are_exact_and_preserve_inventory(quota_context, state, 
     )
 
 
-@pytest.mark.acceptance("1301-F3-Q-CONCURRENT")
+@pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
 @pytest.mark.parametrize("capacity", ["bytes", "files"])
-def test_postgresql_reference_admission_is_atomic(quota_context, capacity):
+def test_postgresql_reference_admission_is_atomic(
+    quota_context, held_reference_owner, capacity, backend
+):
+    """1301-F3-Q-CONCURRENT: observe contention before allowing the first write."""
     ctx = quota_context
     settings = Settings(
         reference_audio_quota_bytes=100 if capacity == "bytes" else 1000,
         reference_audio_quota_files=1 if capacity == "files" else 50,
     )
-    start = threading.Barrier(2)
+    entered, release = held_reference_owner
+    engine = create_engine(
+        ctx.db.kw["bind"].url,
+        **({"connect_args": {"timeout": 0.1}} if backend == "sqlite" else {}),
+    )
+    contender = sessionmaker(bind=engine)
+    waiting_pid = []
+    attempted = threading.Event()
 
-    def upload():
-        start.wait(timeout=10)
-        try:
-            return store_reference_audio(
-                ctx.db, ctx.audio_dir, "owner", ".wav", b"a" * 100, settings
+    def observe_lock(connection, cursor, statement, parameters, context, executemany):
+        if "pg_advisory_xact_lock" in statement:
+            waiting_pid.append(connection.connection.driver_connection.info.backend_pid)
+            attempted.set()
+
+    event.listen(engine, "before_cursor_execute", observe_lock)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            first = workers.submit(
+                store_reference_audio, ctx.db, ctx.audio_dir, "owner", ".wav", b"a" * 100,
+                settings,
             )
-        except ReferenceAudioQuotaExceeded:
-            return None
-
-    with ThreadPoolExecutor(max_workers=2) as workers:
-        results = list(workers.map(lambda _: upload(), range(2)))
-    assert sum(result is not None for result in results) == 1
+            try:
+                assert entered.wait(timeout=10)
+                second = workers.submit(
+                    store_reference_audio, contender, ctx.audio_dir, "owner", ".wav",
+                    b"b" * 100, settings,
+                )
+                if backend == "postgresql":
+                    assert attempted.wait(timeout=5)
+                    deadline = time.monotonic() + 5
+                    with ctx.db() as observer:
+                        while not observer.execute(
+                            text("SELECT count(*) FROM pg_locks WHERE locktype='advisory' "
+                                 "AND NOT granted AND pid=:pid"),
+                            {"pid": waiting_pid[0]},
+                        ).scalar_one():
+                            assert time.monotonic() < deadline, "Contender never waited on lock"
+                            time.sleep(0.01)
+                    assert not second.done()
+                else:
+                    # SQLite exposes exhausted busy waiting as SQLITE_BUSY, not a lock catalog.
+                    with pytest.raises(OperationalError, match="database is locked"):
+                        second.result(timeout=5)
+                assert not list(owner_reference_audio_root(ctx.audio_dir, "owner").glob("*"))
+            finally:
+                release.set()
+            assert (ctx.audio_dir / first.result(timeout=5)).read_bytes() == b"a" * 100
+            with pytest.raises(ReferenceAudioQuotaExceeded):
+                if backend == "postgresql":
+                    second.result(timeout=5)
+                else:
+                    store_reference_audio(
+                        contender, ctx.audio_dir, "owner", ".wav", b"b" * 100, settings
+                    )
+    finally:
+        engine.dispose()
     root = owner_reference_audio_root(ctx.audio_dir, "owner")
     assert [entry.read_bytes() for entry in root.iterdir()] == [b"a" * 100]
 
@@ -211,8 +292,8 @@ def held_reference_owner(quota_context):
         event.remove(quota_context.db, "loaded_as_persistent", hold)
 
 
-@pytest.mark.acceptance("1301-F3-Q-CONCURRENT")
 def test_postgresql_reference_owners_do_not_block_each_other(quota_context, held_reference_owner):
+    """1301-F3-Q-CONCURRENT: issue criterion evidence."""
     ctx = quota_context
     entered, release = held_reference_owner
     with ThreadPoolExecutor(max_workers=2) as workers:
@@ -230,10 +311,10 @@ def test_postgresql_reference_owners_do_not_block_each_other(quota_context, held
         assert (ctx.audio_dir / first.result(timeout=5)).read_bytes() == b"a"
 
 
-@pytest.mark.acceptance("1301-F3-Q-CONCURRENT")
 def test_postgresql_unrelated_user_write_completes_during_upload(
     quota_context, held_reference_owner
 ):
+    """1301-F3-Q-CONCURRENT: issue criterion evidence."""
     ctx = quota_context
     entered, release = held_reference_owner
 
@@ -259,10 +340,10 @@ def test_postgresql_unrelated_user_write_completes_during_upload(
         assert session.get(Song, "song").album.created_by == "owner"
 
 
-@pytest.mark.acceptance("1301-F3-Q-FAILURE")
 def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
     quota_context, held_reference_owner
 ):
+    """1301-F3-Q-FAILURE: issue criterion evidence."""
     ctx = quota_context
     entered, release = held_reference_owner
 
@@ -297,9 +378,10 @@ def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
     assert [entry.read_bytes() for entry in root.iterdir()] == [b"a" * 100]
 
 
-@pytest.mark.acceptance("1301-F3-Q-FAILURE")
 @pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
-def test_postgresql_failed_reference_write_releases_admission(tmp_path, request, backend):
+@pytest.mark.parametrize("cleanup", ["removed", "denied"])
+def test_postgresql_failed_reference_write_releases_admission(tmp_path, request, backend, cleanup):
+    """1301-F3-Q-FAILURE: issue criterion evidence."""
     if backend == "postgresql":
         factory = request.getfixturevalue("pg_factory")
     else:
@@ -323,22 +405,40 @@ from songmaker_cli.settings import Settings
 factory = sessionmaker(bind=create_engine(os.environ["REFERENCE_TEST_DB"]))
 root = Path(sys.argv[1])
 settings = Settings(reference_audio_quota_bytes=10000)
+refs = root / "owner" / "refs"
+refs.mkdir(parents=True)
+retained = refs / "retained.wav"
+retained.write_bytes(b"r" * 100)
+cleanup_denied = sys.argv[2] == "denied"
+def refuse_cleanup(event, args):
+    if event == "os.remove" and cleanup_denied:
+        assert (refs / args[0]).stat().st_size == 1024
+        refs.chmod(0o500)
+sys.addaudithook(refuse_cleanup)
 signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
 original = resource.getrlimit(resource.RLIMIT_FSIZE)
 resource.setrlimit(resource.RLIMIT_FSIZE, (1024, original[1]))
 try:
     try:
         store_reference_audio(factory, root, "owner", ".wav", b"x" * 8192, settings)
-    except ReferenceAudioStorageError:
-        pass
+    except ReferenceAudioStorageError as error:
+        assert isinstance(error.__cause__, PermissionError if cleanup_denied else OSError)
+        if cleanup_denied:
+            assert error.__cause__.filename.endswith(".wav")
     else:
         raise AssertionError("write should exceed filesystem limit")
 finally:
     resource.setrlimit(resource.RLIMIT_FSIZE, original)
-assert list((root / "owner" / "refs").iterdir()) == []
-(root / "owner" / "refs" / "crash-remnant").write_bytes(b"r" * 9900)
-stored = store_reference_audio(factory, root, "owner", ".wav", b"a" * 100, settings)
-assert (root / stored).read_bytes() == b"a" * 100
+    refs.chmod(0o700)
+assert retained.read_bytes() == b"r" * 100
+partials = [entry for entry in refs.iterdir() if entry != retained]
+assert len(partials) == int(cleanup_denied)
+if cleanup_denied:
+    assert partials[0].read_bytes() == b"x" * 1024
+remaining = 10000 - sum(entry.stat().st_size for entry in refs.iterdir())
+stored = store_reference_audio(factory, root, "owner", ".wav", b"a" * remaining, settings)
+assert (root / stored).read_bytes() == b"a" * remaining
+assert retained.read_bytes() == b"r" * 100
 try:
     store_reference_audio(factory, root, "owner", ".wav", b"b", settings)
 except ReferenceAudioQuotaExceeded:
@@ -347,9 +447,13 @@ else:
     raise AssertionError("surviving bytes were not counted")
 """,
             str(tmp_path / "audio"),
+            cleanup,
         ],
         env={
             **os.environ,
+            "PYTHONPATH": os.pathsep.join(
+                [str(Path(__file__).resolve().parents[1] / "src"), os.environ.get("PYTHONPATH", "")]
+            ),
             "REFERENCE_TEST_DB": factory.kw["bind"].url.render_as_string(hide_password=False),
         },
         capture_output=True,
