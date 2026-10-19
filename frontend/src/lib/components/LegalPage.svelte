@@ -7,7 +7,7 @@
 
 	interface Props {
 		title: string;
-		section: LegalSection;
+		section?: LegalSection;
 	}
 
 	let { title, section }: Props = $props();

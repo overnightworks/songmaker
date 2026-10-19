@@ -119,6 +119,7 @@ describe('the legal addresses', () => {
 		fakePage.url = new URL(location.href);
 		component = mount(Address, { target: document.body });
 
-		expect(document.querySelector('h1')?.textContent).toBe(heading);
+		const shownHeadings = [...document.querySelectorAll('h1')].map((h1) => h1.textContent);
+		expect(shownHeadings).toEqual([heading]);
 	});
 });

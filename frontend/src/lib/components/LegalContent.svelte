@@ -43,7 +43,7 @@
 	</div>
 
 	{#if section === 'impressum'}
-		<section id="impressum">
+		<section>
 			<h1>Impressum</h1>
 			<p>Angaben gemäß §5 DDG</p>
 
@@ -61,7 +61,7 @@
 	{/if}
 
 	{#if section === 'datenschutz'}
-		<section id="datenschutz">
+		<section>
 			<h1>Datenschutzerklärung</h1>
 
 			<h2>1. Verantwortlicher</h2>
@@ -153,7 +153,7 @@
 	{/if}
 
 	{#if section === 'nutzungsbedingungen'}
-		<section id="nutzungsbedingungen">
+		<section>
 			<h1>Nutzungsbedingungen</h1>
 
 			<h2>1. Leistungsbeschreibung</h2>
