@@ -12,6 +12,7 @@ import logging
 from arq import cron, func
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
+from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     MODEL_DEFAULT_MODE,
@@ -191,6 +192,8 @@ class MusicWorkerSettings:
     functions = _music_worker_functions(_music_worker, _settings)
     on_startup = _music_worker.on_startup
     on_shutdown = _music_worker.on_shutdown
+    job_serializer = staticmethod(serialize_arq)
+    job_deserializer = staticmethod(deserialize_arq)
     redis_settings = build_redis_settings(_settings)
     queue_name = MusicWorker.queue_name
     max_jobs = _settings.music_max_jobs
