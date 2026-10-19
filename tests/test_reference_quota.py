@@ -135,12 +135,13 @@ def test_default_reference_admission_boundaries(quota_context, files, retained_b
         with (root / f"retained-{index}.wav").open("wb") as retained:
             retained.truncate(retained_bytes if files == 1 else 1)
     before = {entry.name: entry.stat().st_size for entry in root.iterdir()}
+    settings = Settings()
     if accepted:
-        stored = store_reference_audio(ctx.db, ctx.audio_dir, "owner", ".wav", b"a", Settings())
+        stored = store_reference_audio(ctx.db, ctx.audio_dir, "owner", ".wav", b"a", settings)
         assert (ctx.audio_dir / stored).read_bytes() == b"a"
     else:
         with pytest.raises(ReferenceAudioQuotaExceeded):
-            store_reference_audio(ctx.db, ctx.audio_dir, "owner", ".wav", b"a", Settings())
+            store_reference_audio(ctx.db, ctx.audio_dir, "owner", ".wav", b"a", settings)
     assert len(list(root.iterdir())) == files + int(accepted)
     assert all((root / name).stat().st_size == size for name, size in before.items())
 
@@ -262,10 +263,11 @@ def test_postgresql_reference_admission_is_atomic(
             finally:
                 release.set()
             assert (ctx.audio_dir / first.result(timeout=5)).read_bytes() == b"a" * 100
-            with pytest.raises(ReferenceAudioQuotaExceeded):
-                if backend == "postgresql":
+            if backend == "postgresql":
+                with pytest.raises(ReferenceAudioQuotaExceeded):
                     second.result(timeout=5)
-                else:
+            else:
+                with pytest.raises(ReferenceAudioQuotaExceeded):
                     store_reference_audio(
                         contender, ctx.audio_dir, "owner", ".wav", b"b" * 100, settings
                     )
@@ -372,23 +374,20 @@ def test_postgresql_cancelled_request_finishes_storage_under_its_lock(
             Settings(reference_audio_quota_files=1),
         )
 
+    upload = cancel_upload()
     with pytest.raises(ReferenceAudioQuotaExceeded):
-        asyncio.run(cancel_upload())
+        asyncio.run(upload)
     root = owner_reference_audio_root(ctx.audio_dir, "owner")
     assert [entry.read_bytes() for entry in root.iterdir()] == [b"a" * 100]
 
 
 @pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
 @pytest.mark.parametrize("cleanup", ["removed", "denied"])
-def test_postgresql_failed_reference_write_releases_admission(tmp_path, request, backend, cleanup):
+def test_postgresql_failed_reference_write_releases_admission(
+    tmp_path, quota_context, backend, cleanup
+):
     """1301-F3-Q-FAILURE: issue criterion evidence."""
-    if backend == "postgresql":
-        factory = request.getfixturevalue("pg_factory")
-    else:
-        factory = make_router_ctx(tmp_path).db
-    with factory() as session:
-        session.add(User(id="owner", username="owner", password_hash="unused"))
-        session.commit()
+    factory = quota_context.db
     result = subprocess.run(
         [
             sys.executable,

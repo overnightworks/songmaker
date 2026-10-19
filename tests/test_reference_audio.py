@@ -89,8 +89,9 @@ def test_rejects_symlink_outside_owner_root(tmp_path: Path, operation: str) -> N
         from songmaker_cli.settings import Settings
 
         ctx = make_router_ctx(tmp_path, seed_db=_seed_users)
+        settings = Settings()
         with pytest.raises(ReferenceAudioStorageError):
-            store_reference_audio(ctx.db, audio_dir, "user-a", ".wav", b"audio", Settings())
+            store_reference_audio(ctx.db, audio_dir, "user-a", ".wav", b"audio", settings)
     assert foreign.read_bytes() == b"SECRET"
     assert list(link_dir.iterdir()) == [link]
 
@@ -192,10 +193,11 @@ def test_admission_rejects_unsafe_owner_inventory(tmp_path, entry_kind):
             unreadable.write_bytes(b"retained")
             unreadable.chmod(0)
     before = set(ctx.audio_dir.rglob("*"))
+    settings = Settings()
     with pytest.raises(
         ReferenceAudioStorageError, match="Reference audio storage could not be checked"
     ):
-        store_reference_audio(ctx.db, ctx.audio_dir, "user-a", ".wav", b"a" * 100, Settings())
+        store_reference_audio(ctx.db, ctx.audio_dir, "user-a", ".wav", b"a" * 100, settings)
     assert foreign.read_bytes() == b"SECRET"
     assert set(ctx.audio_dir.rglob("*")) == before
 
@@ -207,6 +209,7 @@ def test_missing_reference_owner_is_refused_before_directory_creation(tmp_path):
     from songmaker_cli.settings import Settings
 
     ctx = make_router_ctx(tmp_path)
+    settings = Settings()
     with pytest.raises(ReferenceAudioStorageError):
-        store_reference_audio(ctx.db, ctx.audio_dir, "missing", ".wav", b"a", Settings())
+        store_reference_audio(ctx.db, ctx.audio_dir, "missing", ".wav", b"a", settings)
     assert not ctx.audio_dir.exists()
