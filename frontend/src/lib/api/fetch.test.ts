@@ -11,7 +11,6 @@ import {
 	apiFetch,
 	fetchMediaBytes,
 	sseFetch,
-	addCsrfToken,
 	ApiError,
 	NetworkError,
 	describeFailure,
@@ -137,11 +136,16 @@ describe('sseFetch', () => {
 	});
 });
 
-describe('addCsrfToken', () => {
+describe('CSRF token on a mutating request', () => {
 	// jsdom's real cookie jar refuses a `__Host-` prefixed cookie on the
 	// insecure `http://localhost` test origin (the prefix requires a secure
 	// context), so the raw `document.cookie` string -- the one shape
 	// `getCsrfToken` actually parses -- is stubbed directly instead.
+	function lastRequestHeaders(): Record<string, string> | undefined {
+		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+		return call[1].headers;
+	}
+
 	let cookieValue = '';
 	const originalCookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie');
 	if (!originalCookieDescriptor) throw new Error('jsdom dropped the document.cookie descriptor');
@@ -166,16 +170,19 @@ describe('addCsrfToken', () => {
 		],
 		['the plain cookie set first', 'csrf_token=plain-tok; __Host-csrf_token=host-tok', 'host-tok'],
 		['only the plain cookie present', 'csrf_token=plain-tok', 'plain-tok']
-	])('with %s, the token used is %s', (_label, rawCookie, expectedToken) => {
+	])('with %s, the token used is %s', async (_label, rawCookie, expectedToken) => {
 		cookieValue = rawCookie;
-		const init = addCsrfToken({}, 'POST');
-		const headers = init.headers as Record<string, string>;
-		expect(headers['X-CSRF-Token']).toBe(expectedToken);
+		mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+		await apiFetch('/api/albums', { method: 'POST' });
+		const headers = lastRequestHeaders();
+		expect(headers?.['X-CSRF-Token']).toBe(expectedToken);
 	});
 
-	it('adds no header when neither cookie is present', () => {
-		const init = addCsrfToken({}, 'POST');
-		expect(init.headers).toBeUndefined();
+	it('adds no header when neither cookie is present', async () => {
+		mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
+		await apiFetch('/api/albums', { method: 'POST' });
+		const headers = lastRequestHeaders();
+		expect(headers?.['X-CSRF-Token']).toBeUndefined();
 	});
 });
 

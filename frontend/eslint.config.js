@@ -37,8 +37,8 @@ const TRANSPORT_READS_NO_IMPORT_META =
 	'lib/api is the transport (#925 G2): import.meta (import.meta.glob included) ' +
 	'reaches modules lint cannot read. Keep it out of lib/api.';
 
-// #925 G3. Only the transport calls fetch; the named media owners, diagnostics
-// beacon and service worker retain their direct reads. Tests stub the boundary.
+// #925 G3. Only the transport calls fetch; the named media owners and service worker
+// retain their direct reads. Tests stub the boundary.
 // checkGlobalObject also refuses window.fetch, globalThis.fetch and self.fetch.
 // Keep this the last block setting no-restricted-globals for these files:
 // a later block replaces its options.

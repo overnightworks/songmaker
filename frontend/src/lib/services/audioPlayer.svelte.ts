@@ -77,8 +77,6 @@ type StallReason = 'stall-timeout' | 'frozen-clock' | 'network-return';
 
 type RecoveryReason = StallReason | 'media-error';
 
-// A Play tap on a take that waits for its bytes sends the deck's download on.
-
 type RecoveryStep = 'give-up' | 'wait' | 'reload';
 
 // 'awaiting-network' is a stall given up while the network was gone; its
@@ -499,7 +497,7 @@ class AudioPlayer {
 			tail: info
 		};
 		this.deckSession = session;
-		this.handToDeck(session, info, session.deck.appendTake(info, url));
+		this.handToDeck(session, session.deck.appendTake(info, url));
 	}
 
 	// The queue's next take changes when the listener repicks or reshuffles
@@ -508,10 +506,10 @@ class AudioPlayer {
 	private appendAhead(session: DeckSession, info: PlaybackInfo): void {
 		if (session.tail === info) return;
 		session.tail = info;
-		this.handToDeck(session, info, session.deck.appendNext(info, audioUrlOf(info)));
+		this.handToDeck(session, session.deck.appendNext(info, audioUrlOf(info)));
 	}
 
-	private handToDeck(session: DeckSession, info: PlaybackInfo, appended: Promise<void>): void {
+	private handToDeck(session: DeckSession, appended: Promise<void>): void {
 		appended.catch((error: unknown) => this.deckFailed(session, error));
 	}
 

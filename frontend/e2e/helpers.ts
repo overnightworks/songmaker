@@ -678,10 +678,9 @@ export class FlowGuard {
 		});
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
-			// Chromium reports a stream the client cancelled in flight, a send the
-			// leaving page cut off and a take the running step abandons as a
-			// failed request with exactly this error, indistinguishable from any
-			// other intentional client-side abort. Every other reason still fails
+			// Chromium reports a stream the client cancelled in flight and a take the running step
+			// abandons as a failed request with exactly this error,
+			// indistinguishable from any other intentional client-side abort. Every other reason still fails
 			// the flow, including a 429 or 5xx on the same path (handled below).
 			// A request the page leaves behind after the server's expected refusal
 			// of it is reported the same way, though its answer had arrived.
