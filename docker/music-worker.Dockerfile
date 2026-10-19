@@ -15,18 +15,15 @@ USER songmaker
 RUN mkdir -p /home/songmaker/.codex
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
-# All resolved versions come from the committed uv.lock.
 RUN uv sync --frozen --no-build --no-dev --no-install-project \
-    --extra server --extra image # NOSONAR
+    --extra server --extra image # why: All resolved versions come from the committed uv.lock.
 
 COPY --chown=root:root src/ src/
 COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
 USER root
-# The local project adds no resolved dependencies and cannot change locked
-# versions.
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
-    --editable . # NOSONAR
+    --editable . # why: The local project adds no resolved dependencies and cannot change locked versions.
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image
