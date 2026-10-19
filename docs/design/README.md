@@ -79,3 +79,14 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   `album-cover.html`. Die 16 gerulten Zeilen von #1374 stehen in der Datei; die
   Vorher-Screenshots sind nicht übernommen (sie bleiben im Artefakt). Offen:
   die Sammlungs-h1, entschieden in Slice 6 gegen dieses Bild.
+- `sign-in.html` — Anmelden und Abgewiesen-Werden (#1715). Quelle:
+  overnightworks/ui-console#6, Fassung 2, freigegeben vom Operator am
+  19.10.2026, Artefakt https://claude.ai/artifact/6xvoJezFbApz7ygKfCe9we. Die
+  Tafeln sind in presentators Aussehen gezeichnet; songmaker übernimmt Aufbau
+  und Wortlaut in den eigenen Farben (Operator: „Gleicher Aufbau, App-Farben“).
+  K12 (#1620) baut gegen diese Abschnitte: Weiterleitung, abgemeldet, kein
+  Zugang, Anmeldung fehlgeschlagen, Personenmenü; die
+  presentator-spezifischen Tafeln gelten nicht. Standard-Zuordnung der
+  Abweisungen: `ACCOUNT_DEACTIVATED` → „No access“; `FOREIGN_ISSUER` und
+  `USERNAME_TAKEN` → „Login failed“. Das Verhalten gehört dem webauth-README,
+  Abschnitt „Signed out and refused“.

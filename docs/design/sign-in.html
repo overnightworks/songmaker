@@ -1,0 +1,1783 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>K13 Login Picture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans+Condensed:wght@600&amp;family=IBM+Plex+Sans:wght@400;450;600&amp;display=swap">
+<style>
+  :root {
+    --canvas: #E9ECEE;
+    --canvas-2: #DFE3E6;
+    --screen: #FFFFFF;
+    --ink: #14181D;
+    --ink-soft: #5C6774;
+    --ink-faint: #8A94A0;
+    --line: #D2D8DD;
+    --line-soft: #E4E8EB;
+    --accent: #0C6C77;
+    --accent-soft: #DCEDEE;
+    --on-accent: #FFFFFF;
+    --ok: #1D7444;
+    --ok-soft: #DDEFE4;
+    --busy: #9A6200;
+    --busy-soft: #F6EAD3;
+    --fail: #AC2222;
+    --fail-soft: #F6E1E0;
+    --shadow: 0 1px 2px rgba(20, 24, 29, .06), 0 8px 24px -12px rgba(20, 24, 29, .28);
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", "Consolas", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --canvas: #101317;
+      --canvas-2: #171B21;
+      --screen: #1C2128;
+      --ink: #E8ECF0;
+      --ink-soft: #9BA5B1;
+      --ink-faint: #737E8B;
+      --line: #2C333C;
+      --line-soft: #242A32;
+      --accent: #56C3CD;
+      --accent-soft: #16333A;
+      --on-accent: #06181B;
+      --ok: #63C48D;
+      --ok-soft: #16301F;
+      --busy: #E0A63F;
+      --busy-soft: #33260F;
+      --fail: #EE7070;
+      --fail-soft: #35191A;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -14px rgba(0, 0, 0, .8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --canvas: #101317;
+    --canvas-2: #171B21;
+    --screen: #1C2128;
+    --ink: #E8ECF0;
+    --ink-soft: #9BA5B1;
+    --ink-faint: #737E8B;
+    --line: #2C333C;
+    --line-soft: #242A32;
+    --accent: #56C3CD;
+    --accent-soft: #16333A;
+    --on-accent: #06181B;
+    --ok: #63C48D;
+    --ok-soft: #16301F;
+    --busy: #E0A63F;
+    --busy-soft: #33260F;
+    --fail: #EE7070;
+    --fail-soft: #35191A;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px -14px rgba(0, 0, 0, .8);
+  }
+
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 40px 24px 96px;
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+  }
+
+  /* ---------- annotation layer ---------- */
+
+  .eyebrow {
+    font-family: var(--cond);
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .sheet-head {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .sheet-head h1 {
+    font-size: clamp(30px, 5vw, 44px);
+    font-weight: 600;
+    letter-spacing: -.02em;
+    line-height: 1.08;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .lead {
+    margin: 0;
+    max-width: 62ch;
+    color: var(--ink-soft);
+    font-size: 16px;
+  }
+
+  .head-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 12px;
+  }
+
+  .panel {
+    border-top: 2px solid var(--ink);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .panel h2 {
+    font-family: var(--cond);
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .key {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .key-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+
+  .key-row b {
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .out-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+
+  .out-list li {
+    display: grid;
+    grid-template-columns: 14px 1fr;
+    gap: 8px;
+  }
+
+  .out-list li::before {
+    content: "×";
+    color: var(--ink-faint);
+    font-family: var(--mono);
+  }
+
+  .out-list b {
+    font-weight: 500;
+    color: var(--ink);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .group-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+  }
+
+  .group-head h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+  }
+
+  .lines {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .boards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    align-items: flex-start;
+  }
+
+  .board {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 100%;
+  }
+
+  .board-cap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 48ch;
+  }
+
+  .board-title {
+    font-family: var(--cond);
+    font-size: 13px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .board-title .w {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-faint);
+  }
+
+  .board-note {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .open-mark {
+    font-family: var(--cond);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--busy);
+    border: 1px solid var(--busy);
+    border-radius: 2px;
+    padding: 0 5px;
+  }
+
+  /* ---------- the frame: a rendered page ---------- */
+
+  .frame {
+    width: var(--w, 960px);
+    max-width: 100%;
+    background: var(--screen);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+    container-type: inline-size;
+    overflow: hidden;
+  }
+
+  .route {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    background: var(--canvas-2);
+    border-bottom: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+  }
+
+  .route::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--ink-faint);
+    opacity: .5;
+    flex: none;
+  }
+
+  /* ---------- product chrome ---------- */
+
+  .app {
+    padding: 0;
+  }
+
+  .app-bar {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 28px;
+    border-bottom: 1px solid var(--line-soft);
+    min-height: 48px;
+  }
+
+  .wordmark {
+    font-weight: 600;
+    letter-spacing: .04em;
+    font-size: 14px;
+  }
+
+  .wordmark span {
+    color: var(--accent);
+  }
+
+  .icon {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    display: block;
+  }
+
+  .icon-sheet {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  .brand {
+    display: flex;
+    align-items: stretch;
+    gap: 22px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .brand .wordmark {
+    display: flex;
+    align-items: center;
+    flex: none;
+  }
+
+  .nav {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .nav-link,
+  .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13.5px;
+    font-weight: 450;
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+  }
+
+  .nav-link {
+    padding: 14px 8px 12px;
+    margin-bottom: -1px;
+  }
+
+  .nav-link--now,
+  .tab--now {
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+  }
+
+  .person {
+    position: relative;
+    flex: none;
+    align-self: center;
+  }
+
+  .person-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink);
+  }
+
+  .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-family: var(--cond);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+
+  .person-name {
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+
+  .person-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 6;
+    width: 228px;
+    background: var(--screen);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    box-shadow: var(--shadow);
+    padding: 6px 0;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-size: 13.5px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  div.menu-item {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+    gap: 0;
+  }
+
+  .menu-sub .radio {
+    font-size: 13.5px;
+  }
+
+  .person-menu,
+  .person-menu * {
+    box-sizing: border-box;
+  }
+
+  .menu-item-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  .menu-item-row .icon:last-child {
+    margin-left: auto;
+  }
+
+  .menu-sub {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 2px 12px 10px 36px;
+  }
+
+  .menu-sep {
+    height: 1px;
+    background: var(--line);
+    margin: 6px 0;
+  }
+
+  .tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .tab {
+    padding: 8px 8px 10px;
+    margin-bottom: -1px;
+  }
+
+  .row--user .stand .lbl { display: none; }
+
+  .row--head {
+    font-family: var(--cond);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    background: var(--canvas-2);
+    border-bottom-color: var(--line);
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .toast {
+    position: absolute;
+    right: 28px;
+    bottom: 24px;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--ink);
+    color: var(--canvas);
+    font-size: 13.5px;
+    font-weight: 500;
+    border-radius: 2px;
+    box-shadow: var(--shadow);
+  }
+
+  .nav-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+  }
+
+  .nav-sample {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13.5px;
+    color: var(--ink);
+  }
+
+  .app {
+    position: relative;
+  }
+
+  .linkish {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1px;
+  }
+
+  .body {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ---------- legal links (#196): same two links, logged out and in ---------- */
+
+  .legal-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+  }
+
+  .app-footer {
+    display: flex;
+    justify-content: center;
+    padding: 14px 28px;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .login .legal-links {
+    justify-content: center;
+  }
+
+  @container (max-width: 520px) {
+    .app-footer { padding: 14px 16px; }
+  }
+
+  /* ---------- legal page body (#196) ---------- */
+
+  .legal-page {
+    max-width: 640px;
+  }
+
+  .legal-page h1 {
+    margin: 0 0 4px;
+    font-size: 21px;
+    font-weight: 600;
+  }
+
+  .legal-page h2 {
+    margin: 4px 0 0;
+    font-family: var(--cond);
+    font-size: 12.5px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  .legal-page p,
+  .legal-page li {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+
+  .legal-page ul {
+    margin: 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .legal-page section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 14px;
+  }
+
+  .legal-page > section:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .legal-page .offen {
+    color: var(--busy);
+  }
+
+  /* ---------- login ---------- */
+
+  .login {
+    padding: 56px 28px 64px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+
+  .login-card {
+    width: 320px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .login h1 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 600;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .field label {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .input {
+    border: 1px solid var(--line);
+    background: var(--screen);
+    color: var(--ink);
+    padding: 9px 11px;
+    font-family: var(--sans);
+    font-size: 14.5px;
+    border-radius: 2px;
+  }
+
+  .input.filled {
+    color: var(--ink);
+  }
+
+  .input.dots {
+    font-family: var(--mono);
+    letter-spacing: .18em;
+    color: var(--ink-soft);
+  }
+
+  .input.placeholder {
+    color: var(--ink-faint);
+  }
+
+  /* ---------- buttons ---------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    background: var(--screen);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: default;
+  }
+
+  .btn svg {
+    flex: none;
+  }
+
+  .btn--primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    font-weight: 600;
+  }
+
+  .btn--wide { width: 100%; }
+
+  .btn--off {
+    opacity: .42;
+    border-style: dashed;
+  }
+
+  .btn--primary.btn--off {
+    background: transparent;
+    border-color: var(--ink-faint);
+    color: var(--ink-soft);
+    opacity: .62;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .source-detail-ssh .actions .btn {
+    box-sizing: border-box;
+  }
+
+  /* ---------- state markers: shape + colour ---------- */
+
+  .state {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .glyph {
+    width: 12px;
+    height: 12px;
+    flex: none;
+    display: inline-block;
+    position: relative;
+  }
+
+  /* ready — filled disc */
+  .state--ok { color: var(--ok); }
+  .state--ok .glyph {
+    border-radius: 50%;
+    background: var(--ok);
+  }
+
+  /* building — open ring, turning */
+  .state--busy { color: var(--busy); }
+  .state--busy .glyph {
+    border-radius: 50%;
+    border: 2px solid var(--busy);
+    border-top-color: transparent;
+    animation: turn 1.1s linear infinite;
+  }
+
+  /* failed — triangle */
+  .state--fail { color: var(--fail); }
+  .state--fail .glyph {
+    background: var(--fail);
+    clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  }
+
+  @keyframes turn { to { transform: rotate(360deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .state--busy .glyph { animation: none; }
+  }
+
+  /* ---------- deck list ---------- */
+
+  .list-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .list-head h1 {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 600;
+  }
+
+  a.source {
+    border-bottom: 1px solid var(--line);
+    text-decoration: none;
+  }
+
+  .source {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+  }
+
+  .path {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    background: var(--canvas-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 2px;
+    padding: 1px 6px;
+    word-break: break-all;
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 158px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    padding: 13px 8px 13px 4px;
+    border-bottom: 1px solid var(--line-soft);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .row-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .row-title {
+    font-size: 15px;
+    font-weight: 500;
+  }
+
+  .slug {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+
+  .age {
+    font-size: 13px;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  @container (max-width: 520px) {
+    .body { padding: 20px 16px; }
+    .app-bar { padding: 0 16px; flex-wrap: wrap; }
+    .brand { gap: 12px; flex-wrap: wrap; }
+    .nav { gap: 0; flex-wrap: wrap; }
+    .person-name { display: none; }
+    .toast { right: 16px; bottom: 16px; }
+    .row {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 6px;
+      padding: 12px 2px;
+    }
+    .row .state { grid-column: 1; grid-row: 1; }
+    .row .age { grid-column: 2; grid-row: 1; }
+    .row .row-name { grid-column: 1 / -1; grid-row: 2; }
+    .list-head { flex-direction: column; gap: 8px; }
+    .row--head { display: none; }
+    .row--user .stand .lbl { display: inline; }
+    .actions { flex-direction: column; align-items: stretch; }
+    .actions .btn { width: 100%; }
+  }
+
+  /* ---------- empty state ---------- */
+
+  .empty {
+    border: 1px dashed var(--line);
+    padding: 40px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .empty-mark {
+    width: 34px;
+    height: 26px;
+    border: 2px dashed var(--ink-faint);
+    border-radius: 2px;
+    opacity: .7;
+  }
+
+  .empty h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .empty p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  /* ---------- deck page ---------- */
+
+  .crumb {
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .deck-head {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .deck-head h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .stand {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 7px;
+  }
+
+  .stand .lbl {
+    font-family: var(--cond);
+    font-size: 11px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .builds-with {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .sha {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink);
+    background: var(--canvas-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 2px;
+    padding: 0 5px;
+  }
+
+  /* ---------- banners ---------- */
+
+  .banner {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr);
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-left-width: 3px;
+    border-radius: 2px;
+  }
+
+  .banner--busy {
+    background: var(--busy-soft);
+    border-color: var(--busy);
+  }
+
+  .banner--fail {
+    background: var(--fail-soft);
+    border-color: var(--fail);
+  }
+
+  .banner .glyph { margin-top: 3px; }
+
+  .banner-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .banner h2 {
+    margin: 0;
+    font-family: var(--cond);
+    font-size: 12px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+
+  .banner p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--ink);
+  }
+
+  .attempt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .errlog {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--screen);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .cut {
+    color: var(--ink-faint);
+  }
+
+  .sheet-foot {
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    font-size: 13px;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+  }
+
+  /* ---------- quellen: state, tags, blocks ---------- */
+
+  /* never fetched — hollow dashed square, grey */
+  .state--never { color: var(--ink-faint); }
+  .state--never .glyph {
+    border: 2px dashed var(--ink-faint);
+    border-radius: 1px;
+  }
+
+  .banner--ok {
+    background: var(--ok-soft);
+    border-color: var(--ok);
+  }
+
+  /* unknown — service status not confirmed, not a failed attempt */
+  .banner--off {
+    background: var(--canvas-2);
+    border-color: var(--ink-faint);
+  }
+
+  .tag {
+    font-family: var(--cond);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+
+  .once {
+    font-family: var(--cond);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--busy);
+    border: 1px solid var(--busy);
+    background: var(--busy-soft);
+    border-radius: 2px;
+    padding: 0 5px;
+    white-space: nowrap;
+  }
+
+  .btn--s {
+    padding: 5px 11px;
+    font-size: 13px;
+  }
+
+  .sub {
+    font-family: var(--cond);
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .mini {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pair {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .dots-line {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: .18em;
+    color: var(--ink-soft);
+  }
+
+  .block {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: start;
+    border: 1px solid var(--line);
+    background: var(--canvas-2);
+    border-radius: 2px;
+    padding: 10px 10px 10px 12px;
+  }
+
+  .block code {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- the one explanation affordance ---------- */
+
+  .info {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    flex: none;
+    border: 1px solid var(--ink-faint);
+    border-radius: 50%;
+    color: var(--ink-soft);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: default;
+  }
+
+  .pop {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: -8px;
+    z-index: 3;
+    width: 262px;
+    background: var(--ink);
+    color: var(--canvas);
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.45;
+    letter-spacing: 0;
+    text-align: left;
+    padding: 9px 11px;
+    border-radius: 2px;
+    box-shadow: var(--shadow);
+  }
+
+  .info:hover .pop,
+  .info:focus-visible .pop,
+  .info--open .pop { display: block; }
+
+  /* ---------- quellen list rows ---------- */
+
+  .row--src {
+    grid-template-columns: 150px minmax(0, 1fr) auto auto auto;
+    gap: 14px;
+  }
+
+  .src-name {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .src-title {
+    align-self: flex-start;
+    font-size: 15px;
+    font-weight: 500;
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .src-url {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    overflow-wrap: anywhere;
+  }
+
+  .why {
+    font-size: 12.5px;
+    color: var(--fail);
+  }
+
+  /* ---------- fetch log ---------- */
+
+  .log {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .log-row {
+    display: grid;
+    grid-template-columns: 150px 130px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    color: inherit;
+    text-decoration: none;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 4px 10px;
+  }
+
+  /* ---------- create form ---------- */
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .form-part {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 13px;
+  }
+
+  .lbl-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .input--mono {
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .radios {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .radio {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 14.5px;
+  }
+
+  .dot {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    border: 1px solid var(--ink-faint);
+    border-radius: 50%;
+    position: relative;
+  }
+
+  .dot--on { border-color: var(--accent); }
+
+  .dot--on::after {
+    content: "";
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* ---------- deferred: reverse direction ---------- */
+
+  .later {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    border: 1px dashed var(--line);
+    border-radius: 2px;
+    padding: 12px 14px;
+    color: var(--ink-faint);
+  }
+
+  .later-mark {
+    font-family: var(--cond);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 0 5px;
+  }
+
+  /* ---------- deck page: which source built this ---------- */
+
+  .qlink {
+    font-size: 13px;
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .sep { color: var(--ink-faint); }
+
+  /* ---------- accounts: the one new state, the user row ---------- */
+
+  /* deactivated — split disc, grey: switched off, not broken */
+  .state--off { color: var(--ink-faint); }
+  .state--off .glyph {
+    border-radius: 50%;
+    background: var(--ink-faint);
+    clip-path: polygon(0 0, 100% 0, 100% 38%, 0 38%, 0 62%, 100% 62%, 100% 100%, 0 100%);
+  }
+
+  /* fixed tracks: every row is its own grid, so only fixed widths line the columns up */
+  .row--user {
+    grid-template-columns: 142px minmax(0, 1fr) 62px 176px 222px;
+    gap: 14px;
+  }
+
+  .row--user .row-act { justify-self: end; }
+
+  /* ---------- voice: model rows and sample player ---------- */
+
+  .row--voice {
+    grid-template-columns: 168px minmax(0, 1fr) auto;
+    gap: 14px;
+  }
+
+  .player {
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .player-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .player-model {
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .player-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .lang-toggle {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .lang-opt {
+    padding: 6px 12px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--ink-soft);
+  }
+
+  .lang-opt + .lang-opt { border-left: 1px solid var(--line); }
+
+  .lang-opt--on {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  @container (max-width: 520px) {
+    .row--src {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 8px;
+    }
+    .row--src .state { grid-column: 1; grid-row: 1; }
+    .row--src .age { grid-column: 2; grid-row: 1; }
+    .row--src .src-name { grid-column: 1 / -1; grid-row: 2; }
+    .row--src .row-act { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
+    .row--user {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 8px;
+    }
+    .row--user .state { grid-column: 1; grid-row: 1; }
+    .row--user .tag { grid-column: 2; grid-row: 1; justify-self: end; }
+    .row--user .src-name { grid-column: 1 / -1; grid-row: 2; }
+    .row--user .stand { grid-column: 1 / -1; grid-row: 3; }
+    .row--user .row-act { grid-column: 1 / -1; grid-row: 4; justify-self: start; }
+    .row--voice {
+      grid-template-columns: minmax(0, 1fr) auto;
+      row-gap: 6px;
+    }
+    .row--voice .state { grid-column: 1; grid-row: 1; }
+    .row--voice .row-name { grid-column: 1 / -1; grid-row: 2; }
+    .row--voice .row-act,
+    .row--voice .mini { grid-column: 1 / -1; grid-row: 3; justify-self: start; }
+    .player-row { gap: 10px; }
+    .log-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .block { grid-template-columns: minmax(0, 1fr); }
+    .nav { gap: 0; }
+  }
+
+  a:focus-visible,
+  .btn:focus-visible,
+  .input:focus-visible,
+  .info:focus-visible,
+  .person-btn:focus-visible,
+  .nav-link:focus-visible,
+  .tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- settings selects ---------- */
+
+  .select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--line);
+    background: var(--screen);
+    color: var(--ink);
+    padding: 9px 11px;
+    font-family: var(--sans);
+    font-size: 14.5px;
+    border-radius: 2px;
+  }
+
+  .select svg {
+    flex: none;
+    color: var(--ink-soft);
+  }
+
+  .sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ---------- Slidev presenter: proposed Home navigation ---------- */
+
+  .presenter-stage { position: relative; height: 604px; min-height: 0; overflow: hidden; background: #9ca3af33; color: #18181b; font-family: ui-sans-serif, system-ui, sans-serif; }
+  .presenter-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 360px; grid-template-rows: minmax(0, 1fr) 280px min-content; grid-template-areas: "main main next" "main main note" "bottom bottom bottom"; height: 100%; gap: 1px; }
+  .presenter-panel { min-width: 0; min-height: 0; background: #fff; }
+  .presenter-main { grid-area: main; display: flex; flex-direction: column; }
+  .presenter-toolbar { display: flex; align-items: center; gap: 16px; min-height: 36px; padding: 0 12px; border-bottom: 1px solid #d4d4d8; color: #71717a; font-size: 13px; }
+  .presenter-toolbar__spacer { flex: 1; }
+  .presenter-select { border: 0; background: transparent; color: #3f3f46; font: inherit; }
+  .presenter-main-body { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; padding: 12px 20px; }
+  .presenter-slide { display: flex; aspect-ratio: 16 / 9; width: min(72%, 400px); align-items: center; justify-content: center; background: #173B63; color: #fff; font-size: clamp(23px, 3vw, 38px); font-weight: 700; letter-spacing: -.03em; text-align: center; }
+  .presenter-next { grid-area: next; display: flex; flex-direction: column; gap: 10px; padding: 16px; }
+  .presenter-kicker { color: #71717a; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .presenter-preview { display: flex; flex: 1; align-items: center; justify-content: center; background: #F2E2C2; color: #5D4521; font-size: 17px; font-weight: 700; }
+  .presenter-note { grid-area: note; padding: 16px; color: #3f3f46; font-size: 13px; line-height: 1.5; }
+  .presenter-note p { margin: 7px 0 0; }
+  .presenter-bottom { grid-area: bottom; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 8px; color: #52525b; font-size: 12px; }
+  .presenter-controls { display: flex; flex-wrap: wrap-reverse; gap: 2px; align-items: center; }
+  .presenter-control { display: inline-flex; min-width: 44px; height: 44px; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #3f3f46; }
+  .presenter-control--home { gap: 7px; padding: 0 13px; border-color: #0C6C77; background: #DCEDEE; color: #0C6C77; font-size: 15px; font-weight: 600; text-decoration: none; }
+  .presenter-control--focused { outline: 3px solid #0C6C77; outline-offset: 2px; }
+  .presenter-count { display: inline-flex; align-items: center; padding: 0 8px; color: #52525b; }
+  .presenter-control--ai { gap: 5px; border-color: #6366f1; color: #4338ca; font: 600 12px/1 ui-sans-serif, system-ui, sans-serif; }
+  .presenter-control--ai-active { border-color: #0C6C77; background: #DCEDEE; color: #0C6C77; }
+  .copresenter-toolbar { display: flex; flex: none; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .copresenter-panel { box-sizing: border-box; display: grid; width: min(330px, calc(100vw - 16px)); max-height: 142px; gap: 8px; overflow: auto; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; box-shadow: 0 6px 18px #0f172a1a; color: #334155; font-size: 12px; line-height: 1.35; }
+  .copresenter-panel__state { display: flex; align-items: center; gap: 7px; color: #0C6C77; font-weight: 700; }
+  .copresenter-panel__dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #0C6C77; }
+  .copresenter-panel__heard { padding-left: 10px; border-left: 2px solid #bae6fd; color: #475569; }
+  .copresenter-panel__answer { padding: 8px 10px; border-radius: 7px; background: #eff6ff; color: #1e3a5f; }
+  .projector-slide { display: flex; height: 604px; align-items: center; justify-content: center; background: #173B63; color: #fff; font-family: ui-sans-serif, system-ui, sans-serif; font-size: clamp(28px, 4vw, 52px); font-weight: 700; letter-spacing: -.04em; text-align: center; }
+
+  @container (max-width: 520px) {
+    .presenter-stage { height: 694px; }
+    .presenter-grid { grid-template: "main" 2fr "note" 1fr "next" 1fr "bottom" min-content / 1fr; }
+    .presenter-toolbar { padding: 0 12px; }
+    .presenter-main-body { padding: 12px 20px; }
+    .presenter-slide { width: 90%; font-size: 25px; }
+    .presenter-next, .presenter-note { padding: 12px 14px; }
+    .presenter-preview { min-height: 58px; }
+    .presenter-bottom { align-items: flex-start; }
+    .presenter-controls { max-width: 100%; }
+    .copresenter-panel { width: min(374px, calc(100vw - 16px)); max-height: 132px; }
+  }
+
+  .sheet { max-width: 1400px; box-sizing: border-box; width: 100%; }
+  .boards, .board { min-width: 0; }
+  .frame { width: min(var(--w, 960px), 100%); }
+  .btn { box-sizing: border-box; }
+  .chg { font-family: var(--cond); font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+         border: 1px solid var(--line); border-radius: 2px; padding: 0 5px; color: var(--ink-soft); background: transparent; }
+  .chg--new { color: var(--accent); border-color: var(--accent); }
+  .chg--gone { color: var(--ink-soft); border-style: dashed; text-decoration: line-through; }
+  .chg--chg { color: var(--busy); border-color: var(--busy); }
+  .board-cap { max-width: 60ch; }
+  .boards { gap: 32px 40px; }
+
+  /* ---------- redirect board ---------- */
+  .flow { display: flex; align-items: stretch; gap: 14px; flex-wrap: wrap; }
+  .flow-step { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 2px; background: var(--screen); }
+  .flow-step--central { border-color: var(--accent); background: var(--accent-soft); }
+  .flow-host { font-family: var(--mono); font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+  .flow-what { font-size: 13px; color: var(--ink-soft); }
+  .flow-arrow { align-self: center; font-family: var(--mono); font-size: 18px; color: var(--ink-faint); }
+  @container (max-width: 700px) { .flow { flex-direction: column; } .flow-step { flex: none; } .flow-arrow { transform: rotate(90deg); } }
+
+</style>
+<main class="sheet">
+  <svg class="icon-sheet" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="icon-layout-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="7" height="7" x="3" y="3" rx="1"></rect>
+      <rect width="7" height="7" x="14" y="3" rx="1"></rect>
+      <rect width="7" height="7" x="14" y="14" rx="1"></rect>
+      <rect width="7" height="7" x="3" y="14" rx="1"></rect>
+    </symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </symbol>
+    <symbol id="icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+      <circle cx="12" cy="7" r="4"></circle>
+    </symbol>
+    <symbol id="icon-contrast" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M12 18a6 6 0 0 0 0-12v12z"></path>
+    </symbol>
+    <symbol id="icon-log-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+      <polyline points="16 17 21 12 16 7"></polyline>
+      <line x1="21" x2="9" y1="12" y2="12"></line>
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6 9 17l-5-5"></path>
+    </symbol>
+    <symbol id="icon-sliders-horizontal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="21" x2="14" y1="4" y2="4"></line>
+      <line x1="10" x2="3" y1="4" y2="4"></line>
+      <line x1="21" x2="12" y1="12" y2="12"></line>
+      <line x1="8" x2="3" y1="12" y2="12"></line>
+      <line x1="21" x2="16" y1="20" y2="20"></line>
+      <line x1="12" x2="3" y1="20" y2="20"></line>
+      <line x1="14" x2="14" y1="2" y2="6"></line>
+      <line x1="8" x2="8" y1="10" y2="14"></line>
+      <line x1="16" x2="16" y1="18" y2="22"></line>
+    </symbol>
+    <symbol id="icon-git-branch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="6" x2="6" y1="3" y2="15"></line>
+      <circle cx="18" cy="6" r="3"></circle>
+      <circle cx="6" cy="18" r="3"></circle>
+      <path d="M18 9a9 9 0 0 1-9 9"></path>
+    </symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+      <circle cx="9" cy="7" r="4"></circle>
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+    </symbol>
+    <symbol id="icon-key-round" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>
+      <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>
+    </symbol>
+    <symbol id="icon-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+      <line x1="8" x2="16" y1="21" y2="21"></line>
+      <line x1="12" x2="12" y1="17" y2="21"></line>
+    </symbol>
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 9 6 6 6-6"></path>
+    </symbol>
+    <symbol id="icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+      <line x1="12" x2="12" y1="19" y2="22"></line>
+    </symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="6 3 20 12 6 21 6 3"></polygon>
+    </symbol>
+    <symbol id="icon-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+    </symbol>
+  </svg>
+<header class="sheet-head"><div class="eyebrow">Picture for ruling · Issue #242 · K13</div>
+<h1>Keycloak replaces presentator&rsquo;s login</h1>
+<p class="lead">This follows the shared sign-in pattern of ui-console#6: the same structure and wording in every app, each app with its own colours. Shown here: the redirect, the three app states (signed out, no access, sign-in failed), the person menu and Account &ndash; in the look of <span class="path">docs/mockups/m0-lobby.html</span>. Tags outside the boards: <span class="chg chg--new">neu</span> <span class="chg chg--chg">ersetzt</span> <span class="chg chg--gone">entfällt</span> <span class="chg">unverändert</span>.</p></header>
+<section class="group" id="a1"><div class="group-head"><h2>1. Not signed in: redirect</h2><span class="lines">line [Removed]</span></div><div class="boards"><figure class="board"><figcaption class="board-cap"><div class="board-title">Not signed in: straight to the central sign-in <span class="chg chg--chg">ersetzt</span> <span class="chg chg--gone">entfällt: eigene Login-Seite mit Knopf</span></div><p class="board-note">Eine geschützte Seite leitet ohne Zwischenseite zur zentralen Anmeldung weiter; danach geht es zurück zur gewünschten Seite. Presentator hat keine eigene Login-Seite mehr. Das Aussehen der Keycloak-Seite ist das Theme von edge und wird hier nicht gezeichnet. <span class="path">/datenschutz</span> bleibt öffentlich und wird nicht weitergeleitet. API-Aufrufe ohne Anmeldung bekommen 401.</p></figcaption><div class="frame flow-frame" style="--w: 960px"><div class="route">presentator.hallucinai.de/</div><div class="app"><div class="body"><div class="flow"><div class="flow-step"><span class="flow-host">presentator.hallucinai.de/</span><span class="flow-what">Seite aufgerufen, nicht angemeldet</span></div><span class="flow-arrow" aria-hidden="true">&rarr;</span><div class="flow-step flow-step--central"><span class="flow-host">auth.hallucinai.de</span><span class="flow-what">hallucinai sign-in</span></div><span class="flow-arrow" aria-hidden="true">&rarr;</span><div class="flow-step"><span class="flow-host">back to the page you asked for</span><span class="flow-what">angemeldet, weiter wie gewollt</span></div></div></div></div></div></figure></div></section><section class="group" id="a2"><div class="group-head"><h2>2. Signed out</h2><span class="lines">line [Sign out]</span></div><div class="boards"><figure class="board"><figcaption class="board-cap"><div class="board-title">Signed out <span class="w">390 px</span> </div><p class="board-note">Gleiche Seite, schmal: alles untereinander, nichts abgeschnitten.</p></figcaption><div class="frame" style="--w: 390px"><div class="route">presentator.hallucinai.de/login</div><div class="app"><div class="login"><div class="login-card"><div class="wordmark">Presen<span>tator</span></div><h1>You are logged out.</h1><div class="btn btn--primary btn--wide">Log in</div></div><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure><figure class="board"><figcaption class="board-cap"><div class="board-title">Signed out <span class="w">1280 px</span> <span class="chg chg--chg">ersetzt Login-Seite</span></div><p class="board-note">Ziel nach dem Abmelden. Ein Satz, ein Knopf &bdquo;Log in&ldquo; (kein Produktname, kein Schlüssel). Die Seite leitet nie von selbst weiter; erst der Knopf startet die Anmeldung. Gleicher Aufbau und gleiche Wörter in jeder App, nur die Farben sind presentators.</p></figcaption><div class="frame" style="--w: 1280px"><div class="route">presentator.hallucinai.de/login</div><div class="app"><div class="login"><div class="login-card"><div class="wordmark">Presen<span>tator</span></div><h1>You are logged out.</h1><div class="btn btn--primary btn--wide">Log in</div></div><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure></div></section><section class="group" id="a3"><div class="group-head"><h2>3. No access</h2><span class="lines">line [Who]</span></div><div class="boards"><figure class="board"><figcaption class="board-cap"><div class="board-title">No access <span class="w">390 px</span> </div><p class="board-note">Gleiche Seite, schmal: alles untereinander, nichts abgeschnitten.</p></figcaption><div class="frame" style="--w: 390px"><div class="route">presentator.hallucinai.de/no-access</div><div class="app"><div class="login"><div class="login-card"><div class="wordmark">Presen<span>tator</span></div><h1>No access</h1>
+<div class="banner banner--fail"><span class="glyph" style="background: var(--fail); clip-path: polygon(50% 0%, 100% 100%, 0% 100%);"></span><div class="banner-body"><p>You are signed in, but this account has no access to presentator.</p></div></div>
+<div class="actions"><div class="btn btn--primary"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-log-out"></use></svg> Log out</div><div class="btn">Back</div></div></div><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure><figure class="board"><figcaption class="board-cap"><div class="board-title">No access <span class="w">1280 px</span> <span class="chg chg--new">neu</span></div><p class="board-note">Angemeldet, aber nicht Mitglied von /apps/presentator. Kein Name, keine Gruppen-Details: eine Absage trägt bewusst keine Identität. Zwei Auswege: abmelden (z. B. für ein anderes Konto) oder zurück.</p></figcaption><div class="frame" style="--w: 1280px"><div class="route">presentator.hallucinai.de/no-access</div><div class="app"><div class="login"><div class="login-card"><div class="wordmark">Presen<span>tator</span></div><h1>No access</h1>
+<div class="banner banner--fail"><span class="glyph" style="background: var(--fail); clip-path: polygon(50% 0%, 100% 100%, 0% 100%);"></span><div class="banner-body"><p>You are signed in, but this account has no access to presentator.</p></div></div>
+<div class="actions"><div class="btn btn--primary"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-log-out"></use></svg> Log out</div><div class="btn">Back</div></div></div><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure></div></section><section class="group" id="a4"><div class="group-head"><h2>4. Sign-in failed</h2><span class="lines">line [Keycloak down]</span></div><div class="boards"><figure class="board"><figcaption class="board-cap"><div class="board-title">Sign-in failed <span class="w">390 px</span> </div><p class="board-note">Gleiche Seite, schmal: alles untereinander, nichts abgeschnitten.</p></figcaption><div class="frame" style="--w: 390px"><div class="route">presentator.hallucinai.de/auth/callback</div><div class="app"><div class="login"><div class="login-card"><div class="wordmark">Presen<span>tator</span></div><h1>Login failed</h1>
+<div class="banner banner--fail"><span class="glyph" style="background: var(--fail); clip-path: polygon(50% 0%, 100% 100%, 0% 100%);"></span><div class="banner-body"><p>Sign-in did not work. Please try again.</p></div></div>
+<div class="actions"><div class="btn btn--primary">Try again</div></div></div><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure><figure class="board"><figcaption class="board-cap"><div class="board-title">Sign-in failed <span class="w">1280 px</span> <span class="chg chg--new">neu</span> <span class="chg chg--chg">ersetzt &bdquo;Login incorrect&ldquo;</span></div><p class="board-note">Keycloak meldete einen Fehler oder der Rückweg schlug fehl (z. B. abgelaufener Zustand). Ein Weg weiter: erneut versuchen. Fällt Keycloak ganz aus, zeigt der Browser seine eigene Fehlerseite; dafür wird hier nichts gezeichnet.</p></figcaption><div class="frame" style="--w: 1280px"><div class="route">presentator.hallucinai.de/auth/callback</div><div class="app"><div class="login"><div class="login-card"><div class="wordmark">Presen<span>tator</span></div><h1>Login failed</h1>
+<div class="banner banner--fail"><span class="glyph" style="background: var(--fail); clip-path: polygon(50% 0%, 100% 100%, 0% 100%);"></span><div class="banner-body"><p>Sign-in did not work. Please try again.</p></div></div>
+<div class="actions"><div class="btn btn--primary">Try again</div></div></div><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure></div></section><section class="group" id="a5"><div class="group-head"><h2>5. Header person menu</h2><span class="lines">lines [Who], [Sign out]</span></div><div class="boards"><figure class="board"><figcaption class="board-cap"><div class="board-title">Header person menu <span class="w">390 px</span> </div><p class="board-note">Gleiche Seite, schmal: alles untereinander, nichts abgeschnitten.</p></figcaption><div class="frame" style="--w: 390px"><div class="route">presentator.hallucinai.de/</div><div class="app"><div class="app-bar"><div class="brand"><div class="wordmark">Presen<span>tator</span></div>
+ <nav class="nav"><a class="nav-link nav-link--now" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+ <a class="nav-link" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a></nav></div>
+ <div class="person person--open"><span class="person-btn" tabindex="0"><span class="avatar">FH</span><span class="person-name">felix</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span><div class="person-menu">
+ <a class="menu-item" href="#account"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-user"></use></svg> Account</a>
+ <div class="menu-item"><div class="menu-item-row"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-contrast"></use></svg> Theme <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div>
+ <div class="menu-sub"><span class="radio"><span class="dot dot--on"></span>Follow system</span><span class="radio"><span class="dot"></span>Light</span><span class="radio"><span class="dot"></span>Dark</span></div></div>
+ <div class="menu-sep"></div>
+ <a class="menu-item" href="#logout"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-log-out"></use></svg> Log out</a></div></div></div><div class="body"><div class="list-head"><h1>Decks</h1><a class="source" href="#sources">3 sources</a></div>
+<div class="rows"><div class="row row--head"><span>State</span><span>Deck</span><span>Changed</span></div>
+<a class="row" href="#d"><span class="state state--ok"><span class="glyph"></span>ready</span><span class="row-name"><span class="row-title">Agenten-Fabrik</span><span class="slug">agenten-fabrik</span></span><span class="age">3 hours ago</span></a></div></div><div class="app-footer"><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure><figure class="board"><figcaption class="board-cap"><div class="board-title">Header person menu <span class="w">1280 px</span> <span class="chg chg--same">unverändert im Bild</span></div><p class="board-note">Name aus Keycloak, darunter Account, Theme, Log out. Nie ein Passwort-, Benutzer- oder Admin-Eintrag. Das Menü sieht aus wie heute; nur die Quelle des Namens und die Rolle (Gruppe) kommen aus Keycloak. Settings in der Leiste nur für /apps/presentator/admin.</p></figcaption><div class="frame" style="--w: 1280px"><div class="route">presentator.hallucinai.de/</div><div class="app"><div class="app-bar"><div class="brand"><div class="wordmark">Presen<span>tator</span></div>
+ <nav class="nav"><a class="nav-link nav-link--now" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+ <a class="nav-link" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a></nav></div>
+ <div class="person person--open"><span class="person-btn" tabindex="0"><span class="avatar">FH</span><span class="person-name">felix</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span><div class="person-menu">
+ <a class="menu-item" href="#account"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-user"></use></svg> Account</a>
+ <div class="menu-item"><div class="menu-item-row"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-contrast"></use></svg> Theme <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div>
+ <div class="menu-sub"><span class="radio"><span class="dot dot--on"></span>Follow system</span><span class="radio"><span class="dot"></span>Light</span><span class="radio"><span class="dot"></span>Dark</span></div></div>
+ <div class="menu-sep"></div>
+ <a class="menu-item" href="#logout"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-log-out"></use></svg> Log out</a></div></div></div><div class="body"><div class="list-head"><h1>Decks</h1><a class="source" href="#sources">3 sources</a></div>
+<div class="rows"><div class="row row--head"><span>State</span><span>Deck</span><span>Changed</span></div>
+<a class="row" href="#d"><span class="state state--ok"><span class="glyph"></span>ready</span><span class="row-name"><span class="row-title">Agenten-Fabrik</span><span class="slug">agenten-fabrik</span></span><span class="age">3 hours ago</span></a></div></div><div class="app-footer"><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure></div></section><section class="group" id="a6"><div class="group-head"><h2>6. Account page</h2><span class="lines">lines [Removed], [Who]</span></div><div class="boards"><figure class="board"><figcaption class="board-cap"><div class="board-title">Account page <span class="w">390 px</span> </div><p class="board-note">Gleiche Seite, schmal: alles untereinander, nichts abgeschnitten.</p></figcaption><div class="frame" style="--w: 390px"><div class="route">presentator.hallucinai.de/account</div><div class="app"><div class="app-bar"><div class="brand"><div class="wordmark">Presen<span>tator</span></div>
+ <nav class="nav"><a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+ <a class="nav-link" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a></nav></div>
+ <div class="person"><span class="person-btn" tabindex="0"><span class="avatar">FH</span><span class="person-name">felix</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span></div></div><div class="body"><div class="deck-head"><h1>Account</h1><div class="meta"><span class="slug">felix</span><span class="tag">Admin</span></div></div>
+<div class="form-part" style="border-top: none; padding-top: 0;"><span class="sub">Preferences</span>
+<div class="field"><label>Language</label><div class="select"><span>Instance default</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div>
+<div class="field"><label>Theme</label><div class="select"><span>Instance default</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div></div></div><div class="app-footer"><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure><figure class="board"><figcaption class="board-cap"><div class="board-title">Account page <span class="w">1280 px</span> <span class="chg chg--gone">entfällt: Passwort ändern, Zustand active</span> <span class="chg chg--same">Sprache, Theme unverändert</span></div><p class="board-note">Es bleiben Sprache und Theme. Das Passwort-Formular entfällt; der Zustand &bdquo;active&ldquo; entfällt, weil es lokal nichts mehr zu (de)aktivieren gibt. Die Rolle (Admin) kommt aus der Keycloak-Gruppe.</p></figcaption><div class="frame" style="--w: 1280px"><div class="route">presentator.hallucinai.de/account</div><div class="app"><div class="app-bar"><div class="brand"><div class="wordmark">Presen<span>tator</span></div>
+ <nav class="nav"><a class="nav-link" href="#decks"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-layout-grid"></use></svg> Decks</a>
+ <a class="nav-link" href="#settings"><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-settings"></use></svg> Settings</a></nav></div>
+ <div class="person"><span class="person-btn" tabindex="0"><span class="avatar">FH</span><span class="person-name">felix</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></span></div></div><div class="body"><div class="deck-head"><h1>Account</h1><div class="meta"><span class="slug">felix</span><span class="tag">Admin</span></div></div>
+<div class="form-part" style="border-top: none; padding-top: 0;"><span class="sub">Preferences</span>
+<div class="field"><label>Language</label><div class="select"><span>Instance default</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div>
+<div class="field"><label>Theme</label><div class="select"><span>Instance default</span><svg class="icon" width="16" height="16" aria-hidden="true"><use href="#icon-chevron-down"></use></svg></div></div></div></div><div class="app-footer"><div class="legal-links">
+  <a class="linkish" href="https://hallucinai.de/impressum">Impressum</a>
+  <a class="linkish" href="#datenschutz">Datenschutz</a>
+</div></div></div></div></figure></div></section><section class="group" id="a7"><div class="group-head"><h2>7. Entfällt</h2><span class="lines">line [Removed]</span></div><div class="boards">
+<figure class="board"><figcaption class="board-cap"><div class="board-title">Entfällt <span class="chg chg--gone">entfällt</span></div><p class="board-note">Was mit dem Umstieg aus Bild und Code verschwindet.</p></figcaption>
+<div class="frame" style="--w: 640px"><div class="route">presentator.hallucinai.de</div><div class="app"><div class="body">
+<ul class="out-list">
+<li><span><b>/setup</b> &ndash; die Seite &bdquo;Set up admin&ldquo; (Benutzername, zweimal Passwort); antwortet 404</span></li>
+<li><span><b>Die eigene Login-Seite mit Knopf</b> &ndash; ersetzt durch die Weiterleitung zur zentralen Anmeldung</span></li>
+<li><span><b>Das Passwort-Formular</b> auf /login &ndash; Benutzername, Passwort, &bdquo;Log in&ldquo;, die Zeile &bdquo;Login incorrect, please wait a moment&ldquo;</span></li>
+<li><span><b>Gespeicherte Anmeldeversuche</b> &ndash; Tabelle <span class="path">login_attempts</span> und die Sperre nach Fehlversuchen</span></li>
+<li><span><b>Passwort ändern</b> auf Account &ndash; der Block Current / New / Repeat password</span></li>
+<li><span><b>Passwort-Hash</b> &ndash; Spalte <span class="path">users.password_hash</span> und die Passwort-Hasher-Komposition</span></li>
+<li><span><b>Settings &rarr; Users</b> &ndash; Create user, Reset password, Deactivate, Zustand &bdquo;deactivated&ldquo; <span class="open-mark">Vorschlag: entfällt (Entscheidung offen)</span></span></li>
+<li><span><b>Der Block Sessions / &bdquo;End others&ldquo;</b> auf Account (steht im Bild, nicht im heutigen Template) <span class="open-mark">Vorschlag: entfällt (Entscheidung offen)</span></span></li>
+</ul>
+</div></div></div></figure></div></section>
+</main>
+</body></html>
