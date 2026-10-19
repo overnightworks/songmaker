@@ -1,5 +1,4 @@
 import type { PlaybackInfo } from './audioPlayer.svelte';
-import { recordPlaybackEvent } from './playbackDiagnostics';
 
 interface MediaHandlers {
 	play: () => void;
@@ -74,7 +73,7 @@ function applyMediaSessionHandlers(handlers: MediaHandlers): void {
 	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 	const mediaSession = navigator.mediaSession;
 	const set = (action: MediaSessionAction, handler: MediaSessionActionHandler) =>
-		safeSetHandler(mediaSession, action, recordedAction(action, handler));
+		safeSetHandler(mediaSession, action, handler);
 	set('play', handlers.play);
 	set('pause', handlers.pause);
 	set('stop', handlers.stop);
@@ -83,17 +82,6 @@ function applyMediaSessionHandlers(handlers: MediaHandlers): void {
 	set('seekto', (details: MediaSessionActionDetails) => {
 		if (typeof details.seekTime === 'number') handlers.seekTo(details.seekTime);
 	});
-}
-
-function recordedAction(
-	action: MediaSessionAction,
-	handler: MediaSessionActionHandler
-): MediaSessionActionHandler {
-	return (details) => {
-		const detail = typeof details.seekTime === 'number' ? `${action} ${details.seekTime}` : action;
-		recordPlaybackEvent({ kind: 'media_session_action', detail, take: null });
-		handler(details);
-	};
 }
 
 function clearMediaSessionHandlers(): void {

@@ -14,7 +14,6 @@ import {
 	APP_NAME,
 	COWRITER_TURN_PATH,
 	OFFLINE_STRIP_MESSAGE,
-	PLAYBACK_DIAGNOSTICS_PATH,
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
@@ -186,15 +185,6 @@ function isClosedOnPurpose(url: string): boolean {
 	return (
 		path === RESOURCE_EVENT_STREAM_PATH || path === COWRITER_TURN_PATH || JOB_STREAM_PATH.test(path)
 	);
-}
-
-// The playback recorder (#1187) tells the server what it saw as the page
-// hides, so every reload or navigation away of a signed-in page sends one
-// report, and Chromium reports that send, cut from the page that made it, as
-// aborted. The browser still delivers a keepalive send it cut from the page,
-// so the abort loses nothing.
-function isSentAsThePageLeaves(url: string): boolean {
-	return new URL(url).pathname === PLAYBACK_DIAGNOSTICS_PATH;
 }
 
 const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_EVENT_STREAM_PATH;
@@ -697,7 +687,6 @@ export class FlowGuard {
 			// of it is reported the same way, though its answer had arrived.
 			const cutOffOnPurpose =
 				isClosedOnPurpose(request.url()) ||
-				isSentAsThePageLeaves(request.url()) ||
 				this.forgivesAbandonedTake(request.url()) ||
 				this.refusedAsExpected.has(request);
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {

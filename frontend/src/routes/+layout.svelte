@@ -58,7 +58,6 @@
 		selectedSongId
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { startPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 	import { NOW_PLAYING_STACKED_MEDIA } from '$lib/constants/now-playing';
 	import {
 		initRailCollapsed,
@@ -94,7 +93,6 @@
 	);
 	const me = $derived($currentUser);
 	const hasPrivatePlayer = $derived(me !== null);
-	const signedInUserId = $derived(me?.id ?? null);
 
 	// Whether the library session should be live. Three addresses share the
 	// library workspace (`/`, `/album/<slug>` and `/album/<slug>/<song-slug>`,
@@ -191,15 +189,6 @@
 	});
 
 	$effect(() => followShellLayers());
-
-	// The playback recorder (#1187) follows the signed-in user: it starts
-	// with their sign-in, sends what an earlier page of theirs left behind,
-	// and stops when they leave, so one user's events never go out under
-	// another's session.
-	$effect(() => {
-		if (!browser || signedInUserId === null) return;
-		return startPlaybackDiagnostics(signedInUserId);
-	});
 
 	// The history controller runs on every page, so Back closes the topmost
 	// overlay before it leaves the page, signed in or not.

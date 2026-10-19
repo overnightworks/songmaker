@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { recordPlaybackEvent } from './playbackDiagnostics';
 import {
 	clearMediaSessionPositionState,
 	setupMediaSessionHandlers,
@@ -8,8 +7,6 @@ import {
 	updateMediaSessionPlaybackState,
 	updateMediaSessionPositionState
 } from './mediaSession';
-
-vi.mock('./playbackDiagnostics', () => ({ recordPlaybackEvent: vi.fn() }));
 
 type Action = 'play' | 'pause' | 'stop' | 'nexttrack' | 'previoustrack' | 'seekto';
 
@@ -77,22 +74,6 @@ afterEach(() => {
 });
 
 describe('Media Session handlers', () => {
-	it('records every lock-screen action for the playback diagnostics before acting on it', () => {
-		const session = installMediaSession();
-		const calls: string[] = [];
-		vi.mocked(recordPlaybackEvent).mockClear();
-		setupMediaSessionHandlers(callbacks('app', calls));
-
-		invoke(session, 'pause');
-		invoke(session, 'seekto', { seekTime: 42 });
-
-		expect(vi.mocked(recordPlaybackEvent).mock.calls.map(([note]) => note)).toEqual([
-			{ kind: 'media_session_action', detail: 'pause', take: null },
-			{ kind: 'media_session_action', detail: 'seekto 42', take: null }
-		]);
-		expect(calls).toEqual(['app:pause', 'app:seek:42']);
-	});
-
 	it.each([
 		['play', 'play'],
 		['pause', 'pause'],

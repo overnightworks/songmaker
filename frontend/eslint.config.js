@@ -100,7 +100,6 @@ export default ts.config(
 		ignores: [
 			'src/lib/api/fetch.ts',
 			'src/lib/services/audioPlayer.svelte.ts',
-			'src/lib/services/playbackDiagnostics.ts',
 			'src/service-worker.ts',
 			'src/**/*.test.ts'
 		],
