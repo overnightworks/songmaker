@@ -16,6 +16,8 @@ import {
 	stampNavigatedEntry
 } from '$lib/history/historyController';
 import { fakePage, startFakeRouter } from '$lib/test-utils/app-navigation';
+import DatenschutzPage from '../datenschutz/+page.svelte';
+import ImpressumPage from '../impressum/+page.svelte';
 import Page from './+page.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -102,4 +104,21 @@ describe('the legal page Back', () => {
 			expect(back).toHaveBeenCalledTimes(stepsBack ? 1 : 0);
 		}
 	);
+});
+
+describe('the legal addresses', () => {
+	it.each([
+		{ address: '/legal', Address: Page, heading: 'Impressum' },
+		{ address: '/legal#unknown', Address: Page, heading: 'Impressum' },
+		{ address: '/legal#datenschutz', Address: Page, heading: 'Datenschutzerklärung' },
+		{ address: '/legal#nutzungsbedingungen', Address: Page, heading: 'Nutzungsbedingungen' },
+		{ address: '/impressum', Address: ImpressumPage, heading: 'Impressum' },
+		{ address: '/datenschutz', Address: DatenschutzPage, heading: 'Datenschutzerklärung' }
+	])('$address shows $heading', ({ address, Address, heading }) => {
+		history.replaceState(null, '', address);
+		fakePage.url = new URL(location.href);
+		component = mount(Address, { target: document.body });
+
+		expect(document.querySelector('h1')?.textContent).toBe(heading);
+	});
 });

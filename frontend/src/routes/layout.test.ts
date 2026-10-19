@@ -888,7 +888,8 @@ describe('auth check failure', () => {
 			'a logged-out deep link',
 			'/album/northern-lights/glass-river',
 			'/login?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river'
-		]
+		],
+		['a lookalike of a legal address', '/impressum-foo', '/login?redirect=%2Fimpressum-foo']
 	])(
 		'sends %s to sign-in on a 401 (no known user, no check error)',
 		async (_label, path, signIn) => {

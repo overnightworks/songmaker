@@ -1,16 +1,17 @@
 <!-- APP_NAME: if the app name changes, update the legal text below and the email addresses manually -->
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { LegalSection } from '$lib/components/LegalLinks.svelte';
 	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 
 	interface Props {
 		onback?: () => void;
-		initialSection?: string;
+		initialSection?: LegalSection;
 	}
 
 	let { onback, initialSection = 'impressum' }: Props = $props();
-	let userOverride: string | null = $state(null);
+	let userOverride: LegalSection | null = $state(null);
 	let section = $derived(userOverride ?? initialSection);
 	let compact = $state(false);
 
@@ -19,7 +20,7 @@
 		return subscribeCompactLayout((value) => (compact = value));
 	});
 
-	function switchSection(s: string) {
+	function switchSection(s: LegalSection) {
 		userOverride = s;
 	}
 </script>
