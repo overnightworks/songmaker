@@ -1,0 +1,8 @@
+claim_id = "0662487413c6425b9f9b7474bd3be8f5"
+agent = "claude"
+role = "builder"
+base = "2280d3a7bbbc4d1f1ecc99606895d0bf2a4ccc7f"
+branch = "claude/issue-1706-reference-quota"
+scope = [".github/workflows/ci.yml", "docs/acestep.md", "docs/security.md", "docs/testing.md", "frontend/src/lib/components/editor/PhoneRecipeSection.test.ts", "frontend/src/lib/components/editor/RecipePanel.test.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/settings.py", "tests/conftest.py", "tests/test_postgresql.py", "tests/test_reference_audio.py", "tests/test_reference_quota.py", "tests/test_upload_limits.py"]
+opened_commit = "662269ad3231c34e62e7ac007ba57692e9a5ea3f"
+whole_reason = "The storage decision, API refusal, concurrency proofs and their mandatory CI registration establish one atomic admission contract."
