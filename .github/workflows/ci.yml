@@ -216,8 +216,13 @@ jobs:
           cases = [
               case for case in ET.parse("postgresql-contract.xml").iter("testcase")
               if case.attrib["classname"].endswith("test_reference_quota")
-              and case.attrib["name"].startswith("test_postgresql_")
-              and not case.attrib["name"].endswith("[sqlite]")
+              and (
+                  "postgresql" in case.attrib["name"].partition("[")[2]
+                  or (
+                      "[" not in case.attrib["name"]
+                      and case.attrib["name"].startswith("test_postgresql_")
+                  )
+              )
           ]
           assert cases, "No PostgreSQL reference quota proofs executed"
           assert not any(case.find("skipped") is not None for case in cases), "Quota proof skipped"
