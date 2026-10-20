@@ -64,7 +64,7 @@ api = [
     "anthropic>=0.20,<2",
 ]
 image = [
-    "pillow>=12.3,<13",
+    "pillow>=13,<14",
 ]
 mcp = [
     "mcp>=2.2,<3",
