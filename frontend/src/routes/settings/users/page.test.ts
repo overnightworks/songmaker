@@ -1396,7 +1396,7 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('!Needs its API key');
 	});
 
-	it('keeps Save disabled and sends nothing while the generation defaults failed to load', async () => {
+	it('offers no defaults editor and sends nothing while the generation defaults failed to load', async () => {
 		api.fetchGenerationDefaults.mockRejectedValue(
 			new ApiError(
 				500,
@@ -1411,10 +1411,8 @@ describe('admin models tab', () => {
 
 		const section = sectionByHeading(target, 'Generation Defaults');
 		expect(requireElement(section, '.error').textContent).toContain('Defaults unavailable');
-		const save = requireElement<HTMLButtonElement>(section, '.save-btn');
-		expect(save.disabled).toBe(true);
-		save.click();
-		await flush();
+		expect(section.querySelector('.save-btn')).toBeNull();
+		expect(section.querySelector('.gen-model-tab')).toBeNull();
 		expect(api.updateGenerationDefaults).not.toHaveBeenCalled();
 	});
 
@@ -1447,6 +1445,58 @@ describe('admin models tab', () => {
 		stepsInput.dispatchEvent(new Event('change', { bubbles: true }));
 		await flush();
 		save.click();
+		await flush();
+		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith({
+			turbo: { inference_steps: 30, guidance_scale: 5 }
+		});
+	});
+
+	it('renders no defaults editor while the read has failed, and Save after recovery sends the stored values', async () => {
+		const stored = { turbo: { inference_steps: 20 }, base: { inference_steps: 40 } };
+		api.fetchBuiltinDefaults.mockResolvedValue({
+			turbo: { inference_steps: 8 },
+			base: { inference_steps: 8 }
+		});
+		api.fetchGenerationDefaults
+			.mockRejectedValueOnce(
+				new ApiError(500, 'Defaults unavailable', '/api/settings/generation-defaults', null, null)
+			)
+			.mockResolvedValue(stored);
+		api.updateGenerationDefaults.mockImplementation(async (body: unknown) => body);
+		const target = await renderPage(true);
+		await selectTab(target, 'generation');
+
+		const failed = sectionByHeading(target, 'Generation Defaults');
+		expect(requireElement(failed, '.error').textContent).toContain('Defaults unavailable');
+		expect(failed.querySelector('.save-btn')).toBeNull();
+
+		await selectTab(target, 'users');
+		await selectTab(target, 'generation');
+
+		const section = sectionByHeading(target, 'Generation Defaults');
+		requireElement<HTMLButtonElement>(section, '.save-btn').click();
+		await flush();
+		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith(stored);
+	});
+
+	it('re-hydrates after a network-loss read retries successfully, and an edit merges into the stored values', async () => {
+		vi.useFakeTimers();
+		const stored = { turbo: { inference_steps: 20, guidance_scale: 5 } };
+		api.fetchBuiltinDefaults.mockResolvedValue({ turbo: { inference_steps: 8 } });
+		api.fetchGenerationDefaults.mockRejectedValueOnce(lostNetwork()).mockResolvedValue(stored);
+		api.updateGenerationDefaults.mockImplementation(async (body: unknown) => body);
+		const target = await renderPage(true);
+		await selectTab(target, 'generation');
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS[0]);
+
+		const section = sectionByHeading(target, 'Generation Defaults');
+		const stepsInput = requireElement<HTMLInputElement>(section, 'input');
+		expect(stepsInput.value).toBe('20');
+		stepsInput.value = '30';
+		stepsInput.dispatchEvent(new Event('input', { bubbles: true }));
+		stepsInput.dispatchEvent(new Event('change', { bubbles: true }));
+		await flush();
+		requireElement<HTMLButtonElement>(section, '.save-btn').click();
 		await flush();
 		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith({
 			turbo: { inference_steps: 30, guidance_scale: 5 }

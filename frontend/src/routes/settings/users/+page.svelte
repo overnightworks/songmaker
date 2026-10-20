@@ -836,9 +836,9 @@
 			genDefaultsLoaded = true;
 			settleLoad('genDefaults');
 			const modes = Object.keys($builtinDefaults);
-			if (modes.length > 0 && !genEditModel) {
-				genEditModel = modes[0];
-				genEditDefaults = { ...(genDefaults[modes[0]] ?? {}) };
+			if (modes.length > 0) {
+				genEditModel ||= modes[0];
+				genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
 			}
 		} catch (e) {
 			genDefaultsLoaded = false;
@@ -857,6 +857,7 @@
 	}
 
 	function switchGenModel(model: string): void {
+		if (!genDefaultsLoaded) return;
 		genEditModel = model;
 		genEditDefaults = { ...(genDefaults[model] ?? {}) };
 	}
@@ -870,6 +871,7 @@
 			const cleaned = Object.keys(genEditDefaults).length > 0 ? genEditDefaults : {};
 			genDefaults = await updateGenerationDefaults({ ...genDefaults, [genEditModel]: cleaned });
 			genDefaultsLoaded = true;
+			settleLoad('genDefaults');
 			genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
 		} catch {
 			reportError('Failed to save generation defaults');
@@ -1345,37 +1347,39 @@
 					<p class="error">{$loadFailures.genDefaults}</p>
 				{/if}
 
-				<div class="gen-model-tabs">
-					{#each genModelModes as mode (mode)}
+				{#if genDefaultsLoaded}
+					<div class="gen-model-tabs">
+						{#each genModelModes as mode (mode)}
+							<button
+								class="gen-model-tab"
+								class:active={genEditModel === mode}
+								onclick={() => switchGenModel(mode)}
+							>
+								{mode.toUpperCase()}
+							</button>
+						{/each}
+					</div>
+
+					<div class="gen-defaults-controls">
+						<ParamControls
+							values={genEditDefaults}
+							placeholders={($builtinDefaults[genEditModel] ??
+								{}) as Required<VersionGenerationParams>}
+							onchange={(p) => (genEditDefaults = p)}
+						/>
+					</div>
+
+					<div class="gen-actions-row">
 						<button
-							class="gen-model-tab"
-							class:active={genEditModel === mode}
-							onclick={() => switchGenModel(mode)}
+							class="save-btn"
+							onclick={handleSaveGenDefaults}
+							disabled={genSaving || !genDefaultsLoaded}
 						>
-							{mode.toUpperCase()}
+							{genSaving ? 'Saving...' : 'Save Defaults'}
 						</button>
-					{/each}
-				</div>
-
-				<div class="gen-defaults-controls">
-					<ParamControls
-						values={genEditDefaults}
-						placeholders={($builtinDefaults[genEditModel] ??
-							{}) as Required<VersionGenerationParams>}
-						onchange={(p) => (genEditDefaults = p)}
-					/>
-				</div>
-
-				<div class="gen-actions-row">
-					<button
-						class="save-btn"
-						onclick={handleSaveGenDefaults}
-						disabled={genSaving || !genDefaultsLoaded}
-					>
-						{genSaving ? 'Saving...' : 'Save Defaults'}
-					</button>
-					<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
-				</div>
+						<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
+					</div>
+				{/if}
 			</section>
 		{/if}
 
