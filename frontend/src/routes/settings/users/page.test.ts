@@ -1396,6 +1396,28 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('!Needs its API key');
 	});
 
+	it('keeps Save disabled and sends nothing while the generation defaults failed to load', async () => {
+		api.fetchGenerationDefaults.mockRejectedValue(
+			new ApiError(
+				500,
+				'Defaults unavailable',
+				'/api/settings/generation-defaults',
+				null,
+				'Defaults unavailable'
+			)
+		);
+		const target = await renderPage(true);
+		await selectTab(target, 'generation');
+
+		const section = sectionByHeading(target, 'Generation Defaults');
+		expect(requireElement(section, '.error').textContent).toContain('Defaults unavailable');
+		const save = requireElement<HTMLButtonElement>(section, '.save-btn');
+		expect(save.disabled).toBe(true);
+		save.click();
+		await flush();
+		expect(api.updateGenerationDefaults).not.toHaveBeenCalled();
+	});
+
 	it('names a rejected save in a red sub-row with a retry', async () => {
 		const rejection = "Unknown grok model 'grok-4'";
 		api.updateCowriterSettings.mockRejectedValue(

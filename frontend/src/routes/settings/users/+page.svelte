@@ -225,6 +225,7 @@
 
 	let allModels = $state<AvailableModel[]>([]);
 	let genDefaults = $state<Record<string, VersionGenerationParams>>({});
+	let genDefaultsLoaded = $state(false);
 	let genEditModel = $state('');
 	let genEditDefaults = $state<VersionGenerationParams>({});
 	let genSaving = $state(false);
@@ -244,7 +245,8 @@
 		'providerStatus',
 		'cowriter',
 		'cover',
-		'scoring'
+		'scoring',
+		'genDefaults'
 	] as const;
 	type AdminLoad = (typeof ADMIN_LOADS)[number];
 
@@ -256,7 +258,8 @@
 		providerStatus: PROVIDER_STATUS_UNAVAILABLE_DETAIL,
 		cowriter: 'Failed to load co-writer settings',
 		cover: 'Failed to load cover settings',
-		scoring: 'Failed to load scoring settings'
+		scoring: 'Failed to load scoring settings',
+		genDefaults: 'Failed to load generation defaults'
 	};
 	const PAGE_WIDE_LOADS = {
 		users: ['users', 'sessions', 'attempts', 'ratelimits'],
@@ -275,7 +278,8 @@
 		providerStatus: reloadWhileUnreachable(() => void loadProviderStatuses()),
 		cowriter: reloadWhileUnreachable(() => void loadCowriterSettings()),
 		cover: reloadWhileUnreachable(() => void loadCoverSettings()),
-		scoring: reloadWhileUnreachable(() => void loadJudgeSettings())
+		scoring: reloadWhileUnreachable(() => void loadJudgeSettings()),
+		genDefaults: reloadWhileUnreachable(() => void loadGenDefaults())
 	};
 	const loadFailures = derived(
 		ADMIN_LOADS.map((load) => loadReloads[load].loadFailure),
@@ -829,8 +833,11 @@
 		}
 		try {
 			genDefaults = await fetchGenerationDefaults();
-		} catch {
-			genDefaults = {};
+			genDefaultsLoaded = true;
+			settleLoad('genDefaults');
+		} catch (e) {
+			genDefaultsLoaded = false;
+			failLoad('genDefaults', e);
 		}
 		const modes = Object.keys($builtinDefaults);
 		if (modes.length > 0 && !genEditModel) {
@@ -855,6 +862,7 @@
 	}
 
 	async function handleSaveGenDefaults(): Promise<void> {
+		if (!genDefaultsLoaded) return;
 		const reportError = pageErrorReporter();
 		genSaving = true;
 		reportError('');
@@ -1332,6 +1340,10 @@
 					Default generation parameters for all users. Per-song overrides take precedence.
 				</p>
 
+				{#if $loadFailures.genDefaults}
+					<p class="error">{$loadFailures.genDefaults}</p>
+				{/if}
+
 				<div class="gen-model-tabs">
 					{#each genModelModes as mode (mode)}
 						<button
@@ -1354,7 +1366,11 @@
 				</div>
 
 				<div class="gen-actions-row">
-					<button class="save-btn" onclick={handleSaveGenDefaults} disabled={genSaving}>
+					<button
+						class="save-btn"
+						onclick={handleSaveGenDefaults}
+						disabled={genSaving || !genDefaultsLoaded}
+					>
 						{genSaving ? 'Saving...' : 'Save Defaults'}
 					</button>
 					<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
