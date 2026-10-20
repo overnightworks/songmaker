@@ -105,13 +105,14 @@
 				<li>
 					<strong>Letzte Bearbeitungen und Wiedergaben:</strong> je Song der Zeitpunkt und die Art Ihrer
 					letzten Bearbeitung sowie der Zeitpunkt Ihrer letzten Wiedergabe, innerhalb oder außerhalb einer
-					Playlist; je Playlist der Zeitpunkt der letzten Wiedergabe daraus. Daraus zeigt die Startseite,
+					Playlist; je Playlist Zeitpunkt und Song der letzten Wiedergabe daraus. Daraus zeigt die Startseite,
 					was Sie zuletzt gehört und bearbeitet haben. Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO.
 				</li>
 				<li>
 					<strong>Server-Logs:</strong> IP-Adresse, Zeitpunkt, aufgerufene Adresse, Statuscode und Dauer
-					jeder Anfrage, bei angemeldeten Anfragen auch Ihre Nutzerkennung. Rechtsgrundlage: Art. 6 Abs.
-					1 lit. f DSGVO (Sicherheit und Fehlerbehebung).
+					jeder Anfrage, bei angemeldeten Anfragen auch Ihre Nutzerkennung; beim Erzeugen von Musik auch
+					Liedtext und Stilbeschreibung der Generierung. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Sicherheit
+					und Fehlerbehebung).
 				</li>
 			</ul>
 			<p>
@@ -149,10 +150,11 @@
 					<strong>Co-Writer:</strong> Wir senden Ihre Nachricht, den bisherigen Gesprächsverlauf (bei
 					langen Gesprächen eine Zusammenfassung und die letzten Nachrichten), Ihre Co-Writer-Notizen
 					sowie Titel, Liedtext, Stilbeschreibung und Parameter der Songs und Alben, die Sie geöffnet
-					oder per @-Erwähnung genannt haben, und zur gerade ausgewählten Generierung deren Transkription
-					und Bewertungen an den vom Betreiber eingestellten Anbieter: Anthropic (Claude), xAI (Grok)
-					oder OpenAI (Codex). Während des Gesprächs kann das Modell über die Werkzeuge des Co-Writers
-					weitere Ihrer Alben, Songs, Versionen und Generierungen (einschließlich Transkription und Bewertungen)
+					oder per @-Erwähnung genannt haben, sowie Transkription und Bewertungen der Generierung des
+					geöffneten Songs, die gerade abgespielt wird, sonst seiner Auswahl oder seiner neuesten abspielbaren
+					Generierung, an den vom Betreiber eingestellten Anbieter: Anthropic (Claude), xAI (Grok) oder
+					OpenAI (Codex). Während des Gesprächs kann das Modell über die Werkzeuge des Co-Writers weitere
+					Ihrer Alben, Songs, Versionen und Generierungen (einschließlich Transkription und Bewertungen)
 					abrufen sowie Ihre Songs ändern oder neue anlegen.
 				</li>
 				<li>
@@ -167,44 +169,33 @@
 				</li>
 			</ul>
 			<p>
-				<strong>Route und Rolle der Anbieter:</strong> Für den Co-Writer stellt der Betreiber je Anbieter
-				ein, ob eine Anfrage über die Programmierschnittstelle (API) des Anbieters oder über ein Nutzerkonto
-				des Betreibers beim Anbieter läuft. Die Textprüfung läuft bei xAI und OpenAI stets über die API,
-				bei Anthropic über die API, sofern ein API-Schlüssel hinterlegt ist, sonst über das Nutzerkonto
-				des Betreibers. Cover-Vorschläge laufen stets über das Nutzerkonto des Betreibers bei OpenAI.
+				<strong>Rolle der Anbieter:</strong> Alle drei Funktionen senden die Daten über die
+				Programmierschnittstelle (API) des jeweiligen Anbieters. Der Anbieter verarbeitet sie nach
+				seinen veröffentlichten Geschäftsbedingungen als Auftragsverarbeiter für uns; Bestandteil
+				dieser Bedingungen ist jeweils ein Auftragsverarbeitungsvertrag (Art. 28 DSGVO), der auch
+				die Schutzmaßnahmen des Anbieters beschreibt: bei Anthropic die Commercial Terms of Service
+				mit dem
+				<a href="https://www.anthropic.com/legal/data-processing-addendum"
+					>Data Processing Addendum</a
+				>
+				(Vertragspartner im EWR: Anthropic Ireland, Limited), bei OpenAI das Services Agreement mit dem
+				<a href="https://openai.com/policies/data-processing-addendum/">Data Processing Addendum</a>
+				(im EWR: OpenAI Ireland Ltd.), bei xAI die Terms of Service – Enterprise mit dem
+				<a href="https://x.ai/legal/data-processing-addendum">Data Processing Addendum</a> (SpaceXAI LLC),
+				über seine API mit Zero Data Retention.
 			</p>
 			<p>
-				Über die API verarbeitet der Anbieter die Daten nach seinen veröffentlichten
-				Geschäftsbedingungen als Auftragsverarbeiter für uns; Bestandteil dieser Bedingungen ist
-				jeweils ein Auftragsverarbeitungsvertrag (Art. 28 DSGVO): bei Anthropic die Commercial Terms
-				of Service mit dem Data Processing Addendum (Vertragspartner im EWR: Anthropic Ireland,
-				Limited), bei OpenAI das Services Agreement mit dem Data Processing Addendum (im EWR: OpenAI
-				Ireland Ltd.), bei xAI die Terms of Service – Enterprise mit dem Data Processing Addendum
-				(SpaceXAI LLC). Läuft eine Anfrage über ein Nutzerkonto des Betreibers, verarbeitet der
-				Anbieter die Daten als eigener Verantwortlicher nach seiner Datenschutzerklärung: Anthropic
-				Ireland, Limited (Dublin), OpenAI Ireland Ltd. (Dublin) und bei xAI SpaceXAI LLC (USA). Die
-				Nutzung Ihrer Inhalte zum Training von KI-Modellen ist in den Konten des Betreibers bei
-				Anthropic, OpenAI und xAI abgeschaltet.
+				<strong>Training:</strong> Nach diesen Bedingungen trainiert Anthropic keine Modelle mit Ihren
+				Inhalten (Commercial Terms, Abschnitt B); OpenAI verwendet Ihre Inhalte nicht, um seine Dienste
+				zu entwickeln oder zu verbessern, es sei denn, der Kunde stimmt dem ausdrücklich zu (Services
+				Agreement, Abschnitt 4.2); xAI verwendet Ihre Inhalte nicht, um KI-Modelle zu trainieren oder
+				neue Produkte zu entwickeln (Terms of Service – Enterprise, Abschnitt 3.1).
 			</p>
 			<p>
-				<strong>Übermittlung in die USA:</strong> Je nach genutzter Funktion und Route verarbeiten
-				Anthropic, OpenAI und xAI Daten auch in den USA. Über die API stützen die drei Anbieter die
-				Übermittlung nach ihren Auftragsverarbeitungsverträgen auf die Standardvertragsklauseln der
-				EU-Kommission (Art. 46 Abs. 2 lit. c DSGVO), OpenAI daneben auf Angemessenheitsbeschlüsse
-				(Art. 45 DSGVO); die Verträge sind öffentlich unter
-				<a href="https://www.anthropic.com/legal/data-processing-addendum">anthropic.com</a>,
-				<a href="https://openai.com/policies/data-processing-addendum/">openai.com</a> und
-				<a href="https://x.ai/legal/data-processing-addendum">x.ai</a>. Über ein Nutzerkonto des
-				Betreibers stützen Anthropic und OpenAI die Übermittlung nach ihren Datenschutzerklärungen
-				auf Angemessenheitsbeschlüsse und auf die Standardvertragsklauseln. Für Anfragen über das
-				Nutzerkonto des Betreibers bei xAI nennt xAI in seiner Datenschutzerklärung für Europa
-				SpaceXAI LLC in den USA als Verantwortlichen, aber keine Übermittlungsgrundlage nach Art. 45
-				oder 46 DSGVO; wir können dafür derzeit keine benennen.
-			</p>
-			<p>
-				<strong>Speicherung beim Betreiber:</strong> Läuft eine Anfrage an Anthropic über das Nutzerkonto
-				des Betreibers, legt das dafür genutzte Programm (Claude-CLI) die Sitzung zusätzlich in seinem
-				Profil auf unserem Server ab; eine feste Löschfrist besteht dafür derzeit nicht.
+				<strong>Übermittlung in die USA:</strong> Je nach genutzter Funktion verarbeiten Anthropic, OpenAI
+				und xAI Daten auch in den USA. Die drei Anbieter stützen die Übermittlung nach ihren oben verlinkten
+				Auftragsverarbeitungsverträgen auf die Standardvertragsklauseln der EU-Kommission (Art. 46 Abs.
+				2 lit. c DSGVO), OpenAI daneben auf Angemessenheitsbeschlüsse (Art. 45 DSGVO).
 			</p>
 
 			<h2>5. Cloudflare</h2>
@@ -253,11 +244,13 @@
 				</li>
 			</ul>
 			<p>
-				Den Inhalt von Browser-Speicher und Browser-Cache lesen wir nicht aus; beim Wiederherstellen
-				der letzten Wiedergabe ruft die App jedoch den dort gemerkten Song oder die Playlist von
-				unserem Server ab, und jede Wiedergabe wird wie unter „Letzte Bearbeitungen und Wiedergaben“
-				beschrieben auf dem Server vermerkt. Cloudflare kann eigene Sicherheits-Cookies setzen
-				(siehe Cloudflare).
+				Browser-Speicher und Browser-Cache liest nur die App auf Ihrem Gerät, um Ihre Einstellungen,
+				die letzte Wiedergabe und gespeicherte Audiodateien wiederherzustellen; beim
+				Wiederherstellen der letzten Wiedergabe ruft sie den dort gemerkten Song oder die Playlist
+				von unserem Server ab. Beim Abspielen meldet die App dem Server die Wiedergabe, je
+				Generierung und Playlist einmal seit dem Öffnen der App; der Server vermerkt sie wie unter
+				„Letzte Bearbeitungen und Wiedergaben“ beschrieben. Wiedergaben über einen Freigabe-Link
+				meldet die App nicht. Cloudflare kann eigene Sicherheits-Cookies setzen (siehe Cloudflare).
 			</p>
 
 			<h2>8. Speicherdauer</h2>
@@ -277,7 +270,9 @@
 					als gelöscht markiert; ihre Trainingsaufnahmen und das Modell bleiben gespeichert. Referenzaufnahmen
 					lassen sich derzeit nicht in der App löschen. Bei der Löschung eines Kontos bleiben Referenzaufnahmen
 					und Stimmdateien erhalten, und Einträge im Audit-Log bleiben mit Benutzername und IP-Adressen
-					bestehen. Wenn Sie die Löschung dieser Daten wünschen, schreiben Sie an legal@hallucinai.de.
+					bestehen. Liedtext und Stilbeschreibung einer Generierung bleiben in den Container-Logs, bis
+					diese rotiert werden, und im Protokoll des Musikerzeugungs-Prozesses ohne feste Frist. Wenn
+					Sie die Löschung dieser Daten wünschen, schreiben Sie an legal@hallucinai.de.
 				</li>
 				<li>
 					<strong>Letzte Bearbeitungen und Wiedergaben:</strong> bis zur Löschung des Songs, der Playlist
