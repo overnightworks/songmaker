@@ -688,6 +688,33 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             assert bind_options.get("create_host_path") is False
 
 
+WORKER_SERVICES = (
+    "songmaker-music-worker",
+    "songmaker-acestep-worker-0",
+    "songmaker-scoring-worker",
+)
+WEB_ONLY_SECURITY_OPTIONS = ("seccomp", "apparmor", "systempaths")
+
+
+@pytest.mark.parametrize("service_name", WORKER_SERVICES)
+def test_a_worker_drops_every_capability_and_blocks_privilege_gain(
+    service_name: str,
+) -> None:
+    service = _raw_compose_services()[service_name]
+    assert isinstance(service, dict)
+    security_options = service["security_opt"]
+
+    assert service["cap_drop"] == ["ALL"]
+    assert "cap_add" not in service
+    assert not service.get("privileged")
+    assert "no-new-privileges:true" in security_options
+    assert not [
+        option
+        for option in security_options
+        if option.startswith(WEB_ONLY_SECURITY_OPTIONS)
+    ]
+
+
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
 def test_a_test_stack_publishes_its_ports_on_loopback_only(
     compose_files: tuple[str, ...],

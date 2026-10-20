@@ -182,6 +182,10 @@ services:
       dockerfile: docker/music-worker.Dockerfile
     command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *service-logging
     healthcheck:
       test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "music"]
@@ -234,6 +238,10 @@ services:
       dockerfile: docker/acestep-worker.Dockerfile
     runtime: nvidia
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *service-logging
     depends_on:
       redis:
@@ -281,6 +289,10 @@ services:
         - hf_token
     command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
     restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     logging: *service-logging
     healthcheck:
       test: ["CMD", "/app/.venv/bin/python", "scripts/arq_healthcheck.py", "scoring"]
