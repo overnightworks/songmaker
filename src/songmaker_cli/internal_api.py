@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.api_models import WorkerRegisterRequest, WorkerRegisterResponse
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.db.queries import register_worker
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

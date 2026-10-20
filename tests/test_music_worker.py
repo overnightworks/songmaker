@@ -225,7 +225,7 @@ def test_on_shutdown_disposes_db() -> None:
     worker._db_engine = MagicMock()
 
     with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value={},
+        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={},
     ):
         _run(worker.on_shutdown(_mock_ctx()))
 

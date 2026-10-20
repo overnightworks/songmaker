@@ -15,7 +15,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.loras import (
     add_user_lora_sample,
     count_user_lora_samples,
     create_user_lora,

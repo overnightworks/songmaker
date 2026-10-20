@@ -38,7 +38,7 @@ from songmaker_cli.constants import (
     LimiterFailurePolicy,
 )
 from songmaker_cli.db.models import Generation, Song
-from songmaker_cli.db.queries import list_songs
+from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.queue_streams import (
     PinnedBytesExceededError,
     QueueStreamSource,

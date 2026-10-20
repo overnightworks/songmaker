@@ -46,68 +46,69 @@ from songmaker_cli.db.models import (
     Version,
     aware_timestamp,
 )
-from songmaker_cli.db.queries import (
-    UNSET,
-    JobStatusUpdate,
-    archive_generation,
-    cleanup_album,
-    cleanup_song,
+from songmaker_cli.db.queries.albums import cleanup_album, delete_album, get_album, list_albums
+from songmaker_cli.db.queries.auth import (
     count_recent_failed_attempts,
-    count_total_queued_jobs,
-    count_user_active_jobs,
-    count_user_jobs_in_window,
-    create_generation,
-    create_job,
     create_session,
-    create_song,
     create_user,
-    delete_album,
     delete_expired_sessions,
-    delete_generation,
-    delete_generation_files,
     delete_session,
-    delete_song,
-    delete_version,
-    enable_generation_sharing,
-    enable_song_sharing,
-    get_album,
-    get_generation,
-    get_job,
     get_session_with_user,
-    get_song,
     get_user,
     get_user_by_username,
-    keep_generation,
     list_active_sessions,
-    list_albums,
-    list_generations_expired_for_archive,
-    list_generations_expired_for_delete,
     list_login_attempts,
-    list_songs,
     list_users,
-    measure_generation_audio_duration,
-    move_song,
-    pick_generation,
     prune_overflow_sessions,
     record_login_attempt,
-    record_playlist_listen,
-    recover_stale_jobs_by_age_and_type,
-    recover_stale_jobs_by_type,
-    save_rating,
-    save_scores,
-    set_generation_transcript,
-    soft_delete_song,
-    unarchive_generation,
-    unkeep_generation,
-    unpick_generation,
-    unset_if_none,
-    update_job_heartbeat,
-    update_job_status,
-    update_song,
     update_user,
     user_count,
 )
-from songmaker_cli.db.queries.sentinels import _Unset
+from songmaker_cli.db.queries.generations import (
+    archive_generation,
+    create_generation,
+    delete_generation,
+    delete_generation_files,
+    enable_generation_sharing,
+    get_generation,
+    keep_generation,
+    list_generations_expired_for_archive,
+    list_generations_expired_for_delete,
+    measure_generation_audio_duration,
+    pick_generation,
+    save_rating,
+    save_scores,
+    set_generation_transcript,
+    unarchive_generation,
+    unkeep_generation,
+    unpick_generation,
+)
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    count_total_queued_jobs,
+    count_user_active_jobs,
+    count_user_jobs_in_window,
+    create_job,
+    get_job,
+    recover_stale_jobs_by_age_and_type,
+    recover_stale_jobs_by_type,
+    update_job_heartbeat,
+    update_job_status,
+)
+from songmaker_cli.db.queries.sentinels import UNSET, _Unset, unset_if_none
+from songmaker_cli.db.queries.songs import (
+    cleanup_song,
+    create_song,
+    delete_song,
+    enable_song_sharing,
+    get_song,
+    list_songs,
+    move_song,
+    record_playlist_listen,
+    soft_delete_song,
+    update_song,
+)
+from songmaker_cli.db.queries.versions import delete_version
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 
@@ -203,7 +204,7 @@ def test_list_albums(seeded_session: Session) -> None:
 
 
 def test_list_albums_filtered_by_user(db_session: Session) -> None:
-    from songmaker_cli.db.queries import create_album, list_albums
+    from songmaker_cli.db.queries.albums import create_album, list_albums
 
     u1 = create_user(db_session, "alice", "h", role="user")
     u2 = create_user(db_session, "bob", "h", role="user")
@@ -222,7 +223,7 @@ def test_list_albums_filtered_by_user(db_session: Session) -> None:
 
 
 def test_create_album(db_session: Session) -> None:
-    from songmaker_cli.db.queries import create_album, get_album
+    from songmaker_cli.db.queries.albums import create_album, get_album
 
     album = create_album(db_session, "my-album", "My Album", artist="Artist")
     db_session.commit()
@@ -233,7 +234,7 @@ def test_create_album(db_session: Session) -> None:
 
 
 def test_create_album_with_owner(db_session: Session) -> None:
-    from songmaker_cli.db.queries import create_album
+    from songmaker_cli.db.queries.albums import create_album
 
     user = create_user(db_session, "owner", "h", role="user")
     db_session.flush()
@@ -292,8 +293,7 @@ def test_create_song_first_in_album_uses_initial_track_number(
 def test_create_generation_first_for_song_uses_initial_number(
     seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
-    from songmaker_cli.db.queries import create_generation
-    from songmaker_cli.db.queries.generations import INITIAL_GENERATION_NUMBER
+    from songmaker_cli.db.queries.generations import INITIAL_GENERATION_NUMBER, create_generation
 
     seeded_session.add(Album(id="a2", title="A2", artist="X"))
     seeded_session.add(Song(id="s2", title="S2", album_id="a2", track_number=1))
@@ -1787,7 +1787,7 @@ def test_session_renewal_is_owned_by_the_callers_transaction(db_session: Session
     """defect:#1590: renewal persists only with its caller's commit."""
     from datetime import datetime, timedelta, timezone
 
-    from songmaker_cli.db.queries import renew_session
+    from songmaker_cli.db.queries.auth import renew_session
 
     user = _make_user(db_session)
     old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -2086,7 +2086,7 @@ def test_count_user_jobs_outside_window(db_session: Session) -> None:
 
 
 def test_count_user_active_jobs(db_session: Session) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
     user = create_user(db_session, "testuser", "hash", role="user")
     db_session.flush()
@@ -2105,7 +2105,7 @@ def test_count_user_active_jobs(db_session: Session) -> None:
 
 
 def test_count_total_queued_jobs(db_session: Session) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
     u1 = create_user(db_session, "user1", "hash", role="user")
     u2 = create_user(db_session, "user2", "hash", role="user")
@@ -2342,7 +2342,7 @@ def test_chat_recovery_reads_its_constant_table_not_settings(
 
     import songmaker_cli.settings as settings
     from songmaker_cli.constants import JobStatus, JobType
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+    from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age_and_type
 
     job = create_job(db_session, JobType.CHAT)
     db_session.commit()
@@ -2484,7 +2484,7 @@ def test_user_filtered_reaper_leaves_fresh_jobs_alone(db_session: Session) -> No
 
 
 def test_queue_position_queued_jobs(db_session: Session) -> None:
-    from songmaker_cli.db.queries import get_queue_position
+    from songmaker_cli.db.queries.jobs import get_queue_position
 
     j1 = create_job(db_session, "generate")
     j2 = create_job(db_session, "generate")
@@ -2497,7 +2497,7 @@ def test_queue_position_queued_jobs(db_session: Session) -> None:
 
 
 def test_queue_position_not_queued(db_session: Session) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, get_queue_position, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_queue_position, update_job_status
 
     j1 = create_job(db_session, "generate")
     db_session.commit()
@@ -2509,7 +2509,7 @@ def test_queue_position_not_queued(db_session: Session) -> None:
 
 
 def test_queue_position_mixed_statuses(db_session: Session) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, get_queue_position, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_queue_position, update_job_status
 
     j1 = create_job(db_session, "generate")
     j2 = create_job(db_session, "generate")
@@ -2525,7 +2525,7 @@ def test_queue_position_mixed_statuses(db_session: Session) -> None:
 
 
 def test_queue_position_isolated_by_type(db_session: Session) -> None:
-    from songmaker_cli.db.queries import get_queue_position
+    from songmaker_cli.db.queries.jobs import get_queue_position
 
     score_first = create_job(db_session, "score")
     gen_first = create_job(db_session, "generate")
@@ -2543,7 +2543,7 @@ def test_queue_position_isolated_by_type(db_session: Session) -> None:
 
 
 def test_upsert_and_get_rate_limit_global(db_session: Session) -> None:
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.rate_limits import (
         get_rate_limit_setting,
         upsert_rate_limit_setting,
     )
@@ -2559,7 +2559,7 @@ def test_upsert_and_get_rate_limit_global(db_session: Session) -> None:
 
 
 def test_upsert_rate_limit_updates_existing(db_session: Session) -> None:
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.rate_limits import (
         get_rate_limit_setting,
         upsert_rate_limit_setting,
     )
@@ -2574,7 +2574,7 @@ def test_upsert_rate_limit_updates_existing(db_session: Session) -> None:
 
 
 def test_upsert_rate_limit_per_user(db_session: Session) -> None:
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.rate_limits import (
         get_rate_limit_setting,
         upsert_rate_limit_setting,
     )
@@ -2594,7 +2594,7 @@ def test_upsert_rate_limit_per_user(db_session: Session) -> None:
 
 
 def test_resolve_rate_limit_env_fallback(db_session: Session) -> None:
-    from songmaker_cli.db.queries import resolve_rate_limit
+    from songmaker_cli.db.queries.rate_limits import resolve_rate_limit
 
     user = create_user(db_session, "testuser", "hash", role="user")
     db_session.commit()
@@ -2603,7 +2603,7 @@ def test_resolve_rate_limit_env_fallback(db_session: Session) -> None:
 
 
 def test_resolve_rate_limit_global_override(db_session: Session) -> None:
-    from songmaker_cli.db.queries import resolve_rate_limit, upsert_rate_limit_setting
+    from songmaker_cli.db.queries.rate_limits import resolve_rate_limit, upsert_rate_limit_setting
 
     user = create_user(db_session, "testuser", "hash", role="user")
     upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
@@ -2613,7 +2613,7 @@ def test_resolve_rate_limit_global_override(db_session: Session) -> None:
 
 
 def test_resolve_rate_limit_user_override(db_session: Session) -> None:
-    from songmaker_cli.db.queries import resolve_rate_limit, upsert_rate_limit_setting
+    from songmaker_cli.db.queries.rate_limits import resolve_rate_limit, upsert_rate_limit_setting
 
     user = create_user(db_session, "testuser", "hash", role="user")
     upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
@@ -2624,7 +2624,10 @@ def test_resolve_rate_limit_user_override(db_session: Session) -> None:
 
 
 def test_get_all_global_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries import get_all_global_rate_limits, upsert_rate_limit_setting
+    from songmaker_cli.db.queries.rate_limits import (
+        get_all_global_rate_limits,
+        upsert_rate_limit_setting,
+    )
 
     upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
     upsert_rate_limit_setting(db_session, "scoring_rate_limit", 30)
@@ -2637,10 +2640,7 @@ def test_get_all_global_rate_limits(db_session: Session) -> None:
 
 
 def test_get_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries import (
-        get_user_rate_limits,
-        upsert_rate_limit_setting,
-    )
+    from songmaker_cli.db.queries.rate_limits import get_user_rate_limits, upsert_rate_limit_setting
 
     user = create_user(db_session, "testuser", "hash", role="user")
     upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
@@ -2653,7 +2653,7 @@ def test_get_user_rate_limits(db_session: Session) -> None:
 
 
 def test_delete_all_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.rate_limits import (
         delete_all_user_rate_limits,
         get_user_rate_limits,
         upsert_rate_limit_setting,

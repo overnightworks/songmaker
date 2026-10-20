@@ -22,31 +22,31 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import (
     RestoreWindowExpiredError,
-    add_song_to_playlist,
-    create_playlist,
-    create_song,
     delete_album,
-    delete_song,
     enable_album_sharing,
-    enable_song_sharing,
     get_album,
     get_album_by_slug,
-    get_playlist,
+    list_albums,
+    list_expired_albums,
+    restore_album,
+    soft_delete_album,
+)
+from songmaker_cli.db.queries.auth import hard_delete_user
+from songmaker_cli.db.queries.generations import pick_generation
+from songmaker_cli.db.queries.playlists import add_song_to_playlist, create_playlist, get_playlist
+from songmaker_cli.db.queries.songs import (
+    create_song,
+    delete_song,
+    enable_song_sharing,
     get_song,
     get_song_by_slug,
-    hard_delete_user,
-    list_albums,
+    list_expired_songs,
     move_song,
-    pick_generation,
-    restore_album,
     restore_song,
-    soft_delete_album,
     soft_delete_song,
 )
-from songmaker_cli.db.queries.albums import list_expired_albums
-from songmaker_cli.db.queries.songs import list_expired_songs
 from songmaker_cli.settings import get_settings
 
 RESTORE_WINDOW = timedelta(days=get_settings().soft_delete_retention_days)

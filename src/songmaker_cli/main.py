@@ -159,7 +159,7 @@ def reset_password(
     from songmaker_cli.app_context import build_password_hasher
     from songmaker_cli.auth_stores import DatabaseSessionRecordStore
     from songmaker_cli.db.engine import init_db, resolve_database_url
-    from songmaker_cli.db.queries import get_user_by_username, update_user
+    from songmaker_cli.db.queries.auth import get_user_by_username, update_user
     from songmaker_cli.settings import get_settings
 
     password = _ask_password("Password: ")
@@ -204,7 +204,7 @@ def _sessions_ended(count: int) -> str:
 def list_users_cmd() -> None:
     """List all users (requires local DB access)."""
     from songmaker_cli.db.engine import init_db, resolve_database_url
-    from songmaker_cli.db.queries import list_users
+    from songmaker_cli.db.queries.auth import list_users
 
     db_url = resolve_database_url()
 

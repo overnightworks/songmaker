@@ -45,7 +45,8 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.generations import get_generation
+from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
     add_song_to_playlist,
@@ -53,7 +54,6 @@ from songmaker_cli.db.queries import (
     delete_playlist,
     disable_playlist_sharing,
     enable_playlist_sharing,
-    get_generation,
     get_playlist,
     get_playlist_by_slug,
     list_playlists,

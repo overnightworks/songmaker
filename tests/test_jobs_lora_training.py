@@ -27,7 +27,8 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora, UserLoraSample
-from songmaker_cli.db.queries import get_job, get_user_lora
+from songmaker_cli.db.queries.jobs import get_job
+from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.jobs.lora_training import (
     _LoraProgressThrottle,
     _validate_export_path,
@@ -1882,7 +1883,7 @@ def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
 ) -> None:
     from songmaker_cli.constants import JobFunction
     from songmaker_cli.db.models import Job
-    from songmaker_cli.db.queries import count_queued_generation_jobs
+    from songmaker_cli.db.queries.jobs import count_queued_generation_jobs
     from songmaker_cli.jobs.lora_training import _reserve_lora_worker
     from songmaker_cli.scheduler import AllWorkersHeld
 

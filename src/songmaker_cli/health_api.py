@@ -36,7 +36,14 @@ from songmaker_cli.constants import (
     PROM_NEVER_FAILED_TIMESTAMP,
     PROM_QUEUE_DEPTH,
 )
-from songmaker_cli.db import queries
+from songmaker_cli.db.queries.auth import count_active_sessions
+from songmaker_cli.db.queries.jobs import (
+    count_total_queued_jobs,
+    job_counts_by_type_and_status,
+    job_duration_stats,
+    last_job_failure_time,
+)
+from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.lifecycle import codex_image_sandbox_runtime_health
 
 router = APIRouter()
@@ -239,11 +246,11 @@ async def metrics_endpoint(request: Request) -> PlainTextResponse:
 
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:
-        jobs_by_type = queries.job_counts_by_type_and_status(session)
-        duration = queries.job_duration_stats(session)
-        last_job_failure = queries.last_job_failure_time(session)
-        active_sessions = queries.count_active_sessions(session)
-        acestep_workers = queries.list_worker_identities(session)
+        jobs_by_type = job_counts_by_type_and_status(session)
+        duration = job_duration_stats(session)
+        last_job_failure = last_job_failure_time(session)
+        active_sessions = count_active_sessions(session)
+        acestep_workers = list_worker_identities(session)
 
     music_queue_depth = await arq_pool.get_music_queue_depth()
     scoring_queue_depth = await arq_pool.get_scoring_queue_depth()
@@ -324,8 +331,8 @@ async def health_check(request: Request) -> HealthResponse:
     pool = arq_pool.get_arq_pool()
     config = settings.get_settings()
     with ctx.db() as session:
-        acestep_workers = queries.list_worker_identities(session)
-        active_jobs_count = queries.count_total_queued_jobs(session)
+        acestep_workers = list_worker_identities(session)
+        active_jobs_count = count_total_queued_jobs(session)
     queue_depth_cap_reached = active_jobs_count >= config.max_queue_depth
     workers_total = len(acestep_workers)
     workers_online = 0

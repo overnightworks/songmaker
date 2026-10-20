@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.workers import (
     get_worker_identity,
     list_worker_identities,
     register_worker,

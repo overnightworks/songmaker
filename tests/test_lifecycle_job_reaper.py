@@ -24,7 +24,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User, UserLora
-from songmaker_cli.db.queries import get_user_lora
+from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.health_types import BackgroundLoopStatus
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,

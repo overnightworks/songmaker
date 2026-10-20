@@ -16,7 +16,7 @@ from webauth.policies import RateLimitClass
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
-from songmaker_cli.db.queries import create_user
+from songmaker_cli.db.queries.auth import create_user
 from songmaker_cli.request_policies import build_rate_limit_policy
 from songmaker_cli.settings import get_settings
 

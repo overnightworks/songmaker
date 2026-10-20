@@ -40,26 +40,29 @@ from songmaker_cli.db.models import (
     UserSession,
     UserSongWork,
 )
-from songmaker_cli.db.queries import (
-    JobStatusUpdate,
-    create_generation_created_event,
-    create_job,
-    create_session,
-    delete_resource_events_before,
-    get_oldest_resource_event_sequence,
-    get_resource_event_high_water_mark,
-    job_duration_stats,
+from songmaker_cli.db.queries.activity import (
     list_place_listens,
-    list_resource_events_after,
     list_worked_songs,
-    prune_overflow_sessions,
-    record_playlist_listen,
     record_song_edit,
     record_song_played,
+)
+from songmaker_cli.db.queries.auth import create_session, prune_overflow_sessions
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    create_job,
+    job_duration_stats,
     recover_stale_jobs_by_age_and_type,
     update_job_heartbeat,
     update_job_status,
 )
+from songmaker_cli.db.queries.resource_events import (
+    create_generation_created_event,
+    delete_resource_events_before,
+    get_oldest_resource_event_sequence,
+    get_resource_event_high_water_mark,
+    list_resource_events_after,
+)
+from songmaker_cli.db.queries.songs import record_playlist_listen
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.lora_api import api_create_lora
 from songmaker_cli.settings import get_settings
@@ -492,7 +495,7 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
     from concurrent.futures import ThreadPoolExecutor
 
     from songmaker_cli.auth_stores import DatabaseSessionRecordStore
-    from songmaker_cli.db.queries import create_user
+    from songmaker_cli.db.queries.auth import create_user
 
     now = datetime.now(timezone.utc)
     with pg_factory() as db:

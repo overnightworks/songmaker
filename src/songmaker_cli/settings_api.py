@@ -49,13 +49,11 @@ from songmaker_cli.constants import (
     AuditAction,
     ResourceType,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import get_user, record_audit
+from songmaker_cli.db.queries.rate_limits import (
     delete_all_user_rate_limits,
     get_all_global_rate_limits,
-    get_raw_stored_cowriter_settings,
-    get_user,
     get_user_rate_limits,
-    record_audit,
     resolve_rate_limit,
     upsert_rate_limit_setting,
 )
@@ -74,6 +72,7 @@ from songmaker_cli.db.queries.settings import (
     get_judge_provider,
     get_judge_route,
     get_preset,
+    get_raw_stored_cowriter_settings,
     list_active_models,
     list_all_models,
     list_presets,

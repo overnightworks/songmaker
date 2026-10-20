@@ -23,9 +23,9 @@ from songmaker_cli.db.models import (
     Song,
     User,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import create_user
+from songmaker_cli.db.queries.resource_events import (
     create_generation_created_event,
-    create_user,
     delete_resource_events_before,
     get_oldest_resource_event_sequence,
     get_resource_event_high_water_mark,

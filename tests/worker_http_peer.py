@@ -25,7 +25,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from acestep_worker.model_cache import LoadedModel, ModelCache
 from acestep_worker.wrapper import create_app
-from songmaker_cli.db.queries import register_worker
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.settings import get_settings
 
 PEER_DEADLINE_SECONDS = 15

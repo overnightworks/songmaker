@@ -66,34 +66,38 @@ from songmaker_cli.covers import (
     write_album_cover,
 )
 from songmaker_cli.db.models import Album
-from songmaker_cli.db.queries import (
-    UNSET,
-    JobStatusUpdate,
+from songmaker_cli.db.queries.albums import (
     RestoreWindowExpiredError,
     album_ids_with_playable_take,
     archive_album,
     cleanup_album,
     count_albums,
-    count_cover_jobs_since,
     count_picked_songs_by_album,
     count_songs_by_album,
     create_album,
-    delete_album_cover_suggestions,
     disable_album_sharing,
     enable_album_sharing,
     get_album,
-    get_album_cover_suggestion,
-    get_last_cover_job_for_album,
-    list_album_cover_suggestions,
     list_albums,
-    record_audit,
     restore_album,
     set_album_cover_key,
     soft_delete_album,
     unarchive_album,
     update_album,
+)
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.cover_suggestions import (
+    delete_album_cover_suggestions,
+    get_album_cover_suggestion,
+    list_album_cover_suggestions,
+)
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    count_cover_jobs_since,
+    get_last_cover_job_for_album,
     update_job_status,
 )
+from songmaker_cli.db.queries.sentinels import UNSET
 from songmaker_cli.db.queries.sharing import songs_without_playable_take
 from songmaker_cli.settings import get_settings
 

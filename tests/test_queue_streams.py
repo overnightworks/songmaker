@@ -2639,7 +2639,7 @@ def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path: Path, monke
     assert {take["song_id"] for take in data["takes"]} == {"s1", "s2"}
     assert all(take["mp3_path"] for take in data["takes"])
 
-    from songmaker_cli.db.queries import list_songs
+    from songmaker_cli.db.queries.songs import list_songs
 
     with factory() as session:
         songs = list_songs(session, user_id="user-a", light=False)

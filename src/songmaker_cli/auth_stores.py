@@ -24,7 +24,7 @@ from webauth.ports import (
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.models import User
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import (
     count_active_sessions,
     count_recent_failed_attempts,
     create_session,

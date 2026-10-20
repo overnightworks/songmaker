@@ -49,20 +49,19 @@ from songmaker_cli.db.models import (
     UserLora,
     UserLoraSample,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.generations import get_generation, get_generations
+from songmaker_cli.db.queries.jobs import (
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
     create_job,
-    get_album,
-    get_generation,
-    get_generations,
-    get_playlist,
-    get_song,
-    list_worker_identities,
     recover_stale_jobs_by_age_and_type,
-    resolve_rate_limit,
 )
+from songmaker_cli.db.queries.playlists import get_playlist
+from songmaker_cli.db.queries.rate_limits import resolve_rate_limit
+from songmaker_cli.db.queries.songs import get_song
+from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import read_worker_liveness
@@ -535,7 +534,7 @@ def check_lora_ready_for_generation(
     Returns None when ``user_lora_id`` is None (no LoRA requested).
     """
     from songmaker_cli.constants import LoraStatus
-    from songmaker_cli.db.queries import get_user_lora
+    from songmaker_cli.db.queries.loras import get_user_lora
 
     if not user_lora_id:
         return None

@@ -44,7 +44,7 @@ from songmaker_cli.constants import (
     SSE_HEARTBEAT_SECONDS,
     ResourceEventKind,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.resource_events import (
     get_oldest_resource_event_sequence,
     get_resource_event_high_water_mark,
     list_resource_events_after,

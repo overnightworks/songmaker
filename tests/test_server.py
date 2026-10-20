@@ -211,7 +211,8 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
 def auth_server_app(tmp_path: Path):
     from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
-    from songmaker_cli.db.queries import create_album, create_session, create_user
+    from songmaker_cli.db.queries.albums import create_album
+    from songmaker_cli.db.queries.auth import create_session, create_user
 
     audio_dir = tmp_path / "audio"
     data_dir = tmp_path / "data"
@@ -287,7 +288,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Songmaker</html>")
 
-    from songmaker_cli.db.queries import create_session as create_db_session
+    from songmaker_cli.db.queries.auth import create_session as create_db_session
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
@@ -1790,7 +1791,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
         queue_depth_key,
         worker_state_key,
     )
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -1860,7 +1861,7 @@ def test_metrics_endpoint_offline_worker(
 ) -> None:
     import fakeredis.aioredis
 
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -1923,7 +1924,7 @@ def auto_setup_ctx(tmp_path: Path) -> AppContext:
 def test_auto_setup_admin_creates_user(auto_setup_ctx: AppContext) -> None:
     from songmaker_cli.app_context import build_password_hasher
     from songmaker_cli.db.models import AuditLog, UserSession
-    from songmaker_cli.db.queries import get_user_by_username
+    from songmaker_cli.db.queries.auth import get_user_by_username
     from songmaker_cli.lifecycle import auto_setup_admin
 
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
@@ -1942,7 +1943,7 @@ def test_auto_setup_admin_creates_user(auto_setup_ctx: AppContext) -> None:
 def test_auto_setup_admin_leaves_an_existing_admin_untouched(
     auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture, admin_password: str,
 ) -> None:
-    from songmaker_cli.db.queries import create_user, list_users
+    from songmaker_cli.db.queries.auth import create_user, list_users
     from songmaker_cli.lifecycle import auto_setup_admin
 
     with auto_setup_ctx.db() as session:
@@ -1963,7 +1964,7 @@ def test_auto_setup_admin_leaves_an_existing_admin_untouched(
 def test_auto_setup_admin_skips_without_env_vars(
     auto_setup_ctx: AppContext, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from songmaker_cli.db.queries import user_count
+    from songmaker_cli.db.queries.auth import user_count
     from songmaker_cli.lifecycle import auto_setup_admin
 
     monkeypatch.delenv("ADMIN_USERNAME", raising=False)
@@ -1985,7 +1986,7 @@ def test_auto_setup_admin_refuses_a_password_the_rule_rejects(
     auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture,
     admin_password: str, reason: str,
 ) -> None:
-    from songmaker_cli.db.queries import user_count
+    from songmaker_cli.db.queries.auth import user_count
     from songmaker_cli.lifecycle import auto_setup_admin
 
     with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": admin_password}):
@@ -2007,7 +2008,7 @@ def test_auto_setup_admin_rolls_back_concurrent_startup(
 
     from songmaker_cli.auth_stores import DatabaseUserStore
     from songmaker_cli.db.models import AuditLog, UserSession
-    from songmaker_cli.db.queries import user_count
+    from songmaker_cli.db.queries.auth import user_count
     from songmaker_cli.lifecycle import auto_setup_admin
 
     failure = [0, 2] if store_method == "count" else UsernameTakenError("Username already exists")

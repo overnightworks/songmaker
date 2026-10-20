@@ -29,7 +29,7 @@ from songmaker_cli.constants import (
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.queries import register_worker
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.scheduler import (
     WORKER_ERROR_GPU_OUT_OF_MEMORY,
     WORKER_STREAM_WENT_SILENT,

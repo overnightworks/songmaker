@@ -42,14 +42,14 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.generations import get_generation
+from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     count_user_jobs_in_window,
-    get_generation,
     get_job,
-    register_worker,
     update_job_status,
 )
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.jobs import (
     GenerationContext,
@@ -2715,7 +2715,7 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
 
 
 def test_job_counts_by_type_and_status(db_factory) -> None:
-    from songmaker_cli.db.queries import job_counts_by_type_and_status
+    from songmaker_cli.db.queries.jobs import job_counts_by_type_and_status
 
     with db_factory() as session:
         session.add(Job(type="generate", status="completed"))
@@ -2732,7 +2732,7 @@ def test_job_counts_by_type_and_status(db_factory) -> None:
 
 
 def test_job_counts_empty_db(db_factory) -> None:
-    from songmaker_cli.db.queries import job_counts_by_type_and_status
+    from songmaker_cli.db.queries.jobs import job_counts_by_type_and_status
 
     with db_factory() as session:
         counts = job_counts_by_type_and_status(session)
@@ -2742,7 +2742,7 @@ def test_job_counts_empty_db(db_factory) -> None:
 def test_job_duration_stats(db_factory) -> None:
     from datetime import datetime, timedelta, timezone
 
-    from songmaker_cli.db.queries import job_duration_stats
+    from songmaker_cli.db.queries.jobs import job_duration_stats
 
     now = datetime.now(timezone.utc)
     with db_factory() as session:
@@ -2768,7 +2768,7 @@ def test_job_duration_stats_no_completed(db_factory) -> None:
     """S9-F: Timestamped PARTIAL jobs do not enter completed duration statistics."""
     from datetime import datetime, timezone
 
-    from songmaker_cli.db.queries import job_duration_stats
+    from songmaker_cli.db.queries.jobs import job_duration_stats
 
     with db_factory() as session:
         session.add(Job(type="generate", status="running"))
@@ -2898,7 +2898,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
 
 
 def _seed_worker_row(factory, worker_id: str = "w1") -> None:
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     with factory() as session:
         register_worker(
@@ -3073,7 +3073,7 @@ def _seed_online_worker(factory, redis: _FakeRedis, worker_id: str = "w1") -> No
     import json
 
     from songmaker_cli.acestep_state import worker_state_key
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     with factory() as session:
         register_worker(

@@ -41,12 +41,9 @@ from songmaker_cli.covers import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User
-from songmaker_cli.db.queries import (
-    create_user,
-    get_song,
-    soft_delete_album,
-    soft_delete_song,
-)
+from songmaker_cli.db.queries.albums import soft_delete_album
+from songmaker_cli.db.queries.auth import create_user
+from songmaker_cli.db.queries.songs import get_song, soft_delete_song
 from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
 

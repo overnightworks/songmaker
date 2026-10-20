@@ -40,16 +40,16 @@ from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
 from songmaker_cli.cowriter.routing import CoverImageDispatch, cover_image_provider_method
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.cover_suggestions import delete_job_cover_suggestions
+from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     claim_next_cover_job,
-    delete_job_cover_suggestions,
-    get_album,
     get_job,
-    list_songs,
     recover_stale_jobs_by_type,
     update_job_status,
 )
+from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.jobs._runtime import _sanitize_error, _touch_heartbeat, _update_job
 from songmaker_cli.settings import CoverExecutor, Settings, get_settings
 

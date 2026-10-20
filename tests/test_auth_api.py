@@ -22,7 +22,7 @@ from webauth.ports import UsernameTakenError
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.db.models import AuditLog, UserSession
-from songmaker_cli.db.queries import create_user
+from songmaker_cli.db.queries.auth import create_user
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
@@ -162,7 +162,7 @@ def test_login_brute_force_lockout(client: TestClient) -> None:
 
 
 def test_login_lockout_after_sustained_failures(client: TestClient) -> None:
-    from songmaker_cli.db.queries import record_login_attempt
+    from songmaker_cli.db.queries.auth import record_login_attempt
     from songmaker_cli.settings import get_settings
     _seed_admin(client)
     threshold = get_settings().login_lockout_threshold
@@ -658,7 +658,7 @@ def test_password_change_replaces_session_and_rejects_old_cookie(client: TestCli
 def _get_user_id(client: TestClient, username: str) -> str:
     factory = client.app.state.ctx.db
     with factory() as session:
-        from songmaker_cli.db.queries import get_user_by_username
+        from songmaker_cli.db.queries.auth import get_user_by_username
         user = get_user_by_username(session, username)
         return user.id
 
