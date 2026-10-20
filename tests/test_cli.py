@@ -215,7 +215,7 @@ def test_reset_password_db_failure_leaves_password_and_sessions_unchanged(
     """defect:#1590: reset rolls back both changes when deletion or commit fails."""
     from datetime import datetime, timedelta, timezone
 
-    from songmaker_cli.db.queries import create_session
+    from songmaker_cli.db.queries.auth import create_session
 
     factory = served_app.app.state.ctx.db
     with factory() as db:

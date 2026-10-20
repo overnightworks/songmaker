@@ -30,7 +30,7 @@ prepend_own_checkout_src(__file__)
 
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.models import Album
-from songmaker_cli.db.queries import get_user_by_username
+from songmaker_cli.db.queries.auth import get_user_by_username
 
 
 def archive_e2e_albums(

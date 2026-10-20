@@ -78,20 +78,19 @@ from songmaker_cli.covers import (
     remove_song_cover_files,
 )
 from songmaker_cli.db.models import Album
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import (
     count_active_sessions,
     count_login_attempts,
     get_user,
-    get_worker_identity,
     hard_delete_user,
     list_active_sessions,
     list_login_attempts,
-    list_song_ids_for_owner,
-    list_user_loras_for_admin,
     list_users,
-    list_worker_identities,
     record_audit,
 )
+from songmaker_cli.db.queries.loras import list_user_loras_for_admin
+from songmaker_cli.db.queries.songs import list_song_ids_for_owner
+from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
 
@@ -466,7 +465,7 @@ async def load_model_on_worker_endpoint(
 ) -> JobResponse:
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.jobs import (
         JobStatusUpdate,
         create_job,
         get_queue_position,
@@ -647,7 +646,7 @@ async def download_model_endpoint(
 ) -> JobResponse:
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.jobs import (
         JobStatusUpdate,
         create_job,
         get_queue_position,
@@ -738,8 +737,8 @@ async def generation_retention_run(
         run_generation_retention, ctx.db, ctx.audio_dir, dry_run=False,
     )
     record_audit(
-        db, admin.id, AuditAction.HARD_DELETE, ResourceType.GENERATION, None,
-        f"retention: archived={report.archived_count}, deleted={report.deleted_count}",
+        db, admin.id, AuditAction.HARD_DELETE, ResourceType.GENERATION,
+        detail=f"retention: archived={report.archived_count}, deleted={report.deleted_count}",
     )
     db.commit()
     return _retention_report_response(report, dry_run=False)

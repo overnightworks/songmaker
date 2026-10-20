@@ -8,7 +8,7 @@ import pytest
 from conftest import make_test_app
 from fastapi.testclient import TestClient
 
-from songmaker_cli.db.queries import get_worker_identity, list_worker_identities
+from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
 
 
 @pytest.fixture

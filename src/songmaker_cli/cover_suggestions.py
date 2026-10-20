@@ -14,12 +14,8 @@ from sqlalchemy.orm import Session
 from songmaker_cli.api_helpers import Actor, can_access_album
 from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
 from songmaker_cli.db.models import Job
-from songmaker_cli.db.queries import (
-    count_cover_jobs_since,
-    create_job,
-    get_album,
-    has_active_cover_job,
-)
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.jobs import count_cover_jobs_since, create_job, has_active_cover_job
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

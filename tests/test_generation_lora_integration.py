@@ -11,7 +11,7 @@ from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.constants import JOB_ERROR_USER_LORA_UNAVAILABLE, LoraStatus
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, UserLora, Version
-from songmaker_cli.db.queries import create_user_lora, update_user_lora
+from songmaker_cli.db.queries.loras import create_user_lora, update_user_lora
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,

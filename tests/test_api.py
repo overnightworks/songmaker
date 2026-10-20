@@ -932,7 +932,7 @@ def test_unkeep_generation_api(client: TestClient) -> None:
 
 def test_unarchive_generation_api(client: TestClient) -> None:
     factory = client.app.state.ctx.db
-    from songmaker_cli.db.queries import archive_generation
+    from songmaker_cli.db.queries.generations import archive_generation
     with factory() as session:
         archive_generation(session, "g1")
         session.commit()
@@ -1320,7 +1320,7 @@ def _register_worker_with_gpu_health(
     import json
     from unittest.mock import AsyncMock
 
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -2419,7 +2419,7 @@ def test_get_running_generation_exposes_take_counters_and_eta(
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
     from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
 
@@ -2473,8 +2473,8 @@ def test_generation_estimate_leaves_the_model_load_out(
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
     from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.db.queries import jobs as job_queries
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     clock = [datetime(2030, 1, 1, tzinfo=timezone.utc)]
 
@@ -2678,7 +2678,7 @@ def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
     resp = c.post("/api/albums", json={"title": "My New Album"})
     assert resp.status_code == 200
-    from songmaker_cli.db.queries import get_album
+    from songmaker_cli.db.queries.albums import get_album
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         album = get_album(session, "my-new-album")
@@ -2688,7 +2688,7 @@ def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
 
 def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
     from songmaker_cli.db.models import User
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
 
@@ -2729,7 +2729,7 @@ def test_cancel_queued_job(client: TestClient) -> None:
 
 
 def test_cancel_already_completed_job(client: TestClient) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
     with _mock_worker():
         resp = client.post(
@@ -2751,7 +2751,7 @@ def test_cancel_already_completed_job(client: TestClient) -> None:
 
 
 def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
     with _mock_worker():
         resp = client.post(
@@ -2787,7 +2787,7 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
 def test_cancel_running_cover_job_signals_the_web_runner(client: TestClient) -> None:
     from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.cover_runner import CoverJobCancellationRegistry
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -2813,7 +2813,7 @@ def test_cancel_job_not_found(client: TestClient) -> None:
 
 def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
     from songmaker_cli.db.models import User
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
 
@@ -2852,7 +2852,7 @@ def _sign_job_stream_session(ctx: AppContext, user_id: str) -> str:
 
     from webauth.cookies import sign_session_id
 
-    from songmaker_cli.db.queries import create_session
+    from songmaker_cli.db.queries.auth import create_session
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=1)
     with ctx.db() as session:
@@ -2873,7 +2873,7 @@ def _authenticate_job_stream_client(
 def test_stream_job_initial_state(client: TestClient) -> None:
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -2904,7 +2904,7 @@ def test_stream_completed_job_carries_training_epochs_and_zero_eta(
     import json
 
     from songmaker_cli.constants import JobStatus
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -2932,7 +2932,7 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
     import asyncio
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
@@ -2981,7 +2981,7 @@ def test_stream_job_emits_a_change_without_a_status_or_progress_change(
     import asyncio
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
@@ -3018,7 +3018,7 @@ def test_stream_job_sends_heartbeat_without_status_change(
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "SSE_HEARTBEAT_SECONDS", 0)
@@ -3044,7 +3044,7 @@ def test_stream_job_sends_heartbeat_without_status_change(
 
 
 def test_stream_job_reraises_client_cancellation(client: TestClient) -> None:
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
@@ -3069,7 +3069,7 @@ def test_stream_job_reraises_client_cancellation(client: TestClient) -> None:
 def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3197,7 +3197,7 @@ def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetim
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     client, factory = _make_pool_capacity_limited_client(
         tmp_path, pool_size=1, max_overflow=0, pool_timeout=2,
@@ -3305,7 +3305,7 @@ def test_stream_job_fetches_status_off_the_event_loop(
     import threading
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3348,7 +3348,12 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
     import json
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, get_job, update_job_status
+    from songmaker_cli.db.queries.jobs import (
+        JobStatusUpdate,
+        create_job,
+        get_job,
+        update_job_status,
+    )
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "JOB_STREAM_CONNECTION_SECONDS", 0.05)
@@ -3386,7 +3391,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     import asyncio
 
     from songmaker_cli import redis_client
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3434,7 +3439,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
 
 
 def test_stream_job_rejects_when_lease_is_exhausted(client: TestClient) -> None:
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3454,7 +3459,7 @@ def test_stream_job_rejects_when_lease_is_exhausted(client: TestClient) -> None:
 
 
 def test_stream_job_lease_fails_closed_when_limiter_errors(client: TestClient) -> None:
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3483,7 +3488,7 @@ def test_stream_job_heartbeat_survives_the_lease_and_deadline_changes(
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "SSE_HEARTBEAT_SECONDS", 0)
@@ -4459,7 +4464,7 @@ def test_s8_stream_error_only_changes(client, before, after):
     import asyncio
 
     from songmaker_cli import redis_client
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx = client.app.state.ctx
     with ctx.db() as session:
@@ -4525,7 +4530,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
 
     from songmaker_cli import redis_client
     from songmaker_cli.acestep_state import read_queue_depth
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
 
     ctx = client.app.state.ctx
@@ -4612,7 +4617,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
     from worker_http_peer import WorkerScenario, WorkerStream
 
     from songmaker_cli import redis_client
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
 
     ctx = client.app.state.ctx

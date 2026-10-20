@@ -55,7 +55,7 @@ def test_seeded_takes_record_the_owner_as_their_maker(
 @pytest.fixture
 def seeded_job(tmp_path):
     from songmaker_cli.constants import JobStatus, JobType
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     factory = init_test_db(tmp_path / "completion.db")
     with factory() as session:
@@ -76,7 +76,7 @@ def test_completion_preserves_takes_and_adds_the_declared_batch_without_events(
 ):
     from songmaker_cli.constants import JobStatus
     from songmaker_cli.db.models import ResourceEvent
-    from songmaker_cli.db.queries import get_song, update_song
+    from songmaker_cli.db.queries.songs import get_song, update_song
 
     session, audio_dir, job = seeded_job
     existing_ids = {g.id for g in session.query(Generation)}
@@ -152,7 +152,7 @@ def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_
     import argparse
 
     from songmaker_cli.constants import JobStatus, JobType
-    from songmaker_cli.db.queries import create_job, get_job, get_queue_position
+    from songmaker_cli.db.queries.jobs import create_job, get_job, get_queue_position
 
     session, _, running = seeded_job
     ahead = create_job(session, JobType.GENERATE, user_id=_OWNER_ID, song_id=running.song_id)

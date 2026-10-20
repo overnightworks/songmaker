@@ -17,7 +17,7 @@ from songmaker_cli.constants import (
     REIMPORT_BODY_MAX_BYTES,
 )
 from songmaker_cli.db.models import Album, User
-from songmaker_cli.db.queries import create_user_lora
+from songmaker_cli.db.queries.loras import create_user_lora
 from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
 

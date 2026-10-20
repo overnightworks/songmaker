@@ -20,7 +20,7 @@ from songmaker_cli.auth_dependencies import (
     require_admin,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.queries import create_session, create_user
+from songmaker_cli.db.queries.auth import create_session, create_user
 
 _TEST_SECRET = b"a" * 64
 
@@ -171,7 +171,7 @@ def test_a_protected_route_can_name_the_session_it_authenticated(
 
 
 def test_sliding_window_renewal(auth_app: TestClient, create_session_id) -> None:
-    from songmaker_cli.db.queries import get_session_with_user
+    from songmaker_cli.db.queries.auth import get_session_with_user
 
     sid = create_session_id()
     factory = auth_app.app.state.ctx.db
@@ -219,7 +219,7 @@ def test_ip_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
     factory = auth_app.app.state.ctx.db
 
     with factory() as db:
-        from songmaker_cli.db.queries import get_session_with_user
+        from songmaker_cli.db.queries.auth import get_session_with_user
         sess = get_session_with_user(db, sid)
         sess.ip_address = "1.2.3.4"
         db.commit()
@@ -240,7 +240,7 @@ def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> Non
     factory = auth_app.app.state.ctx.db
 
     with factory() as db:
-        from songmaker_cli.db.queries import get_session_with_user
+        from songmaker_cli.db.queries.auth import get_session_with_user
         sess = get_session_with_user(db, sid)
         sess.user_agent = "OldBrowser/1.0"
         db.commit()
@@ -260,7 +260,7 @@ def test_auth_transaction_commits_renewal_and_audit_together(
     from starlette.requests import Request
 
     from songmaker_cli.db.models import AuditLog
-    from songmaker_cli.db.queries import get_session_with_user
+    from songmaker_cli.db.queries.auth import get_session_with_user
 
     sid = _make_user_and_session(_db)
     old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -310,7 +310,7 @@ def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_
     """defect:#1590: GET renewal/audit commit; endpoint work never piggybacks."""
     from songmaker_cli.app_context import get_db_session
     from songmaker_cli.db.models import AuditLog
-    from songmaker_cli.db.queries import get_session_with_user, get_user
+    from songmaker_cli.db.queries.auth import get_session_with_user, get_user
 
     sid = _make_user_and_session(_db)
     old_expiry = datetime.now(timezone.utc) + timedelta(hours=1)

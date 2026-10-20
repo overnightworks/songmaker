@@ -28,7 +28,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.db.queries import record_song_edit, record_song_played
+from songmaker_cli.db.queries.activity import record_song_edit, record_song_played
 
 OWNER_ID = "u-owner"
 ADMIN_ID = "u-admin"

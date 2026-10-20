@@ -16,7 +16,7 @@ from songmaker_cli.api_models import GenerationResponse
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import AUDIO_UPLOAD_FILE_MAX_BYTES
-from songmaker_cli.db.queries import get_generation
+from songmaker_cli.db.queries.generations import get_generation
 from songmaker_cli.reimport import cleanup_reimported_files, reimport_files
 
 log = logging.getLogger(__name__)

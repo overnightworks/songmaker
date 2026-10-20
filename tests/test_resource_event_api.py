@@ -34,10 +34,9 @@ from songmaker_cli.constants import (
     ResourceEventKind,
 )
 from songmaker_cli.db.models import Job, ResourceEvent, ResourceEventCursor, User
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import create_session, create_user
+from songmaker_cli.db.queries.resource_events import (
     create_generation_created_event,
-    create_session,
-    create_user,
     list_resource_events_after,
 )
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware

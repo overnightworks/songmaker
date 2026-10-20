@@ -31,7 +31,8 @@ from songmaker_cli.cover_suggestions import (
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, User
-from songmaker_cli.db.queries import count_cover_jobs_since, get_album
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.jobs import count_cover_jobs_since
 from songmaker_cli.settings import get_settings
 
 

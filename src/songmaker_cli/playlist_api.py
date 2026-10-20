@@ -53,7 +53,9 @@ from songmaker_cli.covers import (
     write_playlist_cover,
 )
 from songmaker_cli.db.models import Generation
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
     add_song_to_playlist,
@@ -62,10 +64,8 @@ from songmaker_cli.db.queries import (
     delete_playlist,
     disable_playlist_sharing,
     enable_playlist_sharing,
-    get_album,
     get_playlist,
     list_playlists,
-    record_audit,
     remove_from_playlist,
     reorder_playlist_entry,
     set_playlist_cover_key,

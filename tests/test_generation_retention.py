@@ -11,7 +11,7 @@ from songmaker_cli.api_models.songs import generation_expiry
 from songmaker_cli.cleanup import run_generation_retention
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Song, Version
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.generations import (
     archive_generation,
     get_generation,
     keep_generation,

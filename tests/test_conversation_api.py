@@ -480,7 +480,7 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
     """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
     from conftest import login_and_csrf, make_test_app, stored_hash
 
-    from songmaker_cli.db.queries import create_user
+    from songmaker_cli.db.queries.auth import create_user
 
     def _seed_a_turn_the_restart_interrupted(session) -> None:
         musician = create_user(session, "musician", stored_hash("musician-pass"), role="user")

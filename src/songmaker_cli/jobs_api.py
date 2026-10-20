@@ -35,11 +35,11 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.models import Job
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     get_job,
     get_queue_position,
-    record_audit,
     update_job_status,
 )
 from songmaker_cli.jobs.generation_failure import musician_job_response

@@ -62,26 +62,28 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.models import Generation, Version
-from songmaker_cli.db.queries import (
-    JobStatusUpdate,
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.generations import (
     bulk_delete_generations,
     delete_generation,
     disable_generation_sharing,
     enable_generation_sharing,
-    get_active_generate_job_for_song,
-    get_last_generate_job_for_song,
-    get_queue_position,
     keep_generation,
-    list_active_models,
     measure_generation_audio_duration,
     pick_generation,
-    record_audit,
     save_rating,
     unarchive_generation,
     unkeep_generation,
     unpick_generation,
+)
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    get_active_generate_job_for_song,
+    get_last_generate_job_for_song,
+    get_queue_position,
     update_job_status,
 )
+from songmaker_cli.db.queries.settings import list_active_models
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.jobs.generation_failure import (
     generation_failure,
@@ -119,7 +121,7 @@ def _check_version_lora_ready(
 
 
 async def _has_online_acestep_worker(session: Session) -> bool:
-    from songmaker_cli.db.queries import list_worker_identities
+    from songmaker_cli.db.queries.workers import list_worker_identities
 
     pool = get_arq_pool()
     for w in list_worker_identities(session):

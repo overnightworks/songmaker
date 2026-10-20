@@ -23,7 +23,7 @@ from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Base, Job, User, aware_timestamp
-from songmaker_cli.db.queries import JobStatusUpdate, count_cover_jobs_since, update_job_status
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
 from songmaker_cli.settings import CoverExecutor, Settings
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)

@@ -18,17 +18,14 @@ from datetime import datetime, timedelta, timezone
 from songmaker_cli.api_helpers import cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
+from songmaker_cli.db.queries.generations import (
     archive_generation,
-    delete_album,
     delete_generation,
-    delete_song,
-    list_expired_albums,
-    list_expired_songs,
     list_generations_expired_for_archive,
     list_generations_expired_for_delete,
-    list_song_ids_for_albums,
 )
+from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

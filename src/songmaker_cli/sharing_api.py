@@ -71,16 +71,16 @@ from songmaker_cli.covers import (
     song_cover_file_exists,
 )
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song
-from songmaker_cli.db.queries import (
-    get_album_by_slug,
-    get_generation_by_slug,
-    get_playlist_by_slug,
-    get_song_by_slug,
+from songmaker_cli.db.queries.albums import get_album_by_slug
+from songmaker_cli.db.queries.generations import get_generation_by_slug
+from songmaker_cli.db.queries.playlists import get_playlist_by_slug
+from songmaker_cli.db.queries.sharing import (
+    is_playable_take,
     shared_album_take_stored_path,
     shared_playlist_take_stored_path,
     shared_song_take_stored_path,
 )
-from songmaker_cli.db.queries.sharing import is_playable_take
+from songmaker_cli.db.queries.songs import get_song_by_slug
 from songmaker_cli.queue_streams import (
     QueueStreamManifest,
     build_queue_stream_snapshot,

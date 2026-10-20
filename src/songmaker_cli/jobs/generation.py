@@ -49,17 +49,13 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.db.models import GenerationPreset
-from songmaker_cli.db.queries import (
-    create_generation,
-    create_generation_created_event,
-    create_job,
-    get_default_preset,
-    get_generation,
-    get_song,
-    get_version,
-    lock_active_job,
-    unset_if_none,
-)
+from songmaker_cli.db.queries.generations import create_generation, get_generation
+from songmaker_cli.db.queries.jobs import create_job, lock_active_job
+from songmaker_cli.db.queries.resource_events import create_generation_created_event
+from songmaker_cli.db.queries.sentinels import unset_if_none
+from songmaker_cli.db.queries.settings import get_default_preset
+from songmaker_cli.db.queries.songs import get_song
+from songmaker_cli.db.queries.versions import get_version
 from songmaker_cli.generate import (
     _decode_audio,
     _splice_repaint_raw,
@@ -372,7 +368,7 @@ def _apply_user_lora_path(
     if not user_lora_id:
         return ace_config
     from songmaker_cli.constants import LoraStatus
-    from songmaker_cli.db.queries import get_user_lora
+    from songmaker_cli.db.queries.loras import get_user_lora
 
     with db_factory() as session:
         lora = get_user_lora(session, user_lora_id, include_deleted_rows=True)

@@ -9,7 +9,7 @@ import pytest
 
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
-from songmaker_cli.db.queries import save_scores
+from songmaker_cli.db.queries.generations import save_scores
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.scoring.models import (
     ScorerOutcome,

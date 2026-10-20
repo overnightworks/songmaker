@@ -27,7 +27,7 @@ from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, Job
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
-from songmaker_cli.db.queries import JobStatusUpdate, count_cover_jobs_since, update_job_status
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_since, update_job_status
 from songmaker_cli.settings import CoverExecutor, Settings
 
 

@@ -14,7 +14,8 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
 from songmaker_cli.db.models import AuditLog
-from songmaker_cli.db.queries import create_user, create_user_lora
+from songmaker_cli.db.queries.auth import create_user
+from songmaker_cli.db.queries.loras import create_user_lora
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 
 
@@ -43,7 +44,7 @@ def _login_as_user(client: TestClient) -> None:
 
 
 def _deactivate_actor(client: TestClient, actor_id: str) -> None:
-    from songmaker_cli.db.queries import update_user
+    from songmaker_cli.db.queries.auth import update_user
 
     with client.app.state.ctx.db() as session:
         update_user(session, actor_id, is_active=False)
@@ -508,7 +509,7 @@ def test_deactivate_admin_via_delete_allowed_when_multiple(client: TestClient) -
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        from songmaker_cli.db.queries import get_user
+        from songmaker_cli.db.queries.auth import get_user
         admin2_user = get_user(session, admin2_id)
         assert admin2_user.is_active is False
 
@@ -672,12 +673,10 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
     audio_dir = client.app.state.ctx.audio_dir
 
     with factory() as session:
-        from songmaker_cli.db.queries import (
-            create_album,
-            create_generation,
-            create_playlist,
-            create_song,
-        )
+        from songmaker_cli.db.queries.albums import create_album
+        from songmaker_cli.db.queries.generations import create_generation
+        from songmaker_cli.db.queries.playlists import create_playlist
+        from songmaker_cli.db.queries.songs import create_song
 
         user = create_user(session, username, stored_hash("t3stP@ssw0rd"))
         album = create_album(session, f"{username}-album", "Test Album", created_by=user.id)
@@ -700,7 +699,7 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
 
 
 def _write_user_playlist_cover(client: TestClient, user_id: str) -> Path:
-    from songmaker_cli.db.queries import list_playlists
+    from songmaker_cli.db.queries.playlists import list_playlists
 
     with client.app.state.ctx.db() as session:
         playlist_id = list_playlists(session, user_id)[0].id
@@ -723,12 +722,13 @@ def test_hard_delete_user(client: TestClient) -> None:
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        from songmaker_cli.db.queries import get_user, list_albums
+        from songmaker_cli.db.queries.albums import list_albums
+        from songmaker_cli.db.queries.auth import get_user
 
         assert get_user(session, user_id) is None
         user_albums = [a for a in list_albums(session) if a.created_by == user_id]
         assert len(user_albums) == 0
-        from songmaker_cli.db.queries import list_playlists
+        from songmaker_cli.db.queries.playlists import list_playlists
         assert len(list_playlists(session, user_id)) == 0
 
     assert not (audio_dir / user_id).exists()
@@ -784,7 +784,7 @@ def test_hard_delete_user_rolls_back_when_session_deletion_fails(
     ):
         client.delete(f"/api/admin/users/{user_id}/permanent")
 
-    from songmaker_cli.db.queries import get_user
+    from songmaker_cli.db.queries.auth import get_user
 
     with factory() as session:
         assert get_user(session, user_id) is not None
@@ -899,7 +899,7 @@ def test_last_active_admin_is_protected_from_every_removal_path(
     if already_authenticated:
         assert response.json()["detail"] == "Cannot remove the last active admin"
     with client.app.state.ctx.db() as db:
-        from songmaker_cli.db.queries import get_user
+        from songmaker_cli.db.queries.auth import get_user
         target = get_user(db, target_id)
         assert target.is_active
         assert target.role == "admin"
@@ -930,7 +930,7 @@ def test_hard_delete_not_found(client: TestClient) -> None:
 
 
 def _seed_worker(client: TestClient, worker_id: str, **kwargs) -> None:
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -1141,7 +1141,9 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     from songmaker_cli.acestep_state import worker_state_key
     from songmaker_cli.arq_pool import init_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_HEALTH_KEY
-    from songmaker_cli.db.queries import create_album, create_song, get_user_by_username
+    from songmaker_cli.db.queries.albums import create_album
+    from songmaker_cli.db.queries.auth import get_user_by_username
+    from songmaker_cli.db.queries.songs import create_song
     from songmaker_cli.lifecycle import BackgroundLoopName, BackgroundLoopRegistry
     from songmaker_cli.worker_liveness import WorkerLiveness, acestep_worker_liveness
 

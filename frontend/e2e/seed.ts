@@ -595,7 +595,7 @@ export async function setVoiceProofModelMode(
 ): Promise<void> {
 	const script = [
 		'from songmaker_cli.db.engine import connect_db, resolve_database_url',
-		'from songmaker_cli.db.queries import get_user_lora, update_user_lora',
+		'from songmaker_cli.db.queries.loras import get_user_lora, update_user_lora',
 		'import sys',
 		'factory = connect_db(resolve_database_url())',
 		'with factory() as session:',

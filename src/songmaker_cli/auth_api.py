@@ -48,7 +48,7 @@ from songmaker_cli.auth_dependencies import (
     user_management,
 )
 from songmaker_cli.auth_stores import DatabaseLoginAttemptStore, DatabaseSessionRecordStore
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import (
     count_recent_failed_attempts,
     create_session,
     get_user_by_username,

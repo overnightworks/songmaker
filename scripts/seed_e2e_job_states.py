@@ -70,18 +70,11 @@ from songmaker_cli.config import audio_file_path, find_project_root
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, GenerationPhase, JobStatus, JobType
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.models import Generation, Job
-from songmaker_cli.db.queries import (
-    JobStatusUpdate,
-    create_generation,
-    create_generation_created_event,
-    create_job,
-    create_song,
-    get_job,
-    get_song,
-    get_user_by_username,
-    update_job_status,
-    update_song,
-)
+from songmaker_cli.db.queries.auth import get_user_by_username
+from songmaker_cli.db.queries.generations import create_generation
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, get_job, update_job_status
+from songmaker_cli.db.queries.resource_events import create_generation_created_event
+from songmaker_cli.db.queries.songs import create_song, get_song, update_song
 from songmaker_cli.settings import get_settings
 
 

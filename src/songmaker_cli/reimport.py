@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.config import audio_file_path
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
-from songmaker_cli.db.queries import create_generation, create_generation_created_event
+from songmaker_cli.db.queries.generations import create_generation
+from songmaker_cli.db.queries.resource_events import create_generation_created_event
 
 log = logging.getLogger(__name__)
 

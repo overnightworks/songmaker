@@ -31,14 +31,13 @@ from songmaker_cli.constants import (
     PAGE_MAX_LIMIT,
 )
 from songmaker_cli.db.models import Album
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.activity import list_place_listens, list_worked_songs
+from songmaker_cli.db.queries.albums import (
     album_ids_with_playable_take,
     count_picked_songs_by_album,
     count_songs_by_album,
-    list_place_listens,
-    list_worked_songs,
-    search_library,
 )
+from songmaker_cli.db.queries.library import search_library
 from songmaker_cli.library_cursor import (
     LibraryCursorInvalidError,
     LibraryCursorMismatchError,

@@ -2054,7 +2054,8 @@ def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> Non
 
 
 def test_share_album_ownership_enforced(tmp_path: Path) -> None:
-    from songmaker_cli.db.queries import create_album, create_user
+    from songmaker_cli.db.queries.albums import create_album
+    from songmaker_cli.db.queries.auth import create_user
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -2104,14 +2105,22 @@ def test_enabling_sharing_logs_entity_without_capability(
     entity_id: str,
 ) -> None:
     """1301-F6-LOG: first and repeated sharing log identity without the capability."""
-    from songmaker_cli.db import queries
+    from songmaker_cli.db.queries.albums import enable_album_sharing
+    from songmaker_cli.db.queries.generations import enable_generation_sharing
+    from songmaker_cli.db.queries.playlists import enable_playlist_sharing
+    from songmaker_cli.db.queries.songs import enable_song_sharing
 
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         _seed_song_with_two_takes(session)
         session.commit()
 
-    enable_sharing = getattr(queries, f"enable_{entity_type}_sharing")
+    enable_sharing = {
+        "album": enable_album_sharing,
+        "song": enable_song_sharing,
+        "generation": enable_generation_sharing,
+        "playlist": enable_playlist_sharing,
+    }[entity_type]
     slug = None
     for _ in range(2):
         caplog.clear()
@@ -2129,7 +2138,7 @@ def test_enabling_sharing_logs_entity_without_capability(
 
 
 def test_enable_disable_sharing(tmp_path: Path) -> None:
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.albums import (
         create_album,
         disable_album_sharing,
         enable_album_sharing,
@@ -2165,7 +2174,7 @@ def test_enable_disable_sharing(tmp_path: Path) -> None:
 
 
 def test_enable_sharing_not_found(tmp_path: Path) -> None:
-    from songmaker_cli.db.queries import enable_album_sharing
+    from songmaker_cli.db.queries.albums import enable_album_sharing
 
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
@@ -2174,7 +2183,7 @@ def test_enable_sharing_not_found(tmp_path: Path) -> None:
 
 
 def test_disable_sharing_not_found(tmp_path: Path) -> None:
-    from songmaker_cli.db.queries import disable_album_sharing
+    from songmaker_cli.db.queries.albums import disable_album_sharing
 
     factory = init_db(tmp_path / "test.db")
     with factory() as session:

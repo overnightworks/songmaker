@@ -10,10 +10,7 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import SETTING_JUDGE_PROVIDER, SETTING_JUDGE_ROUTE
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import RateLimitSetting
-from songmaker_cli.db.queries import (
-    get_judge_route,
-    set_claude_model,
-)
+from songmaker_cli.db.queries.settings import get_judge_route, set_claude_model
 from songmaker_cli.lifecycle import pin_judge_route
 
 
@@ -98,7 +95,9 @@ def test_unexpected_pin_failure_remains_visible(ctx, monkeypatch):
     def unavailable_database(*_args, **_kwargs):
         raise RuntimeError("database unavailable")
 
-    monkeypatch.setattr("songmaker_cli.db.queries.pin_judge_route_if_unset", unavailable_database)
+    monkeypatch.setattr(
+        "songmaker_cli.db.queries.settings.pin_judge_route_if_unset", unavailable_database
+    )
 
     with pytest.raises(RuntimeError, match="database unavailable"):
         pin_judge_route(ctx)

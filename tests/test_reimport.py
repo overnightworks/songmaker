@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli import audio_files
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
-from songmaker_cli.db.queries import get_generation
+from songmaker_cli.db.queries.generations import get_generation
 from songmaker_cli.reimport import _extract_seed, reimport_files
 
 USER_ID = "u-reimport"

@@ -108,7 +108,7 @@ def test_on_shutdown_recovers_jobs() -> None:
 
     redis = AsyncMock()
     with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value={"dummy": 2},
+        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={"dummy": 2},
     ) as mock_recover:
         _run(worker.on_shutdown({"redis": redis}))
 
@@ -126,7 +126,7 @@ def test_on_shutdown_skips_when_lock_held() -> None:
     redis.set = AsyncMock(return_value=False)
 
     with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_type",
+        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type",
     ) as mock_recover:
         _run(worker.on_shutdown({"redis": redis}))
 
@@ -142,7 +142,7 @@ def test_recover_on_startup_acquires_lock_and_recovers() -> None:
 
     ctx = {"redis": AsyncMock()}
     with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value={"dummy": 3},
+        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={"dummy": 3},
     ) as mock_recover:
         result = _run(worker._recover_on_startup(ctx))
 
@@ -162,7 +162,7 @@ def test_recover_on_startup_skips_when_lock_held() -> None:
     ctx["redis"].set = AsyncMock(return_value=False)
 
     with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_type",
+        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type",
     ) as mock_recover:
         result = _run(worker._recover_on_startup(ctx))
 
@@ -181,7 +181,7 @@ def test_recover_on_startup_releases_lock_on_error() -> None:
 
     ctx = {"redis": AsyncMock()}
 
-    with patch("songmaker_cli.db.queries.recover_stale_jobs_by_type"):
+    with patch("songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type"):
         try:
             _run(worker._recover_on_startup(ctx))
         except RuntimeError:

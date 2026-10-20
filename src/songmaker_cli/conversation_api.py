@@ -79,36 +79,42 @@ from songmaker_cli.constants import (
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.cowriter.routing import stream_cowriter_turn
 from songmaker_cli.db.models import ChatMessage, Conversation, Generation, Song
-from songmaker_cli.db.queries import (
-    JobStatusUpdate,
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.conversations import (
+    append_message,
     archive_conversation,
-    best_playable_generation,
-    count_user_active_jobs,
     create_conversation,
     delete_conversation,
     get_active_conversation,
-    get_album,
-    get_album_memory,
     get_conversation,
+    get_or_create_active_conversation,
+    list_messages,
+    recent_conversations,
+    upsert_summary,
+)
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    count_user_active_jobs,
+    recover_stale_jobs_by_type,
+    update_job_status,
+)
+from songmaker_cli.db.queries.memory import (
+    get_album_memory,
+    get_song_memory,
+    get_user_memory,
+    upsert_album_memory,
+    upsert_song_memory,
+    upsert_user_memory,
+)
+from songmaker_cli.db.queries.playlists import best_playable_generation
+from songmaker_cli.db.queries.settings import (
     get_cowriter_model,
     get_cowriter_provider,
     get_cowriter_tail_token_budget,
     get_effective_provider_routes,
-    get_or_create_active_conversation,
-    get_song_memory,
-    get_user_memory,
-    get_version,
-    list_messages,
-    list_songs,
-    recent_conversations,
-    recover_stale_jobs_by_type,
-    update_job_status,
-    upsert_album_memory,
-    upsert_song_memory,
-    upsert_summary,
-    upsert_user_memory,
 )
-from songmaker_cli.db.queries.conversations import append_message
+from songmaker_cli.db.queries.songs import list_songs
+from songmaker_cli.db.queries.versions import get_version
 
 if TYPE_CHECKING:
     from agent_providers.catalog import ProviderRoute
