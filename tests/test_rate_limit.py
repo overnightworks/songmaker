@@ -92,15 +92,20 @@ def _mock_arq():
 # ── Generation rate limit ───────────────────────────────────────────
 
 
-def test_generate_rate_limit_for_user(client: TestClient) -> None:
-    _login_as(client, "user")
+def _add_completed_generate_jobs(client: TestClient, count: int) -> None:
     user_id = _get_user_id(client)
-
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        for i in range(3):
+    with client.app.state.ctx.db() as session:
+        for _ in range(count):
             session.add(Job(type="generate", user_id=user_id, status="completed"))
         session.commit()
+
+
+@pytest.mark.parametrize("role", ["user", "admin"])
+def test_generate_rate_limit(client: TestClient, monkeypatch, role: str) -> None:
+    monkeypatch.setenv("GENERATION_RATE_LIMIT_USER", "3")
+    get_settings.cache_clear()
+    _login_as(client, role)
+    _add_completed_generate_jobs(client, 3)
 
     resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
@@ -108,26 +113,24 @@ def test_generate_rate_limit_for_user(client: TestClient) -> None:
     assert "Rate limit" in resp.json()["detail"]
 
 
-def test_generate_no_rate_limit_for_admin(client: TestClient) -> None:
+def test_saved_global_rate_limit_binds_an_admin(client: TestClient) -> None:
     _login_as(client, "admin")
-    user_id = _get_user_id(client)
+    saved = client.put("/api/settings/rate-limits", json={"settings": {"generation_rate_limit": 5}})
+    assert saved.status_code == 200
+    _add_completed_generate_jobs(client, 5)
 
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        for i in range(10):
-            session.add(Job(type="generate", user_id=user_id, status="completed"))
-        session.commit()
+    resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
 
-    with _mock_arq():
-        resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
-
-    assert resp.status_code == 200
+    assert resp.status_code == 429
+    assert "5/generates" in resp.json()["detail"]
 
 
 # ── Scoring rate limit ──────────────────────────────────────────────
 
 
-def test_score_rate_limit_for_user(client: TestClient) -> None:
+def test_score_rate_limit_for_user(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("SCORING_RATE_LIMIT_USER", "10")
+    get_settings.cache_clear()
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
@@ -145,10 +148,11 @@ def test_score_rate_limit_for_user(client: TestClient) -> None:
 # ── Active job limit ────────────────────────────────────────────────
 
 
-def test_active_job_limit(client: TestClient, monkeypatch) -> None:
+@pytest.mark.parametrize("role", ["user", "admin"])
+def test_active_job_limit(client: TestClient, monkeypatch, role: str) -> None:
     monkeypatch.setenv("MAX_USER_ACTIVE_JOBS", "1")
     get_settings.cache_clear()
-    _login_as(client, "user")
+    _login_as(client, role)
     user_id = _get_user_id(client)
 
     factory = client.app.state.ctx.db

@@ -3837,29 +3837,6 @@ def test_create_album_records_audit(client: TestClient) -> None:
     assert any(e.action == "create" and e.resource_type == "album" for e in entries)
 
 
-# ── Admin rate limits ────────────────────────────────────────────────
-
-
-def test_admin_has_rate_limit(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("GENERATION_RATE_LIMIT_USER", "3")
-    monkeypatch.setenv("GENERATION_RATE_LIMIT_ADMIN", "1")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
-
-    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-
-    with _mock_worker():
-        r = c.post(
-            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
-        )
-        assert r.status_code == 200
-
-        r = c.post(
-            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
-        )
-        assert r.status_code == 429
-
-
 # ── Body size limit middleware ───────────────────────────────────────
 
 

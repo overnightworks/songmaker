@@ -887,7 +887,7 @@ def test_chat_turns_beyond_the_chat_rate_limit_are_refused(
     every_provider_is_configured,
 ):
     client, _ = admin_client
-    monkeypatch.setenv("CHAT_RATE_LIMIT_ADMIN", "2")
+    monkeypatch.setenv("CHAT_RATE_LIMIT_USER", "2")
     get_settings.cache_clear()
     client.put("/api/settings/cowriter", json={"provider": "claude", "model": "claude-opus-4-6"})
 
