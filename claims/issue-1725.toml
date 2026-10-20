@@ -1,8 +1,0 @@
-claim_id = "4cf34a5e55514451b7e4a6dc5428fdfe"
-agent = "claude"
-role = "builder"
-base = "30f9985bf8fc8e0fce49a0f826521d414184d504"
-branch = "claude/issue-1725-one-rate-limit"
-scope = ["docker-compose.yml", "docker/.env.docker.example", "docs/security.md", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/settings.py", "tests/test_api.py", "tests/test_cowriter_providers.py", "tests/test_rate_limit.py", "tests/test_settings.py"]
-opened_commit = "8cc101816b3c35a9215515c2099eaf41980fc818"
-whole_reason = "Dropping the admin column touches its settings fields, the one resolver, the env example, the docs table and the three tests that pin it; split, a test would pin a removed setting."
