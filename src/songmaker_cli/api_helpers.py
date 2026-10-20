@@ -201,27 +201,15 @@ def resolve_public_base_url() -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _job_type_rate_limits(job_type: JobType) -> tuple[int, int, str]:
-    """Return (user_limit, admin_limit, db_setting_key) for a job type."""
+def _job_type_rate_limit(job_type: JobType) -> tuple[int, str]:
+    """Return (env_limit, db_setting_key) for a job type."""
     settings = get_settings()
     if job_type == JobType.GENERATE:
-        return (
-            settings.generation_rate_limit_user,
-            settings.generation_rate_limit_admin,
-            SETTING_GENERATION_RATE_LIMIT,
-        )
+        return settings.generation_rate_limit_user, SETTING_GENERATION_RATE_LIMIT
     if job_type == JobType.SCORE:
-        return (
-            settings.scoring_rate_limit_user,
-            settings.scoring_rate_limit_admin,
-            SETTING_SCORING_RATE_LIMIT,
-        )
+        return settings.scoring_rate_limit_user, SETTING_SCORING_RATE_LIMIT
     if job_type == JobType.CHAT:
-        return (
-            settings.chat_rate_limit_user,
-            settings.chat_rate_limit_admin,
-            SETTING_CHAT_RATE_LIMIT,
-        )
+        return settings.chat_rate_limit_user, SETTING_CHAT_RATE_LIMIT
     raise ValueError(f"Unknown job type for rate limiting: {job_type}")
 
 
@@ -262,7 +250,6 @@ def create_job_with_rate_limit(
     session.commit()
     _begin_exclusive(session)
 
-    is_admin = user.role == ROLE_ADMIN
     settings = get_settings()
     max_queue_depth = resolve_rate_limit(
         session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
@@ -278,17 +265,15 @@ def create_job_with_rate_limit(
         if count_total_queued_jobs(session) >= max_queue_depth:
             session.rollback()
             raise HTTPException(429, "Queue is full. Try again later.")
-        if not is_admin:
-            max_active = resolve_rate_limit(
-                session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
-            )
-            if count_user_active_jobs(session, user.id, job_type) >= max_active:
-                session.rollback()
-                raise HTTPException(429, "You already have an active job. Wait for it to finish.")
+        max_active = resolve_rate_limit(
+            session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
+        )
+        if count_user_active_jobs(session, user.id, job_type) >= max_active:
+            session.rollback()
+            raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
-    env_user, env_admin, setting_key = _job_type_rate_limits(job_type)
-    env_default = env_admin if is_admin else env_user
-    limit = resolve_rate_limit(session, user.id, setting_key, env_default)
+    env_limit, setting_key = _job_type_rate_limit(job_type)
+    limit = resolve_rate_limit(session, user.id, setting_key, env_limit)
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         session.rollback()

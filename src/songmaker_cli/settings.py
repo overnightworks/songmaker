@@ -209,11 +209,8 @@ class Settings(BaseSettings):
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 3
-    generation_rate_limit_admin: int = 30
     scoring_rate_limit_user: int = 10
-    scoring_rate_limit_admin: int = 100
     chat_rate_limit_user: int = 30
-    chat_rate_limit_admin: int = 300
     cover_suggestions_daily_limit: int = Field(default=10, ge=1)
     cover_cli_deadline_seconds: int = Field(default=COVER_CLI_DEADLINE_SECONDS, ge=1)
     cover_job_budget_seconds: int = Field(default=COVER_JOB_BUDGET_SECONDS, ge=1)
