@@ -266,7 +266,7 @@ type HistoryWriteMode = 'push' | 'replace';
 // and loads its route again.
 //
 // Only history the controller has moving holds a write: a step back it has
-// underway (the phone drawer closing, Go to song leaving full Now Playing),
+// underway (a sheet closing, Go to song leaving full Now Playing),
 // whose landing a write issued meanwhile would land under, or that one `goto`
 // from another page, whose entry stands only once its route has loaded -- a
 // second write issued meanwhile would supersede it and stand in its place

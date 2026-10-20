@@ -436,7 +436,7 @@
 
 	/* A phone opens the list as a sheet along the screen's bottom edge; a
 	   wider window keeps it as a popover under the chip. The sheet dims the
-	   page as the phone's rail drawer does: the picture's light grey left the
+	   page as the phone's other sheets do: the picture's light grey left the
 	   dark theme undimmed. */
 	@media (max-width: 768px) {
 		.versions-backdrop {

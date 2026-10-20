@@ -44,10 +44,6 @@ const onlogout = vi.fn();
 const { render, cleanup } = createComponentMount(Rail, {
 	account: { username: 'felix', onlogout }
 });
-const navigationOnly = createComponentMount(Rail, {
-	showCollapseControl: false,
-	showResizeHandle: false
-});
 let collapsedMounted: ReturnType<typeof mount> | undefined;
 
 async function renderCollapsedRail(): Promise<HTMLElement> {
@@ -141,7 +137,6 @@ beforeEach(() => {
 
 afterEach(async () => {
 	await cleanup();
-	await navigationOnly.cleanup();
 	if (collapsedMounted) await unmount(collapsedMounted);
 	collapsedMounted = undefined;
 	resetLibraryContextForTests();
@@ -169,20 +164,6 @@ describe('Rail', () => {
 		expect(groupRows[1]?.textContent).toContain('Playlists');
 		expect(groupRows[2]?.textContent).toContain('Settings');
 		expect(target.textContent).toContain('felix');
-	});
-
-	it('carries navigation only without an account: brand, search, Library and Playlists', async () => {
-		const target = await navigationOnly.render();
-		const groupTitles = Array.from(
-			target.querySelectorAll('.rail-group > .disclose-row .group-title'),
-			(title) => title.textContent?.trim()
-		);
-
-		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
-		expect(target.querySelectorAll('input[type="search"]')).toHaveLength(1);
-		expect(groupTitles).toEqual(['Library', 'Playlists']);
-		expect(target.querySelector('.rail-bottom')).toBeNull();
-		expect(target.querySelector('.rail-collapse, input[type="range"]')).toBeNull();
 	});
 
 	it('renders the only search field directly beneath the brand', async () => {
@@ -355,7 +336,7 @@ describe('Rail', () => {
 		'1354_rule_28: page titles follow this rail collapse state, collapsed=%s',
 		async (collapsed) => {
 			railCollapsed.set(true);
-			const target = collapsed ? await renderCollapsedRail() : await navigationOnly.render();
+			const target = collapsed ? await renderCollapsedRail() : await render();
 			for (const link of target.querySelectorAll<HTMLAnchorElement>('a.home-link, a.page-link')) {
 				expect(link.hasAttribute('title')).toBe(collapsed);
 				const icon = requireElement<SVGElement>(link, 'svg');
@@ -373,8 +354,7 @@ describe('Rail', () => {
 		const brand = requireElement<HTMLButtonElement>(target, '.brand');
 		// Named after what it is (the wordmark), not what it does -- GitHub's own
 		// logo pattern -- so it never collides with the LIBRARY group's own
-		// "Library" name in an accessible-name lookup (both live in the same
-		// mobile drawer).
+		// "Library" name in an accessible-name lookup.
 		expect(brand.hasAttribute('aria-label')).toBe(false);
 		expect(brand.textContent).toBe('Hallucinai');
 		brand.click();
