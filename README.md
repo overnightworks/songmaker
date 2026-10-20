@@ -87,17 +87,17 @@ The local Python `.venv` exists for **tests, type checking, and IDE autocomplete
 # One-time setup
 uv sync --extra server --extra scoring --extra whisper --extra mcp --extra image --extra dev
 
-# Run the test suite
-pytest tests/ -n auto -q
+# Run the tests that prove your change (the full suite runs in CI)
+pytest tests/test_foo.py tests/test_bar.py -q --tb=short
 
-# Run the linter
-ruff check src/ tests/
+# Run the linter on the files you changed
+ruff check src/songmaker_cli/foo.py tests/test_foo.py
 
-# Frontend tests / lint / type-check
-cd frontend && pnpm install && pnpm test:coverage && pnpm lint && pnpm check && pnpm build
+# Frontend: named test files, lint, type-check
+cd frontend && pnpm install && pnpm exec vitest run src/lib/stores/player.test.ts && pnpm lint && pnpm check
 ```
 
-Tests run against an in-memory SQLite database (no Postgres needed for unit tests) and `fakeredis`. The live Docker stack and the test suite are fully independent — you can run tests while the Docker stack is up.
+The full suite and coverage gates run in CI; see [docs/testing.md](docs/testing.md). Tests run against an in-memory SQLite database (no Postgres needed for unit tests) and `fakeredis`. The live Docker stack and the test suite are fully independent — you can run tests while the Docker stack is up.
 
 The auth layer and the provider layer are external dependencies:
 `overnightworks-webauth` is pinned to the `v0.14.0` release wheel of

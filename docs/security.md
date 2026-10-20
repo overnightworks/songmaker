@@ -1082,7 +1082,7 @@ The most a compromised worker can do is publish bogus state to Redis, register w
 
 ### Trust model and accepted risks
 
-- **Subprocesses share the OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker with `cap_drop: ALL`. Compromised model weights or ACE-Step code get user-level disk access. Container isolation mitigates this; OS-user separation would need separate containers for marginal benefit. Accepted for a single-user deployment.
+- **Subprocesses share the OS user.** ACE-Step and scorer subprocesses run as the same `songmaker` user in Docker. `songmaker-acestep-worker-0`, `songmaker-music-worker` and `songmaker-scoring-worker` keep Docker's default capability set and do not set `no-new-privileges`; hardening them is tracked in #1723. Compromised model weights or ACE-Step code get user-level disk access. Container isolation mitigates this; OS-user separation would need separate containers for marginal benefit. Accepted for a single-user deployment.
 - **One shared token.** All workers hold the same `SONGMAKER_INTERNAL_TOKEN`; compromising one grants full internal-API access. Multi-node deployments should move to per-worker tokens or mTLS.
 - **Single node.** One acestep-worker per GPU on one host, the ACE-Step HTTP subprocess inside the worker container. Multi-node distribution (separate hosts, shared model storage, cross-host Redis heartbeats) is untested, and the image/packaging refactor that would precede it (decoupling the ACE-Step subprocess image from the worker image) is unwritten.
 

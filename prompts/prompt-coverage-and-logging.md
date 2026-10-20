@@ -60,7 +60,7 @@ Coverage is measured in CI (the full `pytest tests/ -n auto --cov=...` run is CI
 pytest tests/test_foo.py -q --tb=short
 ```
 
-For any module below 90% coverage (excluding `scoring/*`, `main.py`):
+For any module below 90% coverage in the CI coverage report (excluding `scoring/*`, `main.py`):
 1. Read the uncovered lines
 2. If they're reachable code paths (not just `if __name__ == "__main__"` guards), write tests
 3. Focus on error paths and edge cases, not happy paths (those are already covered)

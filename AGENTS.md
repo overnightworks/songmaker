@@ -92,8 +92,3 @@ Backend paths are under `src/songmaker_cli/`. `plans/` holds temporary live-coor
 - **Stale numba cache segfaults scorer tests after `uv sync`** (librosa's `.nbc`/`.nbi` files under `librosa/__pycache__/`). Fix: `find .venv/lib/python*/site-packages/librosa \( -name "*.nbc" -o -name "*.nbi" \) -delete`.
 - **Backup and restore need both** DB and audio files (`scripts/backup.sh`, `scripts/restore.sh`); restoring one leaves orphaned records or unreachable files.
 - **`slugify()` uses `python-slugify`**; the `"untitled"` fallback covers an empty transliteration.
-
-## Work items
-
-- An item's kind is GitHub's native issue type from the `overnightworks` organization (`gh api graphql` on `organization(login:"overnightworks"){ issueTypes }`): `Container` for an epic or distributor holding slices, `Task` for a buildable slice, `Bug`, `Feature`; the coordination ledger issue (#71) stays untyped. A slice's parent is GitHub's sub-issue relation, never a body line; closing a parent's last open child closes the parent. Set both right after `gh issue create` via `gh api graphql` (`updateIssue`, `addSubIssue`); `gh issue edit` fails here with a Projects-classic GraphQL error.
-- The board reads the contract from the typed `aco` fenced block (`body_contract = "block"` in `.aco/board.toml`). Every hand-created item carries the four-line block; only `cut` writes it automatically. (Org-wide; raised to marketplace, stays here until it or aco rules.)
