@@ -737,8 +737,8 @@ async def generation_retention_run(
         run_generation_retention, ctx.db, ctx.audio_dir, dry_run=False,
     )
     record_audit(
-        db, admin.id, AuditAction.HARD_DELETE, ResourceType.GENERATION, None,
-        f"retention: archived={report.archived_count}, deleted={report.deleted_count}",
+        db, admin.id, AuditAction.HARD_DELETE, ResourceType.GENERATION,
+        detail=f"retention: archived={report.archived_count}, deleted={report.deleted_count}",
     )
     db.commit()
     return _retention_report_response(report, dry_run=False)
