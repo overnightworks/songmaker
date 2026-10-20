@@ -43,6 +43,6 @@ and the choices made while curating it.
   or implementation-status report.
 
 The current product description in [AGENTS.md](../AGENTS.md), the running code,
-and GitHub issues are source material for requirement candidates. Only the
-[requirement revision lifecycle](requirements/README.md#revision-lifecycle)
-turns reviewed candidate bytes into normative intent.
+and GitHub issues are source material for requirement candidates. The ruled product sentences in
+[docs/requirements/](requirements/README.md) (moving to `docs/specs/`) are
+normative; they change only by an operator ruling that the pull request names.
