@@ -276,6 +276,27 @@ describe('apiFetch error detail', () => {
 		expect((err as ApiError).responseDetail).toEqual(responseDetail);
 		expect((err as ApiError).message).toBe(API_ERROR_GENERIC_MESSAGE);
 	});
+
+	it.each([
+		{
+			body: { detail: 'Not now', error_type: 'generation_unavailable', job_id: 'job9' },
+			errorType: 'generation_unavailable',
+			jobId: 'job9'
+		},
+		{ body: { detail: 'Not now', error_type: 7, job_id: null }, errorType: null, jobId: null },
+		{ body: { detail: 'Not now' }, errorType: null, jobId: null }
+	])('keeps error_type and job_id of $body as typed fields', async ({ body, errorType, jobId }) => {
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 503,
+			headers: { get: () => null },
+			json: () => Promise.resolve(body)
+		});
+
+		const err = await apiFetch('/api/songs/s1/generate').catch((e: unknown) => e);
+
+		expect(err).toMatchObject({ detail: 'Not now', errorType, jobId });
+	});
 });
 
 describe('apiFetch 429 classification', () => {

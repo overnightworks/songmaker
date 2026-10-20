@@ -12,7 +12,6 @@ import type { JobItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	EDITOR_GENERATE_CANCEL_FAILED,
-	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_SELECT_MODEL_TITLE
@@ -153,8 +152,8 @@ describe('generate action presentation', () => {
 			}
 		},
 		{
-			state: 'GPU offline',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE },
+			state: 'no worker online',
+			expectedState: { kind: 'idle', mode: 'generate' },
 			setup: () => {
 				vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 			}
@@ -771,6 +770,55 @@ describe('generate action execution', () => {
 		}
 		expect(get(generateAction)).toMatchObject({ kind: 'queued', jobId: queuedJob.id });
 		expect(get(pinnedSeed)).toBeNull();
+	});
+
+	it.each([{ mode: 'generate' }, { mode: 'repaint' }, { mode: 'cover' }] as const)(
+		'a $mode press refused as unavailable shows its lasting line with no toast',
+		async ({ mode }) => {
+			const line = "Generating isn't available right now.";
+			const refusal = new ApiError(
+				503,
+				line,
+				'/api/x',
+				null,
+				line,
+				'generation_unavailable',
+				'job9'
+			);
+			if (mode === 'generate') vi.mocked(generateSong).mockRejectedValueOnce(refusal);
+			else {
+				sourceGeneration.set(makeGeneration());
+				sourceMode.set(mode);
+				vi.mocked(mode === 'repaint' ? repaintGeneration : coverGeneration).mockRejectedValueOnce(
+					refusal
+				);
+			}
+			await generate();
+			expect(addToast).not.toHaveBeenCalled();
+			expect(get(generationFailures)).toEqual({ s1: { message: line, unavailable: true } });
+			expect(get(generateAction)).toMatchObject({
+				kind: 'failed',
+				cause: line,
+				unavailable: true
+			});
+		}
+	);
+
+	it.each([
+		{
+			why: 'another error type',
+			error: new ApiError(503, 'ffmpeg missing', '/api/x', null, 'x', 'generation_error', 'job9')
+		},
+		{ why: 'no error type', error: new ApiError(503, 'Queue is not reachable', '/api/x') },
+		{
+			why: 'no job id',
+			error: new ApiError(503, 'Generating', '/api/x', null, 'x', 'generation_unavailable')
+		}
+	])('a 503 with $why keeps its toast and sets no lasting line', async ({ error }) => {
+		vi.mocked(generateSong).mockRejectedValueOnce(error);
+		await generate();
+		expect(addToast).toHaveBeenCalledExactlyOnceWith(error.detail, 'error');
+		expect(get(generationFailures)).toEqual({});
 	});
 
 	it('generates without a saved version when none exists', async () => {

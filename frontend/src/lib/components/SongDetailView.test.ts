@@ -19,7 +19,6 @@ import {
 	COMPACT_LAYOUT_MEDIA,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATING_LABEL,
-	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_SAVE_FAILED,
 	EDITOR_SAVE_LABEL,
@@ -910,39 +909,14 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		return target.querySelector<HTMLButtonElement>('.generate-action .primary-button');
 	}
 
-	it('disables Generate with a reason when no ACE-Step worker is online', async () => {
+	it('keeps Generate pressable with no reason when no ACE-Step worker is online', async () => {
 		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 		const target = await renderView();
 
 		const btn = generateBtn(target);
-		expect(btn?.disabled).toBe(true);
-		expect(target.querySelector('.generate-action .reason')?.textContent).toContain(
-			EDITOR_GPU_OFFLINE_TITLE
-		);
-		expect(btn?.title).toBe(EDITOR_GPU_OFFLINE_TITLE);
-	});
-
-	it('keeps Generate enabled when at least one ACE-Step worker is online', async () => {
-		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 2 }));
-		const target = await renderView();
-
-		const btn = generateBtn(target);
 		expect(btn?.disabled).toBe(false);
-		expect(btn?.textContent).toContain(EDITOR_GENERATE_MODE_LABELS.generate);
-	});
-
-	it('re-enables Generate without a reload once a worker comes back online', async () => {
-		vi.useFakeTimers();
-		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
-		const target = await renderView();
-		expect(generateBtn(target)?.disabled).toBe(true);
-
-		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 1 }));
-		await vi.advanceTimersByTimeAsync(15_000);
-		await tick();
-
-		const btn = generateBtn(target);
-		expect(btn?.disabled).toBe(false);
+		expect(btn?.title).toBe('');
+		expect(target.querySelector('.generate-action .reason')).toBeNull();
 		expect(btn?.textContent).toContain(EDITOR_GENERATE_MODE_LABELS.generate);
 	});
 

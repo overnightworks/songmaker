@@ -1,6 +1,6 @@
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Phone Takes and generation states (#995, #914 L12); Settings also runs on desktop (#1143).
-// CI seeds jobs without a worker; the health override exposes their failure state.
+// CI seeds jobs without a worker.
 
 import { phoneSearchResult } from './phone-search';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
@@ -174,17 +174,6 @@ test.describe('song page at phone width', () => {
 		'[defect:#1568] [defect:#1579] lists takes with a play control each, shows a running generation, then its failure',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ page }) => {
-			// Stands in for the absent worker's own heartbeat (see the file header):
-			// every /health this page makes reports one online, so generateAction's
-			// disabled-reason check never masks the failed job below.
-			await page.route('**/health', async (route) => {
-				const response = await route.fetch();
-				const body = (await response.json()) as Record<string, unknown>;
-				await route.fulfill({
-					response,
-					json: { ...body, acestep_workers_online: 1, acestep_workers_total: 1 }
-				});
-			});
 			const guard = new FlowGuard(page);
 			const library = readSeededLibrary();
 			// A per-attempt title, not the bare constant: CI retries this test once

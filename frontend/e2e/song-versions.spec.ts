@@ -168,17 +168,6 @@ async function saveFurtherVersions(page: Page, songId: string, count: number): P
 	}
 }
 
-async function reportOneWorkerOnline(page: Page): Promise<void> {
-	await page.route('**/health', async (route) => {
-		const response = await route.fetch();
-		const body = (await response.json()) as Record<string, unknown>;
-		await route.fulfill({
-			response,
-			json: { ...body, acestep_workers_online: 1, acestep_workers_total: 1 }
-		});
-	});
-}
-
 // Through the album's track list, the way song-phone.spec.ts opens a song it
 // is about to edit.
 async function openSongEditor(page: Page, song: SeededVersions): Promise<void> {
@@ -375,7 +364,6 @@ test.describe('the versions of a song', () => {
 		test(`tapping v1 loads it as the draft, and Generate makes v3 while v1 and ${v2} stay as they were`, async ({
 			page
 		}, testInfo) => {
-			await reportOneWorkerOnline(page);
 			const song = await seedTwoVersions(page, testInfo, secondVersionTaken);
 			await openSongEditor(page, song);
 			await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
