@@ -3,9 +3,9 @@
 Audience: the musician shaping generated ideas into songs and coherent albums,
 and the people deciding what Songmaker should become.
 
-**Status: non-normative overview.** Approved product truth lives only in the
-active tips of the [requirement registry](requirements/revisions.toml). This
-page explains direction; it does not approve or replace a requirement.
+**Status: non-normative overview.** Ruled product sentences live in the
+[requirements](requirements/). This page explains direction; it does not
+approve or replace a requirement.
 
 ## Why Songmaker exists
 
