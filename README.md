@@ -19,7 +19,7 @@ sudo ./scripts/apparmor/install.sh
 cp docker/.env.docker.example .env     # edit with your secrets — see file for required fields
 docker compose up -d --build --wait
 # Cold-cache rebuild takes 8-15 min the first time. Never wrap in `timeout`
-# (see the "Docker" section of AGENTS.md for the full reasoning).
+# (see "Setup and run" in AGENTS.md for the full reasoning).
 
 # 3. Install the agent-CLI login mirror (one-time, needs sudo)
 sudo ./scripts/install-cli-credentials-mirror.sh

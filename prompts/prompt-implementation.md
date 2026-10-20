@@ -16,6 +16,6 @@ Keep changes minimal. Don't refactor surrounding code, don't add things the plan
 
 ## Step 3: Commit
 
-Commit your work using conventional commit messages (`feat:`, `fix:`, `refactor:`).
+Commit your work.
 
 A second agent will review every line of your diff. If something is wrong, they'll find it — so get it right the first time rather than hoping it passes.

@@ -61,4 +61,3 @@ The build output (`frontend/build/`) is copied into the songmaker-web Docker ima
 - [`../AGENTS.md`](../AGENTS.md) — project conventions, code patterns, "Where things go" (frontend row)
 - [`../docs/architecture.md`](../docs/architecture.md) — backend layout, API endpoints, generation flow
 - [`../docs/security.md`](../docs/security.md) — auth, CSRF, security headers (the frontend must call CSRF-protected endpoints with the `X-CSRF-Token` header)
-- [`../plans/frontend-component-split.md`](../plans/frontend-component-split.md) — proposed refactor for the god components and component test scaffolding

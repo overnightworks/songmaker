@@ -54,10 +54,10 @@ Check these locations:
 
 ### Phase 4: Coverage check
 
-Run the full test suite with coverage:
+Coverage is measured in CI (the full `pytest tests/ -n auto --cov=...` run is CI-only). Locally, run the targeted tests for the modules you changed:
 
 ```bash
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
+pytest tests/test_foo.py -q --tb=short
 ```
 
 For any module below 90% coverage (excluding `scoring/*`, `main.py`):
@@ -77,7 +77,7 @@ For any module below 90% coverage (excluding `scoring/*`, `main.py`):
 
 ```bash
 ruff check src/ tests/
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
+pytest tests/test_foo.py -q --tb=short
 ```
 
 All existing tests must still pass. Coverage should not decrease.
