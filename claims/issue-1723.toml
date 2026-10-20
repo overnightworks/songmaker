@@ -1,0 +1,7 @@
+claim_id = "c23392baf1d94d5388141c2604d4029c"
+agent = "claude"
+role = "builder"
+base = "55d3408aa6c67057555be991cbaa235ca8efc175"
+branch = "claude/issue-1723-harden-worker-containers"
+scope = ["docker-compose.yml", "docs/security.md", "tests/test_packaging_boundary.py"]
+opened_commit = "67e4d2f4d78f22bc6f0206ba95d3bef0e2ed60aa"
