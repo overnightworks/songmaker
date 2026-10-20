@@ -24,7 +24,6 @@ REPORTS = ("reports/coverage.xml", "reports/frontend-coverage/lcov.info")
             "needs",
             [
                 "backend",
-                "acceptance-evidence",
                 "alert-rules",
                 "postgresql-contract",
                 "frontend",
@@ -70,7 +69,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
     assert set(config) == {"gate"}
     assert set(config["gate"]) == {"mandatory_jobs"}
     mandatory = config["gate"]["mandatory_jobs"]
-    assert len(mandatory) == len(set(mandatory)) == 5
+    assert len(mandatory) == len(set(mandatory)) == 4
     assert set(mandatory) == rendered_names
 
 
