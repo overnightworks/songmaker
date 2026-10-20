@@ -212,7 +212,6 @@ def set_song_cover_key(session: Session, song_id: str, cover_key: str | None) ->
         raise ValueError(f"Song not found: {song_id}")
     song.cover_key = cover_key
     session.flush()
-    log.info("Set song %s cover_key=%r", song_id, cover_key)
     return song
 
 
@@ -294,7 +293,6 @@ def create_song(
     )
     session.add(version)
     session.flush()
-    log.info("Created song '%s' (id=%s) in album '%s'", title, song.id, album_id)
     return song
 
 
@@ -362,7 +360,6 @@ def update_song(
         prev.key_scale = new_key_scale
         prev.generation_params = new_gen_params
         session.flush()
-        log.info("Updated song %s v%d in-place", song_id, prev.version_number)
         return prev
 
     next_num = (prev.version_number + 1) if prev else 1
@@ -378,7 +375,6 @@ def update_song(
     )
     song.versions.append(version)
     session.flush()
-    log.info("Updated song %s → v%d", song_id, next_num)
     return version
 
 
@@ -423,7 +419,6 @@ def delete_song(session: Session, song_id: str) -> list[str]:
         ]
         session.delete(song)
         session.flush()
-    log.info("Hard-deleted song %s", song_id)
     return paths
 
 
@@ -435,7 +430,6 @@ def soft_delete_song(session: Session, song_id: str) -> datetime:
     now = datetime.now(timezone.utc)
     song.deleted_at = now
     session.flush()
-    log.info("Soft-deleted song %s", song_id)
     return now
 
 
@@ -469,7 +463,6 @@ def restore_song(session: Session, song_id: str) -> Song:
         raise ValueError(f"Cannot restore song {song_id}: parent album is deleted")
     song.deleted_at = None
     session.flush()
-    log.info("Restored song %s", song_id)
     return song
 
 
@@ -505,7 +498,6 @@ def rename_song(
         update_song(session, song_id, force_new_version=True)
     else:
         session.flush()
-    log.info("Renamed song %s to %r", song_id, title)
     return song
 
 
@@ -528,11 +520,9 @@ def move_song(session: Session, song_id: str, new_album_id: str, slug: str) -> S
     if song.album_id == new_album_id:
         return song
 
-    old_album_id = song.album_id
     song.album_id = new_album_id
     song.slug = slug
     session.flush()
-    log.info("Moved song %s from album %s to %s", song_id, old_album_id, new_album_id)
     return song
 
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 
@@ -19,8 +18,6 @@ from songmaker_cli.db.queries.sharing import (
 )
 from songmaker_cli.db.soft_delete import include_deleted
 from songmaker_cli.settings import get_settings
-
-log = logging.getLogger(__name__)
 
 
 class RestoreWindowExpiredError(Exception):
@@ -156,7 +153,6 @@ def create_album(
     album = Album(id=album_id, title=title, artist=artist, created_by=created_by)
     session.add(album)
     session.flush()
-    log.info("Created album '%s' (id=%s, owner=%s)", title, album_id, created_by)
     return album
 
 
@@ -186,7 +182,6 @@ def update_album(
         album.year = year
         applied["year"] = year
     session.flush()
-    log.info("Updated album %s: %s", album_id, applied)
     return album
 
 
@@ -196,7 +191,6 @@ def set_album_cover_key(session: Session, album_id: str, cover_key: str | None) 
         raise ValueError(f"Album not found: {album_id}")
     album.cover_key = cover_key
     session.flush()
-    log.info("Set album %s cover_key=%r", album_id, cover_key)
     return album
 
 
@@ -262,7 +256,6 @@ def soft_delete_album(session: Session, album_id: str) -> datetime:
         if song.deleted_at is None:
             song.deleted_at = now
     session.flush()
-    log.info("Soft-deleted album %s", album_id)
     return now
 
 
@@ -298,7 +291,6 @@ def restore_album(session: Session, album_id: str) -> Album:
             if aware_timestamp(song_ts) == deleted_at:
                 song.deleted_at = None
     session.flush()
-    log.info("Restored album %s", album_id)
     return album
 
 
@@ -329,7 +321,6 @@ def delete_album(session: Session, album_id: str) -> list[str]:
         session.delete(album)
         session.flush()
 
-    log.info("Hard-deleted album %s", album_id)
     return paths
 
 
@@ -345,7 +336,6 @@ def archive_album(session: Session, album_id: str) -> Album:
     album.is_archived = True
     album.archived_at = datetime.now(timezone.utc)
     session.flush()
-    log.info("Archived album %s", album_id)
     return album
 
 
@@ -356,7 +346,6 @@ def unarchive_album(session: Session, album_id: str) -> Album:
     album.is_archived = False
     album.archived_at = None
     session.flush()
-    log.info("Unarchived album %s", album_id)
     return album
 
 
