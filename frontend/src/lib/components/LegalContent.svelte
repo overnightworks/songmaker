@@ -180,16 +180,17 @@
 				>
 				(Vertragspartner im EWR: Anthropic Ireland, Limited), bei OpenAI das Services Agreement mit dem
 				<a href="https://openai.com/policies/data-processing-addendum/">Data Processing Addendum</a>
-				(im EWR: OpenAI Ireland Ltd.), bei xAI die Terms of Service – Enterprise mit dem
-				<a href="https://x.ai/legal/data-processing-addendum">Data Processing Addendum</a> (SpaceXAI LLC),
-				über seine API mit Zero Data Retention.
+				(im EWR: OpenAI Ireland Ltd.), bei xAI (SpaceXAI LLC), das wir nur über seine API mit Zero Data
+				Retention nutzen, die Terms of Service – Enterprise mit dem
+				<a href="https://x.ai/legal/data-processing-addendum">Data Processing Addendum</a>.
 			</p>
 			<p>
 				<strong>Training:</strong> Nach diesen Bedingungen trainiert Anthropic keine Modelle mit Ihren
 				Inhalten (Commercial Terms, Abschnitt B); OpenAI verwendet Ihre Inhalte nicht, um seine Dienste
-				zu entwickeln oder zu verbessern, es sei denn, der Kunde stimmt dem ausdrücklich zu (Services
+				zu entwickeln oder zu verbessern, es sei denn, wir als Kunde stimmen dem ausdrücklich zu (Services
 				Agreement, Abschnitt 4.2); xAI verwendet Ihre Inhalte nicht, um KI-Modelle zu trainieren oder
-				neue Produkte zu entwickeln (Terms of Service – Enterprise, Abschnitt 3.1).
+				neue Produkte zu entwickeln, vorbehaltlich der Hinweise von xAI an uns und der von uns als Kunde
+				gesteuerten Einstellungen (Terms of Service – Enterprise, Abschnitt 3.1).
 			</p>
 			<p>
 				<strong>Übermittlung in die USA:</strong> Je nach genutzter Funktion verarbeiten Anthropic, OpenAI
@@ -245,12 +246,13 @@
 			</ul>
 			<p>
 				Browser-Speicher und Browser-Cache liest nur die App auf Ihrem Gerät, um Ihre Einstellungen,
-				die letzte Wiedergabe und gespeicherte Audiodateien wiederherzustellen; beim
-				Wiederherstellen der letzten Wiedergabe ruft sie den dort gemerkten Song oder die Playlist
-				von unserem Server ab. Beim Abspielen meldet die App dem Server die Wiedergabe, je
-				Generierung und Playlist einmal seit dem Öffnen der App; der Server vermerkt sie wie unter
-				„Letzte Bearbeitungen und Wiedergaben“ beschrieben. Wiedergaben über einen Freigabe-Link
-				meldet die App nicht. Cloudflare kann eigene Sicherheits-Cookies setzen (siehe Cloudflare).
+				die letzte Wiedergabe, den Navigationsverlauf und die App selbst sowie gespeicherte
+				Audiodateien wiederherzustellen; beim Wiederherstellen der letzten Wiedergabe ruft sie den
+				dort gemerkten Song oder die Playlist von unserem Server ab. Beim Abspielen meldet die App
+				dem Server die Wiedergabe, je Generierung und Playlist einmal seit dem Öffnen der App; der
+				Server vermerkt sie wie unter „Letzte Bearbeitungen und Wiedergaben“ beschrieben.
+				Wiedergaben über einen Freigabe-Link meldet die App nicht. Cloudflare kann eigene
+				Sicherheits-Cookies setzen (siehe Cloudflare).
 			</p>
 
 			<h2>8. Speicherdauer</h2>
