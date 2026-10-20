@@ -1,6 +1,6 @@
 # Coverage & Logging Audit
 
-You are auditing a codebase for test coverage gaps and missing logging at system boundaries. Read `CLAUDE.md` for conventions.
+You are auditing a codebase for test coverage gaps and missing logging at system boundaries. Read `AGENTS.md` for conventions.
 
 ## Context
 

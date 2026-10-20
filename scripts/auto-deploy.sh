@@ -82,7 +82,7 @@
 #     can leave a git lock file behind; clearing it is manual
 #     (docs/architecture.md).
 #
-# Per CLAUDE.md: NEVER wrap `docker compose up --build --wait` in `timeout`.
+# Per AGENTS.md: NEVER wrap `docker compose up --build --wait` in `timeout`.
 # A cold-cache rebuild can take 8-15 minutes; the systemd unit has no
 # TimeoutStartSec override for the same reason. That rule is about the
 # image BUILD, not about the DB round-trip the active-jobs check makes —
@@ -1354,7 +1354,7 @@ fi
 # --- 10. Fast-forward exactly the selected green commit, then build.
 # Do not use `git pull` here: it would fetch a second time and could move the
 # checkout past $DEPLOY_COMMIT after its checks were accepted. No timeout around
-# the build (CLAUDE.md) — a
+# the build (AGENTS.md) — a
 # cold-cache rebuild legitimately takes 8-15 minutes. Building does not
 # recreate any running container, so it cannot kill an in-flight job by
 # itself — the recheck in step 11 is what guards the actual recreate. Both

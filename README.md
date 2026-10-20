@@ -19,7 +19,7 @@ sudo ./scripts/apparmor/install.sh
 cp docker/.env.docker.example .env     # edit with your secrets — see file for required fields
 docker compose up -d --build --wait
 # Cold-cache rebuild takes 8-15 min the first time. Never wrap in `timeout`
-# (see CLAUDE.md "Docker" section for the full reasoning).
+# (see the "Docker" section of AGENTS.md for the full reasoning).
 
 # 3. Install the agent-CLI login mirror (one-time, needs sudo)
 sudo ./scripts/install-cli-credentials-mirror.sh
@@ -118,7 +118,7 @@ BACKUP_DIR=/path/to/backup ./scripts/backup.sh
 
 ## Docs
 
-- [CLAUDE.md](CLAUDE.md) — project conventions, code patterns, and "Known Technical Debt." Read this first if you're contributing.
+- [AGENTS.md](AGENTS.md) — project conventions, code patterns, and known constraints. Read this first if you're contributing.
 - [docs/VISION.md](docs/VISION.md) — non-normative product overview and pointer to approved intent
 - [docs/requirements/](docs/requirements/) — normative requirement grammar and revision registry
 - [docs/PRODUCT.md](docs/PRODUCT.md) — generated requirement/acceptance count view; no implementation claim yet

@@ -6,7 +6,7 @@ You are a senior software architect with 20+ years of experience. You have seen 
 
 Your job is to find what's NEW. Anything already documented as known/accepted should NOT show up as a finding.
 
-1. **Read [`CLAUDE.md`](../CLAUDE.md)** (auto-loaded) — especially the "Code Patterns", "Plan-writing convention", and "Known Technical Debt" sections. The accepted-constraint items in Known Technical Debt are deliberate trade-offs (Claude CLI bind mounts, scoring CI exclusion, single-node worker pool, etc.) — flagging them is noise.
+1. **Read [`AGENTS.md`](../AGENTS.md)** (auto-loaded) — especially the "Code patterns" and "Constraints and known debt" sections. The accepted-constraint items in "Constraints and known debt" are deliberate trade-offs (Claude CLI bind mounts, scoring CI exclusion, single-node worker pool, etc.) — flagging them is noise.
 
 2. **Read the live board** (`gh issue list --repo overnightworks/songmaker --state open --json number,title,milestone,labels`). Every open item there is **already known and tracked**. If you find something that's already an open issue, do not surface it as a finding. Use the board as a "what's already on the radar" filter.
 
@@ -95,7 +95,7 @@ Read the entire codebase. Then tear it apart across these dimensions:
 
 ## Output Format
 
-After producing the review (sections below), **open one distributor GitHub issue — with a milestone — holding your real findings** as a numbered list with evidence, per the repository's standing review-findings rule (CLAUDE.md "Work item" row; operator rulings 24./25.08.2026: a review yields exactly one distributor issue, never a fresh issue per finding at review time). The chat output is for the user to read; the distributor issue is for the future agent who will execute the fix.
+After producing the review (sections below), **open one distributor GitHub issue — with a milestone — holding your real findings** as a numbered list with evidence, per the repository's standing review-findings rule (global contract, "Review and audit findings"; operator rulings 24./25.08.2026: a review yields exactly one distributor issue, never a fresh issue per finding at review time). The chat output is for the user to read; the distributor issue is for the future agent who will execute the fix.
 
 ### How to write findings into the distributor issue
 
@@ -108,7 +108,7 @@ Findings from a brutal architecture review on {date}. Each is numbered; the oper
 **Severity:** HIGH | MEDIUM | LOW
 **Goal:** {1–2 sentences: what's wrong, what the fix produces}
 **Decisions you'd recommend:** {bullets — what you'd lock in if the operator accepts. They may override.}
-**Hard constraints:** {bullets — things the future executor must not violate. CLAUDE.md conventions, engine isolation, etc.}
+**Hard constraints:** {bullets — things the future executor must not violate. AGENTS.md conventions, engine isolation, etc.}
 **Evidence:** {file:line citations from your review. The future executor will re-grep, but giving them the starting point saves 5 minutes.}
 
 ### {next finding}
@@ -118,7 +118,7 @@ Findings from a brutal architecture review on {date}. Each is numbered; the oper
 **Rules for the distributor issue:**
 - One numbered finding per entry. ~10–20 lines each.
 - Severity is your call: HIGH = correctness/security/data-loss risk, MEDIUM = real bug-class waiting to bite, LOW = quality / cosmetic / minor.
-- Do **not** include symbol inventories, line counts, file-by-file diff sketches, or step-by-step orderings. Per CLAUDE.md "Plan-writing convention", those rot. Concept only.
+- Do **not** include symbol inventories, line counts, file-by-file diff sketches, or step-by-step orderings. Concept notes rot less than detailed plans; the global contract and AGENTS.md "Where things go" own plan handling. Concept only.
 - Do **not** include findings that are already open on the board or in the recent git history. That's noise.
 - Label the issue so it is discoverable as this review's output; the distributor closes once every finding is landed, folded into an owner, or retired.
 
