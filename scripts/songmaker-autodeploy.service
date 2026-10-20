@@ -41,7 +41,7 @@ User=felix-hummert
 # tick and a manual shell run of this same script two different lock
 # inodes — no mutual exclusion between them at all.
 # No TimeoutStartSec override: a cold-cache `docker compose build` can
-# legitimately take 8-15 minutes (see CLAUDE.md — never wrap compose in a
+# legitimately take 8-15 minutes (see AGENTS.md — never wrap compose in a
 # timeout). The systemd default TimeoutStartSec (90s) would kill it mid-build
 # if not disabled here.
 TimeoutStartSec=infinity

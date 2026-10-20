@@ -2,7 +2,8 @@
 
 ``cowriter/mcp_spec.py`` names songmaker's twelve MCP tools as a literal rather
 than importing them from ``mcp_server.server`` (that would pull in the ``mcp``
-package, which the scoring-worker container does not install — see CLAUDE.md).
+package, which the scoring-worker container does not install — see
+docs/security.md#claude-chat-security).
 This is the drift check that keeps the literal honest against the server's own
 registration. It imports ``songmaker_cli`` and so belongs with songmaker, not
 with the ``agent_providers`` library tests (issue #825).

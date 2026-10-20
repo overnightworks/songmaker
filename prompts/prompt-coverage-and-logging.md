@@ -1,6 +1,6 @@
 # Coverage & Logging Audit
 
-You are auditing a codebase for test coverage gaps and missing logging at system boundaries. Read `CLAUDE.md` for conventions.
+You are auditing a codebase for test coverage gaps and missing logging at system boundaries. Read `AGENTS.md` for conventions.
 
 ## Context
 
@@ -54,13 +54,13 @@ Check these locations:
 
 ### Phase 4: Coverage check
 
-Run the full test suite with coverage:
+Coverage is measured in CI (the full `pytest tests/ -n auto --cov=...` run is CI-only). Locally, run the targeted tests for the modules you changed:
 
 ```bash
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
+pytest tests/test_foo.py -q --tb=short
 ```
 
-For any module below 90% coverage (excluding `scoring/*`, `main.py`):
+For any module below 90% coverage in the CI coverage report (excluding `scoring/*`, `main.py`):
 1. Read the uncovered lines
 2. If they're reachable code paths (not just `if __name__ == "__main__"` guards), write tests
 3. Focus on error paths and edge cases, not happy paths (those are already covered)
@@ -77,7 +77,7 @@ For any module below 90% coverage (excluding `scoring/*`, `main.py`):
 
 ```bash
 ruff check src/ tests/
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov-report=term-missing
+pytest tests/test_foo.py -q --tb=short
 ```
 
 All existing tests must still pass. Coverage should not decrease.

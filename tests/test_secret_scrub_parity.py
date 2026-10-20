@@ -1,6 +1,6 @@
 """Pins that every owner of a secret-scrub list names the same environment keys.
 
-``acestep_worker`` must never import ``songmaker_cli`` (see CLAUDE.md "Engine
+``acestep_worker`` must never import ``songmaker_cli`` (see AGENTS.md "Engine
 packages are independent") and ``agent_providers`` must import neither, so the
 list exists three times: as a constant in each of the two packages, and as the
 value songmaker injects into the provider runtime at startup (issue #836).

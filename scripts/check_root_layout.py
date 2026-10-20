@@ -34,7 +34,7 @@ ALLOWED_ROOT_ENTRIES: dict[str, str] = {
     "uv.lock": "uv resolves the lockfile next to pyproject.toml",
     "alembic.ini": "alembic's default `-c`-less lookup from the CWD; Dockerfile COPYs it to /app",
     "sonar-project.properties": "the SonarCloud scan action's default projectBaseDir lookup",
-    "docker-compose.yml": "`docker compose` (no -f) default lookup, used bare in README/CLAUDE.md",
+    "docker-compose.yml": "`docker compose` (no -f) default lookup, used bare in README/AGENTS.md",
     "Dockerfile": "docker-compose.yml's `dockerfile: Dockerfile` plus Docker's own root convention",
     ".dockerignore": "Docker's default ignore-file lookup at the build context root",
     ".gitignore": "git's top-level ignore file covers the whole tree",

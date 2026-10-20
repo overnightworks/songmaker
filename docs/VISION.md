@@ -42,7 +42,7 @@ and the choices made while curating it.
 - This vision is not a feature backlog, technical architecture, API contract,
   or implementation-status report.
 
-The current product description in [CLAUDE.md](../CLAUDE.md), the running code,
+The current product description in [AGENTS.md](../AGENTS.md), the running code,
 and GitHub issues are source material for requirement candidates. Only the
 [requirement revision lifecycle](requirements/README.md#revision-lifecycle)
 turns reviewed candidate bytes into normative intent.

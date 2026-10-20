@@ -2,10 +2,7 @@
 
 ## Running Tests
 
-Agents and subagents run **only the tests that prove the change** and omit
-`-n auto`; GitHub CI explicitly sets `-n auto` for parallel test runs, while
-the full suite remains its responsibility (atelier-2 rule: local = targeted,
-land gate = CI).
+GitHub CI explicitly sets `-n auto` for parallel test runs and owns the full suite.
 
 The auto-deploy subprocess tests fake Docker and GitHub: they prove that a
 missing base image or a `docker/base/**` change rebuilds bases before Compose,
@@ -86,8 +83,7 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 ## Coverage Targets
 
 - **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
-- **Local**: aim for 100% on non-scoring core modules (exclude `main.py` CLI entrypoint)
-- **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`. 100% on `lib/` remains a local aspiration, not a CI gate.
+- **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`.
 - **CI PostgreSQL contract**: `tests/test_postgresql.py`, `tests/test_cover_accounting.py` and `tests/test_reference_quota.py` run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, transactional rollback, retention gaps, and cover publication/cancellation accounting; SQLite tests do not stand in for these guarantees. The reference quota proofs (`1301-F3-Q-BOUNDARY`, `-CONCURRENT`, `-FAILURE`, `-PATH`, `-SURFACE`) cover exact limits, retained and crash-file accounting, concurrent owner admission, independent owners, unrelated same-user writes, failed writes and request cancellation. Require the PostgreSQL contract job log to show the PostgreSQL quota cases passed with zero skipped; collection alone is not evidence. Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
 - **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
