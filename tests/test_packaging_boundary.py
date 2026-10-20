@@ -706,6 +706,7 @@ def test_a_worker_drops_every_capability_and_blocks_privilege_gain(
 
     assert service["cap_drop"] == ["ALL"]
     assert "cap_add" not in service
+    assert not service.get("privileged")
     assert "no-new-privileges:true" in security_options
     assert not [
         option
