@@ -1,6 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
+	import { readStorage, writeStorage } from '$lib/utils/storage';
 	import { getRailCollapsed } from '$lib/contexts/rail-collapsed';
 	import { followPlainClick } from '$lib/stores/navigation';
 
@@ -41,23 +42,7 @@
 		children
 	}: Props = $props();
 
-	function readPersistedOpen(): boolean {
-		try {
-			return localStorage.getItem(storageKey) === 'true';
-		} catch {
-			return false;
-		}
-	}
-
-	function persistOpen(value: boolean): void {
-		try {
-			localStorage.setItem(storageKey, String(value));
-		} catch {
-			// Best-effort convenience only — the disclosure still works without it.
-		}
-	}
-
-	let open = $state(readPersistedOpen());
+	let open = $state(untrack(() => readStorage(storageKey) === 'true'));
 
 	// A plain variable, not $state: it must not itself become a dependency
 	// this effect reruns for, only a value the effect reads once per actual
@@ -74,13 +59,13 @@
 		previousExpandTrigger = expandTrigger;
 		if (enteredTrigger) {
 			open = true;
-			persistOpen(true);
+			writeStorage(storageKey, String(true));
 		}
 	});
 
 	function toggleOpen(): void {
 		open = !open;
-		persistOpen(open);
+		writeStorage(storageKey, String(open));
 	}
 </script>
 

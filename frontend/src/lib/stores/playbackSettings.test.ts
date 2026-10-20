@@ -102,3 +102,15 @@ describe('removed stream/classic queue choice', () => {
 		expect(localStorage.getItem('queuePlaybackModeChosen')).toBeNull();
 	});
 });
+
+it('imports with the defaults when browser storage throws', async () => {
+	vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+		throw new DOMException('blocked', 'SecurityError');
+	});
+	vi.resetModules();
+	const { desktopNowPlayingSurface, libraryTakePool } = await import('./playbackSettings');
+	vi.restoreAllMocks();
+
+	expect(get(libraryTakePool)).toBe('picks');
+	expect(get(desktopNowPlayingSurface)).toBe('docked');
+});

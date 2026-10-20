@@ -93,6 +93,12 @@ describe('TakeMenu', () => {
 		expect(target.querySelector('.menu-heading')?.textContent).toBe(heading);
 	});
 
+	it('names the take share page in the shared tooltip', async () => {
+		const { target } = await render({ gen: gen({ is_shared: true, share_slug: 'take' }) });
+
+		expect(menuRow(target, TAKE_SHARE_LABEL).title).toBe('Shared: /share/gen/take');
+	});
+
 	it.each([false, true])(
 		'915_C3: offers five ordered actions with an icon each, Delete last in red, and leaves Keep to the row when kept is %s',
 		async (kept) => {

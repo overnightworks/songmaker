@@ -121,6 +121,7 @@
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
 	} from '$lib/constants';
+	import { sharePagePath } from '$lib/routes/addresses';
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
@@ -794,7 +795,7 @@
 
 	{#snippet sharedLink()}
 		{#if song.is_shared && song.share_slug}
-			<ShareLinkChip url={`${window.location.origin}/share/song/${song.share_slug}`} />
+			<ShareLinkChip url={`${window.location.origin}${sharePagePath('song', song.share_slug)}`} />
 		{/if}
 	{/snippet}
 

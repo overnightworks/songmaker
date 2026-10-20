@@ -5,16 +5,8 @@ import {
 	SHARE_BUTTON_FAILED_TOAST,
 	SHARE_BUTTON_UNSHARED_TOAST
 } from '$lib/constants';
+import { sharePagePath, type ShareKind } from '$lib/routes/addresses';
 import { addToast } from './toast';
-
-export type ShareKind = 'album' | 'song' | 'playlist' | 'gen';
-
-const SHARE_PAGE_PATH: Readonly<Record<ShareKind, string>> = {
-	album: '/share',
-	song: '/share/song',
-	playlist: '/share/playlist',
-	gen: '/share/gen'
-};
 
 interface ShareToggleSource {
 	kind: ShareKind;
@@ -66,7 +58,7 @@ export function createShareToggle(source: () => ShareToggleSource) {
 		},
 		get sharedTooltip() {
 			const { kind, isShared, shareSlug } = source();
-			return isShared ? `Shared: ${SHARE_PAGE_PATH[kind]}/${shareSlug ?? ''}` : undefined;
+			return isShared ? `Shared: ${sharePagePath(kind, shareSlug ?? '')}` : undefined;
 		},
 		toggle
 	};
