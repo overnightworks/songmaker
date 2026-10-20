@@ -1061,7 +1061,7 @@ describe('route convergence after a landing', () => {
 	});
 
 	// Issue #1340: the router reports a navigation only after the mount it
-	// aborts has failed -- the album a tap in the drawer opens -- and not at all
+	// aborts has failed -- the album a tap in the library list opens -- and not at all
 	// while another one loads.
 	it('an aborted navigation leaves the mount to a page navigation issued before the router reports it', async () => {
 		const loading = abortableNavigation();

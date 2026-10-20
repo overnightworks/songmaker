@@ -1,7 +1,7 @@
 import { writable, type Writable } from 'svelte/store';
 
 // The one stack of open layers (issue #1182): every open overlay -- a menu,
-// picker, sheet, dialog, the phone drawer, full Now Playing, the cover editor,
+// picker, sheet, dialog, full Now Playing, the cover editor,
 // Edit details -- holds one place here while it shows, and Escape and Back
 // both close the topmost one. Only with nothing open does Escape move a page
 // level up (utils/escape-level-up.ts).

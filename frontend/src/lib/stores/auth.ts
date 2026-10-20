@@ -211,7 +211,7 @@ export function handleSessionLost(): Promise<void> {
 // instead of forcing a redirect that could race it.
 //
 // A lost session loads the address history stands on afresh once history has
-// come to rest -- the album a tap in the drawer opened, whichever of its
+// come to rest -- the album a tap in the library list opened, whichever of its
 // requests the server refused first -- so nothing of the signed-in page stays
 // in memory (#1340, ruling A). That load asks for the session as every load
 // does: the server's answer sends it to sign-in, carrying the address back,

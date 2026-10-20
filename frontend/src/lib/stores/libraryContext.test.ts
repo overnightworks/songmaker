@@ -907,7 +907,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		}
 	);
 
-	// The phone drawer closing, or Go to song leaving a history layer, steps
+	// A sheet closing, or Go to song leaving a history layer, steps
 	// back before the crossing it opens: once that step lands, the crossing's
 	// entry stands, so a Back pressed while its route still loads returns to
 	// the page underneath instead of stepping past it.

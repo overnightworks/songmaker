@@ -49,7 +49,7 @@ function trapTabKey(container: HTMLElement, event: KeyboardEvent): void {
 
 /**
  * Keeps focus inside `container` while it acts as a modal-like surface
- * (drawer, dropdown menu, dialog): Escape closes the topmost open layer -- the
+ * (dropdown menu, dialog, panel): Escape closes the topmost open layer -- the
  * one Back closes too, which is this surface unless something opened over it
  * -- and Tab/Shift+Tab wrap at the container's edges instead of leaving it.
  */

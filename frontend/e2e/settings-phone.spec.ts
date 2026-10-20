@@ -1,5 +1,5 @@
 // The Settings list on the phone (issue #1150, picture H4 in
-// docs/design/navigation.html §(h)): the drawer no longer lists the settings
+// docs/design/navigation.html §(h)): the bottom tabs carry no settings
 // pages, so on the phone `/settings` is itself the list, a row opens its
 // page, and Back returns to the list. The desktop rail carries the sections,
 // so there `/settings` keeps redirecting into the first one. The run's
