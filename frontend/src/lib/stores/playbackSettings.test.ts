@@ -103,14 +103,33 @@ describe('removed stream/classic queue choice', () => {
 	});
 });
 
-it('imports with the defaults when browser storage throws', async () => {
-	vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+function blockStorage(stored: Record<string, string> = {}) {
+	const blocked = () => {
 		throw new DOMException('blocked', 'SecurityError');
+	};
+	vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+		if (key in stored) return stored[key];
+		return blocked();
 	});
+	vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+	vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(blocked);
+}
+
+it('imports with the defaults when every browser storage call throws', async () => {
+	blockStorage();
 	vi.resetModules();
 	const { desktopNowPlayingSurface, libraryTakePool } = await import('./playbackSettings');
 	vi.restoreAllMocks();
 
 	expect(get(libraryTakePool)).toBe('picks');
 	expect(get(desktopNowPlayingSurface)).toBe('docked');
+});
+
+it('imports a legacy keeps pool as mix when the migration write is blocked', async () => {
+	blockStorage({ [POOL_STORAGE_KEY]: 'keeps' });
+	vi.resetModules();
+	const { libraryTakePool } = await import('./playbackSettings');
+	vi.restoreAllMocks();
+
+	expect(get(libraryTakePool)).toBe('mix');
 });
