@@ -1,0 +1,8 @@
+claim_id = "010c271cd2c54f4e83a160a48edb8692"
+agent = "claude"
+role = "builder"
+base = "f45fc633d6f725d100fa14c482aac4209844a81c"
+branch = "claude/issue-1745-generate-without-worker"
+scope = ["docs/design/song-page-phone.html", "docs/design/vocabulary.html", "frontend/e2e/generate-without-worker.spec.ts", "frontend/e2e/generation-unavailable.spec.ts", "frontend/e2e/offline.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/e2e/song-versions.spec.ts", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/GenerateButton.svelte", "frontend/src/lib/components/editor/GenerateButton.test.ts", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts"]
+opened_commit = "b33974a7c5ff2b2792a1bc3954b4acf80448de19"
+whole_reason = "Eine Verhaltensänderung (Generate ohne Worker) über Store, Transport und Konstante; die übrigen Pfade sind Tests, E2E-Specs mit überholten Stubs und zwei nachzufrierende Bilder."
