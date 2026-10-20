@@ -3,6 +3,6 @@ agent = "claude"
 role = "builder"
 base = "cd9239a971e6b5a33077af1f703d405fc5316510"
 branch = "claude/issue-1739-red-main-log-injection"
-scope = ["src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/db/queries/playlists.py", "src/songmaker_cli/db/queries/sharing.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/db/queries/versions.py", "tests/test_cleanup.py", "tests/test_sharing.py"]
+scope = ["src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/db/queries/playlists.py", "src/songmaker_cli/db/queries/sharing.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/db/queries/versions.py", "tests/test_cleanup.py", "tests/test_sharing.py", "tests/test_song_covers.py"]
 opened_commit = "a03ced3178100f3aa04e4026ed5bf8ad772d6d17"
 whole_reason = "One Sonar rule fires in seven query modules for the same reason; split, main stays red until the last slice."
