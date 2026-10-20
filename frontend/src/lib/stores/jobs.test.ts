@@ -776,7 +776,7 @@ describe('jobs store', () => {
 	});
 
 	it.each([
-		new ApiError(503, 'ffmpeg is missing', '/api/x', null, 'x', 'ffmpeg_missing', 'j9'),
+		new ApiError(503, 'ffmpeg is missing', '/api/x', null, 'x', 'generation_error', 'j9'),
 		new ApiError(503, 'Queue gone', '/api/x', null, 'x', 'generation_unavailable'),
 		new ApiError(500, 'Boom', '/api/x', null, 'x', 'generation_unavailable', 'j9'),
 		new Error('Boom')

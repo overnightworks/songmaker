@@ -807,7 +807,7 @@ describe('generate action execution', () => {
 	it.each([
 		{
 			why: 'another error type',
-			error: new ApiError(503, 'ffmpeg missing', '/api/x', null, 'x', 'ffmpeg_missing', 'job9')
+			error: new ApiError(503, 'ffmpeg missing', '/api/x', null, 'x', 'generation_error', 'job9')
 		},
 		{ why: 'no error type', error: new ApiError(503, 'Queue is not reachable', '/api/x') },
 		{

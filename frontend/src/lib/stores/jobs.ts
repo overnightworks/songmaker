@@ -80,12 +80,14 @@ export function resetGenerationFailuresForTests(): void {
 
 const GENERATION_UNAVAILABLE_ERROR_TYPE = 'generation_unavailable';
 
-function failureMessage(job: JobStatus): string {
+type FailureFields = Pick<JobStatus, 'error' | 'error_type' | 'type'>;
+
+function failureMessage(job: FailureFields): string {
 	if (job.error_type === 'server_restart') return SERVER_RESTART_MESSAGE;
 	return job.error || `${job.type} failed`;
 }
 
-function generationFailure(job: JobStatus): GenerationFailure {
+function generationFailure(job: FailureFields): GenerationFailure {
 	return {
 		message: failureMessage(job),
 		unavailable: job.error_type === GENERATION_UNAVAILABLE_ERROR_TYPE
@@ -110,7 +112,11 @@ export function showGenerationUnavailableRefusal(songId: string, error: unknown)
 	) {
 		return false;
 	}
-	const failure = { message: error.detail, unavailable: true };
+	const failure = generationFailure({
+		error: error.detail,
+		error_type: error.errorType,
+		type: 'generate'
+	});
 	generationFailures.update((failures) => ({ ...failures, [songId]: failure }));
 	return true;
 }
