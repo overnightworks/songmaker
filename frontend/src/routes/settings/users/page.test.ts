@@ -1418,6 +1418,41 @@ describe('admin models tab', () => {
 		expect(api.updateGenerationDefaults).not.toHaveBeenCalled();
 	});
 
+	it('refills the form from the stored defaults once a failed read recovers, so Save never wipes them', async () => {
+		const stored = { turbo: { inference_steps: 20, guidance_scale: 5 } };
+		api.fetchBuiltinDefaults.mockResolvedValue({ turbo: { inference_steps: 8 } });
+		api.fetchGenerationDefaults
+			.mockRejectedValueOnce(
+				new ApiError(500, 'Defaults unavailable', '/api/settings/generation-defaults', null, null)
+			)
+			.mockResolvedValue(stored);
+		api.updateGenerationDefaults.mockImplementation(async (body: unknown) => body);
+		const target = await renderPage(true);
+		await selectTab(target, 'generation');
+		await selectTab(target, 'users');
+		await selectTab(target, 'generation');
+
+		const section = sectionByHeading(target, 'Generation Defaults');
+		const save = requireElement<HTMLButtonElement>(section, '.save-btn');
+		const stepsInput = requireElement<HTMLInputElement>(section, 'input');
+		expect(save.disabled).toBe(false);
+		expect(stepsInput.value).toBe('20');
+
+		save.click();
+		await flush();
+		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith(stored);
+
+		stepsInput.value = '30';
+		stepsInput.dispatchEvent(new Event('input', { bubbles: true }));
+		stepsInput.dispatchEvent(new Event('change', { bubbles: true }));
+		await flush();
+		save.click();
+		await flush();
+		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith({
+			turbo: { inference_steps: 30, guidance_scale: 5 }
+		});
+	});
+
 	it('names a rejected save in a red sub-row with a retry', async () => {
 		const rejection = "Unknown grok model 'grok-4'";
 		api.updateCowriterSettings.mockRejectedValue(

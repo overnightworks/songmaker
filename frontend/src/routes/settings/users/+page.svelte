@@ -835,14 +835,14 @@
 			genDefaults = await fetchGenerationDefaults();
 			genDefaultsLoaded = true;
 			settleLoad('genDefaults');
+			const modes = Object.keys($builtinDefaults);
+			if (modes.length > 0 && !genEditModel) {
+				genEditModel = modes[0];
+				genEditDefaults = { ...(genDefaults[modes[0]] ?? {}) };
+			}
 		} catch (e) {
 			genDefaultsLoaded = false;
 			failLoad('genDefaults', e);
-		}
-		const modes = Object.keys($builtinDefaults);
-		if (modes.length > 0 && !genEditModel) {
-			genEditModel = modes[0];
-			genEditDefaults = { ...(genDefaults[modes[0]] ?? {}) };
 		}
 	}
 
@@ -869,6 +869,7 @@
 		try {
 			const cleaned = Object.keys(genEditDefaults).length > 0 ? genEditDefaults : {};
 			genDefaults = await updateGenerationDefaults({ ...genDefaults, [genEditModel]: cleaned });
+			genDefaultsLoaded = true;
 			genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
 		} catch {
 			reportError('Failed to save generation defaults');
