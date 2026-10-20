@@ -1,7 +1,0 @@
-claim_id = "3dacb01fec6843a6906c6f53e3b803b1"
-agent = "claude"
-role = "builder"
-base = "7e86f8d7511a20738fc3f67cb1425f8161988442"
-branch = "claude/issue-1726-drop-experiment-scripts"
-scope = ["scripts/benchmark_scoring_devices.py", "scripts/comping_v3.py", "scripts/extract_ab_test.py"]
-opened_commit = "ed8c2e926146a5902eb6f07eed01e58ecdd1047e"
