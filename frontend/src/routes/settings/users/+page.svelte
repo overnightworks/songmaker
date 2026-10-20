@@ -831,12 +831,13 @@
 		} catch {
 			allModels = [];
 		}
+		const wasLoaded = genDefaultsLoaded;
 		try {
 			genDefaults = await fetchGenerationDefaults();
 			genDefaultsLoaded = true;
 			settleLoad('genDefaults');
 			const modes = Object.keys($builtinDefaults);
-			if (modes.length > 0) {
+			if (!wasLoaded && modes.length > 0) {
 				genEditModel ||= modes[0];
 				genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
 			}

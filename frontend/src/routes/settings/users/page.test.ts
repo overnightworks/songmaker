@@ -1479,27 +1479,82 @@ describe('admin models tab', () => {
 		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith(stored);
 	});
 
-	it('re-hydrates after a network-loss read retries successfully, and an edit merges into the stored values', async () => {
-		vi.useFakeTimers();
-		const stored = { turbo: { inference_steps: 20, guidance_scale: 5 } };
-		api.fetchBuiltinDefaults.mockResolvedValue({ turbo: { inference_steps: 8 } });
-		api.fetchGenerationDefaults.mockRejectedValueOnce(lostNetwork()).mockResolvedValue(stored);
-		api.updateGenerationDefaults.mockImplementation(async (body: unknown) => body);
-		const target = await renderPage(true);
-		await selectTab(target, 'generation');
-		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS[0]);
+	describe('generation defaults editing across reads', () => {
+		const builtins = { turbo: { inference_steps: 8 }, sft: { inference_steps: 8 } };
 
-		const section = sectionByHeading(target, 'Generation Defaults');
-		const stepsInput = requireElement<HTMLInputElement>(section, 'input');
-		expect(stepsInput.value).toBe('20');
-		stepsInput.value = '30';
-		stepsInput.dispatchEvent(new Event('input', { bubbles: true }));
-		stepsInput.dispatchEvent(new Event('change', { bubbles: true }));
-		await flush();
-		requireElement<HTMLButtonElement>(section, '.save-btn').click();
-		await flush();
-		expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith({
-			turbo: { inference_steps: 30, guidance_scale: 5 }
+		async function typeSteps(section: HTMLElement, value: string): Promise<void> {
+			const stepsInput = requireElement<HTMLInputElement>(section, 'input');
+			stepsInput.value = value;
+			stepsInput.dispatchEvent(new Event('input', { bubbles: true }));
+			stepsInput.dispatchEvent(new Event('change', { bubbles: true }));
+			await flush();
+		}
+
+		function modeTab(section: HTMLElement, mode: string): HTMLButtonElement {
+			const tab = Array.from(section.querySelectorAll<HTMLButtonElement>('.gen-model-tab')).find(
+				(candidate) => candidate.textContent?.trim() === mode
+			);
+			if (!tab) throw new Error(`no mode tab ${mode}`);
+			return tab;
+		}
+
+		beforeEach(() => {
+			api.fetchBuiltinDefaults.mockResolvedValue(builtins);
+			api.updateGenerationDefaults.mockImplementation(async (body: unknown) => body);
+		});
+
+		it('re-hydrates after a network-loss read retries successfully, and an edit merges into the stored values', async () => {
+			vi.useFakeTimers();
+			const firstStored = { turbo: { inference_steps: 20 }, sft: { inference_steps: 40 } };
+			const recoveredStored = {
+				turbo: { inference_steps: 21, guidance_scale: 5 },
+				sft: { inference_steps: 41, guidance_scale: 6 }
+			};
+			api.fetchGenerationDefaults
+				.mockResolvedValueOnce(firstStored)
+				.mockRejectedValueOnce(lostNetwork())
+				.mockResolvedValue(recoveredStored);
+			const target = await renderPage(true);
+			await selectTab(target, 'generation');
+			modeTab(sectionByHeading(target, 'Generation Defaults'), 'SFT').click();
+			await flush();
+			await selectTab(target, 'users');
+			await selectTab(target, 'generation');
+			await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS[0]);
+
+			const section = sectionByHeading(target, 'Generation Defaults');
+			expect(requireElement<HTMLInputElement>(section, 'input').value).toBe('41');
+			await typeSteps(section, '30');
+			requireElement<HTMLButtonElement>(section, '.save-btn').click();
+			await flush();
+
+			expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith({
+				turbo: recoveredStored.turbo,
+				sft: { inference_steps: 30, guidance_scale: 6 }
+			});
+		});
+
+		it('keeps an unsaved edit when the admin leaves the tab and returns while reads succeed', async () => {
+			const stored = { turbo: { inference_steps: 20 }, sft: { inference_steps: 50 } };
+			api.fetchGenerationDefaults.mockResolvedValue(stored);
+			const target = await renderPage(true);
+			await selectTab(target, 'generation');
+			const first = sectionByHeading(target, 'Generation Defaults');
+			modeTab(first, 'SFT').click();
+			await flush();
+			await typeSteps(first, '77');
+			await selectTab(target, 'acestep');
+			await selectTab(target, 'generation');
+
+			const section = sectionByHeading(target, 'Generation Defaults');
+			expect(requireElement<HTMLInputElement>(section, 'input').value).toBe('77');
+			requireElement<HTMLButtonElement>(section, '.save-btn').click();
+			await flush();
+
+			expect(api.updateGenerationDefaults).toHaveBeenLastCalledWith({
+				turbo: stored.turbo,
+				sft: { inference_steps: 77 }
+			});
 		});
 	});
 
