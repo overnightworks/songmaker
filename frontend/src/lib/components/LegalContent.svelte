@@ -45,7 +45,7 @@
 	{#if section === 'impressum'}
 		<section>
 			<h1>Impressum</h1>
-			<p>Angaben gemäß § 5 DDG und § 18 Abs. 1 MStV</p>
+			<p>Angaben gemäß § 18 Abs. 1 MStV</p>
 
 			<h2>Verantwortlich</h2>
 			<p>
@@ -103,8 +103,15 @@
 					Art. 6 Abs. 1 lit. f DSGVO (Schutz vor Missbrauch).
 				</li>
 				<li>
+					<strong>Letzte Bearbeitungen und Wiedergaben:</strong> je Song der Zeitpunkt und die Art Ihrer
+					letzten Bearbeitung sowie der Zeitpunkt Ihrer letzten Wiedergabe, innerhalb oder außerhalb einer
+					Playlist; je Playlist der Zeitpunkt der letzten Wiedergabe daraus. Daraus zeigt die Startseite,
+					was Sie zuletzt gehört und bearbeitet haben. Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO.
+				</li>
+				<li>
 					<strong>Server-Logs:</strong> IP-Adresse, Zeitpunkt, aufgerufene Adresse, Statuscode und Dauer
-					jeder Anfrage. Rechtsgrundlage: Art. 6 Abs. 1 lit. f DSGVO (Sicherheit und Fehlerbehebung).
+					jeder Anfrage, bei angemeldeten Anfragen auch Ihre Nutzerkennung. Rechtsgrundlage: Art. 6 Abs.
+					1 lit. f DSGVO (Sicherheit und Fehlerbehebung).
 				</li>
 			</ul>
 			<p>
@@ -117,7 +124,7 @@
 			<h2>3. Verarbeitung auf unserem Server</h2>
 			<p>
 				Musikerzeugung (ACE-Step), Transkription des Gesungenen (Whisper), Audiobewertung und das
-				Training eigener Stimmen laufen nur auf unserem Server in Deutschland.
+				Training eigener Stimmen laufen nur auf unserem eigenen Server.
 			</p>
 			<p>
 				<strong>Eigene Stimmen und Referenzaufnahmen:</strong> Aus hochgeladenen Aufnahmen trainieren
@@ -133,7 +140,8 @@
 
 			<h2>4. KI-Funktionen mit externen Anbietern</h2>
 			<p>
-				Drei Funktionen senden Daten an externe KI-Anbieter. Jede davon stoßen Sie selbst an.
+				Drei Funktionen senden Daten an externe KI-Anbieter. Co-Writer und Cover-Vorschläge stoßen
+				Sie selbst an; die Textprüfung läuft automatisch als Teil der Bewertung jeder Generierung.
 				Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO.
 			</p>
 			<ul>
@@ -141,35 +149,57 @@
 					<strong>Co-Writer:</strong> Wir senden Ihre Nachricht, den bisherigen Gesprächsverlauf (bei
 					langen Gesprächen eine Zusammenfassung und die letzten Nachrichten), Ihre Co-Writer-Notizen
 					sowie Titel, Liedtext, Stilbeschreibung und Parameter der Songs und Alben, die Sie geöffnet
-					oder per @-Erwähnung genannt haben, an den von Ihnen gewählten Anbieter: Anthropic (Claude),
-					xAI (Grok) oder OpenAI (Codex).
+					oder per @-Erwähnung genannt haben, und zur gerade ausgewählten Generierung deren Transkription
+					und Bewertungen an den vom Betreiber eingestellten Anbieter: Anthropic (Claude), xAI (Grok)
+					oder OpenAI (Codex). Während des Gesprächs kann das Modell über die Werkzeuge des Co-Writers
+					weitere Ihrer Alben, Songs, Versionen und Generierungen (einschließlich Transkription und Bewertungen)
+					abrufen sowie Ihre Songs ändern oder neue anlegen.
 				</li>
 				<li>
-					<strong>Textprüfung:</strong> Ist sie eingeschaltet, senden wir nach einer Generierung den beabsichtigten
-					Liedtext und die auf unserem Server erzeugte Transkription des Gesungenen an den vom Betreiber
-					eingestellten Anbieter (Anthropic, xAI oder OpenAI).
+					<strong>Textprüfung:</strong> Nach jeder Generierung mit Liedtext, bei der die Transkription
+					Gesang erkannt hat, senden wir den beabsichtigten Liedtext und die auf unserem Server erzeugte
+					Transkription des Gesungenen automatisch an den vom Betreiber eingestellten Anbieter (Anthropic,
+					xAI oder OpenAI). Generierungen, die noch keine Bewertung haben, werden nachträglich bewertet.
 				</li>
 				<li>
-					<strong>Cover-Vorschläge:</strong> Auf Ihre Anforderung senden wir Albumtitel, Künstlername
-					sowie Auszüge aus Stilbeschreibungen und Liedtexten an OpenAI.
+					<strong>Cover-Vorschläge:</strong> Auf Ihre Anforderung, auch über den Co-Writer, senden wir
+					Albumtitel, Künstlername sowie Auszüge aus Stilbeschreibungen und Liedtexten an OpenAI.
 				</li>
 			</ul>
 			<p>
-				<strong>Rolle der Anbieter:</strong> Der Betreiber stellt je Anbieter und Funktion ein, ob eine
-				Anfrage über die Programmierschnittstelle (API) des Anbieters oder über ein Nutzerkonto des Betreibers
-				beim Anbieter läuft; Cover-Vorschläge laufen stets über das Nutzerkonto des Betreibers bei OpenAI.
-				Soweit eine Anfrage über ein Nutzerkonto des Betreibers läuft, verarbeitet der Anbieter die Daten
-				als eigener Verantwortlicher nach seiner Datenschutzerklärung (Anthropic Ireland Ltd., Dublin;
-				OpenAI Ireland Ltd., Dublin; xAI). Über die Programmierschnittstelle verarbeitet der Anbieter
-				die Daten nach seinen Bedingungen für die API-Nutzung. Die Nutzung Ihrer Inhalte zum Training
-				von KI-Modellen ist in den Konten des Betreibers bei Anthropic, OpenAI und xAI abgeschaltet.
+				<strong>Route und Rolle der Anbieter:</strong> Für den Co-Writer stellt der Betreiber je Anbieter
+				ein, ob eine Anfrage über die Programmierschnittstelle (API) des Anbieters oder über ein Nutzerkonto
+				des Betreibers beim Anbieter läuft. Die Textprüfung läuft bei xAI und OpenAI stets über die API,
+				bei Anthropic über die API, sofern ein API-Schlüssel hinterlegt ist, sonst über das Nutzerkonto
+				des Betreibers. Cover-Vorschläge laufen stets über das Nutzerkonto des Betreibers bei OpenAI.
 			</p>
 			<p>
-				<strong>Übermittlung in die USA:</strong> Je nach genutzter Funktion verarbeiten Anthropic, OpenAI
-				und xAI Daten auch in den USA. Anthropic und OpenAI stützen die Übermittlung nach ihren Datenschutzerklärungen
-				auf Angemessenheitsbeschlüsse der EU-Kommission und auf deren Standardvertragsklauseln (Art. 45,
-				Art. 46 Abs. 2 lit. c DSGVO). Für xAI konnten wir die Übermittlungsgrundlage bislang nicht feststellen.
-				Eine Kopie der jeweils geltenden Garantien erhalten Sie auf Anfrage unter legal@hallucinai.de.
+				Über die API verarbeitet der Anbieter die Daten nach seinen veröffentlichten
+				Geschäftsbedingungen als Auftragsverarbeiter für uns; Bestandteil dieser Bedingungen ist
+				jeweils ein Auftragsverarbeitungsvertrag (Art. 28 DSGVO): bei Anthropic die Commercial Terms
+				of Service mit dem Data Processing Addendum (Vertragspartner im EWR: Anthropic Ireland,
+				Limited), bei OpenAI das Services Agreement mit dem Data Processing Addendum (im EWR: OpenAI
+				Ireland Ltd.), bei xAI die Terms of Service – Enterprise mit dem Data Processing Addendum
+				(SpaceXAI LLC). Läuft eine Anfrage über ein Nutzerkonto des Betreibers, verarbeitet der
+				Anbieter die Daten als eigener Verantwortlicher nach seiner Datenschutzerklärung: Anthropic
+				Ireland, Limited (Dublin), OpenAI Ireland Ltd. (Dublin) und bei xAI SpaceXAI LLC (USA). Die
+				Nutzung Ihrer Inhalte zum Training von KI-Modellen ist in den Konten des Betreibers bei
+				Anthropic, OpenAI und xAI abgeschaltet.
+			</p>
+			<p>
+				<strong>Übermittlung in die USA:</strong> Je nach genutzter Funktion und Route verarbeiten
+				Anthropic, OpenAI und xAI Daten auch in den USA. Über die API stützen die drei Anbieter die
+				Übermittlung nach ihren Auftragsverarbeitungsverträgen auf die Standardvertragsklauseln der
+				EU-Kommission (Art. 46 Abs. 2 lit. c DSGVO), OpenAI daneben auf Angemessenheitsbeschlüsse
+				(Art. 45 DSGVO); die Verträge sind öffentlich unter
+				<a href="https://www.anthropic.com/legal/data-processing-addendum">anthropic.com</a>,
+				<a href="https://openai.com/policies/data-processing-addendum/">openai.com</a> und
+				<a href="https://x.ai/legal/data-processing-addendum">x.ai</a>. Über ein Nutzerkonto des
+				Betreibers stützen Anthropic und OpenAI die Übermittlung nach ihren Datenschutzerklärungen
+				auf Angemessenheitsbeschlüsse und auf die Standardvertragsklauseln. Für Anfragen über das
+				Nutzerkonto des Betreibers bei xAI nennt xAI in seiner Datenschutzerklärung für Europa
+				SpaceXAI LLC in den USA als Verantwortlichen, aber keine Übermittlungsgrundlage nach Art. 45
+				oder 46 DSGVO; wir können dafür derzeit keine benennen.
 			</p>
 			<p>
 				<strong>Speicherung beim Betreiber:</strong> Läuft eine Anfrage an Anthropic über das Nutzerkonto
@@ -196,10 +226,11 @@
 			<h2>6. Freigaben</h2>
 			<p>
 				Wenn Sie ein Album, einen Song, eine Generierung oder eine Playlist freigeben, kann jede
-				Person mit dem Link ohne Anmeldung Titel, Künstlername, Liedtext, Audio und Cover abrufen
-				und den Link weitergeben. Sie können die Freigabe jederzeit beenden; bereits
-				heruntergeladene Kopien lassen sich nicht zurückholen. Von Besuchern verarbeiten wir die
-				IP-Adresse wie unter Server-Logs beschrieben und zur Ratenbegrenzung.
+				Person mit dem Link ohne Anmeldung Titel, Künstlername, Liedtext, Audio, Cover sowie die
+				zeitgenaue Transkription des Gesungenen abrufen und den Link weitergeben. Sie können die
+				Freigabe jederzeit beenden; bereits heruntergeladene Kopien lassen sich nicht zurückholen.
+				Von Besuchern verarbeiten wir die IP-Adresse wie unter Server-Logs beschrieben und zur
+				Ratenbegrenzung.
 			</p>
 
 			<h2>7. Speicherung auf Ihrem Gerät</h2>
@@ -222,8 +253,11 @@
 				</li>
 			</ul>
 			<p>
-				Browser-Speicher und Browser-Cache verlassen Ihr Gerät nicht. Cloudflare kann eigene
-				Sicherheits-Cookies setzen (siehe Cloudflare).
+				Den Inhalt von Browser-Speicher und Browser-Cache lesen wir nicht aus; beim Wiederherstellen
+				der letzten Wiedergabe ruft die App jedoch den dort gemerkten Song oder die Playlist von
+				unserem Server ab, und jede Wiedergabe wird wie unter „Letzte Bearbeitungen und Wiedergaben“
+				beschrieben auf dem Server vermerkt. Cloudflare kann eigene Sicherheits-Cookies setzen
+				(siehe Cloudflare).
 			</p>
 
 			<h2>8. Speicherdauer</h2>
@@ -246,9 +280,14 @@
 					bestehen. Wenn Sie die Löschung dieser Daten wünschen, schreiben Sie an legal@hallucinai.de.
 				</li>
 				<li>
-					<strong>Sitzungen:</strong> Das Anmelde-Cookie gilt bis zu 30 Tage ohne Nutzung; eine Anmeldung
-					endet spätestens 90 Tage nach dem Einloggen. Der Sitzungseintrag mit IP-Adresse und Browserkennung
-					bleibt bis zu etwa 120 Tage nach dem Einloggen gespeichert.
+					<strong>Letzte Bearbeitungen und Wiedergaben:</strong> bis zur Löschung des Songs, der Playlist
+					oder Ihres Kontos; eine frühere Löschung gibt es derzeit nicht.
+				</li>
+				<li>
+					<strong>Sitzungen:</strong> Das Anmelde-Cookie im Browser gilt bis zu 30 Tage nach dem Einloggen;
+					über die Kommandozeile bleibt eine Anmeldung bis zu 90 Tage gültig, wenn zwischen zwei Aufrufen
+					weniger als 30 Tage liegen. Der Sitzungseintrag mit IP-Adresse und Browserkennung bleibt bis
+					zu etwa 120 Tage nach dem Einloggen gespeichert.
 				</li>
 				<li>
 					<strong>Anmeldeversuche:</strong> Einträge älter als 90 Tage werden gelöscht; der Löschlauf
@@ -257,8 +296,10 @@
 				</li>
 				<li><strong>Audit-Log:</strong> wird derzeit ohne feste Frist gespeichert.</li>
 				<li>
-					<strong>Server-Logs:</strong> werden nach Speichermenge rotiert (höchstens 50 MB je Dienst);
-					eine feste Höchstdauer besteht derzeit nicht.
+					<strong>Server-Logs:</strong> Die Container-Logs der Dienste werden nach Speichermenge rotiert
+					(höchstens 50 MB je Dienst). Das Protokoll des Musikerzeugungs-Prozesses (ACE-Step) wird zusätzlich
+					in eine Datei geschrieben, die nicht rotiert wird. Eine feste Höchstdauer besteht in beiden
+					Fällen derzeit nicht.
 				</li>
 				<li>
 					<strong>Sicherungskopien:</strong> Sicherungskopien von Datenbank und Audiodateien werden wöchentlich
@@ -294,8 +335,8 @@
 			<p>
 				Ihre Daten werden nicht verkauft und nicht zu Werbezwecken weitergegeben. Empfänger sind (a)
 				Cloudflare für Transport und Schutz der Website, (b) die KI-Anbieter Anthropic, xAI und
-				OpenAI, soweit Sie die oben beschriebenen KI-Funktionen nutzen, und (c) Personen, denen Sie
-				einen Freigabelink geben.
+				OpenAI für die oben beschriebenen KI-Funktionen und (c) Personen, denen Sie einen
+				Freigabelink geben.
 			</p>
 
 			<h2>12. Kein Tracking</h2>
@@ -333,9 +374,10 @@
 				<li>
 					Rein maschinell erzeugte Musik ist mangels menschlicher Schöpfung in der Regel kein
 					urheberrechtlich geschütztes Werk (§ 2 Abs. 2 UrhG). Von Ihnen geschriebene Liedtexte und
-					andere menschliche Beiträge bleiben geschützt; ob an generierten Aufnahmen
-					Leistungsschutzrechte entstehen und ob Verwertungsgesellschaften wie die GEMA Ansprüche
-					haben, ist nicht abschließend geklärt.
+					andere menschliche Beiträge sind geschützt, soweit sie die gesetzlichen
+					Schutzvoraussetzungen erfüllen; ob an generierten Aufnahmen Leistungsschutzrechte
+					entstehen und ob Verwertungsgesellschaften wie die GEMA Ansprüche haben, ist nicht
+					abschließend geklärt.
 				</li>
 				<li>
 					Der Betreiber übernimmt keine Gewähr für die Originalität oder Qualität der generierten
@@ -351,9 +393,10 @@
 				</li>
 				<li>Stimmen anderer Personen laden Sie nur mit deren ausdrücklicher Einwilligung hoch.</li>
 				<li>
-					Geben Sie synthetische Aufnahmen nicht als echte Äußerungen einer realen Person aus; wer
-					Inhalte veröffentlicht, die einer realen Person ähneln, legt offen, dass sie KI-generiert
-					sind (Art. 50 Abs. 4 KI-VO).
+					Geben Sie synthetische Aufnahmen nicht als echte Äußerungen einer realen Person aus. Wer
+					Inhalte veröffentlicht, die einer realen Person ähneln, macht nach diesen Bedingungen
+					kenntlich, dass sie KI-generiert sind; soweit Art. 50 Abs. 4 KI-VO auf eine
+					Veröffentlichung anwendbar ist, gilt dessen Offenlegungspflicht daneben.
 				</li>
 				<li>
 					Nutzer dürfen keine rechtswidrigen, beleidigenden oder diskriminierenden Inhalte
@@ -371,11 +414,15 @@
 				vertragstypischen Schaden. Dies gilt nicht für Ansprüche nach dem Produkthaftungsgesetz.
 			</p>
 			<p>
-				Für Inhalte, die Nutzer eingeben oder speichern, ist der Betreiber nach § 7 DDG in
-				Verbindung mit Art. 6 der Verordnung (EU) 2022/2065 erst ab Kenntnis einer Rechtsverletzung
-				verantwortlich und entfernt sie dann zügig. KI-Ergebnisse können geschützten Werken ähneln;
-				eine Gewähr für ihre rechtliche Verwertbarkeit übernimmt der Betreiber nicht. Im Übrigen
-				gilt die Haftungsregelung in Absatz 1.
+				Für Inhalte, die Nutzer eingeben oder speichern, haftet der Betreiber nach § 7 DDG in
+				Verbindung mit Art. 6 der Verordnung (EU) 2022/2065 nur unter den dort genannten
+				Voraussetzungen: wenn er tatsächliche Kenntnis von einer rechtswidrigen Tätigkeit oder
+				Information hat oder sich, soweit es um Schadensersatz geht, Tatsachen oder Umstände bewusst
+				ist, aus denen die Rechtswidrigkeit offensichtlich wird, und er nicht zügig tätig wird, um
+				die Information zu entfernen oder den Zugang zu ihr zu sperren. Anordnungen von Gerichten
+				und Behörden bleiben unberührt. KI-Ergebnisse können geschützten Werken ähneln; eine Gewähr
+				für ihre rechtliche Verwertbarkeit übernimmt der Betreiber nicht. Im Übrigen gilt die
+				Haftungsregelung in Absatz 1.
 			</p>
 
 			<h2>5. Löschung und Kündigung</h2>
