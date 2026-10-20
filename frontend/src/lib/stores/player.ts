@@ -93,6 +93,7 @@ import {
 	type PlaybackSource
 } from '$lib/constants/now-playing';
 import { shuffled } from '$lib/utils/shuffle';
+import { readStorage, writeStorage } from '$lib/utils/storage';
 
 // --- Browsing state ---
 export const selectedAlbumId = writable<string | null>(null);
@@ -198,7 +199,7 @@ const SHUFFLE_STORAGE_KEY = 'queueShuffleEnabled';
 
 function readStoredShuffle(): boolean {
 	if (typeof window === 'undefined') return false;
-	return localStorage.getItem(SHUFFLE_STORAGE_KEY) === 'true';
+	return readStorage(SHUFFLE_STORAGE_KEY) === 'true';
 }
 
 export const shuffleEnabled = writable(readStoredShuffle());
@@ -206,7 +207,7 @@ export const shuffleEnabled = writable(readStoredShuffle());
 export function setShuffle(enabled: boolean): void {
 	shuffleEnabled.set(enabled);
 	if (typeof window !== 'undefined') {
-		localStorage.setItem(SHUFFLE_STORAGE_KEY, String(enabled));
+		writeStorage(SHUFFLE_STORAGE_KEY, String(enabled));
 	}
 }
 

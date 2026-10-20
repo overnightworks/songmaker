@@ -7,7 +7,17 @@ import {
 } from '$lib/constants';
 import { addToast } from './toast';
 
+export type ShareKind = 'album' | 'song' | 'playlist' | 'gen';
+
+const SHARE_PAGE_PATH: Readonly<Record<ShareKind, string>> = {
+	album: '/share',
+	song: '/share/song',
+	playlist: '/share/playlist',
+	gen: '/share/gen'
+};
+
 interface ShareToggleSource {
+	kind: ShareKind;
 	isShared: boolean;
 	shareSlug: string | null | undefined;
 	onshare: () => Promise<ShareResult>;
@@ -55,8 +65,8 @@ export function createShareToggle(source: () => ShareToggleSource) {
 			return source().isShared ? 'link' : 'share';
 		},
 		get sharedTooltip() {
-			const { isShared, shareSlug } = source();
-			return isShared ? `Shared: /share/${shareSlug ?? ''}` : undefined;
+			const { kind, isShared, shareSlug } = source();
+			return isShared ? `Shared: ${SHARE_PAGE_PATH[kind]}/${shareSlug ?? ''}` : undefined;
 		},
 		toggle
 	};

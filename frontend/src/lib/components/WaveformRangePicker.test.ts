@@ -64,3 +64,21 @@ it.each([
 		status === 200 ? [1, 2, 3] : null
 	);
 });
+
+it.each([
+	{ seconds: 1.996, shown: '0:02.00' },
+	{ seconds: 61.5, shown: '1:01.50' }
+])('shows $seconds s as $shown', ({ seconds, shown }) => {
+	picker = mount(WaveformRangePicker, {
+		target: document.body,
+		props: {
+			audioUrl: '/audio/waveform',
+			duration: seconds,
+			startPercent: 1,
+			endPercent: 1,
+			onchange: () => undefined
+		}
+	});
+
+	expect(document.body.textContent).toContain(shown);
+});
