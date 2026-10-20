@@ -45,7 +45,9 @@ export class ApiError extends Error {
 		public readonly detail: string,
 		public readonly path: string,
 		public readonly retryAfterSeconds: number | null = null,
-		public readonly responseDetail: unknown = detail
+		public readonly responseDetail: unknown = detail,
+		public readonly errorType: string | null = null,
+		public readonly jobId: string | null = null
 	) {
 		super(detail || API_ERROR_GENERIC_MESSAGE);
 		this.name = 'ApiError';
@@ -112,22 +114,40 @@ export function isTransientApiFailure(err: unknown): boolean {
 	);
 }
 
-async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
+interface ErrorBody {
 	detail: string;
 	responseDetail: unknown;
-}> {
+	errorType: string | null;
+	jobId: string | null;
+}
+
+const EMPTY_ERROR_BODY: ErrorBody = {
+	detail: '',
+	responseDetail: '',
+	errorType: null,
+	jobId: null
+};
+
+function stringField(body: object, key: string): string | null {
+	const value: unknown = (body as Record<string, unknown>)[key];
+	return typeof value === 'string' ? value : null;
+}
+
+async function readErrorBody(response: Pick<Response, 'json'>): Promise<ErrorBody> {
 	try {
 		const body: unknown = await response.json();
 		if (typeof body !== 'object' || body === null || !('detail' in body)) {
-			return { detail: '', responseDetail: '' };
+			return EMPTY_ERROR_BODY;
 		}
 		const responseDetail = body.detail;
 		return {
 			detail: typeof responseDetail === 'string' ? responseDetail : '',
-			responseDetail
+			responseDetail,
+			errorType: stringField(body, 'error_type'),
+			jobId: stringField(body, 'job_id')
 		};
 	} catch {
-		return { detail: '', responseDetail: '' };
+		return EMPTY_ERROR_BODY;
 	}
 }
 
@@ -246,7 +266,7 @@ function addCsrfToken(init: RequestInit, method: string): RequestInit {
 
 async function throwForFailedResponse(response: Response, path: string): Promise<void> {
 	if (response.ok) return;
-	const { detail, responseDetail } = await readErrorDetail(response);
+	const { detail, responseDetail, errorType, jobId } = await readErrorBody(response);
 	if (response.status === RATE_LIMITED_STATUS) installedReactions.rateLimited(path);
 	if (isSessionLostResponse(response.status, path)) await installedReactions.sessionLost();
 	throw new ApiError(
@@ -254,7 +274,9 @@ async function throwForFailedResponse(response: Response, path: string): Promise
 		detail,
 		path,
 		parseRetryAfterSeconds(response),
-		responseDetail
+		responseDetail,
+		errorType,
+		jobId
 	);
 }
 

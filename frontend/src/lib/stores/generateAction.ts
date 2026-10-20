@@ -8,7 +8,6 @@ import {
 	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GENERATING_LABEL,
-	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_QUEUED_LABEL,
@@ -29,11 +28,11 @@ import {
 	retireVersionLoadUndo,
 	versions
 } from './editor';
-import { health } from './health';
 import {
 	activeJobs,
 	dismissGenerationFailure,
 	generationFailures,
+	showGenerationUnavailableRefusal,
 	trackJob,
 	type ActiveJob
 } from './jobs';
@@ -192,13 +191,12 @@ function disabledReasonFor(input: {
 	prompt: string;
 	model: string | null;
 	models: unknown[];
-	gpuOffline: boolean;
 }): string {
 	if (!input.lyrics || !input.prompt) return EDITOR_MISSING_CONTENT_TITLE;
 	if (input.model === null) {
 		return input.models.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
 	}
-	return input.gpuOffline ? EDITOR_GPU_OFFLINE_TITLE : '';
+	return '';
 }
 
 type JobView = ActiveJob['job'];
@@ -245,7 +243,6 @@ const generatePresentation = derived(
 		selectedSong,
 		activeJobs,
 		requestInFlight,
-		health,
 		editLyrics,
 		editPrompt,
 		recipeModel,
@@ -259,7 +256,6 @@ const generatePresentation = derived(
 		song,
 		jobs,
 		inFlight,
-		health,
 		lyrics,
 		prompt,
 		model,
@@ -273,10 +269,9 @@ const generatePresentation = derived(
 		const job = tracked?.job ?? null;
 		const reconnecting = isOffline || tracked?.streamStale === true;
 		const pending = inFlight || job !== null;
-		const gpuOffline = health?.acestep_workers_online === 0;
-		const disabledReason = disabledReasonFor({ lyrics, prompt, model, models, gpuOffline });
+		const disabledReason = disabledReasonFor({ lyrics, prompt, model, models });
 
-		const disabled = pending || isOffline || !lyrics || !prompt || model === null || gpuOffline;
+		const disabled = pending || isOffline || !lyrics || !prompt || model === null;
 		const actionMode: GenerateMode = source ? mode : 'generate';
 		const cause = song ? failures[song.id] : undefined;
 		if (job?.status === 'queued') return queuedState(job, reconnecting, isOffline);
@@ -387,7 +382,9 @@ export async function generate(): Promise<void> {
 		pinnedSeed.set(null);
 		trackJob(job, { songId: song.id });
 	} catch (e) {
-		addToast(describeFailure(e, 'Generation failed'), 'error');
+		if (!showGenerationUnavailableRefusal(song.id, e)) {
+			addToast(describeFailure(e, 'Generation failed'), 'error');
+		}
 	} finally {
 		requestInFlight.set(false);
 	}

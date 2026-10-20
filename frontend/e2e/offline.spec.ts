@@ -10,7 +10,6 @@ import {
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
-	EDITOR_GPU_OFFLINE_TITLE,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
@@ -68,9 +67,6 @@ const SESSION_CHECK = '**/api/auth/me';
 const GENERATE_LABEL = EDITOR_GENERATE_MODE_LABELS.generate;
 // The toast a generate job's end raises (`notifyTerminalJob` in stores/jobs.ts).
 const JOB_COMPLETED_TOAST = 'generate completed';
-// CI's stack runs no ACE-Step worker, so online the Generate bar names that
-// reason inside its own box (#1011).
-const GENERATE_WITHOUT_GPU = `${GENERATE_LABEL} — ${EDITOR_GPU_OFFLINE_TITLE}`;
 // The ride through three tunnels on #1039's final drive (#1141).
 const OUTAGES_IN_ONE_RIDE = 3;
 // What each outage past the first adds to the running-take flow's cost: the
@@ -245,7 +241,7 @@ test.describe('losing the network on the phone', { tag: ONLY_IN_SHELL.mobile }, 
 			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
-		await expect(generate).toHaveAccessibleName(GENERATE_WITHOUT_GPU);
+		await expect(generate).toHaveAccessibleName(GENERATE_LABEL);
 		await expect(offlineStrip(page)).toHaveCount(0);
 
 		await loseNetwork(page, context);
@@ -267,7 +263,7 @@ test.describe('losing the network on the phone', { tag: ONLY_IN_SHELL.mobile }, 
 		await regainNetwork(page, context);
 
 		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
-		await expect(generate).toHaveAccessibleName(GENERATE_WITHOUT_GPU);
+		await expect(generate).toHaveAccessibleName(GENERATE_LABEL);
 		await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
 
 		console.log(`Offline flow /api requests: ${guard.apiRequestCount}`);

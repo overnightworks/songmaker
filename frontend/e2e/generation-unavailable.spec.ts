@@ -48,14 +48,6 @@ async function arrangeAudience(page: Page, role: (typeof ROLES)[number]): Promis
 		const user = await response.json();
 		await route.fulfill({ response, json: { ...user, role } });
 	});
-	await page.route('**/health', async (route) => {
-		const response = await route.fetch();
-		const health = await response.json();
-		await route.fulfill({
-			response,
-			json: { ...health, acestep_workers_online: 1, acestep_workers_total: 1 }
-		});
-	});
 }
 
 async function expectWorkerPool(page: Page, width: number): Promise<void> {

@@ -28,6 +28,7 @@ import {
 	hydrateGenerationFailure,
 	removeJob,
 	resetGenerationFailuresForTests,
+	showGenerationUnavailableRefusal,
 	trackJob
 } from './jobs';
 import { toasts } from './toast';
@@ -760,6 +761,29 @@ describe('jobs store', () => {
 			});
 		}
 	);
+
+	it('shows a refused press as the same lasting line a reload shows', async () => {
+		const line = "Generating isn't available right now.";
+		const refusal = new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'j9');
+		expect(showGenerationUnavailableRefusal('s1', refusal)).toBe(true);
+		const live = get(generationFailures);
+		resetGenerationFailuresForTests();
+		mockFetchLastFailedGeneration.mockResolvedValue({
+			job: makeJob({ status: 'failed', error: line, error_type: 'generation_unavailable' })
+		});
+		await hydrateGenerationFailure('s1');
+		expect(live).toEqual(get(generationFailures));
+	});
+
+	it.each([
+		new ApiError(503, 'ffmpeg is missing', '/api/x', null, 'x', 'ffmpeg_missing', 'j9'),
+		new ApiError(503, 'Queue gone', '/api/x', null, 'x', 'generation_unavailable'),
+		new ApiError(500, 'Boom', '/api/x', null, 'x', 'generation_unavailable', 'j9'),
+		new Error('Boom')
+	])('leaves %s to the caller', (error) => {
+		expect(showGenerationUnavailableRefusal('s1', error)).toBe(false);
+		expect(get(generationFailures)).toEqual({});
+	});
 
 	it('forgets the previous cause when the song generates again', () => {
 		generationFailures.set({ s1: { message: 'old failure', unavailable: false } });
