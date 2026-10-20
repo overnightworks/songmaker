@@ -36,8 +36,8 @@ pnpm dev
 # Build the production SPA bundle (FastAPI serves it from frontend/build/)
 pnpm build
 
-# Tests, lint, type-check
-pnpm test
+# Targeted tests (CI runs the full suite), lint, type-check
+pnpm exec vitest run src/lib/stores/player.test.ts
 pnpm lint
 pnpm check
 ```
