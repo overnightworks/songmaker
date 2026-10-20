@@ -100,18 +100,11 @@ def _add_completed_generate_jobs(client: TestClient, count: int) -> None:
         session.commit()
 
 
-def test_generate_rate_limit_for_user(client: TestClient) -> None:
-    _login_as(client, "user")
-    _add_completed_generate_jobs(client, 3)
-
-    resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
-
-    assert resp.status_code == 429
-    assert "Rate limit" in resp.json()["detail"]
-
-
-def test_generate_rate_limit_for_admin_matches_user(client: TestClient) -> None:
-    _login_as(client, "admin")
+@pytest.mark.parametrize("role", ["user", "admin"])
+def test_generate_rate_limit(client: TestClient, monkeypatch, role: str) -> None:
+    monkeypatch.setenv("GENERATION_RATE_LIMIT_USER", "3")
+    get_settings.cache_clear()
+    _login_as(client, role)
     _add_completed_generate_jobs(client, 3)
 
     resp = client.post("/api/songs/s1/generate", json={"count": 1, "model": "sft"})
@@ -135,7 +128,9 @@ def test_saved_global_rate_limit_binds_an_admin(client: TestClient) -> None:
 # ── Scoring rate limit ──────────────────────────────────────────────
 
 
-def test_score_rate_limit_for_user(client: TestClient) -> None:
+def test_score_rate_limit_for_user(client: TestClient, monkeypatch) -> None:
+    monkeypatch.setenv("SCORING_RATE_LIMIT_USER", "10")
+    get_settings.cache_clear()
     _login_as(client, "user")
     user_id = _get_user_id(client)
 
