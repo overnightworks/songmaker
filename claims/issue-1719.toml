@@ -1,7 +1,0 @@
-claim_id = "061cf2e7fe594e3b8daf92f59ac5e761"
-agent = "claude"
-role = "builder"
-base = "e2f8a3a6c9557acd2e8ec94134d935987f9e1398"
-branch = "claude/issue-1719-legal-text-truth"
-scope = ["frontend/src/lib/components/LegalContent.svelte"]
-opened_commit = "79995558b7143c207c25fadbdc02248560ece7a7"
