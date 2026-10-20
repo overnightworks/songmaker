@@ -4,6 +4,7 @@ import type SongMenu from '$lib/components/editor/SongMenu.svelte';
 import { readonly, writable } from 'svelte/store';
 import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '$lib/constants';
 import { isEditableElement } from '$lib/utils/escape-level-up';
+import { readStorage, writeStorage } from '$lib/utils/storage';
 
 interface PhoneAppBarState {
 	kind: 'song';
@@ -114,7 +115,7 @@ const VALID_THEMES: ReadonlySet<string> = new Set<Theme>(['dark', 'light']);
 
 function getInitialTheme(): Theme {
 	if (typeof window === 'undefined') return 'dark';
-	const stored = localStorage.getItem(STORAGE_KEY);
+	const stored = readStorage(STORAGE_KEY);
 	return stored && VALID_THEMES.has(stored) ? (stored as Theme) : 'dark';
 }
 
@@ -122,14 +123,14 @@ export const theme = writable<Theme>(getInitialTheme());
 
 function getInitialRailCollapsed(): boolean {
 	if (typeof window === 'undefined') return false;
-	return localStorage.getItem(RAIL_COLLAPSED_STORAGE_KEY) === 'true';
+	return readStorage(RAIL_COLLAPSED_STORAGE_KEY) === 'true';
 }
 
 export const railCollapsed = writable(getInitialRailCollapsed());
 
 function getInitialLibraryWallOrder(): LibraryWallOrder {
 	if (typeof window === 'undefined') return DEFAULT_LIBRARY_WALL_ORDER;
-	const stored = localStorage.getItem(LIBRARY_WALL_ORDER_STORAGE_KEY);
+	const stored = readStorage(LIBRARY_WALL_ORDER_STORAGE_KEY);
 	return stored && VALID_LIBRARY_WALL_ORDERS.has(stored)
 		? (stored as LibraryWallOrder)
 		: DEFAULT_LIBRARY_WALL_ORDER;
@@ -139,7 +140,7 @@ export const libraryWallOrder = writable(getInitialLibraryWallOrder());
 
 export function chooseLibraryWallOrder(order: LibraryWallOrder): void {
 	libraryWallOrder.set(order);
-	localStorage.setItem(LIBRARY_WALL_ORDER_STORAGE_KEY, order);
+	writeStorage(LIBRARY_WALL_ORDER_STORAGE_KEY, order);
 }
 
 export function initLibraryWallOrder(): void {
@@ -152,7 +153,7 @@ function clampRailWidth(width: number): number {
 
 function getInitialRailWidth(): number {
 	if (typeof window === 'undefined') return DEFAULT_RAIL_WIDTH_PX;
-	const storedValue = localStorage.getItem(RAIL_WIDTH_STORAGE_KEY);
+	const storedValue = readStorage(RAIL_WIDTH_STORAGE_KEY);
 	if (storedValue === null) return DEFAULT_RAIL_WIDTH_PX;
 	const stored = Number(storedValue);
 	return Number.isFinite(stored) ? clampRailWidth(stored) : DEFAULT_RAIL_WIDTH_PX;
@@ -163,13 +164,13 @@ export const railWidth = writable(getInitialRailWidth());
 export function setRailWidth(width: number): void {
 	const next = clampRailWidth(width);
 	railWidth.set(next);
-	localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, String(next));
+	writeStorage(RAIL_WIDTH_STORAGE_KEY, String(next));
 }
 
 export function adjustRailWidth(delta: number): void {
 	railWidth.update((current) => {
 		const next = clampRailWidth(current + delta);
-		localStorage.setItem(RAIL_WIDTH_STORAGE_KEY, String(next));
+		writeStorage(RAIL_WIDTH_STORAGE_KEY, String(next));
 		return next;
 	});
 }
@@ -181,7 +182,7 @@ export function initRailWidth(): void {
 export function toggleRailCollapsed(): void {
 	railCollapsed.update((collapsed) => {
 		const next = !collapsed;
-		localStorage.setItem(RAIL_COLLAPSED_STORAGE_KEY, String(next));
+		writeStorage(RAIL_COLLAPSED_STORAGE_KEY, String(next));
 		return next;
 	});
 }
@@ -193,7 +194,7 @@ export function initRailCollapsed(): void {
 export function toggleTheme(): void {
 	theme.update((t) => {
 		const next: Theme = t === 'dark' ? 'light' : 'dark';
-		localStorage.setItem(STORAGE_KEY, next);
+		writeStorage(STORAGE_KEY, next);
 		document.documentElement.dataset.theme = next;
 		return next;
 	});

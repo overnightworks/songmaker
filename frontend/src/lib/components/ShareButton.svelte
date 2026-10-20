@@ -13,7 +13,13 @@
 	}
 
 	let { iconOnly = false, isShared, shareSlug, onshare, onunshare }: Props = $props();
-	const shareToggle = createShareToggle(() => ({ isShared, shareSlug, onshare, onunshare }));
+	const shareToggle = createShareToggle(() => ({
+		kind: 'song',
+		isShared,
+		shareSlug,
+		onshare,
+		onunshare
+	}));
 </script>
 
 <button

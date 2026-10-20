@@ -5,9 +5,11 @@ import {
 	SHARE_BUTTON_FAILED_TOAST,
 	SHARE_BUTTON_UNSHARED_TOAST
 } from '$lib/constants';
+import { sharePagePath, type ShareKind } from '$lib/routes/addresses';
 import { addToast } from './toast';
 
 interface ShareToggleSource {
+	kind: ShareKind;
 	isShared: boolean;
 	shareSlug: string | null | undefined;
 	onshare: () => Promise<ShareResult>;
@@ -55,8 +57,8 @@ export function createShareToggle(source: () => ShareToggleSource) {
 			return source().isShared ? 'link' : 'share';
 		},
 		get sharedTooltip() {
-			const { isShared, shareSlug } = source();
-			return isShared ? `Shared: /share/${shareSlug ?? ''}` : undefined;
+			const { kind, isShared, shareSlug } = source();
+			return isShared ? `Shared: ${sharePagePath(kind, shareSlug ?? '')}` : undefined;
 		},
 		toggle
 	};

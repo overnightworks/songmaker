@@ -34,6 +34,7 @@
 	);
 
 	const shareToggle = createShareToggle(() => ({
+		kind: 'gen',
 		isShared: gen.is_shared,
 		shareSlug: gen.share_slug,
 		onshare,

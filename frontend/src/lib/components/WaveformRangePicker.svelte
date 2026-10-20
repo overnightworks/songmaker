@@ -25,11 +25,10 @@
 	const LATENT_FRAME_SECONDS = 0.04;
 
 	function formatTime(seconds: number): string {
-		const m = Math.floor(seconds / 60);
-		const s = seconds % 60;
-		const whole = Math.floor(s);
-		const ms = Math.round((s - whole) * 100);
-		return `${m}:${whole.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
+		const hundredths = Math.round(seconds * 100);
+		const m = Math.floor(hundredths / 6000);
+		const s = Math.floor(hundredths / 100) % 60;
+		return `${m}:${String(s).padStart(2, '0')}.${String(hundredths % 100).padStart(2, '0')}`;
 	}
 
 	const startTime = $derived(formatTime(startPercent * duration));

@@ -151,6 +151,16 @@ describe('CollectionMenu Share row', () => {
 		}
 	);
 
+	it.each([
+		{ kind: 'album', label: 'Share', path: '/share/abc' },
+		{ kind: 'playlist', label: 'Share playlist', path: '/share/playlist/abc' }
+	] as const)('names the $kind share page in the shared tooltip', async (row) => {
+		const { target } = await render({ kind: row.kind, isShared: true, shareSlug: 'abc' });
+		await openCollectionMenu(target);
+
+		expect(menuRow(target, row.label).title).toBe(`Shared: ${row.path}`);
+	});
+
 	it('1480_R2: draws a different icon once shared, so the state is not colour alone', async () => {
 		const iconOf = async (isShared: boolean) => {
 			const { target } = await render({ isShared });

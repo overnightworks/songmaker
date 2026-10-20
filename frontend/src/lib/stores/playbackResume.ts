@@ -4,6 +4,7 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { currentUser } from '$lib/stores/auth';
 import { LIBRARY_TAKE_POOLS, type LibraryTakePool } from '$lib/stores/playbackSettings';
+import { readStorage, removeStorage, writeStorage } from '$lib/utils/storage';
 
 // What the app was playing, kept per user on this device, so that reopening
 // a page Android killed can show the same take at the same position (#1187
@@ -304,30 +305,4 @@ function isSavedPlayback(value: unknown): value is SavedPlayback {
 		Number.isFinite(value.position) &&
 		value.position >= 0
 	);
-}
-
-// Private browsing, a full quota or blocked site data: resuming is a comfort,
-// so playback goes on and simply nothing is remembered (#1209).
-function readStorage(key: string): string | null {
-	try {
-		return localStorage.getItem(key);
-	} catch {
-		return null;
-	}
-}
-
-function writeStorage(key: string, value: string): void {
-	try {
-		localStorage.setItem(key, value);
-	} catch {
-		// Nothing is remembered; see readStorage.
-	}
-}
-
-function removeStorage(key: string): void {
-	try {
-		localStorage.removeItem(key);
-	} catch {
-		// Storage that cannot be reached holds no record to forget.
-	}
 }

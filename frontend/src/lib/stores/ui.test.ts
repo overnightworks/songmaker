@@ -283,3 +283,16 @@ describe('transportBarHidden', () => {
 		stop();
 	});
 });
+
+it('imports with the defaults when browser storage throws', async () => {
+	vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+		throw new DOMException('blocked', 'SecurityError');
+	});
+	const { theme, railCollapsed, railWidth, libraryWallOrder } = await import('./ui');
+	vi.restoreAllMocks();
+
+	expect(get(theme)).toBe('dark');
+	expect(get(railCollapsed)).toBe(false);
+	expect(get(railWidth)).toBe(264);
+	expect(get(libraryWallOrder)).toBe('title');
+});
