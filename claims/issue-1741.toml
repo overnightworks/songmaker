@@ -1,0 +1,7 @@
+claim_id = "f722e5c1f57448f4bbb116265069607b"
+agent = "claude"
+role = "builder"
+base = "cd9239a971e6b5a33077af1f703d405fc5316510"
+branch = "claude/issue-1741-certifi-advisory"
+scope = ["uv.lock"]
+opened_commit = "18d83ecb67175986f1b635dd9bcceb6930159fc5"
