@@ -67,12 +67,14 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
         )
         for album in expired_albums:
             paths.extend(delete_album(session, album.id))
+            log.info("cleanup_expired: hard-deleted album %s", album.id)
             album_count += 1
 
         expired_songs = list_expired_songs(session, cutoff, expired_album_ids)
         for song in expired_songs:
             expired_song_ids.append(song.id)
             paths.extend(delete_song(session, song.id))
+            log.info("cleanup_expired: hard-deleted orphan song %s", song.id)
             song_count += 1
 
         session.commit()
