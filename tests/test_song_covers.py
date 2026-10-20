@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
+from sqlalchemy.orm import Session
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
@@ -426,7 +428,11 @@ def test_soft_delete_song_keeps_cover_files(
     assert client.get("/api/songs/alice-song/cover?variant=detail").status_code == 200
 
 
-def test_cleanup_expired_unlinks_orphan_and_album_song_covers(tmp_path: Path) -> None:
+@pytest.mark.parametrize("commit_fails", [False, True])
+def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch,
+    commit_fails: bool,
+) -> None:
     factory = init_db(tmp_path / "covers.db")
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
@@ -479,9 +485,25 @@ def test_cleanup_expired_unlinks_orphan_and_album_song_covers(tmp_path: Path) ->
         orphan.deleted_at = past
         session.commit()
 
-    album_count, song_count = run_cleanup_expired(factory, audio_dir)
+    if commit_fails:
+        def failing_commit(self) -> None:
+            raise RuntimeError("commit failed")
+
+        monkeypatch.setattr(Session, "commit", failing_commit)
+        with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
+            with pytest.raises(RuntimeError, match="commit failed"):
+                run_cleanup_expired(factory, audio_dir)
+        assert "hard-deleted" not in caplog.text
+        assert live_album_dir.is_dir()
+        assert expired_album_dir.is_dir()
+        return
+
+    with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
+        album_count, song_count = run_cleanup_expired(factory, audio_dir)
     assert album_count == 1
     assert song_count == 1
+    assert "expired-album" in caplog.text
+    assert "orphan-song" in caplog.text
     assert not expired_album_dir.exists()
     assert not expired_song_dir.exists()
     assert not orphan_dir.exists()

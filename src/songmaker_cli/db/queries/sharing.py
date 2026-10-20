@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import uuid
 
 from sqlalchemy import ColumnElement, and_, func, or_
@@ -18,7 +17,6 @@ from songmaker_cli.db.models import (
     Song,
 )
 
-log = logging.getLogger(__name__)
 
 def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity_id: str) -> T:
     entity = session.query(model_class).filter_by(id=entity_id).first()
@@ -28,10 +26,6 @@ def enable_sharing[T: ShareMixin](session: Session, model_class: type[T], entity
         entity.share_slug = str(uuid.uuid4())
     entity.is_shared = True
     session.flush()
-    log.info(
-        "Enabled sharing for %s %s",
-        model_class.__name__.lower(), entity_id,
-    )
     return entity
 
 
@@ -42,7 +36,6 @@ def disable_sharing[T: ShareMixin](session: Session, model_class: type[T], entit
     entity.share_slug = None
     entity.is_shared = False
     session.flush()
-    log.info("Disabled sharing for %s %s", model_class.__name__.lower(), entity_id)
     return entity
 
 

@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import Version
-
-log = logging.getLogger(__name__)
 
 
 def get_version(session: Session, version_id: str, song_id: str) -> Version | None:
@@ -46,5 +42,4 @@ def delete_version(
     session.delete(version)
     session.flush()
 
-    log.info("Deleted version %s (delete_generations=%s)", version_id, delete_generations)
     return paths_to_delete
