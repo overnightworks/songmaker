@@ -1,0 +1,7 @@
+claim_id = "2202b7bc068a4173b595ad8ef2ac653e"
+agent = "claude"
+role = "builder"
+base = "7e86f8d7511a20738fc3f67cb1425f8161988442"
+branch = "claude/issue-1729-gen-defaults-read-failure"
+scope = ["frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts"]
+opened_commit = "5a43fe1a1e379900a662b3d358244c3fe17c8cab"
