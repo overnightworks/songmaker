@@ -225,6 +225,7 @@
 
 	let allModels = $state<AvailableModel[]>([]);
 	let genDefaults = $state<Record<string, VersionGenerationParams>>({});
+	let genDefaultsLoaded = $state(false);
 	let genEditModel = $state('');
 	let genEditDefaults = $state<VersionGenerationParams>({});
 	let genSaving = $state(false);
@@ -244,7 +245,8 @@
 		'providerStatus',
 		'cowriter',
 		'cover',
-		'scoring'
+		'scoring',
+		'genDefaults'
 	] as const;
 	type AdminLoad = (typeof ADMIN_LOADS)[number];
 
@@ -256,7 +258,8 @@
 		providerStatus: PROVIDER_STATUS_UNAVAILABLE_DETAIL,
 		cowriter: 'Failed to load co-writer settings',
 		cover: 'Failed to load cover settings',
-		scoring: 'Failed to load scoring settings'
+		scoring: 'Failed to load scoring settings',
+		genDefaults: 'Failed to load generation defaults'
 	};
 	const PAGE_WIDE_LOADS = {
 		users: ['users', 'sessions', 'attempts', 'ratelimits'],
@@ -275,7 +278,8 @@
 		providerStatus: reloadWhileUnreachable(() => void loadProviderStatuses()),
 		cowriter: reloadWhileUnreachable(() => void loadCowriterSettings()),
 		cover: reloadWhileUnreachable(() => void loadCoverSettings()),
-		scoring: reloadWhileUnreachable(() => void loadJudgeSettings())
+		scoring: reloadWhileUnreachable(() => void loadJudgeSettings()),
+		genDefaults: reloadWhileUnreachable(() => void loadGenDefaults())
 	};
 	const loadFailures = derived(
 		ADMIN_LOADS.map((load) => loadReloads[load].loadFailure),
@@ -827,15 +831,19 @@
 		} catch {
 			allModels = [];
 		}
+		const wasLoaded = genDefaultsLoaded;
 		try {
 			genDefaults = await fetchGenerationDefaults();
-		} catch {
-			genDefaults = {};
-		}
-		const modes = Object.keys($builtinDefaults);
-		if (modes.length > 0 && !genEditModel) {
-			genEditModel = modes[0];
-			genEditDefaults = { ...(genDefaults[modes[0]] ?? {}) };
+			genDefaultsLoaded = true;
+			settleLoad('genDefaults');
+			const modes = Object.keys($builtinDefaults);
+			if (!wasLoaded && modes.length > 0) {
+				genEditModel ||= modes[0];
+				genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
+			}
+		} catch (e) {
+			genDefaultsLoaded = false;
+			failLoad('genDefaults', e);
 		}
 	}
 
@@ -850,17 +858,21 @@
 	}
 
 	function switchGenModel(model: string): void {
+		if (!genDefaultsLoaded) return;
 		genEditModel = model;
 		genEditDefaults = { ...(genDefaults[model] ?? {}) };
 	}
 
 	async function handleSaveGenDefaults(): Promise<void> {
+		if (!genDefaultsLoaded) return;
 		const reportError = pageErrorReporter();
 		genSaving = true;
 		reportError('');
 		try {
 			const cleaned = Object.keys(genEditDefaults).length > 0 ? genEditDefaults : {};
 			genDefaults = await updateGenerationDefaults({ ...genDefaults, [genEditModel]: cleaned });
+			genDefaultsLoaded = true;
+			settleLoad('genDefaults');
 			genEditDefaults = { ...(genDefaults[genEditModel] ?? {}) };
 		} catch {
 			reportError('Failed to save generation defaults');
@@ -1332,33 +1344,43 @@
 					Default generation parameters for all users. Per-song overrides take precedence.
 				</p>
 
-				<div class="gen-model-tabs">
-					{#each genModelModes as mode (mode)}
+				{#if $loadFailures.genDefaults}
+					<p class="error">{$loadFailures.genDefaults}</p>
+				{/if}
+
+				{#if genDefaultsLoaded}
+					<div class="gen-model-tabs">
+						{#each genModelModes as mode (mode)}
+							<button
+								class="gen-model-tab"
+								class:active={genEditModel === mode}
+								onclick={() => switchGenModel(mode)}
+							>
+								{mode.toUpperCase()}
+							</button>
+						{/each}
+					</div>
+
+					<div class="gen-defaults-controls">
+						<ParamControls
+							values={genEditDefaults}
+							placeholders={($builtinDefaults[genEditModel] ??
+								{}) as Required<VersionGenerationParams>}
+							onchange={(p) => (genEditDefaults = p)}
+						/>
+					</div>
+
+					<div class="gen-actions-row">
 						<button
-							class="gen-model-tab"
-							class:active={genEditModel === mode}
-							onclick={() => switchGenModel(mode)}
+							class="save-btn"
+							onclick={handleSaveGenDefaults}
+							disabled={genSaving || !genDefaultsLoaded}
 						>
-							{mode.toUpperCase()}
+							{genSaving ? 'Saving...' : 'Save Defaults'}
 						</button>
-					{/each}
-				</div>
-
-				<div class="gen-defaults-controls">
-					<ParamControls
-						values={genEditDefaults}
-						placeholders={($builtinDefaults[genEditModel] ??
-							{}) as Required<VersionGenerationParams>}
-						onchange={(p) => (genEditDefaults = p)}
-					/>
-				</div>
-
-				<div class="gen-actions-row">
-					<button class="save-btn" onclick={handleSaveGenDefaults} disabled={genSaving}>
-						{genSaving ? 'Saving...' : 'Save Defaults'}
-					</button>
-					<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
-				</div>
+						<button class="clear-btn" onclick={handleResetGenDefaults}>Reset</button>
+					</div>
+				{/if}
 			</section>
 		{/if}
 
