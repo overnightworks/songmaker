@@ -1,0 +1,7 @@
+claim_id = "5d2b2b8c1bd448ff8fa13a9009f31a37"
+agent = "claude"
+role = "builder"
+base = "c71d6ee40ac9a19299465ace967f1cf9d4c564d3"
+branch = "claude/issue-1743-pillow-13"
+scope = ["pyproject.toml", "src/songmaker_cli/covers.py", "uv.lock"]
+opened_commit = "421503a5efc3bdeaab8452b7164938107344ebd9"
