@@ -18,7 +18,7 @@ Two flags on generations: **pick** is THE one for this song on the album (one pe
 
 **Co-writer** is one active multi-turn conversation per musician, not per song (`chat_messages`, scoped via `conversations`), with a chosen provider (Claude, Grok or Codex) sharing the same song read/write capabilities. History goes verbatim while it fits the token-bounded tail; beyond it a rolling summary plus that tail. The model can persist an owned song's lyrics, style prompt, title, BPM, key or duration and create new songs. @-mentions are resolved from the DB server-side. Co-writer expansion (more memory or mention features) is frozen until organically needed (operator ruling 2026-08-24). The per-song legacy chat is gone (#1190); the co-writer runs only through `POST /chat/turn` in `conversation_api.py`.
 
-**Seed pinning** reproduces a generation (pin a previous seed, regenerate with tweaked params). Whether to keep, surface or remove it is open (#230).
+**Seed pinning** reproduces a generation (pin a previous seed, regenerate with tweaked params).
 
 ## Setup and run
 
