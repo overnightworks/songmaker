@@ -11,6 +11,7 @@ import pytest
 from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
+from sqlalchemy.orm import Session
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
@@ -427,8 +428,10 @@ def test_soft_delete_song_keeps_cover_files(
     assert client.get("/api/songs/alice-song/cover?variant=detail").status_code == 200
 
 
-def test_cleanup_expired_unlinks_orphan_and_album_song_covers(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture,
+@pytest.mark.parametrize("commit_fails", [False, True])
+def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch,
+    commit_fails: bool,
 ) -> None:
     factory = init_db(tmp_path / "covers.db")
     audio_dir = tmp_path / "audio"
@@ -481,6 +484,19 @@ def test_cleanup_expired_unlinks_orphan_and_album_song_covers(
         assert orphan is not None
         orphan.deleted_at = past
         session.commit()
+
+    if commit_fails:
+        def failing_commit(self) -> None:
+            raise RuntimeError("commit failed")
+
+        monkeypatch.setattr(Session, "commit", failing_commit)
+        with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
+            with pytest.raises(RuntimeError, match="commit failed"):
+                run_cleanup_expired(factory, audio_dir)
+        assert "hard-deleted" not in caplog.text
+        assert live_album_dir.is_dir()
+        assert expired_album_dir.is_dir()
+        return
 
     with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
         album_count, song_count = run_cleanup_expired(factory, audio_dir)
