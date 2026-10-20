@@ -1,0 +1,8 @@
+claim_id = "21e931e14941433da0c3b95fe0c60018"
+agent = "claude"
+role = "builder"
+base = "e2f8a3a6c9557acd2e8ec94134d935987f9e1398"
+branch = "claude/issue-1721-agents-md-fold"
+scope = ["AGENTS.md", "CLAUDE.md", "README.md", "docs/PRODUCT.md", "docs/VISION.md", "docs/architecture.md", "docs/requirements/0001-creative-catalog-and-takes.md", "docs/requirements/0003-creation-and-generation.md", "docs/requirements/0005-sharing-and-administration.md", "docs/security.md", "docs/testing.md", "frontend/README.md", "prompts/prompt-architecture-review.md", "prompts/prompt-coverage-and-logging.md", "prompts/prompt-implementation.md", "prompts/prompt-rereview-implementation.md", "scripts/auto-deploy.sh", "scripts/songmaker-autodeploy.service", "src/songmaker_cli/constants.py", "tests/test_mcp_spec_host_drift.py", "tests/test_secret_scrub_parity.py"]
+opened_commit = "6dc7e38339b1e5df2c93fb58cb15b12d71ae2dac"
+whole_reason = "Folding one agent document into another moves facts between the two files and every document that points at their sections; split, a pointer would dangle between landings."
