@@ -171,16 +171,12 @@ def update_album(
     album = session.query(Album).filter_by(id=album_id).first()
     if not album:
         raise ValueError(f"Album not found: {album_id}")
-    applied: dict[str, str] = {}
     if title is not None:
         album.title = title
-        applied["title"] = title
     if not isinstance(subtitle, _Unset):
         album.subtitle = subtitle
-        applied["subtitle"] = subtitle
     if not isinstance(year, _Unset):
         album.year = year
-        applied["year"] = year
     session.flush()
     return album
 
