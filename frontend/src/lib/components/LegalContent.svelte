@@ -180,8 +180,8 @@
 				>
 				(Vertragspartner im EWR: Anthropic Ireland, Limited), bei OpenAI das Services Agreement mit dem
 				<a href="https://openai.com/policies/data-processing-addendum/">Data Processing Addendum</a>
-				(im EWR: OpenAI Ireland Ltd.), bei xAI (SpaceXAI LLC), das wir nur über seine API mit Zero Data
-				Retention nutzen, die Terms of Service – Enterprise mit dem
+				(im EWR: OpenAI Ireland Ltd.), bei xAI (SpaceXAI LLC), das wir über seine API mit Zero Data Retention
+				nutzen, die Terms of Service – Enterprise mit dem
 				<a href="https://x.ai/legal/data-processing-addendum">Data Processing Addendum</a>.
 			</p>
 			<p>
@@ -246,13 +246,13 @@
 			</ul>
 			<p>
 				Browser-Speicher und Browser-Cache liest nur die App auf Ihrem Gerät, um Ihre Einstellungen,
-				die letzte Wiedergabe, den Navigationsverlauf und die App selbst sowie gespeicherte
-				Audiodateien wiederherzustellen; beim Wiederherstellen der letzten Wiedergabe ruft sie den
-				dort gemerkten Song oder die Playlist von unserem Server ab. Beim Abspielen meldet die App
-				dem Server die Wiedergabe, je Generierung und Playlist einmal seit dem Öffnen der App; der
-				Server vermerkt sie wie unter „Letzte Bearbeitungen und Wiedergaben“ beschrieben.
-				Wiedergaben über einen Freigabe-Link meldet die App nicht. Cloudflare kann eigene
-				Sicherheits-Cookies setzen (siehe Cloudflare).
+				die letzte Wiedergabe, den Navigationsverlauf und gespeicherte Audiodateien
+				wiederherzustellen und die App selbst zu laden; beim Wiederherstellen der letzten Wiedergabe
+				ruft sie den dort gemerkten Song oder die Playlist von unserem Server ab. Beim Abspielen
+				meldet die App dem Server die Wiedergabe, je Generierung und Playlist einmal seit dem Öffnen
+				der App; der Server vermerkt sie wie unter „Letzte Bearbeitungen und Wiedergaben“
+				beschrieben. Wiedergaben über einen Freigabe-Link meldet die App nicht. Cloudflare kann
+				eigene Sicherheits-Cookies setzen (siehe Cloudflare).
 			</p>
 
 			<h2>8. Speicherdauer</h2>
