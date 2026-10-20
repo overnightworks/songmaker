@@ -1,0 +1,8 @@
+claim_id = "d6eef71cf8bf4eddac26945aee16b5a3"
+agent = "claude"
+role = "builder"
+base = "9f1b7d2350ec5de8089d21f4adfdb8e1306b2bda"
+branch = "claude/issue-1747-rail-sheds-drawer-options"
+scope = ["frontend/e2e/settings-phone.spec.ts", "frontend/src/lib/components/editor/VersionsSheet.svelte", "frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/lib/stores/layers.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/utils/focus-trap.ts"]
+opened_commit = "a204e0904a604e9c1cafaef70c11a59dacd9f8a9"
+whole_reason = "One dead-branch removal in Rail.svelte plus one stale comment line in each of the files the drawer era left behind."
