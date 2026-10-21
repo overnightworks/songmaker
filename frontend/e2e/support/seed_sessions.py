@@ -25,6 +25,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 from webauth.cookies import (
+    DEFAULT_COOKIE_SAMESITE,
     PLAIN_CSRF_COOKIE_NAME,
     PLAIN_SESSION_COOKIE_NAME,
     default_cookie_name,
@@ -50,11 +51,16 @@ def _seed(session, entry: dict[str, str]) -> dict[str, str]:
     settings = get_settings()
     signing_key = settings.session_secret.get_secret_value().encode()
     user = get_user_by_username(session, entry["username"])
+    if user is None and entry.get("role") == "admin":
+        raise SystemExit(f"Admin account {entry['username']!r} is missing; never created here.")
     if user is None:
         # Nobody signs in with this hash: the account only ever holds a seeded session.
         unusable_password_hash = build_password_hasher().hash(secrets.token_urlsafe(32))
         user = create_user(
-            session, entry["username"], unusable_password_hash, entry.get("role", "user"),
+            session,
+            entry["username"],
+            unusable_password_hash,
+            entry.get("role", "user"),
         )
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.session_max_age_seconds)
     record = create_session(session, user.id, expires_at)
@@ -67,6 +73,7 @@ def _seed(session, entry: dict[str, str]) -> dict[str, str]:
         "csrf_cookie_name": default_cookie_name(PLAIN_CSRF_COOKIE_NAME, secure=secure),
         "csrf_cookie_value": generate_csrf_token(record.id, signing_key),
         "secure": secure,
+        "same_site": DEFAULT_COOKIE_SAMESITE,
     }
 
 

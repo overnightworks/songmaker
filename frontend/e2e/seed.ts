@@ -972,6 +972,7 @@ interface SeededSessionRow {
 	csrf_cookie_name: string;
 	csrf_cookie_value: string;
 	secure: boolean;
+	same_site: 'strict' | 'lax';
 }
 
 const SEED_SESSIONS_SCRIPT = path.join(E2E_DIR, 'support', 'seed_sessions.py');
@@ -1015,7 +1016,7 @@ function sessionCookies(row: SeededSessionRow): Cookie[] {
 		path: '/',
 		expires: -1,
 		secure: row.secure,
-		sameSite: 'Strict' as const
+		sameSite: row.same_site === 'lax' ? ('Lax' as const) : ('Strict' as const)
 	};
 	return [
 		{

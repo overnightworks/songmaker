@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
 import {
 	ACCOUNT_MENU_LABEL,
@@ -45,8 +45,10 @@ const writeEndpoint = '**/api/library/write';
 async function signInWriter(page: Page, account: SeededAccount): Promise<void> {
 	const context = page.context();
 	await context.clearCookies();
+	await page.goto('/login');
 	await context.addCookies(account.cookies);
-	await page.goto(HOME_PATH);
+	// Leaves the way the form does, replacing the entry, so Back revisits the earlier page.
+	await page.evaluate((address) => location.replace(address), HOME_PATH);
 	await expect(page).toHaveURL(new RegExp(`${HOME_PATH}$`));
 	await expect(writeRegion(page)).toBeVisible();
 }
@@ -108,10 +110,12 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 	context,
 	browser
 }, testInfo) => {
-	const account = await seedAccount(`e2e-write-${testInfo.project.name}-${runMarker()}`);
-	const accountApi = await signedInApi(account);
+	let account: SeededAccount | undefined;
+	let accountApi: APIRequestContext | undefined;
 	let releaseRemoval: (() => void) | undefined;
 	try {
+		account = await seedAccount(`e2e-write-${testInfo.project.name}-${runMarker()}`);
+		accountApi = await signedInApi(account);
 		await signInWriter(page, account);
 		await expect(listenRegion(page).getByText(HOME_LISTEN_EMPTY)).toBeVisible();
 		await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toBeVisible();
@@ -261,8 +265,8 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 	} finally {
 		releaseRemoval?.();
 		await page.unrouteAll({ behavior: 'ignoreErrors' });
-		await accountApi.dispose();
-		await deleteSeededAccounts([account.id]);
+		await accountApi?.dispose();
+		if (account) await deleteSeededAccounts([account.id]);
 	}
 });
 
@@ -271,13 +275,12 @@ for (const pending of [false, true]) {
 		page
 	}, testInfo) => {
 		const marker = runMarker();
-		const accounts = await Promise.all(
-			['a', 'b'].map((suffix) =>
-				seedAccount(`e2e-write-${testInfo.project.name}-${marker}-${suffix}`)
-			)
-		);
+		const accounts: SeededAccount[] = [];
 		let release: (() => void) | undefined;
 		try {
+			for (const suffix of ['a', 'b']) {
+				accounts.push(await seedAccount(`e2e-write-${testInfo.project.name}-${marker}-${suffix}`));
+			}
 			await signInWriter(page, accounts[0]);
 			const album = await writerPost(page, '/api/albums', { title: 'E2E Write account A' });
 			await writerPost(page, '/api/songs', { album_id: album.id, title: 'E2E Write private A' });
