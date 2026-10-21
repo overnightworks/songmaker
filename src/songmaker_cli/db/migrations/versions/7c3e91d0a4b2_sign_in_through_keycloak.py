@@ -24,7 +24,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Recreate the shapes empty; the data comes back only from a restore."""
+    """Recreate the shapes empty; the data comes back only from a restore.
+
+    The unique username index cannot be recreated once two accounts share a
+    username, which the sign-in allows; rolling back is the paired restore.
+    """
     with op.batch_alter_table("users") as batch_op:
         batch_op.add_column(
             sa.Column("is_active", sa.Boolean, nullable=False, server_default=sa.true()),

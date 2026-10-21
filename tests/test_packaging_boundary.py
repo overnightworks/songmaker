@@ -760,8 +760,10 @@ def test_only_the_web_service_holds_the_keycloak_client_secret(
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
-def test_the_web_host_check_admits_the_name_other_services_call_it_by(
+def test_the_web_host_check_admits_the_names_the_stack_calls_it_by(
     compose_files: tuple[str, ...],
 ) -> None:
     web = _rendered_test_stack_services(compose_files)["songmaker-web"]
-    assert "songmaker-web" in web["environment"]["ALLOWED_HOSTS"].split(",")
+    assert {"localhost", "127.0.0.1", "songmaker-web"} <= set(
+        web["environment"]["ALLOWED_HOSTS"].split(","),
+    )
