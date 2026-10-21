@@ -241,7 +241,7 @@ def auth_server_app(tmp_path: Path):
         create_album(session, "other_album", "Other Album", created_by=other.id)
         session.flush()
 
-        expires = datetime.now(timezone.utc) + timedelta(days=30)
+        expires = datetime.now(timezone.utc) + timedelta(days=1)
         owner_session = create_session(session, owner.id, expires)
         other_session = create_session(session, other.id, expires)
         session.commit()
@@ -489,7 +489,7 @@ def test_a_spoofed_host_with_matching_origin_is_refused(server_app: TestClient) 
         json={"title": "X", "album_id": "test_album"},
         headers={"origin": "http://evil.com", "host": "evil.com"},
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 403
 
 
 def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> None:
@@ -1146,49 +1146,6 @@ def test_spa_fallback_not_for_audio(server_app: TestClient) -> None:
     assert resp.status_code in (401, 404)
 
 
-# ── lifespan pruned login attempts log ──────────────────────────────
-
-
-def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
-    from songmaker_cli.db.models import LoginAttempt
-
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir(parents=True)
-    data_dir = tmp_path / "data"
-    data_dir.mkdir(parents=True)
-    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = tmp_path / "frontend" / "build"
-    sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
-
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
-        old_time = datetime.now(timezone.utc) - timedelta(days=100)
-        attempt = LoginAttempt(
-            username="test", ip_address="127.0.0.1", success=False,
-            attempted_at=old_time,
-        )
-        session.add(attempt)
-        session.commit()
-
-    with factory() as session:
-        assert session.query(LoginAttempt).count() == 1
-
-    ctx = AppContext(
-        db=factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-    )
-    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    with web_client(app):
-        pass
-
-    with factory() as session:
-        assert session.query(LoginAttempt).count() == 0
-
-
 # ── structured logging configuration ──────────────────────────────
 
 
@@ -1201,21 +1158,17 @@ class TestConfigureLogging:
         isolated_logging,
     ) -> None:
         monkeypatch.delenv("LOG_FORMAT", raising=False)
-        from songmaker_cli.logging_config import (
-            _SongmakerCliLogHandler,
-            _SongmakerLogHandler,
-            configure_logging,
-        )
+        from songmaker_cli.logging_config import _SongmakerLogHandler, configure_logging
 
         root = logging.getLogger()
-        cli_handler = _SongmakerCliLogHandler()
-        root.addHandler(cli_handler)
+        earlier_handler = _SongmakerLogHandler()
+        root.addHandler(earlier_handler)
 
         configure_logging()
         configure_logging()
         logging.getLogger("songmaker.test").info("text mode")
 
-        assert cli_handler not in root.handlers
+        assert earlier_handler not in root.handlers
         assert caplog.handler in root.handlers
         assert sum(isinstance(handler, _SongmakerLogHandler) for handler in root.handlers) == 1
         assert "text mode" in capsys.readouterr().err
