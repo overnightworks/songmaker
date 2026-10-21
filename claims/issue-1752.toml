@@ -1,0 +1,8 @@
+claim_id = "61303cf084244af88c6f20de1f95eb24"
+agent = "claude"
+role = "builder"
+base = "f7d6461dff31b7746eb5a651067d3a0d48efdd95"
+branch = "claude/issue-1752-frontend-dead-lines"
+scope = ["docs/architecture.md", "docs/security.md", "frontend/src/app.css", "frontend/src/lib/api/admin.ts", "frontend/src/lib/api/albums.ts", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/generations.ts", "frontend/src/lib/api/queue-streams.test.ts", "frontend/src/lib/api/queue-streams.ts", "frontend/src/lib/api/songs.ts", "frontend/src/lib/components/EditableTitle.svelte", "frontend/src/lib/components/EditableTitle.test.ts", "frontend/src/lib/components/MentionDropdown.svelte", "frontend/src/lib/components/editor/CoWriterPanel.svelte", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "d3173921a750677f6b00a8d09cb8e2ca13f8f252"
+whole_reason = "Deletion-only cuts from the #1724 deadweight audit; each file only loses lines."
