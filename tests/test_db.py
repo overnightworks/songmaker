@@ -16,8 +16,6 @@ from songmaker_cli.api_models import (
     AlbumResponse,
     GenerationResponse,
     JobResponse,
-    LoginAttemptResponse,
-    SessionResponse,
     SongResponse,
     UserResponse,
     VersionResponse,
@@ -57,7 +55,6 @@ from songmaker_cli.db.queries.auth import (
     get_user,
     get_user_by_username,
     list_active_sessions,
-    list_login_attempts,
     list_users,
     prune_overflow_sessions,
     record_login_attempt,
@@ -1954,25 +1951,6 @@ def test_count_recent_failed_attempts_outside_window(db_session: Session) -> Non
     assert count == 0
 
 
-def test_list_login_attempts(db_session: Session) -> None:
-    record_login_attempt(db_session, "10.0.0.1", "alice", success=False)
-    record_login_attempt(db_session, "10.0.0.1", "alice", success=True)
-    db_session.commit()
-
-    attempts = list_login_attempts(db_session, limit=10)
-    assert len(attempts) == 2
-    assert attempts[0].attempted_at >= attempts[1].attempted_at
-
-
-def test_list_login_attempts_limit(db_session: Session) -> None:
-    for i in range(5):
-        record_login_attempt(db_session, "10.0.0.1", f"user{i}", success=False)
-    db_session.commit()
-
-    attempts = list_login_attempts(db_session, limit=3)
-    assert len(attempts) == 3
-
-
 # ── Auth API models ─────────────────────────────────────────────────
 
 
@@ -1985,38 +1963,6 @@ def test_user_response_from_orm(db_session: Session) -> None:
     assert resp.role == "admin"
     assert resp.is_active is True
     assert resp.created_at is not None
-
-
-def test_session_response_from_orm(db_session: Session) -> None:
-    from datetime import datetime, timedelta, timezone
-
-    user = _make_user(db_session, "alice")
-    expires = datetime.now(timezone.utc) + timedelta(days=30)
-    sess = create_session(
-        db_session,
-        user.id,
-        expires,
-        ip_address="127.0.0.1",
-        user_agent="Mozilla/5.0",
-    )
-    db_session.commit()
-
-    fetched = get_session_with_user(db_session, sess.id)
-    resp = SessionResponse.from_orm(fetched)
-    assert resp.user_id == user.id
-    assert resp.username == "alice"
-    assert resp.ip_address == "127.0.0.1"
-    assert resp.user_agent == "Mozilla/5.0"
-
-
-def test_login_attempt_response_from_orm(db_session: Session) -> None:
-    attempt = record_login_attempt(db_session, "10.0.0.1", "alice", success=False)
-    db_session.commit()
-    resp = LoginAttemptResponse.from_orm(attempt)
-    assert resp.ip_address == "10.0.0.1"
-    assert resp.username == "alice"
-    assert resp.success is False
-    assert resp.attempted_at is not None
 
 
 # ── User model cascade ──────────────────────────────────────────────
@@ -2637,37 +2583,6 @@ def test_get_all_global_rate_limits(db_session: Session) -> None:
     assert len(results) == 2
     keys = {r.setting_key for r in results}
     assert keys == {"generation_rate_limit", "scoring_rate_limit"}
-
-
-def test_get_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries.rate_limits import get_user_rate_limits, upsert_rate_limit_setting
-
-    user = create_user(db_session, "testuser", "hash", role="user")
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
-    db_session.commit()
-
-    results = get_user_rate_limits(db_session, user.id)
-    assert len(results) == 1
-    assert results[0].value == 100
-
-
-def test_delete_all_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries.rate_limits import (
-        delete_all_user_rate_limits,
-        get_user_rate_limits,
-        upsert_rate_limit_setting,
-    )
-
-    user = create_user(db_session, "testuser", "hash", role="user")
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
-    upsert_rate_limit_setting(db_session, "scoring_rate_limit", 50, user_id=user.id)
-    db_session.commit()
-
-    count = delete_all_user_rate_limits(db_session, user.id)
-    db_session.commit()
-    assert count == 2
-    assert get_user_rate_limits(db_session, user.id) == []
 
 
 # ── Migration tests ────────────────────────────────────────────────

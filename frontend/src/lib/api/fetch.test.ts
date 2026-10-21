@@ -441,11 +441,7 @@ describe('refusal reactions', () => {
 		expect(told).toEqual(['second', 'first']);
 	});
 
-	const SIGN_IN_FORMS = [
-		{ form: 'the login form', path: '/api/auth/login' },
-		{ form: 'the setup form', path: '/api/auth/setup' },
-		{ form: 'the password change (wrong current password)', path: '/api/auth/password' }
-	];
+	const SIGN_IN_FORMS = [{ form: 'the login form', path: '/api/auth/login' }];
 
 	it.each(clients)(
 		'925_M3_P5: a 401 outside the sign-in forms and the public share reads tells sessionLost through $client',

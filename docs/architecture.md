@@ -307,7 +307,7 @@ everything under it (`SongDetailView` included), did not; measuring the cost
 listener, so swapping between any of the seven addresses neither rebuilds the
 workspace nor re-runs its bootstrap, and it starts the stream only for a
 signed-in browser on a library route — the reach the workspace page had when
-it owned this; Settings, login, setup and the share pages leave it off. The
+it owned this; Settings, login and the share pages leave it off. The
 workspace itself gates on `resourceSync.ready` rather than on a promise
 resolved once per mount, so a mount that finds the stream already live
 (returning to the library after leaving it) shows the library on its first
@@ -734,7 +734,7 @@ regenerate `types.ts` and run the check.
 the `rateLimited` reaction that `routes/+layout.svelte` installs through
 `installRefusalReactions`, and `stores/rateLimitNotice.ts` decides whether the
 person hears of it (the generic throttle toast, once on screen, except on the
-sign-in, session-check, setup and cover-suggestion paths that show their own;
+sign-in, session-check and cover-suggestion paths that show their own;
 creating an album still gets both notices until #915). The layout installs while
 its component initialises, before the first request, so a request sent any
 earlier means moving the installation earlier too. A 401 outside the sign-in
@@ -938,7 +938,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Layer | Responsibility | Key files |
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
-| Auth | Session dependencies bound to the database, login/setup/logout, password change, brute-force protection | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
+| Auth | Session dependencies bound to the database, login/logout, brute-force protection | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
 | API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings and capabilities, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
@@ -952,7 +952,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Co-writer | Binds the musician's session and tools to the provider route the library then runs; the judge is configured separately | `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | MCP | Claude's stdio tool server plus shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/tools.py` |
-| CLI | Thin HTTP client to the same API | `main.py`, `cli_client.py` |
+| CLI | Starts the server and resets a password | `main.py` |
 
 ### Agent routes
 
@@ -1053,14 +1053,7 @@ verified-session-id dependencies, and `login.py` the transaction-free parts of
 signing in and out (cookie issuing and clearing, the attempt limits, the
 constant-time credential check). The login route with its advisory lock stays
 in the application. `users.py` provides never-committing account-administration
-helpers. Songmaker's `admin_api.py` uses `UserManagement` for account creation,
-role changes, admin password resets, deactivation, session revocation, and the
-last-admin guard around its own hard-delete cascade. Reactivation remains a
-host-owned store update and audit event. The setup route and environment
-bootstrap both call `complete_first_run_setup`; self-service password changes
-call `UserManagement.change_own_password`. The application retains the failed
-password-attempt budget and opens a fresh session with new cookies after a
-successful password change.
+helpers; the environment bootstrap calls `complete_first_run_setup`.
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, password hasher, rate backend, session liveness
@@ -1095,10 +1088,7 @@ DB dependency rolls back on failure. The environment bootstrap builds its
 configuration through `build_web_auth_config` and uses the same stores and
 write lock. `DatabaseAuditSink` maps session-identity and account-administration
 events to songmaker's audit rows, with one audit row per changed field in a
-multi-field update. First-admin creation and self-service password changes
-produce no audit rows. The
-[admin security contract](security.md#admin-session-management) owns the four
-deliberate behavior changes and the session-reference boundary.
+multi-field update. First-admin creation produces no audit rows.
 
 The same seam carries the four request policies in `webauth.policies`. The
 library owns what a rate limit, a CSRF check, a body cap, and a response header
@@ -1490,7 +1480,7 @@ close the stream.
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
 | * | `/api/admin/*` | admin | User CRUD, sessions, login attempts, ACE-Step control |
-| * | `/api/auth/*` | public | Login, logout, setup, password change |
+| * | `/api/auth/*` | public | Login, logout |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
 | GET | `/metrics` | public | Job stats, HTTP counters, VRAM usage (Prometheus) |
 | POST/DELETE | `/api/albums/{id}/share` | user | Enable/revoke album sharing |

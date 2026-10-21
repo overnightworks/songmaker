@@ -12,8 +12,6 @@ import { addToast, toasts } from '$lib/stores/toast';
 //     "Too many attempts. Try again later." under the login form.
 //   - '/api/auth/me': `stores/auth.ts`'s `checkAuth()` turns a 429 into the
 //     full-page session-check retry banner.
-//   - '/api/auth/setup': not auth.ts -- `routes/setup/+page.svelte`'s own
-//     catch block shows the error inline via `err.message`.
 //   - '/api/albums/<id>/cover-suggestions': `AlbumCoverEditor.svelte` shows
 //     every refusal there itself -- the spent daily limit under the cover,
 //     any other as its failure or error toast; nothing retries it, so
@@ -21,7 +19,6 @@ import { addToast, toasts } from '$lib/stores/toast';
 const RATE_LIMIT_TOAST_EXEMPT_PATHS: readonly RegExp[] = [
 	/^\/api\/auth\/login$/,
 	/^\/api\/auth\/me$/,
-	/^\/api\/auth\/setup$/,
 	/^\/api\/albums\/[^/]+\/cover-suggestions$/
 ];
 

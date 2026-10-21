@@ -74,12 +74,6 @@ jobs:
             exit 1
           }
 
-          setup_required="$(curl -fsS "$base/api/auth/setup-required" | jq -r '.required')"
-          [ "$setup_required" = "false" ] || {
-            echo "expected setup-required=false (admin auto-setup from ADMIN_* env), got $setup_required" >&2
-            exit 1
-          }
-
           login_status="$(curl -sS -o /tmp/login.json -w '%{http_code}' -c "$cookies" \
             -H 'Content-Type: application/json' \
             -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \

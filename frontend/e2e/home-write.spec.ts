@@ -30,8 +30,8 @@ import {
 	type Shell
 } from './helpers';
 import {
+	archiveOwnedAlbum,
 	BASE_URL,
-	deleteSeededAccounts,
 	runMarker,
 	seedAccount,
 	seedUnpickedLibrary,
@@ -113,6 +113,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 	let account: SeededAccount | undefined;
 	let accountApi: APIRequestContext | undefined;
 	let releaseRemoval: (() => void) | undefined;
+	let libraryAlbumId: string | undefined;
 	try {
 		account = await seedAccount(`e2e-write-${testInfo.project.name}-${runMarker()}`);
 		accountApi = await signedInApi(account);
@@ -131,6 +132,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await page.screenshot({ path: testInfo.outputPath('write-empty.png') });
 
 		const library = await seedUnpickedLibrary(accountApi);
+		libraryAlbumId = library.albumId;
 		const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
 		expect(songsResponse.ok()).toBe(true);
 		const songs: PaginatedResponse<SongItem> = await songsResponse.json();
@@ -261,12 +263,14 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await page.getByRole('button', { name: 'Undo', exact: true }).click();
 		await expect(writeBodies(page)).toHaveCount(3);
 		await expectWrittenOrder(page, await writtenAnswer(page));
-		await writerPost(page, `/api/albums/${library.albumId}/archive`);
 	} finally {
 		releaseRemoval?.();
 		await page.unrouteAll({ behavior: 'ignoreErrors' });
-		await accountApi?.dispose();
-		if (account) await deleteSeededAccounts([account.id]);
+		try {
+			if (accountApi && libraryAlbumId) await archiveOwnedAlbum(accountApi, libraryAlbumId);
+		} finally {
+			await accountApi?.dispose();
+		}
 	}
 });
 
@@ -277,12 +281,14 @@ for (const pending of [false, true]) {
 		const marker = runMarker();
 		const accounts: SeededAccount[] = [];
 		let release: (() => void) | undefined;
+		let accountAlbumId: string | undefined;
 		try {
 			for (const suffix of ['a', 'b']) {
 				accounts.push(await seedAccount(`e2e-write-${testInfo.project.name}-${marker}-${suffix}`));
 			}
 			await signInWriter(page, accounts[0]);
 			const album = await writerPost(page, '/api/albums', { title: 'E2E Write account A' });
+			accountAlbumId = album.id;
 			await writerPost(page, '/api/songs', { album_id: album.id, title: 'E2E Write private A' });
 			await page.reload();
 			await expect(writeBodies(page)).toContainText(['E2E Write private A']);
@@ -333,7 +339,15 @@ for (const pending of [false, true]) {
 		} finally {
 			release?.();
 			await page.unrouteAll({ behavior: 'ignoreErrors' });
-			await deleteSeededAccounts(accounts.map((account) => account.id));
+			// Logout ended account A's session; a fresh one of the same account archives its album.
+			if (accountAlbumId) {
+				const accountApi = await signedInApi(await seedAccount(accounts[0].username));
+				try {
+					await archiveOwnedAlbum(accountApi, accountAlbumId);
+				} finally {
+					await accountApi.dispose();
+				}
+			}
 		}
 	});
 }

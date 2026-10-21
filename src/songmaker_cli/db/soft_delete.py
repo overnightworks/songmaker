@@ -5,7 +5,7 @@ ORM SELECT (top-level and relationship loads) so soft-deleted rows are
 invisible by default. Three call sites — restore_album, restore_song,
 and the cleanup_expired periodic task — opt out by setting
 execution_options(include_deleted=True). Code that needs to bypass the
-filter for an entire block (e.g. hard_delete_user, where ORM cascade
+filter for an entire block (e.g. delete_album, where ORM cascade
 walks relationships) uses the include_deleted() context manager, which
 sets a session-level flag the listener checks.
 
@@ -64,7 +64,7 @@ def include_deleted(session: Session) -> Iterator[Session]:
     """Suspend the soft-delete filter for the duration of the block.
 
     Use this when ORM cascade or relationship traversal must see
-    soft-deleted rows (hard_delete_user, cleanup_expired). Per-query
+    soft-deleted rows (delete_album, cleanup_expired). Per-query
     callsites should prefer execution_options(include_deleted=True).
     """
     previous = session.info.get(_SESSION_FLAG, False)

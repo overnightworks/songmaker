@@ -82,8 +82,6 @@ DEFAULT_ARTIST = "Flex0r"
 # Pagination defaults and limits
 PAGE_DEFAULT_LIMIT = 50
 PAGE_MAX_LIMIT = 200
-PAGE_ADMIN_DEFAULT_LIMIT = 100
-PAGE_ADMIN_MAX_LIMIT = 500
 
 LIBRARY_SORT_NEWEST: Final[str] = "newest"
 LIBRARY_SORT_OLDEST: Final[str] = "oldest"

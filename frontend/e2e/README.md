@@ -92,12 +92,11 @@ web container (`docker compose exec -T -e SEED_SESSIONS_REQUEST=... songmaker-we
 user and session queries: it finds or creates an account and opens a database
 session, then prints the signed session cookie and CSRF cookie the app would
 have issued at login. `seedAccount` / `seedAdminAccount` in `seed.ts` return
-those cookies for `context.addCookies` and `signedInApi`; a flow that made an
-account removes it with `deleteSeededAccounts`. The helper sits outside
+those cookies for `context.addCookies` and `signedInApi`; the throwaway stack drops
+the accounts with the run. The helper sits outside
 `scripts/`, which the image copies, so it never ships. Only `auth-flows.spec.ts`
-still types a password, because it exists to drive that login; the remaining
-password paths in `seed.ts` (`createAccount`, `deleteAccount`, `SeedApi.login`)
-serve it alone.
+still types a password, because it exists to drive that login: it seeds its
+account with a `password`, and `SeedApi.login` serves it alone.
 
 The seed builds one base album with three songs, a real take per song imported from
 `fixtures/take.mp3` via `POST /api/songs/{id}/reimport`, one pick, a playlist
@@ -191,7 +190,7 @@ song page and then loads the song afresh, so a whole cold page open comes on
 top of the first: 46 to 47 at 1440 and 45 to 48 at 390 for the take's audio
 refused, over ten runs, against its own ceiling of 55.
 Its own arrangement -- one
-non-admin account per project, created through `POST /api/admin/users` and
+non-admin account per project, seeded with a password through `seedAccount` and
 deleted again in `afterAll` -- does not touch that budget: like the rail's
 filler albums, it runs from the run's API context rather than the page. What
 this spec does spend that no other one does is _failed_ logins: measured at

@@ -601,7 +601,7 @@ def test_host_origin_parser_applies_exact_port_pattern_and_ipv6_rules(
     assert status == expected
 
 
-@pytest.mark.parametrize("path", ["/api/auth/login", "/api/auth/setup", "/api/internal/proof"])
+@pytest.mark.parametrize("path", ["/api/auth/login", "/api/internal/proof"])
 def test_token_exempt_paths_still_reject_foreign_origins(security_exchange, path):
     """defect:#1590 -- every host token exemption remains behind origin protection."""
     _, exchange = security_exchange

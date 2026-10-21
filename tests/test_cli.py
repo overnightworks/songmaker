@@ -152,19 +152,6 @@ def _reset_password(password: str, repeated: str | None = None) -> None:
         app(["reset-password", RESET_USERNAME], result_action="return_value")
 
 
-@pytest.fixture
-def sent_logins(monkeypatch) -> list[tuple[str, str]]:
-    """The (username, password) pairs the login command sends to the server."""
-    sent: list[tuple[str, str]] = []
-
-    def record_login(_server: str, username: str, password: str) -> dict:
-        sent.append((username, password))
-        return {"username": username, "role": "admin"}
-
-    monkeypatch.setattr("songmaker_cli.main.cli_login", record_login)
-    return sent
-
-
 def test_reset_password_stores_the_new_password(served_app, capsys) -> None:
     _reset_password(NEW_PASSWORD)
 
@@ -277,43 +264,28 @@ def test_reset_password_refuses_mismatched_passwords_before_opening_the_database
 
 
 @pytest.mark.parametrize(
-    ("command", "typed"),
-    [
-        ("login", [EOFError]),
-        ("reset-password", [EOFError]),
-        ("reset-password", [NEW_PASSWORD, EOFError]),
-    ],
-    ids=["login", "reset-password-first-prompt", "reset-password-repeat-prompt"],
+    "typed",
+    [[EOFError], [NEW_PASSWORD, EOFError]],
+    ids=["reset-password-first-prompt", "reset-password-repeat-prompt"],
 )
 def test_closed_input_at_a_password_prompt_is_a_plain_error(
-    database_must_stay_closed, sent_logins, capsys, command: str, typed: list,
+    database_must_stay_closed, capsys, typed: list,
 ) -> None:
     with (
         patch("getpass.getpass", side_effect=typed),
         pytest.raises(SystemExit) as exit_info,
     ):
-        app([command, RESET_USERNAME], result_action="return_value")
+        app(["reset-password", RESET_USERNAME], result_action="return_value")
 
     assert exit_info.value.code == 1
     assert capsys.readouterr().out == "Error: no password given\n"
-    assert sent_logins == []
     assert _hash_in_db(database_must_stay_closed) == OLD_PASSWORD_HASH
-
-
-def test_login_sends_the_password_typed_at_the_prompt(sent_logins) -> None:
-    with patch("getpass.getpass", return_value=OLD_PASSWORD):
-        app(["login", RESET_USERNAME], result_action="return_value")
-
-    assert sent_logins == [(RESET_USERNAME, OLD_PASSWORD)]
 
 
 @pytest.mark.parametrize("typed_password", [NEW_PASSWORD, f"--{NEW_PASSWORD}"])
 @pytest.mark.parametrize(
     ("typed_command", "canonical_command"),
     [
-        ("login", "login"),
-        ("LOGIN", "login"),
-        ("log-in", "login"),
         ("reset-password", "reset-password"),
         ("reset_password", "reset-password"),
         ("ResetPassword", "reset-password"),
@@ -321,7 +293,6 @@ def test_login_sends_the_password_typed_at_the_prompt(sent_logins) -> None:
 )
 def test_password_on_the_command_line_is_a_usage_error_that_never_echoes_it(
     served_app,
-    sent_logins,
     capsys,
     typed_command: str,
     canonical_command: str,
@@ -337,33 +308,21 @@ def test_password_on_the_command_line_is_a_usage_error_that_never_echoes_it(
     assert exit_info.value.code == 1
     assert f"Error: usage is 'songmaker {canonical_command} USERNAME'" in printed
     assert NEW_PASSWORD not in printed
-    assert sent_logins == []
     assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
 
 
 @pytest.mark.parametrize("typed_password", [NEW_PASSWORD, f"--{NEW_PASSWORD}"])
 def test_password_before_the_command_is_also_a_usage_error_that_never_echoes_it(
-    served_app, sent_logins, capsys, typed_password: str,
+    served_app, capsys, typed_password: str,
 ) -> None:
     with (
         patch("getpass.getpass", return_value=NEW_PASSWORD),
         pytest.raises(SystemExit) as exit_info,
     ):
-        app([typed_password, "login", RESET_USERNAME], result_action="return_value")
+        app([typed_password, "reset-password", RESET_USERNAME], result_action="return_value")
 
     printed = "".join(capsys.readouterr())
     assert exit_info.value.code == 1
-    assert "Error: usage is 'songmaker login USERNAME'" in printed
+    assert "Error: usage is 'songmaker reset-password USERNAME'" in printed
     assert NEW_PASSWORD not in printed
-    assert sent_logins == []
     assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
-
-
-def test_an_extra_argument_to_another_command_keeps_the_detailed_error(capsys) -> None:
-    with pytest.raises(SystemExit) as exit_info:
-        app(["albums", "extra"], result_action="return_value")
-
-    printed = "".join(capsys.readouterr())
-    assert exit_info.value.code == 1
-    assert "extra" in printed
-    assert "password" not in printed

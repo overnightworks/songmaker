@@ -22,13 +22,6 @@ from songmaker_cli.auth_stores import (
 )
 
 
-def user_management(
-    request: Request,
-    db: Session = Depends(get_db_session),
-) -> UserManagement:
-    return build_user_management(db, web_auth_config(request))
-
-
 def build_user_management(db: Session, config: WebAuthConfig) -> UserManagement:
     return UserManagement(
         users=DatabaseUserStore(db),

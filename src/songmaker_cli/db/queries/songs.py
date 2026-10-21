@@ -226,14 +226,6 @@ def list_song_ids_for_albums(
     return [song_id for (song_id,) in query.all()]
 
 
-def list_song_ids_for_owner(session: Session, user_id: str) -> list[str]:
-    query = (
-        session.query(Song.id)
-        .join(Album)
-        .filter(Album.created_by == user_id)
-        .execution_options(include_deleted=True)
-    )
-    return [song_id for (song_id,) in query.all()]
 
 
 def create_song(

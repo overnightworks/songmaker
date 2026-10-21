@@ -511,44 +511,6 @@ def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
     assert live_song_dir.is_dir()
 
 
-def test_hard_delete_user_unlinks_song_covers_including_soft_deleted(tmp_path: Path) -> None:
-    def seed(session) -> None:
-        create_user(session, "admin", stored_hash("admin12345"), role="admin")
-        victim = create_user(session, "victim", stored_hash("victimpass1"), role="user")
-        session.add(Album(id="live-album", title="Live", artist="V", created_by=victim.id))
-        session.add(
-            Song(
-                id="live-song", title="Live", album_id="live-album", track_number=1, slug="live",
-            ),
-        )
-        session.add(
-            Song(
-                id="gone-song", title="Gone", album_id="live-album", track_number=2, slug="gone",
-            ),
-        )
-
-    client, factory = make_test_app(tmp_path, seed_db=seed)
-    audio_dir = tmp_path / "audio"
-    write_song_cover(audio_dir, "live-song", _jpeg_bytes())
-    write_song_cover(audio_dir, "gone-song", _png_bytes())
-    live_dir = audio_dir / SONG_COVER_DIRNAME / "live-song"
-    gone_dir = audio_dir / SONG_COVER_DIRNAME / "gone-song"
-    assert live_dir.is_dir()
-    assert gone_dir.is_dir()
-
-    with factory() as session:
-        victim = session.query(User).filter_by(username="victim").one()
-        victim_id = victim.id
-        soft_delete_song(session, "gone-song")
-        session.commit()
-
-    login_and_csrf(client, "admin", "admin12345")
-    resp = client.delete(f"/api/admin/users/{victim_id}/permanent")
-    assert resp.status_code == 200, resp.text
-    assert not live_dir.exists()
-    assert not gone_dir.exists()
-
-
 def _assert_escape_markers_survive(
     audio_dir: Path, marker: Path, sibling_marker: Path, legit: Path,
 ) -> None:

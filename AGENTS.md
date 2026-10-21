@@ -2,7 +2,7 @@
 
 Repository facts only. The global contract owns coordination, claims, worktrees, review and code policy; `CLAUDE.md` is exactly `@AGENTS.md`.
 
-AI-powered song generation platform: SvelteKit web UI (`frontend/`, pnpm, Node 22 LTS), FastAPI backend, PostgreSQL, Redis. Songs are created, generated via ACE-Step, scored and reviewed. The CLI is a thin HTTP client to the same API. Python 3.12, venv `.venv/`.
+AI-powered song generation platform: SvelteKit web UI (`frontend/`, pnpm, Node 22 LTS), FastAPI backend, PostgreSQL, Redis. Songs are created, generated via ACE-Step, scored and reviewed. The CLI starts the server and resets a password. Python 3.12, venv `.venv/`.
 
 Docs: [architecture](docs/architecture.md) | [testing](docs/testing.md) | [security](docs/security.md) | [ACE-Step](docs/acestep.md) | [vision](docs/VISION.md) | [requirements](docs/requirements/README.md).
 
@@ -75,7 +75,7 @@ Backend paths are under `src/songmaker_cli/`. `plans/` holds temporary live-coor
 ## Key rules
 
 1. The database is the source of truth: all data in PostgreSQL, not files.
-2. One code path: CLI and web UI use the same REST API. Exceptions: `reset-password` and `list-users` are local escape hatches that need only the DB. `songmaker reset-password <username>` asks twice at a hidden prompt (no argv password; a mismatch changes nothing), changes the password and deletes the account's DB sessions in one transaction, and needs no Redis. `songmaker login <username>` asks once, hidden.
+2. One code path: CLI and web UI use the same REST API. The CLI itself only starts the server and resets a password: `reset-password` is a local escape hatch that needs only the DB. `songmaker reset-password <username>` asks twice at a hidden prompt (no argv password; a mismatch changes nothing), changes the password and deletes the account's DB sessions in one transaction, and needs no Redis.
 3. Pydantic models in `api_models/` define the API contract; `python scripts/generate_types.py` generates `types.ts`.
 4. Test albums (verify, proof, throwaway, QA runs) get a recognizable name prefix and are archived, not deleted, once verified.
 

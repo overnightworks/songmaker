@@ -14,16 +14,14 @@ describe('the throttle notice', () => {
 		toasts.set([]);
 	});
 
-	it.each([
-		'/api/auth/login',
-		'/api/auth/me',
-		'/api/auth/setup',
-		'/api/albums/a1/cover-suggestions'
-	])('925_M3_N1: a 429 on %s raises no throttle toast, the surface shows its own', (path) => {
-		notifyRateLimited(path);
+	it.each(['/api/auth/login', '/api/auth/me', '/api/albums/a1/cover-suggestions'])(
+		'925_M3_N1: a 429 on %s raises no throttle toast, the surface shows its own',
+		(path) => {
+			notifyRateLimited(path);
 
-		expect(get(toasts)).toHaveLength(0);
-	});
+			expect(get(toasts)).toHaveLength(0);
+		}
+	);
 
 	it('925_M3_N2: a burst of 429s shows exactly one toast', () => {
 		for (let refused = 0; refused < 5; refused++) notifyRateLimited('/api/songs');

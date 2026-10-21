@@ -8,10 +8,8 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import (
-    Album,
     AuditLog,
     LoginAttempt,
-    Playlist,
     ResourceEventCursor,
     User,
     UserSession,
@@ -51,43 +49,8 @@ def create_user(
     return user
 
 
-def hard_delete_user(session: Session, user_id: str) -> tuple[list[str], list[str], list[str]]:
-    """Hard-delete a user and all their albums/songs/generations.
-
-    Returns relative audio file paths plus album and playlist ids for post-commit cleanup.
-    """
-    from songmaker_cli.db.soft_delete import include_deleted
-
-    audio_paths: list[str] = []
-    with include_deleted(session):
-        albums = session.query(Album).filter_by(created_by=user_id).all()
-        album_ids = [album.id for album in albums]
-        for album in albums:
-            audio_paths.extend(_album_audio_paths(album))
-            session.delete(album)
-
-    playlists = session.query(Playlist).filter_by(created_by=user_id).all()
-    playlist_ids = [playlist.id for playlist in playlists]
-    for playlist in playlists:
-        session.delete(playlist)
-
-    user = session.query(User).filter_by(id=user_id).first()
-    if not user:
-        raise ValueError(f"User not found: {user_id}")
-    session.delete(user)
-    session.flush()
-    log.info("Hard-deleted user %s and %d album(s)", user_id, len(album_ids))
-    return audio_paths, album_ids, playlist_ids
 
 
-def _album_audio_paths(album: Album) -> list[str]:
-    return [
-        path
-        for song in album.songs
-        for generation in song.generations
-        for path in (generation.mp3_path, generation.wav_path)
-        if path
-    ]
 
 
 def update_user(
@@ -266,22 +229,8 @@ def cleanup_old_login_attempts(session: Session) -> int:
     return count
 
 
-def list_login_attempts(
-    session: Session,
-    offset: int = 0,
-    limit: int = 100,
-) -> list[LoginAttempt]:
-    return (
-        session.query(LoginAttempt)
-        .order_by(LoginAttempt.attempted_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
 
 
-def count_login_attempts(session: Session) -> int:
-    return session.query(LoginAttempt).count()
 
 
 # ── Audit log ─────────────────────────────────────────────────────

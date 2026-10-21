@@ -1,10 +1,10 @@
-"""Auth API endpoints — login, logout, setup, password change."""
+"""Auth API endpoints — login, logout, current user."""
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
@@ -19,24 +19,13 @@ from webauth.login import (
     judge_credentials,
     login_attempt_budget,
 )
-from webauth.ports import UsernameTakenError
 from webauth.proxies import client_user_agent, resolve_client_ip
 from webauth.session_ending import end_session, prune_sessions
-from webauth.users import (
-    SetupAlreadyDoneError,
-    SetupRacedError,
-    UserManagement,
-    WrongPasswordError,
-    complete_first_run_setup,
-)
 
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import (
     AuthMeResponse,
-    ChangePasswordRequest,
     LoginRequest,
-    SetupRequest,
-    SetupRequiredResponse,
     StatusResponse,
     UserResponse,
 )
@@ -45,15 +34,12 @@ from songmaker_cli.auth_dependencies import (
     _session_record_store,
     get_current_user,
     get_verified_session_id,
-    user_management,
 )
 from songmaker_cli.auth_stores import DatabaseLoginAttemptStore, DatabaseSessionRecordStore
 from songmaker_cli.db.queries.auth import (
-    count_recent_failed_attempts,
     create_session,
     get_user_by_username,
     record_login_attempt,
-    user_count,
 )
 from songmaker_cli.settings import get_settings
 
@@ -63,48 +49,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-SETUP_ALREADY_COMPLETED_DETAIL: Final = "Setup already completed"
-
-
-@router.get("/setup-required")
-def setup_required(db: Session = Depends(get_db_session)) -> SetupRequiredResponse:
-    return SetupRequiredResponse(required=user_count(db) == 0)
-
-
-@router.post(
-    "/setup",
-    responses={403: {"description": "Initial setup is not available"}},
-)
-def setup(
-    req: SetupRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db_session),
-    config: WebAuthConfig = Depends(web_auth_config),
-    management: UserManagement = Depends(user_management),
-) -> UserResponse:
-    try:
-        user = complete_first_run_setup(management, req.username, req.password)
-    except (SetupAlreadyDoneError, SetupRacedError, UsernameTakenError) as error:
-        db.rollback()
-        raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL) from error
-
-    ip = resolve_client_ip(request)
-    ua = client_user_agent(request)
-    expires = datetime.now(timezone.utc) + timedelta(
-        seconds=config.session_max_age_seconds,
-    )
-    user_session = create_session(
-        db, user.id, expires,
-        ip_address=ip, user_agent=ua,
-    )
-    db.commit()
-
-    issue_session_cookies(response, user_session.id, config)
-    log.info("Setup completed: admin user '%s' created", req.username)
-    return UserResponse.from_orm(user)
-
 
 @router.post(
     "/login",
@@ -195,52 +139,3 @@ def me(
         username=current_user.username,
         role=current_user.role,
     )
-
-
-@router.put(
-    "/password",
-    responses={
-        401: {"description": "Current password is incorrect"},
-        429: {"description": "Too many password change attempts"},
-    },
-)
-def change_password(
-    req: ChangePasswordRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db_session),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-    config: WebAuthConfig = Depends(web_auth_config),
-    management: UserManagement = Depends(user_management),
-) -> StatusResponse:
-    ip = resolve_client_ip(request)
-    window = config.login_rate_window_seconds
-
-    ip_failures = count_recent_failed_attempts(
-        db, ip, window, username=f"__pwchange__{current_user.username}",
-    )
-    if ip_failures >= config.login_rate_limit:
-        raise HTTPException(
-            429, "Too many password change attempts. Try again later.",
-            headers={"Retry-After": str(window)},
-        )
-
-    try:
-        management.change_own_password(current_user, req.current, req.new)
-    except WrongPasswordError as error:
-        record_login_attempt(db, ip, f"__pwchange__{current_user.username}", success=False)
-        db.commit()
-        raise HTTPException(401, "Current password is incorrect") from error
-
-    ua = client_user_agent(request)
-    expires = datetime.now(timezone.utc) + timedelta(
-        seconds=config.session_max_age_seconds,
-    )
-    new_session = create_session(
-        db, current_user.id, expires,
-        ip_address=ip, user_agent=ua,
-    )
-    db.commit()
-
-    issue_session_cookies(response, new_session.id, config)
-    return StatusResponse(status="ok")

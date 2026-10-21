@@ -3,8 +3,8 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { EDITOR_OPEN_WORKER_POOL_LABEL, EDITOR_TAB_EDIT_LABEL } from '../src/lib/constants';
 import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
 import {
+	archiveAlbumOfAddress,
 	archiveOwnedAlbum,
-	deleteSeededAccounts,
 	runMarker,
 	seedAccount,
 	seedOwnSongAddress,
@@ -43,9 +43,10 @@ async function openAdminSong(page: Page): Promise<OpenedSong> {
 async function openUserSong(page: Page): Promise<OpenedSong> {
 	let account: SeededAccount | undefined;
 	let accountApi: APIRequestContext | undefined;
+	let address: string | undefined;
 	const cleanup = async () => {
 		try {
-			if (account !== undefined) await deleteSeededAccounts([account.id]);
+			if (accountApi && address) await archiveAlbumOfAddress(accountApi, address);
 		} finally {
 			await accountApi?.dispose();
 		}
@@ -54,7 +55,7 @@ async function openUserSong(page: Page): Promise<OpenedSong> {
 		account = await seedAccount(`e2e-nowork-${randomUUID()}`);
 		accountApi = await signedInApi(account);
 		const title = `QA no worker ${runMarker()}`;
-		const address = await seedOwnSongAddress(accountApi, account, title);
+		address = await seedOwnSongAddress(accountApi, account, title);
 		await page.context().clearCookies();
 		await page.context().addCookies(account.cookies);
 		await page.goto(address);

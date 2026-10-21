@@ -22,7 +22,6 @@ from songmaker_cli.api_models import (
     RateLimitsResponse,
     RateLimitUpdateRequest,
     StatusResponse,
-    UserRateLimitsResponse,
 )
 from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
@@ -49,12 +48,9 @@ from songmaker_cli.constants import (
     AuditAction,
     ResourceType,
 )
-from songmaker_cli.db.queries.auth import get_user, record_audit
+from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.rate_limits import (
-    delete_all_user_rate_limits,
     get_all_global_rate_limits,
-    get_user_rate_limits,
-    resolve_rate_limit,
     upsert_rate_limit_setting,
 )
 from songmaker_cli.db.queries.settings import (
@@ -829,75 +825,3 @@ def api_update_rate_limits(
     record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.RATE_LIMITS, detail="global")
     session.commit()
     return api_get_rate_limits(_admin=admin, session=session)
-
-
-@router.get(
-    "/settings/rate-limits/user/{user_id}",
-    responses={404: {"description": "User does not exist"}},
-)
-def api_get_user_rate_limits(
-    user_id: str,
-    _admin: AuthenticatedUser = Depends(require_admin),
-    session: Session = Depends(get_db_session),
-) -> UserRateLimitsResponse:
-    if not get_user(session, user_id):
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
-    env_defaults = _get_env_defaults()
-    overrides = get_user_rate_limits(session, user_id)
-    override_items = [RateLimitItem.from_orm(o, is_override=True) for o in overrides]
-    override_keys = {o.setting_key for o in overrides}
-    effective = []
-    for key, env_val in env_defaults.items():
-        val = resolve_rate_limit(session, user_id, key, env_val)
-        effective.append(RateLimitItem(
-            setting_key=key, value=val, is_override=key in override_keys,
-        ))
-    return UserRateLimitsResponse(
-        user_id=user_id, overrides=override_items, effective=effective,
-    )
-
-
-@router.put(
-    "/settings/rate-limits/user/{user_id}",
-    responses={
-        400: {"description": "Rate-limit setting or value is invalid"},
-        404: {"description": "User does not exist"},
-    },
-)
-def api_update_user_rate_limits(
-    user_id: str,
-    req: RateLimitUpdateRequest,
-    admin: AuthenticatedUser = Depends(require_admin),
-    session: Session = Depends(get_db_session),
-) -> UserRateLimitsResponse:
-    from songmaker_cli.constants import RATE_LIMIT_SETTING_KEYS
-
-    if not get_user(session, user_id):
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
-    invalid = set(req.settings.keys()) - RATE_LIMIT_SETTING_KEYS
-    if invalid:
-        raise HTTPException(400, f"Unknown setting keys: {sorted(invalid)}")
-    for key, value in req.settings.items():
-        if value < 0:
-            raise HTTPException(400, f"Value for {key} must be non-negative")
-        upsert_rate_limit_setting(session, key, value, user_id=user_id)
-    record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.RATE_LIMITS, user_id)
-    session.commit()
-    return api_get_user_rate_limits(user_id, _admin=admin, session=session)
-
-
-@router.delete(
-    "/settings/rate-limits/user/{user_id}",
-    responses={404: {"description": "User does not exist"}},
-)
-def api_delete_user_rate_limits(
-    user_id: str,
-    admin: AuthenticatedUser = Depends(require_admin),
-    session: Session = Depends(get_db_session),
-) -> StatusResponse:
-    if not get_user(session, user_id):
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL)
-    delete_all_user_rate_limits(session, user_id)
-    record_audit(session, admin.id, AuditAction.DELETE, ResourceType.RATE_LIMITS, user_id)
-    session.commit()
-    return StatusResponse()

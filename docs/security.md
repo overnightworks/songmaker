@@ -47,7 +47,7 @@ Two-layer defense:
    `verified_session_id` dependency, which resolves `get_current_user` first —
    so a session is only ever deleted after the request proved it holds it, and
    a logout can never clear the cookie while leaving the stored session alive.
-2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. Public auth/setup endpoints are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
+2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. Public auth endpoints are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
 
 Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
 
@@ -161,7 +161,7 @@ Deployment" below.
 Five-layer defense:
 
 1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
-2. **Session-bound CSRF token**: Login and setup set a `csrf_token` cookie (`__Host-csrf_token` when `COOKIE_SECURE` is true, non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login/setup and internal worker routes) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
+2. **Session-bound CSRF token**: Login sets a `csrf_token` cookie (`__Host-csrf_token` when `COOKIE_SECURE` is true, non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login and internal worker routes) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
 3. **Origin verification**: When `Sec-Fetch-Site` is absent or `same-site`, mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
 4. **Form-submit blocking**: On that same fallback path, mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
 5. **Fetch metadata**: `Sec-Fetch-Site` is checked before the Origin allowlist. `same-origin` passes the origin check; `cross-site` and `none` are rejected (403), even with an allowed Origin. `same-site` and a missing header follow the Origin/Referer allowlist and form-submit rules above. The session-bound token is still required. The internal worker routes remain token-exempt but still follow this origin check. [Server tests](../tests/test_server.py) prove the accepted and rejected header cases.
@@ -1003,38 +1003,6 @@ The child never outlives a scorer it could not stop. A scorer's time budget is a
 
 The scorer's two Hugging Face models (`faster-whisper`'s `large-v3`, `audiobox-aesthetics`'s default checkpoint) are baked into the `songmaker-scoring-worker` image at build time — `docker/scoring-worker.Dockerfile` downloads them with `HF_TOKEN` wired in only for that `RUN --mount=type=secret` build step, and the running container's `docker-compose.yml` service definition never sets `HF_TOKEN` as a runtime env var at all, so there is nothing for the scrub to take away at request time.
 
-## Admin Session Management
-
-The admin sessions endpoint (`GET /api/admin/sessions`) returns the public
-reference from `webauth.cookies.session_reference`, a SHA256 hash of the session
-token. This prevents session hijacking via the admin panel. Songmaker supplies
-the list's timestamps and pagination from its own records. Force-logout
-(`DELETE /api/admin/sessions/{hash}`) calls `UserManagement.revoke_session` and
-writes no audit entry.
-
-The admin adoption of `webauth.users` (#907, operator ruling 2026-09-10)
-deliberately changes four behaviors:
-
-1. Deactivation through `PUT is_active=false` writes `deactivate`, just like
-   DELETE, without detail. The existing DB and JSON representation of absent
-   detail is an empty string, not null.
-2. Setting the role already held by an account neither writes an audit entry
-   nor ends its sessions.
-3. An inactive admin can be deactivated again or permanently deleted while
-   another active admin remains. Only active admins count toward the last-admin
-   protection; removing the last active admin still returns 400.
-4. A DB failure while ending sessions during role changes, admin password
-   resets, deactivation, force-logout, or hard-delete returns 500 and rolls back
-   the operation, including session deletion (DB-only since #1590).
-
-The HTTP proofs live in [test_admin_api.py](../tests/test_admin_api.py):
-`test_admin_changes_keep_their_audit_action_and_detail`,
-`test_setting_the_existing_role_keeps_sessions_and_writes_no_audit`,
-`test_delete_inactive_admin_allowed_when_another_admin_remains`,
-`test_db_failure_rolls_back_account_changes_and_session_deletion` and
-`test_hard_delete_user_rolls_back_when_session_deletion_fails`.
-Reactivation writes `update` with `active=True` and does not end sessions.
-
 ## ACE-Step Worker Pool Trust Boundary
 
 The ACE-Step worker pool runs each model-serving worker as a separate peer container. Workers self-register with the web container at startup and heartbeat ephemeral state to Redis. The control plane (web container) and the workers communicate over an **internal HTTP API** mounted under `/api/internal/*`.
@@ -1165,9 +1133,7 @@ complete end state that was validated before the first install.
 
 ## Audit Trail
 
-Mutating operations are logged to the `audit_log` table, with the no-op role
-and session-revocation exceptions described under
-[Admin Session Management](#admin-session-management):
+Mutating operations are logged to the `audit_log` table:
 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`, `deactivate`, `session_ip_change`, `session_ua_change`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`

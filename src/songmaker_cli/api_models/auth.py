@@ -1,17 +1,16 @@
-"""Auth and admin API models — login, users, sessions, audit."""
+"""Auth API models — login, the current user, the password rule."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationError
-from webauth.cookies import session_reference
 from webauth.passwords import MIN_PASSWORD_LENGTH, check_password_strength
 
 if TYPE_CHECKING:
     from pydantic_core import ErrorDetails
 
-    from songmaker_cli.db.models import LoginAttempt, User, UserSession
+    from songmaker_cli.db.models import User
 
 MAX_PASSWORD_LENGTH: Final = 128
 
@@ -50,28 +49,6 @@ class LoginRequest(BaseModel):
     password: PasswordText
 
 
-class SetupRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=100)
-    password: ChosenPassword
-
-
-class ChangePasswordRequest(BaseModel):
-    current: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
-    new: ChosenPassword = Field(alias="new_password")
-
-
-class CreateUserRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=100)
-    password: ChosenPassword
-    role: Literal["admin", "user"] = "user"
-
-
-class UpdateUserRequest(BaseModel):
-    role: Literal["admin", "user"] | None = None
-    is_active: bool | None = None
-    password: ChosenPassword | None = None
-
-
 class UserResponse(BaseModel):
     id: str
     username: str
@@ -94,49 +71,3 @@ class AuthMeResponse(BaseModel):
     id: str
     username: str
     role: Literal["admin", "user"]
-
-
-class SetupRequiredResponse(BaseModel):
-    required: bool
-
-
-class SessionResponse(BaseModel):
-    id: str
-    user_id: str
-    username: str
-    created_at: str
-    expires_at: str
-    ip_address: str = ""
-    user_agent: str = ""
-    is_current: bool
-
-    @classmethod
-    def from_orm(cls, sess: UserSession, *, is_current: bool = False) -> SessionResponse:
-        return cls(
-            id=session_reference(sess.id),
-            user_id=sess.user_id,
-            username=sess.user.username,
-            created_at=sess.created_at.isoformat(),
-            expires_at=sess.expires_at.isoformat(),
-            ip_address=sess.ip_address,
-            user_agent=sess.user_agent,
-            is_current=is_current,
-        )
-
-
-class LoginAttemptResponse(BaseModel):
-    id: str
-    ip_address: str
-    username: str
-    success: bool
-    attempted_at: str
-
-    @classmethod
-    def from_orm(cls, attempt: LoginAttempt) -> LoginAttemptResponse:
-        return cls(
-            id=attempt.id,
-            ip_address=attempt.ip_address,
-            username=attempt.username,
-            success=attempt.success,
-            attempted_at=attempt.attempted_at.isoformat(),
-        )

@@ -6,7 +6,6 @@ import type {
 	PresetItem,
 	ProviderStatus,
 	RateLimitsResponse,
-	UserRateLimitsResponse,
 	VersionGenerationParams
 } from './types';
 import { apiFetch } from './fetch';
@@ -181,23 +180,4 @@ export async function updateRateLimits(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ settings })
 	});
-}
-
-export async function fetchUserRateLimits(userId: string): Promise<UserRateLimitsResponse> {
-	return apiFetch<UserRateLimitsResponse>(`/api/settings/rate-limits/user/${userId}`);
-}
-
-export async function updateUserRateLimits(
-	userId: string,
-	settings: Record<string, number>
-): Promise<UserRateLimitsResponse> {
-	return apiFetch<UserRateLimitsResponse>(`/api/settings/rate-limits/user/${userId}`, {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ settings })
-	});
-}
-
-export async function deleteUserRateLimits(userId: string): Promise<void> {
-	await apiFetch(`/api/settings/rate-limits/user/${userId}`, { method: 'DELETE' });
 }
