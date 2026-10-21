@@ -45,11 +45,15 @@ import {
 	type SeededAccount
 } from './seed';
 
-test.use({ storageState: { cookies: [], origins: [] } });
+// The service worker answers a navigation on the page's behalf, and Playwright
+// then reports the server's redirect only until the worker has taken the page
+// over; these flows watch that redirect, and none of them is about offline use.
+test.use({ storageState: { cookies: [], origins: [] }, serviceWorkers: 'block' });
 
 const SESSION_REFUSED = [{ path: '/api/auth/me', statuses: [401] }];
 const FAILED_SIGN_IN_REFUSED = [{ path: '/auth/callback', statuses: [403] }];
 const AUTHORIZATION_ENDPOINT_SUFFIX = '/protocol/openid-connect/auth';
+const LOGOUT_ENDPOINT_SUFFIX = '/protocol/openid-connect/logout';
 
 test.beforeEach(async ({ context }) => {
 	await stubIdentityProvider(context);
@@ -160,19 +164,24 @@ test('Log out on no access asks the server for the issuer logout address and lea
 	const guard = new FlowGuard(page);
 	await page.goto('/no-access');
 
-	const [logout] = await Promise.all([
+	const [logout, issuerLogout] = await Promise.all([
 		page.waitForResponse(
 			(response) =>
 				new URL(response.url()).pathname === '/auth/logout' &&
 				response.request().method() === 'POST'
 		),
+		page.waitForRequest((request) => {
+			const address = new URL(request.url());
+			return (
+				address.origin !== new URL(BASE_URL).origin &&
+				address.pathname.endsWith(LOGOUT_ENDPOINT_SUFFIX)
+			);
+		}),
 		page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click()
 	]);
 
 	expect(logout.status()).toBe(200);
 	expect(logout.headers()['cache-control']).toContain('no-store');
-	const { logout_url: logoutUrl } = (await logout.json()) as { logout_url: string };
-	expect(new URL(logoutUrl).origin).not.toBe(new URL(BASE_URL).origin);
 	const cleared = (await logout.headersArray())
 		.filter(({ name }) => name.toLowerCase() === 'set-cookie')
 		.map(({ value }) => value);
@@ -182,7 +191,7 @@ test('Log out on no access asks the server for the issuer logout address and lea
 			`${cookie} is cleared`
 		).toBe(true);
 	}
-	await expect.poll(() => page.url()).toBe(new URL(logoutUrl).href);
+	await expect.poll(() => page.url()).toBe(issuerLogout.url());
 	guard.assertClean();
 });
 
@@ -236,13 +245,17 @@ async function signInAs(page: Page, account: SeededAccount): Promise<void> {
 	await page.context().addCookies(account.cookies);
 }
 
-/** Account from the person menu: the phone's account circle, the desktop rail's user row. */
+/**
+ * Account from the person menu: the phone's account circle, which only the
+ * Library carries, or the desktop rail's user row.
+ */
 async function openAccountFromPersonMenu(
 	page: Page,
 	account: SeededAccount,
 	shell: Shell
 ): Promise<void> {
 	if (shell === 'mobile') {
+		await page.goto('/library');
 		await accountCircle(page).click();
 		const menu = accountMenu(page);
 		await expect(
@@ -294,12 +307,15 @@ test('a member keeps Account and the member Settings sections, an admin also get
 test('an open page whose session ended on the server leaves for the sign-in start with its own address', async ({
 	page
 }, info) => {
+	const shell = shellOf(info);
 	const account = await seedAccount(`e2e-ended-${info.project.name}-${runMarker()}`);
 	const guard = new FlowGuard(page, { refusalsExpectedOn: [{ path: '/api/', statuses: [401] }] });
 	await signInAs(page, account);
 	await page.goto('/settings');
 	const voices = settingsSections(page).getByRole('link', { name: nameStartingWith('Voices') });
 	await expect(voices).toBeVisible();
+	// The desktop Settings index forwards to its first section; the rail's link is the same one after it.
+	if (shell === 'desktop') await expect(page).toHaveURL(/\/settings\/generation$/);
 
 	const server = await signedInApi(account);
 	try {

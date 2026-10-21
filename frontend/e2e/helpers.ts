@@ -167,6 +167,7 @@ export const OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET = 34;
 const API_PATH_PREFIX = '/api';
 // How Chromium fails a request while `loseNetwork` holds the network away.
 const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
+const ISSUER_UNRESOLVED_ERROR = 'net::ERR_NAME_NOT_RESOLVED';
 // How it reports a load `loseNetwork` found still in flight and ended.
 const LOAD_STOPPED_ERROR = 'net::ERR_ABORTED';
 const pagesWithoutNetwork = new WeakSet<Page>();
@@ -616,17 +617,33 @@ export interface SignInStart {
 	location: URL;
 }
 
+const contextsWithStubbedIdentityProvider = new WeakSet<BrowserContext>();
+
 /**
- * The CI stack runs no identity provider, so anything that leaves the app's
- * origin -- the redirect to the issuer, the issuer's logout -- ends on an
- * empty stub instead of on the network.
+ * The CI stack runs no identity provider, so what the page opens outside the
+ * app's origin -- the issuer's logout address -- ends on an empty stub instead
+ * of on the network. Playwright routes only the first request of a redirect
+ * chain, so the server's redirect to the issuer is not stubbed: the browser
+ * fails to resolve the issuer and stays on its error page, and a `FlowGuard`
+ * on a page of a stubbed context forgives exactly that navigation.
  */
 export async function stubIdentityProvider(context: BrowserContext): Promise<void> {
 	const appOrigin = new URL(BASE_URL).origin;
+	contextsWithStubbedIdentityProvider.add(context);
 	await context.route(
 		(url) => url.origin !== appOrigin,
 		(route) =>
 			route.fulfill({ status: 200, contentType: 'text/html', body: '<title>issuer</title>' })
+	);
+}
+
+// Whether a request is the browser's navigation to an issuer that nothing serves.
+function isNavigationToUnservedIssuer(page: Page, request: Request, errorText: string): boolean {
+	return (
+		contextsWithStubbedIdentityProvider.has(page.context()) &&
+		errorText === ISSUER_UNRESOLVED_ERROR &&
+		request.isNavigationRequest() &&
+		new URL(request.url()).origin !== new URL(BASE_URL).origin
 	);
 }
 
@@ -734,6 +751,7 @@ export class FlowGuard {
 				return;
 			}
 			if (losesNetworkOnPurpose && failedWithTheNetwork(page, errorText)) return;
+			if (isNavigationToUnservedIssuer(page, request, errorText)) return;
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);
 		});
 		page.on('response', (response) => {
