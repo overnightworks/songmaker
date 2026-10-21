@@ -1410,7 +1410,7 @@ def test_post_materialization_failure_releases_the_hold_and_stops_renewal(
 ) -> None:
     import fakeredis.aioredis
 
-    from songmaker_cli.acestep_state import release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
 
     async def exercise() -> None:
         from songmaker_cli.jobs.lora_training import update_user_lora
@@ -1467,7 +1467,7 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
 ) -> None:
     import fakeredis.aioredis
 
-    from songmaker_cli.acestep_state import release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
 
     async def exercise() -> None:
         from songmaker_cli.jobs.lora_training import update_user_lora
@@ -1643,7 +1643,8 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
     import fakeredis.aioredis
     import httpx
 
-    from songmaker_cli.acestep_state import admit_generation, reserve_gpu_hold
+    from acestep_worker.heartbeat import reserve_gpu_hold
+    from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
@@ -1669,7 +1670,7 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
         client.post = AsyncMock(side_effect=post)
 
         async def release_hold(*args, **kwargs) -> None:
-            from songmaker_cli.acestep_state import release_gpu_hold
+            from acestep_worker.heartbeat import release_gpu_hold
 
             await release_gpu_hold(redis, "w0", "hold-token")
 
@@ -1703,12 +1704,8 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
     import fakeredis.aioredis
     import httpx
 
-    from songmaker_cli.acestep_state import (
-        admit_generation,
-        release_gpu_hold,
-        renew_gpu_hold,
-        reserve_gpu_hold,
-    )
+    from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
@@ -1775,7 +1772,8 @@ def test_handover_probe_failures_do_not_release_the_hold(probe_outcome: str) -> 
     import fakeredis.aioredis
     import httpx
 
-    from songmaker_cli.acestep_state import admit_generation, release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:

@@ -6,13 +6,12 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from pathlib import Path
 
 import pytest
 from conftest import make_authenticated_user
 from sqlalchemy import create_engine, event, insert, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
@@ -20,7 +19,6 @@ from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
 from songmaker_cli.db.engine import (
-    init_test_db,
     resolve_database_url,
 )
 from songmaker_cli.db.models import (
@@ -72,11 +70,6 @@ SKIP_NO_PG = pytest.mark.skipif(
     not TEST_PG_URL.startswith("postgresql"),
     reason="TEST_DATABASE_URL not set to a PostgreSQL URL",
 )
-
-
-@pytest.fixture
-def sqlite_factory(tmp_path: Path) -> sessionmaker[Session]:
-    return init_test_db(tmp_path / "test.db")
 
 
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:

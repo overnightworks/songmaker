@@ -25,12 +25,6 @@ class LoraCapacityErrorResponse(BaseModel):
     reason: LoraCapacityReason
 
 
-class UserLoraSampleCreateRequest(BaseModel):
-    caption: str = Field(min_length=1)
-    lyrics: str = Field(min_length=1)
-    position: int | None = Field(default=None, ge=0)
-
-
 class UserLoraSampleFromGenerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
