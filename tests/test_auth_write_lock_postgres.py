@@ -12,9 +12,10 @@ from songmaker_cli.auth_stores import DatabaseWriteLock
 
 
 def _second_session_times_out_on_the_lock(pg_factory) -> None:
-    with pg_factory() as other, pytest.raises(OperationalError) as refused:
+    with pg_factory() as other:
         other.execute(text("SET LOCAL lock_timeout = '200ms'"))
-        _begin_exclusive(other, _USER_MANAGEMENT_LOCK_ID)
+        with pytest.raises(OperationalError) as refused:
+            _begin_exclusive(other, _USER_MANAGEMENT_LOCK_ID)
     assert isinstance(refused.value.orig, LockNotAvailable)
 
 
