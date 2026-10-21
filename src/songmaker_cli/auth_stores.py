@@ -47,7 +47,7 @@ from songmaker_cli.db.queries.auth import (
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from sqlalchemy.orm import Session
+    from sqlalchemy.orm import Session, SessionTransaction
     from webauth.ports import SessionIdentityChanged, UserManagementEvent
 
     from songmaker_cli.db.models import UserSession
@@ -105,31 +105,35 @@ class DatabaseUserStore:
 
 @dataclass
 class DatabaseWriteLock:
-    """Commit preceding auth work, then retain the lock until the endpoint finishes.
+    """Commit preceding auth work, then keep the lock until the transaction ends.
 
-    Nested helpers share the enclosing operation's transaction, so a combined
-    account update cannot commit one field before another field fails.
+    The lock is tracked per transaction: a further hold in the same transaction,
+    nested or sequential, neither commits nor takes the lock again, so a combined
+    update cannot persist one part before another fails. After a commit or a
+    rollback the next hold locks again.
     """
 
     session: Session
-    _held: bool = field(default=False, init=False)
+    _locked_transaction: SessionTransaction | None = field(default=None, init=False)
 
     @contextmanager
     def hold(self) -> Iterator[None]:
-        if self._held:
-            yield
-            return
+        if not self._holds_current_transaction():
+            self._lock_new_transaction()
+        yield
+
+    def _holds_current_transaction(self) -> bool:
+        current = self.session.get_transaction()
+        return current is not None and current is self._locked_transaction
+
+    def _lock_new_transaction(self) -> None:
         assert not self.session.new and not self.session.dirty and not self.session.deleted, (
             "DatabaseWriteLock: session has uncommitted mutations — "
             "the commit() below would persist them unconditionally"
         )
         self.session.commit()
         _begin_exclusive(self.session, _USER_MANAGEMENT_LOCK_ID)
-        self._held = True
-        try:
-            yield
-        finally:
-            self._held = False
+        self._locked_transaction = self.session.get_transaction()
 
 
 @dataclass(frozen=True)
