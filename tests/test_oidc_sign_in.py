@@ -486,6 +486,28 @@ def test_a_missing_realm_setting_stops_the_web_app_but_not_the_settings(
         make_test_app(tmp_path)
 
 
+def test_the_music_and_scoring_workers_start_without_any_realm_variable_or_secret_file(
+    monkeypatch: pytest.MonkeyPatch, fresh_settings,
+) -> None:
+    for variable in ("OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE"):
+        monkeypatch.delenv(variable)
+    # Both entry modules read the settings when they are first imported.
+    from songmaker_cli.music_worker import MusicWorker, _music_worker_functions
+    from songmaker_cli.scoring_worker import ScoringWorker
+    from songmaker_cli.settings import get_settings
+    from songmaker_cli.worker_base import build_redis_settings
+
+    get_settings.cache_clear()
+    settings = get_settings()
+
+    assert (
+        settings.oidc_issuer, settings.oidc_client_id, settings.oidc_client_secret_file,
+    ) == (None, None, None)
+    assert build_redis_settings(settings) is not None
+    assert _music_worker_functions(MusicWorker(settings), settings)
+    assert ScoringWorker(settings).queue_name
+
+
 def test_the_secret_is_in_no_log_and_no_response_of_the_sign_in(world: World, caplog) -> None:
     with caplog.at_level("DEBUG"):
         responses = [

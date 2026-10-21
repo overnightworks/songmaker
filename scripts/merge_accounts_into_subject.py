@@ -65,6 +65,8 @@ from songmaker_cli.timestamps import utcnow
 
 RESTORE_HINT: Final = "Restore with scripts/restore.sh <backup>; there is no resume."
 USERS_ID_TARGET: Final = "users.id"
+# The users columns the sign-in migration drops; the folded account copies one of them.
+PASSWORD_ERA_USER_COLUMNS: Final = ("password_hash", "is_active")
 NO_OWNER: Final = None
 
 
@@ -231,6 +233,11 @@ def _structural_refusals(
         f"foreign key {_label(column)} to users.id has no policy"
         for column in owner_columns(metadata)
         if _label(column) not in OWNER_POLICIES
+    ]
+    refusals += [
+        f"users.{name} is gone: the sign-in migration already ran, and this script runs before it"
+        for name in PASSWORD_ERA_USER_COLUMNS
+        if name not in metadata.tables["users"].c
     ]
     if not _is_lowercase_uuid(subject):
         refusals.append(f"subject {subject!r} is not a lowercase 36-character UUID")

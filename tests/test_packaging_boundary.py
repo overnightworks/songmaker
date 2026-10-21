@@ -265,13 +265,18 @@ TEST_STACKS = _test_stacks()
 
 
 @functools.cache
-def _rendered_test_stack_services(compose_files: tuple[str, ...]) -> dict[str, dict]:
-    """The test stack as Compose itself merges it, every profile active, under e2e.yml's env."""
+def _rendered_test_stack_services(
+    compose_files: tuple[str, ...], operator_environment: tuple[tuple[str, str], ...] = (),
+) -> dict[str, dict]:
+    """The test stack as Compose itself merges it, every profile active, under e2e.yml's env.
+
+    ``operator_environment`` adds what an operator's ``.env`` would set on top of it.
+    """
     rendered = run_compose_config(
         (*compose_files, "--profile", "*"),
         ("--format", "json"),
         env_file=Path(os.devnull),
-        environment=_e2e_workflow_environment(),
+        environment={**_e2e_workflow_environment(), **dict(operator_environment)},
     )
     assert rendered.returncode == 0, rendered.stderr
     return json.loads(rendered.stdout)["services"]
@@ -760,10 +765,12 @@ def test_only_the_web_service_holds_the_keycloak_client_secret(
 
 
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+@pytest.mark.parametrize("operator_hosts", [None, "songmaker.hallucinai.de"])
 def test_the_web_host_check_admits_the_names_the_stack_calls_it_by(
-    compose_files: tuple[str, ...],
+    compose_files: tuple[str, ...], operator_hosts: str | None,
 ) -> None:
-    web = _rendered_test_stack_services(compose_files)["songmaker-web"]
-    assert {"localhost", "127.0.0.1", "songmaker-web"} <= set(
-        web["environment"]["ALLOWED_HOSTS"].split(","),
-    )
+    operator_environment = () if operator_hosts is None else (("ALLOWED_HOSTS", operator_hosts),)
+    web = _rendered_test_stack_services(compose_files, operator_environment)["songmaker-web"]
+    admitted = set(web["environment"]["ALLOWED_HOSTS"].split(","))
+    assert {"localhost", "127.0.0.1", "songmaker-web"} <= admitted
+    assert operator_hosts is None or operator_hosts in admitted

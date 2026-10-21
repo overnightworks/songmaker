@@ -389,6 +389,14 @@ def _add_unpoliced_foreign_key(shape: LiveShape) -> dict:
     return {}
 
 
+def _run_after_the_sign_in_migration(shape: LiveShape) -> dict:
+    with shape.engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE users DROP COLUMN password_hash, DROP COLUMN is_active"),
+        )
+    return {}
+
+
 def _unknown_origin(shape: LiveShape) -> dict:
     return {"operator_id": str(uuid.uuid4())}
 
@@ -402,6 +410,10 @@ def _unknown_origin(shape: LiveShape) -> dict:
         pytest.param(_collide_lora_slug, None, "voice", id="lora-slug-collision"),
         pytest.param(
             _add_unpoliced_foreign_key, None, "bookmarks.owner_id", id="T6-unpoliced-foreign-key",
+        ),
+        pytest.param(
+            _run_after_the_sign_in_migration, None, "users.password_hash is gone",
+            id="run-after-the-sign-in-migration",
         ),
         pytest.param(_unknown_origin, None, "unknown", id="unknown-from"),
         pytest.param(lambda shape: {}, "not-a-uuid", "subject", id="T7-malformed"),
