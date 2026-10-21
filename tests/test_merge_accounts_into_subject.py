@@ -109,7 +109,7 @@ def _seed_accounts(session, operator: str, active: list[str], inactive: list[str
         session.add(UserSession(user_id=owner, expires_at=expires))
 
 
-def _seed_library(session, shape: LiveShape) -> None:
+def _seed_live_shape_library(session, shape: LiveShape) -> None:
     operator, first_active = shape.operator, shape.active[0]
     inactive_owner = shape.inactive[0]
     session.add_all([
@@ -236,7 +236,7 @@ def live_shape(pg_factory, tmp_path: Path) -> LiveShape:
     (shape.cache_dir / "stream.mp3").write_bytes(b"cached")
     with pg_factory() as session:
         _seed_accounts(session, shape.operator, shape.active, shape.inactive)
-        _seed_library(session, shape)
+        _seed_live_shape_library(session, shape)
         _seed_lora(session, shape)
         _seed_ownership_tables(session, shape)
         session.commit()

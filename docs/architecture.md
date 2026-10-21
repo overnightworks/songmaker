@@ -1088,7 +1088,8 @@ updated; a missing row is refused, never recreated.
 `auth_dependencies.user_management` constructs one management instance per request from these stores and the installed config.
 `DatabaseWriteLock` commits preceding auth work before acquiring advisory lock
 9 (SQLite: `BEGIN IMMEDIATE`); endpoints must have no business changes before
-entry. Nested helpers share that lock and transaction. Exiting does not commit
+entry. Any further hold in the same transaction, nested or sequential, shares that
+lock; after a commit or rollback the next hold locks again. Exiting does not commit
 or release the database lock: the endpoint commits on success, and the request's
 DB dependency rolls back on failure. The environment bootstrap builds its
 configuration through `build_web_auth_config` and uses the same stores and

@@ -9,6 +9,7 @@ from functools import partial
 from pathlib import Path
 
 import pytest
+from sqlalchemy import event
 from webauth.ports import (
     AuditSink,
     LoginAttemptStore,
@@ -176,6 +177,42 @@ def test_nested_management_writes_roll_back_together_after_leaving_the_lock(user
     session.rollback()
 
     assert (users.get(user.id).role, users.get(user.id).is_active) == ("user", True)
+
+
+def test_sequential_holds_in_one_transaction_do_not_commit_between_them(users, session) -> None:
+    user = users.create("nina", _PASSWORD_HASH, "user")
+    session.commit()
+    lock = DatabaseWriteLock(session)
+
+    with lock.hold():
+        users.update(user.id, role="admin")
+    with lock.hold():
+        users.update(user.id, is_active=False)
+    session.rollback()
+
+    assert (users.get(user.id).role, users.get(user.id).is_active) == ("user", True)
+
+
+@pytest.mark.parametrize("end_transaction", ["commit", "rollback"])
+def test_the_next_hold_locks_again_after_the_transaction_ends(
+    users, session, end_transaction: str,
+) -> None:
+    statements: list[str] = []
+    event.listen(
+        session.get_bind(), "before_cursor_execute",
+        lambda _conn, _cursor, statement, *_rest: statements.append(statement),
+    )
+    lock = DatabaseWriteLock(session)
+
+    with lock.hold():
+        pass
+    with lock.hold():
+        pass
+    getattr(session, end_transaction)()
+    with lock.hold():
+        pass
+
+    assert statements.count("BEGIN IMMEDIATE") == 2
 
 
 def test_management_lock_rejects_pending_business_changes(users, session) -> None:
