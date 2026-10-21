@@ -128,6 +128,7 @@ import {
 	openPlaylistsAddress,
 	openLibraryAddress,
 	libraryScrollAnchor,
+	libraryScrollRestore,
 	openSongAddress,
 	openTakeAddress,
 	resolveLegacySongQueryAddress,
@@ -314,6 +315,18 @@ describe('library history snapshot', () => {
 });
 
 describe('applyLibraryHistory', () => {
+	it('defect:#1354: issues a fresh scroll restore request for every landing, also at an equal offset', async () => {
+		const state = { ...libraryRootState(), scrollAnchor: 240 };
+		await applyLibraryHistory(state);
+		const first = get(libraryScrollRestore);
+		await applyLibraryHistory(state);
+		const second = get(libraryScrollRestore);
+
+		expect(first).toEqual({ top: 240 });
+		expect(second).toEqual({ top: 240 });
+		expect(second).not.toBe(first);
+	});
+
 	it('hydrates an album collection that is not yet loaded', async () => {
 		const state = { ...libraryRootState(), collection: { kind: 'album' as const, id: 'a9' } };
 		await applyLibraryHistory(state);
@@ -907,7 +920,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		}
 	);
 
-	// A sheet closing, or Go to song leaving a history layer, steps
+	// A layer closing, or Go to song leaving a history layer, steps
 	// back before the crossing it opens: once that step lands, the crossing's
 	// entry stands, so a Back pressed while its route still loads returns to
 	// the page underneath instead of stepping past it.

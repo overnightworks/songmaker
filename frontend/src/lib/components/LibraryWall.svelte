@@ -20,7 +20,7 @@
 	import { openCollection, type OpenCollection } from '$lib/stores/collection';
 	import {
 		captureLibraryScroll,
-		libraryScrollAnchor,
+		libraryScrollRestore,
 		takePlaceReturnedFrom
 	} from '$lib/stores/libraryContext';
 	import { whenBackOnline } from '$lib/stores/connectivity';
@@ -56,8 +56,6 @@
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import NewPlaceMenu from './NewPlaceMenu.svelte';
-
-	const SCROLL_RESTORE_TOLERANCE_PX = 1;
 
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
@@ -96,7 +94,7 @@
 	const order = $derived($libraryWallOrder);
 	const browseState = $derived($libraryBrowse);
 	const playlistStatus = $derived($playlistLoad);
-	const restoredScroll = $derived($libraryScrollAnchor);
+	const pendingRestore = $derived($libraryScrollRestore);
 
 	let labelledAt = $state(new Date());
 
@@ -161,13 +159,13 @@
 		labelledAt = new Date();
 	});
 
-	// The wall's own scroll reports come back through the anchor; writing one
-	// back would cut into a momentum scroll, so only a different anchor moves it.
+	// Only a landing writes scrollTop, once the content is tall enough to hold it.
 	$effect(() => {
 		void wallItems.length;
-		if (!browseEl) return;
-		if (Math.abs(browseEl.scrollTop - restoredScroll) >= SCROLL_RESTORE_TOLERANCE_PX)
-			browseEl.scrollTop = restoredScroll;
+		if (!browseEl || !pendingRestore) return;
+		if (browseEl.scrollHeight - browseEl.clientHeight < pendingRestore.top) return;
+		browseEl.scrollTop = pendingRestore.top;
+		libraryScrollRestore.set(null);
 	});
 
 	function sizeLabel(item: AlbumItem | PlaylistItem): string {
@@ -213,6 +211,7 @@
 	function onBrowseScroll(event: Event): void {
 		const target = event.currentTarget;
 		if (!(target instanceof HTMLElement)) return;
+		if (pendingRestore && target.scrollTop !== pendingRestore.top) libraryScrollRestore.set(null);
 		captureLibraryScroll(target.scrollTop);
 	}
 

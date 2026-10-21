@@ -11,6 +11,7 @@ import { get } from 'svelte/store';
 
 import {
 	libraryScrollAnchor,
+	libraryScrollRestore,
 	resetLibraryContextForTests,
 	setLibrarySurface
 } from '$lib/stores/libraryContext';
@@ -760,21 +761,54 @@ function litTitles(root: ParentNode): string[] {
 	);
 }
 
+function landOnWall(top: number): void {
+	libraryScrollRestore.set({ top });
+}
+
+function recordScrollTopWrites(body: HTMLElement, startAt: number) {
+	const writes: number[] = [];
+	let top = startAt;
+	Object.defineProperty(body, 'scrollTop', {
+		configurable: true,
+		get: () => top,
+		set: (next: number) => {
+			top = next;
+			writes.push(next);
+		}
+	});
+	return {
+		writes,
+		scrollByHand(next: number): void {
+			top = next;
+			body.dispatchEvent(new Event('scroll'));
+		}
+	};
+}
+
 describe('the wall landing where it was left', () => {
+	beforeEach(() => {
+		vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(2000);
+		vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it('1354_rule_12: lands at the scroll its entry kept', async () => {
 		seedWall();
-		libraryScrollAnchor.set(480);
+		landOnWall(480);
 
 		const root = await render();
 
 		expect(wallBody(root).scrollTop).toBe(480);
 	});
 
-	it('1354_rule_12: applies a different scroll to the wall that is already showing', async () => {
+	it('1354_rule_12: applies a landing to the wall that is already showing', async () => {
 		seedWall();
 		const root = await render();
 
-		libraryScrollAnchor.set(300);
+		landOnWall(300);
 		await tick();
 
 		expect(wallBody(root).scrollTop).toBe(300);
@@ -784,23 +818,58 @@ describe('the wall landing where it was left', () => {
 		seedWall();
 		const root = await render();
 		const body = wallBody(root);
-		const writes: number[] = [];
-		let top = 0;
-		Object.defineProperty(body, 'scrollTop', {
-			configurable: true,
-			get: () => top,
-			set: (next: number) => {
-				top = next;
-				writes.push(next);
-			}
-		});
+		const { writes, scrollByHand } = recordScrollTopWrites(body, 0);
 
-		top = 500;
-		body.dispatchEvent(new Event('scroll'));
+		scrollByHand(500);
 		await tick();
 
 		expect(get(libraryScrollAnchor)).toBe(500);
 		expect(writes).toEqual([]);
+	});
+
+	it('defect:#1354: an equal list recomputed while scrolled writes nothing', async () => {
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		landOnWall(480);
+		await tick();
+		const { writes } = recordScrollTopWrites(body, 480);
+
+		albumList.update((albums) => [...albums]);
+		await tick();
+
+		expect(writes).toEqual([]);
+	});
+
+	it('defect:#1354: a landing at the same position restores again', async () => {
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		landOnWall(480);
+		await tick();
+		body.scrollTop = 0;
+
+		landOnWall(480);
+		await tick();
+
+		expect(body.scrollTop).toBe(480);
+	});
+
+	it('defect:#1354: a hand scroll drops a landing that waits for the content', async () => {
+		vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(600);
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		landOnWall(480);
+		await tick();
+
+		body.scrollTop = 40;
+		body.dispatchEvent(new Event('scroll'));
+		vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(2000);
+		albumList.update((albums) => [...albums]);
+		await tick();
+
+		expect(body.scrollTop).toBe(40);
 	});
 });
 
