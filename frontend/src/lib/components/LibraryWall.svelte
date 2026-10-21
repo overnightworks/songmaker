@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 	import {
 		albumList,
@@ -20,6 +21,7 @@
 	import { openCollection, type OpenCollection } from '$lib/stores/collection';
 	import {
 		captureLibraryScroll,
+		libraryScrollAnchor,
 		libraryScrollRestore,
 		takePlaceReturnedFrom
 	} from '$lib/stores/libraryContext';
@@ -56,6 +58,17 @@
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import NewPlaceMenu from './NewPlaceMenu.svelte';
+
+	const SCROLL_RESTORE_TOLERANCE_PX = 1;
+	const SCROLL_KEYS: ReadonlySet<string> = new Set([
+		'ArrowUp',
+		'ArrowDown',
+		'PageUp',
+		'PageDown',
+		'Home',
+		'End',
+		' '
+	]);
 
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
@@ -149,6 +162,8 @@
 	let browseEl = $state<HTMLElement | null>(null);
 
 	onMount(() => {
+		// A wall mounted without a landing starts where the anchor says, so the two agree.
+		if (!get(libraryScrollRestore)) libraryScrollRestore.set({ top: get(libraryScrollAnchor) });
 		initLibraryWallOrder();
 		catchUpWall(ensureLastPlayedRead);
 		return whenBackOnline(() => catchUpWall(readLastPlayed));
@@ -159,12 +174,18 @@
 		labelledAt = new Date();
 	});
 
-	// Only a landing writes scrollTop, once the content is tall enough to hold it.
+	// Only a pending restore writes scrollTop: once the content is tall enough to
+	// hold it, or, for a target it can never hold, once the list has loaded, when
+	// the clamped position goes back to the anchor.
 	$effect(() => {
 		void wallItems.length;
 		if (!browseEl || !pendingRestore) return;
-		if (browseEl.scrollHeight - browseEl.clientHeight < pendingRestore.top) return;
-		browseEl.scrollTop = pendingRestore.top;
+		const reachable = browseEl.scrollHeight - browseEl.clientHeight;
+		const holdsTarget = reachable + SCROLL_RESTORE_TOLERANCE_PX >= pendingRestore.top;
+		if (!holdsTarget && !(kindLoaded && orderKnown)) return;
+		const landedAt = holdsTarget ? pendingRestore.top : Math.max(0, reachable);
+		browseEl.scrollTop = landedAt;
+		if (!holdsTarget) captureLibraryScroll(landedAt);
 		libraryScrollRestore.set(null);
 	});
 
@@ -208,10 +229,37 @@
 		if (document.visibilityState === 'visible') catchUpWall(readLastPlayed);
 	}
 
+	// Only the person's own input drops a pending restore; a clamp, momentum or
+	// the wall's own write are scroll events without it.
+	function dropRestoreForInput(): void {
+		if (!pendingRestore || !browseEl) return;
+		libraryScrollRestore.set(null);
+		captureLibraryScroll(browseEl.scrollTop);
+	}
+
+	$effect(() => {
+		const body = browseEl;
+		if (!body) return;
+		const onKeydown = (event: KeyboardEvent) => {
+			if (SCROLL_KEYS.has(event.key)) dropRestoreForInput();
+		};
+		const options = { passive: true };
+		body.addEventListener('pointerdown', dropRestoreForInput, options);
+		body.addEventListener('touchstart', dropRestoreForInput, options);
+		body.addEventListener('wheel', dropRestoreForInput, options);
+		body.addEventListener('keydown', onKeydown);
+		return () => {
+			body.removeEventListener('pointerdown', dropRestoreForInput);
+			body.removeEventListener('touchstart', dropRestoreForInput);
+			body.removeEventListener('wheel', dropRestoreForInput);
+			body.removeEventListener('keydown', onKeydown);
+		};
+	});
+
 	function onBrowseScroll(event: Event): void {
 		const target = event.currentTarget;
 		if (!(target instanceof HTMLElement)) return;
-		if (pendingRestore && target.scrollTop !== pendingRestore.top) libraryScrollRestore.set(null);
+		if (pendingRestore) return;
 		captureLibraryScroll(target.scrollTop);
 	}
 

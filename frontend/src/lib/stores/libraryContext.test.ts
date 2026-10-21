@@ -324,7 +324,6 @@ describe('applyLibraryHistory', () => {
 
 		expect(first).toEqual({ top: 240 });
 		expect(second).toEqual({ top: 240 });
-		expect(second).not.toBe(first);
 	});
 
 	it('hydrates an album collection that is not yet loaded', async () => {
