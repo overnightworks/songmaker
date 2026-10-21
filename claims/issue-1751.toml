@@ -1,8 +1,0 @@
-claim_id = "4235f84fce6846498e367df2c9e27249"
-agent = "claude"
-role = "builder"
-base = "f7d6461dff31b7746eb5a651067d3a0d48efdd95"
-branch = "claude/issue-1751-dead-gpu-hold-copies"
-scope = ["frontend/src/lib/api/types.ts", "src/songmaker_cli/acestep_state.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/loras.py", "tests/test_acestep_state.py", "tests/test_jobs.py", "tests/test_jobs_lora_training.py", "tests/test_postgresql.py"]
-opened_commit = "71c795696204bf385c7153ecd8dd5bf984d67a3b"
-whole_reason = "Deletion-only cuts from the #1724 deadweight audit; each file only loses lines."
