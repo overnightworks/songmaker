@@ -1236,6 +1236,15 @@ export async function archiveOwnedAlbum(api: APIRequestContext, albumId: string)
 	await seed.postJson(`/api/albums/${albumId}/archive`, {});
 }
 
+/** Archives the album an address from `seedOwnSongAddress` or `seedOwnTakeAddress` sits under. */
+export async function archiveAlbumOfAddress(
+	api: APIRequestContext,
+	songAddress: string
+): Promise<void> {
+	const [, , albumId] = songAddress.split('/');
+	await archiveOwnedAlbum(api, albumId);
+}
+
 export async function archivePhoneLibrary(
 	api: APIRequestContext,
 	fixture: PhoneLibraryFixture

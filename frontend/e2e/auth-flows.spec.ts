@@ -45,6 +45,7 @@ import {
 	expect,
 	request,
 	test,
+	type APIRequestContext,
 	type BrowserContext,
 	type Cookie,
 	type Locator,
@@ -87,6 +88,7 @@ import {
 import {
 	BASE_URL,
 	ageSessionPastAbsoluteLimit,
+	archiveAlbumOfAddress,
 	seedAccount,
 	seedOwnSongAddress,
 	seedOwnTakeAddress
@@ -250,6 +252,16 @@ test.afterEach(({}, testInfo) => {
 	console.log(`Auth flow /api requests (${testInfo.title}): ${guard.apiRequestCount}`);
 	guard.assertClean();
 	guard.assertWithinBudget(apiRequestBudgetOf(testInfo));
+});
+
+test.afterEach(async () => {
+	for (const { api, songAddress } of seededSongs.splice(0)) {
+		try {
+			await archiveAlbumOfAddress(api, songAddress);
+		} finally {
+			await api.dispose();
+		}
+	}
 });
 
 /** Types one set of credentials and waits for the server's own answer. */
@@ -461,13 +473,19 @@ async function expectAccountLocked(refusal: Response): Promise<void> {
 	expect((await refusal.json()).detail).toBe(ACCOUNT_LOCKED_DETAIL);
 }
 
+/** Each seeded song's session, which the test's `afterEach` archives the album with. */
+const seededSongs: { api: APIRequestContext; songAddress: string }[] = [];
+
 /** The account's own song, seeded through a session of its own outside the browser. */
 async function seedOwnSong(seedAddress = seedOwnSongAddress): Promise<string> {
 	const api = await request.newContext({ baseURL: BASE_URL });
 	try {
-		return await seedAddress(api, account, DEEP_LINK_SONG_TITLE);
-	} finally {
+		const songAddress = await seedAddress(api, account, DEEP_LINK_SONG_TITLE);
+		seededSongs.push({ api, songAddress });
+		return songAddress;
+	} catch (error) {
 		await api.dispose();
+		throw error;
 	}
 }
 
