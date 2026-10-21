@@ -355,7 +355,7 @@ test(
 
 		expect(start.status).toBe(303);
 		expect(start.requested.search).toBe('');
-		expect(start.location.origin).not.toBe(new URL(page.url()).origin);
+		expect(start.location.origin).not.toBe(start.requested.origin);
 		expect(documentRequests[0]).toBe('/login/oidc');
 		await expect.poll(() => historyLength(page), "one entry, the issuer's").toBe(length + 1);
 		guard.assertClean();

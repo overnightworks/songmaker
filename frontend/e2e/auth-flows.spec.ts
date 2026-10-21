@@ -9,7 +9,7 @@
 // on. Whatever leaves the app's origin ends on a stub (`stubIdentityProvider`).
 // Both shells drive every flow.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import { ACCOUNT_MENU_LOGOUT_LABEL } from '../src/lib/constants';
 import {
@@ -20,7 +20,7 @@ import {
 	SIGN_IN_RETRY_LABEL,
 	SIGNED_OUT_HEADING
 } from '../src/lib/constants/auth';
-import { FlowGuard, nextSignInStart, stubIdentityProvider } from './helpers';
+import { FlowGuard, leftTheApp, nextSignInStart, stubIdentityProvider } from './helpers';
 import { BASE_URL } from './seed';
 
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -32,10 +32,6 @@ const AUTHORIZATION_ENDPOINT_SUFFIX = '/protocol/openid-connect/auth';
 test.beforeEach(async ({ context }) => {
 	await stubIdentityProvider(context);
 });
-
-function leftTheApp(page: Page): boolean {
-	return new URL(page.url()).origin !== new URL(BASE_URL).origin;
-}
 
 test('the sign-in start sends the browser to the issuer with a pending login that only a return can finish', async ({
 	request

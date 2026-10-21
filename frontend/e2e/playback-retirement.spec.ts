@@ -10,6 +10,7 @@ import {
 	accountCircle,
 	accountMenu,
 	FlowGuard,
+	leftTheApp,
 	nameStartingWith,
 	HOME_PATH,
 	observePlayingAudio,
@@ -17,6 +18,7 @@ import {
 	openLibraryWall,
 	playingAudioState,
 	shellOf,
+	stubIdentityProvider,
 	workspace,
 	type Shell
 } from './helpers';
@@ -93,7 +95,8 @@ async function signOut(page: Page, shell: Shell): Promise<void> {
 		const rail = await openRailNav(page, shell);
 		await rail.getByRole('button', { name: 'Logout', exact: true }).click();
 	}
-	await expect(page).toHaveURL(/\/login(?:\?|$)/);
+	// Log out ends at the issuer's logout address, outside the app's origin.
+	await expect.poll(() => leftTheApp(page)).toBe(true);
 }
 
 async function observeStorage(page: Page): Promise<StorageNotice[]> {
@@ -177,6 +180,7 @@ for (const tabs of [1, 2]) {
 		context
 	}, info) => {
 		await context.clearCookies();
+		await stubIdentityProvider(context);
 		await withProofLibrary(async (library) => {
 			const shell = shellOf(info);
 			const guard = new FlowGuard(page);
@@ -299,6 +303,7 @@ for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry']
 		context
 	}, info) => {
 		await context.clearCookies();
+		await stubIdentityProvider(context);
 		await withProofLibrary(async (library) => {
 			const shell = shellOf(info);
 			const guard = new FlowGuard(page, {
@@ -359,9 +364,17 @@ for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry']
 					})
 				);
 				await page.reload();
-				await expect(page).toHaveURL(/\/login(?:\?|$)/);
-				expect(await recovery(page, library.userId)).toEqual(saved);
-				expect(await marker(page, library.userId)).toBeNull();
+				// The refusal sends the page to sign in at the issuer; the app's
+				// storage is read from a document of the app's own origin.
+				await expect.poll(() => leftTheApp(page)).toBe(true);
+				const reader = await context.newPage();
+				try {
+					await reader.goto('/legal');
+					expect(await recovery(reader, library.userId)).toEqual(saved);
+					expect(await marker(reader, library.userId)).toBeNull();
+				} finally {
+					await reader.close();
+				}
 			}
 			guard.assertClean();
 		});

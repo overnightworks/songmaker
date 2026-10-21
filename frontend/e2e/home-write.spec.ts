@@ -19,12 +19,14 @@ import {
 	appBar,
 	csrfHeaders,
 	HOME_PATH,
+	leftTheApp,
 	loseNetwork,
 	regainNetwork,
 	openHome,
 	openLibraryWall,
 	openRailNav,
 	shellOf,
+	stubIdentityProvider,
 	workspace,
 	listenRegion,
 	type Shell
@@ -282,6 +284,8 @@ for (const pending of [false, true]) {
 		const accounts: SeededAccount[] = [];
 		let release: (() => void) | undefined;
 		let accountAlbumId: string | undefined;
+		// Log out ends at the issuer's logout address, which leaves the app's origin.
+		await stubIdentityProvider(page.context());
 		try {
 			for (const suffix of ['a', 'b']) {
 				accounts.push(await seedAccount(`e2e-write-${testInfo.project.name}-${marker}-${suffix}`));
@@ -323,7 +327,7 @@ for (const pending of [false, true]) {
 					.getByRole('button', { name: 'Logout', exact: true })
 					.click();
 			}
-			await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
+			await expect.poll(() => leftTheApp(page)).toBe(true);
 			release?.();
 			await page.unrouteAll({ behavior: 'wait' });
 			await signInWriter(page, accounts[1]);

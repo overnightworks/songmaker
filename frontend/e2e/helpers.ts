@@ -630,6 +630,11 @@ export async function stubIdentityProvider(context: BrowserContext): Promise<voi
 	);
 }
 
+/** Whether the page stands outside the app's origin, as it does at the issuer. */
+export function leftTheApp(page: Page): boolean {
+	return new URL(page.url()).origin !== new URL(BASE_URL).origin;
+}
+
 const SIGN_IN_START_PATHNAME = '/login/oidc';
 
 /** Resolves with the answer of the next request to the server's sign-in start. */
