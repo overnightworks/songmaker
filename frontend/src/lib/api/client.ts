@@ -13,7 +13,6 @@ export {
 	restoreAlbum,
 	archiveAlbum,
 	unarchiveAlbum,
-	cleanupAlbum,
 	createAlbumCoverSuggestions,
 	fetchAlbumCoverSuggestions,
 	selectAlbumCoverSuggestion,
@@ -35,11 +34,9 @@ export {
 	deleteVersion,
 	deleteSong,
 	restoreSong,
-	moveSong,
 	renameSong,
 	shareSong,
 	unshareSong,
-	cleanupSong,
 	uploadSongCover,
 	deleteSongCover
 } from './songs';
@@ -58,7 +55,6 @@ export {
 	unpickGeneration,
 	keepGeneration,
 	unkeepGeneration,
-	unarchiveGeneration,
 	shareGeneration,
 	unshareGeneration
 } from './generations';
@@ -80,7 +76,7 @@ export {
 	uploadPlaylistCover,
 	deletePlaylistCover
 } from './playlists';
-export { createQueueStreamSnapshot, createLibraryQueueStreamSnapshot } from './queue-streams';
+export { createQueueStreamSnapshot } from './queue-streams';
 export { checkSetupRequired, setupAdmin, logout, fetchMe } from './auth';
 
 export {
@@ -127,7 +123,6 @@ export {
 	fetchAdminVoices,
 	createUser,
 	updateUser,
-	deactivateUser,
 	hardDeleteUser,
 	fetchSessions,
 	forceLogout,

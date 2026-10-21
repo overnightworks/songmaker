@@ -1,8 +1,4 @@
-import type {
-	LibraryQueueStreamRequest,
-	QueueStreamManifest,
-	QueueStreamTrackRequest
-} from './types';
+import type { QueueStreamManifest, QueueStreamTrackRequest } from './types';
 import { apiFetch } from './fetch';
 
 // A cold queue-stream build concatenates every track server-side and can take
@@ -20,26 +16,6 @@ export async function createQueueStreamSnapshot(
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ tracks })
-		},
-		STREAM_BUILD_TIMEOUT_MS
-	);
-}
-
-export async function createLibraryQueueStreamSnapshot(
-	startGenerationId: string | null,
-	opts: { shuffle?: boolean; pool?: LibraryQueueStreamRequest['pool'] } = {}
-): Promise<QueueStreamManifest> {
-	const body: LibraryQueueStreamRequest = {
-		start_generation_id: startGenerationId,
-		shuffle: opts.shuffle ?? false,
-		pool: opts.pool ?? 'mix'
-	};
-	return apiFetch<QueueStreamManifest>(
-		'/api/queue-streams/library',
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
 		},
 		STREAM_BUILD_TIMEOUT_MS
 	);

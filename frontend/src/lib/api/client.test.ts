@@ -29,7 +29,6 @@ import {
 	fetchHealth,
 	pickGeneration,
 	unpickGeneration,
-	cleanupAlbum,
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
@@ -41,7 +40,6 @@ import {
 	fetchUsers,
 	createUser,
 	updateUser,
-	deactivateUser,
 	fetchSessions,
 	forceLogout,
 	fetchLoginAttempts,
@@ -202,12 +200,6 @@ describe('API client', () => {
 		expect(mockFetch.mock.calls[0][0]).toBe('/api/generations/g1/unpick');
 	});
 
-	it('cleanupAlbum returns deleted count', async () => {
-		mockOk({ deleted: 5 });
-		const result = await cleanupAlbum('a1');
-		expect(result.deleted).toBe(5);
-	});
-
 	it('fetchCapabilities', async () => {
 		mockOk({ generation: true, scoring: true });
 		const result = await fetchCapabilities();
@@ -347,12 +339,6 @@ describe('Admin API', () => {
 		const [url, init] = mockFetch.mock.calls[0];
 		expect(url).toBe('/api/admin/users/u1');
 		expect(init.method).toBe('PUT');
-	});
-
-	it('deactivateUser sends DELETE', async () => {
-		mockOk({ status: 'ok' });
-		await deactivateUser('u1');
-		expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
 	});
 
 	it('fetchSessions', async () => {

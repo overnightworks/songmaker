@@ -1,6 +1,5 @@
 import type {
 	AlbumItem,
-	CleanupResult,
 	CoverSuggestionSelectionRequest,
 	CoverSuggestionsResponse,
 	JobItem,
@@ -72,10 +71,6 @@ export async function archiveAlbum(albumId: string): Promise<AlbumItem> {
 
 export async function unarchiveAlbum(albumId: string): Promise<AlbumItem> {
 	return apiFetch<AlbumItem>(`/api/albums/${albumId}/unarchive`, { method: 'POST' });
-}
-
-export async function cleanupAlbum(albumId: string): Promise<CleanupResult> {
-	return apiFetch<CleanupResult>(`/api/albums/${albumId}/cleanup`, { method: 'POST' });
 }
 
 export async function createAlbumCoverSuggestions(albumId: string): Promise<JobItem> {

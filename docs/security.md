@@ -187,7 +187,7 @@ Five-layer defense:
 | Login        | 5 / 5 min         | Per IP + per username |
 | Generation   | 30 / hour         | Per user |
 | Scoring      | 100 / hour        | Per user |
-| Chat (Claude)| 300 / hour        | Per user |
+| Chat         | 300 / hour        | Per user |
 | Queue depth  | 100 total         | Global   |
 | Active jobs  | 10 concurrent     | Per user |
 
