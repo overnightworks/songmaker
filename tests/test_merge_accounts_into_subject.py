@@ -15,13 +15,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from sqlalchemy import Column, Engine, ForeignKey, MetaData, String, Table, select, text, update
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import Engine, select, text, update
 from sqlalchemy.exc import DBAPIError
 
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
-    Base,
     ChatMessage,
     Conversation,
     CowriterUserMemory,
@@ -33,10 +34,8 @@ from songmaker_cli.db.models import (
     ResourceEvent,
     ResourceEventCursor,
     Song,
-    User,
     UserLora,
     UserLoraSample,
-    UserSession,
     UserSongWork,
     Version,
 )
@@ -47,6 +46,7 @@ sys.path.insert(0, str(SCRIPTS))
 import merge_accounts_into_subject as merge  # noqa: E402
 
 ARCHIVED_AT = datetime(2026, 1, 2, tzinfo=timezone.utc)
+SIGN_IN_REVISION = "7c3e91d0a4b2"
 
 
 @dataclass
@@ -86,7 +86,7 @@ class LiveShape:
                 table.name: sorted(
                     repr(tuple(row)) for row in connection.execute(select(table))
                 )
-                for table in Base.metadata.sorted_tables
+                for table in merge.reflect_live_schema(self.engine).sorted_tables
             }
         files = sorted(
             str(path.relative_to(self.audio_dir)) for path in self.audio_dir.rglob("*")
@@ -95,18 +95,25 @@ class LiveShape:
 
 
 def _seed_accounts(session, operator: str, active: list[str], inactive: list[str]) -> None:
+    """Insert accounts and sessions in the pre-cutover shape, which the models no longer have."""
     accounts = [(operator, "felix", "admin", True)]
     accounts += [(a, f"active-{n}", "user", True) for n, a in enumerate(active)]
     accounts += [(a, f"inactive-{n}", "user", False) for n, a in enumerate(inactive)]
     for account, username, role, is_active in accounts:
-        session.add(User(
-            id=account, username=username, password_hash=f"hash-{username}",
-            role=role, is_active=is_active, default_generation_config="preset-default",
-        ))
-    session.flush()
+        session.execute(text(
+            "INSERT INTO users (id, username, password_hash, role, is_active,"
+            " default_generation_config, created_at, updated_at) VALUES (:id, :username,"
+            " :password_hash, :role, :is_active, 'preset-default', now(), now())"
+        ), {
+            "id": account, "username": username, "password_hash": f"hash-{username}",
+            "role": role, "is_active": is_active,
+        })
     expires = datetime(2030, 1, 1, tzinfo=timezone.utc)
     for owner in (operator, operator, active[0]):
-        session.add(UserSession(user_id=owner, expires_at=expires))
+        session.execute(text(
+            "INSERT INTO user_sessions (id, user_id, created_at, expires_at, ip_address,"
+            " user_agent) VALUES (:id, :user_id, now(), :expires, '', '')"
+        ), {"id": uuid.uuid4().hex, "user_id": owner, "expires": expires})
 
 
 def _seed_live_shape_library(session, shape: LiveShape) -> None:
@@ -223,10 +230,25 @@ def _seed_ownership_tables(session, shape: LiveShape) -> None:
 
 
 @pytest.fixture
-def live_shape(pg_factory, tmp_path: Path) -> LiveShape:
+def pre_cutover_factory(pg_factory):
+    """The database in the shape the script meets: before the sign-in migration ran."""
+    url = pg_factory.kw["bind"].url.render_as_string(hide_password=False)
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    command.stamp(config, SIGN_IN_REVISION)
+    command.downgrade(config, "-1")
+    yield pg_factory
+    with pg_factory.kw["bind"].begin() as connection:
+        connection.execute(
+            text("DROP TABLE IF EXISTS bookmarks, login_attempts, alembic_version CASCADE"),
+        )
+
+
+@pytest.fixture
+def live_shape(pre_cutover_factory, tmp_path: Path) -> LiveShape:
     new_id = lambda: str(uuid.uuid4())  # noqa: E731
     shape = LiveShape(
-        engine=pg_factory.kw["bind"], audio_dir=tmp_path / "audio",
+        engine=pre_cutover_factory.kw["bind"], audio_dir=tmp_path / "audio",
         cache_dir=tmp_path / "queue-streams", operator=new_id(),
         active=[new_id(), new_id()], inactive=[new_id(), new_id(), new_id()],
         subject=new_id(), lora_id=new_id(),
@@ -234,7 +256,7 @@ def live_shape(pg_factory, tmp_path: Path) -> LiveShape:
     shape.audio_dir.mkdir()
     shape.cache_dir.mkdir()
     (shape.cache_dir / "stream.mp3").write_bytes(b"cached")
-    with pg_factory() as session:
+    with pre_cutover_factory() as session:
         _seed_accounts(session, shape.operator, shape.active, shape.inactive)
         _seed_live_shape_library(session, shape)
         _seed_lora(session, shape)
@@ -359,14 +381,12 @@ def _collide_lora_slug(shape: LiveShape) -> dict:
 
 
 def _add_unpoliced_foreign_key(shape: LiveShape) -> dict:
-    metadata = MetaData()
-    for table in Base.metadata.tables.values():
-        table.to_metadata(metadata)
-    Table(
-        "bookmarks", metadata, Column("id", String(36), primary_key=True),
-        Column("owner_id", String(36), ForeignKey("users.id")),
-    )
-    return {"metadata": metadata}
+    with shape.engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE bookmarks (id varchar(36) PRIMARY KEY,"
+            " owner_id varchar(36) REFERENCES users (id))"
+        ))
+    return {}
 
 
 def _unknown_origin(shape: LiveShape) -> dict:
