@@ -85,15 +85,18 @@ def test_security_headers(server_app: TestClient) -> None:
 
 
 @pytest.mark.parametrize("path", ["/", "/albums/any-album", "/api/albums"])
-def test_content_security_policy_is_pinned_on_pages_and_api(
-    server_app: TestClient, path: str,
-) -> None:
+def test_content_security_policy_is_pinned_on_pages_and_api(tmp_path: Path, path: str) -> None:
     """The build styles inline, so `style-src` carries `'unsafe-inline'`; scripts stay strict."""
-    policy = server_app.get(path).headers["Content-Security-Policy"]
+    inline_script = "boot()"
+    client, _ = make_test_app(
+        tmp_path, index_html=f"<html><script>{inline_script}</script></html>",
+    )
+    policy = client.get(path).headers["Content-Security-Policy"]
     directives = dict(part.split(" ", 1) for part in policy.split("; "))
     assert directives["default-src"] == "'none'"
-    assert directives["script-src"].startswith("'self'")
-    assert "unsafe" not in directives["script-src"]
+    assert directives["base-uri"] == "'self'"
+    assert directives["form-action"] == "'self'"
+    assert directives["script-src"].split() == ["'self'", f"'{_csp_sha256(inline_script)}'"]
     assert directives["style-src"] == "'self' 'unsafe-inline'"
     assert directives["connect-src"] == "'self'"
     assert directives["font-src"] == "'self'"

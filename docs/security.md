@@ -1326,4 +1326,4 @@ Passwords left with the Keycloak sign-in; lockout and brute-force throttling are
 **Priority: Medium** — PostgreSQL and Redis are in place. Multiple uvicorn workers can be added via `--workers N`. The arq worker already runs as a separate process.
 
 ### 5. Content Security Policy — remove `'unsafe-inline'` from `style-src`
-**Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The `style-src 'unsafe-inline'` directive is needed for SvelteKit dev mode but could be tightened in production. Consider nonce-based inline styles if a stricter policy is desired.
+**Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The production build needs `style-src 'unsafe-inline'` for Svelte's inline styles and style attributes. Tightening means style hashes or nonces (`'unsafe-hashes'` for the attributes).

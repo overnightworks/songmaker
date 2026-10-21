@@ -744,12 +744,14 @@ def seed_user(
 def make_test_app(
     tmp_path: Path,
     seed_db: Callable | None = None,
+    index_html: str = "<html>Songmaker</html>",
 ) -> tuple:
     """Create a full test app with real middleware.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
     The optional ``seed_db`` callback receives a SQLAlchemy Session and can
-    add models before the app starts.
+    add models before the app starts; ``index_html`` is the built page whose
+    inline scripts the policy hashes.
     """
     from songmaker_cli.app_context import AppContext
     from songmaker_cli.db.engine import init_test_db as init_db
@@ -763,7 +765,7 @@ def make_test_app(
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True, exist_ok=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+    (sk_dir / "index.html").write_text(index_html)
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
