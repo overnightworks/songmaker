@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from songmaker_cli.admin_api import router as admin_router
 from songmaker_cli.album_api import router as album_router
 from songmaker_cli.auth_api import router as auth_router
 from songmaker_cli.conversation_api import router as conversation_router
@@ -31,6 +32,7 @@ from songmaker_cli.song_api import router as song_router
 
 router = APIRouter(prefix="/api")
 router.include_router(auth_router)
+router.include_router(admin_router)
 router.include_router(album_router)
 router.include_router(song_router)
 router.include_router(library_router)
