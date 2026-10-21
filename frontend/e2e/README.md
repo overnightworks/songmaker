@@ -81,10 +81,22 @@ rate-limit window, so their cost stays additive instead of a burst.
 
 ## How a run is set up
 
-`global-setup.ts` logs in **once** with the stack's admin account, seeds a
-library through the public API (`seed.ts`) and saves the session as the storage
-state every test reuses. Seeding is the only place that talks to the API
-directly; everything a flow asserts, it clicks.
+`global-setup.ts` signs the stack's admin account in **once** with a seeded
+session, seeds a library through the public API (`seed.ts`) and saves the
+session as the storage state every test reuses. Seeding is the only place that
+talks to the API directly; everything a flow asserts, it clicks.
+
+**Sessions are seeded, not typed.** `support/seed_sessions.py` runs inside the
+web container (`docker compose exec -T -e SEED_SESSIONS_REQUEST=... songmaker-web
+/app/.venv/bin/python -`, the script on stdin) and goes through the app's own
+user and session queries: it finds or creates an account and opens a database
+session, then prints the signed session cookie and CSRF cookie the app would
+have issued at login. `seedAccount` / `seedAdminAccount` in `seed.ts` return
+those cookies for `context.addCookies` and `signedInApi`; a flow that made an
+account removes it with `deleteSeededAccounts`. The helper sits outside
+`scripts/`, which the image copies, so it never ships. Only `auth-flows.spec.ts`
+still types a password, because it exists to drive that login: it seeds its
+account with a `password`, and `SeedApi.login` serves it alone.
 
 The seed builds one base album with three songs, a real take per song imported from
 `fixtures/take.mp3` via `POST /api/songs/{id}/reimport`, one pick, a playlist
@@ -178,7 +190,7 @@ song page and then loads the song afresh, so a whole cold page open comes on
 top of the first: 46 to 47 at 1440 and 45 to 48 at 390 for the take's audio
 refused, over ten runs, against its own ceiling of 55.
 Its own arrangement -- one
-non-admin account per project, created through `POST /api/admin/users` and
+non-admin account per project, seeded with a password through `seedAccount` and
 deleted again in `afterAll` -- does not touch that budget: like the rail's
 filler albums, it runs from the run's API context rather than the page. What
 this spec does spend that no other one does is _failed_ logins: measured at

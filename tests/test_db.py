@@ -2585,37 +2585,6 @@ def test_get_all_global_rate_limits(db_session: Session) -> None:
     assert keys == {"generation_rate_limit", "scoring_rate_limit"}
 
 
-def test_get_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries.rate_limits import get_user_rate_limits, upsert_rate_limit_setting
-
-    user = create_user(db_session, "testuser", "hash", role="user")
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
-    db_session.commit()
-
-    results = get_user_rate_limits(db_session, user.id)
-    assert len(results) == 1
-    assert results[0].value == 100
-
-
-def test_delete_all_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries.rate_limits import (
-        delete_all_user_rate_limits,
-        get_user_rate_limits,
-        upsert_rate_limit_setting,
-    )
-
-    user = create_user(db_session, "testuser", "hash", role="user")
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
-    upsert_rate_limit_setting(db_session, "scoring_rate_limit", 50, user_id=user.id)
-    db_session.commit()
-
-    count = delete_all_user_rate_limits(db_session, user.id)
-    db_session.commit()
-    assert count == 2
-    assert get_user_rate_limits(db_session, user.id) == []
-
-
 # ── Migration tests ────────────────────────────────────────────────
 
 

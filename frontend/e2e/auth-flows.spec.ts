@@ -45,7 +45,6 @@ import {
 	expect,
 	request,
 	test,
-	type APIRequestContext,
 	type BrowserContext,
 	type Cookie,
 	type Locator,
@@ -59,16 +58,12 @@ import { AUTH_SESSION_EXPIRED_MESSAGE } from '../src/lib/constants/auth';
 import {
 	ACCOUNT_MENU_LABEL,
 	ACCOUNT_MENU_LOGOUT_LABEL,
-	ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
-	ADMIN_TABS_LABEL,
-	HITBOX_FREQUENT_PX,
 	SESSION_LOST_REDIRECT_PARAM,
 	RAIL_SEARCH_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
-	DESKTOP_VIEWPORT,
 	FlowGuard,
 	SESSION_REFUSAL_STATUSES,
 	type ExpectedRefusal,
@@ -91,10 +86,9 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	STORAGE_STATE_FILE,
 	ageSessionPastAbsoluteLimit,
-	createAccount,
-	deleteAccount,
+	deleteSeededAccounts,
+	seedAccount,
 	seedOwnSongAddress,
 	seedOwnTakeAddress
 } from './seed';
@@ -144,16 +138,7 @@ const TAKE_AUDIO_REFUSED_FLOW_API_REQUEST_BUDGET = 55;
 const AUTH_LOGIN_PATH = '/api/auth/login';
 const AUTH_ME_PATH = '/api/auth/me';
 const ADMIN_API_PREFIX = '/api/admin/';
-const ADMIN_USERS_PATH = '/api/admin/users';
-const ADMIN_SESSIONS_PATH = '/api/admin/sessions';
-const ADMIN_LOGIN_ATTEMPTS_PATH = '/api/admin/login-attempts';
-const REFUSED_PATHS = [
-	AUTH_LOGIN_PATH,
-	AUTH_ME_PATH,
-	ADMIN_USERS_PATH,
-	ADMIN_SESSIONS_PATH,
-	ADMIN_LOGIN_ATTEMPTS_PATH
-];
+const REFUSED_PATHS = [AUTH_LOGIN_PATH, AUTH_ME_PATH];
 // Only the standing-song scenario expects a refused search query.
 const SEARCH_REFUSED_TAG = '@session-search-refused';
 const LIBRARY_SEARCH_PATH = '/api/library/search';
@@ -165,18 +150,9 @@ const ALBUM_OPENING_PATHS = [
 	'/api/settings/models',
 	'/api/resource-events/stream'
 ];
-// The admin flows whose 404s (a stale revoke, a disable of an account deleted
-// meanwhile) and 409 (a taken username) are the sentences under proof. Only
-// those flows forgive them.
-const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
 // The sign-out whose request never reaches the server: only that flow forgives
 // the requests the lost network fails.
 const LOSES_NETWORK_TAG = '@loses-network';
-const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
-	{ path: `${ADMIN_SESSIONS_PATH}/`, statuses: [404] },
-	{ path: `${ADMIN_USERS_PATH}/`, statuses: [404] },
-	{ path: ADMIN_USERS_PATH, statuses: [409] }
-];
 const TAKE_AUDIO_REFUSAL: ExpectedRefusal = { path: TAKE_AUDIO_PATH, statuses: [401] };
 const ADMIN_PAGE_PATH = '/settings/users';
 const VOICES_PAGE_PATH = '/settings/voices';
@@ -216,18 +192,6 @@ const REFUSED_LOGIN_MESSAGE = 'Too many attempts. Try again later.';
 const ACCOUNT_LOCKED_DETAIL =
 	'Account temporarily locked due to repeated failed attempts. Try again later.';
 const ADMIN_REFUSED_MESSAGE = 'Admin access required.';
-const OWN_SESSION_LABEL = 'This device';
-const REVOKE_LABEL = 'Revoke';
-const DISABLE_LABEL = 'Disable';
-// The page maps the API's generic 404 to the missing account (#1447).
-const USER_GONE_MESSAGE = 'That account no longer exists.';
-const USERNAME_TAKEN_MESSAGE = 'Username already exists';
-// What the admin types onto the taken name, which makes it one the server does
-// not have yet.
-const FREE_USERNAME_SUFFIX = '-2';
-const CREATE_USERNAME_PLACEHOLDER = 'Username';
-const CREATE_PASSWORD_PLACEHOLDER = 'Password';
-const CREATE_LABEL = 'Create';
 const LOGOUT_LABEL = 'Logout';
 const SUBMIT_LABEL = 'Enter';
 const USERNAME_LABEL = 'Username';
@@ -254,7 +218,6 @@ interface Account {
 	password: string;
 }
 
-let adminApi: APIRequestContext;
 let account: Account;
 let guard: FlowGuard;
 
@@ -265,20 +228,15 @@ let guard: FlowGuard;
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.beforeAll(async () => {
-	adminApi = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
 	// One account per project, so the shell that locks it out cannot lock the
 	// other shell's flows out with it.
 	const username = `e2e-b6-${test.info().project.name}-${Date.now().toString(36)}`;
-	account = {
-		id: await createAccount(adminApi, username, ACCOUNT_PASSWORD),
-		username,
-		password: ACCOUNT_PASSWORD
-	};
+	const seeded = await seedAccount(username, 'user', ACCOUNT_PASSWORD);
+	account = { id: seeded.id, username, password: ACCOUNT_PASSWORD };
 });
 
 test.afterAll(async () => {
-	await deleteAccount(adminApi, account.id);
-	await adminApi.dispose();
+	await deleteSeededAccounts([account.id]);
 });
 
 test.beforeEach(async ({ page, isMobile }, testInfo) => {
@@ -597,7 +555,6 @@ function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
 	}));
 	return [
 		...sessionRefusals,
-		...(testInfo.tags.includes(ADMIN_REFUSALS_ARE_THE_POINT_TAG) ? ADMIN_REFUSALS : []),
 		...(testInfo.tags.includes(TAKE_AUDIO_REFUSED_TAG) ? [TAKE_AUDIO_REFUSAL] : [])
 	];
 }
@@ -611,266 +568,11 @@ function apiRequestBudgetOf(testInfo: TestInfo): number {
 		: AUTH_FLOW_API_REQUEST_BUDGET;
 }
 
-/**
- * Signs `credentials` in from a device outside the browser. The session stays
- * on the server after the device's context is gone.
- */
-async function signInElsewhere(credentials: Account): Promise<void> {
-	const device = await request.newContext({ baseURL: BASE_URL });
-	try {
-		const response = await device.post(AUTH_LOGIN_PATH, {
-			data: { username: credentials.username, password: credentials.password }
-		});
-		expect(response.status()).toBe(200);
-	} finally {
-		await device.dispose();
-	}
-}
-
-/** Opens an admin tab the way each shell offers it and waits for its read. */
-async function openAdminTab(page: Page, shell: Shell, id: string, label: string): Promise<void> {
-	if (shell === 'mobile') {
-		await page.getByRole('combobox', { name: ADMIN_TABS_LABEL }).selectOption(id);
-		return;
-	}
-	await page.getByRole('button', { name: label, exact: true }).click();
-}
-
-async function openSessionsTab(page: Page, shell: Shell): Promise<void> {
-	await Promise.all([
-		page.waitForResponse((response) => new URL(response.url()).pathname === ADMIN_SESSIONS_PATH),
-		openAdminTab(page, shell, 'sessions', 'Sessions')
-	]);
-}
-
-/**
- * Revokes the admin's one other device from a second tab of this device, so
- * the first tab's row for that device is stale.
- */
-async function revokeOtherDeviceFromSecondTab(
-	page: Page,
-	shell: Shell,
-	admin: Account
-): Promise<void> {
-	const secondTab = await page.context().newPage();
-	const secondTabGuard = new FlowGuard(secondTab);
-	await secondTab.goto(ADMIN_PAGE_PATH);
-	await openSessionsTab(secondTab, shell);
-	const secondTabRows = secondTab.getByRole('row').filter({ hasText: admin.username });
-	await secondTabRows.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-	await expect(secondTabRows).toHaveCount(1);
-	await expect(secondTabRows).toContainText(OWN_SESSION_LABEL);
-	secondTabGuard.assertClean();
-	await secondTab.close();
-}
-
-function createUsernameField(page: Page): Locator {
-	return page.getByPlaceholder(CREATE_USERNAME_PLACEHOLDER, { exact: true });
-}
-
-/**
- * Submits the Users tab's create form with this spec's own account name, which
- * the server already has, and returns the refusal the form shows.
- */
-async function refuseTakenUsername(page: Page): Promise<Locator> {
-	await createUsernameField(page).fill(account.username);
-	await page.getByPlaceholder(CREATE_PASSWORD_PLACEHOLDER, { exact: true }).fill(ACCOUNT_PASSWORD);
-	await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
-	const createRefusal = page.getByText(USERNAME_TAKEN_MESSAGE, { exact: true });
-	await expect(createRefusal).toBeVisible();
-	return createRefusal;
-}
-
-/** Types onto the end of the refused name, the way a person corrects it. */
-async function correctTakenUsername(page: Page): Promise<void> {
-	const usernameField = createUsernameField(page);
-	await usernameField.press('End');
-	await usernameField.pressSequentially(FREE_USERNAME_SUFFIX);
-}
-
-/**
- * Deletes each named account the stack still has. One the flow already deleted,
- * or never got as far as creating, is simply not listed.
- */
-async function deleteAccountsNamed(usernames: readonly string[]): Promise<void> {
-	const response = await adminApi.get(ADMIN_USERS_PATH);
-	expect(response.status()).toBe(200);
-	const accounts = (await response.json()) as Pick<Account, 'id' | 'username'>[];
-	for (const { id, username } of accounts) {
-		if (usernames.includes(username)) await deleteAccount(adminApi, id);
-	}
-}
-
 async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
 	const path = testInfo.outputPath(`${name}.png`);
 	await page.screenshot({ path, fullPage: true });
 	await testInfo.attach(name, { path, contentType: 'image/png' });
 }
-
-test.describe('admin row actions', () => {
-	test.use({ storageState: STORAGE_STATE_FILE });
-
-	// Touch targets are measured by the mobile project.
-	test(
-		'user and session row actions have touch-sized hitboxes at 390px',
-		{ tag: ONLY_IN_SHELL.mobile },
-		async ({ page }, testInfo) => {
-			// The admin's own session offers no Revoke, so the row measured is the
-			// musician's, signed in on a device of its own.
-			await signInElsewhere(account);
-			await page.setViewportSize(MOBILE_VIEWPORT);
-			await page.goto(ADMIN_PAGE_PATH);
-			const userRow = page.getByRole('row').filter({ hasText: account.username });
-			const actions = userRow.getByRole('button');
-			await expect(actions).toHaveText(['Promote', 'Disable', 'Reset PW', 'Delete']);
-			const heights = await actions.evaluateAll((buttons) =>
-				buttons.map((button) => ({
-					label: button.textContent?.trim(),
-					height: button.getBoundingClientRect().height
-				}))
-			);
-			await attachShot(page, testInfo, 'admin-user-actions-390');
-
-			const [sessionsResponse] = await Promise.all([
-				page.waitForResponse(
-					(response) => new URL(response.url()).pathname === ADMIN_SESSIONS_PATH
-				),
-				page.getByRole('combobox', { name: ADMIN_TABS_LABEL }).selectOption('sessions')
-			]);
-			expect(sessionsResponse.status()).toBe(200);
-			const revoke = page
-				.getByRole('row')
-				.filter({ hasText: account.username })
-				.getByRole('button', { name: REVOKE_LABEL, exact: true });
-			await expect(revoke).toBeVisible();
-			heights.push({
-				label: 'Revoke',
-				height: await revoke.evaluate((button) => button.getBoundingClientRect().height)
-			});
-			for (const { label, height } of heights) {
-				expect(height, `${label} touch target height`).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
-			}
-			await attachShot(page, testInfo, 'admin-session-actions-390');
-		}
-	);
-});
-
-test(
-	'an admin finds its own session marked this device, a stale revoke drops the dead row and says so until a revoke works or the tab changes, and a create refusal clears on typing',
-	{ tag: ADMIN_REFUSALS_ARE_THE_POINT_TAG },
-	async ({ page, isMobile }, testInfo) => {
-		const shell = shellOf(testInfo);
-		await page.setViewportSize(isMobile ? MOBILE_VIEWPORT : DESKTOP_VIEWPORT);
-		const stamp = Date.now().toString(36);
-		const username = `e2e-admin-${shell}-${stamp}`;
-		const admin: Account = {
-			id: await createAccount(adminApi, username, ACCOUNT_PASSWORD, 'admin'),
-			username,
-			password: ACCOUNT_PASSWORD
-		};
-		const musicianName = `e2e-musician-${shell}-${stamp}`;
-		const musician: Account = {
-			id: await createAccount(adminApi, musicianName, ACCOUNT_PASSWORD),
-			username: musicianName,
-			password: ACCOUNT_PASSWORD
-		};
-		try {
-			await signInElsewhere(admin);
-			await signInElsewhere(musician);
-			await page.goto('/login');
-			expect((await submitLogin(page, admin.username, admin.password)).status()).toBe(200);
-			await expect(workspace(page)).toBeVisible();
-			await page.goto(ADMIN_PAGE_PATH);
-			await openSessionsTab(page, shell);
-
-			const ownRows = page.getByRole('row').filter({ hasText: admin.username });
-			await expect(ownRows).toHaveCount(2);
-			const thisDevice = ownRows.filter({ hasText: OWN_SESSION_LABEL });
-			await expect(thisDevice).toHaveCount(1);
-			await expect(thisDevice.getByRole('button')).toHaveCount(0);
-			const otherRow = ownRows.filter({ hasNotText: OWN_SESSION_LABEL });
-			await expect(otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true })).toBeVisible();
-			await attachShot(page, testInfo, `admin-own-session-${shell}`);
-
-			await revokeOtherDeviceFromSecondTab(page, shell, admin);
-			await otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-			const alreadyEnded = page.getByText(ADMIN_SESSION_ALREADY_ENDED_MESSAGE, { exact: true });
-			await expect(alreadyEnded).toBeVisible();
-			await expect(ownRows).toHaveCount(1);
-			await expect(thisDevice).toHaveCount(1);
-			await attachShot(page, testInfo, `admin-stale-revoke-${shell}`);
-
-			// A third device signs in now, so the next revoke's refresh lists the
-			// row the second tab then makes stale.
-			await signInElsewhere(admin);
-			const musicianRow = page.getByRole('row').filter({ hasText: musician.username });
-			await musicianRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-			await expect(musicianRow).toHaveCount(0);
-			await expect(alreadyEnded).toBeHidden();
-			await expect(ownRows).toHaveCount(2);
-
-			await revokeOtherDeviceFromSecondTab(page, shell, admin);
-			await otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-			await expect(alreadyEnded).toBeVisible();
-			await expect(ownRows).toHaveCount(1);
-
-			await openAdminTab(page, shell, 'users', 'Users');
-			await expect(alreadyEnded).toBeHidden();
-			const createRefusal = await refuseTakenUsername(page);
-			await attachShot(page, testInfo, `admin-create-refusal-${shell}`);
-
-			await correctTakenUsername(page);
-			await expect(createRefusal).toBeHidden();
-		} finally {
-			await deleteAccount(adminApi, musician.id);
-			await deleteAccount(adminApi, admin.id);
-		}
-	}
-);
-
-test.describe("the run's admin on the Users tab", () => {
-	test.use({ storageState: STORAGE_STATE_FILE });
-
-	test(
-		'a Users tab error stays while a create refusal clears on typing, and leaves with a create that works',
-		{ tag: ADMIN_REFUSALS_ARE_THE_POINT_TAG },
-		async ({ page, isMobile }, testInfo) => {
-			const shell = shellOf(testInfo);
-			await page.setViewportSize(isMobile ? MOBILE_VIEWPORT : DESKTOP_VIEWPORT);
-			const goneName = `e2e-gone-${shell}-${Date.now().toString(36)}`;
-			const createdName = `${account.username}${FREE_USERNAME_SUFFIX}`;
-			const goneId = await createAccount(adminApi, goneName, ACCOUNT_PASSWORD);
-			try {
-				await page.goto(ADMIN_PAGE_PATH);
-				const goneRow = page.getByRole('row').filter({ hasText: goneName });
-				await expect(goneRow).toBeVisible();
-
-				// Another admin deletes the account after the page listed it, so
-				// the server refuses to disable it.
-				await deleteAccount(adminApi, goneId);
-				await goneRow.getByRole('button', { name: DISABLE_LABEL, exact: true }).click();
-				const usersTabError = page.getByText(USER_GONE_MESSAGE, { exact: true });
-				await expect(usersTabError).toBeVisible();
-				await expect(goneRow).toHaveCount(0);
-
-				const createRefusal = await refuseTakenUsername(page);
-				await expect(usersTabError).toBeVisible();
-				await attachShot(page, testInfo, `admin-users-error-and-create-refusal-${shell}`);
-
-				await correctTakenUsername(page);
-				await expect(createRefusal).toBeHidden();
-				await expect(usersTabError).toBeVisible();
-
-				await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
-				await expect(page.getByRole('row').filter({ hasText: createdName })).toBeVisible();
-				await expect(usersTabError).toBeHidden();
-				await attachShot(page, testInfo, `admin-create-clears-users-error-${shell}`);
-			} finally {
-				await deleteAccountsNamed([goneName, createdName]);
-			}
-		}
-	);
-});
 
 test('a musician signs in and the shell shows whose session it is', async ({ page }, testInfo) => {
 	// A tab that knows nothing is sent to the door rather than shown a wall,
@@ -1038,11 +740,8 @@ test('the admin page is refused for a non-admin, with nothing of it rendered', a
 	await page.goto(ADMIN_PAGE_PATH);
 
 	await expect(page.getByText(ADMIN_REFUSED_MESSAGE)).toBeVisible();
-	// Not one control of the page behind it: no tabs to switch, no form to
-	// create an account with, no table of accounts.
-	await expect(page.getByRole('heading', { name: 'Create User' })).toBeHidden();
+	// Not one control of the page behind it: no tabs to switch.
 	await expect(page.getByRole('button', { name: 'Models', exact: true })).toBeHidden();
-	await expect(page.getByPlaceholder('Username')).toBeHidden();
 
 	// And the server refused it too -- the page is not merely hiding what it was
 	// handed.

@@ -1058,12 +1058,6 @@ export interface UserLoraSamplePatchRequest {
 	position?: number | null;
 }
 
-export interface UserRateLimitsResponse {
-	user_id: string;
-	overrides: RateLimitItem[];
-	effective: RateLimitItem[];
-}
-
 export interface VersionGenerationParams {
 	inference_steps?: number | null;
 	guidance_scale?: number | null;

@@ -324,9 +324,3 @@ class RateLimitsResponse(BaseModel):
 
 class RateLimitUpdateRequest(BaseModel):
     settings: dict[str, int]
-
-
-class UserRateLimitsResponse(BaseModel):
-    user_id: str
-    overrides: list[RateLimitItem]
-    effective: list[RateLimitItem]

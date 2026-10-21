@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { expect, type APIRequestContext } from '@playwright/test';
+import { expect, request, type APIRequestContext, type Cookie } from '@playwright/test';
 import type { JobItem } from '../src/lib/api/types';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
 
@@ -329,11 +329,11 @@ class SeedApi {
 		private readonly csrfToken: string
 	) {}
 
-	/** The run's one admin login, or a flow's own account. Everything after it reuses the session. */
-	static async login(
-		api: APIRequestContext,
-		credentials: Credentials = adminCredentials()
-	): Promise<SeedApi> {
+	/**
+	 * A password sign-in, kept for `auth-flows.spec.ts` alone: every other flow
+	 * carries a seeded session (`seedAccount`) and uses `fromSession`.
+	 */
+	static async login(api: APIRequestContext, credentials: Credentials): Promise<SeedApi> {
 		const response = await api.post('/api/auth/login', { data: credentials });
 		if (!response.ok()) {
 			throw new Error(`Login failed: ${response.status()} ${await response.text()}`);
@@ -391,10 +391,6 @@ class SeedApi {
 	}
 }
 
-function adminCredentials(): Credentials {
-	return { username: requiredEnv('ADMIN_USERNAME'), password: requiredEnv('ADMIN_PASSWORD') };
-}
-
 /** Seeds `SONG_TITLES` into the album in that order, each with one imported take. */
 async function seedSongsWithOneTakeEach(
 	seed: SeedApi,
@@ -423,7 +419,7 @@ async function seedSongsWithOneTakeEach(
 
 export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary> {
 	await archivePreviousE2EAlbums();
-	const seed = await SeedApi.login(api);
+	const seed = await SeedApi.fromSession(api);
 	const albumTitle = `${ALBUM_TITLE_PREFIX} ${runMarker()}`;
 
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
@@ -960,37 +956,118 @@ export function readSeededLibrary(): SeededLibrary {
 	return JSON.parse(readFileSync(SEEDED_LIBRARY_FILE, 'utf-8')) as SeededLibrary;
 }
 
+/** One account with a database session of its own, as the cookies a browser or API context carries. */
+export interface SeededAccount {
+	id: string;
+	username: string;
+	cookies: Cookie[];
+}
+
+interface SeededSessionRow {
+	user_id: string;
+	username: string;
+	session_cookie_name: string;
+	session_cookie_value: string;
+	csrf_cookie_name: string;
+	csrf_cookie_value: string;
+	secure: boolean;
+	same_site: 'strict' | 'lax';
+}
+
+const SEED_SESSIONS_SCRIPT = path.join(E2E_DIR, 'support', 'seed_sessions.py');
+const SEED_SESSIONS_REQUEST_VARIABLE = 'SEED_SESSIONS_REQUEST';
+
 /**
- * A second account, created through the same admin API the admin page uses:
- * what a *non-admin* musician may reach is not provable from the run's one
- * admin session, and a library of its own is not reachable from the run's
- * shared one. The flow that creates it removes it again when it is done, so a
- * run leaves the users table as it found it.
+ * Runs `support/seed_sessions.py` in the web container (script on stdin,
+ * request in the environment) and returns its last stdout line, the JSON result.
  */
-export async function createAccount(
-	api: APIRequestContext,
-	username: string,
-	password: string,
-	role: AccountRole = NON_ADMIN_ROLE
-): Promise<string> {
-	const seed = await SeedApi.fromSession(api);
-	const account = await seed.postJson<CreatedResource>('/api/admin/users', {
-		username,
-		password,
-		role
-	});
-	return account.id;
+async function runSeedSessions(sessionRequest: {
+	seed?: Array<{ username: string; role?: AccountRole; password?: string }>;
+	delete?: string[];
+}): Promise<SeededSessionRow[]> {
+	try {
+		const { stdout } = await execWithStdin(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'-e',
+				`${SEED_SESSIONS_REQUEST_VARIABLE}=${JSON.stringify(sessionRequest)}`,
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'-'
+			],
+			{ cwd: REPO_ROOT },
+			readFileSync(SEED_SESSIONS_SCRIPT)
+		);
+		const lastLine = stdout.trim().split('\n').at(-1) ?? '';
+		return JSON.parse(lastLine) as SeededSessionRow[];
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Seeding sessions failed: ${detail}`, { cause: err });
+	}
+}
+
+function sessionCookies(row: SeededSessionRow): Cookie[] {
+	const shared = {
+		domain: new URL(BASE_URL).hostname,
+		path: '/',
+		expires: -1,
+		secure: row.secure,
+		sameSite: row.same_site === 'lax' ? ('Lax' as const) : ('Strict' as const)
+	};
+	return [
+		{
+			...shared,
+			name: row.session_cookie_name,
+			value: row.session_cookie_value,
+			httpOnly: true
+		},
+		{ ...shared, name: row.csrf_cookie_name, value: row.csrf_cookie_value, httpOnly: false }
+	];
 }
 
 /**
- * Signs `api` in as a flow's own account and seeds its whole library -- the
- * library a musician has before their first pick.
+ * Signs `username` in without the password form: the account is found or
+ * created and given a database session straight from the stack's own side, so
+ * the app itself signs the cookies. A flow that creates the account removes it
+ * again with `deleteSeededAccounts`. Only a flow that drives the password form
+ * passes a `password`, which a new account then signs in with.
  */
-export async function seedUnpickedLibrary(
-	api: APIRequestContext,
-	credentials: Credentials
-): Promise<SeededUnpickedLibrary> {
-	const seed = await SeedApi.login(api, credentials);
+export async function seedAccount(
+	username: string,
+	role: AccountRole = NON_ADMIN_ROLE,
+	password?: string
+): Promise<SeededAccount> {
+	const [row] = await runSeedSessions({ seed: [{ username, role, password }] });
+	return { id: row.user_id, username: row.username, cookies: sessionCookies(row) };
+}
+
+/** The run's one admin, which the stack created from its `ADMIN_*` settings. */
+export function seedAdminAccount(): Promise<SeededAccount> {
+	return seedAccount(requiredEnv('ADMIN_USERNAME'), 'admin');
+}
+
+/** An API context that carries the account's session. */
+export function signedInApi(account: SeededAccount): Promise<APIRequestContext> {
+	return request.newContext({
+		baseURL: BASE_URL,
+		storageState: { cookies: account.cookies, origins: [] }
+	});
+}
+
+/** Removes an account made by `seedAccount`, rows and all. */
+export async function deleteSeededAccounts(accountIds: string[]): Promise<void> {
+	await runSeedSessions({ delete: accountIds });
+}
+
+/**
+ * Seeds a flow's own account's whole library -- the library a musician has
+ * before their first pick. `api` carries the account's session (`signedInApi`).
+ */
+export async function seedUnpickedLibrary(api: APIRequestContext): Promise<SeededUnpickedLibrary> {
+	const seed = await SeedApi.fromSession(api);
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
@@ -1000,41 +1077,49 @@ export async function seedUnpickedLibrary(
 }
 
 /**
- * Signs `api` in as a flow's own account and gives it one album holding one
- * song titled `songTitle`, returning that song's address -- a page only that
- * account may open.
+ * Gives a flow's own account one album holding one song titled `songTitle`,
+ * returning that song's address -- a page only that account may open. `api`
+ * carries the account's session (`signedInApi`); only `auth-flows.spec.ts`
+ * passes `Credentials`, which signs `api` in with the password.
  */
 export async function seedOwnSongAddress(
 	api: APIRequestContext,
-	credentials: Credentials,
+	account: SeededAccount | Credentials,
 	songTitle: string
 ): Promise<string> {
-	const seed = await SeedApi.login(api, credentials);
-	return (await createOwnSong(seed, credentials, songTitle)).address;
+	const seed = await signedInSeedApi(api, account);
+	return (await createOwnSong(seed, account.username, songTitle)).address;
 }
 
 /** `seedOwnSongAddress`, with one take of the fixture tone the song plays. */
 export async function seedOwnTakeAddress(
 	api: APIRequestContext,
-	credentials: Credentials,
+	account: SeededAccount | Credentials,
 	songTitle: string
 ): Promise<string> {
-	const seed = await SeedApi.login(api, credentials);
-	const song = await createOwnSong(seed, credentials, songTitle);
+	const seed = await signedInSeedApi(api, account);
+	const song = await createOwnSong(seed, account.username, songTitle);
 	await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
 		mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
 	});
 	return song.address;
 }
 
+function signedInSeedApi(
+	api: APIRequestContext,
+	account: SeededAccount | Credentials
+): Promise<SeedApi> {
+	return 'password' in account ? SeedApi.login(api, account) : SeedApi.fromSession(api);
+}
+
 async function createOwnSong(
 	seed: SeedApi,
-	credentials: Credentials,
+	username: string,
 	songTitle: string
 ): Promise<{ id: string; address: string }> {
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
-		artist: credentials.username
+		artist: username
 	});
 	const song = await seed.postJson<CreatedSong>('/api/songs', {
 		title: songTitle,
@@ -1043,12 +1128,6 @@ async function createOwnSong(
 		prompt: 'calm test tone'
 	});
 	return { id: song.id, address: `/album/${album.id}/${song.slug}` };
-}
-
-/** Removes an account created for a flow, rows and all. */
-export async function deleteAccount(api: APIRequestContext, userId: string): Promise<void> {
-	const seed = await SeedApi.fromSession(api);
-	await seed.delete(`/api/admin/users/${userId}/permanent`);
 }
 
 /**
@@ -1103,11 +1182,8 @@ export interface PhoneLibraryFixture {
 }
 
 /** A fresh account's 43 albums, including unheard, archived-only and unpicked music. */
-export async function seedPhoneLibrary(
-	api: APIRequestContext,
-	credentials: Credentials
-): Promise<PhoneLibraryFixture> {
-	const seed = await SeedApi.login(api, credentials);
+export async function seedPhoneLibrary(api: APIRequestContext): Promise<PhoneLibraryFixture> {
+	const seed = await SeedApi.fromSession(api);
 	const albums: PhoneLibraryFixture['albums'] = [];
 	const tracks: PhoneLibraryFixture['tracks'] = {};
 	// Repeated MPEG frames keep the real tone sounding throughout transport assertions.
