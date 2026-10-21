@@ -105,7 +105,6 @@ from songmaker_cli.api_models.settings import (
     RateLimitItem,
     RateLimitsResponse,
     RateLimitUpdateRequest,
-    UserRateLimitsResponse,
 )
 from songmaker_cli.api_models.songs import (
     VALID_SCORER_NAMES,
@@ -333,7 +332,6 @@ __all__ = [
     "UserLoraSampleFromGenerationRequest",
     "UserLoraSamplePatchRequest",
     "UserLoraSampleResponse",
-    "UserRateLimitsResponse",
     "VALID_SCORER_NAMES",
     "VersionResponse",
     "WorkerEphemeralState",

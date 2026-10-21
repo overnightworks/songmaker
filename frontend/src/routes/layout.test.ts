@@ -111,7 +111,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return {
 		...actual,
 		fetchCapabilities: vi.fn().mockResolvedValue({}),
-		checkSetupRequired: vi.fn(),
 		logout: vi.fn(async () => 'https://auth.example/logout?hint=1')
 	};
 });
@@ -365,7 +364,6 @@ describe('app shell', () => {
 		'/login',
 		'/no-access',
 		'/auth/callback',
-		'/setup',
 		'/legal',
 		'/impressum',
 		'/datenschutz',
@@ -432,7 +430,6 @@ describe('app shell', () => {
 		['/login', false],
 		['/no-access', false],
 		['/auth/callback', false],
-		['/setup', false],
 		['/legal/privacy', false]
 	])('1354_rule_28 1354_rule_33 1354_49: mount-time tabs at %s are %s', async (path, shown) => {
 		replaceHistoryEntry(path);
@@ -1407,7 +1404,6 @@ describe('the library route group', () => {
 				'login',
 				'no-access',
 				'auth',
-				'setup',
 				'legal',
 				'share',
 				'loras'

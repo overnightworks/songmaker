@@ -43,7 +43,7 @@ from songmaker_cli.covers import (
     write_album_cover,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, User
+from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries.albums import get_album, soft_delete_album
 from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
@@ -409,35 +409,6 @@ def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
     assert song_count == 0
     assert not expired_dir.exists()
     assert live_dir.is_dir()
-
-
-def test_hard_delete_user_removes_album_cover_files(tmp_path: Path) -> None:
-    def seed(session) -> None:
-        seed_user(session, "admin", role="admin")
-        victim = seed_user(session, "victim", role="user")
-        session.add(Album(id="live-album", title="Live", artist="V", created_by=victim.id))
-        session.add(Album(id="gone-album", title="Gone", artist="V", created_by=victim.id))
-
-    client, factory = make_test_app(tmp_path, seed_db=seed)
-    audio_dir = tmp_path / "audio"
-    write_album_cover(audio_dir, "live-album", _jpeg_bytes())
-    write_album_cover(audio_dir, "gone-album", _png_bytes())
-    live_dir = audio_dir / COVER_DIRNAME / "live-album"
-    gone_dir = audio_dir / COVER_DIRNAME / "gone-album"
-    assert live_dir.is_dir()
-    assert gone_dir.is_dir()
-
-    with factory() as session:
-        victim = session.query(User).filter_by(username="victim").one()
-        victim_id = victim.id
-        soft_delete_album(session, "gone-album")
-        session.commit()
-
-    login_and_csrf(client, "admin")
-    resp = client.delete(f"/api/admin/users/{victim_id}/permanent")
-    assert resp.status_code == 200, resp.text
-    assert not live_dir.exists()
-    assert not gone_dir.exists()
 
 
 def _assert_escape_markers_survive(

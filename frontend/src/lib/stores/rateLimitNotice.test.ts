@@ -14,7 +14,7 @@ describe('the throttle notice', () => {
 		toasts.set([]);
 	});
 
-	it.each(['/api/auth/me', '/api/auth/setup', '/api/albums/a1/cover-suggestions'])(
+	it.each(['/api/auth/me', '/api/albums/a1/cover-suggestions'])(
 		'925_M3_N1: a 429 on %s raises no throttle toast, the surface shows its own',
 		(path) => {
 			notifyRateLimited(path);

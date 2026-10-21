@@ -293,7 +293,7 @@ def restore_album(session: Session, album_id: str) -> Album:
 def delete_album(session: Session, album_id: str) -> list[str]:
     """Hard-delete an album and return file paths for post-commit cleanup.
 
-    Sees soft-deleted albums (used by cleanup_expired and hard_delete_user).
+    Sees soft-deleted albums (used by cleanup_expired).
     """
     with include_deleted(session):
         album = session.query(Album).filter_by(id=album_id).first()

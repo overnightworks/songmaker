@@ -35,7 +35,7 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	deleteSeededAccounts,
+	archiveOwnedAlbum,
 	readSeededLibrary,
 	runMarker,
 	seedAccount,
@@ -540,8 +540,9 @@ test.describe('on a fresh account', () => {
 	});
 
 	test.afterAll(async () => {
+		// The admin's Search lists every account's live albums.
+		await archiveOwnedAlbum(accountApi, unpicked.albumId);
 		await accountApi.dispose();
-		await deleteSeededAccounts([account.id]);
 	});
 
 	test('a take row in a library with nothing picked continues through its album', async ({

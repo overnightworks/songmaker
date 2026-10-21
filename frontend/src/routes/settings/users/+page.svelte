@@ -2,34 +2,11 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { derived } from 'svelte/store';
-	import {
-		fetchUsers,
-		fetchAdminVoices,
-		ApiError,
-		createUser,
-		updateUser,
-		hardDeleteUser,
-		fetchSessions,
-		forceLogout,
-		fetchLoginAttempts,
-		fetchRateLimits,
-		updateRateLimits,
-		fetchUserRateLimits,
-		updateUserRateLimits,
-		deleteUserRateLimits
-	} from '$lib/api/client';
-	import { describeFailure, isNotFound } from '$lib/api/fetch';
-	import { UserFacingError } from '$lib/api/userFacingError';
+	import { fetchAdminVoices, ApiError, fetchRateLimits, updateRateLimits } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
 	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import type {
-		UserItem,
-		SessionItem,
-		LoginAttemptItem,
-		RateLimitItem,
-		UserRateLimitsResponse,
-		AdminUserLoraItem
-	} from '$lib/api/types';
-	import { currentUser, isAdmin } from '$lib/stores/auth';
+	import type { RateLimitItem, AdminUserLoraItem } from '$lib/api/types';
+	import { isAdmin } from '$lib/stores/auth';
 	import { loadBuiltins, builtinDefaults } from '$lib/stores/presets';
 	import {
 		fetchGenerationDefaults,
@@ -71,12 +48,6 @@
 		ModelsTaskSelection
 	} from '$lib/components/ModelsTaskRow.svelte';
 	import {
-		RATE_LIMITED_STATUS,
-		ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
-		ADMIN_ACCOUNT_GONE_MESSAGE,
-		ADMIN_REVOKE_FAILED_MESSAGE,
-		ADMIN_REVOKE_OFFLINE_MESSAGE,
-		ADMIN_REVOKE_RATE_LIMITED_MESSAGE,
 		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
 		ADMIN_VOICES_HEADING,
@@ -101,8 +72,6 @@
 		MODELS_TASK_COWRITER_LABEL,
 		MODELS_TASK_SCORING_LABEL,
 		modelsRouteNotAvailablePhrase,
-		PASSWORD_MIN_LENGTH,
-		PASSWORD_TOO_SHORT_MESSAGE,
 		PROVIDER_STATUS_UNAVAILABLE_DETAIL
 	} from '$lib/constants';
 	import {
@@ -113,9 +82,6 @@
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { providerDisplayName } from '$lib/utils/cowriter-ui';
 
-	let users = $state<UserItem[]>([]);
-	let sessions = $state<SessionItem[]>([]);
-	let attempts = $state<LoginAttemptItem[]>([]);
 	let voices = $state<AdminUserLoraItem[]>([]);
 	let loadingVoices = $state(false);
 	let voicesLoaded = $state(false);
@@ -123,10 +89,7 @@
 	let compact = $state(false);
 
 	const ADMIN_TABS = [
-		{ id: 'users', label: 'Users' },
 		{ id: 'voices', label: ADMIN_VOICES_TAB_LABEL },
-		{ id: 'sessions', label: 'Sessions' },
-		{ id: 'attempts', label: 'Login Attempts' },
 		{ id: 'ratelimits', label: 'Rate Limits' },
 		{ id: 'generation', label: 'Generation' },
 		{ id: 'models', label: 'Models' },
@@ -135,7 +98,7 @@
 
 	type AdminTab = (typeof ADMIN_TABS)[number]['id'];
 
-	let tab = $state<AdminTab>('users');
+	let tab = $state<AdminTab>('voices');
 	let tabVisit = 0;
 
 	function pageErrorReporter(): (message: string) => void {
@@ -164,8 +127,6 @@
 		error = '';
 		if (next === 'ratelimits') {
 			void loadGlobalLimits();
-		} else if (next === 'sessions') {
-			void loadAll();
 		} else if (next === 'voices') {
 			void loadVoices();
 		} else if (next === 'generation' || next === 'acestep') {
@@ -185,11 +146,6 @@
 	let globalEdits = $state<Record<string, string>>({});
 	let savingGlobal = $state(false);
 
-	let expandedUserId = $state<string | null>(null);
-	let userLimitsData = $state<UserRateLimitsResponse | null>(null);
-	let userEdits = $state<Record<string, string>>({});
-	let savingUser = $state(false);
-
 	const SETTING_LABELS: Record<string, string> = {
 		generation_rate_limit: 'Generations / hour',
 		scoring_rate_limit: 'Scorings / hour',
@@ -197,12 +153,6 @@
 		max_queue_depth: 'Max queue depth',
 		max_user_active_jobs: 'Max active jobs'
 	};
-
-	let newUsername = $state('');
-	let newPassword = $state('');
-	let createError = $state('');
-	let newRole = $state('user');
-	let creating = $state(false);
 
 	let providerStatuses = $state<ProviderStatus[]>([]);
 
@@ -212,14 +162,6 @@
 	let cowriterBudgetFailure = $state<string | null>(null);
 	let coverSettings = $state<CoverSettingsResponse | null>(null);
 	let judgeSettings = $state<JudgeSettings | null>(null);
-
-	let resetPasswordUserId = $state<string | null>(null);
-	let resetPasswordValue = $state('');
-	let resettingPassword = $state(false);
-
-	let deleteUserId = $state<string | null>(null);
-	let deleteConfirmInput = $state('');
-	let deleting = $state(false);
 
 	let registryModes = $state<string[]>([]);
 
@@ -232,16 +174,13 @@
 	const genModelModes = $derived(Object.keys($builtinDefaults));
 
 	const admin = $derived($isAdmin);
-	const me = $derived($currentUser);
 
 	// Each read the page makes (#1107): a lost network shows no words of its
 	// own while the offline strip says it or a reload is coming, and the read
 	// runs again by itself; any other failure shows the server's reason.
 	const ADMIN_LOADS = [
-		'users',
 		'voices',
 		'rateLimits',
-		'userLimits',
 		'providerStatus',
 		'cowriter',
 		'cover',
@@ -251,10 +190,8 @@
 	type AdminLoad = (typeof ADMIN_LOADS)[number];
 
 	const LOAD_FAILURE_FALLBACKS: Record<AdminLoad, string> = {
-		users: 'Failed to load users',
 		voices: VOICES_LOAD_FAILED,
 		rateLimits: 'Failed to load rate limits',
-		userLimits: 'Failed to load user limits',
 		providerStatus: PROVIDER_STATUS_UNAVAILABLE_DETAIL,
 		cowriter: 'Failed to load co-writer settings',
 		cover: 'Failed to load cover settings',
@@ -262,19 +199,15 @@
 		genDefaults: 'Failed to load generation defaults'
 	};
 	const PAGE_WIDE_LOADS = {
-		users: ['users', 'sessions', 'attempts', 'ratelimits'],
 		rateLimits: ['ratelimits'],
-		userLimits: ['ratelimits'],
 		cowriter: ['models'],
 		cover: ['models'],
 		scoring: ['models']
 	} satisfies Partial<Record<AdminLoad, AdminTab[]>>;
 
 	const loadReloads: Record<AdminLoad, ReturnType<typeof reloadWhileUnreachable>> = {
-		users: reloadWhileUnreachable(() => void loadAll()),
 		voices: reloadWhileUnreachable(() => void loadVoices()),
 		rateLimits: reloadWhileUnreachable(() => void loadGlobalLimits()),
-		userLimits: reloadWhileUnreachable(() => void reloadExpandedUserLimits()),
 		providerStatus: reloadWhileUnreachable(() => void loadProviderStatuses()),
 		cowriter: reloadWhileUnreachable(() => void loadCowriterSettings()),
 		cover: reloadWhileUnreachable(() => void loadCoverSettings()),
@@ -308,12 +241,11 @@
 	}
 
 	function selectRequestedTab(url: URL): void {
-		selectTab(parseAdminTab(url.searchParams.get('tab') ?? '') ?? 'users');
+		selectTab(parseAdminTab(url.searchParams.get('tab') ?? '') ?? 'voices');
 	}
 
 	onMount(() => {
 		selectRequestedTab(new URL(window.location.href));
-		if (tab !== 'sessions') void loadAll();
 	});
 	afterNavigate(({ from, to }) => {
 		if (to && from?.url.pathname === to.url.pathname) selectRequestedTab(to.url);
@@ -321,22 +253,6 @@
 	onDestroy(() => {
 		for (const reloads of Object.values(loadReloads)) reloads.stop();
 	});
-
-	async function loadAll() {
-		try {
-			const [u, s, a] = await Promise.all([
-				fetchUsers(),
-				fetchSessions(),
-				fetchLoginAttempts(0, 50)
-			]);
-			users = u;
-			sessions = s.items;
-			attempts = a.items;
-			settleLoad('users');
-		} catch (e) {
-			failLoad('users', e);
-		}
-	}
 
 	async function loadVoices() {
 		loadingVoices = true;
@@ -378,79 +294,6 @@
 			reportError(describeFailure(e, 'Failed to save'));
 		} finally {
 			savingGlobal = false;
-		}
-	}
-
-	async function handleExpandUser(userId: string) {
-		if (expandedUserId === userId) {
-			expandedUserId = null;
-			userLimitsData = null;
-			settleLoad('userLimits');
-			return;
-		}
-		expandedUserId = userId;
-		userEdits = {};
-		await loadUserLimits(userId);
-	}
-
-	async function reloadExpandedUserLimits(): Promise<void> {
-		if (expandedUserId) await loadUserLimits(expandedUserId);
-	}
-
-	async function loadUserLimits(userId: string): Promise<void> {
-		try {
-			const limits = await fetchUserRateLimits(userId);
-			if (userId !== expandedUserId) return;
-			userLimitsData = limits;
-			const overrideMap = Object.fromEntries(limits.overrides.map((o) => [o.setting_key, o.value]));
-			userEdits = Object.fromEntries(
-				limits.effective.map((e) => [
-					e.setting_key,
-					e.is_override ? String(overrideMap[e.setting_key] ?? e.value) : ''
-				])
-			);
-			settleLoad('userLimits');
-		} catch (e) {
-			failLoad('userLimits', e);
-		}
-	}
-
-	async function handleSaveUserLimits() {
-		const reportError = pageErrorReporter();
-		if (!expandedUserId) return;
-		savingUser = true;
-		reportError('');
-		try {
-			const settings: Record<string, number> = {};
-			for (const [key, val] of Object.entries(userEdits)) {
-				if (val !== '') settings[key] = parseInt(val, 10);
-			}
-			if (Object.keys(settings).length === 0) {
-				await deleteUserRateLimits(expandedUserId);
-				userLimitsData = await fetchUserRateLimits(expandedUserId);
-			} else {
-				userLimitsData = await updateUserRateLimits(expandedUserId, settings);
-			}
-		} catch (e) {
-			reportError(describeFailure(e, 'Failed to save user limits'));
-		} finally {
-			savingUser = false;
-		}
-	}
-
-	async function handleClearUserLimits() {
-		const reportError = pageErrorReporter();
-		if (!expandedUserId) return;
-		savingUser = true;
-		reportError('');
-		try {
-			await deleteUserRateLimits(expandedUserId);
-			userLimitsData = await fetchUserRateLimits(expandedUserId);
-			userEdits = Object.fromEntries(userLimitsData.effective.map((e) => [e.setting_key, '']));
-		} catch (e) {
-			reportError(describeFailure(e, 'Failed to clear'));
-		} finally {
-			savingUser = false;
 		}
 	}
 
@@ -711,119 +554,6 @@
 		cowriterBudgetFailure = outcome.reason;
 	}
 
-	async function handleCreate() {
-		const reportError = pageErrorReporter();
-		createError = '';
-		creating = true;
-		try {
-			await createUser(newUsername, newPassword, newRole);
-			reportError('');
-			newUsername = '';
-			newPassword = '';
-			newRole = 'user';
-			users = await fetchUsers();
-		} catch (e) {
-			createError = describeFailure(e, 'Failed to create user');
-		} finally {
-			creating = false;
-		}
-	}
-
-	async function changeUser(userId: string, action: () => Promise<unknown>): Promise<void> {
-		try {
-			await action();
-		} catch (e) {
-			if (!isNotFound(e)) throw e;
-			users = users.filter((user) => user.id !== userId);
-			throw new UserFacingError(ADMIN_ACCOUNT_GONE_MESSAGE);
-		}
-	}
-
-	async function handleToggleActive(user: UserItem) {
-		const reportError = pageErrorReporter();
-		try {
-			await changeUser(user.id, () => updateUser(user.id, { is_active: !user.is_active }));
-			users = await fetchUsers();
-		} catch (e) {
-			reportError(describeFailure(e, 'Failed to update user'));
-		}
-	}
-
-	async function handleToggleRole(user: UserItem) {
-		const reportError = pageErrorReporter();
-		const newRoleValue = user.role === 'admin' ? 'user' : 'admin';
-		try {
-			await changeUser(user.id, () => updateUser(user.id, { role: newRoleValue }));
-			users = await fetchUsers();
-		} catch (e) {
-			reportError(describeFailure(e, 'Failed to update role'));
-		}
-	}
-
-	async function handleResetPassword(userId: string) {
-		const reportError = pageErrorReporter();
-		if (!resetPasswordValue || resetPasswordValue.length < PASSWORD_MIN_LENGTH) {
-			reportError(PASSWORD_TOO_SHORT_MESSAGE);
-			return;
-		}
-		resettingPassword = true;
-		reportError('');
-		try {
-			await changeUser(userId, () => updateUser(userId, { password: resetPasswordValue }));
-			resetPasswordUserId = null;
-			resetPasswordValue = '';
-		} catch (e) {
-			reportError(describeFailure(e, 'Failed to reset password'));
-		} finally {
-			resettingPassword = false;
-		}
-	}
-
-	async function handleHardDelete(userId: string) {
-		const reportError = pageErrorReporter();
-		deleting = true;
-		reportError('');
-		try {
-			await changeUser(userId, () => hardDeleteUser(userId));
-			deleteUserId = null;
-			deleteConfirmInput = '';
-			users = await fetchUsers();
-		} catch (e) {
-			reportError(describeFailure(e, 'Failed to delete user'));
-		} finally {
-			deleting = false;
-		}
-	}
-
-	async function handleForceLogout(sessionId: string) {
-		const reportError = pageErrorReporter();
-		reportError('');
-		try {
-			if ((await revokeSession(sessionId)) === 'already-ended') {
-				reportError(ADMIN_SESSION_ALREADY_ENDED_MESSAGE);
-			}
-			sessions = (await fetchSessions()).items;
-		} catch (e) {
-			reportError(
-				e instanceof ApiError && e.status === RATE_LIMITED_STATUS
-					? ADMIN_REVOKE_RATE_LIMITED_MESSAGE
-					: describeFailure(e, ADMIN_REVOKE_FAILED_MESSAGE, {
-							offline: ADMIN_REVOKE_OFFLINE_MESSAGE
-						})
-			);
-		}
-	}
-
-	async function revokeSession(sessionId: string): Promise<'revoked' | 'already-ended'> {
-		try {
-			await forceLogout(sessionId);
-			return 'revoked';
-		} catch (e) {
-			if (isNotFound(e)) return 'already-ended';
-			throw e;
-		}
-	}
-
 	async function loadGenDefaults() {
 		await loadBuiltins();
 		try {
@@ -920,191 +650,6 @@
 			<p class="error">{failure}</p>
 		{/each}
 
-		{#if tab === 'users'}
-			<section>
-				<h2>Create User</h2>
-				<form
-					class="create-form"
-					oninput={() => (createError = '')}
-					onchange={() => (createError = '')}
-					onsubmit={(e) => {
-						e.preventDefault();
-						handleCreate();
-					}}
-					autocomplete="off"
-				>
-					<input
-						bind:value={newUsername}
-						placeholder="Username"
-						minlength={3}
-						required
-						autocomplete="off"
-					/>
-					<input
-						type="password"
-						bind:value={newPassword}
-						placeholder="Password"
-						minlength={PASSWORD_MIN_LENGTH}
-						required
-						autocomplete="new-password"
-					/>
-					<select bind:value={newRole}>
-						<option value="user">User</option>
-						<option value="admin">Admin</option>
-					</select>
-					<button type="submit" disabled={creating}>
-						{creating ? 'Creating...' : 'Create'}
-					</button>
-				</form>
-				{#if createError}
-					<p class="error">{createError}</p>
-				{/if}
-
-				<h2>Users</h2>
-				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
-					<thead>
-						<tr>
-							<th>Username</th>
-							<th>Role</th>
-							<th>Active</th>
-							<th>Created</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each users as user (user.id)}
-							<tr class:inactive={!user.is_active}>
-								<td data-label="Username">{user.username}</td>
-								<td data-label="Role">
-									<span class="badge" class:admin-badge={user.role === 'admin'}>
-										{user.role}
-									</span>
-								</td>
-								<td data-label="Active">{user.is_active ? 'Yes' : 'No'}</td>
-								<td data-label="Created"
-									>{user.created_at ? new Date(user.created_at).toLocaleDateString() : ''}</td
-								>
-								<td class="actions">
-									{#if me && user.id !== me.id}
-										<button class="small" data-hitbox="text" onclick={() => handleToggleRole(user)}>
-											{user.role === 'admin' ? 'Demote' : 'Promote'}
-										</button>
-										<button
-											class="small"
-											data-hitbox="text"
-											onclick={() => handleToggleActive(user)}
-										>
-											{user.is_active ? 'Disable' : 'Enable'}
-										</button>
-										<button
-											class="small"
-											data-hitbox="text"
-											onclick={() => {
-												resetPasswordUserId = resetPasswordUserId === user.id ? null : user.id;
-												resetPasswordValue = '';
-											}}
-										>
-											Reset PW
-										</button>
-										<button
-											class="small danger"
-											data-hitbox="text"
-											onclick={() => {
-												deleteUserId = deleteUserId === user.id ? null : user.id;
-												deleteConfirmInput = '';
-											}}
-										>
-											Delete
-										</button>
-									{:else}
-										<span class="text-muted">You</span>
-									{/if}
-								</td>
-							</tr>
-							{#if resetPasswordUserId === user.id}
-								<tr class="inline-form-row">
-									<td colspan="5">
-										<form
-											class="inline-form"
-											onsubmit={(e) => {
-												e.preventDefault();
-												handleResetPassword(user.id);
-											}}
-										>
-											<input
-												type="password"
-												bind:value={resetPasswordValue}
-												placeholder="New password (min {PASSWORD_MIN_LENGTH} chars)"
-												minlength={PASSWORD_MIN_LENGTH}
-												required
-												autocomplete="new-password"
-											/>
-											<button type="submit" class="small" disabled={resettingPassword}>
-												{resettingPassword ? 'Saving...' : 'Save'}
-											</button>
-											<button
-												type="button"
-												class="small"
-												onclick={() => {
-													resetPasswordUserId = null;
-													resetPasswordValue = '';
-												}}
-											>
-												Cancel
-											</button>
-										</form>
-									</td>
-								</tr>
-							{/if}
-							{#if deleteUserId === user.id}
-								<tr class="inline-form-row">
-									<td colspan="5">
-										<div class="delete-confirm">
-											<p class="delete-warning">
-												Permanently delete <strong>{user.username}</strong> and all their albums, songs,
-												and generations. This cannot be undone.
-											</p>
-											<form
-												class="inline-form"
-												onsubmit={(e) => {
-													e.preventDefault();
-													handleHardDelete(user.id);
-												}}
-											>
-												<input
-													type="text"
-													bind:value={deleteConfirmInput}
-													placeholder="Type username to confirm"
-													autocomplete="off"
-												/>
-												<button
-													type="submit"
-													class="small danger"
-													disabled={deleting || deleteConfirmInput !== user.username}
-												>
-													{deleting ? 'Deleting...' : 'Confirm Delete'}
-												</button>
-												<button
-													type="button"
-													class="small"
-													onclick={() => {
-														deleteUserId = null;
-														deleteConfirmInput = '';
-													}}
-												>
-													Cancel
-												</button>
-											</form>
-										</div>
-									</td>
-								</tr>
-							{/if}
-						{/each}
-					</tbody>
-				</table>
-			</section>
-		{/if}
-
 		{#if tab === 'voices'}
 			<section>
 				<h2>{ADMIN_VOICES_HEADING}</h2>
@@ -1151,86 +696,10 @@
 			</section>
 		{/if}
 
-		{#if tab === 'sessions'}
-			<section>
-				<h2>Active Sessions</h2>
-				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
-					<thead>
-						<tr>
-							<th>User</th>
-							<th>IP</th>
-							<th>Created</th>
-							<th>Expires</th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each sessions as sess (sess.id)}
-							<tr>
-								<td data-label="User">{sess.username}</td>
-								<td data-label="IP">{sess.ip_address}</td>
-								<td data-label="Created"
-									>{sess.created_at ? new Date(sess.created_at).toLocaleString() : ''}</td
-								>
-								<td data-label="Expires"
-									>{sess.expires_at ? new Date(sess.expires_at).toLocaleString() : ''}</td
-								>
-								<td class="actions">
-									{#if sess.is_current}
-										<span class="text-muted">This device</span>
-									{:else}
-										<button
-											class="small danger"
-											data-hitbox="text"
-											onclick={() => handleForceLogout(sess.id)}
-										>
-											Revoke
-										</button>
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</section>
-		{/if}
-
-		{#if tab === 'attempts'}
-			<section>
-				<h2>Recent Login Attempts</h2>
-				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
-					<thead>
-						<tr>
-							<th>Time</th>
-							<th>Username</th>
-							<th>IP</th>
-							<th>Result</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each attempts as att (att.id)}
-							<tr>
-								<td data-label="Time"
-									>{att.attempted_at ? new Date(att.attempted_at).toLocaleString() : ''}</td
-								>
-								<td data-label="Username">{att.username}</td>
-								<td data-label="IP">{att.ip_address}</td>
-								<td data-label="Result">
-									<span class:success={att.success} class:fail={!att.success}>
-										{att.success ? 'OK' : 'Failed'}
-									</span>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</section>
-		{/if}
-
 		{#if tab === 'ratelimits'}
 			<section>
 				<h2>Global Defaults</h2>
-				<p class="hint">These apply to all users unless overridden per-user.</p>
+				<p class="hint">These apply to all users.</p>
 				<div class="limits-grid">
 					{#each globalLimits as item (item.setting_key)}
 						<label class="limit-row">
@@ -1250,90 +719,6 @@
 						{savingGlobal ? 'Saving...' : 'Save Defaults'}
 					</button>
 				{/if}
-
-				<h2>Per-User Overrides</h2>
-				<p class="hint">Click a user to set individual limits. Empty = uses global default.</p>
-				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
-					<thead>
-						<tr>
-							<th>Username</th>
-							<th>Role</th>
-							<th>Overrides</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each users as user (user.id)}
-							<tr
-								class="clickable"
-								class:expanded={expandedUserId === user.id}
-								onclick={() => handleExpandUser(user.id)}
-							>
-								<td data-label="Username">{user.username}</td>
-								<td data-label="Role">
-									<span class="badge" class:admin-badge={user.role === 'admin'}>
-										{user.role}
-									</span>
-								</td>
-								<td data-label="Overrides">
-									{#if expandedUserId === user.id && userLimitsData}
-										{userLimitsData.overrides.length} custom
-									{:else}
-										-
-									{/if}
-								</td>
-							</tr>
-							{#if expandedUserId === user.id && userLimitsData}
-								<tr class="override-row">
-									<td colspan="3">
-										<div class="limits-grid">
-											{#each userLimitsData.effective as eff (eff.setting_key)}
-												<label class="limit-row">
-													<span class="limit-label">
-														{SETTING_LABELS[eff.setting_key] ?? eff.setting_key}
-														<span class="effective-val">(effective: {eff.value})</span>
-													</span>
-													<input
-														type="number"
-														min="0"
-														placeholder={String(eff.value)}
-														bind:value={userEdits[eff.setting_key]}
-														class="limit-input"
-														onclick={(e) => e.stopPropagation()}
-													/>
-												</label>
-											{/each}
-										</div>
-										<div class="override-actions">
-											<!-- svelte-ignore a11y_click_events_have_key_events -->
-											<!-- svelte-ignore a11y_no_static_element_interactions -->
-											<span
-												class="save-btn"
-												onclick={(e) => {
-													e.stopPropagation();
-													handleSaveUserLimits();
-												}}
-												class:disabled={savingUser}
-											>
-												{savingUser ? 'Saving...' : 'Save Overrides'}
-											</span>
-											<!-- svelte-ignore a11y_click_events_have_key_events -->
-											<!-- svelte-ignore a11y_no_static_element_interactions -->
-											<span
-												class="clear-btn"
-												onclick={(e) => {
-													e.stopPropagation();
-													handleClearUserLimits();
-												}}
-											>
-												Clear All
-											</span>
-										</div>
-									</td>
-								</tr>
-							{/if}
-						{/each}
-					</tbody>
-				</table>
 			</section>
 		{/if}
 
@@ -1642,45 +1027,6 @@
 		letter-spacing: 0.5px;
 	}
 
-	.create-form {
-		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 1rem;
-		flex-wrap: wrap;
-	}
-
-	.create-form input,
-	.create-form select {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--input-radius);
-		color: var(--text);
-		padding: var(--input-padding);
-		font-size: var(--input-font-size);
-		font-family: var(--font-body);
-	}
-
-	.create-form button {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
-		border: none;
-		border-radius: var(--btn-radius-pill);
-		padding: 0.5rem 1rem;
-		cursor: pointer;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
-		transition: box-shadow 0.2s;
-	}
-
-	.create-form button:hover:not(:disabled) {
-		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
-	}
-
-	.create-form button:disabled {
-		opacity: 0.5;
-	}
-
 	table {
 		width: 100%;
 		border-collapse: collapse;
@@ -1698,10 +1044,6 @@
 	td {
 		padding: 0.5rem;
 		border-bottom: 1px solid var(--border);
-	}
-
-	tr.inactive td {
-		opacity: 0.5;
 	}
 
 	.badge {
@@ -1731,81 +1073,15 @@
 		color: white;
 	}
 
-	.admin-badge {
-		background: var(--primary);
-		color: white;
-	}
-
 	.actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.3rem;
 	}
 
-	button.small {
-		background: var(--surface-hover);
-		color: var(--text);
-		border: 1px solid var(--border);
-		border-radius: 3px;
-		padding: 0.2rem 0.5rem;
-		font-size: 0.75rem;
-		cursor: pointer;
-		font-family: var(--font-body);
-	}
-
-	button.small:hover {
-		background: var(--border);
-	}
-
-	button.small.danger {
-		color: var(--score-bad);
-		border-color: var(--score-bad);
-	}
-
-	tr.inline-form-row td {
-		padding: 0.5rem;
-		background: var(--surface);
-		border-bottom: 1px solid var(--border);
-	}
-
-	.inline-form {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		align-items: center;
-	}
-
-	.inline-form input {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--input-radius);
-		color: var(--text);
-		padding: var(--input-padding);
-		font-size: var(--input-font-size);
-		font-family: var(--font-body);
-		min-width: 0;
-		flex: 1 1 12rem;
-	}
-
-	.delete-confirm {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.delete-warning {
-		color: var(--score-bad);
-		font-size: 0.8rem;
-		margin: 0;
-	}
-
 	.text-muted {
 		color: var(--text-muted);
 		font-size: 0.8rem;
-	}
-
-	.success {
-		color: var(--score-good);
 	}
 
 	.fail {
@@ -1836,11 +1112,6 @@
 		flex: 1;
 		font-size: 0.85rem;
 		color: var(--text);
-	}
-
-	.effective-val {
-		color: var(--text-subtle);
-		font-size: 0.75rem;
 	}
 
 	.limit-input {
@@ -1900,32 +1171,6 @@
 	.clear-btn:hover {
 		border-color: var(--text-muted);
 		color: var(--text);
-	}
-
-	.override-actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		align-items: center;
-		margin-top: 0.5rem;
-	}
-
-	tr.clickable {
-		cursor: pointer;
-	}
-
-	tr.clickable:hover td {
-		background: var(--surface-hover);
-	}
-
-	tr.expanded td {
-		background: var(--surface);
-		border-bottom: none;
-	}
-
-	tr.override-row td {
-		padding: 0.75rem 0.5rem 1rem;
-		background: var(--surface);
 	}
 
 	.gen-model-tabs {

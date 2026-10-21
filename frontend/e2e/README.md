@@ -94,9 +94,9 @@ session, then prints the signed session cookie and CSRF cookie the library
 issues after a Keycloak login. The stack has no admin bootstrap, so this helper
 is also where the e2e admin account (`E2E_ADMIN_USERNAME`) comes from.
 `seedAccount` / `seedAdminAccount` in `seed.ts` return those cookies for
-`context.addCookies` and `signedInApi`; a flow that made an account removes it
-with `deleteSeededAccounts`. The helper sits outside `scripts/`, which the
-image copies, so it never ships. No flow types a password: there is none.
+`context.addCookies` and `signedInApi`; the throwaway stack drops the accounts
+with the run. The helper sits outside `scripts/`, which the image copies, so it
+never ships. No flow types a password: there is none.
 
 The seed builds one base album with three songs, a real take per song imported from
 `fixtures/take.mp3` via `POST /api/songs/{id}/reimport`, one pick, a playlist

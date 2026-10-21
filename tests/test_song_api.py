@@ -28,7 +28,6 @@ from songmaker_cli.db.models import Album, Generation, Score, Song, User, Versio
 from songmaker_cli.db.queries.songs import list_songs
 
 _ADMIN_USER = "admin"
-_ADMIN_PASSWORD = "admin12345"
 
 
 def _count_queries(engine, *substrings: str) -> tuple[list[str], Callable]:

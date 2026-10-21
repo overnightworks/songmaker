@@ -194,7 +194,6 @@ def test_resource_type_values():
 def test_audit_action_values():
     assert AuditAction.GENERATE == "generate"
     assert AuditAction.HARD_DELETE == "hard_delete"
-    assert AuditAction.SESSION_IP_CHANGE == "session_ip_change"
 
 
 def test_str_enums_json_serialize_as_value():

@@ -3956,18 +3956,6 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
         pytest.param("/api/settings/judge", "get", {"422"}, id="get-judge"),
         pytest.param("/api/settings/judge", "put", {"422"}, id="set-judge"),
         pytest.param("/api/settings/rate-limits", "put", {"400"}, id="set-rate-limits"),
-        pytest.param(
-            "/api/settings/rate-limits/user/{user_id}", "get", {"404"},
-            id="get-user-rate-limits",
-        ),
-        pytest.param(
-            "/api/settings/rate-limits/user/{user_id}", "put", {"400", "404"},
-            id="set-user-rate-limits",
-        ),
-        pytest.param(
-            "/api/settings/rate-limits/user/{user_id}", "delete", {"404"},
-            id="delete-user-rate-limits",
-        ),
     ],
 )
 def test_settings_api_documents_its_http_error_responses(
@@ -4096,31 +4084,6 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
 
 
 # ── Rate limits ───────────────────────────────────────────────────────
-
-
-def test_deleting_user_rate_limits_restores_the_effective_defaults(tmp_path: Path) -> None:
-    admin_client = _make_authed_client(tmp_path, role="admin")
-    override_values = {"generation_rate_limit": 1, "chat_rate_limit": 2}
-
-    saved = admin_client.put(
-        "/api/settings/rate-limits/user/u-test", json={"settings": override_values},
-    )
-    assert saved.status_code == 200
-    assert {
-        item["setting_key"]: item["value"] for item in saved.json()["overrides"]
-    } == override_values
-
-    deleted = admin_client.delete("/api/settings/rate-limits/user/u-test")
-
-    assert deleted.status_code == 200
-    restored = admin_client.get("/api/settings/rate-limits/user/u-test")
-    assert restored.status_code == 200
-    assert restored.json()["overrides"] == []
-    effective = {
-        item["setting_key"]: item for item in restored.json()["effective"]
-    }
-    assert effective["generation_rate_limit"]["is_override"] is False
-    assert effective["chat_rate_limit"]["is_override"] is False
 
 
 def test_capabilities_reflects_db_model(tmp_path: Path) -> None:

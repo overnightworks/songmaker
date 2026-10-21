@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import songmaker_cli.db.queries.jobs as job_queries
-from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
+from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
@@ -502,7 +502,7 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
     def compete():
         with pg_factory() as db:
             db.execute(text("SET lock_timeout = '5s'"))
-            store = DatabaseSessionRecordStore(db, session_max_age_seconds=3600)
+            store = DatabaseSessionRecordStore(db)
 
             def statement_started(conn, cursor, statement, parameters, context, executemany):
                 if context.isupdate or context.isdelete:
@@ -513,15 +513,14 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
                 store.delete(session_id)
                 result = None
             else:
-                result = store.touch(record, ip_address="new", user_agent="new", now=now)
+                result = store.touch(session_id, expires_at=now + timedelta(hours=2))
             db.commit()
             return result
 
     with ThreadPoolExecutor(max_workers=1) as executor, pg_factory() as db:
-        store = DatabaseSessionRecordStore(db, session_max_age_seconds=3600)
+        store = DatabaseSessionRecordStore(db)
         if first_operation == "renew":
-            loaded = store.load(session_id)
-            assert store.touch(loaded, ip_address="new", user_agent="new", now=now) is True
+            assert store.touch(session_id, expires_at=now + timedelta(hours=2)) is True
         else:
             store.delete(session_id)
         future = executor.submit(compete)
@@ -557,7 +556,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
                 if session.new or session.dirty or session.deleted:
                     raise RuntimeError("session unexpectedly has pending changes")
                 session.commit()
-                _begin_exclusive(session, _SESSION_CAP_LOCK_ID)
+                _begin_exclusive(session, _USER_MANAGEMENT_LOCK_ID)
                 expires = datetime.now(timezone.utc) + timedelta(hours=1)
                 create_session(session, user_id, expires)
                 prune_overflow_sessions(session, user_id, max_sessions)
@@ -810,7 +809,6 @@ def test_alembic_migrations_on_postgresql() -> None:
         "ratings",
         "jobs",
         "user_sessions",
-        "login_attempts",
         "audit_log",
         "generation_presets",
         "resource_event_cursors",

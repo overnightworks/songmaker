@@ -963,7 +963,6 @@ const SEED_SESSIONS_REQUEST_VARIABLE = 'SEED_SESSIONS_REQUEST';
  */
 async function runSeedSessions(sessionRequest: {
 	seed?: Array<{ username: string; role?: AccountRole }>;
-	delete?: string[];
 }): Promise<SeededSessionRow[]> {
 	try {
 		const { stdout } = await execWithStdin(
@@ -1011,8 +1010,8 @@ function sessionCookies(row: SeededSessionRow): Cookie[] {
 /**
  * Signs `username` in without Keycloak: the account is found or
  * created and given a database session straight from the stack's own side, so
- * the app itself signs the cookies. A flow that creates the account removes it
- * again with `deleteSeededAccount`.
+ * the app itself signs the cookies. The throwaway stack drops the account
+ * with the run.
  */
 export async function seedAccount(
 	username: string,
@@ -1035,11 +1034,6 @@ export function signedInApi(account: SeededAccount): Promise<APIRequestContext> 
 	});
 }
 
-/** Removes an account made by `seedAccount`, rows and all. */
-export async function deleteSeededAccounts(accountIds: string[]): Promise<void> {
-	await runSeedSessions({ delete: accountIds });
-}
-
 /**
  * Seeds a flow's own account's whole library -- the library a musician has
  * before their first pick. `api` carries the account's session (`signedInApi`).
@@ -1050,8 +1044,30 @@ export async function seedUnpickedLibrary(api: APIRequestContext): Promise<Seede
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
 	});
-	const songs = await seedSongsWithOneTakeEach(seed, album.id);
+	const songs = await seedAfterAlbum(api, album.id, () => seedSongsWithOneTakeEach(seed, album.id));
 	return { albumId: album.id, tracks: songs.map((song) => song.track) };
+}
+
+/** Runs the seeding that follows an album's creation; a failure archives that album before it rethrows, since no caller holds its id yet. */
+async function seedAfterAlbum<T>(
+	api: APIRequestContext,
+	albumId: string,
+	seedRest: () => Promise<T>
+): Promise<T> {
+	try {
+		return await seedRest();
+	} catch (error) {
+		try {
+			await archiveOwnedAlbum(api, albumId);
+		} catch (archiveError) {
+			throw new AggregateError(
+				[error, archiveError],
+				`Seeding failed and archiving album ${albumId} failed too`,
+				{ cause: archiveError }
+			);
+		}
+		throw error;
+	}
 }
 
 /**
@@ -1065,7 +1081,7 @@ export async function seedOwnSongAddress(
 	songTitle: string
 ): Promise<string> {
 	const seed = await SeedApi.fromSession(api);
-	return (await createOwnSong(seed, account.username, songTitle)).address;
+	return (await createOwnSong(api, seed, account.username, songTitle)).address;
 }
 
 /** `seedOwnSongAddress`, with one take of the fixture tone the song plays. */
@@ -1075,29 +1091,34 @@ export async function seedOwnTakeAddress(
 	songTitle: string
 ): Promise<string> {
 	const seed = await SeedApi.fromSession(api);
-	const song = await createOwnSong(seed, account.username, songTitle);
-	await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
-		mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-	});
+	const song = await createOwnSong(api, seed, account.username, songTitle);
+	await seedAfterAlbum(api, song.albumId, () =>
+		seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
+			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
+		})
+	);
 	return song.address;
 }
 
 async function createOwnSong(
+	api: APIRequestContext,
 	seed: SeedApi,
 	username: string,
 	songTitle: string
-): Promise<{ id: string; address: string }> {
+): Promise<{ id: string; albumId: string; address: string }> {
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: username
 	});
-	const song = await seed.postJson<CreatedSong>('/api/songs', {
-		title: songTitle,
-		album_id: album.id,
-		lyrics: `${songTitle} lyrics`,
-		prompt: 'calm test tone'
-	});
-	return { id: song.id, address: `/album/${album.id}/${song.slug}` };
+	const song = await seedAfterAlbum(api, album.id, () =>
+		seed.postJson<CreatedSong>('/api/songs', {
+			title: songTitle,
+			album_id: album.id,
+			lyrics: `${songTitle} lyrics`,
+			prompt: 'calm test tone'
+		})
+	);
+	return { id: song.id, albumId: album.id, address: `/album/${album.id}/${song.slug}` };
 }
 
 export interface PhoneLibraryFixture {
@@ -1165,6 +1186,15 @@ export async function seedPhoneLibrary(api: APIRequestContext): Promise<PhoneLib
 export async function archiveOwnedAlbum(api: APIRequestContext, albumId: string): Promise<void> {
 	const seed = await SeedApi.fromSession(api);
 	await seed.postJson(`/api/albums/${albumId}/archive`, {});
+}
+
+/** Archives the album an address from `seedOwnSongAddress` or `seedOwnTakeAddress` sits under. */
+export async function archiveAlbumOfAddress(
+	api: APIRequestContext,
+	songAddress: string
+): Promise<void> {
+	const [, , albumId] = songAddress.split('/');
+	await archiveOwnedAlbum(api, albumId);
 }
 
 export async function archivePhoneLibrary(

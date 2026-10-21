@@ -50,8 +50,6 @@ from songmaker_cli.db.queries.auth import (
     delete_session,
     get_session_with_user,
     get_user,
-    list_active_sessions,
-    list_users,
     prune_overflow_sessions,
     set_user_role,
 )
@@ -1687,16 +1685,6 @@ def test_get_user_not_found(db_session: Session) -> None:
     assert get_user(db_session, "nonexistent") is None
 
 
-def test_list_users(db_session: Session) -> None:
-    seed_user(db_session, "alice", role="admin")
-    seed_user(db_session, "bob")
-    db_session.commit()
-    users = list_users(db_session)
-    assert len(users) == 2
-    assert users[0].username == "alice"
-    assert users[1].username == "bob"
-
-
 def test_set_user_role(db_session: Session) -> None:
     user = seed_user(db_session, "alice")
     db_session.commit()
@@ -1784,19 +1772,6 @@ def test_delete_session_not_found(db_session: Session) -> None:
     delete_session(db_session, "nonexistent")
 
 
-def test_list_active_sessions(db_session: Session) -> None:
-    from datetime import datetime, timedelta, timezone
-
-    user = _make_user(db_session)
-    now = datetime.now(timezone.utc)
-    create_session(db_session, user.id, now + timedelta(days=30))
-    create_session(db_session, user.id, now - timedelta(days=1))
-    db_session.commit()
-
-    active = list_active_sessions(db_session)
-    assert len(active) == 1
-
-
 def test_delete_expired_sessions(db_session: Session) -> None:
     from datetime import datetime, timedelta, timezone
 
@@ -1815,13 +1790,11 @@ def _sessions_created_in_order(db_session: Session, user: User, count: int) -> l
     from datetime import datetime, timedelta, timezone
 
     now = datetime.now(timezone.utc)
-    return [
-        create_session(
-            db_session, user.id, now + timedelta(days=30),
-            created_at=now - timedelta(seconds=count - index),
-        ).id
-        for index in range(count)
-    ]
+    sessions = [create_session(db_session, user.id, now + timedelta(days=30)) for _ in range(count)]
+    for index, row in enumerate(sessions):
+        row.created_at = now - timedelta(seconds=count - index)
+    db_session.flush()
+    return [row.id for row in sessions]
 
 
 @pytest.mark.parametrize(
@@ -2475,37 +2448,6 @@ def test_get_all_global_rate_limits(db_session: Session) -> None:
     assert len(results) == 2
     keys = {r.setting_key for r in results}
     assert keys == {"generation_rate_limit", "scoring_rate_limit"}
-
-
-def test_get_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries.rate_limits import get_user_rate_limits, upsert_rate_limit_setting
-
-    user = seed_user(db_session, "testuser", role="user")
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
-    db_session.commit()
-
-    results = get_user_rate_limits(db_session, user.id)
-    assert len(results) == 1
-    assert results[0].value == 100
-
-
-def test_delete_all_user_rate_limits(db_session: Session) -> None:
-    from songmaker_cli.db.queries.rate_limits import (
-        delete_all_user_rate_limits,
-        get_user_rate_limits,
-        upsert_rate_limit_setting,
-    )
-
-    user = seed_user(db_session, "testuser", role="user")
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 100, user_id=user.id)
-    upsert_rate_limit_setting(db_session, "scoring_rate_limit", 50, user_id=user.id)
-    db_session.commit()
-
-    count = delete_all_user_rate_limits(db_session, user.id)
-    db_session.commit()
-    assert count == 2
-    assert get_user_rate_limits(db_session, user.id) == []
 
 
 # ── Migration tests ────────────────────────────────────────────────
