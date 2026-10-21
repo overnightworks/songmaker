@@ -22,8 +22,6 @@ from songmaker_cli.constants import (
     AUDIO_FILE_NOT_FOUND,
     HTTP_NOT_FOUND,
     LIBRARY_QUERY_REQUIRED,
-    PAGE_ADMIN_DEFAULT_LIMIT,
-    PAGE_ADMIN_MAX_LIMIT,
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
     RATE_LIMIT_WINDOW_SECONDS,
@@ -678,15 +676,7 @@ def _page_params(
     return PageParams(offset=offset, limit=limit)
 
 
-def _admin_page_params(
-    offset: int = Query(0, ge=0),
-    limit: int = Query(PAGE_ADMIN_DEFAULT_LIMIT, ge=1, le=PAGE_ADMIN_MAX_LIMIT),
-) -> PageParams:
-    return PageParams(offset=offset, limit=limit)
-
-
 Pagination = Annotated[PageParams, Depends(_page_params)]
-AdminPagination = Annotated[PageParams, Depends(_admin_page_params)]
 
 
 def page_has_more(*, offset: int, fetched: int, total: int) -> bool:

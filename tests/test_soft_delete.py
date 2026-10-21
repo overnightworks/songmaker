@@ -33,7 +33,6 @@ from songmaker_cli.db.queries.albums import (
     restore_album,
     soft_delete_album,
 )
-from songmaker_cli.db.queries.auth import hard_delete_user
 from songmaker_cli.db.queries.generations import pick_generation
 from songmaker_cli.db.queries.playlists import add_song_to_playlist, create_playlist, get_playlist
 from songmaker_cli.db.queries.songs import (
@@ -264,22 +263,6 @@ def test_hard_delete_song_sees_soft_deleted(seeded: Session) -> None:
     paths = delete_song(seeded, "s1")
     seeded.commit()
     assert "u-test/g1.mp3" in paths
-
-
-def test_hard_delete_user_includes_soft_deleted_albums(db_session: Session) -> None:
-    db_session.add(User(id=_OTHER_USER_ID, username="u2", password_hash="x", role="user"))
-    db_session.flush()
-    _seed(db_session, owner=_OTHER_USER_ID)
-    soft_delete_album(db_session, "rock")
-    db_session.commit()
-    paths, album_ids, playlist_ids = hard_delete_user(db_session, _OTHER_USER_ID)
-    db_session.commit()
-    assert "u-test/g1.mp3" in paths
-    assert "rock" in album_ids
-    assert playlist_ids == []
-    assert db_session.query(Album).execution_options(
-        include_deleted=True,
-    ).count() == 0
 
 
 def test_chat_messages_survive_soft_delete_and_restore(seeded: Session) -> None:

@@ -110,7 +110,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return {
 		...actual,
 		fetchCapabilities: vi.fn().mockResolvedValue({}),
-		checkSetupRequired: vi.fn(),
 		logout: vi.fn()
 	};
 });
@@ -360,7 +359,7 @@ describe('app shell', () => {
 		);
 	});
 
-	it.each(['/login', '/setup', '/legal', '/impressum', '/datenschutz', '/share/public-token'])(
+	it.each(['/login', '/legal', '/impressum', '/datenschutz', '/share/public-token'])(
 		'keeps the PlayerBar and reservation out of public route %s',
 		async (path) => {
 			const target = await renderLayout(path);
@@ -423,7 +422,6 @@ describe('app shell', () => {
 		['/loras', true],
 		['/share/public', false],
 		['/login', false],
-		['/setup', false],
 		['/legal/privacy', false]
 	])('1354_rule_28 1354_rule_33 1354_49: mount-time tabs at %s are %s', async (path, shown) => {
 		replaceHistoryEntry(path);
@@ -830,7 +828,7 @@ describe('auth check failure', () => {
 		return vi
 			.mocked(goto)
 			.mock.calls.map(([to]) => to)
-			.filter((to) => String(to).startsWith('/login') || to === '/setup');
+			.filter((to) => String(to).startsWith('/login'));
 	}
 
 	it('shows a retry-able error instead of navigating to /login on a transient failure', async () => {
@@ -1355,7 +1353,7 @@ describe('the library route group', () => {
 			.map((entry) => entry.name);
 
 		expect(topLevelDirs).toEqual(
-			expect.arrayContaining(['(library)', 'settings', 'login', 'setup', 'legal', 'share', 'loras'])
+			expect.arrayContaining(['(library)', 'settings', 'login', 'legal', 'share', 'loras'])
 		);
 		expect(topLevelDirs).not.toContain('album');
 		expect(topLevelDirs).not.toContain('playlist');

@@ -207,7 +207,7 @@ export function handleSessionLost(): Promise<void> {
 // No-ops when there is no session to lose (`hasSessionToLose`): the first
 // load, a second caller that lost the in-flight race above, or a deliberate
 // sign-out under way, which leaves for sign-in itself. This leaves
-// +layout.svelte's own /login-vs-/setup routing, or the sign-out, to decide
+// +layout.svelte's own routing to sign-in, or the sign-out, to decide
 // instead of forcing a redirect that could race it.
 //
 // A lost session loads the address history stands on afresh once history has

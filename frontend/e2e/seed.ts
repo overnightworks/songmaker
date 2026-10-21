@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { expect, type APIRequestContext } from '@playwright/test';
-import type { CreateUserRequest, JobItem } from '../src/lib/api/types';
+import type { JobItem } from '../src/lib/api/types';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
 
 const execFileAsync = promisify(execFile);
@@ -64,13 +64,12 @@ const RAIL_ALBUM_SONG_TITLES = ['Rail Echo', 'Rail Drift'] as const;
 const RAIL_FILLER_ALBUM_TITLE_PREFIX = 'E2E Rail Filler';
 const RAIL_FILLER_ALBUM_COUNT = 30;
 const E2E_ALBUM_TITLE_PREFIX = 'E2E ';
-// The role every account but the stack's admin holds (`CreateUserRequest` in
-// `api_models/auth.py`), and what the absolute-age flow needs to reach past:
+// The role every account but the stack's admin holds, and what the absolute-age flow needs to reach past:
 // `session_absolute_max_age_seconds`' own default in `settings.py`.
 const NON_ADMIN_ROLE: AccountRole = 'user';
 const SESSION_ABSOLUTE_MAX_AGE_DAYS = 90;
 
-export type AccountRole = CreateUserRequest['role'];
+export type AccountRole = 'admin' | 'user';
 const SESSION_ID_SHAPE = /^[A-Za-z0-9_-]+$/;
 
 // The compose defaults for the throwaway CI database (`docker-compose.yml`),

@@ -90,12 +90,12 @@ RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
     "/service-worker.js",
 }) | PWA_ICON_PATHS
 
-# A login and a first-time setup carry no session yet, so they cannot submit
+# A login carries no session yet, so it cannot submit
 # a session-bound CSRF token; workers on `/api/internal/*` have no session
 # at all and authenticate with the internal token instead. Both still owe
 # the same-origin check.
 CSRF_TOKEN_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
-    "/api/auth/login", "/api/auth/setup",
+    "/api/auth/login",
 })
 CSRF_TOKEN_EXEMPT_PREFIXES: Final[tuple[str, ...]] = ("/api/internal/",)
 

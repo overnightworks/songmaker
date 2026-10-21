@@ -81,7 +81,7 @@ export {
 	deletePlaylistCover
 } from './playlists';
 export { createQueueStreamSnapshot, createLibraryQueueStreamSnapshot } from './queue-streams';
-export { checkSetupRequired, setupAdmin, login, logout, fetchMe, changePassword } from './auth';
+export { login, logout, fetchMe } from './auth';
 
 export {
 	streamCoWriterTurn,
@@ -117,21 +117,10 @@ export {
 	deletePresetApi,
 	setPresetDefault,
 	fetchRateLimits,
-	updateRateLimits,
-	fetchUserRateLimits,
-	updateUserRateLimits,
-	deleteUserRateLimits
+	updateRateLimits
 } from './settings';
 export {
-	fetchUsers,
 	fetchAdminVoices,
-	createUser,
-	updateUser,
-	deactivateUser,
-	hardDeleteUser,
-	fetchSessions,
-	forceLogout,
-	fetchLoginAttempts,
 	listWorkers,
 	getRegistry,
 	loadModelOnWorker,

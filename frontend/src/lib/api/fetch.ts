@@ -177,9 +177,9 @@ function getCsrfToken(): string {
 }
 
 // A 401 from these refuses the credentials the person just typed -- a wrong
-// password at sign-in, setup, or a password change (#1117) -- rather than
+// password at sign-in (#1117) -- rather than
 // saying the session is gone, so it never signs anyone out.
-const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/password']);
+const AUTH_ENDPOINTS = new Set(['/api/auth/login']);
 
 // The public share reads (`/shared/*`, sharing_api.py) authenticate nobody, so
 // a 401 there cannot mean that a session ended; the share player opts out the

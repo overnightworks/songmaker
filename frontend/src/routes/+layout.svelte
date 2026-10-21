@@ -4,7 +4,7 @@
 	import { onDestroy } from 'svelte';
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
+	import { fetchCapabilities } from '$lib/api/client';
 	import { installRefusalReactions, signInAddress } from '$lib/api/fetch';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
@@ -85,7 +85,6 @@
 
 	let isPublicRoute = $derived(
 		page.url.pathname === '/login' ||
-			page.url.pathname === '/setup' ||
 			page.url.pathname.startsWith('/share/') ||
 			page.url.pathname.startsWith('/legal') ||
 			page.url.pathname === '/impressum' ||
@@ -262,12 +261,7 @@
 		}
 		await historyStandsStill();
 		const signIn = signInAddress(page.url.pathname + page.url.search);
-		try {
-			const { required } = await checkSetupRequired();
-			await goto(required ? '/setup' : signIn, { replaceState: true });
-		} catch {
-			await goto(signIn, { replaceState: true });
-		}
+		await goto(signIn, { replaceState: true });
 	}
 
 	function levelUp(): void {

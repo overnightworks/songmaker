@@ -590,22 +590,6 @@ def test_hard_delete_cleanup_removes_suggestions_from_expired_albums(
         assert job.started_at is not None
 
 
-def test_user_hard_delete_removes_album_suggestions_after_the_commit(tmp_path: Path) -> None:
-    client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
-    _add_suggestion(factory, tmp_path / "audio")
-    suggestion_dir = tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
-    with factory() as session:
-        alice = session.query(User).filter_by(username="alice").one()
-        alice_id = alice.id
-    login_and_csrf(client, "admin", "adminpass1")
-    client.headers["Origin"] = "http://127.0.0.1:8080"
-
-    response = client.delete(f"/api/admin/users/{alice_id}/permanent")
-
-    assert response.status_code == 200
-    assert not suggestion_dir.exists()
-
-
 def test_suggestion_cleanup_refuses_paths_outside_its_private_tree(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()

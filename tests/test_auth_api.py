@@ -1,11 +1,10 @@
-"""Tests for auth API endpoints — setup, login, logout, me, password change."""
+"""Tests for auth API endpoints — login, logout, me."""
 
 from __future__ import annotations
 
 import dataclasses
 from contextlib import closing
 from pathlib import Path
-from unittest.mock import patch
 
 import httpx
 import pytest
@@ -18,10 +17,9 @@ from webauth.cookies import (
     PLAIN_CSRF_COOKIE_NAME,
     PLAIN_SESSION_COOKIE_NAME,
 )
-from webauth.ports import UsernameTakenError
 from webauth.proxies import TrustedProxies
 
-from songmaker_cli.db.models import AuditLog, UserSession
+from songmaker_cli.db.models import UserSession
 from songmaker_cli.db.queries.auth import create_user
 
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -55,48 +53,6 @@ def _login(client: TestClient, username: str, password: str) -> TestClient:
     from conftest import login_and_csrf
     login_and_csrf(client, username, password)
     return client
-
-
-# -- Setup --------------------------------------------------------------------
-
-
-def test_setup_required_true(client: TestClient) -> None:
-    resp = client.get("/api/auth/setup-required")
-    assert resp.status_code == 200
-    assert resp.json()["required"] is True
-
-
-def test_setup_required_false(client: TestClient) -> None:
-    _seed_admin(client)
-    resp = client.get("/api/auth/setup-required")
-    assert resp.status_code == 200
-    assert resp.json()["required"] is False
-
-
-def test_setup_creates_admin(client: TestClient) -> None:
-    resp = client.post("/api/auth/setup", json={"username": "myadmin", "password": "secure1234"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["username"] == "myadmin"
-    assert data["role"] == "admin"
-    assert DEFAULT_SESSION_COOKIE_NAME in resp.cookies
-
-
-def test_setup_rejected_when_admin_exists(client: TestClient) -> None:
-    _seed_admin(client)
-    resp = client.post("/api/auth/setup", json={"username": "hacker", "password": "t3stP@ssw0rd"})
-    assert resp.status_code == 403
-    assert "already completed" in resp.json()["detail"]
-
-
-def test_setup_validates_short_username(client: TestClient) -> None:
-    resp = client.post("/api/auth/setup", json={"username": "ab", "password": "t3stP@ssw0rd"})
-    assert resp.status_code == 422
-
-
-def test_setup_validates_short_password(client: TestClient) -> None:
-    resp = client.post("/api/auth/setup", json={"username": "admin", "password": "short"})
-    assert resp.status_code == 422
 
 
 # -- Login --------------------------------------------------------------------
@@ -352,158 +308,20 @@ def test_me_unauthenticated(client: TestClient) -> None:
     assert resp.status_code == 401
 
 
-# -- Change password ----------------------------------------------------------
-
-
-def test_change_password(client: TestClient) -> None:
-    _seed_admin(client)
-    _login(client, "admin", "admin12345")
-    _login(client, "admin", "admin12345")
-    user_id = _get_user_id(client, "admin")
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        old_session_ids = {
-            record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
-        }
-    resp = client.put(
-        "/api/auth/password",
-        json={"current": "admin12345", "new_password": "newpassword1"},
-    )
-    assert resp.status_code == 200
-
-    with factory() as session:
-        remaining = session.query(UserSession).filter_by(user_id=user_id).all()
-        assert len(remaining) == 1
-        assert remaining[0].id not in old_session_ids
-
-    client.delete("/api/auth/session")
-    resp = client.post("/api/auth/login", json={"username": "admin", "password": "newpassword1"})
-    assert resp.status_code == 200
-
-
-def test_change_password_wrong_current(client: TestClient) -> None:
-    _seed_admin(client)
-    _login(client, "admin", "admin12345")
-    resp = client.put(
-        "/api/auth/password",
-        json={"current": "wrongpass1", "new_password": "newpassword1"},
-    )
-    assert resp.status_code == 401
-    assert "incorrect" in resp.json()["detail"]
-    attempts = client.get("/api/admin/login-attempts").json()["items"]
-    failures = [attempt for attempt in attempts if not attempt["success"]]
-    assert len(failures) == 1
-    assert failures[0]["username"] == "__pwchange__admin"
-
-
-def test_change_password_too_short(client: TestClient) -> None:
-    _seed_admin(client)
-    _login(client, "admin", "admin12345")
-    resp = client.put(
-        "/api/auth/password",
-        json={"current": "admin12345", "new_password": "short"},
-    )
-    assert resp.status_code == 422
-
-
-def test_change_password_brute_force_lockout(client: TestClient) -> None:
-    _seed_admin(client)
-    _login(client, "admin", "admin12345")
-    for _ in range(5):
-        client.put(
-            "/api/auth/password",
-            json={"current": "wrongpass1", "new_password": "newpassword1"},
-        )
-    resp = client.put(
-        "/api/auth/password",
-        json={"current": "admin12345", "new_password": "newpassword1"},
-    )
-    assert resp.status_code == 429
-    assert "Retry-After" in resp.headers
-
-
-def test_change_password_unauthenticated(client: TestClient) -> None:
-    resp = client.put(
-        "/api/auth/password",
-        json={"current": "admin12345", "new_password": "newpassword1"},
-    )
-    assert resp.status_code in (401, 403)
-
-
-# -- Setup race-condition and integrity error guards ---------------------------
-
-
-def test_setup_race_condition_second_user_created(client: TestClient) -> None:
-    with patch("songmaker_cli.auth_stores.DatabaseUserStore.count", side_effect=[0, 2]):
-        resp = client.post(
-            "/api/auth/setup", json={"username": "racing", "password": "t3stP@ssw0rd"},
-        )
-
-    assert resp.status_code == 403
-    assert "already completed" in resp.json()["detail"]
-    assert client.get("/api/auth/setup-required").json() == {"required": True}
-    assert DEFAULT_SESSION_COOKIE_NAME not in resp.cookies
-    with client.app.state.ctx.db() as session:
-        assert session.query(UserSession).count() == 0
-
-
-def test_setup_integrity_error_returns_403(client: TestClient) -> None:
-    with patch(
-        "songmaker_cli.auth_stores.DatabaseUserStore.create",
-        side_effect=UsernameTakenError("Username already exists"),
-    ):
-        resp = client.post(
-            "/api/auth/setup", json={"username": "admin", "password": "t3stP@ssw0rd"},
-        )
-
-    assert resp.status_code == 403
-    assert "already completed" in resp.json()["detail"]
-    assert client.get("/api/auth/setup-required").json() == {"required": True}
-    assert DEFAULT_SESSION_COOKIE_NAME not in resp.cookies
-
-
-def _audit_log_is_empty(client: TestClient) -> bool:
-    with client.app.state.ctx.db() as session:
-        return session.query(AuditLog).count() == 0
-
-
-def test_setup_and_own_password_change_do_not_create_audit_entries(client: TestClient) -> None:
-    setup = client.post(
-        "/api/auth/setup", json={"username": "admin", "password": "secure1234"},
-    )
-    assert setup.status_code == 200
-    assert _audit_log_is_empty(client)
-
-    client.headers["X-CSRF-Token"] = client.cookies[DEFAULT_CSRF_COOKIE_NAME]
-    change = client.put(
-        "/api/auth/password",
-        json={"current": "secure1234", "new_password": "newpassword1"},
-    )
-    assert change.status_code == 200
-    assert _audit_log_is_empty(client)
-
-
-@pytest.mark.parametrize("endpoint,username,password", [
-    ("login", "admin", "admin12345"),
-    ("setup", "myadmin", "secure1234"),
-])
-def test_login_and_setup_create_a_persisted_usable_session(
-    client: TestClient, endpoint: str, username: str, password: str,
-) -> None:
+def test_login_creates_a_persisted_usable_session(client: TestClient) -> None:
     """defect:#1590: issued cookies authenticate a committed session."""
-    if endpoint == "login":
-        _seed_admin(client)
+    _seed_admin(client)
     response = client.post(
-        f"/api/auth/{endpoint}", json={"username": username, "password": password},
+        "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     )
     assert response.status_code == 200
-    user_id = _get_user_id(client, username)
+    user_id = _get_user_id(client, "admin")
     with client.app.state.ctx.db() as session:
         assert session.query(UserSession).filter_by(user_id=user_id).count() == 1
     with closing(web_client(client.app, cookies=response.cookies)) as replay:
         response_me = replay.get("/api/auth/me")
     assert response_me.status_code == 200
-    assert response_me.json()["username"] == username
+    assert response_me.json()["username"] == "admin"
 
 
 def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
@@ -632,29 +450,6 @@ def test_logout_removes_the_session_and_rejects_its_cookie(
         assert replay.get("/api/auth/me").status_code == 401
 
 
-def test_password_change_replaces_session_and_rejects_old_cookie(client: TestClient) -> None:
-    """defect:#1590: only the replacement session survives a password change."""
-    _seed_admin(client)
-    _login(client, "admin", "admin12345")
-    old_cookie = client.cookies[DEFAULT_SESSION_COOKIE_NAME]
-    user_id = _get_user_id(client, "admin")
-    with client.app.state.ctx.db() as session:
-        old_sid = session.query(UserSession).filter_by(user_id=user_id).one().id
-
-    response = client.put(
-        "/api/auth/password",
-        json={"current": "admin12345", "new_password": "newpassword1"},
-    )
-    assert response.status_code == 200
-    with client.app.state.ctx.db() as session:
-        assert session.query(UserSession).filter_by(user_id=user_id).one().id != old_sid
-    for cookie, status in [(old_cookie, 401), (response.cookies[DEFAULT_SESSION_COOKIE_NAME], 200)]:
-        with closing(web_client(
-            client.app, cookies={DEFAULT_SESSION_COOKIE_NAME: cookie},
-        )) as replay:
-            assert replay.get("/api/auth/me").status_code == status
-
-
 def _get_user_id(client: TestClient, username: str) -> str:
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -663,7 +458,7 @@ def _get_user_id(client: TestClient, username: str) -> str:
         return user.id
 
 
-@pytest.mark.parametrize("operation", ["password", "login", "logout"])
+@pytest.mark.parametrize("operation", ["login", "logout"])
 def test_session_deletion_failure_rolls_back_auth_changes(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, operation: str, session_deletion_failure,
 ) -> None:
@@ -681,9 +476,6 @@ def test_session_deletion_failure_rolls_back_auth_changes(
         password_hash = db.query(User).one().password_hash
 
     method, path, payload = {
-        "password": ("PUT", "/api/auth/password", {
-            "current": "admin12345", "new_password": "newpassword1",
-        }),
         "login": ("POST", "/api/auth/login", {
             "username": "admin", "password": "admin12345",
         }),
