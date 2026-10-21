@@ -31,6 +31,7 @@ describe('queue stream API contract', () => {
 		const [url, init] = request();
 		expect(url).toBe('/api/queue-streams');
 		expect(init.method).toBe('POST');
+		expect(JSON.parse(String(init.body))).toEqual({ tracks: [{ generation_id: 'g-1' }] });
 	});
 
 	it('keeps a cold snapshot build alive for its 120 second timeout budget', () => {
