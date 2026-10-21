@@ -1,0 +1,8 @@
+claim_id = "fac6c2cde5cc435791578c7d6b255e72"
+agent = "claude"
+role = "builder"
+base = "f7d6461dff31b7746eb5a651067d3a0d48efdd95"
+branch = "claude/issue-1756-e2e-seeded-sessions"
+scope = [".github/workflows/e2e.yml", "frontend/e2e"]
+opened_commit = "0263d4292adf3b69c515baf53869d332a7e57f46"
+whole_reason = "K12 preparation slice; scope per the body."
