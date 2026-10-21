@@ -62,10 +62,9 @@ def create_session(
     expires_at: datetime,
     refresh_token: SecretStr | None = None,
 ) -> UserSession:
+    stored_token = None if refresh_token is None else refresh_token.get_secret_value()
     user_session = UserSession(
-        user_id=user_id,
-        expires_at=expires_at,
-        stored_refresh_token=refresh_token.get_secret_value() if refresh_token is not None else None,
+        user_id=user_id, expires_at=expires_at, stored_refresh_token=stored_token,
     )
     session.add(user_session)
     session.flush()
