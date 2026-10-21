@@ -39,10 +39,10 @@ songmaker_cli/album_api.py:api_unarchive_album # HTTP dispatcher: router.post('/
 songmaker_cli/album_api.py:api_unshare_album # HTTP dispatcher: router.delete('/albums/{album_id}/share')
 songmaker_cli/album_api.py:api_update_album # HTTP dispatcher: router.put('/albums/{album_id}', responses={404: {'description': 'Album not found'}, 422: {'description': 'Album title is required'}})
 songmaker_cli/album_api.py:api_upload_album_cover # HTTP dispatcher: router.post('/albums/{album_id}/cover')
-songmaker_cli/auth_api.py:change_password # HTTP dispatcher: router.put('/password', responses={401: {'description': 'Current password is incorrect'}, 429: {'description': 'Too many password change attempts'}})
-songmaker_cli/auth_api.py:logout # HTTP dispatcher: router.delete('/session')
+songmaker_cli/auth_api.py:finish_sign_in # HTTP dispatcher: sign_in_router.get('/auth/callback')
 songmaker_cli/auth_api.py:me # HTTP dispatcher: router.get('/me')
-songmaker_cli/auth_api.py:setup_required # HTTP dispatcher: router.get('/setup-required')
+songmaker_cli/auth_api.py:sign_out # HTTP dispatcher: sign_in_router.post('/auth/logout')
+songmaker_cli/auth_api.py:start_sign_in # HTTP dispatcher: sign_in_router.get('/login/oidc')
 songmaker_cli/conversation_api.py:api_chat_turn # HTTP dispatcher: router.post('/chat/turn', responses={404: {'description': 'Mentioned album or version does not exist'}, 422: {'description': 'Chat context or co-writer configuration is invalid'}})
 songmaker_cli/conversation_api.py:api_conversation_messages # HTTP dispatcher: router.get('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})
 songmaker_cli/conversation_api.py:api_delete_conversation # HTTP dispatcher: router.delete('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})
@@ -53,6 +53,7 @@ songmaker_cli/conversation_api.py:api_put_album_memory # HTTP dispatcher: router
 songmaker_cli/conversation_api.py:api_put_song_memory # HTTP dispatcher: router.put('/memory/songs/{song_id}')
 songmaker_cli/conversation_api.py:api_put_user_memory # HTTP dispatcher: router.put('/memory/user')
 songmaker_cli/db/engine.py:init_test_db # Explicit test database constructor; used by tests/conftest.py and database tests
+songmaker_cli/db/queries/auth.py:get_user_by_username # Operational callers scripts/seed_e2e_*.py and scripts/archive_e2e_albums.py outside src
 songmaker_cli/generation_api.py:api_active_generation # HTTP dispatcher: router.get('/songs/{song_id}/active-generation')
 songmaker_cli/generation_api.py:api_bulk_delete_generations # HTTP dispatcher: router.post('/generations/bulk-delete', responses={404: {'description': 'One or more generations do not exist'}})
 songmaker_cli/generation_api.py:api_cover_generation # HTTP dispatcher: router.post('/generations/{gen_id}/cover', response_model=JobResponse, responses={400: {'description': 'Cover request or source audio is invalid'}, 404: {'description': 'Version does not exist'}, 500: {'description': 'Source audio conversion failed'}, 503: {'description': 'Generation worker or job queue is unavailable'}})

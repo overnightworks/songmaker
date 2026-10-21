@@ -97,12 +97,8 @@ def set_user_role(session: Session, user_id: str, role: str) -> User:
 # ── Sessions ──────────────────────────────────────────────────────
 
 
-def create_session(
-    session: Session, user_id: str, expires_at: datetime, *, created_at: datetime | None = None,
-) -> UserSession:
+def create_session(session: Session, user_id: str, expires_at: datetime) -> UserSession:
     user_session = UserSession(user_id=user_id, expires_at=expires_at)
-    if created_at is not None:
-        user_session.created_at = created_at
     session.add(user_session)
     session.flush()
     return user_session
