@@ -1,5 +1,6 @@
 <script lang="ts">
 	import {
+		ACCOUNT_MENU_ACCOUNT_LABEL,
 		ACCOUNT_MENU_CLOSE_LABEL,
 		ACCOUNT_MENU_LABEL,
 		ACCOUNT_MENU_LOGOUT_LABEL,
@@ -10,7 +11,7 @@
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
 	import { page } from '$app/state';
-	import { signOutFailed } from '$lib/stores/auth';
+	import { isAdmin, signOutFailed } from '$lib/stores/auth';
 	import { openAppPage } from '$lib/stores/navigation';
 	import { theme, toggleTheme } from '$lib/stores/ui';
 	import { accountInitial } from '$lib/utils/format';
@@ -24,6 +25,7 @@
 
 	let popover: MenuPopover | undefined = $state();
 
+	const ACCOUNT_HREF = '/settings/account';
 	const SETTINGS_HREF = '/settings';
 
 	// A failed sign-out is told while the menu that tried it stays open; a
@@ -32,10 +34,10 @@
 		return () => signOutFailed.set(false);
 	}
 
-	function openSettings(): void {
+	function openPage(href: typeof ACCOUNT_HREF | typeof SETTINGS_HREF): void {
 		popover?.close();
-		if (page.url.pathname === SETTINGS_HREF) return;
-		void openAppPage(SETTINGS_HREF);
+		if (page.url.pathname === href) return;
+		void openAppPage(href);
 	}
 </script>
 
@@ -48,9 +50,14 @@
 	>
 		{#snippet trigger()}<span class="account-initial">{initial}</span>{/snippet}
 		<p class="account-heading">{ACCOUNT_MENU_SIGNED_IN_PREFIX} <b>{username}</b></p>
-		<button class="menu-item" onclick={openSettings}>
-			<Icon name="settings" class="menu-item-icon" />{RAIL_SETTINGS_LABEL}
+		<button class="menu-item" onclick={() => openPage(ACCOUNT_HREF)}>
+			<Icon name="user" class="menu-item-icon" />{ACCOUNT_MENU_ACCOUNT_LABEL}
 		</button>
+		{#if $isAdmin}
+			<button class="menu-item" onclick={() => openPage(SETTINGS_HREF)}>
+				<Icon name="settings" class="menu-item-icon" />{RAIL_SETTINGS_LABEL}
+			</button>
+		{/if}
 		<button class="menu-item" onclick={toggleTheme}>
 			{#if offersLight}
 				<Icon name="sun" class="menu-item-icon" />{THEME_SWITCH_TO_LIGHT_LABEL}

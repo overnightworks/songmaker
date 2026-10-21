@@ -506,16 +506,28 @@ describe('app shell', () => {
 		expect(strip.querySelector('.back')?.textContent?.trim()).toBe('Album');
 	});
 
-	it('renders the rail inline on wide layouts, keeping its Settings group and user row', async () => {
-		stubMatchMedia(false);
-		delete document.documentElement.dataset.pointer;
-		const target = await renderLayout(LIBRARY_ROUTE_PATH);
-		expect(target.querySelector('.mobile-strip')).toBeNull();
-		expect(target.querySelector('.phone-tabs')).toBeNull();
-		const rail = requireElement<HTMLElement>(target, '.rail');
-		expect(rail.textContent).toContain(RAIL_SETTINGS_LABEL);
-		expect(requireElement(rail, '.rail-bottom').textContent).toContain(USER.username);
-	});
+	it.each([
+		{ role: 'admin' as const, showsSettings: true },
+		{ role: 'user' as const, showsSettings: false }
+	])(
+		'renders the rail inline on wide layouts with its user row, and its Settings group only for an admin ($role)',
+		async ({ role, showsSettings }) => {
+			const person = { ...USER, role };
+			vi.mocked(checkAuth).mockImplementation(async () => {
+				currentUser.set(person);
+				authLoading.set(false);
+				return person;
+			});
+			stubMatchMedia(false);
+			delete document.documentElement.dataset.pointer;
+			const target = await renderLayout(LIBRARY_ROUTE_PATH);
+			expect(target.querySelector('.mobile-strip')).toBeNull();
+			expect(target.querySelector('.phone-tabs')).toBeNull();
+			const rail = requireElement<HTMLElement>(target, '.rail');
+			expect(rail.textContent?.includes(RAIL_SETTINGS_LABEL)).toBe(showsSettings);
+			expect(requireElement(rail, '.rail-bottom').textContent).toContain(USER.username);
+		}
+	);
 
 	it('makes the desktop workspace follow the rail edge control', async () => {
 		const target = await renderDesktopLayout();
