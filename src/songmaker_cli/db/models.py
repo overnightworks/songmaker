@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Final
 
+from pydantic import SecretStr
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -474,8 +475,16 @@ class UserSession(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID), index=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)
+    stored_refresh_token: Mapped[str | None] = mapped_column("refresh_token", Text, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="sessions")
+
+    @property
+    def refresh_token(self) -> SecretStr | None:
+        """The issuer's refresh token, wrapped so no repr, log or response prints it."""
+        if self.stored_refresh_token is None:
+            return None
+        return SecretStr(self.stored_refresh_token)
 
 
 class RateLimitSetting(Base):

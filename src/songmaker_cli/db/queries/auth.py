@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -14,6 +15,9 @@ from songmaker_cli.db.models import (
     User,
     UserSession,
 )
+
+if TYPE_CHECKING:
+    from pydantic import SecretStr
 
 log = logging.getLogger(__name__)
 
@@ -52,22 +56,29 @@ def set_user_role(session: Session, user_id: str, role: str) -> User:
 # ── Sessions ──────────────────────────────────────────────────────
 
 
-def create_session(session: Session, user_id: str, expires_at: datetime) -> UserSession:
-    user_session = UserSession(user_id=user_id, expires_at=expires_at)
+def create_session(
+    session: Session,
+    user_id: str,
+    expires_at: datetime,
+    refresh_token: SecretStr | None = None,
+) -> UserSession:
+    user_session = UserSession(
+        user_id=user_id,
+        expires_at=expires_at,
+        stored_refresh_token=refresh_token.get_secret_value() if refresh_token is not None else None,
+    )
     session.add(user_session)
     session.flush()
     return user_session
 
 
 def get_session_with_user(session: Session, session_id: str) -> UserSession | None:
-    query = (
+    return (
         session.query(UserSession)
         .options(joinedload(UserSession.user))
         .filter_by(id=session_id)
+        .first()
     )
-    if session.bind.dialect.name != "sqlite":
-        query = query.with_for_update(of=UserSession)
-    return query.first()
 
 
 def renew_session(
@@ -79,6 +90,18 @@ def renew_session(
     """Renew an existing row without recreating a revoked session."""
     rowcount = session.query(UserSession).filter_by(id=session_id).update({
         UserSession.expires_at: expires_at,
+    })
+    return rowcount == 1
+
+
+def replace_session_refresh_token(
+    session: Session,
+    session_id: str,
+    refresh_token: SecretStr,
+) -> bool:
+    """Store the rotated token on an existing row; a deleted session stays deleted."""
+    rowcount = session.query(UserSession).filter_by(id=session_id).update({
+        UserSession.stored_refresh_token: refresh_token.get_secret_value(),
     })
     return rowcount == 1
 

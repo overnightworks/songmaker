@@ -81,7 +81,7 @@ def finish_sign_in(
         db.rollback()
         return _refused(request, response, outcome)
     session = open_session(
-        request, config, outcome.account,
+        request, config, outcome,
         sessions=DatabaseSessionRecordStore(db),
         lock=lock,
         max_sessions=get_settings().max_concurrent_sessions_per_user,

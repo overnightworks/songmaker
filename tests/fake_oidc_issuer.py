@@ -42,6 +42,7 @@ class Person:
     subject: str
     username: str = "someone"
     groups: tuple[str, ...] = ("/apps/songmaker",)
+    refresh_token: str | None = None
 
 
 @dataclass
@@ -90,7 +91,10 @@ class FakeIssuer:
             "exp": int(self.now) + ID_TOKEN_LIFETIME_SECONDS,
         }
         id_token = jwt.encode(claims, self._key, algorithm="RS256", headers={"kid": KEY_ID})
-        return TokenEndpointAnswer(status=200, body=json.dumps({"id_token": id_token}).encode())
+        answer = {"id_token": id_token}
+        if self.person.refresh_token is not None:
+            answer["refresh_token"] = self.person.refresh_token
+        return TokenEndpointAnswer(status=200, body=json.dumps(answer).encode())
 
     def relying_party_for_app(self) -> OidcSignIn:
         client_config = build_oidc_client_config(get_settings())

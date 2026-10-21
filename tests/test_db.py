@@ -3619,6 +3619,7 @@ def test_keycloak_migration_drops_the_password_era_shapes_and_every_session(
         {"ip_address", "user_agent"},
     )
     assert not any(index["unique"] for index in inspector.get_indexes("users"))
+    assert "refresh_token" in {c["name"] for c in inspector.get_columns("user_sessions")}
     with engine.begin() as connection:
         assert connection.execute(text("SELECT count(*) FROM user_sessions")).scalar_one() == 0
         assert connection.execute(text("SELECT role FROM users")).scalar_one() == "admin"
@@ -3637,4 +3638,5 @@ def test_keycloak_migration_drops_the_password_era_shapes_and_every_session(
     assert {"ip_address", "user_agent"} <= {
         c["name"] for c in inspector.get_columns("user_sessions")
     }
+    assert "refresh_token" not in {c["name"] for c in inspector.get_columns("user_sessions")}
     engine.dispose()

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import event
 from webauth.ports import (
     AccountEvent,
@@ -150,12 +151,50 @@ def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -
     created = datetime(2026, 10, 1, 8, 0, tzinfo=timezone.utc)
     expires = created + timedelta(days=7)
 
-    record = sessions.create(_SUBJECT, now=created, expires_at=expires)
+    record = sessions.create(_SUBJECT, now=created, expires_at=expires, refresh_token=None)
     loaded = sessions.load(record.id)
 
     assert loaded.user.username == "nina"
     assert loaded.created_at.replace(tzinfo=timezone.utc) == created
     assert loaded.expires_at.replace(tzinfo=timezone.utc) == expires
+
+
+def test_a_session_without_a_refresh_token_answers_none(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(_SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None)
+
+    assert sessions.load(record.id).refresh_token is None
+
+
+def test_a_stored_refresh_token_is_returned_secret_and_kept_out_of_the_repr(
+    accounts, sessions, session,
+) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
+    )
+    session.commit()
+    session.expire_all()
+
+    loaded = sessions.load(record.id)
+
+    assert loaded.refresh_token.get_secret_value() == "rt-one"
+    assert "rt-one" not in repr(loaded.refresh_token)
+
+
+def test_replacing_a_refresh_token_updates_only_an_existing_session(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
+    )
+
+    assert sessions.replace_refresh_token(record.id, refresh_token=SecretStr("rt-two")) is True
+    assert sessions.load(record.id).refresh_token.get_secret_value() == "rt-two"
+
+    sessions.delete(record.id)
+
+    assert sessions.replace_refresh_token(record.id, refresh_token=SecretStr("rt-three")) is False
+    assert sessions.load(record.id) is None
 
 
 def test_an_unknown_session_is_absent(sessions) -> None:
@@ -164,7 +203,7 @@ def test_an_unknown_session_is_absent(sessions) -> None:
 
 def test_touching_a_session_writes_the_given_expiry(accounts, sessions) -> None:
     accounts.create_for_subject(_SUBJECT, "nina", "user")
-    record = sessions.create(_SUBJECT, now=_later(0), expires_at=_later(1))
+    record = sessions.create(_SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=None)
     renewed = _later(5)
 
     assert sessions.touch(record.id, expires_at=renewed) is True
@@ -178,7 +217,9 @@ def test_touch_does_not_recreate_an_absent_session(accounts, sessions, removal: 
     accounts.create_for_subject(_SUBJECT, "nina", "user")
     session_id = "missing"
     if removal != "missing":
-        session_id = sessions.create(_SUBJECT, now=_later(0), expires_at=_later()).id
+        session_id = sessions.create(
+            _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
+        ).id
         if removal == "deleted":
             sessions.delete(session_id)
         else:
@@ -195,7 +236,7 @@ def test_deleting_an_unknown_session_is_not_an_error(sessions) -> None:
 def test_deleting_a_users_sessions_removes_all_of_them(accounts, sessions, session) -> None:
     accounts.create_for_subject(_SUBJECT, "nina", "user")
     for _ in range(2):
-        sessions.create(_SUBJECT, now=_later(0), expires_at=_later())
+        sessions.create(_SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None)
 
     assert sessions.delete_for_user(_SUBJECT) == 2
     assert session.query(UserSession).count() == 0
@@ -206,7 +247,10 @@ def test_pruning_keeps_only_the_newest_sessions(accounts, sessions, keep_newest:
     accounts.create_for_subject(_SUBJECT, "nina", "user")
     base = datetime.now(timezone.utc)
     created = [
-        sessions.create(_SUBJECT, now=base + timedelta(seconds=index), expires_at=_later()).id
+        sessions.create(
+            _SUBJECT, now=base + timedelta(seconds=index), expires_at=_later(),
+            refresh_token=None,
+        ).id
         for index in range(3)
     ]
 
@@ -265,7 +309,7 @@ class _StoredRows:
         ),
         pytest.param(
             lambda s: DatabaseSessionRecordStore(s).create(
-                _SUBJECT, now=_later(0), expires_at=_later(),
+                _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
             ),
             id="creating a session",
         ),
@@ -289,7 +333,9 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
     """The endpoint owns the transaction. A request that fails after the auth
     machinery wrote must leave the database exactly as it found it."""
     DatabaseSubjectUserStore(session).create_for_subject(_SUBJECT, "nina", "user")
-    DatabaseSessionRecordStore(session).create(_SUBJECT, now=_later(0), expires_at=_later())
+    DatabaseSessionRecordStore(session).create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
+    )
     session.commit()
     before = _StoredRows.of(session)
 

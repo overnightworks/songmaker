@@ -1036,7 +1036,7 @@ events.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.19.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.20.0`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
@@ -1083,8 +1083,9 @@ through the `webauth.ports` protocols, implemented in
 `songmaker_cli/auth_stores.py` over `db/queries/auth.py`:
 `DatabaseSubjectUserStore` (an account is keyed by the Keycloak subject;
 `create_for_subject`, exact `get`, `set_role`), `DatabaseSessionRecordStore`
-(`create(user_id, now=, expires_at=)`, `touch(expires_at=)`, which returns whether
-exactly one existing row was updated; a missing row is refused, never recreated)
+(`create(user_id, now=, expires_at=, refresh_token=)`, `touch(expires_at=)` and
+`replace_refresh_token`, which each return whether exactly one existing row was
+updated; a missing row is refused, never recreated; `load` takes no row lock)
 and `DatabaseAuditSink`, which maps the library's account events (creation, role
 change) to audit rows without a person. No store commits: the endpoint owns its
 business transaction. `auth_dependencies.get_current_user` owns a separate short

@@ -3,7 +3,7 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.19.0` and hash-locked in
+the `server` extra to the release wheel of tag `v0.20.0` and hash-locked in
 `uv.lock` (#879, #1765). Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
@@ -56,7 +56,7 @@ A deploy that must be undone is undone by restore (`scripts/backup.sh` and `scri
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` validates the signed cookie and DB session under `SELECT ... FOR UPDATE`, checks expiry and lifetime, and renews the existing row. Its own short transaction commits renewal before the endpoint runs, without committing endpoint writes. Manual stream callers commit and close their authentication transaction before starting the stream.
+1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` validates the signed cookie and the DB session, checks expiry and lifetime, and renews the existing row with an update-only `touch`, so a session deleted meanwhile stays deleted. Its own short transaction commits renewal before the endpoint runs, without committing endpoint writes. Manual stream callers commit and close their authentication transaction before starting the stream.
    The logout route does not depend on `get_current_user`: the library's `log_out` reads the session cookie itself, deletes the stored session it names, and clears the cookies either way; the route then commits.
 2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. The sign-in routes are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
 
@@ -187,9 +187,10 @@ Five-layer defense:
 
 - The session and CSRF cookie names are no longer request-scheme-dependent: they are fixed at startup from the static `COOKIE_SECURE` setting (`__Host-session_id` / `__Host-csrf_token` when true, `session_id` / `csrf_token` when false). `X-Forwarded-Proto` and `TRUSTED_PROXIES` no longer influence the `Secure` flag or `Strict-Transport-Security`; see "Authentication" and "Proxy trust" above.
 
-### History: deliberate changes with webauth v0.19.0 (#1765)
+### History: deliberate changes with webauth v0.19.0 and v0.20.0 (#1765)
 
 - Sign-in moved from a password form to Keycloak; the password hasher, the login-attempt budget and the account lockout left with it, and the migration `7c3e91d0a4b2` dropped `users.password_hash`, `users.is_active`, `login_attempts` and the session origin columns (`ip_address`, `user_agent`), and the unique index on `users.username`. Every session row was deleted, so everyone signed in again once.
+- With v0.20.0 the session row holds the issuer's refresh token in `user_sessions.refresh_token` (added by the same migration; `NULL` when the issuer gave none, for example in seeded e2e sessions). It is a secret at rest: the ORM returns it only as a `SecretStr`, and no response, log line or `/health` carries it; the only session-related response is a count of active sessions. It leaves with the row on logout, expiry, pruning and revocation. Nothing in songmaker renews an access token with it yet (`replace_refresh_token` stores a rotated token for the library's `fresh_access_token`, which no route calls).
 - The Host check is songmaker's own `TrustedHostMiddleware` over `ALLOWED_HOSTS` (the library's host lists are Origin allowlists only). A request for another Host is answered 400. Compose adds `songmaker-web` to the list because the ACE-Step control plane and Prometheus call the web service by that name.
 
 ## Rate Limiting

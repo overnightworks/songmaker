@@ -561,7 +561,7 @@ def login_and_csrf(client, username: str) -> None:
         user_id = session.query(User).filter_by(username=username).one().id
         idle = timedelta(seconds=config.session_lifetime.idle_seconds)
         record = DatabaseSessionRecordStore(session).create(
-            user_id, now=now, expires_at=now + idle,
+            user_id, now=now, expires_at=now + idle, refresh_token=None,
         )
         session.commit()
         session_id = record.id

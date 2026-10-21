@@ -27,12 +27,14 @@ from songmaker_cli.db.queries.auth import (
     prune_overflow_sessions,
     record_audit,
     renew_session,
+    replace_session_refresh_token,
     set_user_role,
 )
 
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from pydantic import SecretStr
     from sqlalchemy.orm import Session, SessionTransaction
     from webauth.ports import AccountEvent
 
@@ -93,8 +95,15 @@ class DatabaseWriteLock:
 class DatabaseSessionRecordStore:
     session: Session
 
-    def create(self, user_id: str, *, now: datetime, expires_at: datetime) -> UserSession:
-        record = create_session(self.session, user_id, expires_at)
+    def create(
+        self,
+        user_id: str,
+        *,
+        now: datetime,
+        expires_at: datetime,
+        refresh_token: SecretStr | None,
+    ) -> UserSession:
+        record = create_session(self.session, user_id, expires_at, refresh_token)
         record.created_at = now
         self.session.flush()
         return record
@@ -104,6 +113,9 @@ class DatabaseSessionRecordStore:
 
     def touch(self, session_id: str, *, expires_at: datetime) -> bool:
         return renew_session(self.session, session_id, expires_at=expires_at)
+
+    def replace_refresh_token(self, session_id: str, *, refresh_token: SecretStr) -> bool:
+        return replace_session_refresh_token(self.session, session_id, refresh_token)
 
     def delete(self, session_id: str) -> None:
         delete_session(self.session, session_id)

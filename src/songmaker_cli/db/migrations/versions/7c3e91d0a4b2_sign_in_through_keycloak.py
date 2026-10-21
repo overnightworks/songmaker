@@ -1,4 +1,4 @@
-"""Drop the password-era account shapes and end every session of the old login."""
+"""Sign in through Keycloak: drop the password-era shapes, end old sessions, keep refresh tokens."""
 
 import sqlalchemy as sa
 from alembic import op
@@ -15,6 +15,7 @@ def upgrade() -> None:
     op.execute("DELETE FROM user_sessions")
     op.drop_table("login_attempts")
     with op.batch_alter_table("user_sessions") as batch_op:
+        batch_op.add_column(sa.Column("refresh_token", sa.Text, nullable=True))
         batch_op.drop_column("ip_address")
         batch_op.drop_column("user_agent")
     with op.batch_alter_table("users") as batch_op:
@@ -38,6 +39,7 @@ def downgrade() -> None:
         )
         batch_op.create_index("ix_users_username", ["username"], unique=True)
     with op.batch_alter_table("user_sessions") as batch_op:
+        batch_op.drop_column("refresh_token")
         batch_op.add_column(
             sa.Column("user_agent", sa.String(500), nullable=False, server_default=""),
         )

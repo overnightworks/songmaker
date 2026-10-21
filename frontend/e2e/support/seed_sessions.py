@@ -75,6 +75,7 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
         user.id,
         now=now,
         expires_at=now + timedelta(seconds=config.session_lifetime.idle_seconds),
+        refresh_token=None,
     )
     cookies = _issued_cookies(record.id, config)
     return {

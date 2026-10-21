@@ -500,6 +500,39 @@ def test_the_secret_is_in_no_log_and_no_response_of_the_sign_in(world: World, ca
         assert TEST_CLIENT_SECRET not in str(response.headers)
 
 
+def test_the_refresh_token_is_stored_with_the_session_and_reaches_no_log_or_response(
+    world: World, caplog,
+) -> None:
+    refresh_token = "rt-0123456789-never-shown"
+    person = Person(SUBJECT, "felix", (MEMBER,), refresh_token)
+
+    with caplog.at_level("DEBUG"):
+        responses = [
+            world.sign_in(person),
+            world.client.get("/api/auth/me"),
+            world.client.post("/auth/logout", headers=_same_origin()),
+        ]
+        with world.client:
+            responses.append(world.client.get("/health"))
+
+    assert refresh_token not in caplog.text
+    for response in responses:
+        assert refresh_token not in response.text
+        assert refresh_token not in str(response.headers)
+
+
+def test_a_sign_in_keeps_the_issued_refresh_token_in_the_session_row(world: World) -> None:
+    person = Person(SUBJECT, "felix", (MEMBER,), "rt-0123456789-stored")
+
+    world.sign_in(person)
+
+    with world.factory() as session:
+        stored = session.query(UserSession).one().refresh_token
+    assert stored is not None
+    assert stored.get_secret_value() == "rt-0123456789-stored"
+    assert "rt-0123456789-stored" not in repr(stored)
+
+
 def test_health_carries_neither_the_secret_nor_the_path_it_is_read_from(world: World) -> None:
     with world.client:
         response = world.client.get("/health")
