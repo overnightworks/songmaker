@@ -1,8 +1,0 @@
-claim_id = "ea444bd03e2340f59b79885ac55cbe45"
-agent = "claude"
-role = "builder"
-base = "f7d6461dff31b7746eb5a651067d3a0d48efdd95"
-branch = "claude/issue-1758-restore-into-stopped-stack"
-scope = ["scripts/BACKUP.md", "scripts/backup.sh", "scripts/restore.sh", "tests/test_restore_script.py"]
-opened_commit = "ea5ef2db4ca8ec0297b7e9b604c88c79c6701ade"
-whole_reason = "K12 preparation slice; scope per the body."
