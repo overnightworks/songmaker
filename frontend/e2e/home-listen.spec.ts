@@ -1,5 +1,5 @@
 import type { SongItem, PaginatedResponse } from '../src/lib/api/types';
-import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
 	COLLECTION_MENU_LABEL,
 	COLLECTION_MENU_DELETE_LABEL,
@@ -20,12 +20,12 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	STORAGE_STATE_FILE,
-	createAccount,
-	deleteAccount,
+	deleteSeededAccounts,
 	runMarker,
+	seedAccount,
 	seedUnpickedLibrary,
-	readSeededLibrary
+	readSeededLibrary,
+	signedInApi
 } from './seed';
 
 async function postFromPage(
@@ -44,16 +44,13 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 	browser
 }, testInfo) => {
 	const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
-	const admin = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
-	const username = `e2e-listen-${testInfo.project.name}-${runMarker()}`;
-	const password = 'E2eListen#1550!';
-	const accountId = await createAccount(admin, username, password);
-	let account: APIRequestContext | undefined;
+	const account = await seedAccount(`e2e-listen-${testInfo.project.name}-${runMarker()}`);
+	let accountApi: APIRequestContext | undefined;
 	try {
-		account = await request.newContext({ baseURL: BASE_URL });
-		const library = await seedUnpickedLibrary(account, { username, password });
+		accountApi = await signedInApi(account);
+		const library = await seedUnpickedLibrary(accountApi);
 		await context.clearCookies();
-		await context.addCookies((await account.storageState()).cookies);
+		await context.addCookies(account.cookies);
 		await page.goto(HOME_PATH);
 		await expect(listenRegion(page).getByText(HOME_LISTEN_EMPTY)).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath('listen-empty.png') });
@@ -160,9 +157,8 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 		}
 		guard.assertClean();
 	} finally {
-		await account?.dispose();
-		await deleteAccount(admin, accountId);
-		await admin.dispose();
+		await accountApi?.dispose();
+		await deleteSeededAccounts([account.id]);
 	}
 });
 

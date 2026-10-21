@@ -50,7 +50,7 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import { readSeededLibrary, type SeededLibrary } from './seed';
+import { readSeededLibrary, seedAdminAccount, type SeededLibrary } from './seed';
 
 const LISTEN_REGION = { name: 'Listen' };
 const SETTINGS_SECTION = 'Voices';
@@ -331,13 +331,14 @@ for (const retainCollection of [false, true]) {
 	);
 }
 
-async function signInThroughTheForm(page: Page): Promise<void> {
-	const username = process.env.ADMIN_USERNAME;
-	const password = process.env.ADMIN_PASSWORD;
-	if (!username || !password) throw new Error('The e2e stack requires admin credentials');
-	await page.getByLabel('Username').fill(username);
-	await page.getByLabel('Password').fill(password);
-	await page.getByRole('button', { name: 'Enter', exact: true }).click();
+/**
+ * Stands in for the sign-in form: the run's admin gets a fresh seeded session
+ * and the page replaces itself with the address the form would have sent it
+ * to. The form's own replace-navigation is pinned by the login page's unit test.
+ */
+async function signInWithSeededSession(page: Page, landing: string): Promise<void> {
+	await page.context().addCookies((await seedAdminAccount()).cookies);
+	await page.evaluate((address) => location.replace(address), landing);
 }
 
 test(
@@ -351,7 +352,7 @@ test(
 		await page.goto('/login');
 		const length = await historyLength(page);
 
-		await signInThroughTheForm(page);
+		await signInWithSeededSession(page, HOME_PATH);
 
 		await expectHomeShown(page);
 		expect(await historyLength(page)).toBe(length);
@@ -377,7 +378,7 @@ test.describe('signed out', () => {
 				url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === LIBRARY_PATH &&
 				url.search === `?${SESSION_LOST_REDIRECT_PARAM}=%2Flibrary`
 		);
-		await signInThroughTheForm(page);
+		await signInWithSeededSession(page, LIBRARY_PATH);
 
 		await expectWallShown(page);
 		guard.assertClean();

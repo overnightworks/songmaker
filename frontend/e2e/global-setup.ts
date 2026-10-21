@@ -1,11 +1,17 @@
-// One login per run: the seed API context logs in, seeds the library and
-// leaves its session cookies behind as the storage state every test reuses.
+// One seeded admin session per run: the seed API context carries it, seeds the
+// library and leaves its session cookies behind as the storage state every
+// test reuses. No password is posted.
 
-import { request } from '@playwright/test';
-import { BASE_URL, STORAGE_STATE_FILE, seedLibrary, writeSeededLibrary } from './seed';
+import {
+	STORAGE_STATE_FILE,
+	seedAdminAccount,
+	seedLibrary,
+	signedInApi,
+	writeSeededLibrary
+} from './seed';
 
 export default async function globalSetup(): Promise<void> {
-	const api = await request.newContext({ baseURL: BASE_URL });
+	const api = await signedInApi(await seedAdminAccount());
 	try {
 		writeSeededLibrary(await seedLibrary(api));
 		await api.storageState({ path: STORAGE_STATE_FILE });

@@ -1,4 +1,4 @@
-import { expect, request, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { LibraryWriteResponse, PaginatedResponse, SongItem } from '../src/lib/api/types';
 import {
 	ACCOUNT_MENU_LABEL,
@@ -31,21 +31,22 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	STORAGE_STATE_FILE,
-	createAccount,
-	deleteAccount,
+	deleteSeededAccounts,
 	runMarker,
-	seedUnpickedLibrary
+	seedAccount,
+	seedUnpickedLibrary,
+	signedInApi,
+	type SeededAccount
 } from './seed';
 
 const writeRegion = (page: Page) => page.getByRole('region', { name: 'Write', exact: true });
 const writeBodies = (page: Page) => writeRegion(page).locator('.wall-tile-body');
 const writeEndpoint = '**/api/library/write';
-async function loginWriter(page: Page, username: string, password: string): Promise<void> {
-	await page.goto('/login');
-	await page.getByLabel('Username', { exact: true }).fill(username);
-	await page.getByLabel('Password').fill(password);
-	await page.getByRole('button', { name: 'Enter', exact: true }).click();
+async function signInWriter(page: Page, account: SeededAccount): Promise<void> {
+	const context = page.context();
+	await context.clearCookies();
+	await context.addCookies(account.cookies);
+	await page.goto(HOME_PATH);
 	await expect(page).toHaveURL(new RegExp(`${HOME_PATH}$`));
 	await expect(writeRegion(page)).toBeVisible();
 }
@@ -107,15 +108,11 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 	context,
 	browser
 }, testInfo) => {
-	const admin = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
-	const username = `e2e-write-${testInfo.project.name}-${runMarker()}`;
-	const password = 'E2eWrite#1575!';
-	const id = await createAccount(admin, username, password);
-	const account = await request.newContext({ baseURL: BASE_URL });
+	const account = await seedAccount(`e2e-write-${testInfo.project.name}-${runMarker()}`);
+	const accountApi = await signedInApi(account);
 	let releaseRemoval: (() => void) | undefined;
 	try {
-		await context.clearCookies();
-		await loginWriter(page, username, password);
+		await signInWriter(page, account);
 		await expect(listenRegion(page).getByText(HOME_LISTEN_EMPTY)).toBeVisible();
 		await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toBeVisible();
 		expect(
@@ -129,7 +126,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		await expect(workspace(page).getByText('Continue', { exact: true })).toHaveCount(0);
 		await page.screenshot({ path: testInfo.outputPath('write-empty.png') });
 
-		const library = await seedUnpickedLibrary(account, { username, password });
+		const library = await seedUnpickedLibrary(accountApi);
 		const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
 		expect(songsResponse.ok()).toBe(true);
 		const songs: PaginatedResponse<SongItem> = await songsResponse.json();
@@ -264,29 +261,24 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 	} finally {
 		releaseRemoval?.();
 		await page.unrouteAll({ behavior: 'ignoreErrors' });
-		await account.dispose();
-		await deleteAccount(admin, id);
-		await admin.dispose();
+		await accountApi.dispose();
+		await deleteSeededAccounts([account.id]);
 	}
 });
 
 for (const pending of [false, true]) {
 	test(`1354_rule_06 1354_rule_19: logout replaces account A's Write document (read pending: ${pending})`, async ({
-		page,
-		context
+		page
 	}, testInfo) => {
-		const admin = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
-		const password = 'E2eWrite#1575!';
 		const marker = runMarker();
-		const users = ['a', 'b'].map(
-			(suffix) => `e2e-write-${testInfo.project.name}-${marker}-${suffix}`
+		const accounts = await Promise.all(
+			['a', 'b'].map((suffix) =>
+				seedAccount(`e2e-write-${testInfo.project.name}-${marker}-${suffix}`)
+			)
 		);
-		const ids: string[] = [];
 		let release: (() => void) | undefined;
 		try {
-			for (const username of users) ids.push(await createAccount(admin, username, password));
-			await context.clearCookies();
-			await loginWriter(page, users[0], password);
+			await signInWriter(page, accounts[0]);
 			const album = await writerPost(page, '/api/albums', { title: 'E2E Write account A' });
 			await writerPost(page, '/api/songs', { album_id: album.id, title: 'E2E Write private A' });
 			await page.reload();
@@ -309,7 +301,10 @@ for (const pending of [false, true]) {
 			}
 			if (shellOf(testInfo) === 'mobile') {
 				await page
-					.getByRole('button', { name: `${ACCOUNT_MENU_LABEL} · ${users[0]}`, exact: true })
+					.getByRole('button', {
+						name: `${ACCOUNT_MENU_LABEL} · ${accounts[0].username}`,
+						exact: true
+					})
 					.click();
 				await page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true }).click();
 			} else {
@@ -322,7 +317,7 @@ for (const pending of [false, true]) {
 			await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
 			release?.();
 			await page.unrouteAll({ behavior: 'wait' });
-			await loginWriter(page, users[1], password);
+			await signInWriter(page, accounts[1]);
 			await expect(writeRegion(page).getByText(HOME_WRITE_EMPTY)).toBeVisible();
 			for (const direction of ['back', 'forward'] as const) {
 				if (direction === 'back') await page.goBack();
@@ -335,8 +330,7 @@ for (const pending of [false, true]) {
 		} finally {
 			release?.();
 			await page.unrouteAll({ behavior: 'ignoreErrors' });
-			for (const id of ids) await deleteAccount(admin, id);
-			await admin.dispose();
+			await deleteSeededAccounts(accounts.map((account) => account.id));
 		}
 	});
 }
