@@ -16,8 +16,7 @@ import {
 	describeFailure,
 	installRefusalReactions,
 	isTransientApiFailure,
-	signInAddress,
-	signInReturnPath
+	signInAddress
 } from './fetch';
 import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
@@ -441,14 +440,8 @@ describe('refusal reactions', () => {
 		expect(told).toEqual(['second', 'first']);
 	});
 
-	const SIGN_IN_FORMS = [
-		{ form: 'the login form', path: '/api/auth/login' },
-		{ form: 'the setup form', path: '/api/auth/setup' },
-		{ form: 'the password change (wrong current password)', path: '/api/auth/password' }
-	];
-
 	it.each(clients)(
-		'925_M3_P5: a 401 outside the sign-in forms and the public share reads tells sessionLost through $client',
+		'925_M3_P5: a 401 outside the public share reads tells sessionLost through $client',
 		async ({ request }) => {
 			const told = refusalsTold();
 			serverRefusesWith(401);
@@ -456,19 +449,6 @@ describe('refusal reactions', () => {
 			await request('/api/songs/s1').catch((e: unknown) => e);
 
 			expect(told).toEqual(['sessionLost']);
-		}
-	);
-
-	it.each(SIGN_IN_FORMS)(
-		'925_M3_P6: a 401 from $form tells sessionLost nothing and rejects with its ApiError',
-		async ({ path }) => {
-			const told = refusalsTold();
-			serverRefusesWith(401);
-
-			const failure = await apiFetch(path, { method: 'POST' }).catch((e: unknown) => e);
-
-			expect(failure).toBeInstanceOf(ApiError);
-			expect(told).toEqual([]);
 		}
 	);
 
@@ -701,61 +681,35 @@ describe('apiFetch abort signal', () => {
 });
 
 describe('sign-in address', () => {
-	it.each([
-		[
-			'/album/northern-lights/glass-river',
-			'/login?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river'
-		],
-		['/album/a1?tab=lyrics', `/login?redirect=${encodeURIComponent('/album/a1?tab=lyrics')}`],
-		['/', '/login'],
-		['/login', '/login'],
-		['/login?redirect=%2Fx', '/login'],
-		['//attacker.example/x', '/login'],
-		['///attacker.example/x', '/login'],
-		['/%2F%2Fattacker.example/x', '/login']
-	])('asks to return from %s as %s', (returnTo, expected) => {
-		expect(signInAddress(returnTo)).toBe(expected);
-	});
-});
-
-describe('sign-in return path', () => {
-	function signInPage(query: string): URL {
-		return new URL(`/login${query}`, window.location.origin);
-	}
+	const SIGN_IN_START = '/login/oidc?next=';
 
 	it.each([
 		[
 			'the asked-for song',
-			'?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river',
+			'/album/northern-lights/glass-river',
 			'/album/northern-lights/glass-river'
 		],
-		[
-			'a same-origin path with its query',
-			`?redirect=${encodeURIComponent('/album/a1?tab=lyrics')}`,
-			'/album/a1?tab=lyrics'
-		],
-		['no target', '', '/'],
-		['an absolute URL', `?redirect=${encodeURIComponent('https://attacker.example/x')}`, '/'],
-		['a protocol-relative host', `?redirect=${encodeURIComponent('//attacker.example/x')}`, '/'],
-		['a backslash host', `?redirect=${encodeURIComponent('/\\attacker.example/x')}`, '/'],
-		['a host split by a tab', `?redirect=${encodeURIComponent('/\t/attacker.example/x')}`, '/'],
-		['a script URL', `?redirect=${encodeURIComponent('javascript:alert(1)')}`, '/'],
-		['the sign-in page itself', `?redirect=${encodeURIComponent('/login?redirect=/x')}`, '/'],
-		['the sign-in page spelled encoded', `?redirect=${encodeURIComponent('/%6Cogin')}`, '/'],
-		['an API address spelled encoded', `?redirect=${encodeURIComponent('/%61pi/auth/me')}`, '/'],
-		['a nested page', `?redirect=${encodeURIComponent('/album/a/b')}`, '/album/a/b'],
-		['a path below the sign-in page', `?redirect=${encodeURIComponent('/login/x')}`, '/'],
-		['the sign-in page with an encoded slash', `?redirect=${encodeURIComponent('/login%2F')}`, '/'],
-		['the sign-in page in capitals', `?redirect=${encodeURIComponent('/LOGIN')}`, '/'],
-		[
-			'the sign-in page in capitals with a slash',
-			`?redirect=${encodeURIComponent('/LOGIN/')}`,
-			'/'
-		],
-		['an API address in capitals', `?redirect=${encodeURIComponent('/API/auth/me')}`, '/'],
-		['the API root', `?redirect=${encodeURIComponent('/api')}`, '/']
-	])('lands on %s', (_label, query, expected) => {
-		expect(signInReturnPath(signInPage(query))).toBe(expected);
+		['a same-origin path with its query', '/album/a1?tab=lyrics', '/album/a1?tab=lyrics'],
+		['a nested page', '/album/a/b', '/album/a/b'],
+		['the library', '/', '/'],
+		['an absolute URL', 'https://attacker.example/x', '/'],
+		['a protocol-relative host', '//attacker.example/x', '/'],
+		['a triple slash host', '///attacker.example/x', '/'],
+		['a backslash host', '/\\attacker.example/x', '/'],
+		['a host split by a tab', '/\t/attacker.example/x', '/'],
+		['a host behind an encoded slash', '/%2F%2Fattacker.example/x', '/'],
+		['a script URL', 'javascript:alert(1)', '/'],
+		['the signed-out page', '/login', '/'],
+		['the signed-out page spelled encoded', '/%6Cogin', '/'],
+		['the sign-in start', '/login/oidc?next=/x', '/'],
+		['the signed-out page in capitals', '/LOGIN/', '/'],
+		['the no-access page', '/no-access', '/'],
+		['the failed sign-in page', '/auth/callback', '/'],
+		['an API address', '/api/auth/me', '/'],
+		['an API address spelled encoded', '/%61pi/auth/me', '/'],
+		['the API root in capitals', '/API', '/']
+	])('asks to return from %s to %s', (_label, returnTo, target) => {
+		expect(signInAddress(returnTo)).toBe(`${SIGN_IN_START}${encodeURIComponent(target)}`);
 	});
 });
 

@@ -606,6 +606,43 @@ export interface ExpectedRefusal {
 	statuses: readonly number[];
 }
 
+/**
+ * What the app's sign-in start answers: a 303 to the identity provider's
+ * authorization endpoint, whose host is the stack's issuer.
+ */
+export interface SignInStart {
+	requested: URL;
+	status: number;
+	location: URL;
+}
+
+/**
+ * The CI stack runs no identity provider, so anything that leaves the app's
+ * origin -- the redirect to the issuer, the issuer's logout -- ends on an
+ * empty stub instead of on the network.
+ */
+export async function stubIdentityProvider(context: BrowserContext): Promise<void> {
+	const appOrigin = new URL(BASE_URL).origin;
+	await context.route(
+		(url) => url.origin !== appOrigin,
+		(route) =>
+			route.fulfill({ status: 200, contentType: 'text/html', body: '<title>issuer</title>' })
+	);
+}
+
+const SIGN_IN_START_PATHNAME = '/login/oidc';
+
+/** Resolves with the answer of the next request to the server's sign-in start. */
+export function nextSignInStart(page: Page): Promise<SignInStart> {
+	return page
+		.waitForResponse((response) => new URL(response.url()).pathname === SIGN_IN_START_PATHNAME)
+		.then((response) => ({
+			requested: new URL(response.url()),
+			status: response.status(),
+			location: new URL(response.headers()['location'] ?? '', BASE_URL)
+		}));
+}
+
 /** The refusals a session or rate limit answers with. */
 export const SESSION_REFUSAL_STATUSES: readonly number[] = [401, 403, 429];
 

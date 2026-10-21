@@ -36,7 +36,6 @@ import {
 	updateCowriterSettings,
 	checkSetupRequired,
 	setupAdmin,
-	login,
 	logout,
 	fetchMe,
 	fetchUsers,
@@ -46,7 +45,6 @@ import {
 	fetchSessions,
 	forceLogout,
 	fetchLoginAttempts,
-	changePassword,
 	ApiError
 } from './client';
 
@@ -291,34 +289,19 @@ describe('Auth API', () => {
 		expect(JSON.parse(init.body)).toEqual({ username: 'admin', password: 'password123' });
 	});
 
-	it('login sends POST', async () => {
-		mockOk({ id: 'u1', username: 'alice', role: 'user' });
-		const result = await login('alice', 'password123');
-		expect(result.username).toBe('alice');
-		expect(mockFetch.mock.calls[0][0]).toBe('/api/auth/login');
-	});
-
-	it('logout sends DELETE', async () => {
-		mockOk({ status: 'ok' });
-		await logout();
+	it('logout posts to the same-origin logout route and returns the identity provider address', async () => {
+		mockOk({ logout_url: 'https://auth.example/logout?hint=1' });
+		const logoutUrl = await logout();
 		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/auth/session');
-		expect(init.method).toBe('DELETE');
+		expect(url).toBe('/auth/logout');
+		expect(init.method).toBe('POST');
+		expect(logoutUrl).toBe('https://auth.example/logout?hint=1');
 	});
 
 	it('fetchMe calls GET /api/auth/me', async () => {
 		mockOk({ id: 'u1', username: 'admin', role: 'admin' });
 		const result = await fetchMe();
 		expect(result.role).toBe('admin');
-	});
-
-	it('changePassword sends PUT', async () => {
-		mockOk({ status: 'ok' });
-		await changePassword('old', 'newpass123');
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/auth/password');
-		expect(init.method).toBe('PUT');
-		expect(JSON.parse(init.body)).toEqual({ current: 'old', new_password: 'newpass123' });
 	});
 });
 

@@ -5,9 +5,9 @@ export const APP_NAME = 'Hallucinai';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
-// Cross-file contract: fetch.ts's signInAddress writes this param,
-// whatever reads it back (the login page) must use the same name.
-export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
+// The server's sign-in start (`GET /login/oidc?next=`) reads the address to
+// return to from this param.
+export const SIGN_IN_NEXT_PARAM = 'next';
 
 // Mirrors webauth's `MIN_PASSWORD_LENGTH` (`webauth.passwords`) so the browser
 // refuses a short password before the round trip; the server stays authoritative.

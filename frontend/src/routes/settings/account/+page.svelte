@@ -1,104 +1,15 @@
 <script lang="ts">
-	import { changePassword } from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
-	import { PASSWORD_MIN_LENGTH } from '$lib/constants';
 	import { currentUser } from '$lib/stores/auth';
 
-	let current = $state('');
-	let newPass = $state('');
-	let confirm = $state('');
-	let showPassword = $state(false);
-	let submitting = $state(false);
-	let error = $state('');
-	let success = $state('');
-
 	const me = $derived($currentUser);
-
-	async function handleSubmit(e: SubmitEvent) {
-		e.preventDefault();
-		error = '';
-		success = '';
-
-		if (newPass !== confirm) {
-			error = 'Passwords do not match.';
-			return;
-		}
-
-		submitting = true;
-		try {
-			await changePassword(current, newPass);
-			success = 'Password changed.';
-			current = '';
-			newPass = '';
-			confirm = '';
-		} catch (err) {
-			error = describeFailure(err, 'Password change failed');
-		} finally {
-			submitting = false;
-		}
-	}
 </script>
 
 <div class="settings-page">
 	<h1>Account</h1>
-
-	<section>
-		<h2>Change Password</h2>
-		<p class="info">Logged in as <strong>{me?.username}</strong> ({me?.role})</p>
-		<form onsubmit={handleSubmit}>
-			<label>
-				Current Password
-				<div class="pw-field">
-					<input
-						type={showPassword ? 'text' : 'password'}
-						bind:value={current}
-						required
-						autocomplete="current-password"
-						disabled={submitting}
-					/>
-					<button
-						type="button"
-						class="pw-toggle"
-						onclick={() => (showPassword = !showPassword)}
-						tabindex="-1"
-					>
-						{showPassword ? '🙈' : '👁'}
-					</button>
-				</div>
-			</label>
-			<label>
-				New Password
-				<input
-					type={showPassword ? 'text' : 'password'}
-					bind:value={newPass}
-					minlength={PASSWORD_MIN_LENGTH}
-					required
-					autocomplete="new-password"
-					disabled={submitting}
-				/>
-			</label>
-			<label>
-				Confirm New Password
-				<input
-					type={showPassword ? 'text' : 'password'}
-					bind:value={confirm}
-					minlength={PASSWORD_MIN_LENGTH}
-					required
-					autocomplete="new-password"
-					disabled={submitting}
-				/>
-			</label>
-			{#if error}
-				<p class="error">{error}</p>
-			{/if}
-			{#if success}
-				<p class="success">{success}</p>
-			{/if}
-			<button type="submit" disabled={submitting}>
-				{submitting ? 'Changing...' : 'Change Password'}
-			</button>
-		</form>
-	</section>
+	<p class="identity">
+		<span class="username">{me?.username}</span>
+		<span class="role">{me?.role === 'admin' ? 'Admin' : 'Member'}</span>
+	</p>
 </div>
 
 <style>
@@ -114,109 +25,28 @@
 		margin-bottom: 1.5rem;
 	}
 
-	h2 {
+	.identity {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin: 0;
+	}
+
+	.username {
 		font-size: 1rem;
+		color: var(--text);
+		overflow-wrap: anywhere;
+	}
+
+	.role {
+		padding: 0.1rem 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-pill);
+		font-size: 0.75rem;
 		color: var(--text-muted);
-		margin-bottom: 0.5rem;
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
-	}
-
-	.info {
-		color: var(--text-muted);
-		font-size: 0.85rem;
-		margin-bottom: 1rem;
-	}
-
-	form {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	label {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-		font-size: 0.85rem;
-		color: var(--text-muted);
-	}
-
-	input {
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--input-radius);
-		color: var(--text);
-		padding: var(--input-padding);
-		font-size: 0.95rem;
-		width: 100%;
-		font-family: var(--font-body);
-	}
-
-	.pw-field {
-		position: relative;
-	}
-
-	.pw-field input {
-		padding-right: 2.5rem;
-	}
-
-	.pw-toggle {
-		position: absolute;
-		right: 6px;
-		top: 50%;
-		transform: translateY(-50%);
-		background: none;
-		border: none;
-		cursor: pointer;
-		font-size: 1rem;
-		padding: 2px 4px;
-		color: var(--text-muted);
-	}
-
-	input:focus {
-		outline: none;
-		border-color: var(--accent);
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
-	}
-
-	input:disabled {
-		opacity: 0.5;
-	}
-
-	button {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
-		border: none;
-		border-radius: var(--btn-radius-pill);
-		padding: var(--btn-padding-pill);
-		font-size: var(--btn-font-size);
-		font-weight: 600;
-		cursor: pointer;
-		margin-top: 0.5rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: var(--btn-letter-spacing);
-		transition: box-shadow 0.2s;
-	}
-
-	button:hover:not(:disabled) {
-		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
-	}
-
-	button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.error {
-		color: var(--score-bad);
-		font-size: 0.85rem;
-	}
-
-	.success {
-		color: var(--score-good);
-		font-size: 0.85rem;
 	}
 </style>
