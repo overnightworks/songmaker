@@ -1,0 +1,8 @@
+claim_id = "2569f0f24e9d4404aa9f4fdcabd00c12"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "21bfd461661664a40a7fe6e9177a243a0bac0a3c"
+branch = "claude/issue-1769-album-heading-outside-first-page"
+scope = ["frontend/e2e", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/stores/navigation.ts"]
+opened_commit = "10eb67e73ff34f1c2608d77517a5d2c93320e4ba"
+whole_reason = "One fix in navigation.ts plus the album view and one e2e cell; the e2e directory scope is the cell's home, not a widening."
