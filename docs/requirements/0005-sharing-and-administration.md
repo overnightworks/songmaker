@@ -8,7 +8,9 @@ honest inventory of what is currently reachable, and revoke a share so the
 previous public link stops working. A visitor cannot edit the shared work,
 start generation, or change Pick or Keep. A musician who is not an
 administrator cannot reach another musician's private albums, songs, takes, or
-playlists except through a currently active public share. A successful
+playlists except through a currently active public share. Administration is a
+closed signup: completing setup creates the first administrator; later users
+are created by an administrator with role administrator or user. A successful
 login on another device adds a session and does not sign every other device of
 that account out.
 
@@ -92,13 +94,37 @@ Quelle: DESK — CLAUDE.md ownership checks on every resource endpoint; corrobor
 ### REQ-ADMIN-01: A user has exactly one role: administrator or user.
 Quelle: DESK — current create and update user role is administrator or user.
 
+### REQ-ADMIN-02: When no users exist, completing setup creates the first administrator.
+Quelle: DESK — current first-run setup creates the first administrator.
+
+### REQ-ADMIN-03: After at least one user exists, Songmaker does not offer an open signup.
+Quelle: DESK — setup refuses once users exist; corroborated by the invite-only deployment (not an invite-token feature).
+
+### REQ-ADMIN-04: An administrator can create a user with a username, password, and role of administrator or user.
+Quelle: DESK — current admin create-user workflow.
+
+### REQ-ADMIN-05: A user cannot create another user.
+Quelle: DESK — admin endpoints require administrator role; corroborated by current admin-role tests.
+
+### REQ-ADMIN-06: Songmaker refuses to demote or deactivate the last active administrator.
+Quelle: DESK — current last-admin guards.
+
+### REQ-ADMIN-07: An administrator cannot deactivate or permanently delete their own account.
+Quelle: DESK — current admin user endpoints and self-deactivation refusal.
+
 ### REQ-ADMIN-08: A successful login adds an independent session and does not end every other valid session of the same account.
 Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
 
 ### REQ-ADMIN-09: Logout ends only the current session.
 Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
 
+### REQ-ADMIN-10: Changing a user's password, deactivating a user, or deleting a user ends every session of that user.
+Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
+
 ### REQ-ADMIN-11: When a user's concurrent sessions exceed Songmaker's concurrent-session cap, Songmaker ends the oldest sessions until the cap is met and does not end every session.
+Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
+
+### REQ-ADMIN-12: An administrator can revoke a listed session without being shown that session's raw token.
 Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
 
 ## Non-goals
@@ -122,7 +148,8 @@ Quelle: OPERATOR — Issue #67, “Festgelegtes Verhalten”.
 - Whether enabling a share must mark a presented take as Keep.
 - Whether an administrator may open another musician's private studio catalog.
 - Which role may change Co-Writer provider, model, or tail budget.
-- Invite tokens, email invites, or any join path.
+- Invite tokens, email invites, or any join path other than first-run setup
+  plus administrator-created username and password.
 - MFA, social features, collaboration, or recipient management.
 - A claimed share time.
 - The fate of a permanently deleted user's public shares.
