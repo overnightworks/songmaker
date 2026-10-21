@@ -26,6 +26,11 @@ if [[ ! -d "$BACKUP_DIR" ]]; then
     exit 1
 fi
 
+docker volume inspect "$VOLUME_NAME" > /dev/null || {
+    echo "ERROR: audio volume $VOLUME_NAME not found." >&2
+    exit 1
+}
+
 echo "=== Songmaker Backup: $TIMESTAMP ==="
 
 mkdir -p "$SNAPSHOT_DIR"

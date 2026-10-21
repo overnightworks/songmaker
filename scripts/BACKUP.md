@@ -81,13 +81,24 @@ The `nofail` flag means the system still boots if the drive is unplugged. The ba
 ./scripts/restore.sh /mnt/backup/songmaker/20260329_030000
 ```
 
-This will:
-1. Stop every writer: `songmaker-web`, `songmaker-music-worker`, `songmaker-acestep-worker-0`, `songmaker-scoring-worker`
-2. Drop and recreate the database, then restore it with `pg_restore --exit-on-error --single-transaction`; the first error aborts the script and rolls the restore back
-3. Replace the audio volume's contents with the snapshot's, dotfiles included
-4. Leave the writers stopped and print the command that starts them again
+Before restoring, stop auto-deploy and make sure no deployment is running, or it restarts writers mid-restore:
 
-You'll be asked to confirm before anything is overwritten. After a failed run the writers stay stopped; fix the cause and run it again.
+```bash
+sudo systemctl stop songmaker-autodeploy.timer
+```
+
+The script refuses while the timer is active or a deployment holds auto-deploy's lock (`songmaker-autodeploy.lock` in the git admin directory); wait for the deployment to finish and run it again. Keep the timer stopped until the recovery is verified, then `sudo systemctl start songmaker-autodeploy.timer`.
+
+This will:
+1. Refuse an incomplete snapshot: no `manifest.txt`, an unreadable dump (`pg_restore --list`), or an audio file count that differs from the manifest's `audio_files`
+2. Stop every writer: `songmaker-web`, `songmaker-music-worker`, `songmaker-acestep-worker-0`, `songmaker-scoring-worker`
+3. Drop and recreate the database, then restore it with `pg_restore --exit-on-error --single-transaction`
+4. Replace the audio volume's contents with the snapshot's, dotfiles included, and fail if the volume's file count differs from the manifest's
+5. Leave the writers stopped and print the commands that start them and re-enable auto-deploy
+
+You'll be asked to confirm before anything is overwritten.
+
+Only the import is one transaction. The drop and create commit before it and cannot be undone, so a failed import leaves an empty database, and a failed audio step leaves the restored database next to partial audio. In every case the snapshot is unchanged and the writers stay stopped. Recovery: fix the cause and run the script again with a good snapshot.
 
 ## What Gets Backed Up
 
