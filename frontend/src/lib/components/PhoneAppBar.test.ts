@@ -128,7 +128,9 @@ function stampNavigationsReportedSince(count: number): void {
 
 async function followLinkTo(address: Pathname): Promise<void> {
 	const reported = reportedNavigations.length;
-	await goto(resolve(address));
+	// `resolve` has one overload per route; TypeScript cannot relate a union
+	// this wide to them, so the address is narrowed to one static route.
+	await goto(resolve(address as '/'));
 	stampNavigationsReportedSince(reported);
 }
 

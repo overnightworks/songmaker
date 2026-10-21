@@ -81,7 +81,7 @@ export {
 	deletePlaylistCover
 } from './playlists';
 export { createQueueStreamSnapshot, createLibraryQueueStreamSnapshot } from './queue-streams';
-export { checkSetupRequired, setupAdmin, login, logout, fetchMe, changePassword } from './auth';
+export { checkSetupRequired, setupAdmin, logout, fetchMe } from './auth';
 
 export {
 	streamCoWriterTurn,

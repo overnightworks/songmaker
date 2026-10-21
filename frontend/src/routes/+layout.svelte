@@ -1,11 +1,16 @@
 <script lang="ts">
-	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import '../app.css';
 	import { onDestroy } from 'svelte';
-	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
-	import { installRefusalReactions, signInAddress } from '$lib/api/fetch';
+	import { fetchCapabilities } from '$lib/api/client';
+	import {
+		installRefusalReactions,
+		NO_ACCESS_PATH,
+		SIGN_IN_FAILED_PATH,
+		SIGN_IN_PATH,
+		signInAddress
+	} from '$lib/api/fetch';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import PhoneTabs from '$lib/components/shell/PhoneTabs.svelte';
@@ -40,8 +45,8 @@
 	import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
 	import {
-		historyStandsStill,
 		installHistoryController,
+		loadAfresh,
 		mountRouteOfLandedAddress,
 		stampNavigatedEntry
 	} from '$lib/history/historyController';
@@ -84,7 +89,9 @@
 	let { children } = $props();
 
 	let isPublicRoute = $derived(
-		page.url.pathname === '/login' ||
+		page.url.pathname === SIGN_IN_PATH ||
+			page.url.pathname === NO_ACCESS_PATH ||
+			page.url.pathname === SIGN_IN_FAILED_PATH ||
 			page.url.pathname === '/setup' ||
 			page.url.pathname.startsWith('/share/') ||
 			page.url.pathname.startsWith('/legal') ||
@@ -100,7 +107,7 @@
 	// one shape without a route change -- `page.url` keeps the last navigation's
 	// address, which is always one of them -- so this is one boolean rather
 	// than a URL: it stays true across the whole workspace and only flips when
-	// the browser genuinely leaves it. Signed out, and on login, setup, share and
+	// the browser genuinely leaves it. Signed out, and on the sign-in pages, setup, share and
 	// Settings, it is false — exactly the routes outside the `(library)` route
 	// group, which owns the workspace's own mount (issue #276); this layout
 	// keeps the stream and the landing handler, which outlive a route swap
@@ -260,14 +267,9 @@
 		if (get(authCheckError) || get(authCheckUnreachable)) {
 			return;
 		}
-		await historyStandsStill();
-		const signIn = signInAddress(page.url.pathname + page.url.search);
-		try {
-			const { required } = await checkSetupRequired();
-			await goto(required ? '/setup' : signIn, { replaceState: true });
-		} catch {
-			await goto(signIn, { replaceState: true });
-		}
+		// A full navigation to the server's sign-in start: nothing of this
+		// page survives into the signed-in one.
+		await loadAfresh(signInAddress(page.url.pathname + page.url.search));
 	}
 
 	function levelUp(): void {

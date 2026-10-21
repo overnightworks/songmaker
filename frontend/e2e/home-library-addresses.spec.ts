@@ -22,8 +22,9 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_SETTINGS_LABEL,
-	SESSION_LOST_REDIRECT_PARAM
+	SIGN_IN_NEXT_PARAM
 } from '../src/lib/constants';
+import { SIGN_IN_ACTION_LABEL } from '../src/lib/constants/auth';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	FlowGuard,
@@ -35,6 +36,7 @@ import {
 	appBar,
 	expectLibraryWallLoaded,
 	loseNetwork,
+	nextSignInStart,
 	nameStartingWith,
 	openAlbumFromRail,
 	openHome,
@@ -45,6 +47,7 @@ import {
 	regainNetwork,
 	scrollWallHalfway,
 	shellOf,
+	stubIdentityProvider,
 	waitForServiceWorkerControl,
 	wallBody,
 	workspace,
@@ -331,30 +334,30 @@ for (const retainCollection of [false, true]) {
 	);
 }
 
-async function signInThroughTheForm(page: Page): Promise<void> {
-	const username = process.env.ADMIN_USERNAME;
-	const password = process.env.ADMIN_PASSWORD;
-	if (!username || !password) throw new Error('The e2e stack requires admin credentials');
-	await page.getByLabel('Username').fill(username);
-	await page.getByLabel('Password').fill(password);
-	await page.getByRole('button', { name: 'Enter', exact: true }).click();
-}
-
 test(
-	'1354_rule_31 C3: sign-in lands on Home without adding a history entry',
+	'1354_rule_31 C3: Log in on the signed-out page leaves for the server sign-in start in one navigation, adding one history entry',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page, context }) => {
-		const guard = new FlowGuard(page, {
-			refusalsExpectedOn: [{ path: '/api/auth/me', statuses: [401] }]
-		});
+		const guard = new FlowGuard(page);
 		await context.clearCookies();
+		await stubIdentityProvider(context);
 		await page.goto('/login');
 		const length = await historyLength(page);
+		const documentRequests: string[] = [];
+		page.on('request', (request) => {
+			if (request.isNavigationRequest()) documentRequests.push(new URL(request.url()).pathname);
+		});
 
-		await signInThroughTheForm(page);
+		const [start] = await Promise.all([
+			nextSignInStart(page),
+			page.getByRole('link', { name: SIGN_IN_ACTION_LABEL, exact: true }).click()
+		]);
 
-		await expectHomeShown(page);
-		expect(await historyLength(page)).toBe(length);
+		expect(start.status).toBe(303);
+		expect(start.requested.search).toBe('');
+		expect(start.location.origin).not.toBe(new URL(page.url()).origin);
+		expect(documentRequests[0]).toBe('/login/oidc');
+		await expect.poll(() => historyLength(page), "one entry, the issuer's").toBe(length + 1);
 		guard.assertClean();
 	}
 );
@@ -362,24 +365,21 @@ test(
 test.describe('signed out', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
-	test('1354_rule_31 row 4: /library asks for sign-in and comes back to /library', async ({
-		page
+	test('1354_rule_31 row 4: /library asks the server to sign in and to come back to /library', async ({
+		page,
+		context
 	}) => {
 		const guard = new FlowGuard(page, {
 			refusalsExpectedOn: [{ path: '/api/auth/me', statuses: [401] }]
 		});
+		await stubIdentityProvider(context);
 
-		await page.goto(LIBRARY_PATH);
+		const [start] = await Promise.all([nextSignInStart(page), page.goto(LIBRARY_PATH)]);
 
-		await expect(page).toHaveURL(
-			(url) =>
-				url.pathname === '/login' &&
-				url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === LIBRARY_PATH &&
-				url.search === `?${SESSION_LOST_REDIRECT_PARAM}=%2Flibrary`
-		);
-		await signInThroughTheForm(page);
-
-		await expectWallShown(page);
+		expect(start.requested.searchParams.get(SIGN_IN_NEXT_PARAM)).toBe(LIBRARY_PATH);
+		expect(start.requested.search).toBe(`?${SIGN_IN_NEXT_PARAM}=%2Flibrary`);
+		expect(start.status).toBe(303);
+		expect(start.location.origin).not.toBe(start.requested.origin);
 		guard.assertClean();
 	});
 });

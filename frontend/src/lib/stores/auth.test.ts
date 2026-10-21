@@ -3,7 +3,6 @@ import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
 
 const mockFetchMe = vi.fn();
-const mockApiLogin = vi.fn();
 const mockApiLogout = vi.fn();
 
 vi.mock('$lib/api/client', async () => {
@@ -11,7 +10,6 @@ vi.mock('$lib/api/client', async () => {
 	return {
 		ApiError,
 		fetchMe: (...args: unknown[]) => mockFetchMe(...args),
-		login: (...args: unknown[]) => mockApiLogin(...args),
 		logout: (...args: unknown[]) => mockApiLogout(...args)
 	};
 });
@@ -23,24 +21,18 @@ vi.mock('$app/navigation', async () =>
 import {
 	currentUser,
 	authLoading,
-	authError,
 	authCheckError,
 	authCheckUnreachable,
-	authNotice,
 	isAdmin,
 	checkAuth,
 	classifyAuthFailure,
-	login,
 	logout,
 	handleSessionLost,
 	resetAuthForTests,
 	signOutFailed
 } from './auth';
 import { offline, resetConnectivityForTests } from './connectivity';
-import {
-	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
-	AUTH_SESSION_EXPIRED_DETAIL
-} from '$lib/constants/auth';
+import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError, apiFetch, installRefusalReactions, sseFetch } from '$lib/api/fetch';
 import {
@@ -75,13 +67,10 @@ function serverRefusesEveryRequest(): () => void {
 
 beforeEach(() => {
 	mockFetchMe.mockReset();
-	mockApiLogin.mockReset();
 	mockApiLogout.mockReset();
 	currentUser.set(null);
 	authLoading.set(true);
-	authError.set('');
 	authCheckError.set(null);
-	authNotice.set(null);
 	resetHistoryControllerForTests();
 	standInForDocumentLoadsForTests(documentLoads);
 	for (const load of Object.values(documentLoads)) load.mockReset();
@@ -115,7 +104,7 @@ describe('auth store', () => {
 describe('classifyAuthFailure', () => {
 	it.each([
 		['a 401 ApiError', new ApiError(401, 'unauthorized', AUTH_ME_PATH), 'unauthorized'],
-		['a 403 ApiError', new ApiError(403, 'Account disabled', AUTH_ME_PATH), 'disabled'],
+		['a 403 ApiError', new ApiError(403, 'Forbidden', AUTH_ME_PATH), 'retryable'],
 		['a 429 ApiError', new ApiError(429, 'slow down', AUTH_ME_PATH), 'retryable'],
 		['a 500 ApiError', new ApiError(500, 'boom', AUTH_ME_PATH), 'retryable'],
 		['a 502 ApiError', new ApiError(502, 'bad gateway', AUTH_ME_PATH), 'unreachable'],
@@ -135,14 +124,12 @@ describe('classifyAuthFailure', () => {
 describe('checkAuth', () => {
 	it('sets currentUser on success and clears any prior check error', async () => {
 		authCheckError.set('stale error');
-		authNotice.set('disabled');
 		mockFetchMe.mockResolvedValueOnce({ id: 'u1', username: 'admin', role: 'admin' });
 		const user = await checkAuth(vi.fn());
 		expect(user).toEqual({ id: 'u1', username: 'admin', role: 'admin' });
 		expect(get(currentUser)).toEqual(user);
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).toBeNull();
-		expect(get(authNotice)).toBeNull();
 	});
 
 	it('logs out on a 401 and clears the known user', async () => {
@@ -155,45 +142,12 @@ describe('checkAuth', () => {
 		expect(get(authCheckError)).toBeNull();
 	});
 
-	it.each([
-		['a first visit without a session', 'Authentication required', null],
-		['a reload whose session has expired', AUTH_SESSION_EXPIRED_DETAIL, 'unauthorized']
-	])(
-		'tells %s about an expired session only when there was one',
-		async (_label, detail, notice) => {
-			mockFetchMe.mockRejectedValueOnce(new ApiError(401, detail, AUTH_ME_PATH));
-			await checkAuth(vi.fn());
-			expect(get(authNotice)).toBe(notice);
-		}
-	);
-
-	it('keeps the expiry notice of a session that ended through the next session check', async () => {
-		mockFetchMe.mockRejectedValueOnce(new ApiError(401, AUTH_SESSION_EXPIRED_DETAIL, AUTH_ME_PATH));
-		await checkAuth(vi.fn());
-		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
-		await checkAuth(vi.fn());
-		expect(get(authNotice)).toBe('unauthorized');
-	});
-
-	it('logs out on a 403 (account disabled) and clears the known user', async () => {
-		currentUser.set(KNOWN_USER);
-		mockFetchMe.mockRejectedValueOnce(new ApiError(403, 'Account disabled', AUTH_ME_PATH));
-		const user = await checkAuth(vi.fn());
-		expect(user).toBeNull();
-		expect(get(currentUser)).toBeNull();
-		expect(get(authLoading)).toBe(false);
-		expect(get(authCheckError)).toBeNull();
-		expect(get(authNotice)).toBe('disabled');
-	});
-
 	it('keeps an unknown user null through a transient failure on first load', async () => {
-		authNotice.set('disabled');
 		mockFetchMe.mockRejectedValueOnce(new ApiError(429, 'slow down', AUTH_ME_PATH));
 		const user = await checkAuth(vi.fn());
 		expect(user).toBeNull();
 		expect(get(currentUser)).toBeNull();
 		expect(get(authCheckError)).not.toBeNull();
-		expect(get(authNotice)).toBeNull();
 	});
 
 	it.each([
@@ -250,121 +204,73 @@ describe('checkAuth with the server out of reach', () => {
 	});
 });
 
-describe('login', () => {
-	it('sets currentUser on success', async () => {
-		mockApiLogin.mockResolvedValueOnce({ id: 'u1', username: 'alice', role: 'user' });
-		const user = await login('alice', 'password');
-		expect(user.username).toBe('alice');
-		expect(get(currentUser)).toEqual(user);
-		expect(get(authError)).toBe('');
-	});
-
-	it('no longer tells a sign-out that failed before', async () => {
-		signOutFailed.set(true);
-		mockApiLogin.mockResolvedValueOnce({ id: 'u1', username: 'alice', role: 'user' });
-
-		await login('alice', 'password');
-
-		expect(get(signOutFailed)).toBe(false);
-	});
-
-	it('sets authError on 401', async () => {
-		authNotice.set('disabled');
-		mockApiLogin.mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', '/api/auth/login'));
-		await expect(login('alice', 'wrong')).rejects.toThrow();
-		expect(get(authError)).toBe('Invalid username or password.');
-		expect(get(authNotice)).toBeNull();
-	});
-
-	it('sets authError on 429', async () => {
-		mockApiLogin.mockRejectedValueOnce(new ApiError(429, 'Too many requests', '/api/auth/login'));
-		await expect(login('alice', 'x')).rejects.toThrow();
-		expect(get(authError)).toBe('Too many attempts. Try again later.');
-	});
-
-	it('sets detail from ApiError on other status', async () => {
-		mockApiLogin.mockRejectedValueOnce(new ApiError(403, 'Account disabled', '/api/auth/login'));
-		await expect(login('alice', 'x')).rejects.toThrow();
-		expect(get(authError)).toBe('Account disabled');
-	});
-
-	it('sets generic authError on non-API error', async () => {
-		mockApiLogin.mockRejectedValueOnce(new Error('Network failure'));
-		await expect(login('alice', 'x')).rejects.toThrow();
-		expect(get(authError)).toBe('Network failure');
-	});
-});
-
 describe('logout', () => {
-	it('ends the session on the server before it loads sign-in afresh', async () => {
+	const LOGOUT_URL = 'https://auth.example/realms/hallucinai/logout?id_token_hint=h';
+
+	it('ends the session on the server before it loads the identity provider logout afresh', async () => {
 		const order: string[] = [];
 		mockApiLogout.mockImplementation(async () => {
 			order.push('server');
+			return LOGOUT_URL;
 		});
 		documentLoads.assign.mockImplementation((url: string) => order.push(`load ${url}`));
 		currentUser.set(KNOWN_USER);
 
 		await logout();
 
-		expect(order).toEqual(['server', `load ${window.location.origin}/login`]);
+		expect(order).toEqual(['server', `load ${LOGOUT_URL}`]);
 		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
 	it('925_M3_S5: stays a sign-out when a request is refused while it ends the session, or after', async () => {
 		currentUser.set(KNOWN_USER);
-		const noticesShown: Array<string | null> = [];
-		const stopWatching = authNotice.subscribe((notice) => noticesShown.push(notice));
 		const refused = vi
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValue(
 				new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 })
 			);
-		mockApiLogout.mockImplementation(() => apiFetch('/api/songs/s1').catch(() => undefined));
+		mockApiLogout.mockImplementation(async () => {
+			await apiFetch('/api/songs/s1').catch(() => undefined);
+			return LOGOUT_URL;
+		});
 
 		await logout();
 		await apiFetch('/api/songs/s2').catch(() => undefined);
 		refused.mockRestore();
-		stopWatching();
 
-		expect(documentLoads.assign.mock.calls).toEqual([[`${window.location.origin}/login`]]);
+		expect(documentLoads.assign.mock.calls).toEqual([[LOGOUT_URL]]);
 		expect(documentLoads.reload).not.toHaveBeenCalled();
 		expect(documentLoads.replace).not.toHaveBeenCalled();
-		expect(noticesShown).not.toContain('unauthorized');
 	});
 
-	// Only the server's word ends the session: a 2xx, or a 401 for a session it
-	// already no longer held. Any other answer leaves the person signed in, and
-	// says so (#1340, ruling A).
+	// Only the server's word ends the session: its answer carries the address
+	// to leave for. Any other answer leaves the person signed in, and says so
+	// (#1340, ruling A).
 	it.each([
-		{ answer: 'a 2xx', reply: () => Promise.resolve(), leaves: true },
-		{
-			answer: 'a 401',
-			reply: () => Promise.reject(new ApiError(401, 'Not authenticated', '/api/auth/logout')),
-			leaves: true
-		},
+		{ answer: 'a 2xx', reply: () => Promise.resolve(LOGOUT_URL), leaves: true },
 		{
 			answer: 'no answer',
 			reply: () =>
-				Promise.reject(new NetworkError('/api/auth/logout', new TypeError('Failed to fetch'))),
+				Promise.reject(new NetworkError('/auth/logout', new TypeError('Failed to fetch'))),
 			leaves: false
 		},
 		{
 			answer: 'a 403',
-			reply: () => Promise.reject(new ApiError(403, 'CSRF check failed', '/api/auth/logout')),
+			reply: () => Promise.reject(new ApiError(403, 'CSRF check failed', '/auth/logout')),
 			leaves: false
 		},
 		{
 			answer: 'a 503',
-			reply: () => Promise.reject(new ApiError(503, 'Unavailable', '/api/auth/logout')),
+			reply: () => Promise.reject(new ApiError(503, 'Unavailable', '/auth/logout')),
 			leaves: false
 		},
 		{
 			answer: 'a 429',
-			reply: () => Promise.reject(new ApiError(429, 'Too many requests', '/api/auth/logout')),
+			reply: () => Promise.reject(new ApiError(429, 'Too many requests', '/auth/logout')),
 			leaves: false
 		}
 	])(
-		'925_M3_S6: after $answer to the sign-out, leaves for sign-in: $leaves, and a later refusal loads afresh only if it did not',
+		'925_M3_S6: after $answer to the sign-out, leaves for the logout address: $leaves, and a later refusal loads afresh only if it did not',
 		async ({ reply, leaves }) => {
 			onTestFinished(serverRefusesEveryRequest());
 			replaceHistoryEntry('/');

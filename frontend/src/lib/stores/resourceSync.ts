@@ -22,7 +22,6 @@ import {
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
-import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import { leavesForFreshDocument } from '$lib/history/historyController';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
 import {
@@ -183,7 +182,7 @@ export class ResourceSyncController {
 	async retry(): Promise<boolean> {
 		const shownError = this.state.error;
 		this.store.update((state) => ({ ...state, error: null }));
-		// A retry after teardown (an 'unauthorized' or 'disabled' probe result)
+		// A retry after teardown (an 'unauthorized' probe result)
 		// finds the owner stopped: start() alone opens the one EventSource it
 		// needs. Routing that case into restartConnection() below as well used
 		// to open a second connection and immediately close the first.
@@ -439,15 +438,6 @@ export class ResourceSyncController {
 		const source = this.source;
 		const result = await this.deps.probeAuth();
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
-		// Not a session loss (issue #385 finding 2): the account exists and is still logged in,
-		// an admin disabled it, so this must not read as "sign in again" -- that would only fail
-		// the same way.
-		if (result === 'disabled') {
-			this.teardown({ resetStore: false });
-			this.setVisibleError(AUTH_ACCOUNT_DISABLED_MESSAGE);
-			this.resolveReady(false);
-			return;
-		}
 		if (result === 'unauthorized') {
 			this.teardown({ resetStore: false });
 			this.setVisibleError(RESOURCE_SYNC_ERROR);
