@@ -25,11 +25,17 @@ def _second_session_gets_the_lock(pg_factory) -> None:
         other.rollback()
 
 
+def _transaction_id(session) -> int:
+    return session.execute(text("SELECT pg_current_xact_id()")).scalar_one()
+
+
 def test_a_nested_hold_keeps_the_lock_until_the_outer_commit(pg_factory) -> None:
     with pg_factory() as session:
         lock = DatabaseWriteLock(session)
         with lock.hold():
+            outer_transaction = _transaction_id(session)
             with lock.hold():
+                assert _transaction_id(session) == outer_transaction
                 _second_session_times_out_on_the_lock(pg_factory)
             _second_session_times_out_on_the_lock(pg_factory)
             session.commit()
@@ -40,8 +46,10 @@ def test_a_sequential_hold_keeps_the_lock_until_the_outer_commit(pg_factory) -> 
     with pg_factory() as session:
         lock = DatabaseWriteLock(session)
         with lock.hold():
+            first_transaction = _transaction_id(session)
             _second_session_times_out_on_the_lock(pg_factory)
         with lock.hold():
+            assert _transaction_id(session) == first_transaction
             _second_session_times_out_on_the_lock(pg_factory)
         session.commit()
     _second_session_gets_the_lock(pg_factory)
