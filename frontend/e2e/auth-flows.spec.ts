@@ -165,24 +165,34 @@ test('Log out on no access asks the server for the issuer logout address and lea
 }) => {
 	const guard = new FlowGuard(page);
 	await page.goto('/no-access');
-	// The page leaves for the issuer as soon as it has the answer, so the body is
-	// taken here, before the navigation, rather than read from a response afterwards.
-	let loggedOutAt: string | undefined;
+	// The page leaves for the issuer as soon as it has the answer, so the server's
+	// answer is taken here, before the navigation, not read from a response afterwards.
+	let answered:
+		| {
+				status: number;
+				headers: Record<string, string>;
+				setCookies: string[];
+				body: { logout_url?: string };
+		  }
+		| undefined;
 	await page.route(
 		(url) => url.pathname === '/auth/logout',
 		async (route) => {
 			const response = await route.fetch();
-			loggedOutAt = (await response.json()).logout_url;
+			answered = {
+				status: response.status(),
+				headers: response.headers(),
+				setCookies: response
+					.headersArray()
+					.filter(({ name }) => name.toLowerCase() === 'set-cookie')
+					.map(({ value }) => value),
+				body: await response.json()
+			};
 			await route.fulfill({ response });
 		}
 	);
 
-	const [logout, issuerLogout] = await Promise.all([
-		page.waitForResponse(
-			(response) =>
-				new URL(response.url()).pathname === '/auth/logout' &&
-				response.request().method() === 'POST'
-		),
+	const [issuerLogout] = await Promise.all([
 		page.waitForRequest((request) => {
 			const address = new URL(request.url());
 			return (
@@ -193,19 +203,16 @@ test('Log out on no access asks the server for the issuer logout address and lea
 		page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click()
 	]);
 
-	expect(logout.status()).toBe(200);
-	expect(logout.headers()['cache-control']).toContain('no-store');
-	const cleared = (await logout.headersArray())
-		.filter(({ name }) => name.toLowerCase() === 'set-cookie')
-		.map(({ value }) => value);
+	expect(answered?.status).toBe(200);
+	expect(answered?.headers['cache-control']).toContain('no-store');
 	for (const cookie of ['session_id', 'csrf_token']) {
 		expect(
-			cleared.some((line) => line.includes(`${cookie}=`)),
+			answered?.setCookies.some((line) => line.includes(`${cookie}=`)),
 			`${cookie} is cleared`
 		).toBe(true);
 	}
-	expect(loggedOutAt, 'the server names the issuer logout address').toBeTruthy();
-	expect(issuerLogout.url()).toBe(loggedOutAt);
+	expect(answered?.body.logout_url, 'the server names the issuer logout address').toBeTruthy();
+	expect(issuerLogout.url()).toBe(answered?.body.logout_url);
 	await expect.poll(() => page.url()).toBe(issuerLogout.url());
 	guard.assertClean();
 });
