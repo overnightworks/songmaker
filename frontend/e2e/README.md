@@ -199,15 +199,6 @@ username. A path ending in `/` covers the ids
 beneath it. Everywhere else, and for any 5xx, the guard is unchanged, and every
 flow, including each extra tab it opens, still asserts it clean.
 
-The absolute-age flow cannot wait its own limit out: `SESSION_ABSOLUTE_MAX_AGE`
-is 90 days, it is stack-wide, and lowering it would kill the one storage-state
-session the whole suite runs on (`global-setup.ts`). So
-`ageSessionPastAbsoluteLimit` (`seed.ts`) makes that one session genuinely too
-old from the stack's side — 91 days off its `user_sessions.created_at` row.
-The cookie and `expires_at` stay unchanged, isolating the absolute-age check
-from cookie expiry and inactivity. The server decides from the DB on the next
-request; nothing is intercepted and no Redis state is involved (`defect:#1590`).
-
 Summed together, the per-flow `FlowGuard` totals above (436 `/api` requests on
 **desktop** and 178 on **mobile**, read off one green run -- CI run
 34058495442, 2026-09-07, with `auth-flows.spec.ts`; of that, 86 and 80 are its

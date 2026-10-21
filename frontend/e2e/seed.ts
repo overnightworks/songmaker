@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { expect, request, type APIRequestContext, type Cookie } from '@playwright/test';
-import type { CreateUserRequest, JobItem } from '../src/lib/api/types';
+import type { JobItem } from '../src/lib/api/types';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
 
 const execFileAsync = promisify(execFile);
@@ -64,14 +64,10 @@ const RAIL_ALBUM_SONG_TITLES = ['Rail Echo', 'Rail Drift'] as const;
 const RAIL_FILLER_ALBUM_TITLE_PREFIX = 'E2E Rail Filler';
 const RAIL_FILLER_ALBUM_COUNT = 30;
 const E2E_ALBUM_TITLE_PREFIX = 'E2E ';
-// The role every account but the stack's admin holds (`CreateUserRequest` in
-// `api_models/auth.py`), and what the absolute-age flow needs to reach past:
-// `session_absolute_max_age_seconds`' own default in `settings.py`.
+// The role every account but the e2e admin holds.
 const NON_ADMIN_ROLE: AccountRole = 'user';
-const SESSION_ABSOLUTE_MAX_AGE_DAYS = 90;
 
-export type AccountRole = CreateUserRequest['role'];
-const SESSION_ID_SHAPE = /^[A-Za-z0-9_-]+$/;
+export type AccountRole = 'admin' | 'user';
 
 // The compose defaults for the throwaway CI database (`docker-compose.yml`),
 // which neither the workflow nor the README's local recipe overrides.
@@ -1102,51 +1098,6 @@ async function createOwnSong(
 		prompt: 'calm test tone'
 	});
 	return { id: song.id, address: `/album/${album.id}/${song.slug}` };
-}
-
-/**
- * Makes one session older than the absolute maximum age, from the stack's own
- * side.
- *
- * defect:#1590: webauth checks the DB row's `created_at` on every request.
- * Only that timestamp changes; `expires_at` and the browser cookie stay
- * intact so the refusal proves absolute age rather than inactivity or cookie
- * expiry. Nothing here fakes the refusal: the server decides from the row.
- *
- * A run cannot wait the age out and cannot shorten it either — the value is
- * stack-wide, and the whole suite runs on one storage-state session that would
- * die with it (`global-setup.ts`).
- */
-export async function ageSessionPastAbsoluteLimit(sessionId: string): Promise<void> {
-	if (!SESSION_ID_SHAPE.test(sessionId)) throw new Error(`Not a session id: ${sessionId}`);
-	const age = `${SESSION_ABSOLUTE_MAX_AGE_DAYS + 1} days`;
-	try {
-		const { stdout } = await execFileAsync(
-			'docker',
-			[
-				...COMPOSE_ARGS,
-				'exec',
-				'-T',
-				'postgres',
-				'psql',
-				'-U',
-				postgresUser(),
-				'-d',
-				postgresDatabase(),
-				'-v',
-				'ON_ERROR_STOP=1',
-				'-c',
-				`UPDATE user_sessions SET created_at = created_at - INTERVAL '${age}' WHERE id = '${sessionId}'`
-			],
-			{ cwd: REPO_ROOT }
-		);
-		if (!stdout.includes('UPDATE 1')) {
-			throw new Error(`Expected to age exactly one session, got: ${stdout.trim()}`);
-		}
-	} catch (err) {
-		const detail = err instanceof Error ? err.message : String(err);
-		throw new Error(`Ageing session ${sessionId} failed: ${detail}`, { cause: err });
-	}
 }
 
 export interface PhoneLibraryFixture {
