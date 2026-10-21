@@ -1,8 +1,0 @@
-claim_id = "5d0bd7150d4a44ac9da564efc19568a1"
-agent = "claude"
-role = "builder"
-base = "31d8673c8bdd22db55963be291892b8f917db13b"
-branch = "claude/issue-1763-merge-accounts-into-subject"
-scope = [".github/workflows/ci.yml", "docs/testing.md", "scripts/merge_accounts_into_subject.py", "tests/test_merge_accounts_into_subject.py"]
-opened_commit = "4638ad5f5460ec12bb7f691e5de69e7886069896"
-whole_reason = "K12 slice; scope per the body."
