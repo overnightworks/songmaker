@@ -20,6 +20,7 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
+	archiveOwnedAlbum,
 	runMarker,
 	seedAccount,
 	seedUnpickedLibrary,
@@ -45,9 +46,11 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 	const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 	const account = await seedAccount(`e2e-listen-${testInfo.project.name}-${runMarker()}`);
 	let accountApi: APIRequestContext | undefined;
+	let albumId: string | undefined;
 	try {
 		accountApi = await signedInApi(account);
 		const library = await seedUnpickedLibrary(accountApi);
+		albumId = library.albumId;
 		await context.clearCookies();
 		await context.addCookies(account.cookies);
 		await page.goto(HOME_PATH);
@@ -156,6 +159,8 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 		}
 		guard.assertClean();
 	} finally {
+		// The admin's Search lists every account's live albums.
+		if (accountApi && albumId) await archiveOwnedAlbum(accountApi, albumId);
 		await accountApi?.dispose();
 	}
 });

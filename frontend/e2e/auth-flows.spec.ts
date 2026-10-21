@@ -152,6 +152,9 @@ const ALBUM_OPENING_PATHS = [
 // The sign-out whose request never reaches the server: only that flow forgives
 // the requests the lost network fails.
 const LOSES_NETWORK_TAG = '@loses-network';
+// The non-admin visit of the admin page: the server's 403 on its reads is the
+// sentence under proof.
+const ADMIN_REFUSED_TAG = '@admin-refused';
 const TAKE_AUDIO_REFUSAL: ExpectedRefusal = { path: TAKE_AUDIO_PATH, statuses: [401] };
 const ADMIN_PAGE_PATH = '/settings/users';
 const VOICES_PAGE_PATH = '/settings/voices';
@@ -550,6 +553,9 @@ function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
 	}));
 	return [
 		...sessionRefusals,
+		...(testInfo.tags.includes(ADMIN_REFUSED_TAG)
+			? [{ path: ADMIN_API_PREFIX, statuses: [403] }]
+			: []),
 		...(testInfo.tags.includes(TAKE_AUDIO_REFUSED_TAG) ? [TAKE_AUDIO_REFUSAL] : [])
 	];
 }
@@ -717,33 +723,35 @@ test(
 	}
 );
 
-test('the admin page is refused for a non-admin, with nothing of it rendered', async ({
-	page
-}, testInfo) => {
-	await signIn(page);
+test(
+	'the admin page is refused for a non-admin, with nothing of it rendered',
+	{ tag: ADMIN_REFUSED_TAG },
+	async ({ page }, testInfo) => {
+		await signIn(page);
 
-	const isAdminRead = (response: Response): boolean =>
-		new URL(response.url()).pathname.startsWith(ADMIN_API_PREFIX);
-	const adminAnswers: number[] = [];
-	page.on('response', (response) => {
-		if (isAdminRead(response)) adminAnswers.push(response.status());
-	});
-	// The refusal renders from the session the page already holds, before the
-	// reads the page starts on mount have been answered.
-	const firstAdminAnswer = page.waitForResponse(isAdminRead);
+		const isAdminRead = (response: Response): boolean =>
+			new URL(response.url()).pathname.startsWith(ADMIN_API_PREFIX);
+		const adminAnswers: number[] = [];
+		page.on('response', (response) => {
+			if (isAdminRead(response)) adminAnswers.push(response.status());
+		});
+		// The refusal renders from the session the page already holds, before the
+		// reads the page starts on mount have been answered.
+		const firstAdminAnswer = page.waitForResponse(isAdminRead);
 
-	await page.goto(ADMIN_PAGE_PATH);
+		await page.goto(ADMIN_PAGE_PATH);
 
-	await expect(page.getByText(ADMIN_REFUSED_MESSAGE)).toBeVisible();
-	// Not one control of the page behind it: no tabs to switch.
-	await expect(page.getByRole('button', { name: 'Models', exact: true })).toBeHidden();
+		await expect(page.getByText(ADMIN_REFUSED_MESSAGE)).toBeVisible();
+		// Not one control of the page behind it: no tabs to switch.
+		await expect(page.getByRole('button', { name: 'Models', exact: true })).toBeHidden();
 
-	// And the server refused it too -- the page is not merely hiding what it was
-	// handed.
-	await firstAdminAnswer;
-	expect(adminAnswers.filter((status) => status !== 403)).toEqual([]);
-	await attachShot(page, testInfo, 'auth-admin-refused');
-});
+		// And the server refused it too -- the page is not merely hiding what it was
+		// handed.
+		await firstAdminAnswer;
+		expect(adminAnswers.filter((status) => status !== 403)).toEqual([]);
+		await attachShot(page, testInfo, 'auth-admin-refused');
+	}
+);
 
 test('defect:#1590: a session past its absolute maximum age lands on the login page', async ({
 	page

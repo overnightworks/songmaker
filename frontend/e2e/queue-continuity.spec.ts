@@ -35,6 +35,7 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
+	archiveOwnedAlbum,
 	readSeededLibrary,
 	runMarker,
 	seedAccount,
@@ -539,6 +540,8 @@ test.describe('on a fresh account', () => {
 	});
 
 	test.afterAll(async () => {
+		// The admin's Search lists every account's live albums.
+		await archiveOwnedAlbum(accountApi, unpicked.albumId);
 		await accountApi.dispose();
 	});
 
