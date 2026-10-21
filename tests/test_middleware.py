@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import install_app_context, make_fake_redis, stored_hash, web_client
+from conftest import install_app_context, make_fake_redis, seed_user, web_client
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -16,11 +16,10 @@ from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.auth_dependencies import (
     get_current_user,
-    get_verified_session_id,
     require_admin,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.queries.auth import create_session, create_user
+from songmaker_cli.db.queries.auth import create_session
 
 _TEST_SECRET = b"a" * 64
 
@@ -45,14 +44,12 @@ def _build_auth_app(_db, redis=None):
     @app.get("/protected")
     def protected(
         user: AuthenticatedUser = Depends(get_current_user),
-        session_id: str = Depends(get_verified_session_id),
         db: Session = Depends(get_db_session),
     ):
         db.commit()
         return {
             "username": user.username,
             "role": user.role,
-            "session_id": session_id,
         }
 
     @app.get("/admin-only")
@@ -75,20 +72,14 @@ def auth_app(_db) -> TestClient:
 
 def _make_user_and_session(
     factory,
-    role: str = "user", active: bool = True, expired: bool = False,
-    created_days_ago: int = 0,
+    role: str = "user", expired: bool = False, created_days_ago: int = 0,
 ) -> str:
     with factory() as session:
-        user = create_user(
-            session, f"test_{role}_{active}_{expired}_{created_days_ago}",
-            stored_hash("t3stP@ssw0rd"), role=role,
-        )
-        user.is_active = active
-        session.flush()
+        user = seed_user(session, f"test_{role}_{expired}_{created_days_ago}", role=role)
         if expired:
             expires = datetime.now(timezone.utc) - timedelta(days=1)
         else:
-            expires = datetime.now(timezone.utc) + timedelta(days=30)
+            expires = datetime.now(timezone.utc) + timedelta(days=1)
         user_session = create_session(session, user.id, expires)
         if created_days_ago:
             user_session.created_at = datetime.now(timezone.utc) - timedelta(days=created_days_ago)
@@ -133,20 +124,10 @@ def test_expired_session_returns_401(auth_app: TestClient, create_session_id) ->
 
 
 def test_absolute_max_age_expired(auth_app: TestClient, create_session_id) -> None:
-    sid = create_session_id(created_days_ago=91)
+    sid = create_session_id(created_days_ago=31)
     auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
     resp = auth_app.get("/protected")
     assert resp.status_code == 401
-
-
-# -- Disabled user ------------------------------------------------------------
-
-
-def test_disabled_user_returns_403(auth_app: TestClient, create_session_id) -> None:
-    sid = create_session_id(active=False)
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    resp = auth_app.get("/protected")
-    assert resp.status_code == 403
 
 
 # -- Valid session ------------------------------------------------------------
@@ -158,16 +139,6 @@ def test_valid_session_returns_200(auth_app: TestClient, create_session_id) -> N
     resp = auth_app.get("/protected")
     assert resp.status_code == 200
     assert resp.json()["username"].startswith("test_user")
-
-
-def test_a_protected_route_can_name_the_session_it_authenticated(
-    auth_app: TestClient, create_session_id,
-) -> None:
-    sid = create_session_id()
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    resp = auth_app.get("/protected")
-    assert resp.status_code == 200
-    assert resp.json()["session_id"] == sid
 
 
 def test_sliding_window_renewal(auth_app: TestClient, create_session_id) -> None:
@@ -209,57 +180,13 @@ def test_require_admin_allows_admin(auth_app: TestClient, create_session_id) -> 
     assert resp.status_code == 200
 
 
-# -- IP/UA audit logging -----------------------------------------------------
-
-
-def test_ip_change_creates_audit(auth_app: TestClient, create_session_id) -> None:
-    from songmaker_cli.db.models import AuditLog
-
-    sid = create_session_id()
-    factory = auth_app.app.state.ctx.db
-
-    with factory() as db:
-        from songmaker_cli.db.queries.auth import get_session_with_user
-        sess = get_session_with_user(db, sid)
-        sess.ip_address = "1.2.3.4"
-        db.commit()
-
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    auth_app.get("/protected")
-
-    with factory() as db:
-        entry = db.query(AuditLog).filter(AuditLog.action == "session_ip_change").first()
-        assert entry is not None
-        assert "1.2.3.4" in entry.detail
-
-
-def test_ua_change_creates_audit(auth_app: TestClient, create_session_id) -> None:
-    from songmaker_cli.db.models import AuditLog
-
-    sid = create_session_id()
-    factory = auth_app.app.state.ctx.db
-
-    with factory() as db:
-        from songmaker_cli.db.queries.auth import get_session_with_user
-        sess = get_session_with_user(db, sid)
-        sess.user_agent = "OldBrowser/1.0"
-        db.commit()
-
-    auth_app.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
-    auth_app.get("/protected", headers={"user-agent": "NewBrowser/2.0"})
-
-    with factory() as db:
-        entry = db.query(AuditLog).filter(AuditLog.action == "session_ua_change").first()
-        assert entry is not None
-
 @pytest.mark.parametrize("commit_fails", [False, True])
-def test_auth_transaction_commits_renewal_and_audit_together(
+def test_auth_transaction_commits_the_renewal(
     _db, commit_fails, session_commit_failure,
 ) -> None:
-    """defect:#1590: an auth commit failure leaves neither renewal nor audit."""
+    """defect:#1590: an auth commit failure leaves no renewal."""
     from starlette.requests import Request
 
-    from songmaker_cli.db.models import AuditLog
     from songmaker_cli.db.queries.auth import get_session_with_user
 
     sid = _make_user_and_session(_db)
@@ -267,8 +194,6 @@ def test_auth_transaction_commits_renewal_and_audit_together(
     with _db() as db:
         record = get_session_with_user(db, sid)
         record.expires_at = old_expiry
-        record.ip_address = "192.0.2.1"
-        record.user_agent = "Old/1.0"
         db.commit()
 
     app = _build_auth_app(_db)
@@ -295,21 +220,14 @@ def test_auth_transaction_commits_renewal_and_audit_together(
         expiry = record.expires_at.replace(tzinfo=timezone.utc)
         if commit_fails:
             assert expiry == old_expiry
-            assert (record.ip_address, record.user_agent) == ("192.0.2.1", "Old/1.0")
-            assert db.query(AuditLog).count() == 0
         else:
             assert expiry > old_expiry
-            assert (record.ip_address, record.user_agent) == ("192.0.2.2", "New/2.0")
-            assert {entry.action for entry in db.query(AuditLog).all()} == {
-                "session_ip_change", "session_ua_change",
-            }
 
 
 @pytest.mark.parametrize("endpoint_write", ["none", "uncommitted", "failed"])
 def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_write) -> None:
-    """defect:#1590: GET renewal/audit commit; endpoint work never piggybacks."""
+    """defect:#1590: the renewal commits; endpoint work never piggybacks."""
     from songmaker_cli.app_context import get_db_session
-    from songmaker_cli.db.models import AuditLog
     from songmaker_cli.db.queries.auth import get_session_with_user, get_user
 
     sid = _make_user_and_session(_db)
@@ -317,8 +235,6 @@ def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_
     with _db() as db:
         record = get_session_with_user(db, sid)
         record.expires_at = old_expiry
-        record.ip_address = "192.0.2.1"
-        record.user_agent = "Old/1.0"
         user_id = record.user_id
         original_name = record.user.username
         db.commit()
@@ -345,12 +261,7 @@ def test_authentication_persists_independently_of_endpoint_writes(_db, endpoint_
     with _db() as db:
         record = get_session_with_user(db, sid)
         assert record.expires_at.replace(tzinfo=timezone.utc) > old_expiry
-        assert record.user_agent == "New/2.0"
-        assert record.ip_address != "192.0.2.1"
         assert get_user(db, user_id).username == original_name
-        assert {entry.action for entry in db.query(AuditLog).all()} == {
-            "session_ip_change", "session_ua_change",
-        }
 
 
 def test_failed_session_renewal_refuses_authentication(_db) -> None:

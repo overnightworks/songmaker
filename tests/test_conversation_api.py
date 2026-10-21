@@ -20,7 +20,13 @@ from agent_providers.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from conftest import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    seed_user,
+    web_client,
+)
 from fastapi import Request
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
@@ -44,7 +50,7 @@ from songmaker_cli.db.models import (
 
 def _seed_owned(session, user_id: str) -> None:
     session.add(User(
-        id=user_id, username=f"user-{user_id}", password_hash="x", role="user",
+        id=user_id, username=f"user-{user_id}", role="user",
     ))
     session.flush()
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
@@ -78,7 +84,7 @@ def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
     with factory() as session:
         _seed_owned(session, "u-owner")
         session.add(User(
-            id="u-spy", username="spy", password_hash="x", role="user",
+            id="u-spy", username="spy", role="user",
         ))
         session.commit()
 
@@ -478,19 +484,17 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
     tmp_path, mock_arq_pool, chat_job_status,
 ):
     """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
-    from conftest import login_and_csrf, make_test_app, stored_hash
-
-    from songmaker_cli.db.queries.auth import create_user
+    from conftest import login_and_csrf, make_test_app
 
     def _seed_a_turn_the_restart_interrupted(session) -> None:
-        musician = create_user(session, "musician", stored_hash("musician-pass"), role="user")
+        musician = seed_user(session, "musician", role="user")
         session.add(Conversation(id="conv-1", user_id=musician.id))
         session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
         session.add(Job(type="chat", user_id=musician.id, status=chat_job_status))
 
     c, factory = make_test_app(tmp_path, seed_db=_seed_a_turn_the_restart_interrupted)
     with c:
-        login_and_csrf(c, "musician", "musician-pass")
+        login_and_csrf(c, "musician")
         body = c.get("/api/conversations/conv-1").json()
 
     assert [m["content"] for m in body["messages"]] == ["Ja bitte"]
@@ -1007,7 +1011,7 @@ def test_list_conversations_scoped_to_user(client):
     with factory() as session:
         session.add(Conversation(id="mine-1", user_id="u-test", title="mine"))
         session.add(User(
-            id="u-other", username="other", password_hash="x", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Conversation(id="not-mine", user_id="u-other", title="no"))
@@ -1057,7 +1061,7 @@ def test_get_conversation_rejects_other_user(client):
     c, factory = client
     with factory() as session:
         session.add(User(
-            id="u-owner2", username="o", password_hash="x", role="user",
+            id="u-owner2", username="o", role="user",
         ))
         session.flush()
         session.add(Conversation(id="not-mine", user_id="u-owner2", title="x"))
@@ -1124,7 +1128,7 @@ def test_delete_conversation_rejects_other_user(client):
     c, factory = client
     with factory() as session:
         session.add(User(
-            id="u-owner3", username="o", password_hash="x", role="user",
+            id="u-owner3", username="o", role="user",
         ))
         session.flush()
         session.add(Conversation(

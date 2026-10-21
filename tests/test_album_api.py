@@ -16,7 +16,6 @@ from conftest import (
     login_and_csrf,
     make_test_app,
     queries_without_session_auth,
-    stored_hash,
 )
 from sqlalchemy import event
 
@@ -74,7 +73,7 @@ def _add_song_with_generation(
 
 def _seed_pick_scenarios(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, role="admin",
     ))
 
     session.add(Album(id="no-songs", title="No Songs", artist="A"))
@@ -97,7 +96,7 @@ def _seed_pick_scenarios(session) -> None:
 @pytest.fixture
 def picks_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_pick_scenarios)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     return client, factory
 
 
@@ -221,7 +220,7 @@ def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> No
     relationship either, so the aggregate must not silently count it back in."""
     def _seed(session) -> None:
         session.add(User(
-            username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+            username=_ADMIN_USER, role="admin",
         ))
         session.add(Album(id="alb", title="Album", artist="A"))
         session.add(Song(id="live", title="Live", album_id="alb", track_number=1, slug="live"))
@@ -231,7 +230,7 @@ def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> No
         ))
 
     client, _ = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     resp = client.get("/api/albums")
     assert resp.status_code == 200
     by_id = {a["id"]: a for a in resp.json()["items"]}
@@ -240,7 +239,7 @@ def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> No
 
 def _seed_playable_take_scenarios(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, role="admin",
     ))
     for album_id in (
         "no-songs", "songless-song", "only-archived", "only-empty-mp3", "empty-and-archived",
@@ -282,7 +281,7 @@ _PLAYABLE_TAKE_EXPECTATIONS = {
 @pytest.fixture
 def playable_take_client(tmp_path: Path):
     client, _ = make_test_app(tmp_path, seed_db=_seed_playable_take_scenarios)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     return client
 
 
@@ -313,7 +312,7 @@ def test_created_album_has_no_playable_take_1354_rule_11(playable_take_client) -
 
 def _seed_metadata_scenarios(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, role="admin",
     ))
     session.add(Album(
         id="meta-album", title="Meta Album", artist="A",
@@ -324,7 +323,7 @@ def _seed_metadata_scenarios(session) -> None:
 @pytest.fixture
 def metadata_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_metadata_scenarios)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     return client, factory
 
 
@@ -398,11 +397,11 @@ def test_update_album_no_fields_writes_no_audit_row(metadata_client) -> None:
 def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
     def _seed(session) -> None:
         session.add(User(
-            id="u-owner", username="owner", password_hash=stored_hash("owner12345"),
+            id="u-owner", username="owner",
             role="user",
         ))
         session.add(User(
-            id="u-intruder", username="intruder", password_hash=stored_hash("intruder12345"),
+            id="u-intruder", username="intruder",
             role="user",
         ))
         session.flush()
@@ -412,7 +411,7 @@ def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
         ))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, "intruder", "intruder12345")
+    login_and_csrf(client, "intruder")
     resp = client.put("/api/albums/theirs", json={"subtitle": "Hijacked"})
     assert resp.status_code == 404
     with factory() as session:
@@ -421,7 +420,7 @@ def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
 
 def _seed_archive_scenarios(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, role="admin",
     ))
     session.add(Album(id="live-one", title="Live One", artist="A"))
     session.add(Album(id="live-two", title="Live Two", artist="A"))
@@ -431,7 +430,7 @@ def _seed_archive_scenarios(session) -> None:
 @pytest.fixture
 def archive_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_archive_scenarios)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     return client, factory
 
 
@@ -468,14 +467,14 @@ def test_archived_filter_song_count_counts_songs_of_archived_album(tmp_path: Pat
     it must not accidentally go blind on the archived branch."""
     def _seed(session) -> None:
         session.add(User(
-            username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+            username=_ADMIN_USER, role="admin",
         ))
         session.add(Album(id="alb", title="Album", artist="A", is_archived=True))
         session.add(Song(id="s1", title="One", album_id="alb", track_number=1, slug="one"))
         session.add(Song(id="s2", title="Two", album_id="alb", track_number=2, slug="two"))
 
     client, _ = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     resp = client.get("/api/albums", params={"archived": "true"})
     assert resp.status_code == 200
     by_id = {a["id"]: a for a in resp.json()["items"]}
@@ -513,18 +512,18 @@ def test_archive_album_writes_audit_row(archive_client) -> None:
 def test_archive_other_users_album_is_404(tmp_path: Path) -> None:
     def _seed(session) -> None:
         session.add(User(
-            id="u-owner", username="owner", password_hash=stored_hash("owner12345"),
+            id="u-owner", username="owner",
             role="user",
         ))
         session.add(User(
-            id="u-intruder", username="intruder", password_hash=stored_hash("intruder12345"),
+            id="u-intruder", username="intruder",
             role="user",
         ))
         session.flush()
         session.add(Album(id="theirs", title="Theirs", artist="A", created_by="u-owner"))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, "intruder", "intruder12345")
+    login_and_csrf(client, "intruder")
     resp = client.post("/api/albums/theirs/archive")
     assert resp.status_code == 404
     with factory() as session:
@@ -534,11 +533,11 @@ def test_archive_other_users_album_is_404(tmp_path: Path) -> None:
 def test_unarchive_other_users_album_is_404(tmp_path: Path) -> None:
     def _seed(session) -> None:
         session.add(User(
-            id="u-owner", username="owner", password_hash=stored_hash("owner12345"),
+            id="u-owner", username="owner",
             role="user",
         ))
         session.add(User(
-            id="u-intruder", username="intruder", password_hash=stored_hash("intruder12345"),
+            id="u-intruder", username="intruder",
             role="user",
         ))
         session.flush()
@@ -547,7 +546,7 @@ def test_unarchive_other_users_album_is_404(tmp_path: Path) -> None:
         ))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, "intruder", "intruder12345")
+    login_and_csrf(client, "intruder")
     resp = client.post("/api/albums/theirs/unarchive")
     assert resp.status_code == 404
     with factory() as session:
@@ -574,11 +573,11 @@ def test_archived_albums_share_link_stays_functional(archive_client) -> None:
 def creation_client(tmp_path: Path):
     def _seed(session) -> None:
         session.add(User(
-            username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+            username=_ADMIN_USER, role="admin",
         ))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     return client, factory
 
 

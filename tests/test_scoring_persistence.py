@@ -58,7 +58,7 @@ def scored_generation(tmp_path: Path):
     """A generation that already carries a full set of stored scores."""
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="h", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Band", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))

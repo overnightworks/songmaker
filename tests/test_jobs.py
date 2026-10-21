@@ -136,7 +136,7 @@ def db_factory(tmp_path: Path):
 @pytest.fixture
 def seeded_db(db_factory, tmp_path: Path):
     with db_factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="hash", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="rock", title="Rock", artist="Band", created_by="u1"))
         session.add(
@@ -1672,7 +1672,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
     tmp_path: Path,
 ) -> None:
     with seeded_db() as session:
-        session.add(User(id="admin", username="admin", password_hash="hash", role="admin"))
+        session.add(User(id="admin", username="admin", role="admin"))
         session.flush()
         get_job(session, "j1").user_id = "admin"
         session.commit()

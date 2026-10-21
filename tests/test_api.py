@@ -53,8 +53,7 @@ def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user",
-            password_hash="unused", role="user",
+            id=_DEFAULT_USER_ID, username="test_user", role="user",
         ))
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
@@ -117,8 +116,7 @@ def gzip_client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user",
-            password_hash="unused", role="user",
+            id=_DEFAULT_USER_ID, username="test_user", role="user",
         ))
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
@@ -163,8 +161,7 @@ def _make_authed_client(
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=user_id, username=f"test_{role}",
-            password_hash="unused", role=role,
+            id=user_id, username=f"test_{role}", role=role,
         ))
         session.flush()
         _seed_db(session, owner_id=user_id if role != "admin" else None)
@@ -438,12 +435,10 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -506,7 +501,7 @@ def _seed_listen_playlists(client: TestClient) -> None:
     """Own playlists with and without a take of s1, and another musician's."""
     with client.app.state.ctx.db() as session:
         session.add(User(
-            id="u-other", username="other_user", password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.add(Song(id="s2", title="Lightning", album_id="rock", track_number=2))
         session.add(Generation(
@@ -636,7 +631,7 @@ def test_listen_song_hides_a_foreign_song(tmp_path: Path, body: dict | None) -> 
     client = _make_authed_client(tmp_path)
     with client.app.state.ctx.db() as session:
         session.add(User(
-            id="u-other", username="other_user", password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -662,12 +657,10 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -786,12 +779,10 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -1716,8 +1707,7 @@ def test_song_generation_job_requires_ownership(client: TestClient, endpoint: st
     factory = client.app.state.ctx.db
     with factory() as session:
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -2627,7 +2617,7 @@ def test_user_cannot_see_other_album(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="x", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="other", title="Other", artist="X", created_by="u-other"))
@@ -2642,7 +2632,7 @@ def test_user_cannot_see_other_song(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="x", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="secret", title="Secret", artist="X", created_by="u-other"))
@@ -2661,7 +2651,7 @@ def test_admin_product_index_is_personal_library(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="x", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="other", title="Other", artist="X", created_by="u-other"))
@@ -2695,7 +2685,7 @@ def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         other = User(
-            id="u-other", username="other", password_hash="unused", role="user",
+            id="u-other", username="other", role="user",
         )
         session.add(other)
         session.flush()
@@ -2820,7 +2810,7 @@ def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         other = User(
-            id="u-other", username="other", password_hash="unused", role="user",
+            id="u-other", username="other", role="user",
         )
         session.add(other)
         session.flush()
@@ -3139,7 +3129,7 @@ def _make_pool_capacity_limited_client(
 
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user", password_hash="unused", role="user",
+            id=_DEFAULT_USER_ID, username="test_user", role="user",
         ))
         session.commit()
 
@@ -3596,7 +3586,7 @@ def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="unused", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="private", title="Private", artist="X", created_by="u-other"))
@@ -4205,12 +4195,10 @@ def _client_beside_a_foreign_take(
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role=role,
+            id="u-test", username="test_user", role=role,
         ))
         session.add(User(
-            id=other_user_id, username="other_user",
-            password_hash="unused", role="user",
+            id=other_user_id, username="other_user", role="user",
         ))
         session.flush()
 
@@ -4292,8 +4280,7 @@ def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.flush()
         _seed_db(session, owner_id="u-test")
@@ -4774,7 +4761,7 @@ def test_cancel_preserves_status_contract_for_stored_errors(client, stored_music
 def test_get_job_stream_job_cancel_rejects_foreign_job(client, stored_musician_job, read_path):
     """L5: Projection never bypasses job ownership."""
     with client.app.state.ctx.db() as session:
-        session.add(User(id="foreign", username="foreign", password_hash="unused", role="user"))
+        session.add(User(id="foreign", username="foreign", role="user"))
         session.flush()
         session.get(Job, stored_musician_job).user_id = "foreign"
         session.commit()

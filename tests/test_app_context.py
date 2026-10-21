@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -12,7 +10,9 @@ from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import (
     AppContext,
+    allowed_hosts,
     build_web_auth_config,
+    parse_allowed_hosts,
     parse_trusted_proxies,
 )
 from songmaker_cli.constants import (
@@ -20,7 +20,6 @@ from songmaker_cli.constants import (
     ROLE_ADMIN,
 )
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import UserSession
 from songmaker_cli.settings import get_settings
 
 
@@ -33,20 +32,34 @@ def ctx(tmp_path: Path) -> AppContext:
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
         trusted_proxies=TrustedProxies.parse("172.16.0.0/12"),
-        allowed_hosts_exact=frozenset({"songmaker.example"}),
-        allowed_hosts_patterns=[re.compile(r"^[^:]+\.example$")],
     )
 
 
-def test_the_configuration_carries_the_deployments_own_facts(ctx: AppContext) -> None:
+def test_the_configuration_carries_the_deployments_own_facts(
+    ctx: AppContext, monkeypatch: pytest.MonkeyPatch, fresh_settings,
+) -> None:
+    monkeypatch.setenv("ALLOWED_HOSTS", "songmaker.example, *.example")
+
     config = build_web_auth_config(ctx, get_settings())
 
     assert config.signing_key == TEST_SECRET
     assert "172.18.0.1" in config.trusted_proxies
     assert config.allowed_hosts_exact == frozenset({"songmaker.example"})
     assert [pattern.pattern for pattern in config.allowed_hosts_patterns] == [
-        r"^[^:]+\.example$",
+        r"^[^:]+\.example(:\d+)?$",
     ]
+
+
+def test_the_allowed_hosts_are_one_list_for_the_host_check_and_the_origin_allowlist(
+    monkeypatch: pytest.MonkeyPatch, fresh_settings,
+) -> None:
+    monkeypatch.setenv("ALLOWED_HOSTS", " a.example,,*.b.example ,localhost")
+    settings = get_settings()
+
+    assert allowed_hosts(settings) == ("a.example", "*.b.example", "localhost")
+    exact, patterns = parse_allowed_hosts(settings)
+    assert exact == {"a.example", "localhost"}
+    assert [pattern.match("x.b.example:8443") is not None for pattern in patterns] == [True]
 
 
 def test_the_rate_backend_spends_the_budget_in_songmakers_redis(ctx: AppContext) -> None:
@@ -57,30 +70,14 @@ def test_the_rate_backend_spends_the_budget_in_songmakers_redis(ctx: AppContext)
     assert ctx.redis.zcard(f"{REDIS_RL_IP_PREFIX}:x") == 1
 
 
-def test_the_liveness_policy_uses_the_configured_absolute_session_age(ctx: AppContext) -> None:
-    settings = get_settings().model_copy(update={"session_absolute_max_age_seconds": 600})
-    config = build_web_auth_config(ctx, settings)
-    now = datetime(2026, 9, 10, tzinfo=timezone.utc)
-    record = UserSession(
-        created_at=now - timedelta(seconds=settings.session_absolute_max_age_seconds),
-        expires_at=now + timedelta(days=1),
+def test_the_session_lifetime_comes_from_settings(ctx: AppContext) -> None:
+    settings = get_settings().model_copy(
+        update={"session_idle_seconds": 600, "session_absolute_max_age_seconds": 1200},
     )
 
-    assert config.session_liveness.admits_stored_session(record, now)
-    assert not config.session_liveness.admits_stored_session(record, now + timedelta(seconds=1))
+    lifetime = build_web_auth_config(ctx, settings).session_lifetime
 
-
-def test_the_configuration_takes_the_session_and_login_limits_from_settings(
-    ctx: AppContext,
-) -> None:
-    settings = get_settings()
-
-    config = build_web_auth_config(ctx, settings)
-
-    assert config.session_max_age_seconds == settings.session_max_age_seconds
-    assert config.login_rate_limit == settings.login_rate_limit
-    assert config.login_lockout_threshold == settings.login_lockout_threshold
-    assert config.login_lockout_window_seconds == settings.login_lockout_window_seconds
+    assert (lifetime.idle_seconds, lifetime.absolute_max_age_seconds) == (600, 1200)
 
 
 def test_the_configuration_names_songmakers_admin_role(ctx: AppContext) -> None:

@@ -42,7 +42,7 @@ def test_seeded_takes_record_the_owner_as_their_maker(
     audio_dir = tmp_path / "audio"
     factory = init_test_db(tmp_path / "seed.db")
     with factory() as session:
-        session.add(User(id=_OWNER_ID, username=_OWNER_ID, password_hash="x"))
+        session.add(User(id=_OWNER_ID, username=_OWNER_ID))
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
         session.commit()
 
@@ -59,7 +59,7 @@ def seeded_job(tmp_path):
 
     factory = init_test_db(tmp_path / "completion.db")
     with factory() as session:
-        session.add(User(id=_OWNER_ID, username=_OWNER_ID, password_hash="x"))
+        session.add(User(id=_OWNER_ID, username=_OWNER_ID))
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
         session.commit()
         audio_dir = tmp_path / "audio"

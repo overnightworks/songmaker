@@ -21,7 +21,6 @@ from conftest import (
     login_and_csrf,
     make_test_app,
     queries_without_session_auth,
-    stored_hash,
 )
 from sqlalchemy import event
 
@@ -64,7 +63,7 @@ def _add_song_with_generations(
 
 def _seed_generation_count_scenarios(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, role="admin",
     ))
     session.add(Album(id="alb", title="Album", artist="A"))
     _add_song_with_generations(
@@ -85,7 +84,7 @@ def _seed_generation_count_scenarios(session) -> None:
 @pytest.fixture
 def generation_count_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_generation_count_scenarios)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     return client, factory
 
 
@@ -172,7 +171,7 @@ _DETAIL_SCORES_PER_GENERATION = 7
 
 def _seed_worked_through_song(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, role="admin",
     ))
     session.add(Album(id="alb", title="Album", artist="A"))
     session.add(Album(id="source-alb", title="Source album", artist="A"))
@@ -208,7 +207,7 @@ def _seed_worked_through_song(session) -> None:
 @pytest.fixture
 def worked_through_song_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_worked_through_song)
-    login_and_csrf(client, _ADMIN_USER, _ADMIN_PASSWORD)
+    login_and_csrf(client, _ADMIN_USER)
     return client, factory
 
 

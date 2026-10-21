@@ -92,7 +92,7 @@ class DatabaseSessionRecordStore:
     session: Session
 
     def create(self, user_id: str, *, now: datetime, expires_at: datetime) -> UserSession:
-        return create_session(self.session, user_id, created_at=now, expires_at=expires_at)
+        return create_session(self.session, user_id, expires_at, created_at=now)
 
     def load(self, session_id: str) -> UserSession | None:
         return get_session_with_user(self.session, session_id)

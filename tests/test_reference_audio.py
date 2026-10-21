@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import login_and_csrf, make_test_app
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User
@@ -109,10 +109,10 @@ def test_rejects_missing_or_unsupported_owned_reference_audio(tmp_path: Path, na
 def _seed_users(session) -> None:
     session.add_all([
         User(
-            id="user-a", username="owner", password_hash=stored_hash("pass1234"),
+            id="user-a", username="owner",
         ),
         User(
-            id="user-b", username="other", password_hash=stored_hash("pass1234"),
+            id="user-b", username="other",
         ),
     ])
     session.flush()
@@ -123,7 +123,7 @@ def test_song_write_accepts_owned_reference_and_rejects_foreign(
     tmp_path: Path,
 ) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_users)
-    login_and_csrf(client, "owner", "pass1234")
+    login_and_csrf(client, "owner")
     client.headers["Origin"] = "http://127.0.0.1:8080"
     audio_dir = tmp_path / "audio"
     _write_ref(audio_dir, "user-a", "mine.wav")

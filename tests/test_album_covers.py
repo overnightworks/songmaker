@@ -9,7 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash, web_client
+from conftest import login_and_csrf, make_test_app, seed_user, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -45,7 +45,6 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, User
 from songmaker_cli.db.queries.albums import get_album, soft_delete_album
-from songmaker_cli.db.queries.auth import create_user
 from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
 
@@ -110,15 +109,15 @@ def _jpeg_with_orientation(orientation: int) -> bytes:
 
 
 def _seed_owners(session) -> None:
-    alice = create_user(session, "alice", stored_hash(ALICE_PASSWORD), role="user")
-    bob = create_user(session, "bob", stored_hash(BOB_PASSWORD), role="user")
+    alice = seed_user(session, "alice", role="user")
+    bob = seed_user(session, "bob", role="user")
     session.add(Album(id="alice-album", title="Alice Album", artist="Alice", created_by=alice.id))
     session.add(Album(id="bob-album", title="Bob Album", artist="Bob", created_by=bob.id))
 
 
 def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_owners)
-    login_and_csrf(client, username, password)
+    login_and_csrf(client, username)
     client.headers["Origin"] = "http://127.0.0.1:8080"
     return client, factory
 
@@ -384,7 +383,7 @@ def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
-        owner = create_user(session, "alice", stored_hash(ALICE_PASSWORD))
+        owner = seed_user(session, "alice")
         session.add(Album(id="expired-album", title="Expired", artist="A", created_by=owner.id))
         session.add(Album(id="live-album", title="Live", artist="A", created_by=owner.id))
         session.commit()
@@ -414,8 +413,8 @@ def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
 
 def test_hard_delete_user_removes_album_cover_files(tmp_path: Path) -> None:
     def seed(session) -> None:
-        create_user(session, "admin", stored_hash("admin12345"), role="admin")
-        victim = create_user(session, "victim", stored_hash("victimpass1"), role="user")
+        seed_user(session, "admin", role="admin")
+        victim = seed_user(session, "victim", role="user")
         session.add(Album(id="live-album", title="Live", artist="V", created_by=victim.id))
         session.add(Album(id="gone-album", title="Gone", artist="V", created_by=victim.id))
 
@@ -434,7 +433,7 @@ def test_hard_delete_user_removes_album_cover_files(tmp_path: Path) -> None:
         soft_delete_album(session, "gone-album")
         session.commit()
 
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.delete(f"/api/admin/users/{victim_id}/permanent")
     assert resp.status_code == 200, resp.text
     assert not live_dir.exists()

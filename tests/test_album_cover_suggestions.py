@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_authenticated_user, make_test_app, stored_hash
+from conftest import login_and_csrf, make_authenticated_user, make_test_app
 from fastapi.testclient import TestClient
 from PIL import Image
 from webauth.ports import AuthenticatedUser
@@ -45,9 +45,9 @@ def _png_bytes() -> bytes:
 
 
 def _seed_albums(session) -> None:
-    alice = User(username="alice", password_hash=stored_hash("alicepass1"), role="user")
-    bob = User(username="bob", password_hash=stored_hash("bobpass12"), role="user")
-    admin = User(username="admin", password_hash=stored_hash("adminpass1"), role="admin")
+    alice = User(username="alice", role="user")
+    bob = User(username="bob", role="user")
+    admin = User(username="admin", role="admin")
     session.add_all([alice, bob, admin])
     session.flush()
     session.add_all([
@@ -59,7 +59,7 @@ def _seed_albums(session) -> None:
 @pytest.fixture
 def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
-    login_and_csrf(client, "alice", "alicepass1")
+    login_and_csrf(client, "alice")
     client.headers["Origin"] = "http://127.0.0.1:8080"
     return client, factory
 
@@ -478,7 +478,7 @@ def test_foreign_cover_suggestion_routes_are_not_found(
 ) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     _add_suggestion(factory, tmp_path / "audio")
-    login_and_csrf(client, "bob", "bobpass12")
+    login_and_csrf(client, "bob")
     client.headers["Origin"] = "http://127.0.0.1:8080"
 
     foreign = getattr(client, method)(path, **kwargs)
@@ -517,7 +517,7 @@ def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
 def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
-    login_and_csrf(client, "admin", "adminpass1")
+    login_and_csrf(client, "admin")
     client.headers["Origin"] = "http://127.0.0.1:8080"
 
     listed = client.get("/api/albums/alice-album/cover-suggestions")
@@ -597,7 +597,7 @@ def test_user_hard_delete_removes_album_suggestions_after_the_commit(tmp_path: P
     with factory() as session:
         alice = session.query(User).filter_by(username="alice").one()
         alice_id = alice.id
-    login_and_csrf(client, "admin", "adminpass1")
+    login_and_csrf(client, "admin")
     client.headers["Origin"] = "http://127.0.0.1:8080"
 
     response = client.delete(f"/api/admin/users/{alice_id}/permanent")

@@ -37,8 +37,8 @@ _USER_B = "u-b"
 def session(tmp_path: Path) -> Session:
     factory = init_test_db(tmp_path / "loras.db")
     s = factory()
-    s.add(User(id=_USER_A, username="alice", password_hash="x", role="user"))
-    s.add(User(id=_USER_B, username="bob", password_hash="x", role="user"))
+    s.add(User(id=_USER_A, username="alice", role="user"))
+    s.add(User(id=_USER_B, username="bob", role="user"))
     s.commit()
     yield s
     s.close()

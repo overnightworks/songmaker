@@ -23,6 +23,11 @@ log = logging.getLogger(__name__)
 # ── Users ─────────────────────────────────────────────────────────
 
 
+def get_user_by_username(session: Session, username: str) -> User | None:
+    """The first account showing ``username``; display names are not unique."""
+    return session.query(User).filter_by(username=username).order_by(User.created_at).first()
+
+
 def get_user(session: Session, user_id: str) -> User | None:
     return session.query(User).filter_by(id=user_id).first()
 
@@ -93,9 +98,11 @@ def set_user_role(session: Session, user_id: str, role: str) -> User:
 
 
 def create_session(
-    session: Session, user_id: str, *, created_at: datetime, expires_at: datetime,
+    session: Session, user_id: str, expires_at: datetime, *, created_at: datetime | None = None,
 ) -> UserSession:
-    user_session = UserSession(user_id=user_id, created_at=created_at, expires_at=expires_at)
+    user_session = UserSession(user_id=user_id, expires_at=expires_at)
+    if created_at is not None:
+        user_session.created_at = created_at
     session.add(user_session)
     session.flush()
     return user_session

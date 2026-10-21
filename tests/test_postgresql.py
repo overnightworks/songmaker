@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 
 import pytest
-from conftest import make_authenticated_user
+from conftest import make_authenticated_user, seed_user
 from sqlalchemy import create_engine, event, insert, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -105,8 +105,8 @@ def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
     long_ago = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with pg_factory() as session:
         session.add_all([
-            User(id="owner", username="leonardo", password_hash="x", role="user"),
-            User(id="admin", username="felix", password_hash="x", role="admin"),
+            User(id="owner", username="leonardo", role="user"),
+            User(id="admin", username="felix", role="admin"),
         ])
         session.flush()
         session.add(Album(id="vernissage", title="Vernissage", artist="L", created_by="owner"))
@@ -178,7 +178,7 @@ def _seed_libraries_of_many_musicians(
     start = datetime(2026, 9, 1, tzinfo=timezone.utc)
     owners = [f"m{m}" for m in range(musicians)]
     session.add_all([
-        User(id=owner, username=owner, password_hash="x", role="user") for owner in owners
+        User(id=owner, username=owner, role="user") for owner in owners
     ])
     session.flush()
     session.add_all([Conversation(id=f"{owner}-c", user_id=owner) for owner in owners])
@@ -263,7 +263,7 @@ def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory
 @SKIP_NO_PG
 def test_concurrent_job_creation(pg_factory) -> None:
     with pg_factory() as session:
-        session.add(User(id="u1", username="testuser", password_hash="x", role="user"))
+        session.add(User(id="u1", username="testuser", role="user"))
         session.commit()
 
     errors: list[Exception] = []
@@ -301,7 +301,7 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
     monkeypatch.setenv("MAX_USER_LORAS", "1")
     get_settings.cache_clear()
     with pg_factory() as session:
-        session.add(User(id="lora-user", username="lora-user", password_hash="x"))
+        session.add(User(id="lora-user", username="lora-user"))
         session.commit()
 
     barrier = threading.Barrier(2)
@@ -402,7 +402,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
     """PostgreSQL SKIP LOCKED permits exactly one failure audit per LoRA."""
     terminalized_at = datetime.now(timezone.utc)
     with pg_factory() as session:
-        session.add(User(id="lora-user", username="lora-user", password_hash="x"))
+        session.add(User(id="lora-user", username="lora-user"))
         session.add(Job(
             id="lora-job", type=JobType.LORA_TRAINING, status=JobStatus.FAILED,
             completed_at=terminalized_at,
@@ -488,11 +488,10 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
     from concurrent.futures import ThreadPoolExecutor
 
     from songmaker_cli.auth_stores import DatabaseSessionRecordStore
-    from songmaker_cli.db.queries.auth import create_user
 
     now = datetime.now(timezone.utc)
     with pg_factory() as db:
-        user = create_user(db, "renew-revoke", "hashed")
+        user = seed_user(db, "renew-revoke")
         record = create_session(db, user.id, now + timedelta(hours=1))
         db.commit()
         session_id = record.id
@@ -545,7 +544,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
     thread_count = 10
     user_id = "session-cap-user"
     with pg_factory() as session:
-        session.add(User(id=user_id, username="session-cap", password_hash="x", role="user"))
+        session.add(User(id=user_id, username="session-cap", role="user"))
         session.commit()
 
     errors: list[Exception] = []
@@ -586,7 +585,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
 def test_concurrent_first_resource_event_allocations(pg_factory) -> None:
     """A missing cursor plus concurrent first events still allocate exactly once."""
     with pg_factory() as session:
-        session.add(User(id="event-user", username="events", password_hash="x", role="user"))
+        session.add(User(id="event-user", username="events", role="user"))
         session.commit()
 
     errors: list[Exception] = []
@@ -623,7 +622,7 @@ def test_concurrent_first_resource_event_allocations(pg_factory) -> None:
 @SKIP_NO_PG
 def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
     with pg_factory() as session:
-        session.add(User(id="rollback-user", username="rollback", password_hash="x"))
+        session.add(User(id="rollback-user", username="rollback"))
         session.flush()
         create_generation_created_event(
             session,
@@ -686,7 +685,7 @@ def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
 def test_resource_event_retention_gap_on_postgresql(pg_factory) -> None:
     now = datetime.now(timezone.utc)
     with pg_factory() as session:
-        session.add(User(id="retention-user", username="retention", password_hash="x"))
+        session.add(User(id="retention-user", username="retention"))
         session.flush()
         events = [
             create_generation_created_event(

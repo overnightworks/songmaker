@@ -42,10 +42,10 @@ def _client_with_title(
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=OWNER_ID, username="owner", password_hash="unused", role="user",
+            id=OWNER_ID, username="owner", role="user",
         ))
         session.add(User(
-            id=ADMIN_ID, username="admin", password_hash="unused", role=ROLE_ADMIN,
+            id=ADMIN_ID, username="admin", role=ROLE_ADMIN,
         ))
         session.flush()
         session.add(Album(

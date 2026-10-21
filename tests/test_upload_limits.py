@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import login_and_csrf, make_test_app
 from fastapi.testclient import TestClient
 
 from songmaker_cli.constants import (
@@ -50,14 +50,14 @@ def test_body_limits_keep_json_small_and_uploads_larger() -> None:
 
 
 def _seed_owner(session) -> None:
-    session.add(User(id="owner-id", username="owner", password_hash=stored_hash("pass1234")))
+    session.add(User(id="owner-id", username="owner"))
     session.flush()
     session.add(Album(id="a1", title="A", artist="A", created_by="owner-id"))
 
 
 def _authed_app(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path, seed_db=_seed_owner)
-    login_and_csrf(client, "owner", "pass1234")
+    login_and_csrf(client, "owner")
     client.headers["Origin"] = "http://127.0.0.1:8080"
     return client
 
@@ -77,7 +77,7 @@ def test_create_app_accepts_2mib_reference_audio(tmp_path: Path) -> None:
 
 def test_create_app_accepts_2mib_lora_sample(tmp_path: Path) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_owner)
-    login_and_csrf(client, "owner", "pass1234")
+    login_and_csrf(client, "owner")
     client.headers["Origin"] = "http://127.0.0.1:8080"
     with factory() as session:
         lora = create_user_lora(session, "owner-id", "Voice", "v")
