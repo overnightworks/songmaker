@@ -1,0 +1,8 @@
+claim_id = "dc1bf4e7aec946329a70f53c6ea82e26"
+agent = "claude"
+role = "builder"
+base = "31d8673c8bdd22db55963be291892b8f917db13b"
+branch = "claude/issue-1765-keycloak-cutover"
+scope = ["AGENTS.md", "docker-compose.yml", "docker/.env.docker.example", "docs", "frontend", "pyproject.toml", "src/songmaker_cli", "tests", "uv.lock"]
+opened_commit = "62d07a6d377b173e819cfd5c519b684b9e59815a"
+whole_reason = "K12 slice; scope per the body."
