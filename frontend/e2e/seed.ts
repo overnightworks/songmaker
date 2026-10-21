@@ -1084,7 +1084,8 @@ async function seedAfterAlbum<T>(
 		} catch (archiveError) {
 			throw new AggregateError(
 				[error, archiveError],
-				`Seeding failed and archiving album ${albumId} failed too`
+				`Seeding failed and archiving album ${albumId} failed too`,
+				{ cause: archiveError }
 			);
 		}
 		throw error;
