@@ -266,8 +266,11 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 	} finally {
 		releaseRemoval?.();
 		await page.unrouteAll({ behavior: 'ignoreErrors' });
-		if (accountApi && libraryAlbumId) await archiveOwnedAlbum(accountApi, libraryAlbumId);
-		await accountApi?.dispose();
+		try {
+			if (accountApi && libraryAlbumId) await archiveOwnedAlbum(accountApi, libraryAlbumId);
+		} finally {
+			await accountApi?.dispose();
+		}
 	}
 });
 

@@ -1066,8 +1066,22 @@ export async function seedUnpickedLibrary(api: APIRequestContext): Promise<Seede
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
 	});
-	const songs = await seedSongsWithOneTakeEach(seed, album.id);
+	const songs = await seedAfterAlbum(api, album.id, () => seedSongsWithOneTakeEach(seed, album.id));
 	return { albumId: album.id, tracks: songs.map((song) => song.track) };
+}
+
+/** Runs the seeding that follows an album's creation; a failure archives that album before it rethrows, since no caller holds its id yet. */
+async function seedAfterAlbum<T>(
+	api: APIRequestContext,
+	albumId: string,
+	seedRest: () => Promise<T>
+): Promise<T> {
+	try {
+		return await seedRest();
+	} catch (error) {
+		await archiveOwnedAlbum(api, albumId);
+		throw error;
+	}
 }
 
 /**
@@ -1082,7 +1096,7 @@ export async function seedOwnSongAddress(
 	songTitle: string
 ): Promise<string> {
 	const seed = await signedInSeedApi(api, account);
-	return (await createOwnSong(seed, account.username, songTitle)).address;
+	return (await createOwnSong(api, seed, account.username, songTitle)).address;
 }
 
 /** `seedOwnSongAddress`, with one take of the fixture tone the song plays. */
@@ -1092,10 +1106,12 @@ export async function seedOwnTakeAddress(
 	songTitle: string
 ): Promise<string> {
 	const seed = await signedInSeedApi(api, account);
-	const song = await createOwnSong(seed, account.username, songTitle);
-	await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
-		mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-	});
+	const song = await createOwnSong(api, seed, account.username, songTitle);
+	await seedAfterAlbum(api, song.albumId, () =>
+		seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
+			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
+		})
+	);
 	return song.address;
 }
 
@@ -1107,21 +1123,24 @@ function signedInSeedApi(
 }
 
 async function createOwnSong(
+	api: APIRequestContext,
 	seed: SeedApi,
 	username: string,
 	songTitle: string
-): Promise<{ id: string; address: string }> {
+): Promise<{ id: string; albumId: string; address: string }> {
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: username
 	});
-	const song = await seed.postJson<CreatedSong>('/api/songs', {
-		title: songTitle,
-		album_id: album.id,
-		lyrics: `${songTitle} lyrics`,
-		prompt: 'calm test tone'
-	});
-	return { id: song.id, address: `/album/${album.id}/${song.slug}` };
+	const song = await seedAfterAlbum(api, album.id, () =>
+		seed.postJson<CreatedSong>('/api/songs', {
+			title: songTitle,
+			album_id: album.id,
+			lyrics: `${songTitle} lyrics`,
+			prompt: 'calm test tone'
+		})
+	);
+	return { id: song.id, albumId: album.id, address: `/album/${album.id}/${song.slug}` };
 }
 
 /**
