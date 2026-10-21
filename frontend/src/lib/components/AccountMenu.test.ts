@@ -18,11 +18,10 @@ import {
 	THEME_SWITCH_TO_DARK_LABEL,
 	THEME_SWITCH_TO_LIGHT_LABEL
 } from '$lib/constants';
-import { currentUser, signOutFailed } from '$lib/stores/auth';
+import { signOutFailed } from '$lib/stores/auth';
 import { theme } from '$lib/stores/ui';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
-import { makeAuthUser } from '$lib/test-utils/factories';
 import {
 	describeBackClosesOverlay,
 	plannedHistoryIndex,
@@ -37,7 +36,6 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	theme.set('dark');
-	currentUser.set(makeAuthUser({ role: 'admin' }));
 	replaceHistoryEntry('/');
 	startFakeRouter();
 });
@@ -46,7 +44,6 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	vi.mocked(goto).mockReset();
 	signOutFailed.set(false);
-	currentUser.set(null);
 	document.body.replaceChildren();
 });
 
@@ -80,7 +77,7 @@ describe('AccountMenu', () => {
 		expect(getByRoleButton(target, TRIGGER_NAME).textContent?.trim()).toBe('F');
 	});
 
-	it('names who is signed in, then Account, Settings, the theme switch, and Log out last for an admin', async () => {
+	it('names who is signed in, then Account, Settings, the theme switch, and Log out last', async () => {
 		const panel = await openMenu(await renderAccountMenu());
 
 		expect(rowTexts(panel)).toEqual([
@@ -92,21 +89,7 @@ describe('AccountMenu', () => {
 		]);
 	});
 
-	it('offers a member Account, the theme switch and Log out, and no Settings', async () => {
-		currentUser.set(makeAuthUser());
-
-		const panel = await openMenu(await renderAccountMenu());
-
-		expect(rowTexts(panel)).toEqual([
-			`${ACCOUNT_MENU_SIGNED_IN_PREFIX} ${USERNAME}`,
-			ACCOUNT_MENU_ACCOUNT_LABEL,
-			THEME_SWITCH_TO_LIGHT_LABEL,
-			ACCOUNT_MENU_LOGOUT_LABEL
-		]);
-	});
-
-	it('opens the account page for a member and closes', async () => {
-		currentUser.set(makeAuthUser());
+	it('opens the account page and closes', async () => {
 		const target = await renderAccountMenu();
 		const panel = await openMenu(target);
 

@@ -1,4 +1,4 @@
-import { makeAuthUser, makeSong } from '$lib/test-utils/factories';
+import { makeSong } from '$lib/test-utils/factories';
 import { modifiedClicks } from '$lib/test-utils/modified-clicks';
 import { selectedSongId } from '$lib/stores/player';
 import { replaceHistoryEntry } from '$lib/test-utils/library-history';
@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { goto } from '$app/navigation';
-import { currentUser } from '$lib/stores/auth';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
@@ -129,7 +128,6 @@ beforeEach(() => {
 	localStorage.clear();
 	railWidth.set(264);
 	railCollapsed.set(false);
-	currentUser.set(makeAuthUser({ role: 'admin' }));
 	resetLibraryContextForTests();
 	selectedSongId.set(null);
 	railTreeQuery.set('');
@@ -147,7 +145,6 @@ afterEach(async () => {
 	resetPlaylistsForTests();
 	discardDraft();
 	pendingDirtyNavigation.set(null);
-	currentUser.set(null);
 	vi.mocked(goto).mockClear();
 	vi.unstubAllGlobals();
 });
@@ -166,15 +163,6 @@ describe('Rail', () => {
 		expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1');
 		expect(groupRows[1]?.textContent).toContain('Playlists');
 		expect(groupRows[2]?.textContent).toContain('Settings');
-		expect(target.textContent).toContain('felix');
-	});
-
-	it('leaves the Settings group to an admin: a member sees the groups, the user row and no Settings', async () => {
-		currentUser.set(makeAuthUser());
-		const target = await render();
-		const groupRows = target.querySelectorAll<HTMLElement>('.rail-group > .disclose-row');
-		expect(Array.from(groupRows, (row) => row.textContent)).not.toContain('Settings');
-		expect(target.textContent).not.toContain('Settings');
 		expect(target.textContent).toContain('felix');
 	});
 

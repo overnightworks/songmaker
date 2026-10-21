@@ -137,12 +137,11 @@ describe('RailSettings', () => {
 		expect(active.getAttribute('href')).toBe('/settings/voices');
 	});
 
-	it('shows no Settings group to a member, even on a settings route', async () => {
+	it('omits admin-only sections for a non-admin', async () => {
 		currentUser.set(makeAuthUser());
 		pageState.url = new URL('https://songmaker.test/settings/generation');
 		const target = await render();
-		expect(target.querySelector('button.disclose')).toBeNull();
-		expect(itemLabels(target)).toEqual([]);
+		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Legal']);
 	});
 
 	it('persists its open state under RAIL_SETTINGS_OPEN_STORAGE_KEY', async () => {

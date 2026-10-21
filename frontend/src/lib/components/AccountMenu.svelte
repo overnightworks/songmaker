@@ -11,7 +11,7 @@
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
 	import { page } from '$app/state';
-	import { isAdmin, signOutFailed } from '$lib/stores/auth';
+	import { signOutFailed } from '$lib/stores/auth';
 	import { openAppPage } from '$lib/stores/navigation';
 	import { theme, toggleTheme } from '$lib/stores/ui';
 	import { accountInitial } from '$lib/utils/format';
@@ -53,11 +53,9 @@
 		<button class="menu-item" onclick={() => openPage(ACCOUNT_HREF)}>
 			<Icon name="user" class="menu-item-icon" />{ACCOUNT_MENU_ACCOUNT_LABEL}
 		</button>
-		{#if $isAdmin}
-			<button class="menu-item" onclick={() => openPage(SETTINGS_HREF)}>
-				<Icon name="settings" class="menu-item-icon" />{RAIL_SETTINGS_LABEL}
-			</button>
-		{/if}
+		<button class="menu-item" onclick={() => openPage(SETTINGS_HREF)}>
+			<Icon name="settings" class="menu-item-icon" />{RAIL_SETTINGS_LABEL}
+		</button>
 		<button class="menu-item" onclick={toggleTheme}>
 			{#if offersLight}
 				<Icon name="sun" class="menu-item-icon" />{THEME_SWITCH_TO_LIGHT_LABEL}

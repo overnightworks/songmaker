@@ -17,49 +17,47 @@
 	const onSettingsRoute = $derived(pathname.startsWith('/settings'));
 </script>
 
-{#if admin}
-	<RailGroup
-		label={RAIL_SETTINGS_LABEL}
-		groupId="rail-settings-group"
-		storageKey={RAIL_SETTINGS_OPEN_STORAGE_KEY}
-		expandTrigger={onSettingsRoute}
-	>
-		{#snippet icon()}
-			<svg
-				width="14"
-				height="14"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
-			>
-				<path
-					d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
-				/>
-				<circle cx="12" cy="12" r="3" />
-			</svg>
-		{/snippet}
-		<nav class="rail-settings-nav" aria-label={SETTINGS_NAV_LABEL}>
-			<ul>
-				{#each visibleSections as section (section.href)}
-					<li>
-						<a
-							href={section.href}
-							class="row row-sub"
-							class:row-active={pathname === section.href}
-							onclick={(event) => followAppPageLink(event, section.href)}
-						>
-							{section.label}
-						</a>
-					</li>
-				{/each}
-			</ul>
-		</nav>
-	</RailGroup>
-{/if}
+<RailGroup
+	label={RAIL_SETTINGS_LABEL}
+	groupId="rail-settings-group"
+	storageKey={RAIL_SETTINGS_OPEN_STORAGE_KEY}
+	expandTrigger={onSettingsRoute}
+>
+	{#snippet icon()}
+		<svg
+			width="14"
+			height="14"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true"
+		>
+			<path
+				d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+			/>
+			<circle cx="12" cy="12" r="3" />
+		</svg>
+	{/snippet}
+	<nav class="rail-settings-nav" aria-label={SETTINGS_NAV_LABEL}>
+		<ul>
+			{#each visibleSections as section (section.href)}
+				<li>
+					<a
+						href={section.href}
+						class="row row-sub"
+						class:row-active={pathname === section.href}
+						onclick={(event) => followAppPageLink(event, section.href)}
+					>
+						{section.label}
+					</a>
+				</li>
+			{/each}
+		</ul>
+	</nav>
+</RailGroup>
 
 <style>
 	.row {
