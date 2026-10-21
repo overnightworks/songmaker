@@ -43,6 +43,7 @@ SONG_SLUG_MAX_LENGTH: Final = 220
 PLAYLIST_SLUG_MAX_LENGTH: Final = 220
 ALBUM_SLUG_MAX_LENGTH: Final = 64
 LORA_SLUG_MAX_LENGTH: Final = 120
+USERNAME_MAX_LENGTH: Final = 100
 USERS_ID: Final = "users.id"
 ALBUMS_ID: Final = "albums.id"
 SONGS_ID: Final = "songs.id"
@@ -419,7 +420,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    username: Mapped[str] = mapped_column(String(100))
+    username: Mapped[str] = mapped_column(String(USERNAME_MAX_LENGTH))
     role: Mapped[str] = mapped_column(String(20), default="user")
     default_generation_config: Mapped[str | None] = mapped_column(
         String(36), nullable=True, default=None,

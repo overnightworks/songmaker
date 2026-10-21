@@ -529,6 +529,19 @@ def apply_csrf_header(client) -> None:
         client.headers["X-CSRF-Token"] = token
 
 
+def issued_cookies(session_id: str, config) -> dict[str, str]:
+    """The session and CSRF cookies the library issues for ``session_id``, by name."""
+    from fastapi import Response
+    from webauth.cookies import issue_session_cookies
+
+    carrier = Response()
+    issue_session_cookies(carrier, session_id, config)
+    return {
+        name: rest.partition(";")[0]
+        for name, _, rest in (h.partition("=") for h in carrier.headers.getlist("set-cookie"))
+    }
+
+
 def login_and_csrf(client, username: str) -> None:
     """Open a session for the seeded ``username`` and configure the CSRF header.
 
@@ -537,9 +550,7 @@ def login_and_csrf(client, username: str) -> None:
     """
     from datetime import datetime, timedelta, timezone
 
-    from fastapi import Response
     from webauth.config import installed_web_auth_config
-    from webauth.cookies import issue_session_cookies
 
     from songmaker_cli.auth_stores import DatabaseSessionRecordStore
     from songmaker_cli.db.models import User
@@ -554,11 +565,8 @@ def login_and_csrf(client, username: str) -> None:
         )
         session.commit()
         session_id = record.id
-    carrier = Response()
-    issue_session_cookies(carrier, session_id, config)
-    for header in carrier.headers.getlist("set-cookie"):
-        name, _, rest = header.partition("=")
-        client.cookies.set(name, rest.partition(";")[0])
+    for name, value in issued_cookies(session_id, config).items():
+        client.cookies.set(name, value)
     apply_csrf_header(client)
 
 

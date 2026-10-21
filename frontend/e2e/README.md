@@ -81,7 +81,7 @@ rate-limit window, so their cost stays additive instead of a burst.
 
 ## How a run is set up
 
-`global-setup.ts` signs the stack's admin account in **once** with a seeded
+`global-setup.ts` signs the e2e admin account in **once** with a seeded
 session, seeds a library through the public API (`seed.ts`) and saves the
 session as the storage state every test reuses. Seeding is the only place that
 talks to the API directly; everything a flow asserts, it clicks.
@@ -89,15 +89,14 @@ talks to the API directly; everything a flow asserts, it clicks.
 **Sessions are seeded, not typed.** `support/seed_sessions.py` runs inside the
 web container (`docker compose exec -T -e SEED_SESSIONS_REQUEST=... songmaker-web
 /app/.venv/bin/python -`, the script on stdin) and goes through the app's own
-user and session queries: it finds or creates an account and opens a database
-session, then prints the signed session cookie and CSRF cookie the app would
-have issued at login. `seedAccount` / `seedAdminAccount` in `seed.ts` return
-those cookies for `context.addCookies` and `signedInApi`; a flow that made an
-account removes it with `deleteSeededAccounts`. The helper sits outside
-`scripts/`, which the image copies, so it never ships. Only `auth-flows.spec.ts`
-still types a password, because it exists to drive that login; the remaining
-password paths in `seed.ts` (`createAccount`, `deleteAccount`, `SeedApi.login`)
-serve it alone.
+user and session stores: it finds or creates an account and opens a database
+session, then prints the signed session cookie and CSRF cookie the library
+issues after a Keycloak login. The stack has no admin bootstrap, so this helper
+is also where the e2e admin account (`E2E_ADMIN_USERNAME`) comes from.
+`seedAccount` / `seedAdminAccount` in `seed.ts` return those cookies for
+`context.addCookies` and `signedInApi`; a flow that made an account removes it
+with `deleteSeededAccounts`. The helper sits outside `scripts/`, which the
+image copies, so it never ships. No flow types a password: there is none.
 
 The seed builds one base album with three songs, a real take per song imported from
 `fixtures/take.mp3` via `POST /api/songs/{id}/reimport`, one pick, a playlist
@@ -194,7 +193,7 @@ wall it is standing on. And a refusal it drives is reported twice: once as the
 response, and once as a console error Chromium writes for every failed fetch,
 so `FlowGuard` takes a `refusalsExpectedOn` list of paths, each with the
 statuses that are the sentence under proof there: a 401, 403 or 429 on the
-login, session and admin reads, and in the admin flows a 404 on a stale session
+session and admin reads, and in the admin flows a 404 on a stale session
 revoke or on a Disable of an account deleted meanwhile, and a 409 on a taken
 username. A path ending in `/` covers the ids
 beneath it. Everywhere else, and for any 5xx, the guard is unchanged, and every
@@ -220,7 +219,7 @@ explicitly rather than assumed: a `FlowGuard` only counts `/api/*` requests
 the page itself made, so it misses HTML document navigations (the rate-limit
 policy puts every unrecognized path, including a plain page load, in the same
 API class — fail closed, not fail open), the CI
-workflow's own `/health`/login smoke test before Playwright even starts,
+workflow's own `/health` smoke test before Playwright even starts,
 anything seeded through Playwright's `request` API context (global setup's
 library, each attempt's playlist), and a retry re-running a whole flow inside
 the same window. What the rate limiter actually counts is measured from
@@ -307,7 +306,10 @@ export COMPOSE_PROJECT_NAME=songmaker-e2e-local WEB_PORT=18080
 export POSTGRES_PASSWORD=e2e-ci-postgres-password
 export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
 export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
-export ADMIN_USERNAME=e2e-ci-admin ADMIN_PASSWORD='E2eCiSmoke#2026!'
+export E2E_ADMIN_USERNAME=e2e-ci-admin
+# The web app boots without reaching Keycloak; these name an issuer that never answers.
+export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
+export KEYCLOAK_CLIENT_SECRET_FILE="$(mktemp)" && echo e2e-ci-client-secret > "$KEYCLOAK_CLIENT_SECRET_FILE"
 export GRAFANA_PASSWORD=e2e-ci-grafana-password    # compose refuses up/down without it
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or global-setup's seed 500s
 docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \

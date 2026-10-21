@@ -232,7 +232,8 @@ def create_app(
     #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
     #   7. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
     #   8. CsrfTokenMiddleware        -- verify double-submit CSRF token
-    #   9. AccessLogMiddleware        -- log all requests (after security checks)
+    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  10. AccessLogMiddleware        -- log all requests (after security checks)
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the true outermost layer) and outside everything else, on purpose:

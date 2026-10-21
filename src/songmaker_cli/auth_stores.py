@@ -16,6 +16,7 @@ from webauth.ports import AccountEventKind
 
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.constants import AuditAction, ResourceType
+from songmaker_cli.db.models import USERNAME_MAX_LENGTH
 from songmaker_cli.db.queries.auth import (
     create_session,
     create_user,
@@ -48,7 +49,8 @@ class DatabaseSubjectUserStore:
         return get_user(self.session, user_id)
 
     def create_for_subject(self, subject: str, username: str, role: str) -> User:
-        return create_user(self.session, subject, username, role)
+        """The username is display text and may be longer than the column holds."""
+        return create_user(self.session, subject, username[:USERNAME_MAX_LENGTH], role)
 
     def set_role(self, user_id: str, role: str) -> User:
         return set_user_role(self.session, user_id, role)

@@ -155,11 +155,6 @@ interface SeededAlbumSong {
 	track: SeededTrack;
 }
 
-export interface Credentials {
-	username: string;
-	password: string;
-}
-
 interface CreatedSong extends CreatedResource {
 	slug: string;
 }
@@ -224,7 +219,7 @@ type MultipartFile = { name: string; mimeType: string; buffer: Buffer };
 
 function requiredEnv(name: string): string {
 	const value = process.env[name];
-	if (!value) throw new Error(`${name} must be set to the CI stack's admin credentials`);
+	if (!value) throw new Error(`${name} must be set to the e2e admin's username`);
 	return value;
 }
 
@@ -285,7 +280,7 @@ async function seedFillerAlbums(titlePrefix: string): Promise<void> {
 				'--title-prefix',
 				titlePrefix,
 				'--owner-username',
-				requiredEnv('ADMIN_USERNAME')
+				requiredEnv('E2E_ADMIN_USERNAME')
 			],
 			{ cwd: REPO_ROOT }
 		);
@@ -314,7 +309,7 @@ async function archivePreviousE2EAlbums(): Promise<void> {
 				'--title-prefix',
 				E2E_ALBUM_TITLE_PREFIX,
 				'--owner-username',
-				requiredEnv('ADMIN_USERNAME')
+				requiredEnv('E2E_ADMIN_USERNAME')
 			],
 			{ cwd: REPO_ROOT }
 		);
@@ -330,23 +325,11 @@ class SeedApi {
 		private readonly csrfToken: string
 	) {}
 
-	/**
-	 * A password sign-in, kept for `auth-flows.spec.ts` alone: every other flow
-	 * carries a seeded session (`seedAccount`) and uses `fromSession`.
-	 */
-	static async login(api: APIRequestContext, credentials: Credentials): Promise<SeedApi> {
-		const response = await api.post('/api/auth/login', { data: credentials });
-		if (!response.ok()) {
-			throw new Error(`Login failed: ${response.status()} ${await response.text()}`);
-		}
-		return SeedApi.fromSession(api, 'Login set no CSRF cookie');
-	}
-
-	/** Seeds from a context that already carries the run's session, without logging in again. */
-	static async fromSession(api: APIRequestContext, missingCookieError?: string): Promise<SeedApi> {
+	/** Seeds from a context that already carries a seeded session (`seedAccount`). */
+	static async fromSession(api: APIRequestContext): Promise<SeedApi> {
 		const { cookies } = await api.storageState();
 		const csrf = cookies.find((cookie) => cookie.name === CSRF_COOKIE);
-		if (!csrf) throw new Error(missingCookieError ?? 'Context carries no CSRF cookie');
+		if (!csrf) throw new Error('Context carries no CSRF cookie');
 		return new SeedApi(api, csrf.value);
 	}
 
@@ -534,7 +517,7 @@ export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoice
 				'--take-count',
 				'1',
 				'--owner-username',
-				requiredEnv('ADMIN_USERNAME'),
+				requiredEnv('E2E_ADMIN_USERNAME'),
 				'--lyrics',
 				lyrics,
 				'--prompt',
@@ -740,7 +723,7 @@ export async function seedTakeStripSong(
 				'--take-count',
 				String(takeCount),
 				'--owner-username',
-				requiredEnv('ADMIN_USERNAME')
+				requiredEnv('E2E_ADMIN_USERNAME')
 			],
 			{ cwd: REPO_ROOT },
 			readFileSync(TAKE_FIXTURE)
@@ -810,7 +793,7 @@ export async function seedSongPhoneSong(
 				'--take-count',
 				String(takeCount),
 				'--owner-username',
-				requiredEnv('ADMIN_USERNAME')
+				requiredEnv('E2E_ADMIN_USERNAME')
 			],
 			readFileSync(TAKE_FIXTURE)
 		)
@@ -823,7 +806,7 @@ export async function seedQueuedGenerationJob(songId: string): Promise<string> {
 			'--song-id',
 			songId,
 			'--owner-username',
-			requiredEnv('ADMIN_USERNAME')
+			requiredEnv('E2E_ADMIN_USERNAME')
 		])
 	);
 }
@@ -878,7 +861,7 @@ export async function seedRunningGenerationJob(
 			String(options.takeCount),
 			...phaseArgs(options),
 			'--owner-username',
-			requiredEnv('ADMIN_USERNAME')
+			requiredEnv('E2E_ADMIN_USERNAME')
 		])
 	);
 }
@@ -1030,7 +1013,7 @@ function sessionCookies(row: SeededSessionRow): Cookie[] {
 }
 
 /**
- * Signs `username` in without the password form: the account is found or
+ * Signs `username` in without Keycloak: the account is found or
  * created and given a database session straight from the stack's own side, so
  * the app itself signs the cookies. A flow that creates the account removes it
  * again with `deleteSeededAccount`.
@@ -1043,9 +1026,9 @@ export async function seedAccount(
 	return { id: row.user_id, username: row.username, cookies: sessionCookies(row) };
 }
 
-/** The run's one admin, which the stack created from its `ADMIN_*` settings. */
+/** The run's one admin: the stack has no admin bootstrap, so the seeding helper makes the account. */
 export function seedAdminAccount(): Promise<SeededAccount> {
-	return seedAccount(requiredEnv('ADMIN_USERNAME'), 'admin');
+	return seedAccount(requiredEnv('E2E_ADMIN_USERNAME'), 'admin');
 }
 
 /** An API context that carries the account's session. */
@@ -1059,26 +1042,6 @@ export function signedInApi(account: SeededAccount): Promise<APIRequestContext> 
 /** Removes an account made by `seedAccount`, rows and all. */
 export async function deleteSeededAccounts(accountIds: string[]): Promise<void> {
 	await runSeedSessions({ delete: accountIds });
-}
-
-/**
- * A second account with a password, created through the admin API the admin
- * page uses. Only `auth-flows.spec.ts` still needs one -- it drives the
- * password login; every other flow uses `seedAccount`.
- */
-export async function createAccount(
-	api: APIRequestContext,
-	username: string,
-	password: string,
-	role: AccountRole = NON_ADMIN_ROLE
-): Promise<string> {
-	const seed = await SeedApi.fromSession(api);
-	const account = await seed.postJson<CreatedResource>('/api/admin/users', {
-		username,
-		password,
-		role
-	});
-	return account.id;
 }
 
 /**
@@ -1098,37 +1061,29 @@ export async function seedUnpickedLibrary(api: APIRequestContext): Promise<Seede
 /**
  * Gives a flow's own account one album holding one song titled `songTitle`,
  * returning that song's address -- a page only that account may open. `api`
- * carries the account's session (`signedInApi`); only `auth-flows.spec.ts`
- * passes `Credentials`, which signs `api` in with the password.
+ * carries the account's session (`signedInApi`).
  */
 export async function seedOwnSongAddress(
 	api: APIRequestContext,
-	account: SeededAccount | Credentials,
+	account: SeededAccount,
 	songTitle: string
 ): Promise<string> {
-	const seed = await signedInSeedApi(api, account);
+	const seed = await SeedApi.fromSession(api);
 	return (await createOwnSong(seed, account.username, songTitle)).address;
 }
 
 /** `seedOwnSongAddress`, with one take of the fixture tone the song plays. */
 export async function seedOwnTakeAddress(
 	api: APIRequestContext,
-	account: SeededAccount | Credentials,
+	account: SeededAccount,
 	songTitle: string
 ): Promise<string> {
-	const seed = await signedInSeedApi(api, account);
+	const seed = await SeedApi.fromSession(api);
 	const song = await createOwnSong(seed, account.username, songTitle);
 	await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
 		mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
 	});
 	return song.address;
-}
-
-function signedInSeedApi(
-	api: APIRequestContext,
-	account: SeededAccount | Credentials
-): Promise<SeedApi> {
-	return 'password' in account ? SeedApi.login(api, account) : SeedApi.fromSession(api);
 }
 
 async function createOwnSong(
@@ -1147,12 +1102,6 @@ async function createOwnSong(
 		prompt: 'calm test tone'
 	});
 	return { id: song.id, address: `/album/${album.id}/${song.slug}` };
-}
-
-/** Removes an account created for a flow, rows and all. */
-export async function deleteAccount(api: APIRequestContext, userId: string): Promise<void> {
-	const seed = await SeedApi.fromSession(api);
-	await seed.delete(`/api/admin/users/${userId}/permanent`);
 }
 
 /**

@@ -24,7 +24,7 @@ from fastapi.testclient import TestClient
 from httpx import Response
 from sqlalchemy.orm import sessionmaker
 
-from songmaker_cli.db.models import AuditLog, User, UserSession
+from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, User, UserSession
 
 MEMBER = "/apps/songmaker"
 ADMIN = "/apps/songmaker/admin"
@@ -125,6 +125,13 @@ def test_a_new_member_gets_a_fresh_account_even_when_the_username_is_taken(world
         (SUBJECT, "felix", "admin"),
     ]
     assert world.client.get("/api/auth/me").json()["id"] == OTHER_SUBJECT
+
+
+def test_a_username_longer_than_the_column_is_cut_and_the_sign_in_succeeds(world: World) -> None:
+    response = world.sign_in(_member(OTHER_SUBJECT, "n" * 250))
+
+    assert response.status_code == 303
+    assert world.users() == [(OTHER_SUBJECT, "n" * USERNAME_MAX_LENGTH, "user")]
 
 
 def test_creating_an_account_and_changing_a_role_are_audited_without_a_person(

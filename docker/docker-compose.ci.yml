@@ -60,20 +60,6 @@ services:
       # (2026-09-30) opened 45 in one minute and the next job stream open
       # returned 429. Production remains at 45.
       STREAM_RATE_LIMIT: "200"
-      # `auth-flows.spec.ts` drives a real lockout, so these two are inverted
-      # against production on purpose (see that spec's header and
-      # `e2e/README.md`). The short-window budget counts failures per *IP*, and
-      # the whole run comes from one address: production's 5 would refuse every
-      # later login from the runner for five minutes, including the correct
-      # ones the other flows type. Measured cost of the spec: 3 failed attempts
-      # per project (one lockout sequence), 6 per suite run, 12 across CI's one
-      # retry -- 40 carries more than three times that headroom. The lockout
-      # counts per *account*, so lowering it to 3 keeps the refusal on the
-      # spec's own throwaway user and costs 3 requests instead of 15.
-      # Production remains at 5 / 15 / 3600.
-      LOGIN_RATE_LIMIT: "40"
-      LOGIN_LOCKOUT_THRESHOLD: "3"
-      LOGIN_LOCKOUT_WINDOW: "60"
       # The runner reaches songmaker-web over plain http, not through a TLS
       # terminator, so a Secure/__Host- cookie would never come back.
       COOKIE_SECURE: "false"
