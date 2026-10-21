@@ -15,13 +15,20 @@ import {
 	libraryRootState,
 	libraryScrollAnchor,
 	libraryScrollRestore,
+	librarySurface,
 	resetLibraryContextForTests,
 	setLibrarySurface
 } from '$lib/stores/libraryContext';
 import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
-import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '$lib/stores/libraryData';
+import {
+	albumList,
+	allAlbumsLoad,
+	albumSongsLoad,
+	resetLibraryDataForTests,
+	songList
+} from '$lib/stores/libraryData';
 import { chooseLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
@@ -803,6 +810,7 @@ describe('the wall landing where it was left', () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+		resetLibraryDataForTests();
 	});
 
 	it('1354_rule_12: lands at the scroll its entry kept', async () => {
@@ -836,14 +844,17 @@ describe('the wall landing where it was left', () => {
 		expect(writes).toEqual([]);
 	});
 
-	it('defect:#1354: an equal list recomputed while scrolled writes nothing', async () => {
+	it('defect:#1354: a grown and re-sorted list while scrolled writes nothing', async () => {
 		seedWall();
 		const root = await render();
 		const body = wallBody(root);
 		await landOnWall(480);
 		const { writes } = recordScrollTopWrites(body, 900);
 
-		albumList.update((albums) => [...albums]);
+		albumList.update((albums) => [
+			album({ id: 'a-zuerst', title: 'Aaa zuerst', song_count: 3 }),
+			...albums.slice().reverse()
+		]);
 		await tick();
 
 		expect(writes).toEqual([]);
@@ -913,12 +924,66 @@ describe('the wall landing where it was left', () => {
 
 	it('defect:#1354: a landing on a detail page issues no request for a wall', async () => {
 		await applyLibraryHistory(
-			{ ...libraryRootState(), surface: 'detail', scrollAnchor: 480 },
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'a-local' },
+				scrollAnchor: 480
+			},
 			false
 		);
 
+		expect(get(librarySurface)).toBe('detail');
 		expect(get(libraryScrollRestore)).toBeNull();
 	});
+
+	it('defect:#1354: the Playlists wall opened from a detail entry starts at its own anchor', async () => {
+		await applyLibraryHistory(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'a-local' },
+				scrollAnchor: 800
+			},
+			false
+		);
+		await applyLibraryHistory(
+			{ ...libraryRootState(), surface: 'playlists', scrollAnchor: 0 },
+			false
+		);
+
+		const root = await render('playlists');
+
+		expect(wallBody(root).scrollTop).toBe(0);
+	});
+
+	it.each([
+		{ clear: 'a cancelled apply', fire: () => cancelLibraryHistoryApply() },
+		{ clear: 'a navigation', fire: () => setLibrarySurface('playlists') }
+	])(
+		'1354_rule_12: $clear while the wall waits leaves wall and anchor agreeing',
+		async ({ fire }) => {
+			mockContentHeight(600);
+			seedWall();
+			const root = await render();
+			const body = wallBody(root);
+			await landOnWall(480);
+
+			fire();
+			await tick();
+			mockContentHeight(2000);
+			albumList.update((albums) => [
+				...albums,
+				album({ id: 'a-more', title: 'Mehr', song_count: 2 })
+			]);
+			await tick();
+
+			expect({ wall: body.scrollTop, anchor: get(libraryScrollAnchor) }).toEqual({
+				wall: 0,
+				anchor: 0
+			});
+		}
+	);
 
 	it('defect:#1354: a navigation off the wall drops a landing that still waits', async () => {
 		mockContentHeight(600);

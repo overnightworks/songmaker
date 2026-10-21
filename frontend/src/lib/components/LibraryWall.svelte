@@ -166,7 +166,18 @@
 		if (!get(libraryScrollRestore)) libraryScrollRestore.set({ top: get(libraryScrollAnchor) });
 		initLibraryWallOrder();
 		catchUpWall(ensureLastPlayedRead);
-		return whenBackOnline(() => catchUpWall(readLastPlayed));
+		const stopReconnectCatchUp = whenBackOnline(() => catchUpWall(readLastPlayed));
+		// A request cleared while this wall stays mounted leaves the anchor at its
+		// target; the wall then reports where it really is.
+		let waiting = get(libraryScrollRestore) !== null;
+		const stopWatchingRestore = libraryScrollRestore.subscribe((request) => {
+			if (waiting && request === null && browseEl) captureLibraryScroll(browseEl.scrollTop);
+			waiting = request !== null;
+		});
+		return () => {
+			stopReconnectCatchUp();
+			stopWatchingRestore();
+		};
 	});
 
 	$effect(() => {
