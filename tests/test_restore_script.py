@@ -31,7 +31,8 @@ fi
 
 FAKE_SYSTEMCTL = """#!/bin/bash
 echo "systemctl $*" >> "$FAKE_LOG"
-[[ "${FAKE_TIMER_ACTIVE:-0}" == 1 ]]
+[[ "${FAKE_SYSTEMCTL_BROKEN:-0}" != 1 ]] || exit 1
+echo "${FAKE_TIMER_STATE:-inactive}"
 """
 
 FAKE_FLOCK = """#!/bin/bash
@@ -115,6 +116,8 @@ def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snap
     audio = _index(lines, "alpine sh -c")
     assert validate < stop < recreate < restore < audio
     assert "--exit-on-error" in lines[restore]
+    assert "WITH (FORCE)" in lines[recreate]
+    assert "IF EXISTS" not in lines[recreate]
     assert not any("compose up" in line for line in lines)
     assert "docker compose up -d --wait" in result.stdout
     assert "systemctl start songmaker-autodeploy.timer" in result.stdout
@@ -123,7 +126,9 @@ def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snap
 @pytest.mark.parametrize(
     ("env", "steps_started"),
     [
-        pytest.param({"FAKE_TIMER_ACTIVE": "1"}, [], id="timer_active"),
+        pytest.param({"FAKE_TIMER_STATE": "active"}, [], id="timer_active"),
+        pytest.param({"FAKE_TIMER_STATE": "unknown"}, [], id="timer_state_unrecognised"),
+        pytest.param({"FAKE_SYSTEMCTL_BROKEN": "1"}, [], id="timer_query_fails"),
         pytest.param({"FAKE_LOCK_BUSY": "1"}, [], id="deployment_lock_held"),
         pytest.param({"FAKE_DOCKER_FAIL_ON": "volume inspect"}, [], id="volume_missing"),
         pytest.param({"FAKE_DOCKER_FAIL_ON": "pg_restore --list"}, [], id="dump_unreadable"),
@@ -238,3 +243,25 @@ def test_backup_with_zero_retention_prunes_nothing(docker_log: Path, tmp_path: P
 
     assert result.returncode == 0, result.stderr
     assert old.is_dir()
+
+
+def test_backup_with_a_missing_volume_fails_before_any_snapshot_work(
+    docker_log: Path, tmp_path: Path
+) -> None:
+    backup_dir = tmp_path / "backups"
+    old = backup_dir / "20200101_000000"
+    old.mkdir(parents=True)
+    os.utime(old, (1_577_836_800, 1_577_836_800))
+
+    result = _run(
+        BACKUP_SCRIPT,
+        docker_log,
+        [],
+        BACKUP_DIR=str(backup_dir),
+        FAKE_DOCKER_FAIL_ON="volume inspect",
+    )
+
+    assert result.returncode != 0
+    assert [path.name for path in backup_dir.iterdir()] == [old.name]
+    lines = _logged(docker_log)
+    assert not any(step in line for step in ("pg_dump", "docker run") for line in lines)

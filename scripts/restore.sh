@@ -40,12 +40,18 @@ autodeploy_lock_file() {
 }
 
 require_idle_autodeploy() {
-    if systemctl is-active --quiet "$AUTODEPLOY_TIMER"; then
-        fail "$AUTODEPLOY_TIMER is active and would restart writers mid-restore. Stop it first:
+    local timer_state
+    timer_state="$(systemctl show -p ActiveState --value "$AUTODEPLOY_TIMER")" \
+        || fail "cannot query $AUTODEPLOY_TIMER; refusing without knowing auto-deploy is stopped."
+    case "$timer_state" in
+        inactive | failed) ;;
+        *)
+            fail "$AUTODEPLOY_TIMER is '$timer_state', not stopped, and could restart writers mid-restore. Stop it first:
     sudo systemctl stop $AUTODEPLOY_TIMER
   Re-enable it only after the recovery is verified:
     sudo systemctl start $AUTODEPLOY_TIMER"
-    fi
+            ;;
+    esac
     local lock_file
     lock_file="$(autodeploy_lock_file)"
     flock -n "$lock_file" true || fail "a deployment holds $lock_file. Wait for it to finish, then run this again."
