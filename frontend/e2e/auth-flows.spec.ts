@@ -87,7 +87,6 @@ import {
 import {
 	BASE_URL,
 	ageSessionPastAbsoluteLimit,
-	deleteSeededAccounts,
 	seedAccount,
 	seedOwnSongAddress,
 	seedOwnTakeAddress
@@ -233,10 +232,6 @@ test.beforeAll(async () => {
 	const username = `e2e-b6-${test.info().project.name}-${Date.now().toString(36)}`;
 	const seeded = await seedAccount(username, 'user', ACCOUNT_PASSWORD);
 	account = { id: seeded.id, username, password: ACCOUNT_PASSWORD };
-});
-
-test.afterAll(async () => {
-	await deleteSeededAccounts([account.id]);
 });
 
 test.beforeEach(async ({ page, isMobile }, testInfo) => {

@@ -31,7 +31,6 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	deleteSeededAccounts,
 	runMarker,
 	seedAccount,
 	seedUnpickedLibrary,
@@ -266,7 +265,6 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		releaseRemoval?.();
 		await page.unrouteAll({ behavior: 'ignoreErrors' });
 		await accountApi?.dispose();
-		if (account) await deleteSeededAccounts([account.id]);
 	}
 });
 
@@ -333,7 +331,6 @@ for (const pending of [false, true]) {
 		} finally {
 			release?.();
 			await page.unrouteAll({ behavior: 'ignoreErrors' });
-			await deleteSeededAccounts(accounts.map((account) => account.id));
 		}
 	});
 }

@@ -75,7 +75,7 @@ Backend paths are under `src/songmaker_cli/`. `plans/` holds temporary live-coor
 ## Key rules
 
 1. The database is the source of truth: all data in PostgreSQL, not files.
-2. One code path: CLI and web UI use the same REST API. The CLI itself only starts the server and resets a password: `reset-password` is a local escape hatch that needs only the DB. `songmaker reset-password <username>` asks twice at a hidden prompt (no argv password; a mismatch changes nothing), changes the password and deletes the account's DB sessions in one transaction, and needs no Redis. `songmaker login <username>` asks once, hidden.
+2. One code path: CLI and web UI use the same REST API. The CLI itself only starts the server and resets a password: `reset-password` is a local escape hatch that needs only the DB. `songmaker reset-password <username>` asks twice at a hidden prompt (no argv password; a mismatch changes nothing), changes the password and deletes the account's DB sessions in one transaction, and needs no Redis.
 3. Pydantic models in `api_models/` define the API contract; `python scripts/generate_types.py` generates `types.ts`.
 4. Test albums (verify, proof, throwaway, QA runs) get a recognizable name prefix and are archived, not deleted, once verified.
 

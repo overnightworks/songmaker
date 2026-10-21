@@ -35,7 +35,6 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	deleteSeededAccounts,
 	readSeededLibrary,
 	runMarker,
 	seedAccount,
@@ -541,7 +540,6 @@ test.describe('on a fresh account', () => {
 
 	test.afterAll(async () => {
 		await accountApi.dispose();
-		await deleteSeededAccounts([account.id]);
 	});
 
 	test('a take row in a library with nothing picked continues through its album', async ({

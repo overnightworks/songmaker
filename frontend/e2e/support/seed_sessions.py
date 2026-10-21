@@ -7,13 +7,11 @@ mounted. The script itself arrives on stdin and the request as JSON in the
     docker compose exec -T -e SEED_SESSIONS_REQUEST='{"seed": [{"username": "e2e-x"}]}' \
         songmaker-web /app/.venv/bin/python - < seed_sessions.py
 
-A request holds ``seed`` (entries ``username`` and optional ``role`` and ``password``) and
-``delete`` (user ids).
+A request holds ``seed`` (entries ``username`` and optional ``role`` and ``password``).
 
 ``seed`` finds or creates each account and opens a database session for it,
 printing the signed session cookie and CSRF cookie the app itself would have
-issued at login. ``delete`` removes accounts made earlier, with their albums.
-The helper never ships: it lives outside ``scripts/``, which the image copies.
+issued at login. The helper never ships: it lives outside ``scripts/``, which the image copies.
 """
 
 from __future__ import annotations
@@ -38,9 +36,7 @@ from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.queries.auth import (
     create_session,
     create_user,
-    delete_user_sessions,
     get_user_by_username,
-    hard_delete_user,
 )
 from songmaker_cli.settings import get_settings
 
@@ -79,18 +75,10 @@ def _seed(session, entry: dict[str, str]) -> dict[str, str]:
     }
 
 
-def _delete(session, user_id: str) -> None:
-    delete_user_sessions(session, user_id)
-    # Audio files of the removed albums stay in the throwaway stack's volume.
-    hard_delete_user(session, user_id)
-
-
 def main() -> int:
     request = json.loads(os.environ[REQUEST_ENVIRONMENT_VARIABLE])
     with connect_db(resolve_database_url())() as session:
         seeded = [_seed(session, entry) for entry in request.get("seed", [])]
-        for user_id in request.get("delete", []):
-            _delete(session, user_id)
         session.commit()
     print(json.dumps(seeded))
     return 0

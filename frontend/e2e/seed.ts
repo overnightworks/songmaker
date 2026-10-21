@@ -983,7 +983,6 @@ const SEED_SESSIONS_REQUEST_VARIABLE = 'SEED_SESSIONS_REQUEST';
  */
 async function runSeedSessions(sessionRequest: {
 	seed?: Array<{ username: string; role?: AccountRole; password?: string }>;
-	delete?: string[];
 }): Promise<SeededSessionRow[]> {
 	try {
 		const { stdout } = await execWithStdin(
@@ -1031,8 +1030,8 @@ function sessionCookies(row: SeededSessionRow): Cookie[] {
 /**
  * Signs `username` in without the password form: the account is found or
  * created and given a database session straight from the stack's own side, so
- * the app itself signs the cookies. A flow that creates the account removes it
- * again with `deleteSeededAccounts`. Only a flow that drives the password form
+ * the app itself signs the cookies. The throwaway stack drops the account
+ * with the run. Only a flow that drives the password form
  * passes a `password`, which a new account then signs in with.
  */
 export async function seedAccount(
@@ -1055,11 +1054,6 @@ export function signedInApi(account: SeededAccount): Promise<APIRequestContext> 
 		baseURL: BASE_URL,
 		storageState: { cookies: account.cookies, origins: [] }
 	});
-}
-
-/** Removes an account made by `seedAccount`, rows and all. */
-export async function deleteSeededAccounts(accountIds: string[]): Promise<void> {
-	await runSeedSessions({ delete: accountIds });
 }
 
 /**

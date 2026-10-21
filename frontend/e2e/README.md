@@ -92,8 +92,8 @@ web container (`docker compose exec -T -e SEED_SESSIONS_REQUEST=... songmaker-we
 user and session queries: it finds or creates an account and opens a database
 session, then prints the signed session cookie and CSRF cookie the app would
 have issued at login. `seedAccount` / `seedAdminAccount` in `seed.ts` return
-those cookies for `context.addCookies` and `signedInApi`; a flow that made an
-account removes it with `deleteSeededAccounts`. The helper sits outside
+those cookies for `context.addCookies` and `signedInApi`; the throwaway stack drops
+the accounts with the run. The helper sits outside
 `scripts/`, which the image copies, so it never ships. Only `auth-flows.spec.ts`
 still types a password, because it exists to drive that login: it seeds its
 account with a `password`, and `SeedApi.login` serves it alone.

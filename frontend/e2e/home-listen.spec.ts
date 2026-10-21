@@ -20,7 +20,6 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	deleteSeededAccounts,
 	runMarker,
 	seedAccount,
 	seedUnpickedLibrary,
@@ -158,7 +157,6 @@ test('1354_rule_14 1354_rule_15 1354_rule_18 1354_rule_19 1354_rule_20: Home Lis
 		guard.assertClean();
 	} finally {
 		await accountApi?.dispose();
-		await deleteSeededAccounts([account.id]);
 	}
 });
 

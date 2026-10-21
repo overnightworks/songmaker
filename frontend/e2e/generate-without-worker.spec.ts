@@ -4,7 +4,6 @@ import { EDITOR_OPEN_WORKER_POOL_LABEL, EDITOR_TAB_EDIT_LABEL } from '../src/lib
 import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveOwnedAlbum,
-	deleteSeededAccounts,
 	runMarker,
 	seedAccount,
 	seedOwnSongAddress,
@@ -44,11 +43,7 @@ async function openUserSong(page: Page): Promise<OpenedSong> {
 	let account: SeededAccount | undefined;
 	let accountApi: APIRequestContext | undefined;
 	const cleanup = async () => {
-		try {
-			if (account !== undefined) await deleteSeededAccounts([account.id]);
-		} finally {
-			await accountApi?.dispose();
-		}
+		await accountApi?.dispose();
 	};
 	try {
 		account = await seedAccount(`e2e-nowork-${randomUUID()}`);
