@@ -107,6 +107,9 @@ const DEFAULT_DETAIL_TAB: DetailTab = 'edit';
 export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
+// A fresh object per wall landing, so two landings at one offset each restore;
+// any other surface change or cancelled apply clears it.
+export const libraryScrollRestore = writable<{ top: number } | null>(null);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['home', 'browse', 'playlists', 'detail']);
 const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
@@ -266,7 +269,7 @@ type HistoryWriteMode = 'push' | 'replace';
 // and loads its route again.
 //
 // Only history the controller has moving holds a write: a step back it has
-// underway (a sheet closing, Go to song leaving full Now Playing),
+// underway (a layer closing, Go to song leaving full Now Playing),
 // whose landing a write issued meanwhile would land under, or that one `goto`
 // from another page, whose entry stands only once its route has loaded -- a
 // second write issued meanwhile would supersede it and stand in its place
@@ -1018,6 +1021,7 @@ export async function applyLibraryHistory(
 	searchQuery.set(state.query);
 	showSongTab(state.songId, normalizeDetailTab(state.detailTab));
 	libraryScrollAnchor.set(state.scrollAnchor);
+	if (isWall(state.surface)) libraryScrollRestore.set({ top: state.scrollAnchor });
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
 	await hydrateCollection(state.collection);
@@ -1063,6 +1067,7 @@ export function playlistWhoseDetailShows(
 
 export function cancelLibraryHistoryApply(): void {
 	runningApply = null;
+	libraryScrollRestore.set(null);
 }
 
 async function hydrateCollection(collection: CollectionSnapshot): Promise<void> {
@@ -1205,6 +1210,7 @@ export function setLibrarySurface(surface: LibrarySurface): void {
 		placeReturnedFrom = left === 'detail' && isWall(surface) ? get(openCollection) : null;
 	}
 	librarySurface.set(surface);
+	libraryScrollRestore.set(null);
 }
 
 export function takePlaceReturnedFrom(): OpenCollection | null {
@@ -1228,6 +1234,7 @@ export function resetLibraryContextForTests(): void {
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	songTabs.clear();
 	libraryScrollAnchor.set(0);
+	libraryScrollRestore.set(null);
 	setOpenCollection(null);
 }
 

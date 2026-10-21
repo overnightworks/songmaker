@@ -10,14 +10,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import {
+	applyLibraryHistory,
+	cancelLibraryHistoryApply,
+	libraryRootState,
 	libraryScrollAnchor,
+	libraryScrollRestore,
+	librarySurface,
 	resetLibraryContextForTests,
 	setLibrarySurface
 } from '$lib/stores/libraryContext';
 import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
-import { albumList, allAlbumsLoad, albumSongsLoad, songList } from '$lib/stores/libraryData';
+import {
+	albumList,
+	allAlbumsLoad,
+	albumSongsLoad,
+	resetLibraryDataForTests,
+	songList
+} from '$lib/stores/libraryData';
 import { chooseLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
@@ -760,22 +771,62 @@ function litTitles(root: ParentNode): string[] {
 	);
 }
 
+async function landOnWall(top: number): Promise<void> {
+	await applyLibraryHistory({ ...libraryRootState(), scrollAnchor: top }, false);
+	await tick();
+}
+
+function recordScrollTopWrites(body: HTMLElement, startAt: number) {
+	const writes: number[] = [];
+	let top = startAt;
+	Object.defineProperty(body, 'scrollTop', {
+		configurable: true,
+		get: () => top,
+		set: (next: number) => {
+			top = next;
+			writes.push(next);
+		}
+	});
+	return {
+		writes,
+		scrollWithoutInput(next: number): void {
+			top = next;
+			body.dispatchEvent(new Event('scroll'));
+		}
+	};
+}
+
+function mockContentHeight(scrollHeight: number): void {
+	vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(scrollHeight);
+}
+
 describe('the wall landing where it was left', () => {
+	beforeEach(() => {
+		mockContentHeight(2000);
+		vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+		fetchAlbums.mockReturnValue(new Promise(() => {}));
+		allAlbumsLoad.set({ status: 'loading', error: null });
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		resetLibraryDataForTests();
+	});
+
 	it('1354_rule_12: lands at the scroll its entry kept', async () => {
 		seedWall();
-		libraryScrollAnchor.set(480);
+		await landOnWall(480);
 
 		const root = await render();
 
 		expect(wallBody(root).scrollTop).toBe(480);
 	});
 
-	it('1354_rule_12: applies a different scroll to the wall that is already showing', async () => {
+	it('1354_rule_12: applies a landing to the wall that is already showing', async () => {
 		seedWall();
 		const root = await render();
 
-		libraryScrollAnchor.set(300);
-		await tick();
+		await landOnWall(300);
 
 		expect(wallBody(root).scrollTop).toBe(300);
 	});
@@ -784,23 +835,207 @@ describe('the wall landing where it was left', () => {
 		seedWall();
 		const root = await render();
 		const body = wallBody(root);
-		const writes: number[] = [];
-		let top = 0;
-		Object.defineProperty(body, 'scrollTop', {
-			configurable: true,
-			get: () => top,
-			set: (next: number) => {
-				top = next;
-				writes.push(next);
-			}
-		});
+		const { writes, scrollWithoutInput } = recordScrollTopWrites(body, 0);
 
-		top = 500;
-		body.dispatchEvent(new Event('scroll'));
+		scrollWithoutInput(500);
 		await tick();
 
 		expect(get(libraryScrollAnchor)).toBe(500);
 		expect(writes).toEqual([]);
+	});
+
+	it('defect:#1354: a grown and re-sorted list while scrolled writes nothing', async () => {
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		await landOnWall(480);
+		const { writes } = recordScrollTopWrites(body, 900);
+
+		albumList.update((albums) => [
+			album({ id: 'a-zuerst', title: 'Aaa zuerst', song_count: 3 }),
+			...albums.slice().reverse()
+		]);
+		await tick();
+
+		expect(writes).toEqual([]);
+	});
+
+	it('defect:#1354: a landing at the same position restores again', async () => {
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		await landOnWall(480);
+		body.scrollTop = 0;
+
+		await landOnWall(480);
+
+		expect(body.scrollTop).toBe(480);
+	});
+
+	it.each([
+		{
+			input: 'a pointer press',
+			fire: (body: HTMLElement) => body.dispatchEvent(new Event('pointerdown'))
+		},
+		{ input: 'a touch', fire: (body: HTMLElement) => body.dispatchEvent(new Event('touchstart')) },
+		{ input: 'the wheel', fire: (body: HTMLElement) => body.dispatchEvent(new Event('wheel')) },
+		{
+			input: 'a scroll key',
+			fire: (body: HTMLElement) =>
+				body.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageDown' }))
+		}
+	])('defect:#1354: $input drops a landing that waits for the content', async ({ fire }) => {
+		mockContentHeight(600);
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		await landOnWall(480);
+
+		fire(body);
+		mockContentHeight(2000);
+		albumList.update((albums) => [
+			...albums,
+			album({ id: 'a-more', title: 'Mehr', song_count: 2 })
+		]);
+		await tick();
+
+		expect(body.scrollTop).toBe(0);
+		expect(get(libraryScrollAnchor)).toBe(0);
+	});
+
+	it('defect:#1354: a clamp or programmatic scroll leaves a waiting landing in place', async () => {
+		mockContentHeight(800);
+		seedWall();
+		const root = await render();
+		const body = wallBody(root);
+		await landOnWall(480);
+		const { scrollWithoutInput } = recordScrollTopWrites(body, 0);
+
+		scrollWithoutInput(200);
+		mockContentHeight(2000);
+		albumList.update((albums) => [
+			...albums,
+			album({ id: 'a-more', title: 'Mehr', song_count: 2 })
+		]);
+		await tick();
+
+		expect(body.scrollTop).toBe(480);
+	});
+
+	it('defect:#1354: a landing on a detail page issues no request for a wall', async () => {
+		await applyLibraryHistory(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'a-local' },
+				scrollAnchor: 480
+			},
+			false
+		);
+
+		expect(get(librarySurface)).toBe('detail');
+		expect(get(libraryScrollRestore)).toBeNull();
+	});
+
+	it('defect:#1354: the Playlists wall opened from a detail entry starts at its own anchor', async () => {
+		await applyLibraryHistory(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'a-local' },
+				scrollAnchor: 800
+			},
+			false
+		);
+		await applyLibraryHistory(
+			{ ...libraryRootState(), surface: 'playlists', scrollAnchor: 0 },
+			false
+		);
+
+		const root = await render('playlists');
+
+		expect(wallBody(root).scrollTop).toBe(0);
+	});
+
+	it.each([
+		{ clear: 'a cancelled apply', fire: () => cancelLibraryHistoryApply() },
+		{ clear: 'a navigation', fire: () => setLibrarySurface('playlists') }
+	])(
+		'1354_rule_12: $clear while the wall waits leaves wall and anchor agreeing',
+		async ({ fire }) => {
+			mockContentHeight(600);
+			seedWall();
+			const root = await render();
+			const body = wallBody(root);
+			await landOnWall(480);
+
+			fire();
+			await tick();
+			mockContentHeight(2000);
+			albumList.update((albums) => [
+				...albums,
+				album({ id: 'a-more', title: 'Mehr', song_count: 2 })
+			]);
+			await tick();
+
+			expect({ wall: body.scrollTop, anchor: get(libraryScrollAnchor) }).toEqual({
+				wall: 0,
+				anchor: 0
+			});
+		}
+	);
+
+	it('defect:#1354: a navigation off the wall drops a landing that still waits', async () => {
+		mockContentHeight(600);
+		seedWall();
+		await landOnWall(480);
+
+		setLibrarySurface('playlists');
+
+		expect(get(libraryScrollRestore)).toBeNull();
+	});
+
+	it('defect:#1354: a cancelled apply drops a landing that still waits', async () => {
+		mockContentHeight(600);
+		seedWall();
+		await landOnWall(480);
+
+		cancelLibraryHistoryApply();
+
+		expect(get(libraryScrollRestore)).toBeNull();
+	});
+
+	it('1354_rule_12: a wall mounted without a landing starts at the anchor', async () => {
+		seedWall();
+		libraryScrollAnchor.set(240);
+
+		const root = await render();
+
+		expect(wallBody(root).scrollTop).toBe(240);
+		expect(get(libraryScrollAnchor)).toBe(240);
+	});
+
+	it('1354_rule_12: a target the loaded list cannot hold settles at the end and the anchor follows', async () => {
+		mockContentHeight(1000);
+		seedWall();
+		allAlbumsLoad.set({ status: 'ready', error: null });
+		await landOnWall(5000);
+
+		const root = await render();
+		await tick();
+
+		expect(wallBody(root).scrollTop).toBe(400);
+		expect(get(libraryScrollAnchor)).toBe(400);
+	});
+
+	it('1354_rule_12: a fractional shortfall of a pixel still counts as reached', async () => {
+		mockContentHeight(1080);
+		seedWall();
+		await landOnWall(480.6);
+
+		const root = await render();
+
+		expect(wallBody(root).scrollTop).toBe(480.6);
 	});
 });
 
