@@ -1,0 +1,8 @@
+claim_id = "80edec46b3ec4e129c8a5cae36f083b7"
+agent = "claude"
+role = "builder"
+base = "71679b6123381d29deeb85507cccb2ab628954d7"
+branch = "claude/issue-1749-walls-restore-on-landing"
+scope = ["frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts"]
+opened_commit = "b76580748ffef8f27d3e1f95690d3d60cccea720"
+whole_reason = "Two production files plus their two test files; one behaviour (restore on landing only)."
