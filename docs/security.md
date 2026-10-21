@@ -3,7 +3,7 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.20.0` and hash-locked in
+the `server` extra to the release wheel of tag `v0.20.1` and hash-locked in
 `uv.lock` (#879, #1765). Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.

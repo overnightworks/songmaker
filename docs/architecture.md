@@ -1036,7 +1036,7 @@ events.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.20.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.20.1`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
