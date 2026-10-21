@@ -241,6 +241,7 @@ for (const record of ['present', 'absent'] as const) {
 		context
 	}, info) => {
 		await context.clearCookies();
+		await stubIdentityProvider(context);
 		await withProofLibrary(async (library) => {
 			const shell = shellOf(info);
 			const guard = new FlowGuard(page);
