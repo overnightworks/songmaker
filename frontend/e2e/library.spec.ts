@@ -27,7 +27,6 @@ import {
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_PAGE_LABEL,
-	RAIL_SEARCH_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	PLAYING_MARK_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL,
@@ -54,7 +53,6 @@ import {
 	boundingBoxes,
 	containing,
 	csrfHeaders,
-	expectLibraryWallLoaded,
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	MOBILE_VIEWPORT,
@@ -711,47 +709,59 @@ test(
 	}
 );
 
+// Archives every album before reporting any failure, so one refusal leaves no
+// later album behind.
+async function archiveEvery(page: Page, albumIds: string[]): Promise<void> {
+	const failures: unknown[] = [];
+	for (const albumId of albumIds) {
+		try {
+			await archiveOwnedAlbum(page.request, albumId);
+		} catch (error) {
+			failures.push(error);
+		}
+	}
+	if (failures.length > 0) {
+		throw new AggregateError(failures, `Archiving ${failures.length} test albums failed`);
+	}
+}
+
 // The browse loads 50 albums, newest first (LIBRARY_ALBUM_PAGE_SIZE); an album
 // chosen in Search from beyond that page still opens under its own heading.
-test('1354_37a: an album found in Search beyond the first browse page opens with its heading', async ({
-	page
-}, testInfo) => {
-	const shell = shellOf(testInfo);
-	const surface = workspace(page);
-	const runTag = `E2E Beyond Page ${Date.now()}`;
-	const targetTitle = `${runTag} target`;
-	const albumIds: string[] = [];
-	await page.goto(HOME_PATH);
-	const headers = await csrfHeaders(page);
-	try {
-		// The target is created first, so the newest-first browse puts it last.
-		for (let index = 0; index <= LIBRARY_ALBUM_PAGE_SIZE; index++) {
-			const title = index === 0 ? targetTitle : `${runTag} filler ${index}`;
-			const response = await page.request.post('/api/albums', { headers, data: { title } });
-			expect(response.ok()).toBe(true);
-			albumIds.push((await response.json()).id);
-		}
-		await page.goto(LIBRARY_PATH);
-		await expectLibraryWallLoaded(page);
+// Phone only: the desktop Rail is mounted on every page and pages in every
+// album at once (RailLibraryGroup), so no desktop surface lacks the album. The
+// cell starts on a playlist address, which never loads all albums.
+test(
+	'1354_37a: an album found in Search beyond the first browse page opens with its heading',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page, request }) => {
+		const surface = workspace(page);
+		const runTag = `E2E Beyond Page ${Date.now()}`;
+		const targetTitle = `${runTag} target`;
+		const albumIds: string[] = [];
+		await page.goto(HOME_PATH);
+		const headers = await csrfHeaders(page);
+		try {
+			// The target is created first, so the newest-first browse puts it last.
+			for (let index = 0; index <= LIBRARY_ALBUM_PAGE_SIZE; index++) {
+				const title = index === 0 ? targetTitle : `${runTag} filler ${index}`;
+				const response = await page.request.post('/api/albums', { headers, data: { title } });
+				expect(response.ok()).toBe(true);
+				albumIds.push((await response.json()).id);
+			}
+			const playlist = await seedPlaylist(request, readSeededLibrary());
+			await page.goto(`/playlist/${playlist.slug}`);
+			await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
 
-		if (shell === 'mobile') {
 			await (
 				await phoneSearchResult(page, 'Albums', targetTitle, nameStartingWith(targetTitle))
 			).click();
-		} else {
-			const rail = await openRailNav(page, shell);
-			await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(targetTitle);
-			await rail
-				.getByRole('group', { name: 'Albums', exact: true })
-				.getByRole('option', { name: nameStartingWith(targetTitle) })
-				.click();
-		}
 
-		await expect(surface.getByRole('heading', { name: targetTitle })).toBeVisible();
-	} finally {
-		for (const albumId of albumIds) await archiveOwnedAlbum(page.request, albumId);
+			await expect(surface.getByRole('heading', { name: targetTitle })).toBeVisible();
+		} finally {
+			await archiveEvery(page, albumIds);
+		}
 	}
-});
+);
 
 test('1354_37b_64: an album with nothing to play dims its circle and leaves the running album playing on', async ({
 	page
