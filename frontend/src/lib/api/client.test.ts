@@ -29,7 +29,6 @@ import {
 	fetchHealth,
 	pickGeneration,
 	unpickGeneration,
-	cleanupAlbum,
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
@@ -192,12 +191,6 @@ describe('API client', () => {
 		mockOk({});
 		await unpickGeneration('g1');
 		expect(mockFetch.mock.calls[0][0]).toBe('/api/generations/g1/unpick');
-	});
-
-	it('cleanupAlbum returns deleted count', async () => {
-		mockOk({ deleted: 5 });
-		const result = await cleanupAlbum('a1');
-		expect(result.deleted).toBe(5);
 	});
 
 	it('fetchCapabilities', async () => {
