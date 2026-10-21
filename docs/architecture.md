@@ -616,7 +616,7 @@ The idle transport Play keeps its own path, since it must keep the listener's
 shuffle setting. Navigation reads playback only through `idlePlayTarget()`
 ("what would Play start"), never as a queue.
 
-**The queue names its next take once.** `nextQueueTake(ctx, current)` in
+**The queue names its next take once.** `adjacentQueueTake(ctx, current)` in
 `stores/player.ts` is the one decider of which take follows the current one:
 Next plays it, the transport's Next button (`canPlayNextSong`) and Now
 Playing's Up next (`buildQueueViewModel`) show it, and every queue load and
@@ -639,7 +639,7 @@ written on a take change, on pause, when the page hides, and about every 5 s
 of playback in between; the last save is kept in memory, so that rhythm reads
 no storage per tick. A take is only ever saved under the user it started
 under, a pause saves the element's own clock, and a take that ended leaves the
-queue's next take (`nextQueueTake`) at 0; at a library window's end the ended
+queue's next take (`adjacentQueueTake`) at 0; at a library window's end the ended
 take itself stays saved at 0, since its next window starts from it, and when
 nothing follows the current record is retired without suppressing later saves
 in this tab or other signed-in tabs.

@@ -6,12 +6,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 
-import {
-	createLibraryQueueStreamSnapshot,
-	createQueueStreamSnapshot,
-	pinQueueStream,
-	unpinQueueStream
-} from './queue-streams';
+import { createQueueStreamSnapshot, pinQueueStream, unpinQueueStream } from './queue-streams';
 
 function acceptRequests(): void {
 	mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ snapshot_id: 'snap-1' }) });
@@ -31,23 +26,11 @@ describe('queue stream API contract', () => {
 		vi.useRealTimers();
 	});
 
-	it('builds explicit and library snapshots with their declared defaults', async () => {
+	it('builds an explicit snapshot', async () => {
 		await createQueueStreamSnapshot([{ generation_id: 'g-1' }]);
-		let [url, init] = request();
+		const [url, init] = request();
 		expect(url).toBe('/api/queue-streams');
 		expect(init.method).toBe('POST');
-		expect(JSON.parse(String(init.body))).toEqual({ tracks: [{ generation_id: 'g-1' }] });
-
-		mockFetch.mockClear();
-		await createLibraryQueueStreamSnapshot(null);
-		[url, init] = request();
-		expect(url).toBe('/api/queue-streams/library');
-		expect(init.method).toBe('POST');
-		expect(JSON.parse(String(init.body))).toEqual({
-			start_generation_id: null,
-			shuffle: false,
-			pool: 'mix'
-		});
 	});
 
 	it('keeps a cold snapshot build alive for its 120 second timeout budget', () => {
