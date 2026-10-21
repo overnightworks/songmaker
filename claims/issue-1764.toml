@@ -1,8 +1,0 @@
-claim_id = "e531d4745be143ffbceefd5b6dff4a3a"
-agent = "claude"
-role = "builder"
-base = "31d8673c8bdd22db55963be291892b8f917db13b"
-branch = "claude/issue-1764-password-era-surfaces-leave"
-scope = ["AGENTS.md", "docs", "frontend/e2e/auth-flows.spec.ts", "frontend/src", "src/songmaker_cli", "tests"]
-opened_commit = "5f69f90fa8863795fe5531543a46870da5519145"
-whole_reason = "K12 slice; scope per the body."
