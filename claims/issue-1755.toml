@@ -1,8 +1,0 @@
-claim_id = "756cf8411d144d369cc3d97dbd680699"
-agent = "claude"
-role = "builder"
-base = "f7d6461dff31b7746eb5a651067d3a0d48efdd95"
-branch = "claude/issue-1755-write-lock-per-transaction"
-scope = [".github/workflows/ci.yml", "docs/architecture.md", "docs/testing.md", "src/songmaker_cli/auth_stores.py", "tests/test_auth_stores.py", "tests/test_auth_write_lock_postgres.py"]
-opened_commit = "94ea20b1394e742a97e87be224ab06b13cabdcec"
-whole_reason = "The write-lock fix plus the CI job and docs that run and describe its Postgres proof."
