@@ -1,8 +1,0 @@
-claim_id = "020b1d2426184d62bbb42d07536ad96d"
-agent = "claude"
-role = "builder"
-base = "f7d6461dff31b7746eb5a651067d3a0d48efdd95"
-branch = "claude/issue-1757-users-fk-on-update-cascade"
-scope = ["src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "tests"]
-opened_commit = "295b05acba43824173322b9158eb5b2a4009c12e"
-whole_reason = "K12 preparation slice; scope per the body."
