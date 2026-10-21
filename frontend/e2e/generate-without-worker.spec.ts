@@ -1,16 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { EDITOR_OPEN_WORKER_POOL_LABEL, EDITOR_TAB_EDIT_LABEL } from '../src/lib/constants';
 import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveOwnedAlbum,
-	BASE_URL,
-	createAccount,
-	deleteAccount,
+	deleteSeededAccounts,
 	runMarker,
+	seedAccount,
 	seedOwnSongAddress,
 	seedSongPhoneSong,
-	STORAGE_STATE_FILE
+	signedInApi,
+	type SeededAccount
 } from './seed';
 
 const UNAVAILABLE = "Generating isn't available right now.";
@@ -41,28 +41,22 @@ async function openAdminSong(page: Page): Promise<OpenedSong> {
 
 // The user case is a real non-admin account, signed in, on a song it owns.
 async function openUserSong(page: Page): Promise<OpenedSong> {
-	const admin = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
-	let account: APIRequestContext | undefined;
-	let userId: string | undefined;
+	let account: SeededAccount | undefined;
+	let accountApi: APIRequestContext | undefined;
 	const cleanup = async () => {
 		try {
-			if (userId !== undefined) await deleteAccount(admin, userId);
+			if (account !== undefined) await deleteSeededAccounts([account.id]);
 		} finally {
-			try {
-				await account?.dispose();
-			} finally {
-				await admin.dispose();
-			}
+			await accountApi?.dispose();
 		}
 	};
 	try {
-		const credentials = { username: `e2e-nowork-${randomUUID()}`, password: randomUUID() };
-		userId = await createAccount(admin, credentials.username, credentials.password);
-		account = await request.newContext({ baseURL: BASE_URL });
+		account = await seedAccount(`e2e-nowork-${randomUUID()}`);
+		accountApi = await signedInApi(account);
 		const title = `QA no worker ${runMarker()}`;
-		const address = await seedOwnSongAddress(account, credentials, title);
+		const address = await seedOwnSongAddress(accountApi, account, title);
 		await page.context().clearCookies();
-		await page.context().addCookies((await account.storageState()).cookies);
+		await page.context().addCookies(account.cookies);
 		await page.goto(address);
 		return { title, cleanup };
 	} catch (error) {
