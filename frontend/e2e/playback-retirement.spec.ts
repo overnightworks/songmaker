@@ -11,6 +11,7 @@ import {
 	accountMenu,
 	FlowGuard,
 	leftTheApp,
+	nextSignInStart,
 	nameStartingWith,
 	HOME_PATH,
 	observePlayingAudio,
@@ -364,10 +365,11 @@ for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry']
 						json: { detail: 'Session expired' }
 					})
 				);
-				await page.reload();
+				const [start] = await Promise.all([nextSignInStart(page), page.reload()]);
 				// The refusal sends the page to sign in at the issuer; the app's
 				// storage is read from a document of the app's own origin.
 				await expect.poll(() => leftTheApp(page)).toBe(true);
+				await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 				const reader = await context.newPage();
 				try {
 					await reader.goto('/legal');

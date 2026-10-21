@@ -624,8 +624,10 @@ const contextsWithStubbedIdentityProvider = new WeakSet<BrowserContext>();
  * app's origin -- the issuer's logout address -- ends on an empty stub instead
  * of on the network. Playwright routes only the first request of a redirect
  * chain, so the server's redirect to the issuer is not stubbed: the browser
- * fails to resolve the issuer and stays on its error page, and a `FlowGuard`
- * on a page of a stubbed context forgives exactly that navigation.
+ * fails to resolve the issuer and stays on its error page. A `FlowGuard` on a
+ * page of a stubbed context forgives only that navigation: the main frame's
+ * navigation to the `Location` of the last sign-in start the page received,
+ * once per start, and lists it in `forgivenIssuerNavigations`.
  */
 export async function stubIdentityProvider(context: BrowserContext): Promise<void> {
 	const appOrigin = new URL(BASE_URL).origin;
@@ -634,16 +636,6 @@ export async function stubIdentityProvider(context: BrowserContext): Promise<voi
 		(url) => url.origin !== appOrigin,
 		(route) =>
 			route.fulfill({ status: 200, contentType: 'text/html', body: '<title>issuer</title>' })
-	);
-}
-
-// Whether a request is the browser's navigation to an issuer that nothing serves.
-function isNavigationToUnservedIssuer(page: Page, request: Request, errorText: string): boolean {
-	return (
-		contextsWithStubbedIdentityProvider.has(page.context()) &&
-		errorText === ISSUER_UNRESOLVED_ERROR &&
-		request.isNavigationRequest() &&
-		new URL(request.url()).origin !== new URL(BASE_URL).origin
 	);
 }
 
@@ -713,9 +705,11 @@ export class FlowGuard {
 	private readonly takesBeingAbandoned = new Set<string>();
 	private readonly completingResponses = new WeakSet<Request>();
 	private readonly refusedAsExpected = new WeakSet<Request>();
+	private pendingIssuerNavigation: string | undefined;
 	private successorPath: string | undefined;
 	private abortedSuccessorUrls: string[] = [];
 	private apiRequests = 0;
+	readonly forgivenIssuerNavigations: string[] = [];
 
 	constructor(
 		private readonly page: Page,
@@ -751,11 +745,17 @@ export class FlowGuard {
 				return;
 			}
 			if (losesNetworkOnPurpose && failedWithTheNetwork(page, errorText)) return;
-			if (isNavigationToUnservedIssuer(page, request, errorText)) return;
+			if (this.forgivesIssuerNavigation(request, errorText)) return;
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);
 		});
 		page.on('response', (response) => {
 			const status = response.status();
+			if (new URL(response.url()).pathname === SIGN_IN_START_PATHNAME && status === 303) {
+				this.pendingIssuerNavigation = new URL(
+					response.headers()['location'] ?? '',
+					response.url()
+				).href;
+			}
 			if (completesTheTake(response)) {
 				this.completingResponses.add(response.request());
 			}
@@ -833,6 +833,22 @@ export class FlowGuard {
 
 	get apiRequestCount(): number {
 		return this.apiRequests;
+	}
+
+	// The one navigation the stubbed identity provider cannot answer: the main
+	// frame following the last sign-in start's redirect.
+	private forgivesIssuerNavigation(request: Request, errorText: string): boolean {
+		const forgiven =
+			contextsWithStubbedIdentityProvider.has(this.page.context()) &&
+			errorText === ISSUER_UNRESOLVED_ERROR &&
+			request.isNavigationRequest() &&
+			request.frame() === this.page.mainFrame() &&
+			request.url() === this.pendingIssuerNavigation;
+		if (forgiven) {
+			this.forgivenIssuerNavigations.push(request.url());
+			this.pendingIssuerNavigation = undefined;
+		}
+		return forgiven;
 	}
 
 	assertClean(): void {

@@ -358,6 +358,7 @@ test(
 		expect(start.location.origin).not.toBe(start.requested.origin);
 		expect(documentRequests[0]).toBe('/login/oidc');
 		await expect.poll(() => historyLength(page), "one entry, the issuer's").toBe(length + 1);
+		await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 		guard.assertClean();
 	}
 );
@@ -380,6 +381,7 @@ test.describe('signed out', () => {
 		expect(start.requested.search).toBe(`?${SIGN_IN_NEXT_PARAM}=%2Flibrary`);
 		expect(start.status).toBe(303);
 		expect(start.location.origin).not.toBe(start.requested.origin);
+		await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 		guard.assertClean();
 	});
 });

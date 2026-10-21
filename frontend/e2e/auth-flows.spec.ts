@@ -104,6 +104,7 @@ test('the signed-out page says so and starts the sign-in only when Log in is pre
 	expect(start.status).toBe(303);
 	expect(start.location.pathname.endsWith(AUTHORIZATION_ENDPOINT_SUFFIX)).toBe(true);
 	await expect.poll(() => leftTheApp(page)).toBe(true);
+	await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 	guard.assertClean();
 });
 
@@ -116,6 +117,7 @@ test('a protected address asks the server to sign in and to come back to it', as
 	expect(start.requested.search).toBe('?next=%2Flibrary');
 	expect(start.location.pathname.endsWith(AUTHORIZATION_ENDPOINT_SUFFIX)).toBe(true);
 	await expect.poll(() => leftTheApp(page)).toBe(true);
+	await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 	guard.assertClean();
 });
 
@@ -163,6 +165,17 @@ test('Log out on no access asks the server for the issuer logout address and lea
 }) => {
 	const guard = new FlowGuard(page);
 	await page.goto('/no-access');
+	// The page leaves for the issuer as soon as it has the answer, so the body is
+	// taken here, before the navigation, rather than read from a response afterwards.
+	let loggedOutAt: string | undefined;
+	await page.route(
+		(url) => url.pathname === '/auth/logout',
+		async (route) => {
+			const response = await route.fetch();
+			loggedOutAt = (await response.json()).logout_url;
+			await route.fulfill({ response });
+		}
+	);
 
 	const [logout, issuerLogout] = await Promise.all([
 		page.waitForResponse(
@@ -191,6 +204,8 @@ test('Log out on no access asks the server for the issuer logout address and lea
 			`${cookie} is cleared`
 		).toBe(true);
 	}
+	expect(loggedOutAt, 'the server names the issuer logout address').toBeTruthy();
+	expect(issuerLogout.url()).toBe(loggedOutAt);
 	await expect.poll(() => page.url()).toBe(issuerLogout.url());
 	guard.assertClean();
 });
@@ -229,6 +244,7 @@ for (const [refusal, query] of [
 		]);
 		expect(start.status).toBe(303);
 		await expect.poll(() => leftTheApp(page)).toBe(true);
+		await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 		guard.assertClean();
 	});
 }
@@ -331,5 +347,6 @@ test('an open page whose session ended on the server leaves for the sign-in star
 	expect(start.status).toBe(303);
 	expect(start.requested.search).toBe(`?next=${encodeURIComponent('/settings/voices')}`);
 	await expect.poll(() => leftTheApp(page)).toBe(true);
+	await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 	guard.assertClean();
 });
