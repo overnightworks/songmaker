@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import Column, Engine, ForeignKey, MetaData, String, Table, select, text, update
+from sqlalchemy.exc import DBAPIError
 
 from songmaker_cli.db.models import (
     Album,
@@ -330,10 +331,9 @@ def test_six_accounts_end_owned_by_the_subject_with_files_moved(
     assert shape.operator in _scalar(shape, "SELECT error FROM jobs")
     assert list(shape.cache_dir.iterdir()) == []
 
-    # a repeated run refuses; verify alone still passes
+    # a repeated run refuses
     assert shape.run() == 1
     assert "unknown" in capsys.readouterr().out
-    assert shape.run(merge.Mode.VERIFY) == 0
 
 
 def _plant_target(shape: LiveShape) -> dict:
@@ -480,3 +480,32 @@ def test_command_line_dry_runs_then_applies_with_the_configured_directories(
     finally:
         get_settings.cache_clear()
     assert list(live_shape.cache_dir.iterdir()) == []
+
+
+def _database_error_carrying(password_hash: str) -> BaseException:
+    return DBAPIError(
+        "INSERT INTO users (password_hash) VALUES (%(password_hash)s)",
+        {"password_hash": password_hash}, Exception("duplicate key\nDETAIL: more"),
+    )
+
+
+@pytest.mark.parametrize(
+    "failure_for", [_database_error_carrying, lambda _hash: KeyboardInterrupt()],
+)
+def test_a_failed_apply_prints_no_traceback_and_no_password_hash(
+    live_shape: LiveShape, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+    failure_for: Callable[[str], BaseException],
+) -> None:
+    password_hash = _scalar(
+        live_shape, f"SELECT password_hash FROM users WHERE id = '{live_shape.operator}'",
+    )
+
+    def fail(*_arguments) -> None:
+        raise failure_for(password_hash)
+
+    monkeypatch.setattr(merge, "_merge_database", fail)
+    assert live_shape.run() == 1
+    error = capsys.readouterr().err
+    assert "restore.sh" in error
+    assert "Traceback" not in error
+    assert password_hash not in error

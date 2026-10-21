@@ -13,8 +13,6 @@ with the venv's Python:
   moves and path rewrites, and every refusal. Writes nothing.
 * ``--apply``: refusals again, then the files move, then one database
   transaction, then the queue-stream cache is cleared, then V1-V5 run.
-* ``--verify``: V1-V5 alone. Checks that need the pre-run counts are only
-  reported, and only ``--from`` is searched for as an old id.
 
 Any refusal, error or failed check means ``scripts/restore.sh <backup>``;
 there is no resume. The script reads and writes through SQLAlchemy Core so
@@ -25,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 import shutil
 import sys
 import uuid
@@ -51,6 +50,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 
 prepend_own_checkout_src(__file__)
 
@@ -70,7 +70,6 @@ NO_OWNER: Final = None
 class Mode(StrEnum):
     DRY_RUN = "dry-run"
     APPLY = "apply"
-    VERIFY = "verify"
 
 
 class OwnerPolicy(StrEnum):
@@ -103,6 +102,7 @@ class PathColumn:
     label: str
     namespace: str
     holds_json: bool = False
+    is_directory: bool = False
 
 
 LORA_NAMESPACE: Final = f"{USER_LORAS_DIRNAME}/"
@@ -112,7 +112,7 @@ PATH_COLUMNS: Final = (
     PathColumn("versions.generation_params", "", holds_json=True),
     PathColumn("generations.generation_params", "", holds_json=True),
     PathColumn("generation_presets.params", "", holds_json=True),
-    PathColumn("user_loras.storage_path", LORA_NAMESPACE),
+    PathColumn("user_loras.storage_path", LORA_NAMESPACE, is_directory=True),
     PathColumn("user_loras.tensor_path", LORA_NAMESPACE),
     PathColumn("user_lora_samples.audio_path", LORA_NAMESPACE),
 )
@@ -292,6 +292,10 @@ def _plan_file_moves(
     return moves, refusals
 
 
+def _resolves(path: Path, is_directory: bool) -> bool:
+    return path.is_dir() if is_directory else path.is_file()
+
+
 def _rewritten(value: str, namespace: str, old_ids: tuple[str, ...], subject: str) -> str | None:
     for old_id in old_ids:
         prefix = f"{namespace}{old_id}/"
@@ -372,7 +376,7 @@ def build_plan(
     plan.missing_before = frozenset(
         change.new
         for rewrite in plan.rewrites for change in rewrite.changes
-        if not (audio_dir / change.old).is_file()
+        if not _resolves(audio_dir / change.old, rewrite.column.is_directory)
     )
     plan.tree_before = _tree_size(
         [root for root in _account_roots(audio_dir, (*old_ids, subject)) if root.is_dir()],
@@ -441,7 +445,7 @@ def _merge_database(
             conn.execute(delete(column.table))
     conn.execute(
         update(users).where(users.c.id == operator_id)
-        .values(username=f"merged-{operator_id}"),
+        .values(username=f"merged-{operator_id}-{secrets.token_hex(4)}"),
     )
     conn.execute(insert(users).values(
         id=subject, username=operator.username, password_hash=operator.password_hash,
@@ -498,9 +502,7 @@ def _check_accounts(conn: Connection, metadata: MetaData, subject: str) -> Check
     return CheckResult("V1", problems, f"users are {subject} as admin, no sessions")
 
 
-def _check_row_counts(conn: Connection, metadata: MetaData, plan: Plan | None) -> CheckResult:
-    if plan is None:
-        return CheckResult("V2", [], "not checked: no baseline in --verify")
+def _check_row_counts(conn: Connection, metadata: MetaData, plan: Plan) -> CheckResult:
     problems = []
     for table in metadata.sorted_tables:
         actual = conn.execute(select(func.count()).select_from(table)).scalar_one()
@@ -511,7 +513,7 @@ def _check_row_counts(conn: Connection, metadata: MetaData, plan: Plan | None) -
 
 
 def _check_owners(
-    conn: Connection, metadata: MetaData, plan: Plan | None, subject: str,
+    conn: Connection, metadata: MetaData, plan: Plan, subject: str,
 ) -> CheckResult:
     problems = []
     for column in owner_columns(metadata):
@@ -522,7 +524,7 @@ def _check_owners(
         ).scalar_one()
         if stray:
             problems.append(f"{label} has {stray} row(s) owned by someone else")
-        if plan is not None and OWNER_POLICIES[label] is not OwnerPolicy.DELETE_ALL:
+        if OWNER_POLICIES[label] is not OwnerPolicy.DELETE_ALL:
             nulls = conn.execute(
                 select(func.count()).select_from(column.table).where(column.is_(None)),
             ).scalar_one()
@@ -532,21 +534,22 @@ def _check_owners(
     return CheckResult("V3", problems, "every owner column is the subject or NULL")
 
 
-def _stored_paths(conn: Connection, metadata: MetaData, subject: str) -> set[str]:
-    stored: set[str] = set()
+def _stored_paths(conn: Connection, metadata: MetaData, subject: str) -> dict[str, bool]:
+    stored: dict[str, bool] = {}
     for path_column in PATH_COLUMNS:
         column = _column(metadata, path_column.label)
         prefix = f"{path_column.namespace}{subject}/"
         for value in conn.execute(select(column)).scalars():
             candidates = value.values() if isinstance(value, dict) else [value]
             stored.update(
-                item for item in candidates if isinstance(item, str) and item.startswith(prefix)
+                (item, path_column.is_directory) for item in candidates
+                if isinstance(item, str) and item.startswith(prefix)
             )
     return stored
 
 
 def _check_paths(
-    conn: Connection, metadata: MetaData, plan: Plan | None, audio_dir: Path,
+    conn: Connection, metadata: MetaData, plan: Plan, audio_dir: Path,
     old_ids: tuple[str, ...], subject: str,
 ) -> CheckResult:
     problems = [
@@ -554,12 +557,12 @@ def _check_paths(
         if root.exists()
     ]
     stored = _stored_paths(conn, metadata, subject)
-    missing = {path for path in stored if not (audio_dir / path).is_file()}
-    if plan is None:
-        note = f"{len(missing)} stored path(s) do not resolve (no baseline in --verify)"
-        return CheckResult("V4", problems, note)
+    missing = {
+        path for path, is_directory in stored.items()
+        if not _resolves(audio_dir / path, is_directory)
+    }
     expected = {change.new for rewrite in plan.rewrites for change in rewrite.changes}
-    problems += [f"rewritten path {path} is not stored" for path in sorted(expected - stored)]
+    problems += [f"rewritten path {path} is not stored" for path in sorted(expected - set(stored))]
     problems += [
         f"path {path} does not resolve" for path in sorted(missing - plan.missing_before)
     ]
@@ -593,7 +596,7 @@ def _check_residual_ids(
 
 
 def verify(
-    conn: Connection, metadata: MetaData, plan: Plan | None, audio_dir: Path,
+    conn: Connection, metadata: MetaData, plan: Plan, audio_dir: Path,
     old_ids: tuple[str, ...], subject: str,
 ) -> list[CheckResult]:
     return [
@@ -614,14 +617,16 @@ def _report_checks(results: list[CheckResult]) -> bool:
     return not any(result.problems for result in results)
 
 
+def _one_line(error: BaseException) -> str:
+    # SQLAlchemy's own text carries the statement and its parameters
+    cause = error.orig if isinstance(error, DBAPIError) else error
+    return (str(cause).splitlines() or [""])[0]
+
+
 def run(
     engine: Engine, *, audio_dir: Path, stream_cache_dir: Path, operator_id: str,
     subject: str, mode: Mode, metadata: MetaData = Base.metadata,
 ) -> int:
-    if mode is Mode.VERIFY:
-        with engine.connect() as conn:
-            results = verify(conn, metadata, None, audio_dir, (operator_id,), subject)
-        return 0 if _report_checks(results) else 1
     with engine.connect() as conn:
         plan = build_plan(conn, metadata, audio_dir, operator_id, subject)
     print_plan(plan, operator_id, subject, mode)
@@ -636,9 +641,9 @@ def run(
         _clear_stream_cache(stream_cache_dir)
         with engine.connect() as conn:
             results = verify(conn, metadata, plan, audio_dir, plan.old_ids, subject)
-    except Exception:
-        print(f"ERROR during apply. {RESTORE_HINT}")
-        raise
+    except (Exception, KeyboardInterrupt) as error:
+        print(f"{type(error).__name__}: {_one_line(error)}. {RESTORE_HINT}", file=sys.stderr)
+        return 1
     if _report_checks(results):
         return 0
     print(f"Verification failed. {RESTORE_HINT}")
@@ -651,11 +656,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="The operator's current user id.")
     parser.add_argument("--subject", required=True,
                         help="The operator's Keycloak subject, a lowercase UUID.")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--apply", action="store_true", help="Write. Default is a dry run.")
-    group.add_argument("--verify", action="store_true", help="Run V1-V5 alone.")
+    parser.add_argument("--apply", action="store_true", help="Write. Default is a dry run.")
     args = parser.parse_args(argv)
-    mode = Mode.APPLY if args.apply else Mode.VERIFY if args.verify else Mode.DRY_RUN
+    mode = Mode.APPLY if args.apply else Mode.DRY_RUN
 
     settings = get_settings()
     project_root = find_project_root(Path.cwd()) or Path.cwd()
