@@ -11,7 +11,7 @@ from time import monotonic
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import get_cached_limiter
 from songmaker_cli.api_models import JobResponse

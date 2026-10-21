@@ -37,8 +37,6 @@ SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
     "HF_TOKEN",
-    "ADMIN_USERNAME",
-    "ADMIN_PASSWORD",
     "GRAFANA_USER",
     "GRAFANA_PASSWORD",
 )

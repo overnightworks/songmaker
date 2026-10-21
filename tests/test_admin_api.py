@@ -874,7 +874,7 @@ def test_last_active_admin_is_protected_from_every_removal_path(
     client: TestClient, method: str, suffix: str, payload, already_authenticated: bool,
 ) -> None:
     """defect:#1590: removal is denied even if deactivation follows authentication."""
-    from webauth.dependencies import AuthenticatedUser
+    from webauth.ports import AuthenticatedUser
 
     from songmaker_cli.auth_dependencies import get_current_user
 

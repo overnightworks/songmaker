@@ -537,49 +537,6 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
 
 
-def auto_setup_admin(ctx: AppContext) -> None:
-    settings = get_settings()
-    admin_user = settings.admin_username
-    admin_pass = (
-        settings.admin_password.get_secret_value() if settings.admin_password else None
-    )
-    if not admin_user or not admin_pass:
-        return
-
-    from webauth.ports import UsernameTakenError
-    from webauth.users import (
-        SetupAlreadyDoneError,
-        SetupRacedError,
-        complete_first_run_setup,
-    )
-
-    from songmaker_cli.api_models.auth import chosen_rule_refusal
-    from songmaker_cli.app_context import build_web_auth_config
-    from songmaker_cli.auth_dependencies import build_user_management
-    from songmaker_cli.db.queries.auth import user_count
-
-    config = build_web_auth_config(ctx, settings)
-    with ctx.db() as session:
-        if user_count(session) > 0:
-            return
-        refusal = chosen_rule_refusal(admin_pass)
-        if refusal is not None:
-            log.error("ADMIN_PASSWORD refused: %s -- skipping auto-setup", refusal)
-            return
-        management = build_user_management(session, config)
-        try:
-            complete_first_run_setup(management, admin_user, admin_pass)
-        except SetupAlreadyDoneError:
-            session.rollback()
-            return
-        except (SetupRacedError, UsernameTakenError):
-            session.rollback()
-            log.info("Auto-setup: admin user already exists (concurrent startup)")
-            return
-        session.commit()
-        log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
-
-
 def pin_judge_route(ctx: AppContext) -> None:
     """Persist the pre-route judge transport once using the shared runtime config."""
     from agent_providers.config import current_config

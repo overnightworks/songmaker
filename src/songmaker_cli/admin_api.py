@@ -11,7 +11,7 @@ from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 from webauth.ports import UnknownUserError, UsernameTakenError
 from webauth.session_ending import end_user_sessions
 from webauth.users import (

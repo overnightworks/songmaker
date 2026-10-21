@@ -10,7 +10,7 @@ import pytest
 from conftest import login_and_csrf, make_authenticated_user, make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from PIL import Image
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (

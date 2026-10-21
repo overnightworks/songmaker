@@ -24,7 +24,7 @@ from agent_providers.events import StreamEvent
 from agent_providers.tool_loop import ToolExecutor
 from agent_providers.tools import ToolCatalog
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.db.queries.settings import get_cover_settings

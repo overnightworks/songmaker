@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG, ROLE_ADMIN
 from songmaker_cli.db.engine import init_test_db as init_db

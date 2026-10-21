@@ -1,189 +1,136 @@
-"""Auth API endpoints — login, logout, setup, password change."""
+"""Auth endpoints — sign-in through the Keycloak realm, logout, and the signed-in account."""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 from webauth.config import WebAuthConfig, web_auth_config
-from webauth.dependencies import AuthenticatedUser
-from webauth.login import (
-    INVALID_CREDENTIALS_DETAIL,
-    LoginOutcome,
-    clear_session_cookies,
-    http_refusal,
-    issue_session_cookies,
-    judge_credentials,
-    login_attempt_budget,
-)
-from webauth.ports import UsernameTakenError
-from webauth.proxies import client_user_agent, resolve_client_ip
-from webauth.session_ending import end_session, prune_sessions
-from webauth.users import (
-    SetupAlreadyDoneError,
-    SetupRacedError,
-    UserManagement,
-    WrongPasswordError,
-    complete_first_run_setup,
-)
+from webauth.cookies import issue_session_cookies
+from webauth.oidc import OidcRefusal
+from webauth.oidc_login import AdmissionRefusal, finish_login, log_out, open_session, start_login
+from webauth.ports import AuthenticatedUser
 
-from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
-from songmaker_cli.api_models import (
-    AuthMeResponse,
-    ChangePasswordRequest,
-    LoginRequest,
-    SetupRequest,
-    SetupRequiredResponse,
-    StatusResponse,
-    UserResponse,
-)
+from songmaker_cli.api_models import AuthMeResponse, LogoutResponse
 from songmaker_cli.app_context import get_db_session
-from songmaker_cli.auth_dependencies import (
-    _session_record_store,
-    get_current_user,
-    get_verified_session_id,
-    user_management,
+from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.auth_stores import (
+    DatabaseAuditSink,
+    DatabaseSessionRecordStore,
+    DatabaseSubjectUserStore,
+    DatabaseWriteLock,
 )
-from songmaker_cli.auth_stores import DatabaseLoginAttemptStore, DatabaseSessionRecordStore
-from songmaker_cli.db.queries.auth import (
-    count_recent_failed_attempts,
-    create_session,
-    get_user_by_username,
-    record_login_attempt,
-    user_count,
+from songmaker_cli.constants import (
+    LOGOUT_PATH,
+    NO_ACCESS_PATH,
+    OIDC_CALLBACK_PATH,
+    OIDC_START_PATH,
 )
 from songmaker_cli.settings import get_settings
 
 if TYPE_CHECKING:
-    from songmaker_cli.db.models import User
+    from songmaker_cli.oidc_client import OidcSignIn
 
 log = logging.getLogger(__name__)
 
+SIGN_IN_FAILED_STATUS: int = 403
+DEFAULT_LANDING_PATH = "/"
+
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-SETUP_ALREADY_COMPLETED_DETAIL: Final = "Setup already completed"
-
-
-@router.get("/setup-required")
-def setup_required(db: Session = Depends(get_db_session)) -> SetupRequiredResponse:
-    return SetupRequiredResponse(required=user_count(db) == 0)
+sign_in_router = APIRouter(tags=["auth"])
 
 
-@router.post(
-    "/setup",
-    responses={403: {"description": "Initial setup is not available"}},
-)
-def setup(
-    req: SetupRequest,
+def _sign_in(request: Request) -> OidcSignIn:
+    return request.app.state.oidc_sign_in
+
+
+@sign_in_router.get(OIDC_START_PATH)
+def start_sign_in(
     request: Request,
-    response: Response,
+    next: str | None = None,
+    config: WebAuthConfig = Depends(web_auth_config),
+) -> Response:
+    response = Response(status_code=303)
+    response.headers["location"] = start_login(
+        _sign_in(request).relying_party, request, response, config, return_to=next,
+    )
+    return response
+
+
+@sign_in_router.get(OIDC_CALLBACK_PATH)
+def finish_sign_in(
+    request: Request,
     db: Session = Depends(get_db_session),
     config: WebAuthConfig = Depends(web_auth_config),
-    management: UserManagement = Depends(user_management),
-) -> UserResponse:
-    try:
-        user = complete_first_run_setup(management, req.username, req.password)
-    except (SetupAlreadyDoneError, SetupRacedError, UsernameTakenError) as error:
+) -> Response:
+    sign_in = _sign_in(request)
+    # The library writes its cookie changes onto this response, so every outcome
+    # is answered with it.
+    response = Response()
+    lock = DatabaseWriteLock(db)
+    outcome = finish_login(
+        sign_in.relying_party, request, response, config,
+        admission=sign_in.admission,
+        accounts=DatabaseSubjectUserStore(db),
+        lock=lock,
+        audit=DatabaseAuditSink(db),
+    )
+    if isinstance(outcome, (OidcRefusal, AdmissionRefusal)):
         db.rollback()
-        raise HTTPException(403, SETUP_ALREADY_COMPLETED_DETAIL) from error
-
-    ip = resolve_client_ip(request)
-    ua = client_user_agent(request)
-    expires = datetime.now(timezone.utc) + timedelta(
-        seconds=config.session_max_age_seconds,
-    )
-    user_session = create_session(
-        db, user.id, expires,
-        ip_address=ip, user_agent=ua,
+        return _refused(request, response, outcome)
+    session = open_session(
+        request, config, outcome.account,
+        sessions=DatabaseSessionRecordStore(db),
+        lock=lock,
+        max_sessions=get_settings().max_concurrent_sessions_per_user,
     )
     db.commit()
-
-    issue_session_cookies(response, user_session.id, config)
-    log.info("Setup completed: admin user '%s' created", req.username)
-    return UserResponse.from_orm(user)
+    issue_session_cookies(response, session.id, config)
+    return _redirect(response, outcome.return_to or DEFAULT_LANDING_PATH)
 
 
-@router.post(
-    "/login",
-    responses={
-        401: {"description": "Credentials are invalid"},
-        429: {"description": "Too many login attempts"},
-    },
-)
-def login(
-    req: LoginRequest,
+def _redirect(response: Response, location: str) -> Response:
+    response.status_code = 303
+    response.headers["location"] = location
+    return response
+
+
+def _refused(
+    request: Request, response: Response, refusal: OidcRefusal | AdmissionRefusal,
+) -> Response:
+    if refusal is AdmissionRefusal.NOT_A_MEMBER:
+        log.info("Sign-in refused: not a member")
+        return _redirect(response, NO_ACCESS_PATH)
+    log.info("Sign-in refused: %s", refusal.reason if isinstance(refusal, OidcRefusal) else refusal)
+    shell = request.app.state.spa_index
+    response.status_code = SIGN_IN_FAILED_STATUS
+    if shell.exists():
+        body = shell.read_bytes()
+        response.body = body
+        response.headers["content-type"] = "text/html; charset=utf-8"
+    else:
+        response.body = b'{"detail":"Login failed"}'
+        response.headers["content-type"] = "application/json"
+    response.headers["content-length"] = str(len(response.body))
+    return response
+
+
+@sign_in_router.post(LOGOUT_PATH)
+def sign_out(
     request: Request,
     response: Response,
     db: Session = Depends(get_db_session),
     config: WebAuthConfig = Depends(web_auth_config),
-    sessions: DatabaseSessionRecordStore = Depends(_session_record_store),
-) -> UserResponse:
-    ip = resolve_client_ip(request)
-
-    refusal = login_attempt_budget(
-        DatabaseLoginAttemptStore(db),
-        ip_address=ip,
-        username=req.username,
-        config=config,
-    )
-    if refusal is not None:
-        raise http_refusal(refusal)
-    user = _authenticate_login(db, ip, req, config)
-
-    assert not db.new and not db.dirty and not db.deleted, (
-        "login: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
+) -> LogoutResponse:
+    logout_url = log_out(
+        _sign_in(request).relying_party, request, response, config,
+        sessions=DatabaseSessionRecordStore(db),
+        lock=DatabaseWriteLock(db),
     )
     db.commit()
-    _begin_exclusive(db, _SESSION_CAP_LOCK_ID)
-
-    record_login_attempt(db, ip, req.username, success=True)
-    ua = client_user_agent(request)
-    expires = datetime.now(timezone.utc) + timedelta(
-        seconds=config.session_max_age_seconds,
-    )
-    user_session = create_session(
-        db, user.id, expires,
-        ip_address=ip, user_agent=ua,
-    )
-    prune_sessions(
-        sessions, user.id, get_settings().max_concurrent_sessions_per_user,
-    )
-    db.commit()
-
-    issue_session_cookies(response, user_session.id, config)
-    return UserResponse.from_orm(user)
-
-
-def _authenticate_login(
-    db: Session, ip: str, req: LoginRequest, config: WebAuthConfig,
-) -> User:
-    user = get_user_by_username(db, req.username)
-    outcome = judge_credentials(req.password, user, hasher=config.password_hasher)
-    if outcome is LoginOutcome.ADMITTED:
-        return user
-    record_login_attempt(db, ip, req.username, success=False)
-    db.commit()
-    raise HTTPException(401, INVALID_CREDENTIALS_DETAIL)
-
-
-@router.delete("/session")
-def logout(
-    response: Response,
-    db: Session = Depends(get_db_session),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-    session_id: str = Depends(get_verified_session_id),
-    config: WebAuthConfig = Depends(web_auth_config),
-    sessions: DatabaseSessionRecordStore = Depends(_session_record_store),
-) -> StatusResponse:
-    end_session(sessions, session_id=session_id)
-    db.commit()
-
-    clear_session_cookies(response, config)
-    return StatusResponse(status="ok")
+    return LogoutResponse(logout_url=logout_url)
 
 
 @router.get("/me")
@@ -195,52 +142,3 @@ def me(
         username=current_user.username,
         role=current_user.role,
     )
-
-
-@router.put(
-    "/password",
-    responses={
-        401: {"description": "Current password is incorrect"},
-        429: {"description": "Too many password change attempts"},
-    },
-)
-def change_password(
-    req: ChangePasswordRequest,
-    request: Request,
-    response: Response,
-    db: Session = Depends(get_db_session),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-    config: WebAuthConfig = Depends(web_auth_config),
-    management: UserManagement = Depends(user_management),
-) -> StatusResponse:
-    ip = resolve_client_ip(request)
-    window = config.login_rate_window_seconds
-
-    ip_failures = count_recent_failed_attempts(
-        db, ip, window, username=f"__pwchange__{current_user.username}",
-    )
-    if ip_failures >= config.login_rate_limit:
-        raise HTTPException(
-            429, "Too many password change attempts. Try again later.",
-            headers={"Retry-After": str(window)},
-        )
-
-    try:
-        management.change_own_password(current_user, req.current, req.new)
-    except WrongPasswordError as error:
-        record_login_attempt(db, ip, f"__pwchange__{current_user.username}", success=False)
-        db.commit()
-        raise HTTPException(401, "Current password is incorrect") from error
-
-    ua = client_user_agent(request)
-    expires = datetime.now(timezone.utc) + timedelta(
-        seconds=config.session_max_age_seconds,
-    )
-    new_session = create_session(
-        db, current_user.id, expires,
-        ip_address=ip, user_agent=ua,
-    )
-    db.commit()
-
-    issue_session_cookies(response, new_session.id, config)
-    return StatusResponse(status="ok")

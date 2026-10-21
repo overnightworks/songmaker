@@ -1,16 +1,16 @@
-"""Query functions for users, sessions, login attempts, and audit log."""
+"""Query functions for users, sessions, and the audit log."""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
-    LoginAttempt,
     Playlist,
     ResourceEventCursor,
     User,
@@ -23,10 +23,6 @@ log = logging.getLogger(__name__)
 # ── Users ─────────────────────────────────────────────────────────
 
 
-def get_user_by_username(session: Session, username: str) -> User | None:
-    return session.query(User).filter_by(username=username).first()
-
-
 def get_user(session: Session, user_id: str) -> User | None:
     return session.query(User).filter_by(id=user_id).first()
 
@@ -35,19 +31,13 @@ def list_users(session: Session) -> list[User]:
     return session.query(User).order_by(User.username).all()
 
 
-def user_count(session: Session) -> int:
-    return session.query(User).count()
-
-
-def create_user(
-    session: Session, username: str, password_hash: str, role: str = "user",
-) -> User:
-    user = User(username=username, password_hash=password_hash, role=role)
+def create_user(session: Session, user_id: str, username: str, role: str) -> User:
+    user = User(id=user_id, username=username, role=role)
     session.add(user)
     session.flush()
     session.add(ResourceEventCursor(user_id=user.id))
     session.flush()
-    log.info("Created user '%s' (role=%s)", username, role)
+    log.info("Created user %s (role=%s)", user_id, role)
     return user
 
 
@@ -90,22 +80,11 @@ def _album_audio_paths(album: Album) -> list[str]:
     ]
 
 
-def update_user(
-    session: Session,
-    user_id: str,
-    role: str | None = None,
-    is_active: bool | None = None,
-    password_hash: str | None = None,
-) -> User:
+def set_user_role(session: Session, user_id: str, role: str) -> User:
     user = session.query(User).filter_by(id=user_id).first()
     if not user:
         raise ValueError(f"User not found: {user_id}")
-    if role is not None:
-        user.role = role
-    if is_active is not None:
-        user.is_active = is_active
-    if password_hash is not None:
-        user.password_hash = password_hash
+    user.role = role
     session.flush()
     return user
 
@@ -114,18 +93,9 @@ def update_user(
 
 
 def create_session(
-    session: Session,
-    user_id: str,
-    expires_at: datetime,
-    ip_address: str = "",
-    user_agent: str = "",
+    session: Session, user_id: str, *, created_at: datetime, expires_at: datetime,
 ) -> UserSession:
-    user_session = UserSession(
-        user_id=user_id,
-        expires_at=expires_at,
-        ip_address=ip_address,
-        user_agent=user_agent,
-    )
+    user_session = UserSession(user_id=user_id, created_at=created_at, expires_at=expires_at)
     session.add(user_session)
     session.flush()
     return user_session
@@ -147,14 +117,10 @@ def renew_session(
     session_id: str,
     *,
     expires_at: datetime,
-    ip_address: str,
-    user_agent: str,
 ) -> bool:
     """Renew an existing row without recreating a revoked session."""
     rowcount = session.query(UserSession).filter_by(id=session_id).update({
         UserSession.expires_at: expires_at,
-        UserSession.ip_address: ip_address,
-        UserSession.user_agent: user_agent,
     })
     return rowcount == 1
 
@@ -203,85 +169,19 @@ def delete_expired_sessions(session: Session) -> int:
     return count
 
 
-def prune_overflow_sessions(
-    session: Session, user_id: str, max_sessions: int,
-) -> list[str]:
-    """Delete oldest unexpired sessions above max_sessions. Returns pruned ids."""
-    if max_sessions < 1:
-        raise ValueError("max_sessions must be >= 1")
-    now = datetime.now(timezone.utc)
-    active = (
-        session.query(UserSession)
-        .filter(UserSession.user_id == user_id, UserSession.expires_at > now)
-        .order_by(UserSession.created_at.asc(), UserSession.id.asc())
-        .all()
+def prune_overflow_sessions(session: Session, user_id: str, keep_newest: int) -> None:
+    """Delete all but the user's ``keep_newest`` newest sessions; ``0`` keeps none."""
+    kept = (
+        session.query(UserSession.id)
+        .filter_by(user_id=user_id)
+        .order_by(UserSession.created_at.desc(), UserSession.id.desc())
+        .limit(keep_newest)
+        .subquery()
     )
-    overflow = active[:-max_sessions]
-    pruned_ids = [row.id for row in overflow]
-    for row in overflow:
-        session.delete(row)
+    session.query(UserSession).filter(
+        UserSession.user_id == user_id, UserSession.id.not_in(select(kept.c.id)),
+    ).delete(synchronize_session=False)
     session.flush()
-    return pruned_ids
-
-
-# ── Login attempts ────────────────────────────────────────────────
-
-
-def record_login_attempt(
-    session: Session, ip_address: str, username: str, *, success: bool,
-) -> LoginAttempt:
-    attempt = LoginAttempt(
-        ip_address=ip_address, username=username, success=success,
-    )
-    session.add(attempt)
-    session.flush()
-    return attempt
-
-
-def count_recent_failed_attempts(
-    session: Session,
-    ip_address: str,
-    window_seconds: int = 300,
-    username: str | None = None,
-) -> int:
-    cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
-    query = session.query(LoginAttempt).filter(
-        LoginAttempt.success == False,  # noqa: E712
-        LoginAttempt.attempted_at >= cutoff,
-    )
-    if username:
-        query = query.filter(LoginAttempt.username == username)
-    else:
-        query = query.filter(LoginAttempt.ip_address == ip_address)
-    return query.count()
-
-
-LOGIN_ATTEMPT_RETENTION_DAYS = 90
-
-
-def cleanup_old_login_attempts(session: Session) -> int:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=LOGIN_ATTEMPT_RETENTION_DAYS)
-    count = session.query(LoginAttempt).filter(LoginAttempt.attempted_at < cutoff).delete()
-    session.flush()
-    return count
-
-
-def list_login_attempts(
-    session: Session,
-    offset: int = 0,
-    limit: int = 100,
-) -> list[LoginAttempt]:
-    return (
-        session.query(LoginAttempt)
-        .order_by(LoginAttempt.attempted_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-
-
-def count_login_attempts(session: Session) -> int:
-    return session.query(LoginAttempt).count()
 
 
 # ── Audit log ─────────────────────────────────────────────────────

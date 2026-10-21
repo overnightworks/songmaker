@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import (
     GET_SONG_ONLY_FOR_OTHER_SONGS,

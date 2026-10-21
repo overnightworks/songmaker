@@ -14,7 +14,7 @@ from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.audio_paths import AudioFileNotFoundError

@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.auth_dependencies import (
     get_current_user,

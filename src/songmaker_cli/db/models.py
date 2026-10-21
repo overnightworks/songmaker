@@ -419,10 +419,8 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(200))
+    username: Mapped[str] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(20), default="user")
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     default_generation_config: Mapped[str | None] = mapped_column(
         String(36), nullable=True, default=None,
     )
@@ -475,20 +473,8 @@ class UserSession(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID), index=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)
-    ip_address: Mapped[str] = mapped_column(String(45), default="")
-    user_agent: Mapped[str] = mapped_column(String(500), default="")
 
     user: Mapped[User] = relationship(back_populates="sessions")
-
-
-class LoginAttempt(Base):
-    __tablename__ = "login_attempts"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    ip_address: Mapped[str] = mapped_column(String(45), index=True)
-    username: Mapped[str] = mapped_column(String(100))
-    success: Mapped[bool] = mapped_column(Boolean)
-    attempted_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
 
 class RateLimitSetting(Base):

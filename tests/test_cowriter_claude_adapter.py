@@ -22,7 +22,7 @@ from agent_providers.events import (
 from agent_providers.tool_loop import ToolOutcome
 from agent_providers.tools import anthropic_tool_schemas
 from conftest import make_authenticated_user
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, COWRITER_TOOLS

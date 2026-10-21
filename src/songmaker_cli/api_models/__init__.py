@@ -12,18 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from songmaker_cli.api_models.auth import (
-    AuthMeResponse,
-    ChangePasswordRequest,
-    CreateUserRequest,
-    LoginAttemptResponse,
-    LoginRequest,
-    SessionResponse,
-    SetupRequest,
-    SetupRequiredResponse,
-    UpdateUserRequest,
-    UserResponse,
-)
+from songmaker_cli.api_models.auth import AuthMeResponse, LogoutResponse
 from songmaker_cli.api_models.cover_suggestions import (
     CoverSuggestionResponse,
     CoverSuggestionSelectionRequest,
@@ -232,7 +221,6 @@ __all__ = [
     "BulkDeleteResponse",
     "AuthMeResponse",
     "CapabilitiesResponse",
-    "ChangePasswordRequest",
     "ChatMessageResponse",
     "ChatTurnV2Request",
     "ChatTurnV2Response",
@@ -252,7 +240,6 @@ __all__ = [
     "CoverSuggestionSelectionRequest",
     "CoverSuggestionsResponse",
     "CoverTaskParams",
-    "CreateUserRequest",
     "DEFAULT_LIBRARY_TAKE_POOL",
     "DefaultConfigRequest",
     "DefaultConfigResponse",
@@ -267,6 +254,7 @@ __all__ = [
     "JobResponse",
     "JudgeSettingsRequest",
     "JudgeSettingsResponse",
+    "LogoutResponse",
     "LoraCapacityErrorResponse",
     "GenerationUnavailableResponse",
     "LoraCapacityReason",
@@ -286,8 +274,6 @@ __all__ = [
     "LibraryTakePool",
     "LoadedModelDetail",
     "LoadModelOnWorkerRequest",
-    "LoginAttemptResponse",
-    "LoginRequest",
     "ModelAvailability",
     "OwnPlayableTakeListResponse",
     "OwnPlayableTakeResponse",
@@ -325,9 +311,6 @@ __all__ = [
     "ScorerSchemaItem",
     "ScoreRequest",
     "ScoringSchemaResponse",
-    "SessionResponse",
-    "SetupRequest",
-    "SetupRequiredResponse",
     "ShareResponse",
     "SharedPlaylistEntryResponse",
     "SharedPlaylistResponse",
@@ -344,7 +327,6 @@ __all__ = [
     "StoredGenerationParams",
     "TitleUpdateRequest",
     "UnpinModelOnWorkerRequest",
-    "UpdateUserRequest",
     "UserLoraCreateRequest",
     "UserLoraListResponse",
     "UserLoraResponse",
@@ -352,7 +334,6 @@ __all__ = [
     "UserLoraSamplePatchRequest",
     "UserLoraSampleResponse",
     "UserRateLimitsResponse",
-    "UserResponse",
     "VALID_SCORER_NAMES",
     "VersionResponse",
     "WorkerEphemeralState",
