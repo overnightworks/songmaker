@@ -84,6 +84,22 @@ def test_security_headers(server_app: TestClient) -> None:
     assert "camera=()" in resp.headers["Permissions-Policy"]
 
 
+@pytest.mark.parametrize("path", ["/", "/albums/any-album", "/api/albums"])
+def test_content_security_policy_is_pinned_on_pages_and_api(
+    server_app: TestClient, path: str,
+) -> None:
+    """The build styles inline, so `style-src` carries `'unsafe-inline'`; scripts stay strict."""
+    policy = server_app.get(path).headers["Content-Security-Policy"]
+    directives = dict(part.split(" ", 1) for part in policy.split("; "))
+    assert directives["default-src"] == "'none'"
+    assert directives["script-src"].startswith("'self'")
+    assert "unsafe" not in directives["script-src"]
+    assert directives["style-src"] == "'self' 'unsafe-inline'"
+    assert directives["connect-src"] == "'self'"
+    assert directives["font-src"] == "'self'"
+    assert directives["frame-ancestors"] == "'none'"
+
+
 def test_get_audio(server_app: TestClient) -> None:
     resp = server_app.get("/audio/admin-user-id/g1.mp3")
     assert resp.status_code == 200

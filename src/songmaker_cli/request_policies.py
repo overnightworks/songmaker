@@ -15,6 +15,7 @@ from webauth.policies import (
     BodySizePolicy,
     BodySizeRule,
     CacheControlRule,
+    CspDirective,
     CsrfPolicy,
     PathRules,
     PathShape,
@@ -122,6 +123,7 @@ COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
 
 RESOURCE_EVENT_STREAM_CACHE_CONTROL: Final = "no-cache, no-store"
 API_CACHE_CONTROL: Final = "no-store"
+STYLE_SOURCES_ADDED: Final = {CspDirective.STYLE_SRC: ("'unsafe-inline'",)}
 
 
 def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
@@ -200,11 +202,16 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
 def build_security_headers_policy(script_hashes: Sequence[str]) -> SecurityHeadersPolicy:
     """The library's default policy, plus what may be cached: nothing under `/api/`.
 
+    The SvelteKit build applies inline styles, which the default `style-src 'self'`
+    blocks, so this is the one source the app adds.
+
     The resource-event stream additionally forbids caching its reconnect
     stream in an intermediary, which `no-store` alone does not.
     """
     return SecurityHeadersPolicy(
-        content_security_policy=default_content_security_policy(script_hashes),
+        content_security_policy=default_content_security_policy(
+            script_hashes, added_sources=STYLE_SOURCES_ADDED,
+        ),
         cache_control_rules=(
             CacheControlRule(
                 paths=PathRules(exact=frozenset({RESOURCE_EVENT_STREAM_PATH})),
