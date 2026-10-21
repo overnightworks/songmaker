@@ -6,6 +6,7 @@ the fake issuer's, so every ID token is verified as in production.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
@@ -182,7 +183,7 @@ def test_a_foreign_issuer_gets_the_failure_page_and_writes_nothing(world: World)
     assert _cleared(response, PENDING_PREFIX)
 
 
-def test_a_state_mismatch_gets_the_failure_page_and_clears_the_pending_login(
+def test_a_state_mismatch_gets_the_failure_page_and_keeps_the_real_pending_login(
     world: World,
 ) -> None:
     started = world.start()
@@ -190,6 +191,15 @@ def test_a_state_mismatch_gets_the_failure_page_and_clears_the_pending_login(
     response = world.callback(_member(), started, state="not-the-state-we-issued")
 
     _assert_the_failure_page(world, response)
+    real_pending_login = {
+        name for name in _set_cookies(started) if name.startswith(PENDING_PREFIX)
+    }
+    cleared = {
+        name for name, header in _set_cookies(response).items() if "Max-Age=0" in header
+    }
+    assert real_pending_login
+    assert not real_pending_login & cleared
+    assert world.callback(_member(), started).status_code == 303
 
 
 def test_an_expired_pending_login_gets_the_failure_page_and_clears_the_pending_login(
@@ -488,6 +498,14 @@ def test_the_secret_is_in_no_log_and_no_response_of_the_sign_in(world: World, ca
     for response in responses:
         assert TEST_CLIENT_SECRET not in response.text
         assert TEST_CLIENT_SECRET not in str(response.headers)
+
+
+def test_health_carries_neither_the_secret_nor_the_path_it_is_read_from(world: World) -> None:
+    with world.client:
+        response = world.client.get("/health")
+
+    assert TEST_CLIENT_SECRET not in response.text
+    assert os.environ["OIDC_CLIENT_SECRET_FILE"] not in response.text
 
 
 # -- M22: the Host header ---------------------------------------------------------
