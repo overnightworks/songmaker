@@ -1,4 +1,4 @@
-import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
 import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
@@ -11,6 +11,7 @@ import {
 	accountMenu,
 	FlowGuard,
 	nameStartingWith,
+	HOME_PATH,
 	observePlayingAudio,
 	openRailNav,
 	openLibraryWall,
@@ -19,21 +20,13 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import {
-	BASE_URL,
-	STORAGE_STATE_FILE,
-	archiveOwnedAlbum,
-	createAccount,
-	runMarker,
-	seedOwnTakeAddress
-} from './seed';
+import { archiveOwnedAlbum, runMarker, seedAccount, seedOwnTakeAddress, signedInApi } from './seed';
 
 // The gate runs both configured shells: 390×844 and 1440×900. No synthetic
 // playing/ended events: the same short fixture as queue-continuity really ends.
 test.use({ serviceWorkers: 'block' });
 // Account seeding and the two naturally advancing tabs share this allowance.
 test.setTimeout(90_000);
-const PASSWORD = 'E2eRetirement!2026';
 const END_TIMEOUT_MS = 15_000;
 const SLOW_PLAYBACK_RATE = 0.1;
 
@@ -55,22 +48,21 @@ interface ProofLibrary {
 }
 
 async function withProofLibrary(flow: (library: ProofLibrary) => Promise<void>): Promise<void> {
-	const admin = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
-	const api = await request.newContext({ baseURL: BASE_URL });
+	const username = `e2e-retirement-${runMarker()}`;
+	const account = await seedAccount(username);
+	const api = await signedInApi(account);
 	let albumId: string | undefined;
 	try {
-		const username = `e2e-retirement-${runMarker()}`;
-		const userId = await createAccount(admin, username, PASSWORD);
 		// A real one-song, one-take album has no successor when its take ends.
 		const songTitle = `E2E retirement ${runMarker()}`;
-		const address = await seedOwnTakeAddress(api, { username, password: PASSWORD }, songTitle);
+		const address = await seedOwnTakeAddress(api, account, songTitle);
 		albumId = address.split('/')[2];
 		const response = await api.get(`/api/songs?album_id=${albumId}`);
 		expect(response.ok()).toBe(true);
 		const { items } = (await response.json()) as { items: SongItem[] };
 		expect(items).toHaveLength(1);
 		const song = items[0];
-		await flow({ userId, username, albumId, song, api });
+		await flow({ userId: account.id, username, albumId, song, api });
 	} finally {
 		// Retain the recognizable E2E album and its evidence, archived rather
 		// than deleting the account and cascading away its music.
@@ -79,16 +71,16 @@ async function withProofLibrary(flow: (library: ProofLibrary) => Promise<void>):
 			if (albumId) await archiveOwnedAlbum(api, albumId);
 		} finally {
 			await api.dispose();
-			await admin.dispose();
 		}
 	}
 }
 
+/** Every sign-in opens a session of its own, as a login does: a signed-out one is gone for good. */
 async function signIn(page: Page, library: ProofLibrary): Promise<void> {
-	await page.goto('/login');
-	await page.getByLabel('Username').fill(library.username);
-	await page.getByLabel('Password').fill(PASSWORD);
-	await page.getByRole('button', { name: 'Enter', exact: true }).click();
+	const { cookies } = await seedAccount(library.username);
+	await page.context().clearCookies();
+	await page.context().addCookies(cookies);
+	await page.goto(HOME_PATH);
 	await expect(workspace(page)).toBeVisible();
 }
 

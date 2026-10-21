@@ -80,8 +80,6 @@
 		currentAlbumTitle?: string;
 		allSongs?: SongItem[];
 		versions?: VersionItem[];
-		catalogLoading?: boolean;
-		visible?: boolean;
 		onturncompleted?: () => void;
 	}
 
@@ -91,8 +89,6 @@
 		currentAlbumTitle = '',
 		allSongs = [],
 		versions = [],
-		catalogLoading = false,
-		visible = true,
 		onturncompleted
 	}: Props = $props();
 
@@ -163,16 +159,12 @@
 	});
 
 	$effect(() => {
-		if (visible) {
-			void loadConversations();
-			void loadCowriterSettings();
-		}
+		void loadConversations();
+		void loadCowriterSettings();
 	});
 
 	$effect(() => {
-		if (visible) {
-			void loadMemory(currentSongId || null);
-		}
+		void loadMemory(currentSongId || null);
 	});
 
 	async function loadConversations(): Promise<void> {
@@ -845,7 +837,7 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent): void {
-		if ($showMentions && (activeMentionResults.length > 0 || catalogLoading)) {
+		if ($showMentions && activeMentionResults.length > 0) {
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
 				if (activeMentionResults.length === 0) return;
@@ -1158,7 +1150,6 @@
 				items={activeMentionResults}
 				selectedIndex={selectedMentionIdx}
 				albumTitle={currentAlbumTitle}
-				loading={catalogLoading}
 				onselect={selectMentionItem}
 			/>
 		{/if}
