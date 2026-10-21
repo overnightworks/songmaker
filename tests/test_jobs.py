@@ -469,11 +469,8 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
 
 
 def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_path: Path) -> None:
-    from songmaker_cli.acestep_state import (
-        read_queue_depth,
-        release_gpu_hold,
-        reserve_gpu_hold,
-    )
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
         redis = fakeredis.aioredis.FakeRedis()
@@ -517,7 +514,7 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    from songmaker_cli.acestep_state import reserve_gpu_hold
+    from acestep_worker.heartbeat import reserve_gpu_hold
     from songmaker_cli.scheduler import pick_worker
 
     async def exercise() -> None:
@@ -668,11 +665,8 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    from songmaker_cli.acestep_state import (
-        read_queue_depth,
-        release_gpu_hold,
-        reserve_gpu_hold,
-    )
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
         redis = fakeredis.aioredis.FakeRedis()
@@ -715,7 +709,8 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
     tmp_path: Path,
     outcome: str,
 ) -> None:
-    from songmaker_cli.acestep_state import read_queue_depth, reserve_gpu_hold
+    from acestep_worker.heartbeat import reserve_gpu_hold
+    from songmaker_cli.acestep_state import read_queue_depth
 
     async def dispatch(**kwargs):
         if outcome == "cancel":

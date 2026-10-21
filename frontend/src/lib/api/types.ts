@@ -1082,12 +1082,6 @@ export interface UserLoraListResponse {
 	loras: UserLoraItem[];
 }
 
-export interface UserLoraSampleCreateRequest {
-	caption: string;
-	lyrics: string;
-	position?: number | null;
-}
-
 export interface UserLoraSampleFromGenerationRequest {
 	generation_id: string;
 }
