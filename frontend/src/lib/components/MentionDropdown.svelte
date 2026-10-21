@@ -8,17 +8,14 @@
 		items: MentionItem[];
 		selectedIndex: number;
 		albumTitle: string;
-		loading?: boolean;
 		onselect: (item: MentionItem) => void;
 	}
 
-	let { items, selectedIndex, albumTitle, loading = false, onselect }: Props = $props();
+	let { items, selectedIndex, albumTitle, onselect }: Props = $props();
 </script>
 
 <div class="mention-dropdown">
-	{#if loading}
-		<div class="mention-empty">Loading catalog...</div>
-	{:else if items.length === 0}
+	{#if items.length === 0}
 		<div class="mention-empty">No matches</div>
 	{/if}
 	{#each items as result, idx (idx)}
