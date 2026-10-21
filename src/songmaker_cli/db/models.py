@@ -108,7 +108,7 @@ class Album(ShareMixin, Base):
     colors: Mapped[dict] = mapped_column(JSON, default=dict)
     cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by: Mapped[str | None] = mapped_column(
-        ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
+        ForeignKey(USERS_ID, ondelete=SET_NULL, onupdate="CASCADE"), nullable=True, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
@@ -170,7 +170,7 @@ class UserSongWork(Base):
     __tablename__ = "user_song_work"
 
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="CASCADE"), primary_key=True,
+        ForeignKey(USERS_ID, ondelete="CASCADE", onupdate="CASCADE"), primary_key=True,
     )
     song_id: Mapped[str] = mapped_column(
         ForeignKey(SONGS_ID, ondelete="CASCADE"), primary_key=True, index=True,
@@ -240,7 +240,7 @@ class Generation(ShareMixin, Base):
     )
     audio_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_by: Mapped[str | None] = mapped_column(
-        ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
+        ForeignKey(USERS_ID, ondelete=SET_NULL, onupdate="CASCADE"), nullable=True, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
@@ -276,7 +276,7 @@ class Playlist(ShareMixin, Base):
     )
     cover_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by: Mapped[str | None] = mapped_column(
-        ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
+        ForeignKey(USERS_ID, ondelete=SET_NULL, onupdate="CASCADE"), nullable=True, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
@@ -346,7 +346,7 @@ class GenerationPreset(Base):
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str | None] = mapped_column(
-        ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
+        ForeignKey(USERS_ID, ondelete=SET_NULL, onupdate="CASCADE"), nullable=True, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
@@ -379,7 +379,7 @@ class Job(Base):
     error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     queue_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[str | None] = mapped_column(
-        ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
+        ForeignKey(USERS_ID, ondelete=SET_NULL, onupdate="CASCADE"), nullable=True, index=True,
     )
     song_id: Mapped[str | None] = mapped_column(
         ForeignKey(SONGS_ID, ondelete=SET_NULL), nullable=True, index=True,
@@ -440,7 +440,7 @@ class ResourceEventCursor(Base):
     __tablename__ = "resource_event_cursors"
 
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="CASCADE"), primary_key=True,
+        ForeignKey(USERS_ID, ondelete="CASCADE", onupdate="CASCADE"), primary_key=True,
     )
     high_water_mark: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
@@ -456,7 +456,7 @@ class ResourceEvent(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="CASCADE"), nullable=False,
+        ForeignKey(USERS_ID, ondelete="CASCADE", onupdate="CASCADE"), nullable=False,
     )
     sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
     kind: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -472,7 +472,9 @@ class UserSession(Base):
     __tablename__ = "user_sessions"
 
     id: Mapped[str] = mapped_column(String(43), primary_key=True, default=_session_token)
-    user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID), index=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey(USERS_ID, onupdate="CASCADE"), index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)
     ip_address: Mapped[str] = mapped_column(String(45), default="")
@@ -499,7 +501,7 @@ class RateLimitSetting(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str | None] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="CASCADE"), nullable=True, index=True,
+        ForeignKey(USERS_ID, ondelete="CASCADE", onupdate="CASCADE"), nullable=True, index=True,
     )
     setting_key: Mapped[str] = mapped_column(String(50))
     value: Mapped[int] = mapped_column(Integer)
@@ -517,7 +519,7 @@ class Conversation(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="CASCADE"), index=True,
+        ForeignKey(USERS_ID, ondelete="CASCADE", onupdate="CASCADE"), index=True,
     )
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
@@ -574,7 +576,7 @@ class CowriterUserMemory(Base):
     __tablename__ = "cowriter_user_memories"
 
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="CASCADE"), primary_key=True,
+        ForeignKey(USERS_ID, ondelete="CASCADE", onupdate="CASCADE"), primary_key=True,
     )
     body: Mapped[str] = mapped_column(Text, default="")
     updated_at: Mapped[datetime] = mapped_column(
@@ -664,7 +666,7 @@ class UserLora(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="CASCADE"), index=True,
+        ForeignKey(USERS_ID, ondelete="CASCADE", onupdate="CASCADE"), index=True,
     )
     name: Mapped[str] = mapped_column(String(100))
     slug: Mapped[str] = mapped_column(String(LORA_SLUG_MAX_LENGTH))
@@ -719,7 +721,7 @@ class AuditLog(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str | None] = mapped_column(
-        ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
+        ForeignKey(USERS_ID, ondelete=SET_NULL, onupdate="CASCADE"), nullable=True, index=True,
     )
     action: Mapped[str] = mapped_column(String(30), index=True)
     resource_type: Mapped[str] = mapped_column(String(30))
