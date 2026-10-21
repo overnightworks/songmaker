@@ -23,8 +23,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from acestep_engine.settings import EngineSettings
 from songmaker_cli.constants import (
-    SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT,
-    SESSION_IDLE_SECONDS_DEFAULT,
     AUDIO_UPLOAD_BODY_MAX_BYTES,
     CLAUDE_SCORING_MODEL_DEFAULT,
     CODEX_CLI_MAX_CONCURRENT_PROCESSES,
@@ -38,6 +36,8 @@ from songmaker_cli.constants import (
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     REIMPORT_BODY_MAX_BYTES,
     SCORER_TIMEOUT_SECONDS,
+    SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT,
+    SESSION_IDLE_SECONDS_DEFAULT,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
     CoverExecutor,
     acestep_sse_read_timeout_seconds,
