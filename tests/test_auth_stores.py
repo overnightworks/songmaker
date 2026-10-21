@@ -193,11 +193,13 @@ def test_a_failed_session_insert_raises_without_the_refresh_token_in_the_traceba
         Base.metadata.create_all(database_session.get_bind())
         database_session.execute(text("PRAGMA foreign_keys=ON"))
         sessions = DatabaseSessionRecordStore(database_session)
+        opened_at, expires_at = _later(0), _later()
+        refresh_token = SecretStr("rt-in-a-failed-insert")
 
         with pytest.raises(IntegrityError) as failure:
             sessions.create(
-                "no-such-account", now=_later(0), expires_at=_later(),
-                refresh_token=SecretStr("rt-in-a-failed-insert"),
+                "no-such-account", now=opened_at, expires_at=expires_at,
+                refresh_token=refresh_token,
             )
 
     formatted = "".join(traceback.format_exception(failure.value))
