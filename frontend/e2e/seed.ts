@@ -1079,7 +1079,14 @@ async function seedAfterAlbum<T>(
 	try {
 		return await seedRest();
 	} catch (error) {
-		await archiveOwnedAlbum(api, albumId);
+		try {
+			await archiveOwnedAlbum(api, albumId);
+		} catch (archiveError) {
+			throw new AggregateError(
+				[error, archiveError],
+				`Seeding failed and archiving album ${albumId} failed too`
+			);
+		}
 		throw error;
 	}
 }
