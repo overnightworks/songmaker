@@ -59,6 +59,7 @@ audio_bytes=${AUDIO_SIZE:-0}
 hostname=$(hostname)
 MANIFEST
 
+# RETENTION_DAYS=0 means keep every snapshot.
 if [[ "$RETENTION_DAYS" -gt 0 ]]; then
     PRUNED=$(find "$BACKUP_DIR" -maxdepth 1 -mindepth 1 -type d -mtime +"$RETENTION_DAYS" | wc -l)
     if [[ "$PRUNED" -gt 0 ]]; then

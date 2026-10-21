@@ -33,7 +33,7 @@ cd ~/git/songmaker
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BACKUP_DIR` | `/mnt/backup/songmaker` | Where backups go |
-| `RETENTION_DAYS` | `7` | Delete backups older than this |
+| `RETENTION_DAYS` | `7` | Delete backups older than this many days; `0` prunes nothing |
 | `POSTGRES_USER` | `songmaker` | PostgreSQL username |
 | `POSTGRES_DB` | `songmaker` | PostgreSQL database name |
 
@@ -48,6 +48,12 @@ BACKUP_DIR=/media/felix/external/songmaker ./scripts/backup.sh
 
 # List what you have
 ./scripts/backup-list.sh
+```
+
+Pruning deletes every directory directly under `BACKUP_DIR` older than `RETENTION_DAYS`, not only snapshots this script made. Give `BACKUP_DIR` a directory of its own that holds nothing else. A snapshot you must keep (for example the one taken just before a cutover) belongs in a dedicated directory run with `RETENTION_DAYS=0`:
+
+```bash
+BACKUP_DIR=/mnt/backup/songmaker-cutover RETENTION_DAYS=0 ./scripts/backup.sh
 ```
 
 ## Automatic Daily Backup (cron)
@@ -76,12 +82,12 @@ The `nofail` flag means the system still boots if the drive is unplugged. The ba
 ```
 
 This will:
-1. Stop the web and worker containers
-2. Restore the PostgreSQL database
-3. Restore all audio files
-4. Restart everything
+1. Stop every writer: `songmaker-web`, `songmaker-music-worker`, `songmaker-acestep-worker-0`, `songmaker-scoring-worker`
+2. Drop and recreate the database, then restore it with `pg_restore --exit-on-error --single-transaction`; the first error aborts the script and rolls the restore back
+3. Replace the audio volume's contents with the snapshot's, dotfiles included
+4. Leave the writers stopped and print the command that starts them again
 
-You'll be asked to confirm before anything is overwritten.
+You'll be asked to confirm before anything is overwritten. After a failed run the writers stay stopped; fix the cause and run it again.
 
 ## What Gets Backed Up
 
