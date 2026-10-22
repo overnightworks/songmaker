@@ -79,13 +79,17 @@ describe('generation retention failures', () => {
 		vi.mocked(previewGenerationRetention).mockResolvedValue(report());
 		vi.mocked(runGenerationRetention).mockRejectedValueOnce(lostNetwork());
 		const target = await render();
-		clickButton(target, 'Run now');
-		await tick();
+		await openConfirmation(target);
 		clickButton(target, 'Delete 2');
 
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Cleanup failed', 'error'));
 	});
 });
+
+async function openConfirmation(target: HTMLElement): Promise<void> {
+	clickButton(target, 'Run now');
+	await vi.waitFor(() => expect(target.querySelector('.confirm')).not.toBeNull());
+}
 
 function clickButton(target: HTMLElement, label: string): void {
 	Array.from(target.querySelectorAll<HTMLButtonElement>('button'))
@@ -110,8 +114,7 @@ describe('generation retention panel', () => {
 		);
 		const target = await render();
 
-		clickButton(target, 'Run now');
-		await tick();
+		await openConfirmation(target);
 
 		expect(runGenerationRetention).not.toHaveBeenCalled();
 		expect(target.querySelector('.confirm p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
@@ -134,8 +137,7 @@ describe('generation retention panel', () => {
 		);
 		const target = await render();
 
-		clickButton(target, 'Run now');
-		await tick();
+		await openConfirmation(target);
 		clickButton(target, 'Delete 3');
 
 		await vi.waitFor(() =>
@@ -149,12 +151,52 @@ describe('generation retention panel', () => {
 		);
 		const target = await render();
 
-		clickButton(target, 'Run now');
-		await tick();
+		await openConfirmation(target);
 
 		expect(target.querySelector('.confirm p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
 			'Archive 1 take and permanently delete 1. Deleting cannot be undone.'
 		);
+	});
+
+	it('shows what is due after a run, not what the run just did', async () => {
+		vi.mocked(previewGenerationRetention)
+			.mockResolvedValueOnce(report({ archived_count: 12, deleted_count: 3 }))
+			.mockResolvedValueOnce(report({ archived_count: 12, deleted_count: 3 }))
+			.mockResolvedValue(report({ archived_count: 0, deleted_count: 0 }));
+		vi.mocked(runGenerationRetention).mockResolvedValue(
+			report({ archived_count: 12, deleted_count: 3, dry_run: false })
+		);
+		const target = await render();
+
+		await openConfirmation(target);
+		clickButton(target, 'Delete 3');
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Nothing to clean up right now'));
+		expect(addToast).toHaveBeenCalledWith('Archived 12, deleted 3', 'success');
+		expect(buttonLabels(target)).toEqual(['What this does']);
+	});
+
+	it('confirms with the counts that are current when Run now is pressed', async () => {
+		vi.mocked(previewGenerationRetention)
+			.mockResolvedValueOnce(report({ archived_count: 1, deleted_count: 2 }))
+			.mockResolvedValue(report({ archived_count: 5, deleted_count: 9 }));
+		const target = await render();
+
+		await openConfirmation(target);
+
+		expect(buttonLabels(target).slice(-2)).toEqual(['Cancel', 'Delete 9']);
+	});
+
+	it('shows the empty state and no confirmation when the fresh preview has nothing due', async () => {
+		vi.mocked(previewGenerationRetention)
+			.mockResolvedValueOnce(report({ archived_count: 1, deleted_count: 2 }))
+			.mockResolvedValue(report({ archived_count: 0, deleted_count: 0 }));
+		const target = await render();
+
+		clickButton(target, 'Run now');
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Nothing to clean up right now'));
+		expect(target.querySelector('.confirm')).toBeNull();
 	});
 
 	it('says there is nothing to clean up and offers no buttons when nothing is due', async () => {

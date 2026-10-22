@@ -308,7 +308,7 @@ describe('PhoneAppBar', () => {
 		}
 	);
 
-	it('keeps Log out off the bar and one tap away in the account menu', async () => {
+	it('keeps Sign out off the bar and one tap away in the account menu', async () => {
 		const onlogout = vi.fn();
 		const target = renderBar(onlogout);
 		await tick();

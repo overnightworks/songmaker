@@ -337,7 +337,7 @@
 		>
 			<Rail collapsed={$railCollapsed} />
 			<div class="app-shell desktop">
-				<div class="desktop-account"><AccountMenu username={me.username} onlogout={logout} /></div>
+				<div class="desktop-topbar"><AccountMenu username={me.username} onlogout={logout} /></div>
 				{@render children()}
 			</div>
 			{@render nowPlayingView()}
@@ -411,11 +411,14 @@
 		flex-direction: column;
 	}
 
-	.desktop-account {
-		position: absolute;
-		top: 6px;
-		right: 14px;
-		z-index: 10;
+	.desktop-topbar {
+		display: flex;
+		flex: none;
+		align-items: center;
+		justify-content: flex-end;
+		height: var(--header-height);
+		padding: 0 14px;
+		border-bottom: 1px solid var(--border);
 	}
 
 	.app-shell.mobile {

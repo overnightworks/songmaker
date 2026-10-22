@@ -31,24 +31,31 @@
 		return `${count} take${count === 1 ? '' : 's'}`;
 	}
 
-	async function refreshPreview(): Promise<void> {
+	async function refreshPreview(): Promise<boolean> {
 		loading = true;
 		try {
 			report = await previewGenerationRetention();
 			previewReloads.stop();
+			return true;
 		} catch (e) {
 			const failure = previewReloads.nameLoadFailure(e, 'Preview failed');
 			if (failure !== null) addToast(failure, 'error');
+			return false;
 		} finally {
 			loading = false;
 		}
 	}
 
+	async function askToRun(): Promise<void> {
+		if ((await refreshPreview()) && !nothingDue) confirming = true;
+	}
+
 	async function execute(): Promise<void> {
 		running = true;
 		try {
-			report = await runGenerationRetention();
-			addToast(`Archived ${report.archived_count}, deleted ${report.deleted_count}`, 'success');
+			const outcome = await runGenerationRetention();
+			addToast(`Archived ${outcome.archived_count}, deleted ${outcome.deleted_count}`, 'success');
+			await refreshPreview();
 		} catch (e) {
 			addToast(describeFailure(e, 'Cleanup failed'), 'error');
 		} finally {
@@ -115,7 +122,8 @@
 				<button type="button" class="btn" onclick={refreshPreview} disabled={loading}
 					>Refresh</button
 				>
-				<button type="button" class="btn danger" onclick={() => (confirming = true)}>Run now</button
+				<button type="button" class="btn danger" onclick={askToRun} disabled={loading}
+					>Run now</button
 				>
 			</div>
 		{:else}

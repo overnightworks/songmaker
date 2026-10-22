@@ -1031,7 +1031,8 @@ def test_retention_preview_returns_counts(client: TestClient) -> None:
     body = resp.json()
     assert body["dry_run"] is True
     assert {"archived_ids", "deleted_ids"} <= body.keys()
-    assert body["retention_days"] >= 1 and body["hard_delete_days"] >= 1
+    assert body["retention_days"] >= 1
+    assert body["hard_delete_days"] >= 1
     assert body["scheduled_hour_utc"] == GENERATION_RETENTION_HOUR_UTC
 
 
