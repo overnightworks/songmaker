@@ -24,7 +24,6 @@ import {
 	regainNetwork,
 	openHome,
 	openLibraryWall,
-	openRailNav,
 	shellOf,
 	stubIdentityProvider,
 	workspace,
@@ -284,7 +283,7 @@ for (const pending of [false, true]) {
 		const accounts: SeededAccount[] = [];
 		let release: (() => void) | undefined;
 		let accountAlbumId: string | undefined;
-		// Log out ends at the issuer's logout address, which leaves the app's origin.
+		// Sign out ends at the issuer's logout address, which leaves the app's origin.
 		await stubIdentityProvider(page.context());
 		try {
 			for (const suffix of ['a', 'b']) {
@@ -312,21 +311,13 @@ for (const pending of [false, true]) {
 				await page.reload({ waitUntil: 'domcontentloaded' });
 				await started;
 			}
-			if (shellOf(testInfo) === 'mobile') {
-				await page
-					.getByRole('button', {
-						name: `${ACCOUNT_MENU_LABEL} · ${accounts[0].username}`,
-						exact: true
-					})
-					.click();
-				await page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true }).click();
-			} else {
-				await (
-					await openRailNav(page, 'desktop')
-				)
-					.getByRole('button', { name: 'Logout', exact: true })
-					.click();
-			}
+			await page
+				.getByRole('button', {
+					name: `${ACCOUNT_MENU_LABEL} · ${accounts[0].username}`,
+					exact: true
+				})
+				.click();
+			await page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true }).click();
 			await expect.poll(() => leftTheApp(page)).toBe(true);
 			release?.();
 			await page.unrouteAll({ behavior: 'wait' });

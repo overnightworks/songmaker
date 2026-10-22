@@ -200,7 +200,7 @@ async function openAlbumFromNavigation(page: Page, shell: Shell, title: string):
 
 /**
  * The phone's ‹ (#1354 rule 25): named after the page it goes back to, and
- * the account circle only on the Library, with Log out one tap away in it.
+ * the account circle only on the Library, with Sign out one tap away in it.
  */
 async function backOnPhone(page: Page, to: string): Promise<void> {
 	await appBar(page)

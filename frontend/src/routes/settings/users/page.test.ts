@@ -163,7 +163,7 @@ function judgeSettings(
 	};
 }
 
-const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Models', 'ACE-Step'];
+const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Models', 'ACE-Step', 'Cleanup'];
 
 let mounted: ReturnType<typeof mount> | undefined;
 

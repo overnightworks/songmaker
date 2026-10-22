@@ -8,6 +8,7 @@ import pytest
 from conftest import make_test_app, seed_user
 from fastapi.testclient import TestClient
 
+from songmaker_cli.cleanup import GENERATION_RETENTION_HOUR_UTC
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.queries.loras import create_user_lora
 
@@ -1024,15 +1025,14 @@ def test_retention_run_requires_admin(client: TestClient) -> None:
 def test_retention_preview_returns_counts(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_album_with_gens(client)
-
     resp = client.get("/api/admin/generation-retention/preview")
     assert resp.status_code == 200
     body = resp.json()
     assert body["dry_run"] is True
-    assert "archived_ids" in body
-    assert "deleted_ids" in body
+    assert {"archived_ids", "deleted_ids"} <= body.keys()
     assert body["retention_days"] >= 1
     assert body["hard_delete_days"] >= 1
+    assert body["scheduled_hour_utc"] == GENERATION_RETENTION_HOUR_UTC
 
 
 def test_retention_run_executes(client: TestClient) -> None:

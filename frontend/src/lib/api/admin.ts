@@ -62,6 +62,7 @@ export interface GenerationRetentionReport {
 	deleted_count: number;
 	retention_days: number;
 	hard_delete_days: number;
+	scheduled_hour_utc: number;
 	dry_run: boolean;
 }
 

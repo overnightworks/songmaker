@@ -3,13 +3,13 @@
 // pages, so on the phone `/settings` is itself the list, a row opens its
 // page, and Back returns to the list. The desktop rail carries the sections,
 // so there `/settings` keeps redirecting into the first one. The run's
-// session is the stack's admin, so Admin and Cleanup are listed.
+// session is the stack's admin, so Admin is listed.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants';
 import { ONLY_IN_SHELL, workspace } from './helpers';
 
-const ADMIN_SECTIONS = ['Generation', 'Voices', 'Account', 'Admin', 'Cleanup', 'Legal'] as const;
+const ADMIN_SECTIONS = ['Generation', 'Voices', 'Admin', 'Legal'] as const;
 const ROW_MIN_HEIGHT_PX = 52;
 
 function settingsList(page: Page): Locator {

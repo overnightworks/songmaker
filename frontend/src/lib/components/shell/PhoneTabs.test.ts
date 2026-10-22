@@ -19,7 +19,7 @@ const routes = [
 	{ pathname: '/album/a1/song/take/1', current: 'Library' },
 	{ pathname: '/playlist/p1', current: 'Playlists' },
 	{ pathname: '/settings', current: null },
-	{ pathname: '/settings/account', current: null },
+	{ pathname: '/settings/generation', current: null },
 	{ pathname: '/loras', current: null },
 	{ pathname: '/jobs', current: null },
 	{ pathname: '/share/album/shared', current: null }

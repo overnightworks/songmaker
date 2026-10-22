@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC
 
 from arq import cron, func
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.arq_codec import deserialize_arq, serialize_arq
+from songmaker_cli.cleanup import GENERATION_RETENTION_HOUR_UTC
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
     MODEL_DEFAULT_MODE,
@@ -200,6 +202,7 @@ class MusicWorkerSettings:
     job_timeout = _settings.arq_job_timeout
     job_completion_wait = _settings.arq_drain_timeout
     health_check_interval = MusicWorker.health_check_interval
+    timezone = UTC
     cron_jobs = [
         cron(
             _music_worker.cleanup_files_cron,
@@ -208,7 +211,7 @@ class MusicWorkerSettings:
         ),
         cron(
             _music_worker.generation_retention_cron,
-            hour={3},
+            hour={GENERATION_RETENTION_HOUR_UTC},
             minute={0},
             second={0},
         ),

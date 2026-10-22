@@ -149,8 +149,7 @@ pinned at the top; a scroll container in the middle holding the LIBRARY
 group, built on the shared `RailGroup.svelte` (chevron, icon, label, count —
 one row shape for every group); and, on the desktop only, pinned below that
 scroll container, the SETTINGS group (also a `RailGroup.svelte`, via
-`RailSettings.svelte`) and a user row (username, theme toggle, Logout —
-inline, no popup menu; `shell/UserRow.svelte`). On ≤768px or any coarse pointer, `PhoneTabs` provides Home,
+`RailSettings.svelte`); the rail has no account row. On ≤768px or any coarse pointer, `PhoneTabs` provides Home,
 Library and Playlists in desktop order. `+layout.svelte` derives their pathname
 from `standingPathname(page.state)` and mounts them only for signed-in private
 pages outside song routes, while the transport is visible. Settings and `/loras`
@@ -172,9 +171,10 @@ the guarded replacement when it executes. Both song traversal and fallback reuse
 the existing dirty-draft question; a parked action resolving does not mean the
 person has agreed to leave. 🔍 on every page
 opens the one search, `RailSearch`, in a sheet. The Library and the Playlists page carry the brand
-and a 44px account circle at the right edge, whose menu (`AccountMenu.svelte`)
-holds Settings, the theme switch and Log out; the song carries its title, share and song menu instead. `Rail`
-renders the block only when the layout hands it an `account`. Choosing
+and a 44px account circle at the right edge (the desktop: top right of the main area). Its menu
+(`AccountMenu.svelte`) holds the name (opens `/api/auth/me`'s `account_console_url` in a new tab),
+Settings, the theme switch, Sign out and a quiet row of legal links; the song carries its title,
+share and song menu instead. Choosing
 Settings in the account menu while `/settings` is already on screen only
 closes the menu.
 In the LIBRARY and PLAYLISTS groups the word is a link to the group's own list

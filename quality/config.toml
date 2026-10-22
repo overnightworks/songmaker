@@ -11,3 +11,9 @@ what = 'mandatory job "Acceptance evidence (integration)" removed'
 item = "#1734"
 date = 2026-10-22
 reason = "the operator ruled the requirement shelf machinery out on 20.10.2026"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"
+item = "#1784"
+date = 2026-10-22
+reason = "generated API types gain two optional fields (account_console_url, scheduled_hour_utc); the generator's --check gates the file; quality is asked to exempt linguist-generated files (operator question, 22.10.2026)"

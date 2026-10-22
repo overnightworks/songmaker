@@ -41,7 +41,7 @@ describe('no-access page', () => {
 		expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(NO_ACCESS_MESSAGE);
 	});
 
-	it('offers Log out and Back, Back leading to the signed-out page', async () => {
+	it('offers Sign out and Back, Back leading to the signed-out page', async () => {
 		const target = await renderPage();
 
 		const actions = Array.from(target.querySelectorAll('.actions a, .actions button'));

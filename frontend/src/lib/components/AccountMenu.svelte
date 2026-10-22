@@ -1,21 +1,21 @@
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve -- the account console is another origin */
 	import {
-		ACCOUNT_MENU_ACCOUNT_LABEL,
 		ACCOUNT_MENU_CLOSE_LABEL,
 		ACCOUNT_MENU_LABEL,
 		ACCOUNT_MENU_LOGOUT_LABEL,
-		ACCOUNT_MENU_SIGNED_IN_PREFIX,
 		RAIL_SETTINGS_LABEL,
 		SIGN_OUT_FAILED_MESSAGE,
 		THEME_SWITCH_TO_DARK_LABEL,
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
 	import { page } from '$app/state';
-	import { signOutFailed } from '$lib/stores/auth';
-	import { openAppPage } from '$lib/stores/navigation';
+	import { currentUser, signOutFailed } from '$lib/stores/auth';
+	import { leaveForLogout, openAppPage } from '$lib/stores/navigation';
 	import { theme, toggleTheme } from '$lib/stores/ui';
 	import { accountInitial } from '$lib/utils/format';
 	import Icon from './Icon.svelte';
+	import LegalLinks from './LegalLinks.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
@@ -25,8 +25,8 @@
 
 	let popover: MenuPopover | undefined = $state();
 
-	const ACCOUNT_HREF = '/settings/account';
 	const SETTINGS_HREF = '/settings';
+	const accountConsoleUrl = $derived($currentUser?.account_console_url ?? null);
 
 	// A failed sign-out is told while the menu that tried it stays open; a
 	// later opening shows the menu as it stands, not an old failure.
@@ -34,10 +34,10 @@
 		return () => signOutFailed.set(false);
 	}
 
-	function openPage(href: typeof ACCOUNT_HREF | typeof SETTINGS_HREF): void {
+	function openSettings(): void {
 		popover?.close();
-		if (page.url.pathname === href) return;
-		void openAppPage(href);
+		if (page.url.pathname === SETTINGS_HREF) return;
+		void openAppPage(SETTINGS_HREF);
 	}
 </script>
 
@@ -49,11 +49,21 @@
 		closeLabel={ACCOUNT_MENU_CLOSE_LABEL}
 	>
 		{#snippet trigger()}<span class="account-initial">{initial}</span>{/snippet}
-		<p class="account-heading">{ACCOUNT_MENU_SIGNED_IN_PREFIX} <b>{username}</b></p>
-		<button class="menu-item" onclick={() => openPage(ACCOUNT_HREF)}>
-			<Icon name="user" class="menu-item-icon" />{ACCOUNT_MENU_ACCOUNT_LABEL}
-		</button>
-		<button class="menu-item" onclick={() => openPage(SETTINGS_HREF)}>
+		{#if accountConsoleUrl}
+			<a
+				class="account-name"
+				href={accountConsoleUrl}
+				target="_blank"
+				rel="noopener noreferrer"
+				onclick={() => popover?.close(false)}
+			>
+				<span class="account-name-text">{username}</span>
+				<Icon name="external-link" size={16} class="account-name-mark" />
+			</a>
+		{:else}
+			<p class="account-name"><span class="account-name-text">{username}</span></p>
+		{/if}
+		<button class="menu-item" onclick={openSettings}>
 			<Icon name="settings" class="menu-item-icon" />{RAIL_SETTINGS_LABEL}
 		</button>
 		<button class="menu-item" onclick={toggleTheme}>
@@ -63,7 +73,7 @@
 				<Icon name="moon" class="menu-item-icon" />{THEME_SWITCH_TO_DARK_LABEL}
 			{/if}
 		</button>
-		<button class="menu-item logout" onclick={onlogout}>
+		<button class="menu-item logout" onclick={() => void leaveForLogout(onlogout)}>
 			<Icon name="log-out" class="menu-item-icon" />{ACCOUNT_MENU_LOGOUT_LABEL}
 		</button>
 		{#if $signOutFailed}
@@ -71,6 +81,7 @@
 				{SIGN_OUT_FAILED_MESSAGE}
 			</p>
 		{/if}
+		<div class="account-legal"><LegalLinks /></div>
 	</MenuPopover>
 </div>
 
@@ -106,20 +117,43 @@
 		width: 238px;
 	}
 
-	.account-heading {
+	.account-name {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 52px;
 		margin: 0 0 0.25rem;
-		padding: 0.3rem 0.6rem 0.5rem;
-		font-size: 0.8rem;
-		color: var(--text-subtle);
+		padding: 0 0.6rem;
 		border-bottom: 1px solid var(--border);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.account-heading b {
 		color: var(--text);
 		font-weight: 600;
+		font-size: 0.9rem;
+		text-decoration: none;
+	}
+
+	a.account-name:hover {
+		background: var(--surface-hover);
+	}
+
+	.account-name-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.account-name :global(.account-name-mark) {
+		flex: none;
+		color: var(--text-muted);
+	}
+
+	.account-legal {
+		margin-top: 0.25rem;
+		padding: 0.5rem 0.4rem 0.3rem;
+		border-top: 1px solid var(--border);
+		font-size: 0.72rem;
+		color: var(--text-subtle);
 	}
 
 	.menu-item {
