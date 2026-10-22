@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { discardAlbumCoverSuggestions } from '$lib/api/albums';
 	import {
 		archiveAlbum,
 		deleteAlbum,
@@ -37,6 +38,8 @@
 	import { forgetListenedPlace, readRestoredPlace } from '$lib/stores/libraryOrder';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
+	import { markCoverSuggestionsDiscarded, stopCoverRun } from '$lib/stores/coverRuns';
+	import { activeJobs } from '$lib/stores/jobs';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
@@ -46,6 +49,7 @@
 		ALBUM_NO_SONGS,
 		ALBUM_YEAR_MAX,
 		ALBUM_YEAR_MIN,
+		JOB_TYPE_COVER,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL,
 		NEW_SONG_ROW_LABEL,
@@ -143,15 +147,33 @@
 		const file = input.files?.[0];
 		input.value = '';
 		if (!file || !selectedAlbum) return;
+		const uploadedAlbumId = selectedAlbum.id;
 		coverBusy = true;
 		try {
-			const updated = await holdOpenWhile('cover-saving', uploadAlbumCover(selectedAlbum.id, file));
-			updateAlbumInList(selectedAlbum.id, () => updated);
+			const updated = await holdOpenWhile('cover-saving', uploadAlbumCover(uploadedAlbumId, file));
+			markCoverSuggestionsDiscarded(uploadedAlbumId);
+			updateAlbumInList(uploadedAlbumId, () => updated);
 			addToast('Cover saved', 'success');
+			await discardSuggestionsAfterUpload(uploadedAlbumId);
 		} catch (e) {
 			addToast(describeFailure(e, 'Cover upload failed'), 'error');
 		} finally {
 			coverBusy = false;
+		}
+	}
+
+	// An uploaded cover ends the suggestions: the one still running is stopped
+	// before the unused ones go. A failure is told here; the next open of the
+	// editor reads what the server still has.
+	async function discardSuggestionsAfterUpload(albumId: string): Promise<void> {
+		const run = $activeJobs.find(
+			(active) => active.albumId === albumId && active.job.type === JOB_TYPE_COVER
+		);
+		try {
+			if (run) await stopCoverRun(run.job.id);
+			await discardAlbumCoverSuggestions(albumId);
+		} catch (error) {
+			addToast(describeFailure(error, 'Cover suggestions could not be discarded'), 'error');
 		}
 	}
 

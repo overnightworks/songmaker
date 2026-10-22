@@ -6,7 +6,6 @@
 		fetchAlbumCoverSuggestions,
 		selectAlbumCoverSuggestion
 	} from '$lib/api/albums';
-	import { cancelJob } from '$lib/api/jobs';
 	import type { AlbumItem, CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 	import {
 		RATE_LIMITED_STATUS,
@@ -35,7 +34,12 @@
 	} from '$lib/constants';
 	import { updateAlbumInList } from '$lib/stores/libraryData';
 	import { addToast } from '$lib/stores/toast';
-	import { activeJobs, removeJob, trackJob } from '$lib/stores/jobs';
+	import {
+		discardMarkOf,
+		markCoverSuggestionsDiscarded,
+		stopCoverRun
+	} from '$lib/stores/coverRuns';
+	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { holdOpenWhile } from '$lib/stores/layers';
 	import Icon from './Icon.svelte';
@@ -86,8 +90,6 @@
 	let chosenSlot = $state<number | null>(null);
 	let runningSuggestionJobId: string | null = null;
 	let followedRunId = $state<string | null>(null);
-	let discardedAlbumId: string | null = null;
-	let albumVisit = new AbortController();
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
 
 	const activeCoverJob = $derived(
@@ -169,9 +171,8 @@
 
 	// Opening the editor only reads what exists: a suggestion spends today's
 	// quota, so only Suggest makes one, and a mistap closed at once costs
-	// nothing (#1186). However the editor leaves an album -- ×, Back, Upload,
-	// Use or another album -- it leaves nothing unused behind: a suggestion
-	// still running is stopped and what × or Use did not already discard goes.
+	// nothing (#1186). Leaving the editor -- Back, Escape, another page or
+	// another album -- stops and discards nothing; only ×, Use and Upload do.
 	$effect(() => {
 		const albumId = currentAlbumId;
 		coverSuggestionsState = {
@@ -182,13 +183,7 @@
 		};
 		followedRunId = null;
 		coverSuggestionsReloads.stop();
-		const visit = new AbortController();
-		albumVisit = visit;
 		queueMicrotask(() => void loadCoverSuggestions(albumId));
-		return () => {
-			visit.abort();
-			discardUnusedOnLeave(albumId);
-		};
 	});
 
 	function reloadCoverSuggestions(): void {
@@ -274,7 +269,7 @@
 	async function suggestCover(): Promise<void> {
 		if (!canSuggestCover) return;
 		const albumId = currentAlbumId;
-		const left = albumVisit.signal;
+		const markAtAsking = discardMarkOf(albumId);
 		chosenSlot = null;
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
@@ -287,12 +282,13 @@
 		}));
 		try {
 			const job = await createAlbumCoverSuggestions(albumId);
-			if (left.aborted) {
+			if (discardMarkOf(albumId) !== markAtAsking) {
 				discardUnusedInBackground(albumId, job.id);
 				return;
 			}
-			runningSuggestionJobId = job.id;
 			followRun(job, albumId);
+			if (albumId !== currentAlbumId) return;
+			runningSuggestionJobId = job.id;
 			void loadCoverSuggestions(albumId);
 		} catch (error) {
 			if (albumId !== currentAlbumId) return;
@@ -345,60 +341,53 @@
 		showSuggestFailure(albumId, refusal);
 	}
 
-	// A load still answering from before the stop would report the run as
-	// running and track the job being cancelled again, so it is dropped.
-	async function stopSuggestionRun(jobId: string): Promise<void> {
-		suggestionsRequest += 1;
-		runningSuggestionJobId = null;
-		try {
-			await cancelJob(jobId);
-		} catch (error) {
-			const alreadyEnded = error instanceof ApiError && error.status === HTTP_CONFLICT;
-			if (!alreadyEnded) {
-				runningSuggestionJobId = jobId;
+	// The run stops before the discard, and a run that ended just before
+	// its stop may already have landed its suggestion, so the discard
+	// follows every stopped run. A load still answering from before the stop
+	// would report the run as running and track the job being cancelled
+	// again, so it is dropped.
+	async function discardUnused(albumId: string, runToStop: string | null): Promise<void> {
+		if (runToStop) {
+			suggestionsRequest += 1;
+			runningSuggestionJobId = null;
+			try {
+				await stopCoverRun(runToStop);
+			} catch (error) {
+				runningSuggestionJobId = runToStop;
 				throw error;
 			}
 		}
-		removeJob(jobId);
+		await discardAlbumCoverSuggestions(albumId);
 	}
 
-	// The run stops before the discard, and a run that ended just before
-	// its stop may already have landed its suggestion, so the discard
-	// follows every stopped run.
-	async function discardUnused(albumId: string, runToStop: string | null): Promise<void> {
-		if (runToStop) await stopSuggestionRun(runToStop);
-		await discardAlbumCoverSuggestions(albumId);
-		discardedAlbumId = albumId;
+	// The server deletes the rows and commits before it removes the files, so
+	// a failed or uncertain discard may come after the suggestions are gone:
+	// the editor shows what the server still has.
+	function reportDiscardFailure(albumId: string, error: unknown): void {
+		addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+		void loadCoverSuggestions(albumId);
 	}
 
 	function discardUnusedInBackground(albumId: string, runToStop: string | null): void {
 		discardUnused(albumId, runToStop).catch((error: unknown) =>
-			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error')
+			reportDiscardFailure(albumId, error)
 		);
 	}
 
-	function discardUnusedOnLeave(albumId: string): void {
-		const runToStop = runningSuggestionJobId;
-		const unusedLeft =
-			discardedAlbumId !== albumId &&
-			coverSuggestionsState?.albumId === albumId &&
-			(coverSuggestionsState.data?.suggestions.length ?? 0) > 0;
-		if (runToStop || unusedLeft) discardUnusedInBackground(albumId, runToStop);
-	}
-
 	async function discardAndClose(): Promise<void> {
+		const albumId = currentAlbumId;
+		markCoverSuggestionsDiscarded(albumId);
 		const runToStop = runningSuggestionJobId;
 		if (!hasSuggestions && !runToStop) {
 			onclose();
 			return;
 		}
-		const albumId = currentAlbumId;
 		coverSuggestionsBusyAlbumId = albumId;
 		try {
 			await discardUnused(albumId, runToStop);
 			onclose();
 		} catch (error) {
-			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+			reportDiscardFailure(albumId, error);
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
@@ -412,10 +401,11 @@
 				'cover-saving',
 				selectAlbumCoverSuggestion(albumId, { suggestion_id: suggestionId })
 			);
+			markCoverSuggestionsDiscarded(albumId);
 			try {
-				await discardUnused(albumId, null);
+				await discardUnused(albumId, runningSuggestionJobId);
 			} catch (error) {
-				addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+				reportDiscardFailure(albumId, error);
 			}
 			updateAlbumInList(albumId, () => updated);
 			addToast('Cover saved', 'success');
