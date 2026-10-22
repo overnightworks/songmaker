@@ -45,12 +45,12 @@ jobs:
           key: uv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
           restore-keys: uv-${{ runner.os }}-${{ matrix.python-version }}-
 
-      - name: Install redis-server
-        # why: tests/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in; no test runs a real ffmpeg, so it is not installed. The runner image's package lists usually know redis-server, so apt-get update is only the fallback; short timeouts and retries make a stalled mirror fail fast.
+      - name: Install system dependencies
+        # why: tests/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The runner image's package lists usually know both packages, so apt-get update is only the fallback; short timeouts and retries make a stalled mirror fail fast.
         run: |
           apt_options="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
-          sudo apt-get install -y $apt_options redis-server \
-            || { sudo apt-get update $apt_options && sudo apt-get install -y $apt_options redis-server; }
+          sudo apt-get install -y $apt_options ffmpeg redis-server \
+            || { sudo apt-get update $apt_options && sudo apt-get install -y $apt_options ffmpeg redis-server; }
         timeout-minutes: 45 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
 
       - name: Install dependencies
