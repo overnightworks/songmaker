@@ -19,6 +19,7 @@ jobs:
   backend:
     name: Backend (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 75 # why: a hung job must not hold the queued main runs for six hours.
     strategy:
       matrix:
         python-version: ["3.12"]
@@ -45,7 +46,12 @@ jobs:
           restore-keys: uv-${{ runner.os }}-${{ matrix.python-version }}-
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg redis-server
+        # why: tests/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The runner image's package lists usually know both packages, so apt-get update is only the fallback; short timeouts and retries make a stalled mirror fail fast.
+        run: |
+          apt_options="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          sudo apt-get install -y $apt_options ffmpeg redis-server \
+            || { sudo apt-get update $apt_options && sudo apt-get install -y $apt_options ffmpeg redis-server; }
+        timeout-minutes: 45 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
 
       - name: Install dependencies
         run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
@@ -101,6 +107,7 @@ jobs:
   alert-rules:
     name: Alert rules (promtool)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -125,6 +132,7 @@ jobs:
   postgresql-contract:
     name: PostgreSQL contract (serial)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -186,6 +194,7 @@ jobs:
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         node-version: ["22"]
