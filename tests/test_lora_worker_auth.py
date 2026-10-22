@@ -70,7 +70,7 @@ def lora_auth_db(tmp_path: Path):
     factory = init_test_db(tmp_path / "lora.db")
     (tmp_path / "sample.wav").write_bytes(b"RIFF0000WAVEfmt ")
     with factory() as session:
-        session.add(User(id="user", username="trainer", password_hash="x", role="user"))
+        session.add(User(id="user", username="trainer", role="user"))
         session.add(
             UserLora(
                 id="lora",

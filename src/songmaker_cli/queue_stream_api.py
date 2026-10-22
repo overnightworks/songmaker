@@ -10,7 +10,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
 import songmaker_cli.constants as _consts

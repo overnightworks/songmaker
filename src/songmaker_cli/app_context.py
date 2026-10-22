@@ -10,18 +10,11 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
-from webauth.config import WebAuthConfig
-from webauth.liveness import ExpiryColumnLiveness
-from webauth.passwords import Argon2idPasswordHasher
-from webauth.ports import PasswordHasher
+from webauth.config import SessionLifetime, WebAuthConfig
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 
-from songmaker_cli.constants import (
-    HTTP_MAX_USER_AGENT_LENGTH,
-    REDIS_RL_IP_PREFIX,
-    ROLE_ADMIN,
-)
+from songmaker_cli.constants import REDIS_RL_IP_PREFIX, ROLE_ADMIN
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -37,8 +30,6 @@ class AppContext:
     signing_key: bytes
     redis: Redis
     trusted_proxies: TrustedProxies = field(default_factory=TrustedProxies)
-    allowed_hosts_exact: frozenset[str] = field(default_factory=frozenset)
-    allowed_hosts_patterns: list[re.Pattern[str]] = field(default_factory=list)
 
 
 def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
@@ -49,26 +40,37 @@ def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
         raise ValueError(f"TRUSTED_PROXIES is invalid: {exc}") from exc
 
 
-def build_password_hasher() -> PasswordHasher:
-    """The one password hasher every stored hash in this deployment comes from."""
-    return Argon2idPasswordHasher()
+def allowed_hosts(settings: Settings) -> tuple[str, ...]:
+    """ALLOWED_HOSTS entries: exact hosts and `*.suffix` wildcards, the one list
+    behind both the Host check and the Origin allowlist."""
+    return tuple(entry.strip() for entry in settings.allowed_hosts.split(",") if entry.strip())
+
+
+def parse_allowed_hosts(settings: Settings) -> tuple[frozenset[str], tuple[re.Pattern[str], ...]]:
+    """The Origin allowlist: exact hosts and patterns for the wildcards."""
+    exact: set[str] = set()
+    patterns: list[re.Pattern[str]] = []
+    for host in allowed_hosts(settings):
+        if host.startswith("*."):
+            patterns.append(re.compile(rf"^[^:]+\.{re.escape(host[2:])}(:\d+)?$"))
+        else:
+            exact.add(host)
+    return frozenset(exact), tuple(patterns)
 
 
 def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
     """The auth library's view of this deployment, assembled from songmaker's."""
+    hosts_exact, hosts_patterns = parse_allowed_hosts(settings)
     return WebAuthConfig(
         session_secret=SecretStr(ctx.signing_key.decode()),
-        password_hasher=build_password_hasher(),
         rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
         trusted_proxies=ctx.trusted_proxies,
-        allowed_hosts_exact=ctx.allowed_hosts_exact,
-        allowed_hosts_patterns=tuple(ctx.allowed_hosts_patterns),
-        session_max_age_seconds=settings.session_max_age_seconds,
-        session_liveness=ExpiryColumnLiveness(settings.session_absolute_max_age_seconds),
-        max_user_agent_chars=HTTP_MAX_USER_AGENT_LENGTH,
-        login_rate_limit=settings.login_rate_limit,
-        login_lockout_threshold=settings.login_lockout_threshold,
-        login_lockout_window_seconds=settings.login_lockout_window_seconds,
+        allowed_hosts_exact=hosts_exact,
+        allowed_hosts_patterns=hosts_patterns,
+        session_lifetime=SessionLifetime(
+            idle_seconds=settings.session_idle_seconds,
+            absolute_max_age_seconds=settings.session_absolute_max_age_seconds,
+        ),
         admin_role=ROLE_ADMIN,
         cookie_secure=settings.cookie_secure,
     )

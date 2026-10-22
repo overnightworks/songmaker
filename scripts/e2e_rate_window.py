@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Final
 
-from webauth.policies import RateLimitClass, RateLimitPolicy
+from webauth.policies import RateLimitPolicy
 
 from songmaker_cli.request_policies import build_rate_limit_policy
 from songmaker_cli.settings import get_settings
@@ -66,9 +66,7 @@ def parse_access_record(line: str) -> AccessRecord | None:
 
 
 def spends_api_budget(record: AccessRecord, policy: RateLimitPolicy) -> bool:
-    return not policy.is_exempt(record.path) and (
-        policy.classify(record.path) is RateLimitClass.API
-    )
+    return not policy.is_exempt(record.path) and policy.budget_for(record.path) is policy.default
 
 
 def busiest_window_of_one_client(
@@ -88,7 +86,7 @@ def busiest_api_window(
     lines: Iterable[str], policy: RateLimitPolicy,
 ) -> WindowPeak | None:
     """The most API-class requests one client sent inside one budget window."""
-    window = timedelta(seconds=policy.budget(RateLimitClass.API).window_seconds)
+    window = timedelta(seconds=policy.default.window_seconds)
     times_by_client: dict[str, list[datetime]] = defaultdict(list)
     for line in lines:
         record = parse_access_record(line)
@@ -110,7 +108,7 @@ def main() -> int:
     if peak is None:
         print("No API-class access record in the log; the measurement is broken.", file=sys.stderr)
         return 1
-    budget = policy.budget(RateLimitClass.API)
+    budget = policy.default
     print(
         f"Busiest {budget.window_seconds} s API window: {peak.request_count} requests "
         f"from {peak.client_ip} starting {peak.starts_at.isoformat()}; "

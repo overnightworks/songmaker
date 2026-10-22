@@ -116,7 +116,7 @@ def _image_event_records() -> list[dict]:
 def cover_job(tmp_path: Path):
     factory = init_test_db(tmp_path / "songmaker.db")
     with factory() as session:
-        user = User(id="u1", username="owner", password_hash="hash")
+        user = User(id="u1", username="owner")
         session.add(user)
         session.flush()
         album = Album(id="album", title="A" * 200, artist="Artist", created_by=user.id)

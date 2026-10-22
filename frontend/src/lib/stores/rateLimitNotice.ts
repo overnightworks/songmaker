@@ -4,12 +4,7 @@ import { RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { addToast, toasts } from '$lib/stores/toast';
 
 // A path whose own 429 is already visible some other way, so the generic
-// toast would only repeat it. Kept as its own list, not derived from
-// `AUTH_ENDPOINTS` in `lib/api/fetch.ts` (that one exists for the unrelated
-// 401-redirect suppression) -- a future path added there for its 401 reason
-// should not silently also lose this toast.
-//   - '/api/auth/login': `stores/auth.ts`'s `login()` turns a 429 into
-//     "Too many attempts. Try again later." under the login form.
+// toast would only repeat it.
 //   - '/api/auth/me': `stores/auth.ts`'s `checkAuth()` turns a 429 into the
 //     full-page session-check retry banner.
 //   - '/api/albums/<id>/cover-suggestions': `AlbumCoverEditor.svelte` shows
@@ -17,7 +12,6 @@ import { addToast, toasts } from '$lib/stores/toast';
 //     any other as its failure or error toast; nothing retries it, so
 //     "it will continue in a moment" would be untrue there.
 const RATE_LIMIT_TOAST_EXEMPT_PATHS: readonly RegExp[] = [
-	/^\/api\/auth\/login$/,
 	/^\/api\/auth\/me$/,
 	/^\/api\/albums\/[^/]+\/cover-suggestions$/
 ];

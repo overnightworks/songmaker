@@ -10,7 +10,6 @@ from conftest import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
-    stored_hash,
     web_client,
 )
 from fastapi.testclient import TestClient
@@ -29,7 +28,7 @@ PASSWORD = "Test1234!"
 
 def _seed_db(session: Session) -> None:
     session.add(User(
-        id=USER_ID, username="reimporter", password_hash=stored_hash(PASSWORD), role="admin",
+        id=USER_ID, username="reimporter", role="admin",
     ))
     session.flush()
     album = Album(id="a-reimport", title="Reimport Album", artist="Test", created_by=USER_ID)

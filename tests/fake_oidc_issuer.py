@@ -1,0 +1,116 @@
+"""A Keycloak stand-in for sign-in tests: an RS256 key, its key set and a token endpoint.
+
+The sign-in routes run the real relying party; only its two outbound calls are
+replaced, so the ID token is verified exactly as in production.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+import urllib.parse
+from dataclasses import dataclass, field
+
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.algorithms import RSAAlgorithm
+from webauth.https_client import KeySetFetchError
+from webauth.oidc import (
+    OidcRelyingParty,
+    TokenEndpointAnswer,
+    TokenEndpointError,
+    TokenRequest,
+)
+
+from songmaker_cli.oidc_client import (
+    OidcSignIn,
+    build_admission_config,
+    build_oidc_client_config,
+)
+from songmaker_cli.settings import get_settings
+
+KEY_ID = "test-key"
+RSA_PUBLIC_EXPONENT = 65537
+RSA_KEY_BITS = 2048
+ID_TOKEN_LIFETIME_SECONDS = 300
+
+
+@dataclass(frozen=True)
+class Person:
+    """Who the realm vouches for at the next token exchange."""
+
+    subject: str
+    username: str = "someone"
+    groups: tuple[str, ...] = ("/apps/songmaker",)
+    refresh_token: str | None = None
+
+
+@dataclass
+class FakeIssuer:
+    issuer: str
+    client_id: str
+    now: float = field(default_factory=time.time)
+    unreachable: bool = False
+    token_issuer: str | None = None
+    person: Person | None = None
+    _key: rsa.RSAPrivateKey = field(
+        default_factory=lambda: rsa.generate_private_key(RSA_PUBLIC_EXPONENT, RSA_KEY_BITS),
+    )
+    _nonce_by_code: dict[str, str] = field(default_factory=dict)
+
+    def clock(self) -> float:
+        return self.now
+
+    def remember_authorization(self, authorization_url: str) -> tuple[str, str]:
+        """Record the nonce an authorization URL asks for; return its state and a code."""
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(authorization_url).query)
+        state, nonce = query["state"][0], query["nonce"][0]
+        code = f"code-for-{state}"
+        self._nonce_by_code[code] = nonce
+        return state, code
+
+    def key_set(self, _url: str) -> bytes:
+        if self.unreachable:
+            raise KeySetFetchError("the issuer is unreachable")
+        jwk = json.loads(RSAAlgorithm.to_jwk(self._key.public_key()))
+        return json.dumps({"keys": [{**jwk, "kid": KEY_ID, "alg": "RS256", "use": "sig"}]}).encode()
+
+    def token_answer(self, request: TokenRequest) -> TokenEndpointAnswer:
+        if self.unreachable:
+            raise TokenEndpointError("the issuer is unreachable")
+        assert self.person is not None, "the test names who signs in"
+        nonce = self._nonce_by_code[request.form["code"]]
+        claims = {
+            "iss": self.token_issuer or self.issuer,
+            "aud": self.client_id,
+            "sub": self.person.subject,
+            "preferred_username": self.person.username,
+            "groups": list(self.person.groups),
+            "nonce": nonce,
+            "iat": int(self.now),
+            "exp": int(self.now) + ID_TOKEN_LIFETIME_SECONDS,
+        }
+        id_token = jwt.encode(claims, self._key, algorithm="RS256", headers={"kid": KEY_ID})
+        answer = {"id_token": id_token}
+        if self.person.refresh_token is not None:
+            answer["refresh_token"] = self.person.refresh_token
+        return TokenEndpointAnswer(status=200, body=json.dumps(answer).encode())
+
+    def relying_party_for_app(self) -> OidcSignIn:
+        client_config = build_oidc_client_config(get_settings())
+        relying_party = OidcRelyingParty(
+            client_config,
+            post_token_request=self.token_answer,
+            fetch_key_set=self.key_set,
+            wall_clock=self.clock,
+            monotonic_clock=self.clock,
+        )
+        return OidcSignIn(relying_party, build_admission_config(client_config))
+
+
+def a_fake_issuer() -> FakeIssuer:
+    settings = get_settings()
+    assert settings.oidc_issuer and settings.oidc_client_id
+    return FakeIssuer(settings.oidc_issuer, settings.oidc_client_id)
+
+

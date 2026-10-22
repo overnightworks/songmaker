@@ -5,13 +5,9 @@ export const APP_NAME = 'Hallucinai';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
-// Cross-file contract: fetch.ts's signInAddress writes this param,
-// whatever reads it back (the login page) must use the same name.
-export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
-
-// Mirrors webauth's `MIN_PASSWORD_LENGTH` (`webauth.passwords`) so the browser
-// refuses a short password before the round trip; the server stays authoritative.
-export const PASSWORD_MIN_LENGTH = 8;
+// The server's sign-in start (`GET /login/oidc?next=`) reads the address to
+// return to from this param.
+export const SIGN_IN_NEXT_PARAM = 'next';
 
 // The share succeeded server-side even when the follow-up clipboard write
 // throws (no permission, no focus, etc.) — that toast must never read as a
@@ -650,6 +646,7 @@ export const ADMIN_TABS_LABEL = 'Admin sections';
 // The phone's account circle and the menu it opens (issue #1158).
 export const ACCOUNT_MENU_LABEL = 'Account';
 export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
+export const ACCOUNT_MENU_ACCOUNT_LABEL = 'Account';
 export const ACCOUNT_MENU_SIGNED_IN_PREFIX = 'Signed in as';
 export const ACCOUNT_MENU_LOGOUT_LABEL = 'Log out';
 // A sign-out the server did not confirm leaves the session standing (#1340).

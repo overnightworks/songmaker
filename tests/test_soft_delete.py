@@ -277,7 +277,7 @@ def test_chat_messages_survive_soft_delete_and_restore(seeded: Session) -> None:
 
 
 def test_playlist_entries_filtered_when_song_soft_deleted(seeded: Session) -> None:
-    seeded.add(User(id="owner", username="o", password_hash="x", role="user"))
+    seeded.add(User(id="owner", username="o", role="user"))
     seeded.commit()
     pl = create_playlist(seeded, "Mix", "owner", slug="mix")
     pick_generation(seeded, "g1")
@@ -303,8 +303,7 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="u_user",
-            password_hash="x", role=role,
+            id=_DEFAULT_USER_ID, username="u_user", role=role,
         ))
         session.flush()
         session.add(Album(
@@ -370,8 +369,8 @@ def test_api_restore_song_round_trip(tmp_path: Path) -> None:
 def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id="u1", username="u1", password_hash="x", role="user"))
-        session.add(User(id="u2", username="u2", password_hash="x", role="user"))
+        session.add(User(id="u1", username="u1", role="user"))
+        session.add(User(id="u2", username="u2", role="user"))
         session.flush()
         session.add(Album(id="rock", title="R", artist="A", created_by="u1"))
         session.commit()

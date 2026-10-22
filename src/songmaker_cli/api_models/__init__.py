@@ -12,11 +12,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from songmaker_cli.api_models.auth import (
-    AuthMeResponse,
-    LoginRequest,
-    UserResponse,
-)
+from songmaker_cli.api_models.auth import AuthMeResponse, LogoutResponse
 from songmaker_cli.api_models.cover_suggestions import (
     CoverSuggestionResponse,
     CoverSuggestionSelectionRequest,
@@ -257,6 +253,7 @@ __all__ = [
     "JobResponse",
     "JudgeSettingsRequest",
     "JudgeSettingsResponse",
+    "LogoutResponse",
     "LoraCapacityErrorResponse",
     "GenerationUnavailableResponse",
     "LoraCapacityReason",
@@ -276,7 +273,6 @@ __all__ = [
     "LibraryTakePool",
     "LoadedModelDetail",
     "LoadModelOnWorkerRequest",
-    "LoginRequest",
     "ModelAvailability",
     "OwnPlayableTakeListResponse",
     "OwnPlayableTakeResponse",
@@ -336,7 +332,6 @@ __all__ = [
     "UserLoraSampleFromGenerationRequest",
     "UserLoraSamplePatchRequest",
     "UserLoraSampleResponse",
-    "UserResponse",
     "VALID_SCORER_NAMES",
     "VersionResponse",
     "WorkerEphemeralState",

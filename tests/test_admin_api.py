@@ -5,10 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app, stored_hash
+from conftest import make_test_app, seed_user
 from fastapi.testclient import TestClient
 
-from songmaker_cli.db.queries.auth import create_user
 from songmaker_cli.db.queries.loras import create_user_lora
 from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 
@@ -23,18 +22,18 @@ def _login_as_admin(client: TestClient) -> None:
     from conftest import login_and_csrf
     factory = client.app.state.ctx.db
     with factory() as session:
-        create_user(session, "admin", stored_hash("admin12345"), role="admin")
+        seed_user(session, "admin", "admin")
         session.commit()
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
 
 
 def _login_as_user(client: TestClient) -> None:
     from conftest import login_and_csrf
     factory = client.app.state.ctx.db
     with factory() as session:
-        create_user(session, "regular", stored_hash("user123456"), role="user")
+        seed_user(session, "regular", "user")
         session.commit()
-    login_and_csrf(client, "regular", "user123456")
+    login_and_csrf(client, "regular")
 
 
 # -- Access control -----------------------------------------------------------
@@ -58,7 +57,7 @@ def test_admin_lists_every_musicians_active_voice(client: TestClient) -> None:
     _login_as_admin(client)
     factory = client.app.state.ctx.db
     with factory() as session:
-        musician = create_user(session, "musician", stored_hash("user123456"))
+        musician = seed_user(session, "musician")
         warm_tenor = create_user_lora(session, musician.id, "Warm Tenor", "warm-tenor")
         dry_spoken_word = create_user_lora(
             session, musician.id, "Dry Spoken Word", "dry-spoken-word",

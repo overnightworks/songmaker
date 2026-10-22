@@ -22,7 +22,7 @@ from agent_providers.events import (
 from agent_providers.tool_loop import ToolOutcome
 from agent_providers.tools import anthropic_tool_schemas
 from conftest import make_authenticated_user
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.cowriter import tools as cowriter_tools
 from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, COWRITER_TOOLS
@@ -328,8 +328,8 @@ def test_claude_api_tool_loop_persists_an_owned_write_and_refuses_a_foreign_one(
     factory = init_test_db(tmp_path / "claude-api.db")
     with factory() as session:
         session.add_all([
-            User(id="owner", username="owner", password_hash="x", role="user"),
-            User(id="other", username="other", password_hash="x", role="user"),
+            User(id="owner", username="owner", role="user"),
+            User(id="other", username="other", role="user"),
         ])
         session.flush()
         session.add_all([

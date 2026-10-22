@@ -38,8 +38,8 @@ USER_B = "u-bob"
 
 
 def _seed_users(session: Session) -> None:
-    session.add(User(id=USER_A, username="alice", password_hash="x", role="user"))
-    session.add(User(id=USER_B, username="bob", password_hash="x", role="user"))
+    session.add(User(id=USER_A, username="alice", role="user"))
+    session.add(User(id=USER_B, username="bob", role="user"))
 
 
 @pytest.fixture

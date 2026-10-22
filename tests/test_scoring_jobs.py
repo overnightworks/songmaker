@@ -179,7 +179,7 @@ def admin_client(tmp_path: Path, monkeypatch):
     factory = init_db(tmp_path / "judge_api.db")
     with factory() as session:
         pin_judge_route_if_unset(session, anthropic_key_is_set=True)
-        session.add(User(id="u-test", username="user-u-test", password_hash="x", role="admin"))
+        session.add(User(id="u-test", username="user-u-test", role="admin"))
         session.commit()
     app = make_router_app(
         make_router_ctx(tmp_path, db=factory),
@@ -264,7 +264,7 @@ def test_judge_and_cowriter_settings_are_independent_through_the_api(
 def _seeded_generation(tmp_path: Path) -> tuple:
     factory = init_db(tmp_path / "scoring.db")
     with factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="x", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="alb1", title="Rock", artist="Band", created_by="u1"))
         session.add(Song(id="s1", title="Song One", album_id="alb1", track_number=1))

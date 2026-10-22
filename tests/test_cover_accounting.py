@@ -63,7 +63,7 @@ def accounting_factory(request, tmp_path):
 @pytest.fixture
 def running_cover(accounting_factory, tmp_path, monkeypatch):
     with accounting_factory() as session:
-        session.add(User(id="owner", username="owner", password_hash="unused"))
+        session.add(User(id="owner", username="owner"))
         session.flush()
         session.add(Album(id="album", title="Album", artist="Artist", created_by="owner"))
         session.flush()
@@ -314,8 +314,11 @@ def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(a
     factory = sessionmaker(bind=engine)
     try:
         with factory() as session:
-            session.add(User(id="owner", username="owner", password_hash="unused"))
-            session.flush()
+            # The revision under test predates the cutover: its users carry a password hash.
+            session.execute(text(
+                "INSERT INTO users (id, username, password_hash, role, is_active, created_at,"
+                " updated_at) VALUES ('owner', 'owner', 'x', 'user', true, now(), now())"
+            ))
             session.add_all([
                 Album(id=album_id, title=album_id, artist="Artist", created_by="owner")
                 for album_id in ("deleted", "retained")

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     Pagination,

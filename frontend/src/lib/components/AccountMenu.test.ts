@@ -9,6 +9,7 @@ vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation'
 
 import { goto } from '$app/navigation';
 import {
+	ACCOUNT_MENU_ACCOUNT_LABEL,
 	ACCOUNT_MENU_CLOSE_LABEL,
 	ACCOUNT_MENU_LABEL,
 	ACCOUNT_MENU_LOGOUT_LABEL,
@@ -76,15 +77,27 @@ describe('AccountMenu', () => {
 		expect(getByRoleButton(target, TRIGGER_NAME).textContent?.trim()).toBe('F');
 	});
 
-	it('names who is signed in, then Settings, the theme switch, and Log out last', async () => {
+	it('names who is signed in, then Account, Settings, the theme switch, and Log out last', async () => {
 		const panel = await openMenu(await renderAccountMenu());
 
 		expect(rowTexts(panel)).toEqual([
 			`${ACCOUNT_MENU_SIGNED_IN_PREFIX} ${USERNAME}`,
+			ACCOUNT_MENU_ACCOUNT_LABEL,
 			RAIL_SETTINGS_LABEL,
 			THEME_SWITCH_TO_LIGHT_LABEL,
 			ACCOUNT_MENU_LOGOUT_LABEL
 		]);
+	});
+
+	it('opens the account page and closes', async () => {
+		const target = await renderAccountMenu();
+		const panel = await openMenu(target);
+
+		getByRoleButton(panel, ACCOUNT_MENU_ACCOUNT_LABEL).click();
+		await tick();
+
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/settings/account'));
+		expect(target.querySelector('[role="dialog"]')).toBeNull();
 	});
 
 	it('switches the theme and then offers the way back', async () => {
@@ -168,24 +181,24 @@ describe('AccountMenu focus', () => {
 		await tick();
 	}
 
-	it('moves focus to Settings, its first item, when it opens', async () => {
+	it('moves focus to Account, its first item, when it opens', async () => {
 		const panel = await openMenu(await renderAccountMenu());
 
-		expect(document.activeElement).toBe(getByRoleButton(panel, RAIL_SETTINGS_LABEL));
+		expect(document.activeElement).toBe(getByRoleButton(panel, ACCOUNT_MENU_ACCOUNT_LABEL));
 	});
 
 	it.each([
 		{
 			from: ACCOUNT_MENU_LOGOUT_LABEL,
 			shiftKey: false,
-			to: RAIL_SETTINGS_LABEL,
+			to: ACCOUNT_MENU_ACCOUNT_LABEL,
 			way: 'Tab past Log out'
 		},
 		{
-			from: RAIL_SETTINGS_LABEL,
+			from: ACCOUNT_MENU_ACCOUNT_LABEL,
 			shiftKey: true,
 			to: ACCOUNT_MENU_LOGOUT_LABEL,
-			way: 'Shift+Tab before Settings'
+			way: 'Shift+Tab before Account'
 		}
 	])('keeps focus inside: $way wraps to $to', async ({ from, shiftKey, to }) => {
 		const panel = await openMenu(await renderAccountMenu());

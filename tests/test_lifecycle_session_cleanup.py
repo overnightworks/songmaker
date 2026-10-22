@@ -30,7 +30,7 @@ def cleanup_context(tmp_path):
 def seed_cleanup_sessions(cleanup_context):
     def seed(*, expired_ids=("expired",), live_expiry=None):
         with cleanup_context.db() as db:
-            db.add(User(id="user", username="user", password_hash="x"))
+            db.add(User(id="user", username="user"))
             db.add_all(
                 UserSession(
                     id=session_id, user_id="user",

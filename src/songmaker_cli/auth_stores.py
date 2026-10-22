@@ -10,97 +10,52 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import timedelta
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
-from sqlalchemy.exc import IntegrityError
-from webauth.ports import (
-    SessionIdentityChange,
-    UnknownUserError,
-    UserManagementEventKind,
-    UsernameTakenError,
-)
+from webauth.ports import AccountEventKind
 
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.constants import AuditAction, ResourceType
-from songmaker_cli.db.models import User
+from songmaker_cli.db.models import USERNAME_MAX_LENGTH
 from songmaker_cli.db.queries.auth import (
-    count_active_sessions,
-    count_recent_failed_attempts,
     create_session,
     create_user,
     delete_session,
     delete_user_sessions,
     get_session_with_user,
     get_user,
-    get_user_by_username,
-    list_active_sessions,
-    list_users,
     prune_overflow_sessions,
     record_audit,
-    record_login_attempt,
     renew_session,
-    update_user,
-    user_count,
+    replace_session_refresh_token,
+    set_user_role,
 )
 
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from pydantic import SecretStr
     from sqlalchemy.orm import Session, SessionTransaction
-    from webauth.ports import SessionIdentityChanged, UserManagementEvent
+    from webauth.ports import AccountEvent
 
-    from songmaker_cli.db.models import UserSession
-
-USER_AGENT_CHANGE_DETAIL: Final = "ua_changed"
-
-_AUDIT_ACTIONS: Final = {
-    SessionIdentityChange.IP_ADDRESS: AuditAction.SESSION_IP_CHANGE,
-    SessionIdentityChange.USER_AGENT: AuditAction.SESSION_UA_CHANGE,
-}
+    from songmaker_cli.db.models import User, UserSession
 
 
 @dataclass(frozen=True)
-class DatabaseUserStore:
+class DatabaseSubjectUserStore:
+    """Accounts keyed by the issuer's subject; the account id is that subject."""
+
     session: Session
 
     def get(self, user_id: str) -> User | None:
         return get_user(self.session, user_id)
 
-    def get_by_username(self, username: str) -> User | None:
-        return get_user_by_username(self.session, username)
+    def create_for_subject(self, subject: str, username: str, role: str) -> User:
+        """The username is display text and may be longer than the column holds."""
+        return create_user(self.session, subject, username[:USERNAME_MAX_LENGTH], role)
 
-    def count(self) -> int:
-        return user_count(self.session)
-
-    def create(self, username: str, password_hash: str, role: str) -> User:
-        try:
-            return create_user(self.session, username, password_hash, role=role)
-        except IntegrityError:
-            # INSERT errors expose password hashes, which the store error contract forbids.
-            raise UsernameTakenError("Username already exists") from None
-
-    def list(self) -> list[User]:
-        return list_users(self.session)
-
-    def update(
-        self,
-        user_id: str,
-        *,
-        role: str | None = None,
-        is_active: bool | None = None,
-        password_hash: str | None = None,
-    ) -> User:
-        try:
-            return update_user(
-                self.session, user_id, role=role, is_active=is_active,
-                password_hash=password_hash,
-            )
-        except ValueError:
-            raise UnknownUserError("Account does not exist") from None
-
-    def count_active_admins(self, role: str) -> int:
-        return self.session.query(User).filter_by(role=role, is_active=True).count()
+    def set_role(self, user_id: str, role: str) -> User:
+        return set_user_role(self.session, user_id, role)
 
 
 @dataclass
@@ -139,37 +94,28 @@ class DatabaseWriteLock:
 @dataclass(frozen=True)
 class DatabaseSessionRecordStore:
     session: Session
-    session_max_age_seconds: int
 
     def create(
         self,
         user_id: str,
-        expires_at: datetime,
         *,
-        ip_address: str,
-        user_agent: str,
+        now: datetime,
+        expires_at: datetime,
+        refresh_token: SecretStr | None,
     ) -> UserSession:
-        return create_session(
-            self.session, user_id, expires_at,
-            ip_address=ip_address, user_agent=user_agent,
-        )
+        record = create_session(self.session, user_id, expires_at, refresh_token)
+        record.created_at = now
+        self.session.flush()
+        return record
 
     def load(self, session_id: str) -> UserSession | None:
         return get_session_with_user(self.session, session_id)
 
-    def touch(
-        self,
-        record: UserSession,
-        *,
-        ip_address: str,
-        user_agent: str,
-        now: datetime,
-    ) -> bool:
-        return renew_session(
-            self.session, record.id,
-            expires_at=now + timedelta(seconds=self.session_max_age_seconds),
-            ip_address=ip_address, user_agent=user_agent,
-        )
+    def touch(self, session_id: str, *, expires_at: datetime) -> bool:
+        return renew_session(self.session, session_id, expires_at=expires_at)
+
+    def replace_refresh_token(self, session_id: str, *, refresh_token: SecretStr) -> bool:
+        return replace_session_refresh_token(self.session, session_id, refresh_token)
 
     def delete(self, session_id: str) -> None:
         delete_session(self.session, session_id)
@@ -177,82 +123,23 @@ class DatabaseSessionRecordStore:
     def delete_for_user(self, user_id: str) -> int:
         return delete_user_sessions(self.session, user_id)
 
-    def prune_overflow(self, user_id: str, max_sessions: int) -> list[str]:
-        return prune_overflow_sessions(self.session, user_id, max_sessions)
-
-    def list_active(self, *, offset: int = 0, limit: int | None = None) -> list[UserSession]:
-        return list_active_sessions(self.session, offset=offset, limit=limit)
-
-    def count_active(self) -> int:
-        return count_active_sessions(self.session)
-
-
-@dataclass(frozen=True)
-class DatabaseLoginAttemptStore:
-    session: Session
-
-    def record(self, *, ip_address: str, username: str, success: bool) -> None:
-        record_login_attempt(self.session, ip_address, username, success=success)
-
-    def count_recent_failures(
-        self,
-        *,
-        ip_address: str,
-        window_seconds: int,
-        username: str | None = None,
-    ) -> int:
-        return count_recent_failed_attempts(
-            self.session, ip_address, window_seconds, username=username,
-        )
+    def prune_overflow(self, user_id: str, keep_newest: int) -> None:
+        prune_overflow_sessions(self.session, user_id, keep_newest)
 
 
 @dataclass(frozen=True)
 class DatabaseAuditSink:
     session: Session
 
-    def user_updated(self, actor_id: str | None, subject_id: str, detail: str) -> None:
-        record_audit(
-            self.session, actor_id, AuditAction.UPDATE, ResourceType.USER, subject_id, detail,
-        )
-
-    def user_management_event(self, event: UserManagementEvent) -> None:
+    def account_event(self, event: AccountEvent) -> None:
         match event.kind:
-            case UserManagementEventKind.USER_CREATED:
-                action, detail = AuditAction.CREATE, f"role={event.role}"
-            case UserManagementEventKind.ROLE_CHANGED:
-                action, detail = AuditAction.UPDATE, f"role={event.role}"
-            case UserManagementEventKind.USER_DEACTIVATED:
-                action, detail = AuditAction.DEACTIVATE, ""
-            case UserManagementEventKind.PASSWORD_SET_BY_ADMIN:
-                action, detail = AuditAction.UPDATE, "password_changed"
-            case (
-                UserManagementEventKind.FIRST_ADMIN_CREATED
-                | UserManagementEventKind.PASSWORD_CHANGED
-                | UserManagementEventKind.SESSIONS_REVOKED
-                | UserManagementEventKind.SESSION_REVOKED
-            ):
-                return
+            case AccountEventKind.USER_CREATED:
+                action = AuditAction.CREATE
+            case AccountEventKind.ROLE_CHANGED:
+                action = AuditAction.UPDATE
             case _:
-                raise ValueError(f"Unsupported user management event: {event.kind}")
-        if action is AuditAction.UPDATE:
-            self.user_updated(event.actor_id, event.subject_id, detail)
-        else:
-            record_audit(
-                self.session, event.actor_id, action, ResourceType.USER, event.subject_id, detail,
-            )
-
-    def session_identity_changed(self, event: SessionIdentityChanged) -> None:
+                raise ValueError(f"Unsupported account event: {event.kind}")
         record_audit(
-            self.session,
-            event.user_id,
-            _AUDIT_ACTIONS[event.change],
-            ResourceType.SESSION,
-            event.session_ref,
-            _identity_change_detail(event),
+            self.session, event.actor_id, action, ResourceType.USER, event.subject_id,
+            f"role={event.role}",
         )
-
-
-def _identity_change_detail(event: SessionIdentityChanged) -> str:
-    if event.change is SessionIdentityChange.IP_ADDRESS:
-        return f"from={event.previous} to={event.current}"
-    return USER_AGENT_CHANGE_DETAIL

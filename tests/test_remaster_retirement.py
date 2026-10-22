@@ -6,7 +6,6 @@ import pytest
 from conftest import (
     login_and_csrf,
     make_test_app,
-    stored_hash,
 )
 from sqlalchemy import select
 
@@ -32,7 +31,7 @@ def test_remaster_is_unavailable_and_preserves_audio_and_history(
     for name, content in audio_before.items():
         (audio_dir / name).write_bytes(content)
     with db() as session:
-        session.add(User(id="owner", username="owner", password_hash=stored_hash("password")))
+        session.add(User(id="owner", username="owner"))
         session.flush()
         session.add(Album(id="album", title="Album", artist="Artist", created_by="owner"))
         session.add(Song(id="song", album_id="album", title="Song", track_number=1))
@@ -48,7 +47,7 @@ def test_remaster_is_unavailable_and_preserves_audio_and_history(
 
     with client:
         if authenticated:
-            login_and_csrf(client, "owner", "password")
+            login_and_csrf(client, "owner")
         with db() as session:
             generation_before = session.execute(select(Generation.__table__)).all()
             audits_before = session.execute(select(AuditLog.__table__).order_by(AuditLog.id)).all()
