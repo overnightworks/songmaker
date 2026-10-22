@@ -1,8 +1,0 @@
-claim_id = "a34cb6029ab244cba89b9a5bf632d84c"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "032e4e28879fcc139c9d5036eeb969300cf80a07"
-branch = "claude/issue-1786-cover-runner-owns-its-job"
-scope = ["src/songmaker_cli/cover_runner.py", "src/songmaker_cli/jobs/__init__.py", "src/songmaker_cli/jobs/cover_suggestions.py", "src/songmaker_cli/music_worker.py", "src/songmaker_cli/server.py", "tests"]
-opened_commit = "427823bc6b8ccd8efdc8d9ea2c9f606714bbda66"
-whole_reason = "One untangling of the cover runner across its five callers."
