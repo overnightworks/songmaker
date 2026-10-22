@@ -27,7 +27,8 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora, UserLoraSample
-from songmaker_cli.db.queries import get_job, get_user_lora
+from songmaker_cli.db.queries.jobs import get_job
+from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.jobs.lora_training import (
     _LoraProgressThrottle,
     _validate_export_path,
@@ -98,7 +99,7 @@ def seeded(db_factory, tmp_path: Path) -> dict:
 
     with db_factory() as session:
         session.add(
-            User(id=user_id, username="u1", password_hash="x", role="user"),
+            User(id=user_id, username="u1", role="user"),
         )
         session.add(
             UserLora(
@@ -1409,7 +1410,7 @@ def test_post_materialization_failure_releases_the_hold_and_stops_renewal(
 ) -> None:
     import fakeredis.aioredis
 
-    from songmaker_cli.acestep_state import release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
 
     async def exercise() -> None:
         from songmaker_cli.jobs.lora_training import update_user_lora
@@ -1466,7 +1467,7 @@ def test_post_materialization_cancellation_releases_the_hold_and_stops_renewal(
 ) -> None:
     import fakeredis.aioredis
 
-    from songmaker_cli.acestep_state import release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
 
     async def exercise() -> None:
         from songmaker_cli.jobs.lora_training import update_user_lora
@@ -1642,7 +1643,8 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
     import fakeredis.aioredis
     import httpx
 
-    from songmaker_cli.acestep_state import admit_generation, reserve_gpu_hold
+    from acestep_worker.heartbeat import reserve_gpu_hold
+    from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
@@ -1668,7 +1670,7 @@ def test_lost_train_response_keeps_the_hold_for_the_worker(seeded, db_factory) -
         client.post = AsyncMock(side_effect=post)
 
         async def release_hold(*args, **kwargs) -> None:
-            from songmaker_cli.acestep_state import release_gpu_hold
+            from acestep_worker.heartbeat import release_gpu_hold
 
             await release_gpu_hold(redis, "w0", "hold-token")
 
@@ -1702,12 +1704,8 @@ def test_unknown_handover_probe_does_not_release_a_worker_owned_hold() -> None:
     import fakeredis.aioredis
     import httpx
 
-    from songmaker_cli.acestep_state import (
-        admit_generation,
-        release_gpu_hold,
-        renew_gpu_hold,
-        reserve_gpu_hold,
-    )
+    from acestep_worker.heartbeat import release_gpu_hold, renew_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
@@ -1774,7 +1772,8 @@ def test_handover_probe_failures_do_not_release_the_hold(probe_outcome: str) -> 
     import fakeredis.aioredis
     import httpx
 
-    from songmaker_cli.acestep_state import admit_generation, release_gpu_hold, reserve_gpu_hold
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import admit_generation
     from songmaker_cli.jobs.lora_training import _pick_and_call_worker, _WorkerHandle
 
     async def exercise() -> AsyncMock:
@@ -1882,7 +1881,7 @@ def test_lora_reserve_checks_queued_generations_after_selecting_the_worker(
 ) -> None:
     from songmaker_cli.constants import JobFunction
     from songmaker_cli.db.models import Job
-    from songmaker_cli.db.queries import count_queued_generation_jobs
+    from songmaker_cli.db.queries.jobs import count_queued_generation_jobs
     from songmaker_cli.jobs.lora_training import _reserve_lora_worker
     from songmaker_cli.scheduler import AllWorkersHeld
 

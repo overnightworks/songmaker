@@ -85,6 +85,7 @@
 	);
 
 	const shareToggle = createShareToggle(() => ({
+		kind,
 		isShared,
 		shareSlug,
 		onshare: shareAndWarnIfIncomplete,

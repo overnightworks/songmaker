@@ -31,10 +31,11 @@ def test_script_imports_songmaker_cli_from_its_copied_checkout(
     (database / "engine.py").write_text(
         "def connect_db(*args):\n    return None\n\ndef resolve_database_url():\n    return ''\n",
     )
-    (database / "queries.py").write_text(
-        "def create_album(*args):\n    return None\n\n"
-        "def get_user_by_username(*args):\n    return None\n",
-    )
+    queries = database / "queries"
+    queries.mkdir()
+    (queries / "__init__.py").write_text("")
+    (queries / "albums.py").write_text("def create_album(*args):\n    return None\n")
+    (queries / "auth.py").write_text("def get_user_by_username(*args):\n    return None\n")
     (database / "models.py").write_text("class Album:\n    pass\n")
 
     result = subprocess.run(

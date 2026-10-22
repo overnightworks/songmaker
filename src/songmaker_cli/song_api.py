@@ -8,7 +8,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     Pagination,
@@ -57,28 +57,27 @@ from songmaker_cli.covers import (
     resolve_song_cover_file,
     write_song_cover,
 )
-from songmaker_cli.db.queries import (
-    RestoreWindowExpiredError,
+from songmaker_cli.db.queries.activity import record_song_played
+from songmaker_cli.db.queries.albums import RestoreWindowExpiredError, get_album
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
+from songmaker_cli.db.queries.songs import (
     cleanup_song,
     count_generations_by_song,
     count_songs,
     create_song,
-    delete_version,
     disable_song_sharing,
     enable_song_sharing,
-    get_album,
     list_songs,
     move_song,
-    record_audit,
     record_playlist_listen,
-    record_song_played,
     rename_song,
     restore_song,
     set_song_cover_key,
     soft_delete_song,
     update_song,
 )
-from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
+from songmaker_cli.db.queries.versions import delete_version
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,

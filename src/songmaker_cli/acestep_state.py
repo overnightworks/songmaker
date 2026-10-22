@@ -27,20 +27,6 @@ if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
 redis.call('INCR', KEYS[1])
 return 1
 """
-RESERVE_GPU_HOLD_SCRIPT = """
-if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
-local depth = redis.call('GET', KEYS[1])
-if depth and tonumber(depth) > 0 then return 0 end
-return redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2], 'NX') and 1 or 0
-"""
-RENEW_GPU_HOLD_SCRIPT = """
-if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
-return redis.call('EXPIRE', KEYS[1], ARGV[2])
-"""
-RELEASE_GPU_HOLD_SCRIPT = """
-if redis.call('GET', KEYS[1]) ~= ARGV[1] then return 0 end
-return redis.call('DEL', KEYS[1])
-"""
 
 
 def worker_state_key(worker_id: str) -> str:
@@ -115,44 +101,6 @@ async def admit_generation(pool: ArqRedis, worker_id: str) -> bool:
         queue_depth_key(worker_id),
         gpu_hold_key(worker_id),
     )
-    return bool(result)
-
-
-async def reserve_gpu_hold(
-    pool: ArqRedis,
-    worker_id: str,
-    token: str,
-    ttl_seconds: int,
-) -> bool:
-    result = await pool.eval(
-        RESERVE_GPU_HOLD_SCRIPT,
-        2,
-        queue_depth_key(worker_id),
-        gpu_hold_key(worker_id),
-        token,
-        ttl_seconds,
-    )
-    return bool(result)
-
-
-async def renew_gpu_hold(
-    pool: ArqRedis,
-    worker_id: str,
-    token: str,
-    ttl_seconds: int,
-) -> bool:
-    result = await pool.eval(
-        RENEW_GPU_HOLD_SCRIPT,
-        1,
-        gpu_hold_key(worker_id),
-        token,
-        ttl_seconds,
-    )
-    return bool(result)
-
-
-async def release_gpu_hold(pool: ArqRedis, worker_id: str, token: str) -> bool:
-    result = await pool.eval(RELEASE_GPU_HOLD_SCRIPT, 1, gpu_hold_key(worker_id), token)
     return bool(result)
 
 

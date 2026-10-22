@@ -106,7 +106,9 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "sqlalchemy": frozenset({"sqlalchemy"}),
     "structlog": frozenset({"structlog"}),
     "torch": frozenset({"functorch", "torch", "torchgen"}),
-    "torchaudio": frozenset({"torchaudio", "torio"}),
+    "torchaudio": frozenset({"torchaudio"}),
+    # torchcodec's top_level.txt lists a placeholder root next to the real one.
+    "torchcodec": frozenset({"FAKE_NAME", "torchcodec"}),
     "uvicorn": frozenset({"uvicorn"}),
 }
 
@@ -265,13 +267,18 @@ TEST_STACKS = _test_stacks()
 
 
 @functools.cache
-def _rendered_test_stack_services(compose_files: tuple[str, ...]) -> dict[str, dict]:
-    """The test stack as Compose itself merges it, every profile active, under e2e.yml's env."""
+def _rendered_test_stack_services(
+    compose_files: tuple[str, ...], operator_environment: tuple[tuple[str, str], ...] = (),
+) -> dict[str, dict]:
+    """The test stack as Compose itself merges it, every profile active, under e2e.yml's env.
+
+    ``operator_environment`` adds what an operator's ``.env`` would set on top of it.
+    """
     rendered = run_compose_config(
         (*compose_files, "--profile", "*"),
         ("--format", "json"),
         env_file=Path(os.devnull),
-        environment=_e2e_workflow_environment(),
+        environment={**_e2e_workflow_environment(), **dict(operator_environment)},
     )
     assert rendered.returncode == 0, rendered.stderr
     return json.loads(rendered.stdout)["services"]
@@ -688,6 +695,33 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             assert bind_options.get("create_host_path") is False
 
 
+WORKER_SERVICES = (
+    "songmaker-music-worker",
+    "songmaker-acestep-worker-0",
+    "songmaker-scoring-worker",
+)
+WEB_ONLY_SECURITY_OPTIONS = ("seccomp", "apparmor", "systempaths")
+
+
+@pytest.mark.parametrize("service_name", WORKER_SERVICES)
+def test_a_worker_drops_every_capability_and_blocks_privilege_gain(
+    service_name: str,
+) -> None:
+    service = _raw_compose_services()[service_name]
+    assert isinstance(service, dict)
+    security_options = service["security_opt"]
+
+    assert service["cap_drop"] == ["ALL"]
+    assert "cap_add" not in service
+    assert not service.get("privileged")
+    assert "no-new-privileges:true" in security_options
+    assert not [
+        option
+        for option in security_options
+        if option.startswith(WEB_ONLY_SECURITY_OPTIONS)
+    ]
+
+
 @pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
 def test_a_test_stack_publishes_its_ports_on_loopback_only(
     compose_files: tuple[str, ...],
@@ -718,3 +752,27 @@ def test_no_test_stack_service_comes_back_after_a_reboot(
         for service_name, service in _rendered_test_stack_services(compose_files).items()
     }
     assert restart_policies == dict.fromkeys(restart_policies, "no")
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_only_the_web_service_holds_the_keycloak_client_secret(
+    compose_files: tuple[str, ...],
+) -> None:
+    holders = {
+        service_name
+        for service_name, service in _rendered_test_stack_services(compose_files).items()
+        if "keycloak_client_secret" in {s["source"] for s in service.get("secrets", [])}
+    }
+    assert holders == {"songmaker-web"}
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+@pytest.mark.parametrize("operator_hosts", [None, "songmaker.hallucinai.de"])
+def test_the_web_host_check_admits_the_names_the_stack_calls_it_by(
+    compose_files: tuple[str, ...], operator_hosts: str | None,
+) -> None:
+    operator_environment = () if operator_hosts is None else (("ALLOWED_HOSTS", operator_hosts),)
+    web = _rendered_test_stack_services(compose_files, operator_environment)["songmaker-web"]
+    admitted = set(web["environment"]["ALLOWED_HOSTS"].split(","))
+    assert {"localhost", "127.0.0.1", "songmaker-web"} <= admitted
+    assert operator_hosts is None or operator_hosts in admitted

@@ -1,5 +1,4 @@
 import type {
-	CleanupResult,
 	PaginatedResponse,
 	ShareResult,
 	SongItem,
@@ -98,14 +97,6 @@ export async function recordSongListen(songId: string, playlistId: string | null
 	});
 }
 
-export async function moveSong(songId: string, albumId: string): Promise<SongItem> {
-	return apiFetch<SongItem>(`/api/songs/${songId}/album`, {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ album_id: albumId })
-	});
-}
-
 export async function renameSong(songId: string, title: string): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}/title`, {
 		method: 'PUT',
@@ -120,10 +111,6 @@ export async function shareSong(songId: string): Promise<ShareResult> {
 
 export async function unshareSong(songId: string): Promise<void> {
 	await apiFetch(`/api/songs/${songId}/share`, { method: 'DELETE' });
-}
-
-export async function cleanupSong(songId: string): Promise<CleanupResult> {
-	return apiFetch<CleanupResult>(`/api/songs/${songId}/cleanup`, { method: 'POST' });
 }
 
 export async function uploadSongCover(songId: string, file: File): Promise<SongItem> {

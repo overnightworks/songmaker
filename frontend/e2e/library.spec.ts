@@ -25,6 +25,7 @@ import {
 	playlistEntryOverflowLabel,
 	PLAYLISTS_PAGE_LABEL,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
+	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_PAGE_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	PLAYING_MARK_LABEL,
@@ -74,7 +75,7 @@ import {
 	LIBRARY_PATH,
 	LIBRARY_URL
 } from './helpers';
-import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
+import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
 // The phone's mini player keeps previous · play · next in one row this tall;
 // the seek timeline and shuffle live in Now Playing (see TransportBarFrame.svelte).
@@ -704,6 +705,60 @@ test(
 					heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 				).toHaveCount(0);
 			});
+		}
+	}
+);
+
+// Archives every album before reporting any failure, so one refusal leaves no
+// later album behind.
+async function archiveEvery(page: Page, albumIds: string[]): Promise<void> {
+	const failures: unknown[] = [];
+	for (const albumId of albumIds) {
+		try {
+			await archiveOwnedAlbum(page.request, albumId);
+		} catch (error) {
+			failures.push(error);
+		}
+	}
+	if (failures.length > 0) {
+		throw new AggregateError(failures, `Archiving ${failures.length} test albums failed`);
+	}
+}
+
+// The browse loads 50 albums, newest first (LIBRARY_ALBUM_PAGE_SIZE); an album
+// chosen in Search from beyond that page still opens under its own heading.
+// Phone only: the desktop Rail is mounted on every page and pages in every
+// album at once (RailLibraryGroup), so no desktop surface lacks the album. The
+// cell starts on a playlist address, which never loads all albums.
+test(
+	'1354_37a: an album found in Search beyond the first browse page opens with its heading',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page, request }) => {
+		const surface = workspace(page);
+		const runTag = `E2E Beyond Page ${Date.now()}`;
+		const targetTitle = `${runTag} target`;
+		const albumIds: string[] = [];
+		await page.goto(HOME_PATH);
+		const headers = await csrfHeaders(page);
+		try {
+			// The target is created first, so the newest-first browse puts it last.
+			for (let index = 0; index <= LIBRARY_ALBUM_PAGE_SIZE; index++) {
+				const title = index === 0 ? targetTitle : `${runTag} filler ${index}`;
+				const response = await page.request.post('/api/albums', { headers, data: { title } });
+				expect(response.ok()).toBe(true);
+				albumIds.push((await response.json()).id);
+			}
+			const playlist = await seedPlaylist(request, readSeededLibrary());
+			await page.goto(`/playlist/${playlist.slug}`);
+			await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
+
+			await (
+				await phoneSearchResult(page, 'Albums', targetTitle, nameStartingWith(targetTitle))
+			).click();
+
+			await expect(surface.getByRole('heading', { name: targetTitle })).toBeVisible();
+		} finally {
+			await archiveEvery(page, albumIds);
 		}
 	}
 );

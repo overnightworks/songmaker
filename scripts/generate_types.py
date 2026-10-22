@@ -75,7 +75,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "LibraryPoolQueueResponse": "LibraryPoolQueue",
     "LibraryPoolTakeResponse": "LibraryPoolTakeItem",
     "LoadedModelDetail": "LoadedModelDetailItem",
-    "LoginAttemptResponse": "LoginAttemptItem",
     "MemoryBundleResponse": "MemoryBundle",
     "MemoryScopeResponse": "MemoryScopeItem",
     "PlaylistAlbumSkipResponse": "PlaylistAlbumSkipItem",
@@ -86,8 +85,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "ProviderStatusResponse": "ProviderStatus",
     "RateResponse": "RateResult",
     "RegistryModelResponse": "RegistryModelItem",
-    "SessionResponse": "SessionItem",
-    "SetupRequiredResponse": "SetupRequired",
     "SharedAlbumResponse": "SharedAlbumPayload",
     "SharedGenerationResponse": "SharedGenerationPayload",
     "SharedPlaylistEntryResponse": "SharedPlaylistEntryPayload",
@@ -327,10 +324,11 @@ def _route_annotations(routers: Iterable[APIRouter]) -> tuple[list[Any], int]:
 
 def _route_routers() -> tuple[APIRouter, ...]:
     from songmaker_cli.api import router as api_router
+    from songmaker_cli.auth_api import sign_in_router
     from songmaker_cli.health_api import router as health_router
     from songmaker_cli.sharing_api import router as sharing_router
 
-    return api_router, health_router, sharing_router
+    return api_router, sign_in_router, health_router, sharing_router
 
 
 def _exported_models() -> tuple[set[type[BaseModel]], int]:

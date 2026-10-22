@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import (
     GET_SONG_ONLY_FOR_OTHER_SONGS,
@@ -52,8 +52,8 @@ def db_factory(tmp_path: Path):
 
 def _seed(session: Session) -> tuple[str, str, str, str, str]:
     """Create owner + non-owner + album + song. Returns ids."""
-    owner = User(id="u1", username="alice", password_hash="x", role="user")
-    stranger = User(id="u2", username="bob", password_hash="x", role="user")
+    owner = User(id="u1", username="alice", role="user")
+    stranger = User(id="u2", username="bob", role="user")
     session.add_all([owner, stranger])
     session.flush()
 
@@ -94,15 +94,6 @@ def test_require_user_id_returns_value(monkeypatch):
 def test_load_user_not_found(db_session: Session):
     with pytest.raises(auth.MCPAuthError):
         auth.load_user(db_session, "nope")
-
-
-def test_load_user_deactivated(db_session: Session):
-    db_session.add(
-        User(id="u3", username="charlie", password_hash="x", role="user", is_active=False),
-    )
-    db_session.commit()
-    with pytest.raises(auth.MCPAuthError):
-        auth.load_user(db_session, "u3")
 
 
 # ── Read tools ────────────────────────────────────────────────────────

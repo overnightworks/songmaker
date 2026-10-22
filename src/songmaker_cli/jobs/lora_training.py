@@ -37,14 +37,10 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.models import aware_timestamp
-from songmaker_cli.db.queries import (
-    count_queued_generation_jobs,
-    get_job,
-    list_active_user_loras,
-    record_audit,
-    unset_if_none,
-    update_user_lora,
-)
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.jobs import count_queued_generation_jobs, get_job
+from songmaker_cli.db.queries.loras import list_active_user_loras, update_user_lora
+from songmaker_cli.db.queries.sentinels import unset_if_none
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
     DispatchOptions,
@@ -1187,7 +1183,7 @@ def _load_lora_training_samples(
     job_id: str,
     lora_id: str,
 ) -> list | None:
-    from songmaker_cli.db.queries import get_user_lora
+    from songmaker_cli.db.queries.loras import get_user_lora
 
     with db_factory() as session:
         lora = get_user_lora(session, lora_id, include_deleted_rows=True)
@@ -1367,7 +1363,7 @@ def _save_lora_model_mode(
     lora_id: str,
     completed_model_mode: str,
 ) -> str | None:
-    from songmaker_cli.db.queries import get_user_lora
+    from songmaker_cli.db.queries.loras import get_user_lora
 
     with db_factory() as session:
         lora = get_user_lora(session, lora_id, include_deleted_rows=True)

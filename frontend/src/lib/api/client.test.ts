@@ -29,24 +29,12 @@ import {
 	fetchHealth,
 	pickGeneration,
 	unpickGeneration,
-	cleanupAlbum,
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
 	updateCowriterSettings,
-	checkSetupRequired,
-	setupAdmin,
-	login,
 	logout,
 	fetchMe,
-	fetchUsers,
-	createUser,
-	updateUser,
-	deactivateUser,
-	fetchSessions,
-	forceLogout,
-	fetchLoginAttempts,
-	changePassword,
 	ApiError
 } from './client';
 
@@ -204,12 +192,6 @@ describe('API client', () => {
 		expect(mockFetch.mock.calls[0][0]).toBe('/api/generations/g1/unpick');
 	});
 
-	it('cleanupAlbum returns deleted count', async () => {
-		mockOk({ deleted: 5 });
-		const result = await cleanupAlbum('a1');
-		expect(result.deleted).toBe(5);
-	});
-
 	it('fetchCapabilities', async () => {
 		mockOk({ generation: true, scoring: true });
 		const result = await fetchCapabilities();
@@ -275,50 +257,19 @@ describe('API client', () => {
 });
 
 describe('Auth API', () => {
-	it('checkSetupRequired', async () => {
-		mockOk({ required: true });
-		const result = await checkSetupRequired();
-		expect(result.required).toBe(true);
-	});
-
-	it('setupAdmin sends POST', async () => {
-		mockOk({ id: 'u1', username: 'admin', role: 'admin' });
-		const result = await setupAdmin('admin', 'password123');
-		expect(result.username).toBe('admin');
+	it('logout posts to the same-origin logout route and returns the identity provider address', async () => {
+		mockOk({ logout_url: 'https://auth.example/logout?hint=1' });
+		const logoutUrl = await logout();
 		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/auth/setup');
+		expect(url).toBe('/auth/logout');
 		expect(init.method).toBe('POST');
-		expect(JSON.parse(init.body)).toEqual({ username: 'admin', password: 'password123' });
-	});
-
-	it('login sends POST', async () => {
-		mockOk({ id: 'u1', username: 'alice', role: 'user' });
-		const result = await login('alice', 'password123');
-		expect(result.username).toBe('alice');
-		expect(mockFetch.mock.calls[0][0]).toBe('/api/auth/login');
-	});
-
-	it('logout sends DELETE', async () => {
-		mockOk({ status: 'ok' });
-		await logout();
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/auth/session');
-		expect(init.method).toBe('DELETE');
+		expect(logoutUrl).toBe('https://auth.example/logout?hint=1');
 	});
 
 	it('fetchMe calls GET /api/auth/me', async () => {
 		mockOk({ id: 'u1', username: 'admin', role: 'admin' });
 		const result = await fetchMe();
 		expect(result.role).toBe('admin');
-	});
-
-	it('changePassword sends PUT', async () => {
-		mockOk({ status: 'ok' });
-		await changePassword('old', 'newpass123');
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/auth/password');
-		expect(init.method).toBe('PUT');
-		expect(JSON.parse(init.body)).toEqual({ current: 'old', new_password: 'newpass123' });
 	});
 });
 
@@ -345,54 +296,6 @@ describe('401 session expiry handler', () => {
 });
 
 describe('Admin API', () => {
-	it('fetchUsers', async () => {
-		mockOk([{ id: 'u1', username: 'admin' }]);
-		const result = await fetchUsers();
-		expect(result).toHaveLength(1);
-	});
-
-	it('createUser sends POST', async () => {
-		mockOk({ id: 'u2', username: 'bob', role: 'user' });
-		const result = await createUser('bob', 'password123', 'user');
-		expect(result.username).toBe('bob');
-		expect(mockFetch.mock.calls[0][1].method).toBe('POST');
-	});
-
-	it('updateUser sends PUT', async () => {
-		mockOk({ id: 'u1', role: 'admin' });
-		await updateUser('u1', { role: 'admin' });
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/admin/users/u1');
-		expect(init.method).toBe('PUT');
-	});
-
-	it('deactivateUser sends DELETE', async () => {
-		mockOk({ status: 'ok' });
-		await deactivateUser('u1');
-		expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
-	});
-
-	it('fetchSessions', async () => {
-		mockOk({ items: [{ id: 's1', username: 'admin' }], total: 1, offset: 0, limit: 100 });
-		const result = await fetchSessions();
-		expect(result.items).toHaveLength(1);
-	});
-
-	it('forceLogout sends DELETE', async () => {
-		mockOk({ status: 'ok' });
-		await forceLogout('s1');
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/admin/sessions/s1');
-		expect(init.method).toBe('DELETE');
-	});
-
-	it('fetchLoginAttempts', async () => {
-		mockOk({ items: [{ id: 'a1', success: false }], total: 1, offset: 0, limit: 50 });
-		const result = await fetchLoginAttempts(0, 50);
-		expect(result.items).toHaveLength(1);
-		expect(mockFetch.mock.calls[0][0]).toBe('/api/admin/login-attempts?offset=0&limit=50');
-	});
-
 	it('uploadAlbumCover posts the file as multipart', async () => {
 		mockOk({
 			id: 'a1',

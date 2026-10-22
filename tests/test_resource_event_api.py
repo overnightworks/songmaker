@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis, make_test_app, web_client
+from conftest import TEST_SECRET, make_fake_redis, make_test_app, seed_user, web_client
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event as sqlalchemy_event
@@ -33,11 +33,10 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_STREAM_PATH,
     ResourceEventKind,
 )
-from songmaker_cli.db.models import Job, ResourceEvent, ResourceEventCursor, User
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.models import Job, ResourceEvent, ResourceEventCursor, User, UserSession
+from songmaker_cli.db.queries.auth import create_session
+from songmaker_cli.db.queries.resource_events import (
     create_generation_created_event,
-    create_session,
-    create_user,
     list_resource_events_after,
 )
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
@@ -46,9 +45,9 @@ from songmaker_cli.settings import get_settings
 
 
 def _seed_stream_users(session) -> None:
-    create_user(session, "alice", "hash", role="user")
-    create_user(session, "bob", "hash", role="user")
-    create_user(session, "admin", "hash", role="admin")
+    seed_user(session, "alice", role="user")
+    seed_user(session, "bob", role="user")
+    seed_user(session, "admin", role="admin")
 
 
 def _authenticated_clients(tmp_path: Path):
@@ -700,18 +699,18 @@ def test_auth_db_connection_is_returned_before_body_iteration(
     assert observed == [0]
 
 
-def test_each_reconnect_reauthenticates_disabled_account(
+def test_each_reconnect_reauthenticates_an_ended_session(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """defect:#1590: reconnect reads account revocation from the database."""
+    """defect:#1590: reconnect reads session revocation from the database."""
     clients, factory, users = _authenticated_clients(tmp_path)
     _install_finite_route_stream(monkeypatch)
     assert clients["alice"].get("/api/resource-events/stream").status_code == 200
     with factory() as session:
-        session.get(User, users["alice"]).is_active = False
+        session.query(UserSession).filter_by(user_id=users["alice"]).delete()
         session.commit()
-    assert clients["alice"].get("/api/resource-events/stream").status_code == 403
+    assert clients["alice"].get("/api/resource-events/stream").status_code == 401
 
 
 def test_authenticated_stream_isolates_two_users_and_admin(

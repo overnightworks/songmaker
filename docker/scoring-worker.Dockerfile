@@ -22,8 +22,8 @@ RUN uv sync --frozen --no-dev --no-install-project \
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \
     MODEL_WARMUP_TIMEOUT_SECONDS=${MODEL_WARMUP_TIMEOUT_SECONDS}
-# 2026-09-05: hf-xet 1.2.0 stalled after downloading most of Whisper's 3 GB
-# checkpoint; use Hugging Face's HTTP path for these bounded build-time downloads.
+# An hf-xet transfer once stalled after downloading most of Whisper's 3 GB checkpoint;
+# use Hugging Face's HTTP path for these bounded build-time downloads.
 RUN --mount=type=secret,id=hf_token,env=HF_TOKEN \
     HF_HUB_DISABLE_XET=1 timeout --verbose "${MODEL_WARMUP_TIMEOUT_SECONDS}s" \
     uv run --no-sync --frozen --no-build python -c \

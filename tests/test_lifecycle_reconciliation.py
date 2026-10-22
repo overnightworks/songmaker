@@ -19,7 +19,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import AuditLog, Job, User, UserLora
-from songmaker_cli.db.queries import get_user_lora
+from songmaker_cli.db.queries.loras import get_user_lora
 from songmaker_cli.lifecycle import _run_stale_job_reaper_tick, reconcile_crashed_loras
 
 
@@ -41,7 +41,7 @@ def _create_stuck_lora(
 ) -> None:
     with ctx.db() as session:
         if session.query(User).filter_by(id="u1").first() is None:
-            session.add(User(id="u1", username="u1", password_hash="x"))
+            session.add(User(id="u1", username="u1"))
         job_id = None
         if job_status is not None:
             session.add(
@@ -220,7 +220,7 @@ def test_reaper_tick_reconciles_when_worker_process_died_without_terminalizing_t
         seconds=STALE_JOB_THRESHOLDS[JobType.LORA_TRAINING].heartbeat_seconds + 60,
     )
     with ctx.db() as session:
-        session.add(User(id="u1", username="u1", password_hash="x"))
+        session.add(User(id="u1", username="u1"))
         session.add(
             Job(
                 id="job-L6", type=JobType.LORA_TRAINING, status=JobStatus.RUNNING,

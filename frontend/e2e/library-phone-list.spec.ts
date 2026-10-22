@@ -30,9 +30,9 @@ import {
 } from './helpers';
 import {
 	archivePhoneLibrary,
-	BASE_URL,
-	createAccount,
+	seedAccount,
 	seedPhoneLibrary,
+	signedInApi,
 	type PhoneLibraryFixture
 } from './seed';
 
@@ -76,15 +76,14 @@ async function expectRows(page: Page): Promise<void> {
 	);
 }
 
-test.beforeEach(async ({ page, request, playwright }) => {
+test.beforeEach(async ({ page }) => {
 	test.setTimeout(SUCCESSOR_TAKES_TEST_TIMEOUT_MS);
 	guard = new FlowGuard(page);
-	const credentials = { username: `e2e-phone-${randomUUID()}`, password: randomUUID() };
-	await createAccount(request, credentials.username, credentials.password);
-	account = await playwright.request.newContext({ baseURL: BASE_URL });
-	fixture = await seedPhoneLibrary(account, credentials);
+	const seeded = await seedAccount(`e2e-phone-${randomUUID()}`);
+	account = await signedInApi(seeded);
+	fixture = await seedPhoneLibrary(account);
 	await page.context().clearCookies();
-	await page.context().addCookies((await account.storageState()).cookies);
+	await page.context().addCookies(seeded.cookies);
 	await observePlayingAudio(page);
 });
 

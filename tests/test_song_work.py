@@ -28,7 +28,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.db.queries import record_song_edit, record_song_played
+from songmaker_cli.db.queries.activity import record_song_edit, record_song_played
 
 OWNER_ID = "u-owner"
 ADMIN_ID = "u-admin"
@@ -69,8 +69,8 @@ class Work(NamedTuple):
 
 def _seed(session: Session) -> None:
     session.add_all([
-        User(id=OWNER_ID, username="leonardo", password_hash="unused", role="user"),
-        User(id=ADMIN_ID, username="felix", password_hash="unused", role="admin"),
+        User(id=OWNER_ID, username="leonardo", role="user"),
+        User(id=ADMIN_ID, username="felix", role="admin"),
     ])
     session.flush()
     session.add(Album(id="alb", title="Album", artist="Leonardo", created_by=OWNER_ID))
@@ -235,7 +235,7 @@ def test_a_rejected_listen_records_no_work(
 
 def test_a_person_who_cannot_open_the_song_records_no_work(tmp_path: Path, db) -> None:
     with db() as session:
-        session.add(User(id="u-stranger", username="bob", password_hash="unused", role="user"))
+        session.add(User(id="u-stranger", username="bob", role="user"))
         session.commit()
     client = _client(tmp_path, db, user_id="u-stranger", role="user")
 

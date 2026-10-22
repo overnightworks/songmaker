@@ -307,7 +307,7 @@ everything under it (`SongDetailView` included), did not; measuring the cost
 listener, so swapping between any of the seven addresses neither rebuilds the
 workspace nor re-runs its bootstrap, and it starts the stream only for a
 signed-in browser on a library route — the reach the workspace page had when
-it owned this; Settings, login, setup and the share pages leave it off. The
+it owned this; Settings, login and the share pages leave it off. The
 workspace itself gates on `resourceSync.ready` rather than on a promise
 resolved once per mount, so a mount that finds the stream already live
 (returning to the library after leaving it) shows the library on its first
@@ -616,7 +616,7 @@ The idle transport Play keeps its own path, since it must keep the listener's
 shuffle setting. Navigation reads playback only through `idlePlayTarget()`
 ("what would Play start"), never as a queue.
 
-**The queue names its next take once.** `nextQueueTake(ctx, current)` in
+**The queue names its next take once.** `adjacentQueueTake(ctx, current)` in
 `stores/player.ts` is the one decider of which take follows the current one:
 Next plays it, the transport's Next button (`canPlayNextSong`) and Now
 Playing's Up next (`buildQueueViewModel`) show it, and every queue load and
@@ -639,7 +639,7 @@ written on a take change, on pause, when the page hides, and about every 5 s
 of playback in between; the last save is kept in memory, so that rhythm reads
 no storage per tick. A take is only ever saved under the user it started
 under, a pause saves the element's own clock, and a take that ended leaves the
-queue's next take (`nextQueueTake`) at 0; at a library window's end the ended
+queue's next take (`adjacentQueueTake`) at 0; at a library window's end the ended
 take itself stays saved at 0, since its next window starts from it, and when
 nothing follows the current record is retired without suppressing later saves
 in this tab or other signed-in tabs.
@@ -734,13 +734,14 @@ regenerate `types.ts` and run the check.
 the `rateLimited` reaction that `routes/+layout.svelte` installs through
 `installRefusalReactions`, and `stores/rateLimitNotice.ts` decides whether the
 person hears of it (the generic throttle toast, once on screen, except on the
-sign-in, session-check, setup and cover-suggestion paths that show their own;
+sign-in, session-check and cover-suggestion paths that show their own;
 creating an album still gets both notices until #915). The layout installs while
 its component initialises, before the first request, so a request sent any
-earlier means moving the installation earlier too. A 401 outside the sign-in
-forms and the public share reads (`/shared/*`, which authenticate nobody) goes
-the same way, to the awaited `sessionLost` reaction, and `stores/auth.ts`
-decides that the session ended (#925).
+earlier means moving the installation earlier too. A 401 outside the public share reads (`/shared/*`, which authenticate
+nobody) goes the same way, to the awaited `sessionLost` reaction, and
+`stores/auth.ts` decides that the session ended (#925). A lost session on a
+non-public page navigates the whole window to `/login/oidc?next=…`; the signed-out
+page `/login` starts nothing by itself and the public paths never redirect.
 
 Outside its `*.test.ts` files, `lib/api` imports only itself, packages,
 `$lib/constants`, `$lib/routes/` and `$lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
@@ -938,7 +939,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Layer | Responsibility | Key files |
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
-| Auth | Session dependencies bound to the database, login/setup/logout, password change, brute-force protection | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
+| Auth | Sign-in through Keycloak (start, callback, logout), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
 | API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings and capabilities, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
@@ -952,7 +953,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Co-writer | Binds the musician's session and tools to the provider route the library then runs; the judge is configured separately | `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | MCP | Claude's stdio tool server plus shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/tools.py` |
-| CLI | Thin HTTP client to the same API | `main.py`, `cli_client.py` |
+| CLI | Starts the server | `main.py` |
 
 ### Agent routes
 
@@ -1035,69 +1036,67 @@ events.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.14.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.20.1`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
-needs `git`. The import package is still `webauth`, so nothing in
-`songmaker_cli` changed when the source moved. Its own tests moved with it.
+needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
 Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
-`passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity
-decision, `ports.py` names the stores, password hasher, rate backend, session
-liveness the host supplies, `policies.py` the four
-request policies it supplies, `liveness.py` the expiry-column and idle-window
-session policies,
-`rate_limit.py` the sliding-window counter, `middleware/` the rate-limit, CSRF,
-body-size and security-header middlewares, `dependencies.py` the
-`current_user_dependency` factory that yields the account, admin, and
-verified-session-id dependencies, and `login.py` the transaction-free parts of
-signing in and out (cookie issuing and clearing, the attempt limits, the
-constant-time credential check). The login route with its advisory lock stays
-in the application. `users.py` provides never-committing account-administration
-helpers. Songmaker's `admin_api.py` uses `UserManagement` for account creation,
-role changes, admin password resets, deactivation, session revocation, and the
-last-admin guard around its own hard-delete cascade. Reactivation remains a
-host-owned store update and audit event. The setup route and environment
-bootstrap both call `complete_first_run_setup`; self-service password changes
-call `UserManagement.change_own_password`. The application retains the failed
-password-attempt budget and opens a fresh session with new cookies after a
-successful password change.
+`cookies.py`/`proxies.py` own the cookie crypto and the client-identity
+decision, `ports.py` names the stores, rate backend and audit sink the host
+supplies, `policies.py` the four request policies it supplies, `oidc.py` and
+`oidc_login.py` the OpenID Connect relying party and the transaction-free parts
+of signing in and out (`start_login`, `finish_login`, `open_session`,
+`log_out`), `rate_limit.py` the sliding-window counter, `middleware/` the
+rate-limit, CSRF, body-size and security-header middlewares, and
+`dependencies.py` the `current_user_dependency` factory. The routes and the
+transaction around them stay in the application.
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
-session secret, trusted proxies, password hasher, rate backend, session liveness
-policy, cookie and header names, allowed hosts, idle
-session age, and login rate/lockout values arrive
-as one frozen `WebAuthConfig`, built by
+session secret, trusted proxies, rate backend, session lifetime (idle and
+absolute), cookie and header names and the Origin allowlist arrive as one frozen
+`WebAuthConfig`, built by
 `songmaker_cli/app_context.py::build_web_auth_config(ctx, settings)` and
 installed on the application in `server.create_app`. Middleware and endpoints
 read it through `webauth.config.web_auth_config(request)`; an application that
-never installed one fails loudly at its first auth-protected request. Songmaker
-binds `Argon2idPasswordHasher`, `RedisRateLimitBackend`, `ExpiryColumnLiveness`
-(with the configured absolute age) to those ports. Redis remains the rate-limit
-backend; session validity comes from the DB on every authenticated request.
-`session_cleanup_loop` periodically deletes expired DB sessions without Redis.
-Songmaker's own data — users, sessions, login attempts, audit entries — reaches
-the library through the `webauth.ports` protocols, implemented in
-`songmaker_cli/auth_stores.py` over `db/queries/auth.py`. No store commits: the
-endpoint owns its business transaction. `auth_dependencies.get_current_user`
-owns a separate short transaction that commits session renewal and identity
-audit before the endpoint runs. Manual stream callers commit authentication
-and close the connection before streaming. `DatabaseSessionRecordStore.touch(now=)`
-derives `expires_at` from that timestamp plus the installed configuration's
-`session_max_age_seconds` and returns whether exactly one existing row was
-updated; a missing row is refused, never recreated.
-`auth_dependencies.user_management` constructs one management instance per request from these stores and the installed config.
+never installed one fails loudly at its first auth-protected request. Redis
+remains the rate-limit backend; session validity comes from the DB on every
+authenticated request. `session_cleanup_loop` periodically deletes expired DB
+sessions without Redis.
+
+Sign-in is songmaker's own composition of that library, in `auth_api.py` and
+`oidc_client.py`. `oidc_client.build_oidc_sign_in(settings)` builds the relying
+party at the Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
+issuer, client id from `OIDC_CLIENT_ID`, client secret read from the file
+`OIDC_CLIENT_SECRET_FILE`, redirect addresses from `PUBLIC_BASE_URL`) and the
+`AdmissionConfig` (the bound issuer and the groups `/apps/songmaker` and
+`/apps/songmaker/admin`). It is built once in `server.create_app`, so the workers
+and the migrate step, which never create the web app, start without the realm's
+settings. `GET /login/oidc` starts the login; `GET /auth/callback` runs
+`finish_login` (admission, account creation or role change) and `open_session`
+under `DatabaseWriteLock` in one transaction and commits before
+`issue_session_cookies`; `POST /auth/logout` runs `log_out`. A refusal at the
+callback is answered with the SPA shell and 403 (the path is the marker the SPA
+reads), except a non-member, who is redirected to `/no-access`.
+
+Songmaker's own data — accounts, sessions, audit entries — reaches the library
+through the `webauth.ports` protocols, implemented in
+`songmaker_cli/auth_stores.py` over `db/queries/auth.py`:
+`DatabaseSubjectUserStore` (an account is keyed by the Keycloak subject;
+`create_for_subject`, exact `get`, `set_role`), `DatabaseSessionRecordStore`
+(`create(user_id, now=, expires_at=, refresh_token=)`, `touch(expires_at=)` and
+`replace_refresh_token`, which each return whether exactly one existing row was
+updated; a missing row is refused, never recreated; `load` takes no row lock)
+and `DatabaseAuditSink`, which maps the library's account events (creation, role
+change) to audit rows without a person. No store commits: the endpoint owns its
+business transaction. `auth_dependencies.get_current_user` owns a separate short
+transaction that commits session renewal before the endpoint runs. Manual stream
+callers commit authentication and close the connection before streaming.
 `DatabaseWriteLock` commits preceding auth work before acquiring advisory lock
 9 (SQLite: `BEGIN IMMEDIATE`); endpoints must have no business changes before
-entry. Nested helpers share that lock and transaction. Exiting does not commit
+entry. Any further hold in the same transaction, nested or sequential, shares that
+lock; after a commit or rollback the next hold locks again. Exiting does not commit
 or release the database lock: the endpoint commits on success, and the request's
-DB dependency rolls back on failure. The environment bootstrap builds its
-configuration through `build_web_auth_config` and uses the same stores and
-write lock. `DatabaseAuditSink` maps session-identity and account-administration
-events to songmaker's audit rows, with one audit row per changed field in a
-multi-field update. First-admin creation and self-service password changes
-produce no audit rows. The
-[admin security contract](security.md#admin-session-management) owns the four
-deliberate behavior changes and the session-reference boundary.
+DB dependency rolls back on failure.
 
 The same seam carries the four request policies in `webauth.policies`. The
 library owns what a rate limit, a CSRF check, a body cap, and a response header
@@ -1109,7 +1108,9 @@ rules. `server.create_app` installs them with one
 `install_web_auth_middleware()` call; no middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
 SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → CsrfOrigin →
-CsrfToken → AccessLog → Router. Library refusals therefore carry security
+CsrfToken → TrustedHost → AccessLog → Router. The Host check is Starlette's
+`TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
+library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
 
 ### The provider library (`agent_providers`, external)
@@ -1275,7 +1276,7 @@ Persistence sits beneath the HTTP contract: `db/` never imports `api_models/`, d
 ## Data Model
 
 ```
-User (username, role: admin|user, Argon2id hash)
+User (id = Keycloak subject, username, role: admin|user)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
   │     ├── AlbumCoverSuggestion (job, private PNG path, created_at)
   │     └── Song (title, slug — unique per album, track_number, share_slug?, is_shared)
@@ -1291,7 +1292,7 @@ User (username, role: admin|user, Argon2id hash)
   ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?)
   └── AuditLog (action, resource_type, resource_id, detail)
 
-Also: UserSession, LoginAttempt, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
+Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
       GenerationPreset, AvailableModel, RateLimitSetting,
       Conversation / ConversationSummary / ChatMessage (global co-writer thread),
       CowriterSongMemory, CowriterAlbumMemory
@@ -1488,8 +1489,11 @@ close the stream.
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
-| * | `/api/admin/*` | admin | User CRUD, sessions, login attempts, ACE-Step control |
-| * | `/api/auth/*` | public | Login, logout, setup, password change |
+| * | `/api/admin/*` | admin | ACE-Step control |
+| GET | `/api/auth/me` | user | The signed-in account |
+| GET | `/login/oidc` | public | Start the Keycloak sign-in (303); `next` is a path of this app |
+| GET | `/auth/callback` | public | Finish the sign-in: 303 to `next` or `/`, to `/no-access` for a non-member, else 403 with the SPA shell |
+| POST | `/auth/logout` | public | End the session and answer `{logout_url}` |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
 | GET | `/metrics` | public | Job stats, HTTP counters, VRAM usage (Prometheus) |
 | POST/DELETE | `/api/albums/{id}/share` | user | Enable/revoke album sharing |
@@ -1886,7 +1890,7 @@ its current usage via heartbeat. The music-worker has no GPU access at all.
 | Worker split | Separate arq queues per job type | Independent scaling, device config per worker |
 | Scoring subprocess | Long-lived child process, killed on timeout | Real cleanup via SIGKILL, GPU memory freed immediately |
 | Scoring isolation | try/except per scorer | One crash doesn't block others |
-| Session auth | Signed cookies + DB sessions | Revocable, HttpOnly; DB expiry, absolute age and active account checked on every authenticated request. See [session lifetime](security.md#authentication) |
+| Session auth | Keycloak sign-in, then signed cookies + DB sessions | Revocable, HttpOnly; DB idle expiry and absolute age checked on every authenticated request; Keycloak is consulted at sign-in and sign-out only. See [Authentication](security.md#authentication) |
 | Redis required | Fail-fast at startup, fail-closed rate limiting | Server won't start without Redis; if Redis drops mid-operation, IP rate limiting returns 503 |
 | Album ownership | `created_by` on Album | Songs inherit access; sharing via secret UUID slug |
 | PostgreSQL | Connection pooling, concurrent writes | Required alongside Redis |

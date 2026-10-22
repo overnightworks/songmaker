@@ -11,6 +11,7 @@ import {
 	pendingTakeRoutePath,
 	playlistRoutePath,
 	readLegacySongQuery,
+	sharePagePath,
 	songAlbumRoutePath,
 	songRoutePath,
 	standsOnHomePage,
@@ -24,7 +25,11 @@ describe('library route addresses', () => {
 		['album', () => albumRoutePath('an field'), '/album/an%20field'],
 		['song', () => songRoutePath('an field', 'tide / turn'), '/album/an%20field/tide%20%2F%20turn'],
 		['take', () => takeRoutePath('anfield', 'tide', 3), '/album/anfield/tide/take/3'],
-		['playlist', () => playlistRoutePath('friday night'), '/playlist/friday%20night']
+		['playlist', () => playlistRoutePath('friday night'), '/playlist/friday%20night'],
+		['shared album', () => sharePagePath('album', 'abc'), '/share/abc'],
+		['shared song', () => sharePagePath('song', 'abc'), '/share/song/abc'],
+		['shared playlist', () => sharePagePath('playlist', 'abc'), '/share/playlist/abc'],
+		['shared take', () => sharePagePath('gen', 'a b'), '/share/gen/a%20b']
 	])('builds a %s route', (_name, build, path) => {
 		expect(build()).toBe(path);
 	});

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	EDITOR_GENERATE_CANCEL_LABEL,
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_SELECT_MODEL_TITLE,
@@ -168,7 +167,6 @@ describe('GenerateButton', () => {
 	});
 
 	it.each([
-		['GPU offline', EDITOR_GPU_OFFLINE_TITLE],
 		['no active models', EDITOR_NO_MODELS_WARNING],
 		['no model selected', EDITOR_SELECT_MODEL_TITLE],
 		['missing lyrics or style prompt', EDITOR_MISSING_CONTENT_TITLE]
@@ -187,12 +185,12 @@ describe('GenerateButton', () => {
 
 	it('carries the disabled reason inside the one outline button in the slim phone bar', async () => {
 		await render(
-			{ kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE },
+			{ kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
 			{ reasonInside: true }
 		);
-		const button = getByRoleButton(document.body, `Generate — ${EDITOR_GPU_OFFLINE_TITLE}`);
+		const button = getByRoleButton(document.body, `Generate — ${EDITOR_MISSING_CONTENT_TITLE}`);
 		expect(button.disabled).toBe(true);
-		expect(button.textContent?.trim()).toBe(`ⓘ ${EDITOR_GPU_OFFLINE_TITLE}`);
+		expect(button.textContent?.trim()).toBe(`ⓘ ${EDITOR_MISSING_CONTENT_TITLE}`);
 		expect(document.body.textContent?.trim()).toBe(button.textContent?.trim());
 	});
 

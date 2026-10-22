@@ -10,7 +10,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 from webauth.proxies import resolve_client_ip
 from webauth.rate_limit import RedisRateLimitBackend
 
@@ -42,6 +42,7 @@ from songmaker_cli.api_models.songs import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import (
     AudioFileNotFoundError,
+    AudioPathRejectedError,
     canonical_audio_path,
     require_canonical_audio_filename,
     require_existing_audio_path,
@@ -71,16 +72,16 @@ from songmaker_cli.covers import (
     song_cover_file_exists,
 )
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song
-from songmaker_cli.db.queries import (
-    get_album_by_slug,
-    get_generation_by_slug,
-    get_playlist_by_slug,
-    get_song_by_slug,
+from songmaker_cli.db.queries.albums import get_album_by_slug
+from songmaker_cli.db.queries.generations import get_generation_by_slug
+from songmaker_cli.db.queries.playlists import get_playlist_by_slug
+from songmaker_cli.db.queries.sharing import (
+    is_playable_take,
     shared_album_take_stored_path,
     shared_playlist_take_stored_path,
     shared_song_take_stored_path,
 )
-from songmaker_cli.db.queries.sharing import is_playable_take
+from songmaker_cli.db.queries.songs import get_song_by_slug
 from songmaker_cli.queue_streams import (
     QueueStreamManifest,
     build_queue_stream_snapshot,
@@ -192,7 +193,7 @@ def _shared_audio_url_for_take(route: str, generation: Generation) -> str | None
         return None
     try:
         require_canonical_audio_filename(generation.mp3_path)
-    except HTTPException:
+    except AudioPathRejectedError:
         return None
     return f"{route}/{generation.id}{SHARED_AUDIO_SUFFIX}"
 

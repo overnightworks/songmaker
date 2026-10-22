@@ -1,12 +1,16 @@
-// Auth-check failure copy (issue #117). Kept separate from lib/constants.ts,
-// which another lane owns for the same landing window.
+import { APP_NAME } from '$lib/constants';
 
-export const AUTH_SESSION_EXPIRED_MESSAGE = 'Your session has expired.';
-// The server's 401 detail for a cookie whose session no longer exists
-// (`webauth.dependencies.SESSION_EXPIRED_DETAIL`); a request without a session
-// cookie is refused with a different detail (#1215).
-export const AUTH_SESSION_EXPIRED_DETAIL = 'Session expired';
-export const AUTH_ACCOUNT_DISABLED_MESSAGE = 'Your account has been disabled.';
+// Auth copy kept apart from lib/constants.ts (issue #117).
+
+// The sign-in pages (docs/design/sign-in.html, boards 2-4).
+export const SIGNED_OUT_HEADING = 'You are logged out.';
+export const SIGN_IN_ACTION_LABEL = 'Log in';
+export const NO_ACCESS_HEADING = 'No access';
+export const NO_ACCESS_MESSAGE = `You are signed in, but this account has no access to ${APP_NAME}.`;
+export const NO_ACCESS_BACK_LABEL = 'Back';
+export const SIGN_IN_FAILED_HEADING = 'Login failed';
+export const SIGN_IN_FAILED_MESSAGE = 'Sign-in did not work. Please try again.';
+export const SIGN_IN_RETRY_LABEL = 'Try again';
 
 export const AUTH_CHECK_RATE_LIMITED_ERROR =
 	'Too many requests. Retry in a moment to check your session.';

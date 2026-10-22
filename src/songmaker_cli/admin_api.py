@@ -1,4 +1,4 @@
-"""Admin API endpoints — user management, sessions, login attempts."""
+"""Admin API endpoints — voices, workers, model registry, generation retention."""
 
 from __future__ import annotations
 
@@ -8,18 +8,10 @@ from typing import Final
 
 import httpx
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
-from webauth.ports import UnknownUserError, UsernameTakenError
-from webauth.session_ending import end_user_sessions
-from webauth.users import (
-    LastAdminError,
-    SelfDeactivationError,
-    UnknownSessionError,
-    UserManagement,
-)
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.acestep_state import (
     read_download_in_progress,
@@ -27,29 +19,18 @@ from songmaker_cli.acestep_state import (
     read_worker_state,
     worker_is_online,
 )
-from songmaker_cli.api_helpers import (
-    AdminPagination,
-    cleanup_generation_files,
-    page_has_more,
-)
 from songmaker_cli.api_models import (
     AdminUserLoraResponse,
-    CreateUserRequest,
     EvictModelOnWorkerRequest,
     GenerationRetentionReportResponse,
     JobResponse,
     LoadModelOnWorkerRequest,
-    LoginAttemptResponse,
     ModelAvailability,
-    PaginatedResponse,
     PinModelOnWorkerRequest,
     RegistryModelResponse,
     RegistryResponse,
-    SessionResponse,
     StatusResponse,
     UnpinModelOnWorkerRequest,
-    UpdateUserRequest,
-    UserResponse,
     WorkerEphemeralState,
     WorkerIdentity,
     WorkerInfo,
@@ -58,59 +39,28 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool_dep
 from songmaker_cli.auth_dependencies import (
-    _audit_sink,
-    get_verified_session_id,
     require_admin,
-    user_management,
 )
-from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.constants import (
+    INTERNAL_TOKEN_HEADER,
     MODEL_CONFIG_PATHS,
     AuditAction,
     JobFunction,
     JobStatus,
     ResourceType,
 )
-from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
-from songmaker_cli.covers import (
-    remove_album_cover_files,
-    remove_playlist_cover_files,
-    remove_song_cover_files,
-)
-from songmaker_cli.db.models import Album
-from songmaker_cli.db.queries import (
-    count_active_sessions,
-    count_login_attempts,
-    get_user,
-    get_worker_identity,
-    hard_delete_user,
-    list_active_sessions,
-    list_login_attempts,
-    list_song_ids_for_owner,
-    list_user_loras_for_admin,
-    list_users,
-    list_worker_identities,
+from songmaker_cli.db.queries.auth import (
     record_audit,
 )
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+from songmaker_cli.db.queries.loras import list_user_loras_for_admin
+from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
 
-USER_NOT_FOUND_DETAIL: Final = "User not found"
-LAST_ADMIN_DETAIL: Final = "Cannot remove the last active admin"
-SELF_DEACTIVATION_DETAIL: Final = "Cannot deactivate your own account"
 JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-@router.get("/users")
-def list_users_endpoint(
-    db: Session = Depends(get_db_session),
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> list[UserResponse]:
-    return [UserResponse.from_orm(u) for u in list_users(db)]
 
 
 @router.get("/voices")
@@ -122,203 +72,6 @@ def list_voices_endpoint(
         AdminUserLoraResponse.from_orm(lora, owner_username)
         for lora, owner_username in list_user_loras_for_admin(db)
     ]
-
-
-@router.post(
-    "/users",
-    responses={409: {"description": "User already exists"}},
-)
-def create_user_endpoint(
-    req: CreateUserRequest,
-    db: Session = Depends(get_db_session),
-    _admin: AuthenticatedUser = Depends(require_admin),
-    management: UserManagement = Depends(user_management),
-) -> UserResponse:
-    try:
-        user = management.create_user(_admin, req.username, req.password, req.role)
-    except UsernameTakenError as error:
-        raise HTTPException(409, "Username already exists") from error
-    db.commit()
-    return UserResponse.from_orm(user)
-
-
-@router.put(
-    "/users/{user_id}",
-    responses={
-        400: {"description": "User update is invalid"},
-        404: {"description": "User does not exist"},
-    },
-)
-def update_user_endpoint(
-    user_id: str,
-    req: UpdateUserRequest,
-    db: Session = Depends(get_db_session),
-    admin: AuthenticatedUser = Depends(require_admin),
-    management: UserManagement = Depends(user_management),
-    audit: DatabaseAuditSink = Depends(_audit_sink),
-) -> UserResponse:
-    try:
-        with management.lock.hold():
-            user = management.users.get(user_id)
-            if user is None:
-                raise UnknownUserError("Account does not exist")
-            if req.is_active is False:
-                management.deactivate_user(admin, user_id)
-            if req.role is not None:
-                management.change_role(admin, user_id, req.role)
-            if req.is_active is True:
-                management.users.update(user_id, is_active=True)
-                audit.user_updated(admin.id, user_id, "active=True")
-            if req.password is not None:
-                management.set_password(admin, user_id, req.password)
-            if req.role is None and req.is_active is None and req.password is None:
-                audit.user_updated(admin.id, user_id, "")
-    except UnknownUserError as error:
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error
-    except LastAdminError as error:
-        raise HTTPException(400, LAST_ADMIN_DETAIL) from error
-    except SelfDeactivationError as error:
-        raise HTTPException(400, SELF_DEACTIVATION_DETAIL) from error
-    db.commit()
-    return UserResponse.from_orm(user)
-
-
-@router.delete(
-    "/users/{user_id}",
-    responses={
-        400: {"description": "User cannot be deactivated"},
-        404: {"description": "User does not exist"},
-    },
-)
-def deactivate_user_endpoint(
-    user_id: str,
-    db: Session = Depends(get_db_session),
-    admin: AuthenticatedUser = Depends(require_admin),
-    management: UserManagement = Depends(user_management),
-) -> StatusResponse:
-    try:
-        management.deactivate_user(admin, user_id)
-    except UnknownUserError as error:
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error
-    except LastAdminError as error:
-        raise HTTPException(400, LAST_ADMIN_DETAIL) from error
-    except SelfDeactivationError as error:
-        raise HTTPException(400, SELF_DEACTIVATION_DETAIL) from error
-    db.commit()
-    return StatusResponse(status="ok")
-
-
-@router.delete(
-    "/users/{user_id}/permanent",
-    responses={
-        400: {"description": "User cannot be permanently deleted"},
-        404: {"description": "User does not exist"},
-    },
-)
-def hard_delete_user_endpoint(
-    user_id: str,
-    request: Request,
-    db: Session = Depends(get_db_session),
-    admin: AuthenticatedUser = Depends(require_admin),
-    ctx: AppContext = Depends(get_app_context),
-    management: UserManagement = Depends(user_management),
-) -> StatusResponse:
-    try:
-        with management.lock.hold():
-            user = get_user(db, user_id)
-            if not user:
-                raise HTTPException(404, USER_NOT_FOUND_DETAIL)
-
-            if user_id == admin.id:
-                raise HTTPException(400, "Cannot delete your own account")
-
-            management.ensure_not_last_admin(user_id)
-
-            song_ids = list_song_ids_for_owner(db, user_id)
-            album_count = (
-                db.query(Album)
-                .execution_options(include_deleted=True)
-                .filter_by(created_by=user_id)
-                .count()
-            )
-            record_audit(
-                db, admin.id, AuditAction.HARD_DELETE, ResourceType.USER, user_id,
-                f"username={user.username}, albums={album_count}, songs={len(song_ids)}",
-            )
-
-            end_user_sessions(management.sessions, user_id)
-            paths, album_ids, playlist_ids = hard_delete_user(db, user_id)
-    except UnknownUserError as error:
-        raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error
-    except LastAdminError as error:
-        raise HTTPException(400, LAST_ADMIN_DETAIL) from error
-    db.commit()
-
-    cleanup_generation_files(ctx.audio_dir, paths)
-    for album_id in album_ids:
-        remove_album_cover_files(ctx.audio_dir, album_id)
-        remove_album_cover_suggestion_files(ctx.audio_dir, album_id)
-    for playlist_id in playlist_ids:
-        remove_playlist_cover_files(ctx.audio_dir, playlist_id)
-    for song_id in song_ids:
-        remove_song_cover_files(ctx.audio_dir, song_id)
-    user_dir = ctx.audio_dir / user_id
-    if user_dir.is_dir() and not any(user_dir.iterdir()):
-        user_dir.rmdir()
-        log.info("Removed empty user audio directory: %s", user_dir)
-
-    return StatusResponse(status="ok")
-
-
-@router.get("/login-attempts")
-def login_attempts_endpoint(
-    page: AdminPagination,
-    db: Session = Depends(get_db_session),
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> PaginatedResponse[LoginAttemptResponse]:
-    total = count_login_attempts(db)
-    attempts = list_login_attempts(db, offset=page.offset, limit=page.limit)
-    return PaginatedResponse(
-        items=[LoginAttemptResponse.from_orm(a) for a in attempts],
-        total=total, offset=page.offset, limit=page.limit,
-        has_more=page_has_more(offset=page.offset, fetched=len(attempts), total=total),
-    )
-
-
-@router.get("/sessions")
-def sessions_endpoint(
-    page: AdminPagination,
-    db: Session = Depends(get_db_session),
-    _admin: AuthenticatedUser = Depends(require_admin),
-    current_session_id: str = Depends(get_verified_session_id),
-) -> PaginatedResponse[SessionResponse]:
-    total = count_active_sessions(db)
-    sessions = list_active_sessions(db, offset=page.offset, limit=page.limit)
-    return PaginatedResponse(
-        items=[
-            SessionResponse.from_orm(s, is_current=s.id == current_session_id) for s in sessions
-        ],
-        total=total, offset=page.offset, limit=page.limit,
-        has_more=page_has_more(offset=page.offset, fetched=len(sessions), total=total),
-    )
-
-
-@router.delete(
-    "/sessions/{session_hash}",
-    responses={404: {"description": "Session does not exist"}},
-)
-def force_logout_endpoint(
-    session_hash: str,
-    db: Session = Depends(get_db_session),
-    admin: AuthenticatedUser = Depends(require_admin),
-    management: UserManagement = Depends(user_management),
-) -> StatusResponse:
-    try:
-        management.revoke_session(admin, session_hash)
-    except UnknownSessionError as error:
-        raise HTTPException(404, "Session not found") from error
-    db.commit()
-    return StatusResponse(status="ok")
 
 
 def _derive_worker_status(state: WorkerEphemeralState | None) -> str:
@@ -466,7 +219,7 @@ async def load_model_on_worker_endpoint(
 ) -> JobResponse:
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.jobs import (
         JobStatusUpdate,
         create_job,
         get_queue_position,
@@ -647,7 +400,7 @@ async def download_model_endpoint(
 ) -> JobResponse:
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
-    from songmaker_cli.db.queries import (
+    from songmaker_cli.db.queries.jobs import (
         JobStatusUpdate,
         create_job,
         get_queue_position,
@@ -738,8 +491,8 @@ async def generation_retention_run(
         run_generation_retention, ctx.db, ctx.audio_dir, dry_run=False,
     )
     record_audit(
-        db, admin.id, AuditAction.HARD_DELETE, ResourceType.GENERATION, None,
-        f"retention: archived={report.archived_count}, deleted={report.deleted_count}",
+        db, admin.id, AuditAction.HARD_DELETE, ResourceType.GENERATION,
+        detail=f"retention: archived={report.archived_count}, deleted={report.deleted_count}",
     )
     db.commit()
     return _retention_report_response(report, dry_run=False)

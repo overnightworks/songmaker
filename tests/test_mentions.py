@@ -29,7 +29,7 @@ def _stream_events(response) -> list[dict]:
 
 def _seed(session, user_id: str) -> None:
     session.add(User(
-        id=user_id, username=f"user-{user_id}", password_hash="x", role="user",
+        id=user_id, username=f"user-{user_id}", role="user",
     ))
     session.flush()
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
@@ -77,7 +77,7 @@ def stranger_client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "mentions_spy.db")
     with factory() as session:
         _seed(session, "u-owner")
-        session.add(User(id="u-spy", username="spy", password_hash="x", role="user"))
+        session.add(User(id="u-spy", username="spy", role="user"))
         session.commit()
     app = make_router_app(
         make_router_ctx(tmp_path, db=factory),

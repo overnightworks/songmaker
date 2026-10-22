@@ -3,7 +3,7 @@ import {
 	API_ERROR_GENERIC_MESSAGE,
 	RATE_LIMITED_STATUS,
 	SERVER_ERROR_STATUS_FLOOR,
-	SESSION_LOST_REDIRECT_PARAM
+	SIGN_IN_NEXT_PARAM
 } from '$lib/constants';
 import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
 import { UserFacingError } from './userFacingError';
@@ -45,7 +45,9 @@ export class ApiError extends Error {
 		public readonly detail: string,
 		public readonly path: string,
 		public readonly retryAfterSeconds: number | null = null,
-		public readonly responseDetail: unknown = detail
+		public readonly responseDetail: unknown = detail,
+		public readonly errorType: string | null = null,
+		public readonly jobId: string | null = null
 	) {
 		super(detail || API_ERROR_GENERIC_MESSAGE);
 		this.name = 'ApiError';
@@ -112,22 +114,40 @@ export function isTransientApiFailure(err: unknown): boolean {
 	);
 }
 
-async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
+interface ErrorBody {
 	detail: string;
 	responseDetail: unknown;
-}> {
+	errorType: string | null;
+	jobId: string | null;
+}
+
+const EMPTY_ERROR_BODY: ErrorBody = {
+	detail: '',
+	responseDetail: '',
+	errorType: null,
+	jobId: null
+};
+
+function stringField(body: object, key: string): string | null {
+	const value: unknown = (body as Record<string, unknown>)[key];
+	return typeof value === 'string' ? value : null;
+}
+
+async function readErrorBody(response: Pick<Response, 'json'>): Promise<ErrorBody> {
 	try {
 		const body: unknown = await response.json();
 		if (typeof body !== 'object' || body === null || !('detail' in body)) {
-			return { detail: '', responseDetail: '' };
+			return EMPTY_ERROR_BODY;
 		}
 		const responseDetail = body.detail;
 		return {
 			detail: typeof responseDetail === 'string' ? responseDetail : '',
-			responseDetail
+			responseDetail,
+			errorType: stringField(body, 'error_type'),
+			jobId: stringField(body, 'job_id')
 		};
 	} catch {
-		return { detail: '', responseDetail: '' };
+		return EMPTY_ERROR_BODY;
 	}
 }
 
@@ -156,22 +176,23 @@ function getCsrfToken(): string {
 	return plain ? decodeURIComponent(plain[1]) : '';
 }
 
-// A 401 from these refuses the credentials the person just typed -- a wrong
-// password at sign-in, setup, or a password change (#1117) -- rather than
-// saying the session is gone, so it never signs anyone out.
-const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/password']);
-
 // The public share reads (`/shared/*`, sharing_api.py) authenticate nobody, so
 // a 401 there cannot mean that a session ended; the share player opts out the
 // same way (`onAuthLost: null`).
 export const PUBLIC_SHARE_PATH_PREFIX = '/shared/';
 
 function isSessionLostResponse(status: number, path: string): boolean {
-	return status === 401 && !AUTH_ENDPOINTS.has(path) && !path.startsWith(PUBLIC_SHARE_PATH_PREFIX);
+	return status === 401 && !path.startsWith(PUBLIC_SHARE_PATH_PREFIX);
 }
 
 const SAFE_INTERNAL_PATH_FALLBACK = HOME_ROUTE_PATH;
+// The signed-out page: where a sign-out ends, never a redirect target.
 export const SIGN_IN_PATH = '/login';
+// The server route that starts the sign-in at the identity provider.
+export const SIGN_IN_START_PATH = '/login/oidc';
+// The pages of the sign-in itself; coming back to one would only loop.
+export const NO_ACCESS_PATH = '/no-access';
+export const SIGN_IN_FAILED_PATH = '/auth/callback';
 
 // A path of this app starts with exactly one slash. A second slash or a
 // backslash makes it a foreign host; anything else -- an absolute URL even on
@@ -189,9 +210,9 @@ function isSingleSlashPath(candidate: string): boolean {
 	}
 }
 
-// No page to land on: the sign-in page would only ask for the password twice,
-// and an API address would show its raw answer.
-const NON_PAGE_ROOTS = [SIGN_IN_PATH, '/api'];
+// No page to land on: the sign-in pages would only ask again, and an API
+// address would show its raw answer.
+const NON_PAGE_ROOTS = [SIGN_IN_PATH, NO_ACCESS_PATH, SIGN_IN_FAILED_PATH, '/api'];
 
 // Judged decoded and lower-cased, so no spelling slips past: URL parsing keeps
 // %-escapes and case, so /%6Cogin or /LOGIN would otherwise count as a page.
@@ -212,19 +233,11 @@ function safeInternalPath(candidate: string): string {
 	return resolved.pathname + resolved.search + resolved.hash;
 }
 
-// The sign-in page, asked to bring the person back to `returnTo` afterwards.
+// The server's sign-in start, asked to bring the person back to `returnTo`
+// afterwards.
 export function signInAddress(returnTo: string): string {
 	const target = safeInternalPath(returnTo);
-	if (target === SAFE_INTERNAL_PATH_FALLBACK) return SIGN_IN_PATH;
-	return `${SIGN_IN_PATH}?${SESSION_LOST_REDIRECT_PARAM}=${encodeURIComponent(target)}`;
-}
-
-// Where a sign-in on `signInPage` lands: the address it was asked to return
-// to when that stays on this origin, the library otherwise, so the redirect
-// is never open.
-export function signInReturnPath(signInPage: URL): string {
-	const requested = signInPage.searchParams.get(SESSION_LOST_REDIRECT_PARAM);
-	return requested === null ? SAFE_INTERNAL_PATH_FALLBACK : safeInternalPath(requested);
+	return `${SIGN_IN_START_PATH}?${SIGN_IN_NEXT_PARAM}=${encodeURIComponent(target)}`;
 }
 
 function abortOnCallerOrTimeout(
@@ -246,7 +259,7 @@ function addCsrfToken(init: RequestInit, method: string): RequestInit {
 
 async function throwForFailedResponse(response: Response, path: string): Promise<void> {
 	if (response.ok) return;
-	const { detail, responseDetail } = await readErrorDetail(response);
+	const { detail, responseDetail, errorType, jobId } = await readErrorBody(response);
 	if (response.status === RATE_LIMITED_STATUS) installedReactions.rateLimited(path);
 	if (isSessionLostResponse(response.status, path)) await installedReactions.sessionLost();
 	throw new ApiError(
@@ -254,7 +267,9 @@ async function throwForFailedResponse(response: Response, path: string): Promise
 		detail,
 		path,
 		parseRetryAfterSeconds(response),
-		responseDetail
+		responseDetail,
+		errorType,
+		jobId
 	);
 }
 

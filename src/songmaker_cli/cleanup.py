@@ -18,17 +18,14 @@ from datetime import datetime, timedelta, timezone
 from songmaker_cli.api_helpers import cleanup_generation_files
 from songmaker_cli.cover_suggestions import remove_album_cover_suggestion_files
 from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_files
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
+from songmaker_cli.db.queries.generations import (
     archive_generation,
-    delete_album,
     delete_generation,
-    delete_song,
-    list_expired_albums,
-    list_expired_songs,
     list_generations_expired_for_archive,
     list_generations_expired_for_delete,
-    list_song_ids_for_albums,
 )
+from songmaker_cli.db.queries.songs import delete_song, list_expired_songs, list_song_ids_for_albums
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)
@@ -61,6 +58,8 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
     paths: list[str] = []
     album_count = 0
     song_count = 0
+    deleted_album_ids: list[str] = []
+    deleted_orphan_song_ids: list[str] = []
 
     with db_factory() as session:
         expired_albums = list_expired_albums(session, cutoff)
@@ -70,15 +69,22 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
         )
         for album in expired_albums:
             paths.extend(delete_album(session, album.id))
+            deleted_album_ids.append(album.id)
             album_count += 1
 
         expired_songs = list_expired_songs(session, cutoff, expired_album_ids)
         for song in expired_songs:
             expired_song_ids.append(song.id)
             paths.extend(delete_song(session, song.id))
+            deleted_orphan_song_ids.append(song.id)
             song_count += 1
 
         session.commit()
+
+    for album_id in deleted_album_ids:
+        log.info("cleanup_expired: hard-deleted album %s", album_id)
+    for song_id in deleted_orphan_song_ids:
+        log.info("cleanup_expired: hard-deleted orphan song %s", song_id)
 
     cleanup_generation_files(audio_dir, paths)
     for album_id in expired_album_ids:

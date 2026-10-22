@@ -69,16 +69,11 @@ import {
 	targetAlreadyShown,
 	snapshotLibraryHistory,
 	writeLibraryHistory,
-	type DetailTab,
-	type LibraryHistoryState
+	type DetailTab
 } from '$lib/stores/libraryContext';
 
 export type { DetailTab };
 export { detailTab };
-
-function urlFromState(state: LibraryHistoryState): string {
-	return libraryHistoryUrl(state);
-}
 
 function currentHistoryIndex(): number {
 	const state = currentLibraryHistoryState();
@@ -93,7 +88,7 @@ function currentHistoryIndex(): number {
 function replaceLibraryHistory(): Promise<void> {
 	cancelLibraryHistoryApply();
 	const next = snapshotLibraryHistory(currentHistoryIndex());
-	return writeLibraryHistory(next, urlFromState(next), 'replace');
+	return writeLibraryHistory(next, libraryHistoryUrl(next), 'replace');
 }
 
 // `enterPage` runs once the page being left has been kept and before the new
@@ -104,7 +99,7 @@ function pushLibraryHistory(enterPage: () => void = () => {}): Promise<void> {
 	void keepLibraryPageAsLeft();
 	enterPage();
 	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
-	return writeLibraryHistory(next, urlFromState(next), 'push');
+	return writeLibraryHistory(next, libraryHistoryUrl(next), 'push');
 }
 
 export function persistLibraryHistory(): void {
@@ -225,6 +220,7 @@ export function openAlbum(albumId: string): Promise<void> {
 		selectedSongId.set(null);
 		selectedGenerationId.set(null);
 		void loadSongsForAlbum(albumId);
+		hydrateAlbumIntoLibrary(albumId);
 		setLibrarySurface('detail');
 		await pushLibraryHistory();
 	});
@@ -551,8 +547,12 @@ function hydrateSongIntoLibrary(song: SongItem): void {
 	if (!get(songList).some((item) => item.id === song.id)) {
 		songList.update((list) => [...list, song]);
 	}
-	if (get(albumList).some((item) => item.id === song.album_id)) return;
-	void fetchAlbum(song.album_id)
+	hydrateAlbumIntoLibrary(song.album_id);
+}
+
+function hydrateAlbumIntoLibrary(albumId: string): void {
+	if (get(albumList).some((item) => item.id === albumId)) return;
+	void fetchAlbum(albumId)
 		.then((album) => {
 			albumList.update((list) =>
 				list.some((item) => item.id === album.id) ? list : [...list, album]
@@ -580,7 +580,7 @@ function chooseSongTab(tab: DetailTab): void {
 	showSongTab(get(selectedSongId), tab);
 	const current = currentLibraryHistoryState();
 	if (!isLibraryHistoryState(current)) return;
-	void writeLibraryHistory({ ...current, detailTab: tab }, urlFromState(current), 'replace');
+	void writeLibraryHistory({ ...current, detailTab: tab }, libraryHistoryUrl(current), 'replace');
 }
 
 function openTakesTab(): void {
@@ -627,7 +627,7 @@ export async function openTakeVersion(
 // docs/architecture.md.
 function putTheSongBackOverTheLanding(): void {
 	const songEntry = snapshotLibraryHistory(currentHistoryIndex() + 1);
-	const songEntryBack = writeLibraryHistory(songEntry, urlFromState(songEntry), 'push');
+	const songEntryBack = writeLibraryHistory(songEntry, libraryHistoryUrl(songEntry), 'push');
 	void holdLibraryRestoresUntil(songEntryBack.finally(cancelLibraryHistoryApply));
 }
 

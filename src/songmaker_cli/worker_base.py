@@ -22,7 +22,7 @@ from songmaker_cli.constants import (
     JobStatus,
 )
 from songmaker_cli.db.engine import init_db
-from songmaker_cli.db.queries import get_job
+from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.settings import Settings, get_settings
 
 log = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ class WorkerBase:
         log.info("%s worker ready", self.worker_name())
 
     async def on_shutdown(self, ctx) -> None:
-        from songmaker_cli.db.queries import recover_stale_jobs_by_type
+        from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_type
 
         redis = ctx["redis"]
         if await redis.set(
@@ -133,7 +133,7 @@ class WorkerBase:
             log.info("Database connection pool disposed")
 
     async def _recover_on_startup(self, ctx) -> int:
-        from songmaker_cli.db.queries import recover_stale_jobs_by_type
+        from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_type
 
         redis = ctx["redis"]
         if not await redis.set(
@@ -170,7 +170,7 @@ class WorkerBase:
             log.warning("Orphaned file audit failed", exc_info=True)
 
     def _audit_orphaned_files_inner(self) -> None:
-        from songmaker_cli.db.queries import all_generation_paths
+        from songmaker_cli.db.queries.generations import all_generation_paths
 
         audio_dir = self.audio_dir()
         if not audio_dir.exists():

@@ -14,7 +14,6 @@ from conftest import (
     make_router_app,
     make_router_ctx,
     make_test_app,
-    stored_hash,
     web_client,
 )
 from fastapi.testclient import TestClient
@@ -45,7 +44,8 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.generations import get_generation
+from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
     add_song_to_playlist,
@@ -53,7 +53,6 @@ from songmaker_cli.db.queries import (
     delete_playlist,
     disable_playlist_sharing,
     enable_playlist_sharing,
-    get_generation,
     get_playlist,
     get_playlist_by_slug,
     list_playlists,
@@ -89,7 +88,7 @@ def db_factory(tmp_path: Path):
 
 
 def _seed_test_data(session: Session) -> None:
-    session.add(User(id=_DEFAULT_USER_ID, username="test", password_hash="x", role="user"))
+    session.add(User(id=_DEFAULT_USER_ID, username="test", role="user"))
     session.flush()
     session.add(Album(id="a1", title="Album One", artist="Artist", created_by=_DEFAULT_USER_ID))
     session.add(
@@ -630,7 +629,7 @@ def test_api_rejects_invalid_playlist_covers(
 def test_foreign_playlist_cover_routes_are_not_found(client: TestClient) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
-        session.add(User(id="foreign-user", username="foreign", password_hash="x", role="user"))
+        session.add(User(id="foreign-user", username="foreign", role="user"))
         session.flush()
         session.add(Playlist(
             id="foreign-playlist", title="Foreign", slug="foreign", created_by="foreign-user",
@@ -778,10 +777,46 @@ def test_api_add_album_to_playlist(client: TestClient) -> None:
     assert len(resp.json()["entries"]) == 2
 
 
+def _point_take_outside_the_audio_root(client: TestClient, generation_id: str) -> None:
+    with client.app.state.ctx.db() as session:
+        session.get(Generation, generation_id).mp3_path = "../escape.mp3"
+        session.commit()
+
+
+def test_api_add_song_with_a_take_outside_the_audio_root_has_no_playable_take(
+    client: TestClient,
+) -> None:
+    _point_take_outside_the_audio_root(client, "g1")
+    playlist_id = client.post("/api/playlists", json={"title": "Test"}).json()["id"]
+
+    response = client.post(
+        f"/api/playlists/{playlist_id}/entries/song", json={"song_id": "s1"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Song has no playable take"
+
+
+def test_api_add_album_skips_a_take_outside_the_audio_root_and_adds_the_album(
+    client: TestClient,
+) -> None:
+    _point_take_outside_the_audio_root(client, "g1")
+    playlist_id = client.post("/api/playlists", json={"title": "Test"}).json()["id"]
+
+    response = client.post(
+        f"/api/playlists/{playlist_id}/entries/album", json={"album_id": "a1"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["added_count"] == 1
+    assert [item["song_id"] for item in body["skipped"]] == ["s1"]
+
+
 def test_api_add_album_to_playlist_hides_missing_and_foreign_albums(client: TestClient) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
-        session.add(User(id="foreign-user", username="foreign", password_hash="x", role="user"))
+        session.add(User(id="foreign-user", username="foreign", role="user"))
         session.flush()
         session.add(
             Album(
@@ -891,7 +926,7 @@ def test_api_add_nonexistent_generation(client: TestClient) -> None:
 
 
 def _seed_sharing_data(session) -> None:
-    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+    admin = User(username="admin", role="admin")
     session.add(admin)
     session.add(Album(id="a1", title="Album", artist="Artist"))
     session.add(
@@ -911,7 +946,7 @@ def _seed_sharing_data(session) -> None:
 
 def test_shared_playlist_view(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
 
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -934,7 +969,7 @@ def test_shared_playlist_view(tmp_path: Path) -> None:
 
 def test_shared_playlist_audio(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
 
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -952,7 +987,7 @@ def test_shared_playlist_stops_presenting_a_deleted_songs_take_1374_rule_9(
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
     (audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
@@ -997,7 +1032,7 @@ def test_shared_playlist_stream_stops_presenting_a_deleted_songs_take_1374_rule_
     expected_new_stream_takes: list[str] | None,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_two_song_sharing_data)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
     for take_id in ("g1", "g2"):
@@ -1029,7 +1064,7 @@ def test_shared_playlist_not_found(tmp_path: Path) -> None:
 
 def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
 
     resp = client.post("/api/playlists/pl1/share")
     slug = resp.json()["share_slug"]
@@ -1041,7 +1076,7 @@ def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
 
 def test_unshare_playlist(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
 
     client.post("/api/playlists/pl1/share")
     resp = client.delete("/api/playlists/pl1/share")

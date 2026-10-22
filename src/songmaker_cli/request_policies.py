@@ -15,17 +15,24 @@ from webauth.policies import (
     BodySizePolicy,
     BodySizeRule,
     CacheControlRule,
+    CspDirective,
     CsrfPolicy,
     PathRules,
     PathShape,
     RateLimitBudget,
-    RateLimitClass,
     RateLimitPolicy,
+    RateLimitRule,
     SecurityHeadersPolicy,
     default_content_security_policy,
 )
 
-from songmaker_cli.constants import PWA_ICON_PATHS, RESOURCE_EVENT_STREAM_PATH
+from songmaker_cli.constants import (
+    LOGOUT_PATH,
+    OIDC_CALLBACK_PATH,
+    OIDC_START_PATH,
+    PWA_ICON_PATHS,
+    RESOURCE_EVENT_STREAM_PATH,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -33,6 +40,9 @@ if TYPE_CHECKING:
     from songmaker_cli.settings import Settings
 
 IP_RATE_LIMIT_WINDOW_SECONDS: Final = 60
+API_BUDGET_NAME: Final = "api"
+MEDIA_BUDGET_NAME: Final = "media"
+STREAM_BUDGET_NAME: Final = "stream"
 
 API_PATH_PREFIX: Final = "/api/"
 STATIC_ASSET_PREFIX: Final = "/_app/"
@@ -90,14 +100,16 @@ RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
     "/service-worker.js",
 }) | PWA_ICON_PATHS
 
-# A login and a first-time setup carry no session yet, so they cannot submit
-# a session-bound CSRF token; workers on `/api/internal/*` have no session
-# at all and authenticate with the internal token instead. Both still owe
-# the same-origin check.
-CSRF_TOKEN_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
-    "/api/auth/login", "/api/auth/setup",
-})
+# Workers on `/api/internal/*` have no session at all and authenticate with
+# the internal token instead. They still owe the same-origin check. The logout
+# is token-exempt too: its session may already be gone, and the origin check
+# is what protects it.
+CSRF_TOKEN_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({LOGOUT_PATH})
 CSRF_TOKEN_EXEMPT_PREFIXES: Final[tuple[str, ...]] = ("/api/internal/",)
+
+# The three sign-in routes answer redirects and refusals that no cache may keep.
+SIGN_IN_PATHS: Final[frozenset[str]] = frozenset({OIDC_START_PATH, OIDC_CALLBACK_PATH, LOGOUT_PATH})
+SIGN_IN_CACHE_CONTROL: Final = "no-store"
 
 # Large multipart uploads are a path-exact allowlist, never a suffix match:
 # an unrelated route ending in `/reimport` must not inherit an upload budget.
@@ -111,38 +123,46 @@ COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
 
 RESOURCE_EVENT_STREAM_CACHE_CONTROL: Final = "no-cache, no-store"
 API_CACHE_CONTROL: Final = "no-store"
+STYLE_SOURCES_ADDED: Final = {CspDirective.STYLE_SRC: ("'unsafe-inline'",)}
 
 
 def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
     """The three per-IP budgets and the paths that spend from each."""
     return RateLimitPolicy(
-        budgets={
-            RateLimitClass.API: RateLimitBudget(
-                settings.ip_rate_limit, IP_RATE_LIMIT_WINDOW_SECONDS,
+        default=RateLimitBudget(
+            API_BUDGET_NAME, settings.ip_rate_limit, IP_RATE_LIMIT_WINDOW_SECONDS,
+        ),
+        rules=(
+            RateLimitRule(
+                paths=PathRules(prefixes=(MEDIA_PATH_PREFIX,), patterns=AUDIO_ROUTE_PATTERNS),
+                budget=RateLimitBudget(
+                    MEDIA_BUDGET_NAME, settings.media_rate_limit, IP_RATE_LIMIT_WINDOW_SECONDS,
+                ),
             ),
-            RateLimitClass.MEDIA: RateLimitBudget(
-                settings.media_rate_limit, IP_RATE_LIMIT_WINDOW_SECONDS,
+            RateLimitRule(
+                paths=PathRules(
+                    exact=frozenset({RESOURCE_EVENT_STREAM_PATH}), shapes=(JOB_STREAM_PATH,),
+                ),
+                budget=RateLimitBudget(
+                    STREAM_BUDGET_NAME, settings.stream_rate_limit, IP_RATE_LIMIT_WINDOW_SECONDS,
+                ),
             ),
-            RateLimitClass.STREAM: RateLimitBudget(
-                settings.stream_rate_limit, IP_RATE_LIMIT_WINDOW_SECONDS,
-            ),
-        },
+        ),
         exempt=PathRules(
             exact=RATE_LIMIT_EXEMPT_PATHS, prefixes=(STATIC_ASSET_PREFIX,),
-        ),
-        media=PathRules(
-            prefixes=(MEDIA_PATH_PREFIX,), patterns=AUDIO_ROUTE_PATTERNS,
-        ),
-        stream=PathRules(
-            exact=frozenset({RESOURCE_EVENT_STREAM_PATH}), shapes=(JOB_STREAM_PATH,),
         ),
     )
 
 
-def build_csrf_policy() -> CsrfPolicy:
-    """Every mutating API call is same-origin; most also carry a token."""
+def build_csrf_origin_policy() -> CsrfPolicy:
+    """Every state-changing request is checked for the same origin."""
+    return CsrfPolicy()
+
+
+def build_csrf_token_policy() -> CsrfPolicy:
+    """Mutating API calls and the logout carry the double-submit token, workers excepted."""
     return CsrfPolicy(
-        protected=PathRules(prefixes=(API_PATH_PREFIX,)),
+        protected=PathRules(prefixes=(API_PATH_PREFIX,), exact=frozenset({LOGOUT_PATH})),
         token_exempt=PathRules(
             exact=CSRF_TOKEN_EXEMPT_PATHS, prefixes=CSRF_TOKEN_EXEMPT_PREFIXES,
         ),
@@ -182,11 +202,16 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
 def build_security_headers_policy(script_hashes: Sequence[str]) -> SecurityHeadersPolicy:
     """The library's default policy, plus what may be cached: nothing under `/api/`.
 
+    The SvelteKit build applies inline styles, which the default `style-src 'self'`
+    blocks, so this is the one source the app adds.
+
     The resource-event stream additionally forbids caching its reconnect
     stream in an intermediary, which `no-store` alone does not.
     """
     return SecurityHeadersPolicy(
-        content_security_policy=default_content_security_policy(script_hashes),
+        content_security_policy=default_content_security_policy(
+            script_hashes, added_sources=STYLE_SOURCES_ADDED,
+        ),
         cache_control_rules=(
             CacheControlRule(
                 paths=PathRules(exact=frozenset({RESOURCE_EVENT_STREAM_PATH})),
@@ -195,6 +220,10 @@ def build_security_headers_policy(script_hashes: Sequence[str]) -> SecurityHeade
             CacheControlRule(
                 paths=PathRules(prefixes=(API_PATH_PREFIX,)),
                 value=API_CACHE_CONTROL,
+            ),
+            CacheControlRule(
+                paths=PathRules(exact=SIGN_IN_PATHS),
+                value=SIGN_IN_CACHE_CONTROL,
             ),
         ),
     )

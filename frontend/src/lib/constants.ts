@@ -5,15 +5,9 @@ export const APP_NAME = 'Hallucinai';
 
 export const API_ERROR_GENERIC_MESSAGE = 'Something went wrong. Try again.';
 
-// Cross-file contract: fetch.ts's signInAddress writes this param,
-// whatever reads it back (the login page) must use the same name.
-export const SESSION_LOST_REDIRECT_PARAM = 'redirect';
-
-// Mirrors webauth's `MIN_PASSWORD_LENGTH` (`webauth.passwords`) so the browser
-// refuses a short password before the round trip; the server stays authoritative.
-export const PASSWORD_MIN_LENGTH = 8;
-// The server's own refusal wording (`api_models/auth.py`, `string_too_short`).
-export const PASSWORD_TOO_SHORT_MESSAGE = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+// The server's sign-in start (`GET /login/oidc?next=`) reads the address to
+// return to from this param.
+export const SIGN_IN_NEXT_PARAM = 'next';
 
 // The share succeeded server-side even when the follow-up clipboard write
 // throws (no permission, no focus, etc.) — that toast must never read as a
@@ -369,7 +363,6 @@ export const GENERATION_PHASE_LABELS: Record<NonNullable<JobItem['phase']>, stri
 export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable one.';
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
-export const EDITOR_GPU_OFFLINE_TITLE = 'No GPU worker online';
 export const EDITOR_LYRICS_LABEL = 'Lyrics';
 export const EDITOR_STYLE_LABEL = 'Style';
 export const EDITOR_STYLE_PROMPT_LABEL = 'Style Prompt';
@@ -649,17 +642,11 @@ export const SONG_NEXT_LABEL = 'Next song';
 
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
-export const ADMIN_SESSION_ALREADY_ENDED_MESSAGE = 'That session had already ended.';
-export const ADMIN_ACCOUNT_GONE_MESSAGE = 'That account no longer exists.';
-export const ADMIN_REVOKE_FAILED_MESSAGE = 'Could not revoke the session. Try again.';
-export const ADMIN_REVOKE_OFFLINE_MESSAGE =
-	'Could not reach the server. Try revoking the session again when connected.';
-export const ADMIN_REVOKE_RATE_LIMITED_MESSAGE =
-	'Too many requests. Wait before revoking the session again.';
 
 // The phone's account circle and the menu it opens (issue #1158).
 export const ACCOUNT_MENU_LABEL = 'Account';
 export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
+export const ACCOUNT_MENU_ACCOUNT_LABEL = 'Account';
 export const ACCOUNT_MENU_SIGNED_IN_PREFIX = 'Signed in as';
 export const ACCOUNT_MENU_LOGOUT_LABEL = 'Log out';
 // A sign-out the server did not confirm leaves the session standing (#1340).

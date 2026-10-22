@@ -8,19 +8,19 @@
 
 ## 1. Authentication & Session Integrity
 
-- **Session Fixation**: Is the session ID regenerated after login?
+- **Session Fixation**: Is the session ID regenerated at the OIDC callback, and is the old session of the request ended?
 - **Cookie Security**: Are HttpOnly, Secure, and SameSite=Lax/Strict flags strictly enforced?
 - **Token Entropy**: Is the SESSION_SECRET sufficiently complex? Does the code fall back to a weak default if the env var is missing?
-- **Logout logic**: Does `DELETE /session` actually invalidate the session in the database, or just clear the cookie?
-- **Constant-time comparisons**: Are ALL security-sensitive comparisons (session verification, CSRF tokens, password hashes) using `hmac.compare_digest` or equivalent? Check every comparison path, not just the obvious ones.
+- **Logout logic**: Does `POST /auth/logout` actually invalidate the session in the database, or just clear the cookie?
+- **Constant-time comparisons**: Are ALL security-sensitive comparisons (session verification, CSRF tokens) using `hmac.compare_digest` or equivalent? Check every comparison path, not just the obvious ones.
 
 ## 2. Authorization (RBAC) & Logic Flaws
 
 - **Bypasses**: Is there ANY path to a GPU-heavy endpoint (`/generate`, `/score`) that skips the `require_auth` or `require_admin` dependency?
 - **IDOR**: Can a user delete or view a song belonging to another user by guessing the ID? Check `owner_id == current_user.id` on every single resource access endpoint.
-- **First-Run Setup**: Can the `/setup` endpoint be re-triggered after the first admin is created? (Critical!)
+- **Admission**: Can anyone outside the Keycloak group `/apps/songmaker` obtain an account or a session at `/auth/callback`? Is the token's issuer bound to the configured realm, and is the admin role taken from the admin group only?
 - **Role escalation**: Can a non-admin user modify their own role via any endpoint? Trace all update paths.
-- **Deactivation bypass**: Can a deactivated user's existing session continue working? Verify session validation checks `is_active` on every request, not just at login.
+- **Revocation**: Songmaker sessions outlive a Keycloak disable or group removal until they go idle or hit the absolute age. Verify the documented revocation paths (Keycloak sign-out, the SQL `DELETE FROM user_sessions` fallback) actually end access on the next request.
 
 ## 3. Injection & Database Safety
 
@@ -88,8 +88,6 @@ These have been reviewed and accepted. Skip them unless the implementation has r
 - **No IP binding on sessions**: A stolen session cookie works from any IP. IP/UA changes are logged but not blocked to avoid breaking mobile users. Accepted tradeoff.
 - **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
 - **Claude CLI tool allowlist**: `provider.py` builds the session with `--tools ""`, `--setting-sources ""`, `--strict-mcp-config` and `--allowedTools mcp__songmaker__*`, and `verify_cli_tool_surface()` refuses a binary that announces anything outside the expected set. The expected tool names ARE a hand-maintained literal (`MCP_TOOL_NAMES` in `songmaker_cli/cowriter/mcp_spec.py`, reaching `provider.py` as `ProviderRuntimeConfig.mcp_server`) — not eliminated, but kept honest by a dedicated test that diffs it against `mcp_server/server.py`'s real registration, so drift there fails a test instead of silently going stale. Every non-MCP call (legacy chat, lyrical-coherence judge) goes through a second gate expecting zero tools, in the same shared call path (`_call_cli`/`_acall_cli`), not per-caller. Section 4 should still assess prompt-based tool invocation bypasses.
-- **Login rate limit allows distributed attacks**: IP and username rate limits are independent by design. A distributed attacker with many IPs gets `LOGIN_RATE_LIMIT` per IP. This is expected — Argon2id's hash cost is the primary defense.
-- **`force_logout` iterates all sessions**: O(n) session scan is acceptable given the expected scale (< 100 concurrent sessions).
 - **Session secret in output directory**: Stored with 0600 permissions. Production deployments can use `SESSION_SECRET` env var instead.
 - **No `X-XSS-Protection` header**: Modern browsers use CSP instead. The buggy XSS auditor is deprecated.
 - **ACE-Step reinitialize has no cooldown**: Admin-only endpoint. Compromised admin has full access anyway.

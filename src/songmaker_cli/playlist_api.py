@@ -8,7 +8,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     PLAYLIST_NOT_FOUND_DETAIL,
@@ -35,6 +35,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
@@ -53,7 +54,9 @@ from songmaker_cli.covers import (
     write_playlist_cover,
 )
 from songmaker_cli.db.models import Generation
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
     add_song_to_playlist,
@@ -62,16 +65,13 @@ from songmaker_cli.db.queries import (
     delete_playlist,
     disable_playlist_sharing,
     enable_playlist_sharing,
-    get_album,
     get_playlist,
     list_playlists,
-    record_audit,
     remove_from_playlist,
     reorder_playlist_entry,
     set_playlist_cover_key,
     update_playlist,
 )
-from songmaker_cli.queue_streams import resolve_audio_path
 
 log = logging.getLogger(__name__)
 
@@ -277,7 +277,7 @@ def api_add_song_to_playlist(
         raise HTTPException(400, "Song has no playable take")
     try:
         resolve_audio_path(ctx.audio_dir, playable.mp3_path)
-    except (HTTPException, OSError):
+    except (AudioPathRejectedError, OSError):
         raise HTTPException(400, "Song has no playable take")
     try:
         add_song_to_playlist(session, playlist_id, req.song_id)
@@ -304,7 +304,7 @@ def api_add_album_to_playlist(
     def _readable(generation: Generation) -> bool:
         try:
             resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-        except (HTTPException, OSError):
+        except (AudioPathRejectedError, OSError):
             return False
         return True
 

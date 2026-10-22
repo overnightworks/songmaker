@@ -24,6 +24,7 @@ from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
+    INTERNAL_TOKEN_HEADER,
     JOB_ERROR_GENERATION_FAILED,
     JOB_ERROR_GENERATION_UNAVAILABLE,
     GenerationPhase,
@@ -42,15 +43,14 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.generations import get_generation
+from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     count_user_jobs_in_window,
-    get_generation,
     get_job,
-    register_worker,
     update_job_status,
 )
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+from songmaker_cli.db.queries.workers import register_worker
 from songmaker_cli.jobs import (
     GenerationContext,
     _apply_cover_overrides,
@@ -136,7 +136,7 @@ def db_factory(tmp_path: Path):
 @pytest.fixture
 def seeded_db(db_factory, tmp_path: Path):
     with db_factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="hash", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="rock", title="Rock", artist="Band", created_by="u1"))
         session.add(
@@ -469,11 +469,8 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
 
 
 def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_path: Path) -> None:
-    from songmaker_cli.acestep_state import (
-        read_queue_depth,
-        release_gpu_hold,
-        reserve_gpu_hold,
-    )
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
         redis = fakeredis.aioredis.FakeRedis()
@@ -517,7 +514,7 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    from songmaker_cli.acestep_state import reserve_gpu_hold
+    from acestep_worker.heartbeat import reserve_gpu_hold
     from songmaker_cli.scheduler import pick_worker
 
     async def exercise() -> None:
@@ -668,11 +665,8 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    from songmaker_cli.acestep_state import (
-        read_queue_depth,
-        release_gpu_hold,
-        reserve_gpu_hold,
-    )
+    from acestep_worker.heartbeat import release_gpu_hold, reserve_gpu_hold
+    from songmaker_cli.acestep_state import read_queue_depth
 
     async def exercise() -> None:
         redis = fakeredis.aioredis.FakeRedis()
@@ -715,7 +709,8 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
     tmp_path: Path,
     outcome: str,
 ) -> None:
-    from songmaker_cli.acestep_state import read_queue_depth, reserve_gpu_hold
+    from acestep_worker.heartbeat import reserve_gpu_hold
+    from songmaker_cli.acestep_state import read_queue_depth
 
     async def dispatch(**kwargs):
         if outcome == "cancel":
@@ -1677,7 +1672,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
     tmp_path: Path,
 ) -> None:
     with seeded_db() as session:
-        session.add(User(id="admin", username="admin", password_hash="hash", role="admin"))
+        session.add(User(id="admin", username="admin", role="admin"))
         session.flush()
         get_job(session, "j1").user_id = "admin"
         session.commit()
@@ -2715,7 +2710,7 @@ def test_scoring_job_exception(seeded_db, tmp_path: Path) -> None:
 
 
 def test_job_counts_by_type_and_status(db_factory) -> None:
-    from songmaker_cli.db.queries import job_counts_by_type_and_status
+    from songmaker_cli.db.queries.jobs import job_counts_by_type_and_status
 
     with db_factory() as session:
         session.add(Job(type="generate", status="completed"))
@@ -2732,7 +2727,7 @@ def test_job_counts_by_type_and_status(db_factory) -> None:
 
 
 def test_job_counts_empty_db(db_factory) -> None:
-    from songmaker_cli.db.queries import job_counts_by_type_and_status
+    from songmaker_cli.db.queries.jobs import job_counts_by_type_and_status
 
     with db_factory() as session:
         counts = job_counts_by_type_and_status(session)
@@ -2742,7 +2737,7 @@ def test_job_counts_empty_db(db_factory) -> None:
 def test_job_duration_stats(db_factory) -> None:
     from datetime import datetime, timedelta, timezone
 
-    from songmaker_cli.db.queries import job_duration_stats
+    from songmaker_cli.db.queries.jobs import job_duration_stats
 
     now = datetime.now(timezone.utc)
     with db_factory() as session:
@@ -2768,7 +2763,7 @@ def test_job_duration_stats_no_completed(db_factory) -> None:
     """S9-F: Timestamped PARTIAL jobs do not enter completed duration statistics."""
     from datetime import datetime, timezone
 
-    from songmaker_cli.db.queries import job_duration_stats
+    from songmaker_cli.db.queries.jobs import job_duration_stats
 
     with db_factory() as session:
         session.add(Job(type="generate", status="running"))
@@ -2898,7 +2893,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
 
 
 def _seed_worker_row(factory, worker_id: str = "w1") -> None:
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     with factory() as session:
         register_worker(
@@ -3073,7 +3068,7 @@ def _seed_online_worker(factory, redis: _FakeRedis, worker_id: str = "w1") -> No
     import json
 
     from songmaker_cli.acestep_state import worker_state_key
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     with factory() as session:
         register_worker(

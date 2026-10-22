@@ -52,10 +52,10 @@ from songmaker_cli.constants import (
     ACESTEP_SSE_READ_TIMEOUT_SECONDS,
     GENERATE_LOAD_MODEL_TIMEOUT_SECONDS,
     GENERATE_SUBMIT_TIMEOUT_SECONDS,
+    INTERNAL_TOKEN_HEADER,
     JOB_ERROR_WORKER_STREAM_SILENT,
 )
-from songmaker_cli.db.queries import list_worker_identities
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

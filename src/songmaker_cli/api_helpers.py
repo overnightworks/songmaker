@@ -14,7 +14,7 @@ from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.audio_paths import AudioFileNotFoundError
@@ -22,8 +22,6 @@ from songmaker_cli.constants import (
     AUDIO_FILE_NOT_FOUND,
     HTTP_NOT_FOUND,
     LIBRARY_QUERY_REQUIRED,
-    PAGE_ADMIN_DEFAULT_LIMIT,
-    PAGE_ADMIN_MAX_LIMIT,
     PAGE_DEFAULT_LIMIT,
     PAGE_MAX_LIMIT,
     RATE_LIMIT_WINDOW_SECONDS,
@@ -49,20 +47,19 @@ from songmaker_cli.db.models import (
     UserLora,
     UserLoraSample,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import get_album
+from songmaker_cli.db.queries.generations import get_generation, get_generations
+from songmaker_cli.db.queries.jobs import (
     count_total_queued_jobs,
     count_user_active_jobs,
     count_user_jobs_in_window,
     create_job,
-    get_album,
-    get_generation,
-    get_generations,
-    get_playlist,
-    get_song,
-    list_worker_identities,
     recover_stale_jobs_by_age_and_type,
-    resolve_rate_limit,
 )
+from songmaker_cli.db.queries.playlists import get_playlist
+from songmaker_cli.db.queries.rate_limits import resolve_rate_limit
+from songmaker_cli.db.queries.songs import get_song
+from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import read_worker_liveness
@@ -72,7 +69,6 @@ if TYPE_CHECKING:
 
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
-_SESSION_CAP_LOCK_ID = 4
 _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
 _LORA_CAPACITY_LOCK_ID = 8
@@ -202,27 +198,15 @@ def resolve_public_base_url() -> str:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
-def _job_type_rate_limits(job_type: JobType) -> tuple[int, int, str]:
-    """Return (user_limit, admin_limit, db_setting_key) for a job type."""
+def _job_type_rate_limit(job_type: JobType) -> tuple[int, str]:
+    """Return (env_limit, db_setting_key) for a job type."""
     settings = get_settings()
     if job_type == JobType.GENERATE:
-        return (
-            settings.generation_rate_limit_user,
-            settings.generation_rate_limit_admin,
-            SETTING_GENERATION_RATE_LIMIT,
-        )
+        return settings.generation_rate_limit_user, SETTING_GENERATION_RATE_LIMIT
     if job_type == JobType.SCORE:
-        return (
-            settings.scoring_rate_limit_user,
-            settings.scoring_rate_limit_admin,
-            SETTING_SCORING_RATE_LIMIT,
-        )
+        return settings.scoring_rate_limit_user, SETTING_SCORING_RATE_LIMIT
     if job_type == JobType.CHAT:
-        return (
-            settings.chat_rate_limit_user,
-            settings.chat_rate_limit_admin,
-            SETTING_CHAT_RATE_LIMIT,
-        )
+        return settings.chat_rate_limit_user, SETTING_CHAT_RATE_LIMIT
     raise ValueError(f"Unknown job type for rate limiting: {job_type}")
 
 
@@ -263,7 +247,6 @@ def create_job_with_rate_limit(
     session.commit()
     _begin_exclusive(session)
 
-    is_admin = user.role == ROLE_ADMIN
     settings = get_settings()
     max_queue_depth = resolve_rate_limit(
         session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
@@ -279,17 +262,15 @@ def create_job_with_rate_limit(
         if count_total_queued_jobs(session) >= max_queue_depth:
             session.rollback()
             raise HTTPException(429, "Queue is full. Try again later.")
-        if not is_admin:
-            max_active = resolve_rate_limit(
-                session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
-            )
-            if count_user_active_jobs(session, user.id, job_type) >= max_active:
-                session.rollback()
-                raise HTTPException(429, "You already have an active job. Wait for it to finish.")
+        max_active = resolve_rate_limit(
+            session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
+        )
+        if count_user_active_jobs(session, user.id, job_type) >= max_active:
+            session.rollback()
+            raise HTTPException(429, "You already have an active job. Wait for it to finish.")
 
-    env_user, env_admin, setting_key = _job_type_rate_limits(job_type)
-    env_default = env_admin if is_admin else env_user
-    limit = resolve_rate_limit(session, user.id, setting_key, env_default)
+    env_limit, setting_key = _job_type_rate_limit(job_type)
+    limit = resolve_rate_limit(session, user.id, setting_key, env_limit)
     count = count_user_jobs_in_window(session, user.id, job_type, RATE_LIMIT_WINDOW_SECONDS)
     if count >= limit:
         session.rollback()
@@ -535,7 +516,7 @@ def check_lora_ready_for_generation(
     Returns None when ``user_lora_id`` is None (no LoRA requested).
     """
     from songmaker_cli.constants import LoraStatus
-    from songmaker_cli.db.queries import get_user_lora
+    from songmaker_cli.db.queries.loras import get_user_lora
 
     if not user_lora_id:
         return None
@@ -694,15 +675,7 @@ def _page_params(
     return PageParams(offset=offset, limit=limit)
 
 
-def _admin_page_params(
-    offset: int = Query(0, ge=0),
-    limit: int = Query(PAGE_ADMIN_DEFAULT_LIMIT, ge=1, le=PAGE_ADMIN_MAX_LIMIT),
-) -> PageParams:
-    return PageParams(offset=offset, limit=limit)
-
-
 Pagination = Annotated[PageParams, Depends(_page_params)]
-AdminPagination = Annotated[PageParams, Depends(_admin_page_params)]
 
 
 def page_has_more(*, offset: int, fetched: int, total: int) -> bool:

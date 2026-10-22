@@ -47,7 +47,7 @@ from songmaker_cli.constants import (
     JobStatus,
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
     get_job,
     update_job_heartbeat,

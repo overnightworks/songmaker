@@ -24,13 +24,14 @@ scoring = [
     "librosa>=0.10,<2",
     "soundfile",
     "audiobox-aesthetics>=0.0.4,<1",
-    "torch>=2.2,<3",
-    "torchaudio>=2.2,<3",
+    "torch>=2.14,<2.15",
+    "torchaudio>=2.11,<3",
+    "torchcodec>=0.14,<0.15",  # torchaudio 2.9+ decodes through torchcodec, whose minor tracks torch's
     "nvidia-ml-py3>=7.352,<8",
 ]
 whisper = [
     "faster-whisper>=1.1,<2",
-    "torch>=2.2,<3",
+    "torch>=2.14,<2.15",
     "soundfile",
     "librosa>=0.10,<2",
     "numba",
@@ -50,7 +51,7 @@ server = [
     # The auth layer lives in its own repository since #879. The pin is the
     # release wheel of an immutable tag, because the slim images have no git
     # and the acestep-worker installs with --require-hashes.
-    "overnightworks-webauth[redis] @ https://github.com/overnightworks/webauth/releases/download/v0.14.0/overnightworks_webauth-0.14.0-py3-none-any.whl",
+    "overnightworks-webauth[redis] @ https://github.com/overnightworks/webauth/releases/download/v0.20.1/overnightworks_webauth-0.20.1-py3-none-any.whl",
     # The provider layer lives in its own repository since #886. Bare in the
     # server extra so its api/image capabilities do not leak anthropic into the
     # music worker or Pillow into the scoring worker (A8).
@@ -64,7 +65,7 @@ api = [
     "anthropic>=0.20,<2",
 ]
 image = [
-    "pillow>=12.3,<13",
+    "pillow>=13,<14",
 ]
 mcp = [
     "mcp>=2.2,<3",
@@ -117,13 +118,14 @@ override-dependencies = [
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu121" }
-torchaudio = { index = "pytorch-cu121" }
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+torchcodec = { index = "pytorch-cpu" }
 
 # ---------------------------------------------------------------
 # Tool configuration

@@ -12,12 +12,12 @@ from pathlib import Path
 
 import anyio
 import pytest
-from conftest import make_test_app
+from conftest import issued_cookies, make_test_app
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.config import install_web_auth_config, installed_web_auth_config
-from webauth.cookies import generate_csrf_token, sign_session_id
 from webauth.middleware import (
     BodySizeLimitMiddleware,
     CsrfOriginMiddleware,
@@ -26,7 +26,7 @@ from webauth.middleware import (
     SecurityHeadersMiddleware,
 )
 
-from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
+from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES, LOGOUT_PATH
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware, _accepts_gzip
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
@@ -286,6 +286,7 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
         IpRateLimitMiddleware,
         CsrfOriginMiddleware,
         CsrfTokenMiddleware,
+        TrustedHostMiddleware,
         AccessLogMiddleware,
     ]
 
@@ -482,7 +483,7 @@ def security_exchange(tmp_path: Path):
             "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
             "http_version": "1.1", "scheme": "http", "method": method,
             "path": path, "raw_path": path.encode(), "query_string": b"",
-            "root_path": "", "headers": list(headers),
+            "root_path": "", "headers": [(b"host", b"localhost"), *headers],
             "client": ("203.0.113.9", 1234), "server": ("localhost", 80),
         }
         if expected_error is None:
@@ -553,7 +554,7 @@ def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
         ) as http:
             for expected in (403, 429):
                 response = await http.post(
-                    "/api/auth/login", headers={"Origin": "https://foreign.example"},
+                    LOGOUT_PATH, headers={"Origin": "https://foreign.example"},
                 )
                 assert response.status_code == expected
                 assert response.headers["x-content-type-options"] == "nosniff"
@@ -586,13 +587,13 @@ def test_host_origin_parser_applies_exact_port_pattern_and_ipv6_rules(
     security_exchange, monkeypatch, allowed, origin, expected,
 ):
     """defect:#1590 -- host configuration feeds the library's parsed origin checks."""
-    from songmaker_cli.server import parse_allowed_hosts
+    from songmaker_cli.app_context import parse_allowed_hosts
     from songmaker_cli.settings import get_settings
 
     app, exchange = security_exchange
     monkeypatch.setenv("ALLOWED_HOSTS", allowed)
     get_settings.cache_clear()
-    exact, patterns = parse_allowed_hosts()
+    exact, patterns = parse_allowed_hosts(get_settings())
     install_web_auth_config(app, replace(
         installed_web_auth_config(app), allowed_hosts_exact=exact,
         allowed_hosts_patterns=tuple(patterns),
@@ -601,7 +602,7 @@ def test_host_origin_parser_applies_exact_port_pattern_and_ipv6_rules(
     assert status == expected
 
 
-@pytest.mark.parametrize("path", ["/api/auth/login", "/api/auth/setup", "/api/internal/proof"])
+@pytest.mark.parametrize("path", [LOGOUT_PATH, "/api/internal/proof"])
 def test_token_exempt_paths_still_reject_foreign_origins(security_exchange, path):
     """defect:#1590 -- every host token exemption remains behind origin protection."""
     _, exchange = security_exchange
@@ -623,8 +624,9 @@ def test_installed_csrf_stack_rejects_bad_tokens_and_cookies_without_500(
     """defect:#1590 -- malformed input cannot turn a CSRF refusal into an exception."""
     app, exchange = security_exchange
     config = installed_web_auth_config(app)
-    cookie = sign_session_id("proof-session", config.signing_key)
-    token = generate_csrf_token("proof-session", config.signing_key)
+    issued = issued_cookies("proof-session", config)
+    cookie = issued[config.session_cookie_name]
+    token = issued[config.csrf_cookie_name]
     if cookie_kind == "tampered":
         cookie = "altered-" + cookie
     elif cookie_kind == "non-ascii":

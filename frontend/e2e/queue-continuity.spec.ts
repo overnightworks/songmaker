@@ -35,13 +35,15 @@ import {
 } from './helpers';
 import {
 	BASE_URL,
-	createAccount,
-	deleteAccount,
+	archiveOwnedAlbum,
 	readSeededLibrary,
 	runMarker,
+	seedAccount,
 	seedPlaylist,
 	seedUnpickedLibrary,
+	signedInApi,
 	STORAGE_STATE_FILE,
+	type SeededAccount,
 	type SeededLibrary,
 	type SeededTake,
 	type SeededTrack,
@@ -65,7 +67,6 @@ const SECOND_PLACE_STARTS_AFTER_SECONDS = 2.5;
 const PLAYING_FOR_SECONDS = 0.5;
 // Far enough past the shuffle toggle that a seek back would already have landed.
 const PLAYS_ON_PAST_THE_TOGGLE_SECONDS = 0.5;
-const ACCOUNT_PASSWORD = 'E2eQueue!2026';
 const RECOVERY_QUERY = 'recover';
 // The deck's contract (continuousDeck.ts): three downloads in a row fail,
 // then it parks until the player retries.
@@ -528,23 +529,20 @@ test('an album whose second take is refused names it once, when playback reaches
 });
 
 test.describe('on a fresh account', () => {
-	let adminApi: APIRequestContext;
+	let account: SeededAccount;
 	let accountApi: APIRequestContext;
-	let accountId: string;
 	let unpicked: SeededUnpickedLibrary;
 
 	test.beforeAll(async () => {
-		adminApi = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
-		const username = `e2e-queue-${test.info().project.name}-${runMarker()}`;
-		accountId = await createAccount(adminApi, username, ACCOUNT_PASSWORD);
-		accountApi = await request.newContext({ baseURL: BASE_URL });
-		unpicked = await seedUnpickedLibrary(accountApi, { username, password: ACCOUNT_PASSWORD });
+		account = await seedAccount(`e2e-queue-${test.info().project.name}-${runMarker()}`);
+		accountApi = await signedInApi(account);
+		unpicked = await seedUnpickedLibrary(accountApi);
 	});
 
 	test.afterAll(async () => {
+		// The admin's Search lists every account's live albums.
+		await archiveOwnedAlbum(accountApi, unpicked.albumId);
 		await accountApi.dispose();
-		await deleteAccount(adminApi, accountId);
-		await adminApi.dispose();
 	});
 
 	test('a take row in a library with nothing picked continues through its album', async ({
@@ -554,7 +552,7 @@ test.describe('on a fresh account', () => {
 		const guard = new FlowGuard(page);
 		const [first, second] = unpicked.tracks;
 		await context.clearCookies();
-		await context.addCookies((await accountApi.storageState()).cookies);
+		await context.addCookies(account.cookies);
 		const surface = workspace(page);
 
 		await page.goto(`/album/${unpicked.albumId}`);

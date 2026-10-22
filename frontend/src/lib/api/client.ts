@@ -13,7 +13,6 @@ export {
 	restoreAlbum,
 	archiveAlbum,
 	unarchiveAlbum,
-	cleanupAlbum,
 	createAlbumCoverSuggestions,
 	fetchAlbumCoverSuggestions,
 	selectAlbumCoverSuggestion,
@@ -35,11 +34,9 @@ export {
 	deleteVersion,
 	deleteSong,
 	restoreSong,
-	moveSong,
 	renameSong,
 	shareSong,
 	unshareSong,
-	cleanupSong,
 	uploadSongCover,
 	deleteSongCover
 } from './songs';
@@ -58,7 +55,6 @@ export {
 	unpickGeneration,
 	keepGeneration,
 	unkeepGeneration,
-	unarchiveGeneration,
 	shareGeneration,
 	unshareGeneration
 } from './generations';
@@ -80,8 +76,8 @@ export {
 	uploadPlaylistCover,
 	deletePlaylistCover
 } from './playlists';
-export { createQueueStreamSnapshot, createLibraryQueueStreamSnapshot } from './queue-streams';
-export { checkSetupRequired, setupAdmin, login, logout, fetchMe, changePassword } from './auth';
+export { createQueueStreamSnapshot } from './queue-streams';
+export { logout, fetchMe } from './auth';
 
 export {
 	streamCoWriterTurn,
@@ -117,21 +113,10 @@ export {
 	deletePresetApi,
 	setPresetDefault,
 	fetchRateLimits,
-	updateRateLimits,
-	fetchUserRateLimits,
-	updateUserRateLimits,
-	deleteUserRateLimits
+	updateRateLimits
 } from './settings';
 export {
-	fetchUsers,
 	fetchAdminVoices,
-	createUser,
-	updateUser,
-	deactivateUser,
-	hardDeleteUser,
-	fetchSessions,
-	forceLogout,
-	fetchLoginAttempts,
 	listWorkers,
 	getRegistry,
 	loadModelOnWorker,

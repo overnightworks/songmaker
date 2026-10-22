@@ -32,20 +32,8 @@
 		onlogout: () => void;
 	}
 
-	// The phone drawer passes no account: its account circle's menu has Settings and Log out.
-	let {
-		account,
-		collapsed = false,
-		showCollapseControl = true,
-		showResizeHandle = true
-	}: {
-		account?: RailAccount;
-		collapsed?: boolean;
-		showCollapseControl?: boolean;
-		showResizeHandle?: boolean;
-	} = $props();
+	let { account, collapsed = false }: { account: RailAccount; collapsed?: boolean } = $props();
 
-	// Each rail supplies its own state so the phone drawer stays expanded.
 	setRailCollapsed(() => collapsed);
 	const homePlace: Place = 'home';
 	const onHome = $derived(
@@ -145,41 +133,37 @@
 		<RailPlaylistsGroup />
 	</div>
 
-	{#if account}
-		<div class="rail-settings-pin">
-			<RailSettings />
-		</div>
+	<div class="rail-settings-pin">
+		<RailSettings />
+	</div>
 
-		<div class="rail-bottom">
-			{#if collapsed}
-				<a
-					class="collapsed-account"
-					href="/settings/account"
-					aria-label="Account"
-					title="Account"
-					onclick={(event) => followAppPageLink(event, '/settings/account')}
-				>
-					{accountInitial(account.username)}
-				</a>
-			{:else}
-				<UserRow username={account.username} onlogout={account.onlogout} />
-			{/if}
-		</div>
-	{/if}
+	<div class="rail-bottom">
+		{#if collapsed}
+			<a
+				class="collapsed-account"
+				href="/settings/account"
+				aria-label="Account"
+				title="Account"
+				onclick={(event) => followAppPageLink(event, '/settings/account')}
+			>
+				{accountInitial(account.username)}
+			</a>
+		{:else}
+			<UserRow username={account.username} onlogout={account.onlogout} />
+		{/if}
+	</div>
 
-	{#if showCollapseControl}
-		<button
-			type="button"
-			class="rail-collapse"
-			aria-label={collapsed ? expandRailLabel : collapseRailLabel}
-			title={collapsed ? expandRailLabel : collapseRailLabel}
-			onclick={toggleRailCollapsed}
-		>
-			{collapsed ? '›' : '‹'}
-		</button>
-	{/if}
+	<button
+		type="button"
+		class="rail-collapse"
+		aria-label={collapsed ? expandRailLabel : collapseRailLabel}
+		title={collapsed ? expandRailLabel : collapseRailLabel}
+		onclick={toggleRailCollapsed}
+	>
+		{collapsed ? '›' : '‹'}
+	</button>
 
-	{#if showResizeHandle && !collapsed}
+	{#if !collapsed}
 		<input
 			type="range"
 			class="rail-resize"

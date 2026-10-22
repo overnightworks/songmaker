@@ -163,7 +163,7 @@ def _stream_events(response) -> list[dict]:
 def _seed(session, user_id: str) -> None:
     seed_judge_route(session)
     session.add(User(
-        id=user_id, username=f"user-{user_id}", password_hash="x", role="admin",
+        id=user_id, username=f"user-{user_id}", role="admin",
     ))
     session.flush()
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
@@ -621,7 +621,6 @@ def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversati
         session.add(User(
             id="u-foreign",
             username="u-foreign",
-            password_hash="x",
             role="user",
         ))
         session.flush()
@@ -889,7 +888,7 @@ def test_chat_turns_beyond_the_chat_rate_limit_are_refused(
     every_provider_is_configured,
 ):
     client, _ = admin_client
-    monkeypatch.setenv("CHAT_RATE_LIMIT_ADMIN", "2")
+    monkeypatch.setenv("CHAT_RATE_LIMIT_USER", "2")
     get_settings.cache_clear()
     client.put("/api/settings/cowriter", json={"provider": "claude", "model": "claude-opus-4-6"})
 

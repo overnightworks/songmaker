@@ -2,8 +2,7 @@
  * User-facing descriptions for ACE-Step generation parameters.
  *
  * Source-verified against the upstream ACE-Step Tutorial.md, the academic
- * papers behind each technique, and the vendored Python source. See
- * plans/acestep-model-parameters.md for the per-model capability matrix.
+ * papers behind each technique, and the vendored Python source.
  *
  * Two layers per parameter:
  *   - short: ~80 char tooltip for hover / mobile long-press

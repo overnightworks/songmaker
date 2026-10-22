@@ -130,11 +130,6 @@ export interface Capabilities {
 	scoring_model: string;
 }
 
-export interface ChangePasswordRequest {
-	current: string;
-	new: string;
-}
-
 export interface ChatMessageItem {
 	id: string;
 	role: string;
@@ -254,12 +249,6 @@ export interface CowriterSettingsRequest {
 	model: string;
 	tail_token_budget?: number | null;
 	provider_routes?: Record<string, 'cli' | 'api'> | null;
-}
-
-export interface CreateUserRequest {
-	username: string;
-	password: string;
-	role: 'admin' | 'user';
 }
 
 export interface DefaultConfigRequest {
@@ -532,17 +521,8 @@ export interface LoadedModelDetailItem {
 	size_gb: number;
 }
 
-export interface LoginAttemptItem {
-	id: string;
-	ip_address: string;
-	username: string;
-	success: boolean;
-	attempted_at: string;
-}
-
-export interface LoginRequest {
-	username: string;
-	password: string;
+export interface LogoutResponse {
+	logout_url: string;
 }
 
 export interface LoraCapacityErrorResponse {
@@ -850,26 +830,6 @@ export interface ScoringSchemaResponse {
 	scorers: ScorerSchemaItem[];
 }
 
-export interface SessionItem {
-	id: string;
-	user_id: string;
-	username: string;
-	created_at: string;
-	expires_at: string;
-	ip_address: string;
-	user_agent: string;
-	is_current: boolean;
-}
-
-export interface SetupRequest {
-	username: string;
-	password: string;
-}
-
-export interface SetupRequired {
-	required: boolean;
-}
-
 export interface ShareResult {
 	status: string;
 	share_url: string;
@@ -1043,20 +1003,6 @@ export interface UnplayableSongSummary {
 	title: string;
 }
 
-export interface UpdateUserRequest {
-	role?: 'admin' | 'user' | null;
-	is_active?: boolean | null;
-	password?: string | null;
-}
-
-export interface UserItem {
-	id: string;
-	username: string;
-	role: string;
-	is_active: boolean;
-	created_at: string;
-}
-
 export interface UserLoraCreateRequest {
 	name: string;
 }
@@ -1082,12 +1028,6 @@ export interface UserLoraListResponse {
 	loras: UserLoraItem[];
 }
 
-export interface UserLoraSampleCreateRequest {
-	caption: string;
-	lyrics: string;
-	position?: number | null;
-}
-
 export interface UserLoraSampleFromGenerationRequest {
 	generation_id: string;
 }
@@ -1107,12 +1047,6 @@ export interface UserLoraSamplePatchRequest {
 	caption?: string | null;
 	lyrics?: string | null;
 	position?: number | null;
-}
-
-export interface UserRateLimitsResponse {
-	user_id: string;
-	overrides: RateLimitItem[];
-	effective: RateLimitItem[];
 }
 
 export interface VersionGenerationParams {

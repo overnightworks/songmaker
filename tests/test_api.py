@@ -53,8 +53,7 @@ def client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user",
-            password_hash="unused", role="user",
+            id=_DEFAULT_USER_ID, username="test_user", role="user",
         ))
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
@@ -117,8 +116,7 @@ def gzip_client(tmp_path: Path) -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user",
-            password_hash="unused", role="user",
+            id=_DEFAULT_USER_ID, username="test_user", role="user",
         ))
         session.flush()
         _seed_db(session, owner_id=_DEFAULT_USER_ID)
@@ -163,8 +161,7 @@ def _make_authed_client(
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=user_id, username=f"test_{role}",
-            password_hash="unused", role=role,
+            id=user_id, username=f"test_{role}", role=role,
         ))
         session.flush()
         _seed_db(session, owner_id=user_id if role != "admin" else None)
@@ -438,12 +435,10 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -506,7 +501,7 @@ def _seed_listen_playlists(client: TestClient) -> None:
     """Own playlists with and without a take of s1, and another musician's."""
     with client.app.state.ctx.db() as session:
         session.add(User(
-            id="u-other", username="other_user", password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.add(Song(id="s2", title="Lightning", album_id="rock", track_number=2))
         session.add(Generation(
@@ -636,7 +631,7 @@ def test_listen_song_hides_a_foreign_song(tmp_path: Path, body: dict | None) -> 
     client = _make_authed_client(tmp_path)
     with client.app.state.ctx.db() as session:
         session.add(User(
-            id="u-other", username="other_user", password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -662,12 +657,10 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -786,12 +779,10 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -933,7 +924,7 @@ def test_unkeep_generation_api(client: TestClient) -> None:
 
 def test_unarchive_generation_api(client: TestClient) -> None:
     factory = client.app.state.ctx.db
-    from songmaker_cli.db.queries import archive_generation
+    from songmaker_cli.db.queries.generations import archive_generation
     with factory() as session:
         archive_generation(session, "g1")
         session.commit()
@@ -1321,7 +1312,7 @@ def _register_worker_with_gpu_health(
     import json
     from unittest.mock import AsyncMock
 
-    from songmaker_cli.db.queries import register_worker
+    from songmaker_cli.db.queries.workers import register_worker
 
     factory = client.app.state.ctx.db
     with factory() as session:
@@ -1717,8 +1708,7 @@ def test_song_generation_job_requires_ownership(client: TestClient, endpoint: st
     factory = client.app.state.ctx.db
     with factory() as session:
         session.add(User(
-            id="u-other", username="other_user",
-            password_hash="unused", role="user",
+            id="u-other", username="other_user", role="user",
         ))
         session.flush()
         session.add(Album(
@@ -2420,7 +2410,7 @@ def test_get_running_generation_exposes_take_counters_and_eta(
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
     from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
 
@@ -2474,8 +2464,8 @@ def test_generation_estimate_leaves_the_model_load_out(
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
     from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.db.queries import jobs as job_queries
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     clock = [datetime(2030, 1, 1, tzinfo=timezone.utc)]
 
@@ -2628,7 +2618,7 @@ def test_user_cannot_see_other_album(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="x", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="other", title="Other", artist="X", created_by="u-other"))
@@ -2643,7 +2633,7 @@ def test_user_cannot_see_other_song(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="x", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="secret", title="Secret", artist="X", created_by="u-other"))
@@ -2662,7 +2652,7 @@ def test_admin_product_index_is_personal_library(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="x", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="other", title="Other", artist="X", created_by="u-other"))
@@ -2679,7 +2669,7 @@ def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
     resp = c.post("/api/albums", json={"title": "My New Album"})
     assert resp.status_code == 200
-    from songmaker_cli.db.queries import get_album
+    from songmaker_cli.db.queries.albums import get_album
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         album = get_album(session, "my-new-album")
@@ -2689,14 +2679,14 @@ def test_authed_user_creates_album_with_ownership(tmp_path: Path) -> None:
 
 def test_job_ownership_blocks_other_user(tmp_path: Path) -> None:
     from songmaker_cli.db.models import User
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
 
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         other = User(
-            id="u-other", username="other", password_hash="unused", role="user",
+            id="u-other", username="other", role="user",
         )
         session.add(other)
         session.flush()
@@ -2730,7 +2720,7 @@ def test_cancel_queued_job(client: TestClient) -> None:
 
 
 def test_cancel_already_completed_job(client: TestClient) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
     with _mock_worker():
         resp = client.post(
@@ -2752,7 +2742,7 @@ def test_cancel_already_completed_job(client: TestClient) -> None:
 
 
 def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
-    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, update_job_status
 
     with _mock_worker():
         resp = client.post(
@@ -2788,7 +2778,7 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
 def test_cancel_running_cover_job_signals_the_web_runner(client: TestClient) -> None:
     from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.cover_runner import CoverJobCancellationRegistry
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -2814,14 +2804,14 @@ def test_cancel_job_not_found(client: TestClient) -> None:
 
 def test_cancel_job_other_user_blocked(tmp_path: Path) -> None:
     from songmaker_cli.db.models import User
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     c = _make_authed_client(tmp_path, role="user", user_id="u-test")
 
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         other = User(
-            id="u-other", username="other", password_hash="unused", role="user",
+            id="u-other", username="other", role="user",
         )
         session.add(other)
         session.flush()
@@ -2853,7 +2843,7 @@ def _sign_job_stream_session(ctx: AppContext, user_id: str) -> str:
 
     from webauth.cookies import sign_session_id
 
-    from songmaker_cli.db.queries import create_session
+    from songmaker_cli.db.queries.auth import create_session
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=1)
     with ctx.db() as session:
@@ -2874,7 +2864,7 @@ def _authenticate_job_stream_client(
 def test_stream_job_initial_state(client: TestClient) -> None:
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -2905,7 +2895,7 @@ def test_stream_completed_job_carries_training_epochs_and_zero_eta(
     import json
 
     from songmaker_cli.constants import JobStatus
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -2933,7 +2923,7 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
     import asyncio
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
@@ -2982,7 +2972,7 @@ def test_stream_job_emits_a_change_without_a_status_or_progress_change(
     import asyncio
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
@@ -3019,7 +3009,7 @@ def test_stream_job_sends_heartbeat_without_status_change(
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "SSE_HEARTBEAT_SECONDS", 0)
@@ -3045,7 +3035,7 @@ def test_stream_job_sends_heartbeat_without_status_change(
 
 
 def test_stream_job_reraises_client_cancellation(client: TestClient) -> None:
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
@@ -3070,7 +3060,7 @@ def test_stream_job_reraises_client_cancellation(client: TestClient) -> None:
 def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
     import json
 
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3140,7 +3130,7 @@ def _make_pool_capacity_limited_client(
 
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="test_user", password_hash="unused", role="user",
+            id=_DEFAULT_USER_ID, username="test_user", role="user",
         ))
         session.commit()
 
@@ -3198,7 +3188,7 @@ def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetim
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     client, factory = _make_pool_capacity_limited_client(
         tmp_path, pool_size=1, max_overflow=0, pool_timeout=2,
@@ -3306,7 +3296,7 @@ def test_stream_job_fetches_status_off_the_event_loop(
     import threading
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3349,7 +3339,12 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
     import json
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, get_job, update_job_status
+    from songmaker_cli.db.queries.jobs import (
+        JobStatusUpdate,
+        create_job,
+        get_job,
+        update_job_status,
+    )
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "JOB_STREAM_CONNECTION_SECONDS", 0.05)
@@ -3387,7 +3382,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     import asyncio
 
     from songmaker_cli import redis_client
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3435,7 +3430,7 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
 
 
 def test_stream_job_rejects_when_lease_is_exhausted(client: TestClient) -> None:
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3455,7 +3450,7 @@ def test_stream_job_rejects_when_lease_is_exhausted(client: TestClient) -> None:
 
 
 def test_stream_job_lease_fails_closed_when_limiter_errors(client: TestClient) -> None:
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
@@ -3484,7 +3479,7 @@ def test_stream_job_heartbeat_survives_the_lease_and_deadline_changes(
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "SSE_HEARTBEAT_SECONDS", 0)
@@ -3592,7 +3587,7 @@ def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
     ctx: AppContext = c.app.state.ctx
     with ctx.db() as session:
         session.add(User(
-            id="u-other", username="other", password_hash="unused", role="user",
+            id="u-other", username="other", role="user",
         ))
         session.flush()
         session.add(Album(id="private", title="Private", artist="X", created_by="u-other"))
@@ -3833,29 +3828,6 @@ def test_create_album_records_audit(client: TestClient) -> None:
     assert any(e.action == "create" and e.resource_type == "album" for e in entries)
 
 
-# ── Admin rate limits ────────────────────────────────────────────────
-
-
-def test_admin_has_rate_limit(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("GENERATION_RATE_LIMIT_USER", "3")
-    monkeypatch.setenv("GENERATION_RATE_LIMIT_ADMIN", "1")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
-
-    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-
-    with _mock_worker():
-        r = c.post(
-            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
-        )
-        assert r.status_code == 200
-
-        r = c.post(
-            "/api/songs/s1/generate", json={"count": 1, "model": "sft"},
-        )
-        assert r.status_code == 429
-
-
 # ── Body size limit middleware ───────────────────────────────────────
 
 
@@ -3985,18 +3957,6 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
         pytest.param("/api/settings/judge", "get", {"422"}, id="get-judge"),
         pytest.param("/api/settings/judge", "put", {"422"}, id="set-judge"),
         pytest.param("/api/settings/rate-limits", "put", {"400"}, id="set-rate-limits"),
-        pytest.param(
-            "/api/settings/rate-limits/user/{user_id}", "get", {"404"},
-            id="get-user-rate-limits",
-        ),
-        pytest.param(
-            "/api/settings/rate-limits/user/{user_id}", "put", {"400", "404"},
-            id="set-user-rate-limits",
-        ),
-        pytest.param(
-            "/api/settings/rate-limits/user/{user_id}", "delete", {"404"},
-            id="delete-user-rate-limits",
-        ),
     ],
 )
 def test_settings_api_documents_its_http_error_responses(
@@ -4127,31 +4087,6 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
 # ── Rate limits ───────────────────────────────────────────────────────
 
 
-def test_deleting_user_rate_limits_restores_the_effective_defaults(tmp_path: Path) -> None:
-    admin_client = _make_authed_client(tmp_path, role="admin")
-    override_values = {"generation_rate_limit": 1, "chat_rate_limit": 2}
-
-    saved = admin_client.put(
-        "/api/settings/rate-limits/user/u-test", json={"settings": override_values},
-    )
-    assert saved.status_code == 200
-    assert {
-        item["setting_key"]: item["value"] for item in saved.json()["overrides"]
-    } == override_values
-
-    deleted = admin_client.delete("/api/settings/rate-limits/user/u-test")
-
-    assert deleted.status_code == 200
-    restored = admin_client.get("/api/settings/rate-limits/user/u-test")
-    assert restored.status_code == 200
-    assert restored.json()["overrides"] == []
-    effective = {
-        item["setting_key"]: item for item in restored.json()["effective"]
-    }
-    assert effective["generation_rate_limit"]["is_override"] is False
-    assert effective["chat_rate_limit"]["is_override"] is False
-
-
 def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
     from songmaker_cli.constants import SETTING_CLAUDE_CHAT_MODEL, SETTING_CLAUDE_SCORING_MODEL
     from songmaker_cli.db.queries.settings import set_claude_model
@@ -4224,12 +4159,10 @@ def _client_beside_a_foreign_take(
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role=role,
+            id="u-test", username="test_user", role=role,
         ))
         session.add(User(
-            id=other_user_id, username="other_user",
-            password_hash="unused", role="user",
+            id=other_user_id, username="other_user", role="user",
         ))
         session.flush()
 
@@ -4311,8 +4244,7 @@ def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            id="u-test", username="test_user", role="user",
         ))
         session.flush()
         _seed_db(session, owner_id="u-test")
@@ -4460,7 +4392,7 @@ def test_s8_stream_error_only_changes(client, before, after):
     import asyncio
 
     from songmaker_cli import redis_client
-    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 
     ctx = client.app.state.ctx
     with ctx.db() as session:
@@ -4526,7 +4458,7 @@ def test_s8_live_stream_during_second_take(client, generation_worker_peer):
 
     from songmaker_cli import redis_client
     from songmaker_cli.acestep_state import read_queue_depth
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
 
     ctx = client.app.state.ctx
@@ -4613,7 +4545,7 @@ def test_partial_oom_reload_retains_successful_take(client, generation_worker_pe
     from worker_http_peer import WorkerScenario, WorkerStream
 
     from songmaker_cli import redis_client
-    from songmaker_cli.db.queries import create_job
+    from songmaker_cli.db.queries.jobs import create_job
     from songmaker_cli.jobs import run_generation_job
 
     ctx = client.app.state.ctx
@@ -4793,7 +4725,7 @@ def test_cancel_preserves_status_contract_for_stored_errors(client, stored_music
 def test_get_job_stream_job_cancel_rejects_foreign_job(client, stored_musician_job, read_path):
     """L5: Projection never bypasses job ownership."""
     with client.app.state.ctx.db() as session:
-        session.add(User(id="foreign", username="foreign", password_hash="unused", role="user"))
+        session.add(User(id="foreign", username="foreign", role="user"))
         session.flush()
         session.get(Job, stored_musician_job).user_id = "foreign"
         session.commit()

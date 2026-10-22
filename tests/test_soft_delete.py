@@ -22,31 +22,30 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.albums import (
     RestoreWindowExpiredError,
-    add_song_to_playlist,
-    create_playlist,
-    create_song,
     delete_album,
-    delete_song,
     enable_album_sharing,
-    enable_song_sharing,
     get_album,
     get_album_by_slug,
-    get_playlist,
+    list_albums,
+    list_expired_albums,
+    restore_album,
+    soft_delete_album,
+)
+from songmaker_cli.db.queries.generations import pick_generation
+from songmaker_cli.db.queries.playlists import add_song_to_playlist, create_playlist, get_playlist
+from songmaker_cli.db.queries.songs import (
+    create_song,
+    delete_song,
+    enable_song_sharing,
     get_song,
     get_song_by_slug,
-    hard_delete_user,
-    list_albums,
+    list_expired_songs,
     move_song,
-    pick_generation,
-    restore_album,
     restore_song,
-    soft_delete_album,
     soft_delete_song,
 )
-from songmaker_cli.db.queries.albums import list_expired_albums
-from songmaker_cli.db.queries.songs import list_expired_songs
 from songmaker_cli.settings import get_settings
 
 RESTORE_WINDOW = timedelta(days=get_settings().soft_delete_retention_days)
@@ -266,22 +265,6 @@ def test_hard_delete_song_sees_soft_deleted(seeded: Session) -> None:
     assert "u-test/g1.mp3" in paths
 
 
-def test_hard_delete_user_includes_soft_deleted_albums(db_session: Session) -> None:
-    db_session.add(User(id=_OTHER_USER_ID, username="u2", password_hash="x", role="user"))
-    db_session.flush()
-    _seed(db_session, owner=_OTHER_USER_ID)
-    soft_delete_album(db_session, "rock")
-    db_session.commit()
-    paths, album_ids, playlist_ids = hard_delete_user(db_session, _OTHER_USER_ID)
-    db_session.commit()
-    assert "u-test/g1.mp3" in paths
-    assert "rock" in album_ids
-    assert playlist_ids == []
-    assert db_session.query(Album).execution_options(
-        include_deleted=True,
-    ).count() == 0
-
-
 def test_chat_messages_survive_soft_delete_and_restore(seeded: Session) -> None:
     seeded.add(ChatMessage(id="m1", song_id="s1", role="user", content="hi"))
     seeded.commit()
@@ -294,7 +277,7 @@ def test_chat_messages_survive_soft_delete_and_restore(seeded: Session) -> None:
 
 
 def test_playlist_entries_filtered_when_song_soft_deleted(seeded: Session) -> None:
-    seeded.add(User(id="owner", username="o", password_hash="x", role="user"))
+    seeded.add(User(id="owner", username="o", role="user"))
     seeded.commit()
     pl = create_playlist(seeded, "Mix", "owner", slug="mix")
     pick_generation(seeded, "g1")
@@ -320,8 +303,7 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=_DEFAULT_USER_ID, username="u_user",
-            password_hash="x", role=role,
+            id=_DEFAULT_USER_ID, username="u_user", role=role,
         ))
         session.flush()
         session.add(Album(
@@ -387,8 +369,8 @@ def test_api_restore_song_round_trip(tmp_path: Path) -> None:
 def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id="u1", username="u1", password_hash="x", role="user"))
-        session.add(User(id="u2", username="u2", password_hash="x", role="user"))
+        session.add(User(id="u1", username="u1", role="user"))
+        session.add(User(id="u2", username="u2", role="user"))
         session.flush()
         session.add(Album(id="rock", title="R", artist="A", created_by="u1"))
         session.commit()

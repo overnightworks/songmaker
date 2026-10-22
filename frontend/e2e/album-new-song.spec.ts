@@ -26,7 +26,7 @@ import {
 	workspace,
 	HOME_PATH
 } from './helpers';
-import { readSeededLibrary } from './seed';
+import { archiveOwnedAlbum, readSeededLibrary } from './seed';
 
 /**
  * Sized before the first CI measurement from the album cold open (album-menu
@@ -98,33 +98,37 @@ test('an empty album makes its first song from + New song and opens it', async (
 }, testInfo) => {
 	await page.goto(HOME_PATH);
 	const album = await createEmptyAlbum(page, testInfo);
-	const songTitle = `Tidewater ${Date.now()}`;
-	await page.goto(`/album/${album.id}`);
-	const surface = workspace(page);
-	await expect(surface.getByRole('heading', { name: album.title })).toBeVisible();
-	await expect(surface.getByText(ALBUM_NO_SONGS, { exact: true })).toBeVisible();
+	try {
+		const songTitle = `Tidewater ${Date.now()}`;
+		await page.goto(`/album/${album.id}`);
+		const surface = workspace(page);
+		await expect(surface.getByRole('heading', { name: album.title })).toBeVisible();
+		await expect(surface.getByText(ALBUM_NO_SONGS, { exact: true })).toBeVisible();
 
-	const card = surface.getByRole('form', { name: newSongCardLabel(album.title) });
-	await newSongRow(page).click();
-	await expect(card).toBeVisible();
-	await expect(newSongRow(page)).toBeHidden();
-	await expect(card.getByLabel(NEW_SONG_TITLE_LABEL)).toBeFocused();
-	await card.getByRole('button', { name: NEW_SONG_CLOSE_LABEL }).click();
-	await expect(card).toBeHidden();
-	await expect(newSongRow(page)).toBeFocused();
+		const card = surface.getByRole('form', { name: newSongCardLabel(album.title) });
+		await newSongRow(page).click();
+		await expect(card).toBeVisible();
+		await expect(newSongRow(page)).toBeHidden();
+		await expect(card.getByLabel(NEW_SONG_TITLE_LABEL)).toBeFocused();
+		await card.getByRole('button', { name: NEW_SONG_CLOSE_LABEL }).click();
+		await expect(card).toBeHidden();
+		await expect(newSongRow(page)).toBeFocused();
 
-	await newSongRow(page).click();
-	await expect(card).toBeVisible();
-	await page.goBack();
-	await expect(card).toBeHidden();
-	await expect(newSongRow(page)).toBeFocused();
-	await expect(surface.getByRole('heading', { name: album.title })).toBeVisible();
+		await newSongRow(page).click();
+		await expect(card).toBeVisible();
+		await page.goBack();
+		await expect(card).toBeHidden();
+		await expect(newSongRow(page)).toBeFocused();
+		await expect(surface.getByRole('heading', { name: album.title })).toBeVisible();
 
-	await newSongRow(page).click();
-	await card.getByLabel(NEW_SONG_TITLE_LABEL).fill(songTitle);
-	await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+		await newSongRow(page).click();
+		await card.getByLabel(NEW_SONG_TITLE_LABEL).fill(songTitle);
+		await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
 
-	await expect(page).toHaveURL(new RegExp(`/album/${album.id}/`));
-	const songHeading = shellOf(testInfo) === 'mobile' ? appBar(page) : surface;
-	await expect(songHeading.getByRole('heading', { name: songTitle })).toBeVisible();
+		await expect(page).toHaveURL(new RegExp(`/album/${album.id}/`));
+		const songHeading = shellOf(testInfo) === 'mobile' ? appBar(page) : surface;
+		await expect(songHeading.getByRole('heading', { name: songTitle })).toBeVisible();
+	} finally {
+		await archiveOwnedAlbum(page.request, album.id);
+	}
 });

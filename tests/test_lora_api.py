@@ -31,19 +31,15 @@ from songmaker_cli.db.models import (
     UserLoraSample,
     Version,
 )
-from songmaker_cli.db.queries import (
-    add_user_lora_sample,
-    create_user_lora,
-    update_user_lora,
-)
+from songmaker_cli.db.queries.loras import add_user_lora_sample, create_user_lora, update_user_lora
 
 USER_A = "u-alice"
 USER_B = "u-bob"
 
 
 def _seed_users(session: Session) -> None:
-    session.add(User(id=USER_A, username="alice", password_hash="x", role="user"))
-    session.add(User(id=USER_B, username="bob", password_hash="x", role="user"))
+    session.add(User(id=USER_A, username="alice", role="user"))
+    session.add(User(id=USER_B, username="bob", role="user"))
 
 
 @pytest.fixture
@@ -214,7 +210,7 @@ def test_list_loras_excludes_soft_deleted_by_default(
         session.commit()
         keep_id = keep.id
         gone_id = gone.id
-        from songmaker_cli.db.queries import soft_delete_user_lora
+        from songmaker_cli.db.queries.loras import soft_delete_user_lora
         soft_delete_user_lora(session, gone_id)
         session.commit()
 
@@ -819,7 +815,7 @@ def test_add_sample_rejected_on_deleted_lora(
     client, ctx = client_and_ctx
     lora_id = _make_lora(ctx)
     with ctx.db() as session:
-        from songmaker_cli.db.queries import soft_delete_user_lora
+        from songmaker_cli.db.queries.loras import soft_delete_user_lora
         soft_delete_user_lora(session, lora_id)
         session.commit()
 
@@ -1218,7 +1214,7 @@ def test_train_rejects_when_soft_deleted(
     client, ctx = client_and_ctx
     lora_id = _seed_trainable_lora(ctx)
     with ctx.db() as session:
-        from songmaker_cli.db.queries import soft_delete_user_lora
+        from songmaker_cli.db.queries.loras import soft_delete_user_lora
         soft_delete_user_lora(session, lora_id)
         session.commit()
 

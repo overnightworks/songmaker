@@ -203,8 +203,8 @@ def test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song(
     factory = init_test_db(tmp_path / f"{provider}-dispatch.db")
     with factory() as session:
         session.add_all([
-            User(id="owner", username="owner", password_hash="x", role="user"),
-            User(id="other", username="other", password_hash="x", role="user"),
+            User(id="owner", username="owner", role="user"),
+            User(id="other", username="other", role="user"),
         ])
         session.flush()
         session.add_all([

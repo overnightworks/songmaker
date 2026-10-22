@@ -12,8 +12,6 @@ Your job is to find what's NEW. Anything already documented as known/accepted sh
 
 3. **Read recent git history** (`git log --oneline -30`). Don't flag things that just shipped. The recent quick-wins / refactors are the most likely source of false-positive findings.
 
-4. **Read the `plans/` directory** (currently 0–3 files depending on whether live-coordination plans exist). Anything in flight or just landed is not a finding.
-
 ## Scope
 
 Focus on `src/` and `tests/`. Config files (pyproject.toml, etc.) are in scope. The `frontend/` directory is in scope for architecture (component structure, state management, API contract). Album content, generated output, and model weights are not.
@@ -118,7 +116,7 @@ Findings from a brutal architecture review on {date}. Each is numbered; the oper
 **Rules for the distributor issue:**
 - One numbered finding per entry. ~10–20 lines each.
 - Severity is your call: HIGH = correctness/security/data-loss risk, MEDIUM = real bug-class waiting to bite, LOW = quality / cosmetic / minor.
-- Do **not** include symbol inventories, line counts, file-by-file diff sketches, or step-by-step orderings. Concept notes rot less than detailed plans; the global contract and AGENTS.md "Where things go" own plan handling. Concept only.
+- Do **not** include symbol inventories, line counts, file-by-file diff sketches, or step-by-step orderings. Concept notes rot less than detailed plans; the global contract owns plan handling. Concept only.
 - Do **not** include findings that are already open on the board or in the recent git history. That's noise.
 - Label the issue so it is discoverable as this review's output; the distributor closes once every finding is landed, folded into an owner, or retired.
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import mimetypes
-import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -23,14 +22,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from webauth.middleware import install_web_auth_middleware
 
 from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.app_context import (
     AppContext,
+    allowed_hosts,
     build_web_auth_config,
     parse_trusted_proxies,
 )
+from songmaker_cli.audio_paths import AudioPathRejectedError
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
     APP_NAME,
@@ -49,7 +51,6 @@ from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
-    auto_setup_admin,
     cleanup_expired_resource_events,
     pin_judge_route,
     provider_status_refresh_loop,
@@ -65,17 +66,17 @@ from songmaker_cli.lifecycle import (
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
+from songmaker_cli.oidc_client import build_oidc_sign_in
 from songmaker_cli.request_policies import (
     build_body_size_policy,
-    build_csrf_policy,
+    build_csrf_origin_policy,
+    build_csrf_token_policy,
     build_rate_limit_policy,
     build_security_headers_policy,
 )
 from songmaker_cli.settings import CoverExecutor, get_settings
 
 log = logging.getLogger(__name__)
-
-NOT_FOUND_DETAIL: Final = "Not Found"
 
 STATIC_ASSET_MEDIA_TYPES: Final = {".woff2": "font/woff2"}
 
@@ -108,28 +109,12 @@ def _record_background_loop_completion(
     log.error("Background loop %s ended", name)
 
 
-def parse_allowed_hosts() -> tuple[frozenset[str], list[re.Pattern[str]]]:
-    raw = get_settings().allowed_hosts
-    exact: set[str] = set()
-    patterns: list[re.Pattern[str]] = []
-    for h in raw.split(","):
-        h = h.strip()
-        if not h:
-            continue
-        if h.startswith("*."):
-            suffix = re.escape(h[2:])
-            patterns.append(re.compile(rf"^[^:]+\.{suffix}(:\d+)?$"))
-        else:
-            exact.add(h)
-    return frozenset(exact), patterns
-
-
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     from agent_providers.claude.provider import shutdown_tool_surface_background_tasks
 
     from songmaker_cli.arq_pool import close_arq_pool, init_arq_pool
-    from songmaker_cli.db.queries import cleanup_old_login_attempts, delete_expired_sessions
+    from songmaker_cli.db.queries.auth import delete_expired_sessions
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
     from songmaker_cli.redis_client import drain_lease_releases
 
@@ -151,12 +136,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         deleted = delete_expired_sessions(session)
         if deleted:
             log.info("Startup: cleaned up %d expired sessions", deleted)
-        pruned = cleanup_old_login_attempts(session)
-        if pruned:
-            log.info("Startup: pruned %d old login attempts", pruned)
         session.commit()
 
-    auto_setup_admin(ctx)
     pin_judge_route(ctx)
     if settings.cover_executor is CoverExecutor.WEB:
         await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir, settings)
@@ -213,6 +194,14 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await shutdown_tool_surface_background_tasks()
 
 
+def audio_path_rejected_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """Answer a rejected audio path exactly like a missing resource."""
+    return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
+
+
 def create_app(
     audio_dir: Path,
     data_dir: Path,
@@ -238,6 +227,7 @@ def create_app(
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)
+    app.state.oidc_sign_in = build_oidc_sign_in(get_settings())
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
@@ -249,7 +239,8 @@ def create_app(
     #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
     #   7. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
     #   8. CsrfTokenMiddleware        -- verify double-submit CSRF token
-    #   9. AccessLogMiddleware        -- log all requests (after security checks)
+    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  10. AccessLogMiddleware        -- log all requests (after security checks)
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the true outermost layer) and outside everything else, on purpose:
@@ -271,15 +262,15 @@ def create_app(
     #     and `test_server_middleware.py`'s SSE test).
     script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     settings = get_settings()
-    csrf_policy = build_csrf_policy()
     app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
     install_web_auth_middleware(
         app,
         security_headers=build_security_headers_policy(script_hashes),
         body_size=build_body_size_policy(settings),
         rate_limit=build_rate_limit_policy(settings),
-        csrf_origin=csrf_policy,
-        csrf_token=csrf_policy,
+        csrf_origin=build_csrf_origin_policy(),
+        csrf_token=build_csrf_token_policy(),
     )
 
     app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
@@ -293,6 +284,8 @@ def create_app(
     )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
 
+    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
         request: Request,
@@ -305,10 +298,12 @@ def create_app(
         )
 
     from songmaker_cli.api import router as api_router
+    from songmaker_cli.auth_api import sign_in_router
     from songmaker_cli.health_api import router as health_router
     from songmaker_cli.sharing_api import router as sharing_router
 
     app.include_router(api_router)
+    app.include_router(sign_in_router)
     app.include_router(health_router)
     app.include_router(sharing_router)
 
@@ -346,7 +341,7 @@ def create_app(
     @app.get("/service-worker.js", include_in_schema=False)
     async def serve_service_worker() -> FileResponse:
         if not sw_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(
             sw_path,
             media_type="application/javascript",
@@ -356,22 +351,23 @@ def create_app(
     @app.get("/manifest.webmanifest", include_in_schema=False)
     async def serve_webmanifest() -> FileResponse:
         if not manifest_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(manifest_path, media_type="application/manifest+json")
 
     @app.get("/icon-192.png", include_in_schema=False)
     async def serve_icon_192() -> FileResponse:
         if not icon_192_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(icon_192_path, media_type="image/png")
 
     @app.get("/icon-512.png", include_in_schema=False)
     async def serve_icon_512() -> FileResponse:
         if not icon_512_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(icon_512_path, media_type="image/png")
 
     sk_index = sveltekit_dir / "index.html"
+    app.state.spa_index = sk_index
 
     @app.exception_handler(404)
     async def spa_fallback(request: Request, exc: HTTPException) -> FileResponse | JSONResponse:
@@ -400,7 +396,6 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
     if not redis_health(redis_instance):
         redis_instance.close()
         raise RuntimeError(REDIS_STARTUP_ERROR.format(url=settings.redis_url.split("@")[-1]))
-    hosts_exact, hosts_patterns = parse_allowed_hosts()
     log.info("Redis connected: %s", settings.redis_url.split("@")[-1])
     return AppContext(
         db=init_db(settings.database_url),
@@ -409,8 +404,6 @@ def _create_default_context(audio_dir: Path, data_dir: Path) -> AppContext:
         signing_key=settings.session_secret.get_secret_value().encode(),
         redis=redis_instance,
         trusted_proxies=parse_trusted_proxies(settings),
-        allowed_hosts_exact=hosts_exact,
-        allowed_hosts_patterns=hosts_patterns,
     )
 
 

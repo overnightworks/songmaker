@@ -30,7 +30,6 @@ from songmaker_cli.health_types import (
     BackgroundLoopName,
     CodexImageSandboxRuntimeHealth,
 )
-from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
 
@@ -209,7 +208,7 @@ async def provider_status_refresh_loop(app: FastAPI) -> None:
 
 def cleanup_expired_resource_events(ctx: AppContext) -> int:
     """Delete delivered event history beyond retention, preserving cursors."""
-    from songmaker_cli.db.queries import delete_resource_events_before
+    from songmaker_cli.db.queries.resource_events import delete_resource_events_before
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=RESOURCE_EVENT_RETENTION_DAYS)
     with ctx.db() as session:
@@ -449,7 +448,7 @@ async def score_backfill_loop(app: FastAPI) -> None:
 
 def read_worker_liveness(ctx: AppContext) -> dict[JobType, WorkerLiveness]:
     """Read lifecycle liveness after the database owner supplies the registry."""
-    from songmaker_cli.db.queries import list_worker_identities
+    from songmaker_cli.db.queries.workers import list_worker_identities
 
     with ctx.db() as session:
         worker_ids = [worker.id for worker in list_worker_identities(session)]
@@ -463,7 +462,7 @@ def reap_stale_jobs(
     worker_liveness: Mapping[JobType, WorkerLiveness] | None = None,
 ) -> int:
     """Terminalize every stale job according to the shared type table."""
-    from songmaker_cli.db.queries import recover_stale_jobs_by_age_and_type
+    from songmaker_cli.db.queries.jobs import recover_stale_jobs_by_age_and_type
 
     if worker_liveness is None:
         worker_liveness = read_worker_liveness(ctx)
@@ -537,55 +536,12 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
 
 
-def auto_setup_admin(ctx: AppContext) -> None:
-    settings = get_settings()
-    admin_user = settings.admin_username
-    admin_pass = (
-        settings.admin_password.get_secret_value() if settings.admin_password else None
-    )
-    if not admin_user or not admin_pass:
-        return
-
-    from webauth.ports import UsernameTakenError
-    from webauth.users import (
-        SetupAlreadyDoneError,
-        SetupRacedError,
-        complete_first_run_setup,
-    )
-
-    from songmaker_cli.api_models.auth import chosen_rule_refusal
-    from songmaker_cli.app_context import build_web_auth_config
-    from songmaker_cli.auth_dependencies import build_user_management
-    from songmaker_cli.db.queries import user_count
-
-    config = build_web_auth_config(ctx, settings)
-    with ctx.db() as session:
-        if user_count(session) > 0:
-            return
-        refusal = chosen_rule_refusal(admin_pass)
-        if refusal is not None:
-            log.error("ADMIN_PASSWORD refused: %s -- skipping auto-setup", refusal)
-            return
-        management = build_user_management(session, config)
-        try:
-            complete_first_run_setup(management, admin_user, admin_pass)
-        except SetupAlreadyDoneError:
-            session.rollback()
-            return
-        except (SetupRacedError, UsernameTakenError):
-            session.rollback()
-            log.info("Auto-setup: admin user already exists (concurrent startup)")
-            return
-        session.commit()
-        log.info("Auto-setup: admin user '%s' created from env vars", admin_user)
-
-
 def pin_judge_route(ctx: AppContext) -> None:
     """Persist the pre-route judge transport once using the shared runtime config."""
     from agent_providers.config import current_config
     from sqlalchemy.exc import IntegrityError
 
-    from songmaker_cli.db.queries import pin_judge_route_if_unset
+    from songmaker_cli.db.queries.settings import pin_judge_route_if_unset
 
     with ctx.db() as session:
         try:
@@ -648,7 +604,7 @@ async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified
 
 def _cleanup_sessions(ctx: AppContext) -> int:
     """Commit expired-session removal without changing surviving sessions."""
-    from songmaker_cli.db.queries import delete_expired_sessions
+    from songmaker_cli.db.queries.auth import delete_expired_sessions
 
     with ctx.db() as db:
         purged = delete_expired_sessions(db)

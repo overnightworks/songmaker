@@ -91,13 +91,13 @@ def _library_env(tmp_path: Path) -> tuple[object, object]:
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=USER_A, username="alice", password_hash="unused", role="user",
+            id=USER_A, username="alice", role="user",
         ))
         session.add(User(
-            id=USER_B, username="bob", password_hash="unused", role="user",
+            id=USER_B, username="bob", role="user",
         ))
         session.add(User(
-            id=ADMIN_ID, username="admin", password_hash="unused", role="admin",
+            id=ADMIN_ID, username="admin", role="admin",
         ))
         session.flush()
         _seed_library(session)

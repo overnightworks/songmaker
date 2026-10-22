@@ -5,7 +5,7 @@ import {
 	fetchLastFailedGeneration,
 	type JobStatus
 } from '$lib/api/client';
-import { isNotFound } from '$lib/api/fetch';
+import { ApiError, isNotFound } from '$lib/api/fetch';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
@@ -78,13 +78,47 @@ export function resetGenerationFailuresForTests(): void {
 	hydrationEpoch.clear();
 }
 
-function failureMessage(job: JobStatus): string {
+const GENERATION_UNAVAILABLE_ERROR_TYPE = 'generation_unavailable';
+
+type FailureFields = Pick<JobStatus, 'error' | 'error_type' | 'type'>;
+
+function failureMessage(job: FailureFields): string {
 	if (job.error_type === 'server_restart') return SERVER_RESTART_MESSAGE;
 	return job.error || `${job.type} failed`;
 }
 
-function generationFailure(job: JobStatus): GenerationFailure {
-	return { message: failureMessage(job), unavailable: job.error_type === 'generation_unavailable' };
+function generationFailure(job: FailureFields): GenerationFailure {
+	return {
+		message: failureMessage(job),
+		unavailable: job.error_type === GENERATION_UNAVAILABLE_ERROR_TYPE
+	};
+}
+
+const SERVICE_UNAVAILABLE_STATUS = 503;
+
+/**
+ * A press the server refused as unavailable: it stored a FAILED job with the
+ * line and answered 503 carrying that job's id. Shows the same lasting line a
+ * reload shows, live -- the press already closed hydration for this song when
+ * it dismissed the previous failure. Returns whether the error was such a
+ * refusal; any other error is left to the caller.
+ */
+export function showGenerationUnavailableRefusal(songId: string, error: unknown): boolean {
+	if (
+		!(error instanceof ApiError) ||
+		error.status !== SERVICE_UNAVAILABLE_STATUS ||
+		error.errorType !== GENERATION_UNAVAILABLE_ERROR_TYPE ||
+		error.jobId === null
+	) {
+		return false;
+	}
+	const failure = generationFailure({
+		error: error.detail,
+		error_type: error.errorType,
+		type: 'generate'
+	});
+	generationFailures.update((failures) => ({ ...failures, [songId]: failure }));
+	return true;
 }
 
 /**

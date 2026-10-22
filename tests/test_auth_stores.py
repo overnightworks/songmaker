@@ -1,49 +1,35 @@
-"""songmaker's stores behind the webauth ports: what they write, and when."""
+"""The database stores behind the `webauth` ports."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from functools import partial
 from pathlib import Path
 
 import pytest
+from pydantic import SecretStr
+from sqlalchemy import event, text
+from sqlalchemy.exc import IntegrityError
 from webauth.ports import (
+    AccountEvent,
+    AccountEventKind,
     AuditSink,
-    LoginAttemptStore,
-    SessionAdministrationStore,
-    SessionIdentityChange,
-    SessionIdentityChanged,
     SessionRecordStore,
-    UnknownUserError,
-    UserAdministrationStore,
-    UserManagementEvent,
-    UserManagementEventKind,
-    UsernameTakenError,
-    UserStore,
-    WriteLock,
+    SubjectUserStore,
 )
 
 from songmaker_cli.auth_stores import (
     DatabaseAuditSink,
-    DatabaseLoginAttemptStore,
     DatabaseSessionRecordStore,
-    DatabaseUserStore,
+    DatabaseSubjectUserStore,
     DatabaseWriteLock,
 )
 from songmaker_cli.constants import AuditAction, ResourceType
-from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import (
-    AuditLog,
-    LoginAttempt,
-    ResourceEventCursor,
-    User,
-    UserSession,
-)
+from songmaker_cli.db.engine import connect_db, init_test_db
+from songmaker_cli.db.models import AuditLog, Base, ResourceEventCursor, User, UserSession
 
-_PASSWORD_HASH = "hashed"
-_SESSION_MAX_AGE_SECONDS = 3600
+_SUBJECT = "7b3f0c1e-5d2a-4c88-9e51-0a1b2c3d4e5f"
 
 
 @pytest.fixture
@@ -54,23 +40,13 @@ def session(tmp_path: Path):
 
 
 @pytest.fixture
-def users(session) -> UserStore:
-    return DatabaseUserStore(session)
+def accounts(session) -> SubjectUserStore:
+    return DatabaseSubjectUserStore(session)
 
 
 @pytest.fixture
-def session_max_age_seconds() -> int:
-    return _SESSION_MAX_AGE_SECONDS
-
-
-@pytest.fixture
-def sessions(session, session_max_age_seconds: int) -> SessionRecordStore:
-    return DatabaseSessionRecordStore(session, session_max_age_seconds=session_max_age_seconds)
-
-
-@pytest.fixture
-def attempts(session) -> LoginAttemptStore:
-    return DatabaseLoginAttemptStore(session)
+def sessions(session) -> SessionRecordStore:
+    return DatabaseSessionRecordStore(session)
 
 
 @pytest.fixture
@@ -78,303 +54,255 @@ def audit(session) -> AuditSink:
     return DatabaseAuditSink(session)
 
 
-def _expiry(hours: int = 1) -> datetime:
+def _later(hours: int = 1) -> datetime:
     return datetime.now(timezone.utc) + timedelta(hours=hours)
 
 
-@pytest.mark.parametrize(
-    ("port", "store"),
-    [
-        (UserStore, DatabaseUserStore),
-        (UserAdministrationStore, DatabaseUserStore),
-        (SessionRecordStore, partial(
-            DatabaseSessionRecordStore, session_max_age_seconds=_SESSION_MAX_AGE_SECONDS,
-        )),
-        (SessionAdministrationStore, partial(
-            DatabaseSessionRecordStore, session_max_age_seconds=_SESSION_MAX_AGE_SECONDS,
-        )),
-        (LoginAttemptStore, DatabaseLoginAttemptStore),
-        (AuditSink, DatabaseAuditSink),
-        (WriteLock, DatabaseWriteLock),
-    ],
-)
-def test_the_store_answers_everything_its_port_asks(
-    port: type, store: Callable[..., object],
+def test_an_account_created_for_a_subject_has_the_subject_as_its_id(accounts, session) -> None:
+    account = accounts.create_for_subject(_SUBJECT, "nina", "user")
+    session.commit()
+
+    assert (account.id, account.username, account.role) == (_SUBJECT, "nina", "user")
+    assert session.get(ResourceEventCursor, _SUBJECT) is not None
+
+
+def test_two_accounts_may_show_the_same_username(accounts) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+
+    other = accounts.create_for_subject("another-subject", "nina", "user")
+
+    assert other.username == "nina"
+
+
+@pytest.mark.parametrize("lookalike", [_SUBJECT.upper(), f"{_SUBJECT} ", f" {_SUBJECT}"])
+def test_an_account_is_found_by_its_exact_id_only(accounts, session, lookalike: str) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    session.commit()
+
+    assert accounts.get(_SUBJECT) is not None
+    assert accounts.get(lookalike) is None
+
+
+def test_changing_a_role_returns_the_account_and_stays_in_the_callers_transaction(
+    accounts, session,
 ) -> None:
-    assert isinstance(store(session=None), port)
-
-
-def test_creating_a_user_also_creates_what_songmaker_ties_to_one(users, session) -> None:
-    """Without its event cursor a fresh account replays the whole history on
-    its first page load, so the account and the cursor are one creation."""
-    created = users.create("nina", _PASSWORD_HASH, "user")
-
-    assert users.get(created.id).username == "nina"
-    assert users.get_by_username("nina").id == created.id
-    assert users.count() == 1
-    assert session.query(ResourceEventCursor).filter_by(user_id=created.id).count() == 1
-
-
-def test_an_unknown_user_is_absent_rather_than_an_error(users) -> None:
-    assert users.get("does-not-exist") is None
-    assert users.get_by_username("nobody") is None
-
-
-def test_duplicate_username_raises_the_port_error(users, session) -> None:
-    users.create("nina", _PASSWORD_HASH, "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
     session.commit()
 
-    with pytest.raises(UsernameTakenError, match="Username already exists"):
-        users.create("nina", _PASSWORD_HASH, "admin")
-
+    assert accounts.set_role(_SUBJECT, "admin").role == "admin"
     session.rollback()
-    assert users.count() == 1
-    assert users.get_by_username("nina").role == "user"
+
+    assert accounts.get(_SUBJECT).role == "user"
 
 
-def test_updating_an_unknown_user_raises_the_port_error(users) -> None:
-    with pytest.raises(UnknownUserError, match="Account does not exist"):
-        users.update("does-not-exist", role="admin")
+def test_changing_the_role_of_an_unknown_account_raises(accounts) -> None:
+    with pytest.raises(ValueError, match="User not found"):
+        accounts.set_role("nobody", "admin")
 
 
-def test_account_updates_preserve_unsupplied_fields_and_remain_rollbackable(users, session) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    session.commit()
-
-    updated = users.update(user.id, role="admin", is_active=False, password_hash="replacement")
-
-    assert (updated.username, updated.role, updated.is_active, updated.password_hash) == (
-        "nina", "admin", False, "replacement",
-    )
-    session.rollback()
-    restored = users.get(user.id)
-    assert (restored.role, restored.is_active, restored.password_hash) == (
-        "user", True, _PASSWORD_HASH,
-    )
-
-
-def test_accounts_are_listed_in_username_order_and_only_active_matching_roles_count(users) -> None:
-    users.create("zoe", _PASSWORD_HASH, "operator")
-    inactive = users.create("nina", _PASSWORD_HASH, "operator")
-    users.create("anna", _PASSWORD_HASH, "admin")
-    users.update(inactive.id, is_active=False)
-
-    assert [user.username for user in users.list()] == ["anna", "nina", "zoe"]
-    assert users.count_active_admins("operator") == 1
-    assert users.count_active_admins("user") == 0
-
-
-def test_nested_management_writes_roll_back_together_after_leaving_the_lock(users, session) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
+def test_sequential_holds_in_one_transaction_do_not_commit_between_them(accounts, session) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
     session.commit()
     lock = DatabaseWriteLock(session)
 
     with lock.hold():
-        users.update(user.id, role="admin")
-        with lock.hold():
-            users.update(user.id, is_active=False)
+        accounts.set_role(_SUBJECT, "admin")
+    with lock.hold():
+        accounts.set_role(_SUBJECT, "operator")
     session.rollback()
 
-    assert (users.get(user.id).role, users.get(user.id).is_active) == ("user", True)
+    assert accounts.get(_SUBJECT).role == "user"
 
 
-def test_management_lock_rejects_pending_business_changes(users, session) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
+@pytest.mark.parametrize("end_transaction", ["commit", "rollback"])
+def test_the_next_hold_locks_again_after_the_transaction_ends(
+    session, end_transaction: str,
+) -> None:
+    statements: list[str] = []
+    event.listen(
+        session.get_bind(), "before_cursor_execute",
+        lambda _conn, _cursor, statement, *_rest: statements.append(statement),
+    )
+    lock = DatabaseWriteLock(session)
+
+    with lock.hold():
+        pass
+    with lock.hold():
+        pass
+    getattr(session, end_transaction)()
+    with lock.hold():
+        pass
+
+    assert statements.count("BEGIN IMMEDIATE") == 2
+
+
+def test_management_lock_rejects_pending_business_changes(accounts, session) -> None:
+    account = accounts.create_for_subject(_SUBJECT, "nina", "user")
     session.commit()
-    user.role = "admin"
+    account.role = "admin"
     lock = DatabaseWriteLock(session)
 
     with pytest.raises(AssertionError, match="uncommitted mutations"), lock.hold():
         pass
     session.rollback()
-    assert users.get(user.id).role == "user"
+    assert accounts.get(_SUBJECT).role == "user"
 
 
-def test_a_session_is_loaded_with_the_account_it_belongs_to(users, sessions) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
+def test_a_session_is_stored_with_the_instants_it_is_given(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    created = datetime(2026, 10, 1, 8, 0, tzinfo=timezone.utc)
+    expires = created + timedelta(days=7)
 
-    created = sessions.create(
-        user.id, _expiry(), ip_address="1.2.3.4", user_agent="TestBrowser/1.0",
-    )
+    record = sessions.create(_SUBJECT, now=created, expires_at=expires, refresh_token=None)
+    loaded = sessions.load(record.id)
 
-    loaded = sessions.load(created.id)
-    assert loaded.id == created.id
     assert loaded.user.username == "nina"
-    assert loaded.ip_address == "1.2.3.4"
+    assert loaded.created_at.replace(tzinfo=timezone.utc) == created
+    assert loaded.expires_at.replace(tzinfo=timezone.utc) == expires
 
 
-def test_an_unknown_session_is_absent(sessions) -> None:
-    assert sessions.load("does-not-exist") is None
+def test_a_session_without_a_refresh_token_answers_none(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(_SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None)
+
+    assert sessions.load(record.id).refresh_token is None
 
 
-def test_active_session_pages_exclude_expired_records(users, sessions) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    sessions.create(user.id, _expiry(hours=-1), ip_address="", user_agent="")
-    older = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
-    newer = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
-
-    assert sessions.count_active() == 2
-    assert [record.id for record in sessions.list_active(limit=1)] == [newer.id]
-    assert [record.id for record in sessions.list_active(offset=1)] == [older.id]
-    assert [record.id for record in sessions.list_active()] == [newer.id, older.id]
-
-
-@pytest.mark.parametrize("session_max_age_seconds", [60, 7200])
-def test_touching_a_session_writes_its_new_origin_and_renews_from_the_supplied_time(
-    users, sessions, session, session_max_age_seconds: int,
+def test_a_stored_refresh_token_is_returned_secret_and_kept_out_of_the_repr(
+    accounts, sessions, session,
 ) -> None:
-    """defect:#1590: renewal returns True and updates the loaded record."""
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    created = sessions.create(
-        user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0",
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
     )
     session.commit()
-    now = datetime(2026, 9, 10, 12, tzinfo=timezone.utc)
+    session.expire_all()
 
-    assert sessions.touch(
-        created, ip_address="9.9.9.9", user_agent="New/2.0",
-        now=now,
-    ) is True
+    loaded = sessions.load(record.id)
 
-    assert created.ip_address == "9.9.9.9"
-    assert created.user_agent == "New/2.0"
-    assert created.expires_at == now + timedelta(seconds=session_max_age_seconds)
+    assert loaded.refresh_token.get_secret_value() == "rt-one"
+    assert "rt-one" not in repr(loaded.refresh_token)
 
 
-@pytest.mark.parametrize("removal", ["missing", "deleted", "revoked"])
-def test_touch_does_not_recreate_an_absent_session(users, sessions, session, removal) -> None:
-    """defect:#1590: stale records cannot resurrect missing or revoked rows."""
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    if removal == "missing":
-        record = UserSession(id="missing", user_id=user.id)
-    else:
-        record = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
-        if removal == "deleted":
-            sessions.delete(record.id)
-        else:
-            sessions.delete_for_user(user.id)
-    session.commit()
+def test_a_failed_session_insert_raises_without_the_refresh_token_in_the_traceback(
+    tmp_path: Path,
+) -> None:
+    database_url = f"sqlite:///{tmp_path / 'production-engine.db'}"
+    factory = connect_db(database_url)
+    with factory() as database_session:
+        Base.metadata.create_all(database_session.get_bind())
+        database_session.execute(text("PRAGMA foreign_keys=ON"))
+        sessions = DatabaseSessionRecordStore(database_session)
+        opened_at, expires_at = _later(0), _later()
+        refresh_token = SecretStr("rt-in-a-failed-insert")
 
-    assert sessions.touch(
-        record, ip_address="9.9.9.9", user_agent="New/2.0",
-        now=datetime.now(timezone.utc),
-    ) is False
+        with pytest.raises(IntegrityError) as failure:
+            sessions.create(
+                "no-such-account", now=opened_at, expires_at=expires_at,
+                refresh_token=refresh_token,
+            )
+
+    formatted = "".join(traceback.format_exception(failure.value))
+    assert "rt-in-a-failed-insert" not in formatted
+
+
+def test_replacing_a_refresh_token_updates_only_an_existing_session(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=SecretStr("rt-one"),
+    )
+
+    assert sessions.replace_refresh_token(record.id, refresh_token=SecretStr("rt-two")) is True
+    assert sessions.load(record.id).refresh_token.get_secret_value() == "rt-two"
+
+    sessions.delete(record.id)
+
+    assert sessions.replace_refresh_token(record.id, refresh_token=SecretStr("rt-three")) is False
     assert sessions.load(record.id) is None
 
 
-def test_deleting_a_session_leaves_the_others_alone(users, sessions, session) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    kept = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
-    dropped = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
-
-    sessions.delete(dropped.id)
-
-    assert sessions.load(dropped.id) is None
-    assert sessions.load(kept.id) is not None
+def test_an_unknown_session_is_absent(sessions) -> None:
+    assert sessions.load("missing") is None
 
 
-def test_deleting_a_users_sessions_removes_all_of_them(users, sessions, session) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    sessions.create(user.id, _expiry(), ip_address="", user_agent="")
-    sessions.create(user.id, _expiry(), ip_address="", user_agent="")
+def test_touching_a_session_writes_the_given_expiry(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(_SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=None)
+    renewed = _later(5)
 
-    assert sessions.delete_for_user(user.id) == 2
+    assert sessions.touch(record.id, expires_at=renewed) is True
+
+    assert sessions.load(record.id).expires_at.replace(tzinfo=timezone.utc) == renewed
+
+
+@pytest.mark.parametrize("removal", ["missing", "deleted", "revoked"])
+def test_touch_does_not_recreate_an_absent_session(accounts, sessions, removal: str) -> None:
+    """defect:#1590: stale records cannot resurrect missing or revoked rows."""
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    session_id = "missing"
+    if removal != "missing":
+        session_id = sessions.create(
+            _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
+        ).id
+        if removal == "deleted":
+            sessions.delete(session_id)
+        else:
+            sessions.delete_for_user(_SUBJECT)
+
+    assert sessions.touch(session_id, expires_at=_later()) is False
+    assert sessions.load(session_id) is None
+
+
+def test_deleting_an_unknown_session_is_not_an_error(sessions) -> None:
+    sessions.delete("never-existed")
+
+
+def test_deleting_a_users_sessions_removes_all_of_them(accounts, sessions, session) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    for _ in range(2):
+        sessions.create(_SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None)
+
+    assert sessions.delete_for_user(_SUBJECT) == 2
     assert session.query(UserSession).count() == 0
 
 
-def test_pruning_keeps_the_newest_sessions(users, sessions) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    oldest = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
-    newest = sessions.create(user.id, _expiry(), ip_address="", user_agent="")
+@pytest.mark.parametrize("keep_newest", [0, 1, 2])
+def test_pruning_keeps_only_the_newest_sessions(accounts, sessions, keep_newest: int) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    base = datetime.now(timezone.utc)
+    created = [
+        sessions.create(
+            _SUBJECT, now=base + timedelta(seconds=index), expires_at=_later(),
+            refresh_token=None,
+        ).id
+        for index in range(3)
+    ]
 
-    assert sessions.prune_overflow(user.id, 1) == [oldest.id]
-    assert sessions.load(newest.id) is not None
+    sessions.prune_overflow(_SUBJECT, keep_newest)
 
-
-def test_failures_are_counted_by_address_and_by_username(attempts) -> None:
-    attempts.record(ip_address="1.2.3.4", username="nina", success=False)
-    attempts.record(ip_address="1.2.3.4", username="rob", success=False)
-    attempts.record(ip_address="1.2.3.4", username="nina", success=True)
-
-    assert attempts.count_recent_failures(ip_address="1.2.3.4", window_seconds=300) == 2
-    assert attempts.count_recent_failures(
-        ip_address="1.2.3.4", window_seconds=300, username="nina",
-    ) == 1
-    assert attempts.count_recent_failures(ip_address="5.6.7.8", window_seconds=300) == 0
-
-
-def test_a_moved_session_is_audited_with_where_it_moved(users, audit, session) -> None:
-    user = users.create("nina", _PASSWORD_HASH, "user")
-
-    audit.session_identity_changed(SessionIdentityChanged(
-        change=SessionIdentityChange.IP_ADDRESS,
-        user_id=user.id,
-        session_ref="0123456789abcdef",
-        previous="1.2.3.4",
-        current="9.9.9.9",
-    ))
-
-    entry = session.query(AuditLog).one()
-    assert entry.action == AuditAction.SESSION_IP_CHANGE
-    assert entry.resource_id == "0123456789abcdef"
-    assert entry.detail == "from=1.2.3.4 to=9.9.9.9"
-
-
-def test_a_changed_user_agent_is_audited_without_repeating_the_string(
-    users, audit, session,
-) -> None:
-    """The agent string is attacker-controlled and long; that it changed is
-    the finding, the string itself is already on the session."""
-    user = users.create("nina", _PASSWORD_HASH, "user")
-
-    audit.session_identity_changed(SessionIdentityChanged(
-        change=SessionIdentityChange.USER_AGENT,
-        user_id=user.id,
-        session_ref="0123456789abcdef",
-        previous="Old/1.0",
-        current="New/2.0",
-    ))
-
-    entry = session.query(AuditLog).one()
-    assert entry.action == AuditAction.SESSION_UA_CHANGE
-    assert entry.detail == "ua_changed"
+    survivors = [session_id for session_id in created if sessions.load(session_id) is not None]
+    assert survivors == created[3 - keep_newest:]
 
 
 @pytest.mark.parametrize(
-    ("kind", "action", "detail"),
+    ("kind", "action"),
     [
-        (UserManagementEventKind.USER_CREATED, AuditAction.CREATE, "role=admin"),
-        (UserManagementEventKind.ROLE_CHANGED, AuditAction.UPDATE, "role=admin"),
-        (UserManagementEventKind.USER_DEACTIVATED, AuditAction.DEACTIVATE, ""),
-        (UserManagementEventKind.PASSWORD_SET_BY_ADMIN, AuditAction.UPDATE, "password_changed"),
-        (UserManagementEventKind.FIRST_ADMIN_CREATED, None, None),
-        (UserManagementEventKind.PASSWORD_CHANGED, None, None),
-        (UserManagementEventKind.SESSIONS_REVOKED, None, None),
-        (UserManagementEventKind.SESSION_REVOKED, None, None),
+        (AccountEventKind.USER_CREATED, AuditAction.CREATE),
+        (AccountEventKind.ROLE_CHANGED, AuditAction.UPDATE),
     ],
 )
-def test_management_events_keep_songmakers_audit_contract(
-    users, audit, session, kind, action, detail,
+def test_account_events_become_audit_lines_without_a_person_behind_them(
+    accounts, audit, session, kind: AccountEventKind, action: AuditAction,
 ) -> None:
-    actor = users.create("nina", _PASSWORD_HASH, "admin")
-    subject = users.create("rob", _PASSWORD_HASH, "user")
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
     session.commit()
 
-    audit.user_management_event(UserManagementEvent(
-        kind=kind, actor_id=actor.id, subject_id=subject.id, role="admin",
-        session_count=2, session_ref="public-reference",
-    ))
+    audit.account_event(AccountEvent(kind=kind, actor_id=None, subject_id=_SUBJECT, role="admin"))
 
-    entries = session.query(AuditLog).all()
-    if action is None:
-        assert entries == []
-    else:
-        assert len(entries) == 1
-        entry = entries[0]
-        assert (entry.user_id, entry.resource_type, entry.resource_id) == (
-            actor.id, ResourceType.USER, subject.id,
-        )
-        assert (entry.action, entry.detail) == (action, detail)
+    entry = session.query(AuditLog).one()
+    assert (entry.user_id, entry.action, entry.resource_type, entry.resource_id, entry.detail) == (
+        None, action, ResourceType.USER, _SUBJECT, "role=admin",
+    )
     session.rollback()
     assert session.query(AuditLog).count() == 0
 
@@ -384,102 +312,59 @@ class _StoredRows:
     """Everything the auth stores can write, as the database holds it."""
 
     users: frozenset[str]
-    sessions: frozenset[tuple[str, str, str]]
-    login_attempts: frozenset[str]
+    sessions: frozenset[str]
     audit_entries: frozenset[str]
 
     @classmethod
     def of(cls, session) -> _StoredRows:
         return cls(
             users=frozenset(row.id for row in session.query(User).all()),
-            sessions=frozenset(
-                (row.id, row.ip_address, row.user_agent)
-                for row in session.query(UserSession).all()
-            ),
-            login_attempts=frozenset(row.id for row in session.query(LoginAttempt).all()),
+            sessions=frozenset(row.id for row in session.query(UserSession).all()),
             audit_entries=frozenset(row.id for row in session.query(AuditLog).all()),
         )
-
-
-@dataclass(frozen=True)
-class _SeededStores:
-    session: object
-    users: UserStore
-    sessions: SessionRecordStore
-    attempts: LoginAttemptStore
-    audit: AuditSink
-    user_id: str
-    session_ids: tuple[str, ...]
-
-
-@pytest.fixture
-def seeded(users, sessions, attempts, audit, session) -> _SeededStores:
-    user = users.create("nina", _PASSWORD_HASH, "user")
-    first = sessions.create(user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0")
-    second = sessions.create(user.id, _expiry(), ip_address="1.2.3.4", user_agent="Old/1.0")
-    session.commit()
-    return _SeededStores(
-        session=session, users=users, sessions=sessions, attempts=attempts, audit=audit,
-        user_id=user.id, session_ids=(first.id, second.id),
-    )
 
 
 @pytest.mark.parametrize(
     "write",
     [
         pytest.param(
-            lambda s: s.users.create("rob", _PASSWORD_HASH, "user"), id="creating a user",
+            lambda s: DatabaseSubjectUserStore(s).create_for_subject("rob-subject", "rob", "user"),
+            id="creating an account",
         ),
         pytest.param(
-            lambda s: s.sessions.create(
-                s.user_id, _expiry(), ip_address="5.6.7.8", user_agent="New/2.0",
+            lambda s: DatabaseSessionRecordStore(s).create(
+                _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
             ),
             id="creating a session",
         ),
         pytest.param(
-            lambda s: s.sessions.touch(
-                s.sessions.load(s.session_ids[0]),
-                ip_address="9.9.9.9", user_agent="New/2.0", now=_expiry(),
-            ),
-            id="touching a session",
+            lambda s: DatabaseSessionRecordStore(s).delete_for_user(_SUBJECT),
+            id="deleting a user's sessions",
         ),
         pytest.param(
-            lambda s: s.sessions.delete(s.session_ids[0]), id="deleting a session",
+            lambda s: DatabaseSessionRecordStore(s).prune_overflow(_SUBJECT, 0),
+            id="pruning sessions",
         ),
         pytest.param(
-            lambda s: s.sessions.delete_for_user(s.user_id), id="deleting a user's sessions",
-        ),
-        pytest.param(
-            lambda s: s.sessions.prune_overflow(s.user_id, 1), id="pruning overflow sessions",
-        ),
-        pytest.param(
-            lambda s: s.attempts.record(
-                ip_address="1.2.3.4", username="nina", success=False,
-            ),
-            id="recording a login attempt",
-        ),
-        pytest.param(
-            lambda s: s.audit.session_identity_changed(SessionIdentityChanged(
-                change=SessionIdentityChange.IP_ADDRESS,
-                user_id=s.user_id,
-                session_ref=s.session_ids[0],
-                previous="1.2.3.4",
-                current="9.9.9.9",
+            lambda s: DatabaseAuditSink(s).account_event(AccountEvent(
+                kind=AccountEventKind.USER_CREATED, actor_id=None, subject_id=_SUBJECT, role="user",
             )),
-            id="auditing a moved session",
+            id="auditing an account event",
         ),
     ],
 )
-def test_no_store_write_survives_the_endpoints_rollback(
-    seeded: _SeededStores, write,
-) -> None:
+def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
     """The endpoint owns the transaction. A request that fails after the auth
-    machinery wrote must leave the database exactly as it found it — no half
-    session, no orphan audit line, no attempt counted against the visitor."""
-    before = _StoredRows.of(seeded.session)
+    machinery wrote must leave the database exactly as it found it."""
+    DatabaseSubjectUserStore(session).create_for_subject(_SUBJECT, "nina", "user")
+    DatabaseSessionRecordStore(session).create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
+    )
+    session.commit()
+    before = _StoredRows.of(session)
 
-    write(seeded)
+    write(session)
 
-    assert _StoredRows.of(seeded.session) != before
-    seeded.session.rollback()
-    assert _StoredRows.of(seeded.session) == before
+    assert _StoredRows.of(session) != before
+    session.rollback()
+    assert _StoredRows.of(session) == before

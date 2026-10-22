@@ -62,8 +62,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchPlaylist: vi.fn(),
 		removeFromPlaylist: vi.fn().mockResolvedValue(undefined),
 		reorderPlaylistEntry: vi.fn().mockResolvedValue(undefined),
-		fetchCapabilities: vi.fn().mockResolvedValue({}),
-		checkSetupRequired: vi.fn()
+		fetchCapabilities: vi.fn().mockResolvedValue({})
 	};
 });
 vi.mock('$lib/api/queue-streams', () => ({

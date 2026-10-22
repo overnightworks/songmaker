@@ -167,6 +167,7 @@ export const OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET = 34;
 const API_PATH_PREFIX = '/api';
 // How Chromium fails a request while `loseNetwork` holds the network away.
 const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
+const ISSUER_UNRESOLVED_ERROR = 'net::ERR_NAME_NOT_RESOLVED';
 // How it reports a load `loseNetwork` found still in flight and ended.
 const LOAD_STOPPED_ERROR = 'net::ERR_ABORTED';
 const pagesWithoutNetwork = new WeakSet<Page>();
@@ -606,6 +607,56 @@ export interface ExpectedRefusal {
 	statuses: readonly number[];
 }
 
+/**
+ * What the app's sign-in start answers: a 303 to the identity provider's
+ * authorization endpoint, whose host is the stack's issuer.
+ */
+export interface SignInStart {
+	requested: URL;
+	status: number;
+	location: URL;
+}
+
+const contextsWithStubbedIdentityProvider = new WeakSet<BrowserContext>();
+
+/**
+ * The CI stack runs no identity provider, so what the page opens outside the
+ * app's origin -- the issuer's logout address -- ends on an empty stub instead
+ * of on the network. Playwright routes only the first request of a redirect
+ * chain, so the server's redirect to the issuer is not stubbed: the browser
+ * fails to resolve the issuer and stays on its error page. A `FlowGuard` on a
+ * page of a stubbed context forgives only that navigation: the main frame's
+ * navigation to the `Location` of the last sign-in start the page received,
+ * once per start, and lists it in `forgivenIssuerNavigations`.
+ */
+export async function stubIdentityProvider(context: BrowserContext): Promise<void> {
+	const appOrigin = new URL(BASE_URL).origin;
+	contextsWithStubbedIdentityProvider.add(context);
+	await context.route(
+		(url) => url.origin !== appOrigin,
+		(route) =>
+			route.fulfill({ status: 200, contentType: 'text/html', body: '<title>issuer</title>' })
+	);
+}
+
+/** Whether the page stands outside the app's origin, as it does at the issuer. */
+export function leftTheApp(page: Page): boolean {
+	return new URL(page.url()).origin !== new URL(BASE_URL).origin;
+}
+
+const SIGN_IN_START_PATHNAME = '/login/oidc';
+
+/** Resolves with the answer of the next request to the server's sign-in start. */
+export function nextSignInStart(page: Page): Promise<SignInStart> {
+	return page
+		.waitForResponse((response) => new URL(response.url()).pathname === SIGN_IN_START_PATHNAME)
+		.then((response) => ({
+			requested: new URL(response.url()),
+			status: response.status(),
+			location: new URL(response.headers()['location'] ?? '', BASE_URL)
+		}));
+}
+
 /** The refusals a session or rate limit answers with. */
 export const SESSION_REFUSAL_STATUSES: readonly number[] = [401, 403, 429];
 
@@ -654,9 +705,11 @@ export class FlowGuard {
 	private readonly takesBeingAbandoned = new Set<string>();
 	private readonly completingResponses = new WeakSet<Request>();
 	private readonly refusedAsExpected = new WeakSet<Request>();
+	private pendingIssuerNavigation: string | undefined;
 	private successorPath: string | undefined;
 	private abortedSuccessorUrls: string[] = [];
 	private apiRequests = 0;
+	readonly forgivenIssuerNavigations: string[] = [];
 
 	constructor(
 		private readonly page: Page,
@@ -692,10 +745,17 @@ export class FlowGuard {
 				return;
 			}
 			if (losesNetworkOnPurpose && failedWithTheNetwork(page, errorText)) return;
+			if (this.forgivesIssuerNavigation(request, errorText)) return;
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);
 		});
 		page.on('response', (response) => {
 			const status = response.status();
+			if (new URL(response.url()).pathname === SIGN_IN_START_PATHNAME && status === 303) {
+				this.pendingIssuerNavigation = new URL(
+					response.headers()['location'] ?? '',
+					response.url()
+				).href;
+			}
 			if (completesTheTake(response)) {
 				this.completingResponses.add(response.request());
 			}
@@ -773,6 +833,22 @@ export class FlowGuard {
 
 	get apiRequestCount(): number {
 		return this.apiRequests;
+	}
+
+	// The one navigation the stubbed identity provider cannot answer: the main
+	// frame following the last sign-in start's redirect.
+	private forgivesIssuerNavigation(request: Request, errorText: string): boolean {
+		const forgiven =
+			contextsWithStubbedIdentityProvider.has(this.page.context()) &&
+			errorText === ISSUER_UNRESOLVED_ERROR &&
+			request.isNavigationRequest() &&
+			request.frame() === this.page.mainFrame() &&
+			request.url() === this.pendingIssuerNavigation;
+		if (forgiven) {
+			this.forgivenIssuerNavigations.push(request.url());
+			this.pendingIssuerNavigation = undefined;
+		}
+		return forgiven;
 	}
 
 	assertClean(): void {

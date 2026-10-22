@@ -9,7 +9,7 @@ import pytest
 
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
-from songmaker_cli.db.queries import save_scores
+from songmaker_cli.db.queries.generations import save_scores
 from songmaker_cli.jobs import run_scoring_job
 from songmaker_cli.scoring.models import (
     ScorerOutcome,
@@ -58,7 +58,7 @@ def scored_generation(tmp_path: Path):
     """A generation that already carries a full set of stored scores."""
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="h", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Band", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))

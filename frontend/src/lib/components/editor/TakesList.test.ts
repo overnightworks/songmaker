@@ -534,6 +534,16 @@ describe('TakesList', () => {
 		expect(target.querySelector('.take-duration')?.textContent).toBe('3:08');
 	});
 
+	it('floors the measured length like every other duration', async () => {
+		const { target } = await render({
+			song: song({
+				...versionedSongDefaults(),
+				generations: [generation({ ...measuredTakeDefaults(), audio_duration_sec: 179.6 })]
+			})
+		});
+		expect(target.querySelector('.take-duration')?.textContent).toBe('2:59');
+	});
+
 	it('shows no duration at all for a take whose length has not been measured', async () => {
 		const { target } = await render({
 			song: song({

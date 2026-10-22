@@ -26,8 +26,8 @@ async def load_model_on_worker(
 ) -> None:
     import httpx
 
-    from songmaker_cli.db.queries import get_worker_identity
-    from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+    from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
+    from songmaker_cli.db.queries.workers import get_worker_identity
     from songmaker_cli.scheduler import WorkerTaskFailed, worker_response_cause
     from songmaker_cli.settings import get_settings
 
@@ -207,7 +207,7 @@ async def _run_download_attempt(
 ) -> Exception | None:
     import httpx
 
-    from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+    from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
     from songmaker_cli.scheduler import (
         DispatchOptions,
         NoCapacityError,

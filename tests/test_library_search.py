@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_SONG, ROLE_ADMIN
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -42,10 +42,10 @@ def _client_with_title(
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
-            id=OWNER_ID, username="owner", password_hash="unused", role="user",
+            id=OWNER_ID, username="owner", role="user",
         ))
         session.add(User(
-            id=ADMIN_ID, username="admin", password_hash="unused", role=ROLE_ADMIN,
+            id=ADMIN_ID, username="admin", role=ROLE_ADMIN,
         ))
         session.flush()
         session.add(Album(

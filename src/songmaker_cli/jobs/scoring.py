@@ -12,14 +12,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli import jobs
 from songmaker_cli.constants import JobStatus, JobType
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.generations import (
     get_generation,
-    get_judge_model,
-    get_judge_provider,
-    lock_active_job,
     save_scores,
     set_generation_transcript,
 )
+from songmaker_cli.db.queries.jobs import lock_active_job
+from songmaker_cli.db.queries.settings import get_judge_model, get_judge_provider
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.lyrical_coherence import (
     CoherenceJudgeConfig,

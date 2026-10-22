@@ -41,8 +41,8 @@ def quota_context(tmp_path, request):
     with ctx.db() as session:
         session.add_all(
             [
-                User(id="owner", username="owner", password_hash="unused"),
-                User(id="other", username="other", password_hash="unused"),
+                User(id="owner", username="owner"),
+                User(id="other", username="other"),
             ]
         )
         session.commit()

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 	import {
 		albumList,
@@ -21,6 +22,7 @@
 	import {
 		captureLibraryScroll,
 		libraryScrollAnchor,
+		libraryScrollRestore,
 		takePlaceReturnedFrom
 	} from '$lib/stores/libraryContext';
 	import { whenBackOnline } from '$lib/stores/connectivity';
@@ -58,6 +60,15 @@
 	import NewPlaceMenu from './NewPlaceMenu.svelte';
 
 	const SCROLL_RESTORE_TOLERANCE_PX = 1;
+	const SCROLL_KEYS: ReadonlySet<string> = new Set([
+		'ArrowUp',
+		'ArrowDown',
+		'PageUp',
+		'PageDown',
+		'Home',
+		'End',
+		' '
+	]);
 
 	// The Library wall of albums alone, or the Playlists page's wall of
 	// playlists alone (#1354 rule 7; frames D1 and D3).
@@ -96,7 +107,7 @@
 	const order = $derived($libraryWallOrder);
 	const browseState = $derived($libraryBrowse);
 	const playlistStatus = $derived($playlistLoad);
-	const restoredScroll = $derived($libraryScrollAnchor);
+	const pendingRestore = $derived($libraryScrollRestore);
 
 	let labelledAt = $state(new Date());
 
@@ -151,9 +162,22 @@
 	let browseEl = $state<HTMLElement | null>(null);
 
 	onMount(() => {
+		// A wall mounted without a landing starts where the anchor says, so the two agree.
+		if (!get(libraryScrollRestore)) libraryScrollRestore.set({ top: get(libraryScrollAnchor) });
 		initLibraryWallOrder();
 		catchUpWall(ensureLastPlayedRead);
-		return whenBackOnline(() => catchUpWall(readLastPlayed));
+		const stopReconnectCatchUp = whenBackOnline(() => catchUpWall(readLastPlayed));
+		// A request cleared while this wall stays mounted leaves the anchor at its
+		// target; the wall then reports where it really is.
+		let waiting = get(libraryScrollRestore) !== null;
+		const stopWatchingRestore = libraryScrollRestore.subscribe((request) => {
+			if (waiting && request === null && browseEl) captureLibraryScroll(browseEl.scrollTop);
+			waiting = request !== null;
+		});
+		return () => {
+			stopReconnectCatchUp();
+			stopWatchingRestore();
+		};
 	});
 
 	$effect(() => {
@@ -161,13 +185,19 @@
 		labelledAt = new Date();
 	});
 
-	// The wall's own scroll reports come back through the anchor; writing one
-	// back would cut into a momentum scroll, so only a different anchor moves it.
+	// Only a pending restore writes scrollTop: once the content is tall enough to
+	// hold it, or, for a target it can never hold, once the list has loaded, when
+	// the clamped position goes back to the anchor.
 	$effect(() => {
 		void wallItems.length;
-		if (!browseEl) return;
-		if (Math.abs(browseEl.scrollTop - restoredScroll) >= SCROLL_RESTORE_TOLERANCE_PX)
-			browseEl.scrollTop = restoredScroll;
+		if (!browseEl || !pendingRestore) return;
+		const reachable = browseEl.scrollHeight - browseEl.clientHeight;
+		const holdsTarget = reachable + SCROLL_RESTORE_TOLERANCE_PX >= pendingRestore.top;
+		if (!holdsTarget && !(kindLoaded && orderKnown)) return;
+		const landedAt = holdsTarget ? pendingRestore.top : Math.max(0, reachable);
+		browseEl.scrollTop = landedAt;
+		if (!holdsTarget) captureLibraryScroll(landedAt);
+		libraryScrollRestore.set(null);
 	});
 
 	function sizeLabel(item: AlbumItem | PlaylistItem): string {
@@ -210,9 +240,37 @@
 		if (document.visibilityState === 'visible') catchUpWall(readLastPlayed);
 	}
 
+	// Only the person's own input drops a pending restore; a clamp, momentum or
+	// the wall's own write are scroll events without it.
+	function dropRestoreForInput(): void {
+		if (!pendingRestore || !browseEl) return;
+		libraryScrollRestore.set(null);
+		captureLibraryScroll(browseEl.scrollTop);
+	}
+
+	$effect(() => {
+		const body = browseEl;
+		if (!body) return;
+		const onKeydown = (event: KeyboardEvent) => {
+			if (SCROLL_KEYS.has(event.key)) dropRestoreForInput();
+		};
+		const options = { passive: true };
+		body.addEventListener('pointerdown', dropRestoreForInput, options);
+		body.addEventListener('touchstart', dropRestoreForInput, options);
+		body.addEventListener('wheel', dropRestoreForInput, options);
+		body.addEventListener('keydown', onKeydown);
+		return () => {
+			body.removeEventListener('pointerdown', dropRestoreForInput);
+			body.removeEventListener('touchstart', dropRestoreForInput);
+			body.removeEventListener('wheel', dropRestoreForInput);
+			body.removeEventListener('keydown', onKeydown);
+		};
+	});
+
 	function onBrowseScroll(event: Event): void {
 		const target = event.currentTarget;
 		if (!(target instanceof HTMLElement)) return;
+		if (pendingRestore) return;
 		captureLibraryScroll(target.scrollTop);
 	}
 

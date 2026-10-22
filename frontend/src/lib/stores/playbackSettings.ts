@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { NOW_PLAYING_SURFACE_KINDS, type NowPlayingSurfaceKind } from '$lib/constants/now-playing';
+import { readStorage, removeStorage, writeStorage } from '$lib/utils/storage';
 
 // The stream/classic queue choice is gone: a take row always starts a queue
 // and a share plays its stream. Devices that stored the old choice still
@@ -8,7 +9,7 @@ const RETIRED_QUEUE_PLAYBACK_MODE_KEYS = ['queuePlaybackMode', 'queuePlaybackMod
 
 function forgetRetiredQueuePlaybackMode(): void {
 	if (typeof window === 'undefined') return;
-	for (const key of RETIRED_QUEUE_PLAYBACK_MODE_KEYS) localStorage.removeItem(key);
+	for (const key of RETIRED_QUEUE_PLAYBACK_MODE_KEYS) removeStorage(key);
 }
 
 forgetRetiredQueuePlaybackMode();
@@ -34,11 +35,11 @@ const LEGACY_POOL_MIGRATIONS: Readonly<Record<string, LibraryTakePool>> = { keep
 
 function readStoredPool(): LibraryTakePool {
 	if (typeof window === 'undefined') return DEFAULT_LIBRARY_TAKE_POOL;
-	const stored = localStorage.getItem(POOL_STORAGE_KEY);
+	const stored = readStorage(POOL_STORAGE_KEY);
 	if (stored && VALID_POOLS.has(stored)) return stored as LibraryTakePool;
 	const migrated = stored ? LEGACY_POOL_MIGRATIONS[stored] : undefined;
 	if (migrated) {
-		localStorage.setItem(POOL_STORAGE_KEY, migrated);
+		writeStorage(POOL_STORAGE_KEY, migrated);
 		return migrated;
 	}
 	return DEFAULT_LIBRARY_TAKE_POOL;
@@ -49,7 +50,7 @@ export const libraryTakePool = writable<LibraryTakePool>(readStoredPool());
 export function setLibraryTakePool(pool: LibraryTakePool): void {
 	libraryTakePool.set(pool);
 	if (typeof window !== 'undefined') {
-		localStorage.setItem(POOL_STORAGE_KEY, pool);
+		writeStorage(POOL_STORAGE_KEY, pool);
 	}
 }
 
@@ -64,7 +65,7 @@ const VALID_DESKTOP_SURFACES: ReadonlySet<string> = new Set<string>(NOW_PLAYING_
 
 function readStoredDesktopSurface(): NowPlayingSurfaceKind {
 	if (typeof window === 'undefined') return DEFAULT_DESKTOP_NOW_PLAYING_SURFACE;
-	const stored = localStorage.getItem(DESKTOP_SURFACE_STORAGE_KEY);
+	const stored = readStorage(DESKTOP_SURFACE_STORAGE_KEY);
 	if (stored && VALID_DESKTOP_SURFACES.has(stored)) return stored as NowPlayingSurfaceKind;
 	return DEFAULT_DESKTOP_NOW_PLAYING_SURFACE;
 }
@@ -74,6 +75,6 @@ export const desktopNowPlayingSurface = writable<NowPlayingSurfaceKind>(readStor
 export function setDesktopNowPlayingSurface(surface: NowPlayingSurfaceKind): void {
 	desktopNowPlayingSurface.set(surface);
 	if (typeof window !== 'undefined') {
-		localStorage.setItem(DESKTOP_SURFACE_STORAGE_KEY, surface);
+		writeStorage(DESKTOP_SURFACE_STORAGE_KEY, surface);
 	}
 }

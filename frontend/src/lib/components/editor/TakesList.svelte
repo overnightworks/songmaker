@@ -56,6 +56,7 @@
 	import { bulkDeleteGenerations } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 	import TransportButtonIcon from '../TransportButtonIcon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
@@ -159,10 +160,7 @@
 	function formatDuration(gen: GenerationItem): string | null {
 		const seconds = gen.audio_duration_sec;
 		if (seconds == null) return null;
-		const whole = Math.round(seconds);
-		const m = Math.floor(whole / 60);
-		const s = whole % 60;
-		return `${m}:${s.toString().padStart(2, '0')}`;
+		return formatTime(seconds);
 	}
 
 	function daysUntilExpiry(gen: GenerationItem): number | null {

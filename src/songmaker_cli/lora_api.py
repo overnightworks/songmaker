@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     check_lora_access,
@@ -59,22 +59,24 @@ from songmaker_cli.constants import (
     LoraStatus,
     ResourceType,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.generations import list_own_playable_generations
+from songmaker_cli.db.queries.jobs import (
     JobStatusUpdate,
+    count_queued_lora_training_jobs,
+    create_job,
+    update_job_status,
+)
+from songmaker_cli.db.queries.loras import (
     add_user_lora_sample,
     count_active_user_loras,
-    count_queued_lora_training_jobs,
     count_user_lora_samples,
-    create_job,
     create_user_lora,
     delete_user_lora_sample,
     get_user_lora,
     get_user_lora_sample,
-    list_own_playable_generations,
     list_user_loras_for_user,
-    record_audit,
     soft_delete_user_lora,
-    update_job_status,
     update_user_lora,
     update_user_lora_sample,
 )

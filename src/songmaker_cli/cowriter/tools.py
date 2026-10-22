@@ -22,7 +22,7 @@ from agent_providers.tool_loop import ToolOutcome
 from agent_providers.tools import ToolCatalog, ToolDeclaration
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.constants import GET_SONG_TOOL_DESCRIPTION
 from songmaker_cli.mcp_server.tools import (

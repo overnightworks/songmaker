@@ -1,12 +1,6 @@
 import { writable, derived, get, readonly } from 'svelte/store';
 import { ApiError, describeFailure, NetworkError } from '$lib/api/fetch';
-import {
-	createLibraryQueueStreamSnapshot,
-	createQueueStreamSnapshot,
-	fetchLibraryPoolQueue,
-	fetchPlaylist,
-	fetchSong
-} from '$lib/api/client';
+import { fetchLibraryPoolQueue, fetchPlaylist, fetchSong } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import {
 	bestTake,
@@ -22,7 +16,6 @@ import type {
 	PlaylistDetailItem,
 	PlaylistEntryItem,
 	PlaylistItem,
-	QueueStreamManifest,
 	QueueStreamSkipItem,
 	SongItem
 } from '$lib/api/types';
@@ -33,7 +26,6 @@ import {
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
 	type PlayerTenure,
-	type StreamFallbackState,
 	type TransportState
 } from '$lib/services/audioPlayer.svelte';
 import {
@@ -93,6 +85,7 @@ import {
 	type PlaybackSource
 } from '$lib/constants/now-playing';
 import { shuffled } from '$lib/utils/shuffle';
+import { readStorage, writeStorage } from '$lib/utils/storage';
 
 // --- Browsing state ---
 export const selectedAlbumId = writable<string | null>(null);
@@ -198,7 +191,7 @@ const SHUFFLE_STORAGE_KEY = 'queueShuffleEnabled';
 
 function readStoredShuffle(): boolean {
 	if (typeof window === 'undefined') return false;
-	return localStorage.getItem(SHUFFLE_STORAGE_KEY) === 'true';
+	return readStorage(SHUFFLE_STORAGE_KEY) === 'true';
 }
 
 export const shuffleEnabled = writable(readStoredShuffle());
@@ -206,7 +199,7 @@ export const shuffleEnabled = writable(readStoredShuffle());
 export function setShuffle(enabled: boolean): void {
 	shuffleEnabled.set(enabled);
 	if (typeof window !== 'undefined') {
-		localStorage.setItem(SHUFFLE_STORAGE_KEY, String(enabled));
+		writeStorage(SHUFFLE_STORAGE_KEY, String(enabled));
 	}
 }
 
@@ -1815,32 +1808,6 @@ function startPlaylistQueue(
 	loadQueueTake(playlistEntryToPlaybackInfo(startTake), loadOpts);
 }
 
-async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
-	const ctx = get(queueContext);
-	try {
-		if (ctx.type === 'library') {
-			clearLibraryQueueSkipFeedback();
-			const currentTrack = state.manifest.tracks[state.trackIndex];
-			const manifest = await createLibraryQueueStreamSnapshot(
-				currentTrack?.generation_id ?? null,
-				librarySnapshotOpts()
-			);
-			libraryQueueSkipped.set(manifest.skipped ?? []);
-			libraryQueueSkippedComplete.set(manifest.skipped_complete ?? true);
-			return manifest;
-		}
-		return await createQueueStreamSnapshot(
-			state.manifest.tracks.map((track) => ({
-				generation_id: track.generation_id,
-				entry_id: track.entry_id
-			}))
-		);
-	} catch {
-		addToast('Stream expired and could not be rebuilt. Press play to retry.', 'error');
-		return null;
-	}
-}
-
 setupMediaSessionHandlers({
 	play: playFromLockScreen,
 	pause: pauseFromLockScreen,
@@ -2050,7 +2017,7 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onEnded: handlePlaybackEnded,
 	onPlaybackStarted: handlePlaybackStarted,
 	onAuthLost: handleSessionLost,
-	onStreamRebuild: rebuildQueueStream,
+	onStreamRebuild: null,
 	onCurrentChange: handleCurrentChange,
 	takeAfter,
 	onTakeSkipped: recordSkippedTake,

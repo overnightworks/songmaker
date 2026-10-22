@@ -2,7 +2,7 @@
 
 The chat backend spawns the CLI → MCP subprocess chain with
 ``SONGMAKER_MCP_USER_ID`` set to the authenticated caller's user id.
-Every tool call re-reads the user from the DB (so deactivations take
+Every tool call re-reads the user from the DB (so a changed role takes
 effect immediately) and wraps it in the same ``AuthenticatedUser``
 dataclass the HTTP middleware produces — that way the existing
 ``check_*_access()`` helpers work unchanged.
@@ -10,7 +10,7 @@ dataclass the HTTP middleware produces — that way the existing
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.db.queries.auth import get_user
 from songmaker_cli.settings import get_settings
@@ -36,11 +36,4 @@ def load_user(session: Session, user_id: str) -> AuthenticatedUser:
     user = get_user(session, user_id)
     if user is None:
         raise MCPAuthError(f"User not found: {user_id}")
-    if not user.is_active:
-        raise MCPAuthError(f"User is deactivated: {user.username}")
-    return AuthenticatedUser(
-        id=user.id,
-        username=user.username,
-        role=user.role,
-        is_active=user.is_active,
-    )
+    return AuthenticatedUser(id=user.id, username=user.username, role=user.role)

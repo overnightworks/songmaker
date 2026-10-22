@@ -1,6 +1,13 @@
 const ALBUM_ROUTE_PREFIX = '/album/';
 const TAKE_ROUTE_SEGMENT = '/take/';
 const PLAYLIST_ROUTE_PREFIX = '/playlist/';
+export type ShareKind = 'album' | 'song' | 'playlist' | 'gen';
+const SHARE_PAGE_PREFIX: Readonly<Record<ShareKind, string>> = {
+	album: '/share/',
+	song: '/share/song/',
+	playlist: '/share/playlist/',
+	gen: '/share/gen/'
+};
 export const HOME_ROUTE_PATH = '/';
 export const LIBRARY_ROUTE_PATH = '/library';
 export const PLAYLISTS_ROUTE_PATH = '/playlists';
@@ -19,6 +26,10 @@ export function takeRoutePath(albumId: string, songSlug: string, takeNumber: num
 
 export function playlistRoutePath(slug: string): string {
 	return `${PLAYLIST_ROUTE_PREFIX}${encodeURIComponent(slug)}`;
+}
+
+export function sharePagePath(kind: ShareKind, slug: string): string {
+	return `${SHARE_PAGE_PREFIX[kind]}${encodeURIComponent(slug)}`;
 }
 
 function isAlbumRoutePath(pathname: string): boolean {

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from conftest import seed_user
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -23,9 +24,8 @@ from songmaker_cli.db.models import (
     Song,
     User,
 )
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.resource_events import (
     create_generation_created_event,
-    create_user,
     delete_resource_events_before,
     get_oldest_resource_event_sequence,
     get_resource_event_high_water_mark,
@@ -44,7 +44,7 @@ def db_factory(tmp_path: Path):
 
 
 def _add_user(session: Session, user_id: str, username: str) -> None:
-    session.add(User(id=user_id, username=username, password_hash="hash", role="user"))
+    session.add(User(id=user_id, username=username, role="user"))
     session.flush()
 
 
@@ -68,7 +68,7 @@ def _add_generation(session: Session, generation_id: str, user_id: str) -> None:
 
 def test_create_user_creates_cursor_in_same_transaction(db_factory) -> None:
     with db_factory() as session:
-        user = create_user(session, "alice", "hash")
+        user = seed_user(session, "alice")
         cursor = session.get(ResourceEventCursor, user.id)
         assert cursor is not None
         assert cursor.high_water_mark == 0

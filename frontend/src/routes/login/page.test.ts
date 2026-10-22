@@ -1,57 +1,18 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { APP_NAME } from '$lib/constants';
-import { AUTH_ACCOUNT_DISABLED_MESSAGE, AUTH_SESSION_EXPIRED_MESSAGE } from '$lib/constants/auth';
+import { SIGN_IN_ACTION_LABEL, SIGNED_OUT_HEADING } from '$lib/constants/auth';
 import { LEGAL_SECTIONS } from '$lib/components/LegalLinks.svelte';
-
-const { authError, authNotice, mockLogin } = vi.hoisted(() => ({
-	authError: store(''),
-	authNotice: store<'unauthorized' | 'disabled' | null>(null),
-	mockLogin: vi.fn()
-}));
-
-function store<T>(initial: T) {
-	let value = initial;
-	const subscribers = new Set<(next: T) => void>();
-	return {
-		subscribe(subscriber: (next: T) => void) {
-			subscriber(value);
-			subscribers.add(subscriber);
-			return () => subscribers.delete(subscriber);
-		},
-		set(next: T) {
-			value = next;
-			subscribers.forEach((subscriber) => subscriber(value));
-		}
-	};
-}
-
-vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
-);
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
-vi.mock('$lib/stores/auth', () => ({ authError, authNotice, login: mockLogin }));
-
-import { goto } from '$app/navigation';
-import { fakePage } from '$lib/test-utils/app-navigation';
 import Page from './+page.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 
-function renderPage(address = '/login'): HTMLElement {
-	fakePage.url = new URL(address, window.location.origin);
+function renderPage(): HTMLElement {
 	const target = document.createElement('div');
 	document.body.append(target);
 	component = mount(Page, { target });
 	return target;
 }
-
-beforeEach(() => {
-	authError.set('');
-	authNotice.set(null);
-	mockLogin.mockReset();
-	vi.mocked(goto).mockClear();
-});
 
 afterEach(async () => {
 	if (component) await unmount(component);
@@ -59,110 +20,29 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
-describe('login page', () => {
-	it('shows the disabled-account notice', async () => {
-		authNotice.set('disabled');
+describe('signed-out page', () => {
+	it('says the person is logged out and offers one way on, the sign-in start', async () => {
 		const target = renderPage();
 		await tick();
 
-		expect(target.querySelector('.error')?.textContent).toBe(AUTH_ACCOUNT_DISABLED_MESSAGE);
+		expect(target.querySelector('h1')?.textContent).toBe(SIGNED_OUT_HEADING);
+		const actions = Array.from(target.querySelectorAll('.actions a, .actions button'));
+		expect(actions.map((action) => action.textContent?.trim())).toEqual([SIGN_IN_ACTION_LABEL]);
+		expect(actions[0].getAttribute('href')).toBe('/login/oidc');
 	});
 
-	it('shows the expired-session notice', async () => {
-		authNotice.set('unauthorized');
+	it('leaves the router out of the sign-in start, which the server answers with a redirect', async () => {
 		const target = renderPage();
 		await tick();
 
-		expect(target.querySelector('.error')?.textContent).toBe(AUTH_SESSION_EXPIRED_MESSAGE);
+		expect(target.querySelector('.actions a')?.hasAttribute('data-sveltekit-reload')).toBe(true);
 	});
 
-	it('says nothing about an expired session without a notice', async () => {
+	it('shows no failure', async () => {
 		const target = renderPage();
 		await tick();
 
-		expect(target.querySelector('.error')).toBeNull();
-	});
-
-	it.each([
-		[
-			'the asked-for song',
-			'/login?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river',
-			'/album/northern-lights/glass-river'
-		],
-		["the app's landing page", '/login', '/'],
-		[
-			'the library instead of a foreign site',
-			`/login?redirect=${encodeURIComponent('https://attacker.example/x')}`,
-			'/'
-		],
-		[
-			'the library instead of a foreign host',
-			`/login?redirect=${encodeURIComponent('//attacker.example/x')}`,
-			'/'
-		],
-		[
-			'the library instead of a same-origin absolute URL',
-			`/login?redirect=${encodeURIComponent(`${window.location.origin}/settings`)}`,
-			'/'
-		],
-		[
-			'the library instead of a one-slash scheme',
-			`/login?redirect=${encodeURIComponent('http:/example.com')}`,
-			'/'
-		],
-		[
-			'the library instead of an encoded foreign host',
-			`/login?redirect=${encodeURIComponent('/%2F%2Fattacker.example/x')}`,
-			'/'
-		],
-		[
-			'the library instead of a relative path',
-			`/login?redirect=${encodeURIComponent('album/x')}`,
-			'/'
-		],
-		[
-			'the library instead of the sign-in page',
-			`/login?redirect=${encodeURIComponent('/login')}`,
-			'/'
-		],
-		[
-			'the library instead of the sign-in page with a trailing slash',
-			`/login?redirect=${encodeURIComponent('/login/')}`,
-			'/'
-		],
-		[
-			'the library instead of the sign-in page with two trailing slashes',
-			`/login?redirect=${encodeURIComponent('/login//')}`,
-			'/'
-		],
-		[
-			'the library instead of the sign-in page in capitals',
-			`/login?redirect=${encodeURIComponent('/LOGIN')}`,
-			'/'
-		],
-		[
-			'the library instead of a raw API answer',
-			`/login?redirect=${encodeURIComponent('/api/auth/me')}`,
-			'/'
-		],
-		...['/%6Cogin', '/logi%6E/'].map((encodedSignIn) => [
-			`the library instead of the sign-in page spelled ${encodedSignIn}`,
-			`/login?redirect=${encodeURIComponent(encodedSignIn)}`,
-			'/'
-		]),
-		...['/%61pi/auth/me', '/api%2Fauth%2Fme', '/%61pi/albums', '/api%2Fsongs'].map((encodedApi) => [
-			`the library instead of a raw API answer spelled ${encodedApi}`,
-			`/login?redirect=${encodeURIComponent(encodedApi)}`,
-			'/'
-		])
-	])('signs in and lands on %s', async (_label, address, landing) => {
-		mockLogin.mockResolvedValueOnce({ id: 'u1', username: 'felix', role: 'user' });
-		const target = renderPage(address);
-		await tick();
-
-		target.querySelector('form')?.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
-
-		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(landing, { replaceState: true }));
+		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 
 	it('names the tab after the app, not the shared song the listener came from', async () => {
@@ -180,13 +60,5 @@ describe('login page', () => {
 		expect(Array.from(target.querySelectorAll('.legal-links a')).map((a) => a.textContent)).toEqual(
 			LEGAL_SECTIONS.map((section) => section.label)
 		);
-	});
-
-	it('waits for a submitted form before attempting login', async () => {
-		authNotice.set('disabled');
-		renderPage();
-		await tick();
-
-		expect(mockLogin).not.toHaveBeenCalled();
 	});
 });

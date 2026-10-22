@@ -107,8 +107,7 @@ function reservedTransportBarRoom(page: Page): Promise<string> {
 }
 
 // The Generate bar's button, whether it can run or names inside its own box
-// why it cannot: CI's stack runs no ACE-Step worker, so once `/health` answers
-// it reads "Generate — No GPU worker online" (#1011).
+// why it cannot.
 function generateButton(page: Page): Locator {
 	return page
 		.getByRole('tabpanel')

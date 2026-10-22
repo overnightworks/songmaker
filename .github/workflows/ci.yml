@@ -154,8 +154,8 @@ jobs:
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
-      - name: Require executed PostgreSQL reference quota proofs
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py tests/test_merge_accounts_into_subject.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
+      - name: Require executed PostgreSQL reference quota and write lock proofs
         run: |
           python - <<'PYTHON'
           import xml.etree.ElementTree as ET
@@ -174,6 +174,13 @@ jobs:
           assert cases, "No PostgreSQL reference quota proofs executed"
           assert not any(case.find("skipped") is not None for case in cases), "Quota proof skipped"
           print(f"PostgreSQL reference quota proofs: {len(cases)} passed, 0 skipped")
+          lock_cases = [
+              case for case in ET.parse("postgresql-contract.xml").iter("testcase")
+              if case.attrib["classname"].endswith("test_auth_write_lock_postgres")
+          ]
+          assert len(lock_cases) == 2, f"Expected 2 PostgreSQL write lock proofs, got {len(lock_cases)}"
+          assert not any(case.find("skipped") is not None for case in lock_cases), "Write lock proof skipped"
+          print(f"PostgreSQL write lock proofs: {len(lock_cases)} passed, 0 skipped")
           PYTHON
 
   frontend:
@@ -285,7 +292,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: overnightworks/quality/.github/workflows/gate.yml@fe7714e3550f3289b370807a7d00c0c5f329fae2 # v0.2.1
+    uses: overnightworks/quality/.github/workflows/gate.yml@61fd8621b20a604a7ef4b1154d1b6ed484d2ed66 # v0.4.0
     with:
       coverage-artifact: coverage
     secrets:

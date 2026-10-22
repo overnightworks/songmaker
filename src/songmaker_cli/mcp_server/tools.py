@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     check_album_access,

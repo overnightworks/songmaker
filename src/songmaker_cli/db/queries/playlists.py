@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Callable, Final
 
@@ -17,8 +16,6 @@ from songmaker_cli.db.models import (
     Song,
 )
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
-
-log = logging.getLogger(__name__)
 
 INITIAL_PLAYLIST_POSITION: Final[int] = 0
 PLAYLIST_SKIP_NO_PLAYABLE: Final = "no_playable_take"
@@ -119,7 +116,6 @@ def create_playlist(session: Session, title: str, user_id: str, slug: str) -> Pl
     playlist = Playlist(title=title, created_by=user_id, slug=slug)
     session.add(playlist)
     session.flush()
-    log.info("Created playlist '%s' (id=%s, owner=%s)", title, playlist.id, user_id)
     return playlist
 
 
@@ -129,7 +125,6 @@ def delete_playlist(session: Session, playlist_id: str) -> None:
         raise ValueError(f"Playlist not found: {playlist_id}")
     session.delete(playlist)
     session.flush()
-    log.info("Deleted playlist %s", playlist_id)
 
 
 def update_playlist(session: Session, playlist_id: str, title: str, slug: str) -> Playlist:
@@ -157,7 +152,6 @@ def set_playlist_cover_key(
         raise ValueError(f"Playlist not found: {playlist_id}")
     playlist.cover_key = cover_key
     session.flush()
-    log.info("Set playlist %s cover_key=%r", playlist_id, cover_key)
     return playlist
 
 

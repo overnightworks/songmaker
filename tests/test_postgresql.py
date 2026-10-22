@@ -6,21 +6,19 @@ import os
 import threading
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user
+from conftest import make_authenticated_user, seed_user
 from sqlalchemy import create_engine, event, insert, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 import songmaker_cli.db.queries.jobs as job_queries
-from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
+from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
 from songmaker_cli.db.engine import (
-    init_test_db,
     resolve_database_url,
 )
 from songmaker_cli.db.models import (
@@ -40,26 +38,29 @@ from songmaker_cli.db.models import (
     UserSession,
     UserSongWork,
 )
-from songmaker_cli.db.queries import (
-    JobStatusUpdate,
-    create_generation_created_event,
-    create_job,
-    create_session,
-    delete_resource_events_before,
-    get_oldest_resource_event_sequence,
-    get_resource_event_high_water_mark,
-    job_duration_stats,
+from songmaker_cli.db.queries.activity import (
     list_place_listens,
-    list_resource_events_after,
     list_worked_songs,
-    prune_overflow_sessions,
-    record_playlist_listen,
     record_song_edit,
     record_song_played,
+)
+from songmaker_cli.db.queries.auth import create_session, prune_overflow_sessions
+from songmaker_cli.db.queries.jobs import (
+    JobStatusUpdate,
+    create_job,
+    job_duration_stats,
     recover_stale_jobs_by_age_and_type,
     update_job_heartbeat,
     update_job_status,
 )
+from songmaker_cli.db.queries.resource_events import (
+    create_generation_created_event,
+    delete_resource_events_before,
+    get_oldest_resource_event_sequence,
+    get_resource_event_high_water_mark,
+    list_resource_events_after,
+)
+from songmaker_cli.db.queries.songs import record_playlist_listen
 from songmaker_cli.lifecycle import reconcile_crashed_loras
 from songmaker_cli.lora_api import api_create_lora
 from songmaker_cli.settings import get_settings
@@ -69,11 +70,6 @@ SKIP_NO_PG = pytest.mark.skipif(
     not TEST_PG_URL.startswith("postgresql"),
     reason="TEST_DATABASE_URL not set to a PostgreSQL URL",
 )
-
-
-@pytest.fixture
-def sqlite_factory(tmp_path: Path) -> sessionmaker[Session]:
-    return init_test_db(tmp_path / "test.db")
 
 
 def test_resolve_database_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -109,8 +105,8 @@ def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
     long_ago = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with pg_factory() as session:
         session.add_all([
-            User(id="owner", username="leonardo", password_hash="x", role="user"),
-            User(id="admin", username="felix", password_hash="x", role="admin"),
+            User(id="owner", username="leonardo", role="user"),
+            User(id="admin", username="felix", role="admin"),
         ])
         session.flush()
         session.add(Album(id="vernissage", title="Vernissage", artist="L", created_by="owner"))
@@ -182,7 +178,7 @@ def _seed_libraries_of_many_musicians(
     start = datetime(2026, 9, 1, tzinfo=timezone.utc)
     owners = [f"m{m}" for m in range(musicians)]
     session.add_all([
-        User(id=owner, username=owner, password_hash="x", role="user") for owner in owners
+        User(id=owner, username=owner, role="user") for owner in owners
     ])
     session.flush()
     session.add_all([Conversation(id=f"{owner}-c", user_id=owner) for owner in owners])
@@ -267,7 +263,7 @@ def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory
 @SKIP_NO_PG
 def test_concurrent_job_creation(pg_factory) -> None:
     with pg_factory() as session:
-        session.add(User(id="u1", username="testuser", password_hash="x", role="user"))
+        session.add(User(id="u1", username="testuser", role="user"))
         session.commit()
 
     errors: list[Exception] = []
@@ -305,7 +301,7 @@ def test_concurrent_lora_creation_admits_only_one_at_voice_limit(
     monkeypatch.setenv("MAX_USER_LORAS", "1")
     get_settings.cache_clear()
     with pg_factory() as session:
-        session.add(User(id="lora-user", username="lora-user", password_hash="x"))
+        session.add(User(id="lora-user", username="lora-user"))
         session.commit()
 
     barrier = threading.Barrier(2)
@@ -406,7 +402,7 @@ def test_concurrent_lora_reconciliation_claims_one_locked_row(
     """PostgreSQL SKIP LOCKED permits exactly one failure audit per LoRA."""
     terminalized_at = datetime.now(timezone.utc)
     with pg_factory() as session:
-        session.add(User(id="lora-user", username="lora-user", password_hash="x"))
+        session.add(User(id="lora-user", username="lora-user"))
         session.add(Job(
             id="lora-job", type=JobType.LORA_TRAINING, status=JobStatus.FAILED,
             completed_at=terminalized_at,
@@ -492,11 +488,10 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
     from concurrent.futures import ThreadPoolExecutor
 
     from songmaker_cli.auth_stores import DatabaseSessionRecordStore
-    from songmaker_cli.db.queries import create_user
 
     now = datetime.now(timezone.utc)
     with pg_factory() as db:
-        user = create_user(db, "renew-revoke", "hashed")
+        user = seed_user(db, "renew-revoke")
         record = create_session(db, user.id, now + timedelta(hours=1))
         db.commit()
         session_id = record.id
@@ -507,7 +502,7 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
     def compete():
         with pg_factory() as db:
             db.execute(text("SET lock_timeout = '5s'"))
-            store = DatabaseSessionRecordStore(db, session_max_age_seconds=3600)
+            store = DatabaseSessionRecordStore(db)
 
             def statement_started(conn, cursor, statement, parameters, context, executemany):
                 if context.isupdate or context.isdelete:
@@ -518,15 +513,14 @@ def test_session_revocation_wins_over_concurrent_renewal(pg_factory, first_opera
                 store.delete(session_id)
                 result = None
             else:
-                result = store.touch(record, ip_address="new", user_agent="new", now=now)
+                result = store.touch(session_id, expires_at=now + timedelta(hours=2))
             db.commit()
             return result
 
     with ThreadPoolExecutor(max_workers=1) as executor, pg_factory() as db:
-        store = DatabaseSessionRecordStore(db, session_max_age_seconds=3600)
+        store = DatabaseSessionRecordStore(db)
         if first_operation == "renew":
-            loaded = store.load(session_id)
-            assert store.touch(loaded, ip_address="new", user_agent="new", now=now) is True
+            assert store.touch(session_id, expires_at=now + timedelta(hours=2)) is True
         else:
             store.delete(session_id)
         future = executor.submit(compete)
@@ -549,7 +543,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
     thread_count = 10
     user_id = "session-cap-user"
     with pg_factory() as session:
-        session.add(User(id=user_id, username="session-cap", password_hash="x", role="user"))
+        session.add(User(id=user_id, username="session-cap", role="user"))
         session.commit()
 
     errors: list[Exception] = []
@@ -562,7 +556,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
                 if session.new or session.dirty or session.deleted:
                     raise RuntimeError("session unexpectedly has pending changes")
                 session.commit()
-                _begin_exclusive(session, _SESSION_CAP_LOCK_ID)
+                _begin_exclusive(session, _USER_MANAGEMENT_LOCK_ID)
                 expires = datetime.now(timezone.utc) + timedelta(hours=1)
                 create_session(session, user_id, expires)
                 prune_overflow_sessions(session, user_id, max_sessions)
@@ -590,7 +584,7 @@ def test_concurrent_session_create_and_prune_respects_cap(pg_factory) -> None:
 def test_concurrent_first_resource_event_allocations(pg_factory) -> None:
     """A missing cursor plus concurrent first events still allocate exactly once."""
     with pg_factory() as session:
-        session.add(User(id="event-user", username="events", password_hash="x", role="user"))
+        session.add(User(id="event-user", username="events", role="user"))
         session.commit()
 
     errors: list[Exception] = []
@@ -627,7 +621,7 @@ def test_concurrent_first_resource_event_allocations(pg_factory) -> None:
 @SKIP_NO_PG
 def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
     with pg_factory() as session:
-        session.add(User(id="rollback-user", username="rollback", password_hash="x"))
+        session.add(User(id="rollback-user", username="rollback"))
         session.flush()
         create_generation_created_event(
             session,
@@ -690,7 +684,7 @@ def test_resource_event_rollback_is_atomic_on_postgresql(pg_factory) -> None:
 def test_resource_event_retention_gap_on_postgresql(pg_factory) -> None:
     now = datetime.now(timezone.utc)
     with pg_factory() as session:
-        session.add(User(id="retention-user", username="retention", password_hash="x"))
+        session.add(User(id="retention-user", username="retention"))
         session.flush()
         events = [
             create_generation_created_event(
@@ -815,7 +809,6 @@ def test_alembic_migrations_on_postgresql() -> None:
         "ratings",
         "jobs",
         "user_sessions",
-        "login_attempts",
         "audit_log",
         "generation_presets",
         "resource_event_cursors",

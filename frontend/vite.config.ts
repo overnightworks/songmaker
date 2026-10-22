@@ -30,6 +30,14 @@ export default defineConfig({
 			'/shared': {
 				target: API_TARGET,
 				changeOrigin: true
+			},
+			'/login/oidc': {
+				target: API_TARGET,
+				changeOrigin: true
+			},
+			'/auth/logout': {
+				target: API_TARGET,
+				changeOrigin: true
 			}
 		}
 	}

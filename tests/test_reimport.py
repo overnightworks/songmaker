@@ -10,7 +10,6 @@ from conftest import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
-    stored_hash,
     web_client,
 )
 from fastapi.testclient import TestClient
@@ -19,7 +18,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli import audio_files
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
-from songmaker_cli.db.queries import get_generation
+from songmaker_cli.db.queries.generations import get_generation
 from songmaker_cli.reimport import _extract_seed, reimport_files
 
 USER_ID = "u-reimport"
@@ -29,7 +28,7 @@ PASSWORD = "Test1234!"
 
 def _seed_db(session: Session) -> None:
     session.add(User(
-        id=USER_ID, username="reimporter", password_hash=stored_hash(PASSWORD), role="admin",
+        id=USER_ID, username="reimporter", role="admin",
     ))
     session.flush()
     album = Album(id="a-reimport", title="Reimport Album", artist="Test", created_by=USER_ID)

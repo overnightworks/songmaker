@@ -179,7 +179,7 @@ def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog) ->
         days=get_settings().soft_delete_retention_days + 1,
     )
     with factory() as session:
-        session.add(User(id="u1", username="u1", password_hash="x"))
+        session.add(User(id="u1", username="u1"))
         session.add(Album(
             id="expired-album", title="Expired", artist="", deleted_at=cutoff,
         ))
@@ -225,7 +225,7 @@ def test_on_shutdown_disposes_db() -> None:
     worker._db_engine = MagicMock()
 
     with patch(
-        "songmaker_cli.db.queries.recover_stale_jobs_by_type", return_value={},
+        "songmaker_cli.db.queries.jobs.recover_stale_jobs_by_type", return_value={},
     ):
         _run(worker.on_shutdown(_mock_ctx()))
 
@@ -237,7 +237,7 @@ def test_startup_recovers_music_job_types_and_reconciles_lora_once(tmp_path) -> 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
-        session.add(User(id="u1", username="u1", password_hash="x"))
+        session.add(User(id="u1", username="u1"))
         session.add_all([
             Job(
                 id="cover-1", type=JobType.COVER,
@@ -309,7 +309,7 @@ def test_queued_music_jobs_survive_worker_restart(tmp_path) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
-        session.add(User(id="u1", username="u1", password_hash="x"))
+        session.add(User(id="u1", username="u1"))
         session.add_all([
             Job(id="generate-queued", type=JobType.GENERATE, status=JobStatus.QUEUED),
             Job(id="lora-queued", type=JobType.LORA_TRAINING, status=JobStatus.QUEUED),

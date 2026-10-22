@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import or_
@@ -16,8 +15,6 @@ from songmaker_cli.constants import (
     LoraStatus,
 )
 from songmaker_cli.db.models import Job, User, UserLora, UserLoraSample
-
-log = logging.getLogger(__name__)
 
 
 def create_user_lora(
@@ -34,7 +31,6 @@ def create_user_lora(
     )
     session.add(lora)
     session.flush()
-    log.info("Created UserLora %s (user=%s, name=%r)", lora.id, user_id, name)
     return lora
 
 
@@ -127,7 +123,6 @@ def soft_delete_user_lora(session: Session, lora_id: str) -> datetime:
     now = datetime.now(timezone.utc)
     lora.deleted_at = now
     session.flush()
-    log.info("Soft-deleted UserLora %s", lora_id)
     return now
 
 

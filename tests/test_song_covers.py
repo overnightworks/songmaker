@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash, web_client
+from conftest import login_and_csrf, make_test_app, seed_user, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
+from sqlalchemy.orm import Session
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
@@ -41,12 +43,8 @@ from songmaker_cli.covers import (
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Song, User
-from songmaker_cli.db.queries import (
-    create_user,
-    get_song,
-    soft_delete_album,
-    soft_delete_song,
-)
+from songmaker_cli.db.queries.albums import soft_delete_album
+from songmaker_cli.db.queries.songs import get_song, soft_delete_song
 from songmaker_cli.request_policies import build_body_size_policy
 from songmaker_cli.settings import get_settings
 
@@ -102,8 +100,8 @@ def _png_header(width: int, height: int) -> bytes:
 
 
 def _seed_owners(session) -> None:
-    alice = create_user(session, "alice", stored_hash(ALICE_PASSWORD), role="user")
-    bob = create_user(session, "bob", stored_hash(BOB_PASSWORD), role="user")
+    alice = seed_user(session, "alice", role="user")
+    bob = seed_user(session, "bob", role="user")
     session.add(Album(id="alice-album", title="Alice Album", artist="Alice", created_by=alice.id))
     session.add(Album(id="bob-album", title="Bob Album", artist="Bob", created_by=bob.id))
     session.add(
@@ -122,7 +120,7 @@ def _seed_owners(session) -> None:
 
 def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_owners)
-    login_and_csrf(client, username, password)
+    login_and_csrf(client, username)
     client.headers["Origin"] = "http://127.0.0.1:8080"
     return client, factory
 
@@ -429,12 +427,16 @@ def test_soft_delete_song_keeps_cover_files(
     assert client.get("/api/songs/alice-song/cover?variant=detail").status_code == 200
 
 
-def test_cleanup_expired_unlinks_orphan_and_album_song_covers(tmp_path: Path) -> None:
+@pytest.mark.parametrize("commit_fails", [False, True])
+def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch,
+    commit_fails: bool,
+) -> None:
     factory = init_db(tmp_path / "covers.db")
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
-        owner = create_user(session, "alice", stored_hash(ALICE_PASSWORD))
+        owner = seed_user(session, "alice")
         session.add(Album(id="expired-album", title="Expired", artist="A", created_by=owner.id))
         session.add(Album(id="live-album", title="Live", artist="A", created_by=owner.id))
         session.add(
@@ -482,52 +484,30 @@ def test_cleanup_expired_unlinks_orphan_and_album_song_covers(tmp_path: Path) ->
         orphan.deleted_at = past
         session.commit()
 
-    album_count, song_count = run_cleanup_expired(factory, audio_dir)
+    if commit_fails:
+        def failing_commit(self) -> None:
+            raise RuntimeError("commit failed")
+
+        monkeypatch.setattr(Session, "commit", failing_commit)
+        with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
+            with pytest.raises(RuntimeError, match="commit failed"):
+                run_cleanup_expired(factory, audio_dir)
+        assert "hard-deleted" not in caplog.text
+        assert live_album_dir.is_dir()
+        assert expired_album_dir.is_dir()
+        return
+
+    with caplog.at_level(logging.INFO, logger="songmaker_cli.cleanup"):
+        album_count, song_count = run_cleanup_expired(factory, audio_dir)
     assert album_count == 1
     assert song_count == 1
+    assert "expired-album" in caplog.text
+    assert "orphan-song" in caplog.text
     assert not expired_album_dir.exists()
     assert not expired_song_dir.exists()
     assert not orphan_dir.exists()
     assert live_album_dir.is_dir()
     assert live_song_dir.is_dir()
-
-
-def test_hard_delete_user_unlinks_song_covers_including_soft_deleted(tmp_path: Path) -> None:
-    def seed(session) -> None:
-        create_user(session, "admin", stored_hash("admin12345"), role="admin")
-        victim = create_user(session, "victim", stored_hash("victimpass1"), role="user")
-        session.add(Album(id="live-album", title="Live", artist="V", created_by=victim.id))
-        session.add(
-            Song(
-                id="live-song", title="Live", album_id="live-album", track_number=1, slug="live",
-            ),
-        )
-        session.add(
-            Song(
-                id="gone-song", title="Gone", album_id="live-album", track_number=2, slug="gone",
-            ),
-        )
-
-    client, factory = make_test_app(tmp_path, seed_db=seed)
-    audio_dir = tmp_path / "audio"
-    write_song_cover(audio_dir, "live-song", _jpeg_bytes())
-    write_song_cover(audio_dir, "gone-song", _png_bytes())
-    live_dir = audio_dir / SONG_COVER_DIRNAME / "live-song"
-    gone_dir = audio_dir / SONG_COVER_DIRNAME / "gone-song"
-    assert live_dir.is_dir()
-    assert gone_dir.is_dir()
-
-    with factory() as session:
-        victim = session.query(User).filter_by(username="victim").one()
-        victim_id = victim.id
-        soft_delete_song(session, "gone-song")
-        session.commit()
-
-    login_and_csrf(client, "admin", "admin12345")
-    resp = client.delete(f"/api/admin/users/{victim_id}/permanent")
-    assert resp.status_code == 200, resp.text
-    assert not live_dir.exists()
-    assert not gone_dir.exists()
 
 
 def _assert_escape_markers_survive(

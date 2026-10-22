@@ -57,23 +57,3 @@ def get_all_global_rate_limits(session: Session) -> list[RateLimitSetting]:
         .filter(RateLimitSetting.user_id.is_(None))
         .all()
     )
-
-
-def get_user_rate_limits(
-    session: Session, user_id: str,
-) -> list[RateLimitSetting]:
-    return (
-        session.query(RateLimitSetting)
-        .filter(RateLimitSetting.user_id == user_id)
-        .all()
-    )
-
-
-def delete_all_user_rate_limits(session: Session, user_id: str) -> int:
-    count = (
-        session.query(RateLimitSetting)
-        .filter(RateLimitSetting.user_id == user_id)
-        .delete()
-    )
-    session.flush()
-    return count

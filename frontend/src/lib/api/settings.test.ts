@@ -7,14 +7,12 @@ vi.mock('$app/navigation', async () =>
 );
 
 import {
-	deleteUserRateLimits,
 	toggleModel,
 	updateCoverSettings,
 	updateCowriterSettings,
 	updateGenerationDefaults,
 	updateJudgeSettings,
-	updateRateLimits,
-	updateUserRateLimits
+	updateRateLimits
 } from './settings';
 
 function acceptRequests(): void {
@@ -59,13 +57,6 @@ describe('settings API contract', () => {
 			'/api/settings/rate-limits',
 			'PUT',
 			{ settings: { generate: 5 } }
-		],
-		[
-			'user rate limits',
-			() => updateUserRateLimits('u-1', { generate: 5 }),
-			'/api/settings/rate-limits/user/u-1',
-			'PUT',
-			{ settings: { generate: 5 } }
 		]
 	])('serializes %s as its public JSON request', async (_name, send, url, method, payload) => {
 		await send();
@@ -88,18 +79,11 @@ describe('settings API contract', () => {
 		});
 	});
 
-	it('uses the model query and deletion endpoint without a JSON body', async () => {
+	it('uses the model query without a JSON body', async () => {
 		await toggleModel('acestep-1.5', false);
-		let [url, init] = request();
+		const [url, init] = request();
 		expect(url).toBe('/api/settings/models/acestep-1.5?active=false');
 		expect(init.method).toBe('PUT');
-		expect(init.body).toBeUndefined();
-
-		mockFetch.mockClear();
-		await deleteUserRateLimits('u-1');
-		[url, init] = request();
-		expect(url).toBe('/api/settings/rate-limits/user/u-1');
-		expect(init.method).toBe('DELETE');
 		expect(init.body).toBeUndefined();
 	});
 });

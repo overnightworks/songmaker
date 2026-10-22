@@ -158,7 +158,7 @@ describe('ShareButton', () => {
 
 	it.each([
 		{ isShared: false, shareSlug: null, tooltip: 'Share' },
-		{ isShared: true, shareSlug: 'abc', tooltip: 'Shared: /share/abc' }
+		{ isShared: true, shareSlug: 'abc', tooltip: 'Shared: /share/song/abc' }
 	])(
 		'1480_R4: titles the button "$tooltip" when isShared is $isShared',
 		async ({ tooltip, ...props }) => {

@@ -14,7 +14,7 @@ def test_seeded_router_data_is_committed_before_authenticated_requests(
     tmp_path: Path, authenticated: bool,
 ) -> None:
     def seed_album(session: Session) -> None:
-        session.add(User(id="owner", username="owner", password_hash="unused", role="user"))
+        session.add(User(id="owner", username="owner", role="user"))
         session.flush()
         session.add(Album(id="album", title="Seeded album", artist="Artist", created_by="owner"))
 

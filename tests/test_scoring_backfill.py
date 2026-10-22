@@ -44,7 +44,7 @@ class _FakeContext:
 
 def _seed_song(factory, *, album_id: str = "a1", song_id: str = "s1") -> None:
     with factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="h", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id=album_id, title="Album", artist="Artist", created_by="u1"))
         session.add(Song(id=song_id, title="Song", album_id=album_id, track_number=1))
@@ -56,7 +56,7 @@ def seeded_generations(tmp_path: Path):
     """Three generations on one song: g0 already scored, g1 and g2 are not."""
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="h", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Artist", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))
@@ -151,7 +151,7 @@ def test_backfill_logs_every_failed_generation(seeded_generations, caplog) -> No
 def test_backfill_respects_the_named_batch_size(tmp_path: Path) -> None:
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="h", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Artist", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))
@@ -185,7 +185,7 @@ def test_backfill_stops_picking_a_chronically_unscorable_generation(tmp_path: Pa
     """
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id="u1", username="user1", password_hash="h", role="user"))
+        session.add(User(id="u1", username="user1", role="user"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Artist", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))

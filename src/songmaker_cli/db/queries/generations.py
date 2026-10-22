@@ -146,7 +146,6 @@ def create_generation(
     gen.audio_duration_sec = _probe_audio_duration_or_none(audio_dir, canonical_mp3_path)
     session.add(gen)
     session.flush()
-    log.info("Created generation #%d for song %s (seed=%s)", gen_number, song_id, seed)
     return gen
 
 
@@ -332,7 +331,6 @@ def delete_generation(session: Session, generation_id: str) -> list[str]:
     session.delete(gen)
     session.flush()
 
-    log.info("Deleted generation %s", generation_id)
     return paths
 
 

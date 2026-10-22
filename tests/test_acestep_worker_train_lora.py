@@ -115,7 +115,7 @@ async def _state(deps: WorkerDeps) -> dict[str, Any]:
 
 
 def _auth_headers() -> dict[str, str]:
-    from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+    from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 
     return {INTERNAL_TOKEN_HEADER: "test-internal-token"}
 

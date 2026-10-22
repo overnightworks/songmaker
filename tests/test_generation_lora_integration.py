@@ -11,7 +11,7 @@ from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.constants import JOB_ERROR_USER_LORA_UNAVAILABLE, LoraStatus
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Song, User, UserLora, Version
-from songmaker_cli.db.queries import create_user_lora, update_user_lora
+from songmaker_cli.db.queries.loras import create_user_lora, update_user_lora
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
     StoredGenerationParams,
@@ -30,8 +30,8 @@ USER_B = "u-bob"
 def db_factory(tmp_path: Path):
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id=USER_A, username="alice", password_hash="x"))
-        session.add(User(id=USER_B, username="bob", password_hash="x"))
+        session.add(User(id=USER_A, username="alice"))
+        session.add(User(id=USER_B, username="bob"))
         session.commit()
     return factory
 
@@ -244,8 +244,8 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
     audio_dir.mkdir()
     factory = init_test_db(tmp_path / "test.db")
     with factory() as session:
-        session.add(User(id=USER_A, username="alice", password_hash="x"))
-        session.add(User(id=USER_B, username="bob", password_hash="x", role="admin"))
+        session.add(User(id=USER_A, username="alice"))
+        session.add(User(id=USER_B, username="bob", role="admin"))
         session.flush()
         lora = create_user_lora(session, USER_A, "voice", "voice")
         update_user_lora(

@@ -15,7 +15,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Job, User
-from songmaker_cli.db.queries import (
+from songmaker_cli.db.queries.loras import (
     add_user_lora_sample,
     count_user_lora_samples,
     create_user_lora,
@@ -37,8 +37,8 @@ _USER_B = "u-b"
 def session(tmp_path: Path) -> Session:
     factory = init_test_db(tmp_path / "loras.db")
     s = factory()
-    s.add(User(id=_USER_A, username="alice", password_hash="x", role="user"))
-    s.add(User(id=_USER_B, username="bob", password_hash="x", role="user"))
+    s.add(User(id=_USER_A, username="alice", role="user"))
+    s.add(User(id=_USER_B, username="bob", role="user"))
     s.commit()
     yield s
     s.close()
