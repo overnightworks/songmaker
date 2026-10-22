@@ -1,0 +1,8 @@
+claim_id = "73571fd7ada34579ba1008fb2e9a85bd"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "7315339b03562cec9679dcfe47ec6260e09463a3"
+branch = "claude/issue-1777-quality-v050"
+scope = [".github/workflows", ".importlinter", "AGENTS.md", "docs/architecture.md", "docs/testing.md", "quality", "scripts/check_root_layout.py", "tests/test_quality_workflow.py"]
+opened_commit = "2d573ad0fa59e6ab653d091049478f8d9dc931df"
+whole_reason = "One pin bump across the two workflow callers, the quality config they read, and the docs and test that name them."
