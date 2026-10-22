@@ -1,8 +1,0 @@
-claim_id = "fce0e13d6e4243c3a065244881b353a1"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "890de7815badb26366f97b2b26fd56bb385a6bc7"
-branch = "claude/issue-1811-ai-mark-files"
-scope = ["docs/architecture.md", "src/audio_engine", "src/songmaker_cli/album_api.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/covers.py", "src/songmaker_cli/generate.py", "tests"]
-opened_commit = "6600a635e05c41a69b70888745dd27349f5905da"
-whole_reason = "One mark written by the writers that produce generated media and the cover route that publishes them, with tests and the one doc line."
