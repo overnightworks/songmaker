@@ -12,8 +12,6 @@ Your job is to find what's NEW. Anything already documented as known/accepted sh
 
 3. **Read recent git history** (`git log --oneline -30`). Don't flag things that just shipped. The recent quick-wins / refactors are the most likely source of false-positive findings.
 
-4. **Read the `plans/` directory** (currently 0–3 files depending on whether live-coordination plans exist). Anything in flight or just landed is not a finding.
-
 ## Scope
 
 Focus on `src/` and `tests/`. Config files (pyproject.toml, etc.) are in scope. The `frontend/` directory is in scope for architecture (component structure, state management, API contract). Album content, generated output, and model weights are not.
