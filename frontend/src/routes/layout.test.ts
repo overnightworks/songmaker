@@ -7,6 +7,7 @@ import {
 	watchBack
 } from '$lib/test-utils/library-history';
 import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
+import { documentLoads as documentLoadStandIn } from '$lib/test-utils/document-loads';
 import {
 	historyStandsStill,
 	pushEntry,
@@ -110,7 +111,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	return {
 		...actual,
 		fetchCapabilities: vi.fn().mockResolvedValue({}),
-		logout: vi.fn()
+		logout: vi.fn(async () => 'https://auth.example/logout?hint=1')
 	};
 });
 vi.mock('$lib/stores/resourceSync', async (importOriginal) => {
@@ -359,14 +360,19 @@ describe('app shell', () => {
 		);
 	});
 
-	it.each(['/login', '/legal', '/impressum', '/datenschutz', '/share/public-token'])(
-		'keeps the PlayerBar and reservation out of public route %s',
-		async (path) => {
-			const target = await renderLayout(path);
-			expect(target.querySelector('.player-bar')).toBeNull();
-			expect(target.querySelector('.app-shell')).toBeNull();
-		}
-	);
+	it.each([
+		'/login',
+		'/no-access',
+		'/auth/callback',
+		'/legal',
+		'/impressum',
+		'/datenschutz',
+		'/share/public-token'
+	])('keeps the PlayerBar and reservation out of public route %s', async (path) => {
+		const target = await renderLayout(path);
+		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(target.querySelector('.app-shell')).toBeNull();
+	});
 
 	it('keeps the PlayerBar and reservation out while auth is loading', async () => {
 		currentUser.set(null);
@@ -422,6 +428,8 @@ describe('app shell', () => {
 		['/loras', true],
 		['/share/public', false],
 		['/login', false],
+		['/no-access', false],
+		['/auth/callback', false],
 		['/legal/privacy', false]
 	])('1354_rule_28 1354_rule_33 1354_49: mount-time tabs at %s are %s', async (path, shown) => {
 		replaceHistoryEntry(path);
@@ -825,13 +833,19 @@ describe('docked Now Playing', () => {
 
 describe('auth check failure', () => {
 	function signInRedirects(): unknown[] {
-		return vi
-			.mocked(goto)
-			.mock.calls.map(([to]) => to)
-			.filter((to) => String(to).startsWith('/login'));
+		return [
+			...documentLoadStandIn.assign.mock.calls,
+			...documentLoadStandIn.replace.mock.calls
+		].map(([to]) => to);
 	}
 
-	it('shows a retry-able error instead of navigating to /login on a transient failure', async () => {
+	beforeEach(() => {
+		resetHistoryControllerForTests();
+		standInForDocumentLoadsForTests(documentLoadStandIn);
+		for (const load of Object.values(documentLoadStandIn)) load.mockReset();
+	});
+
+	it('shows a retry-able error instead of navigating to sign-in on a transient failure', async () => {
 		currentUser.set(null);
 		authLoading.set(true);
 		authCheckError.set(null);
@@ -846,7 +860,7 @@ describe('auth check failure', () => {
 		await Promise.resolve();
 		await tick();
 
-		expect(goto).not.toHaveBeenCalled();
+		expect(signInRedirects()).toEqual([]);
 		expect(target.querySelector('.app-shell')).toBeNull();
 		const retry = requireElement<HTMLButtonElement>(target, '.auth-retry button');
 		expect(retry.textContent).toBe('Retry');
@@ -881,15 +895,15 @@ describe('auth check failure', () => {
 	});
 
 	it.each([
-		['the library', HOME_ROUTE_PATH, '/login'],
+		['the library', HOME_ROUTE_PATH, '/login/oidc?next=%2F'],
 		[
 			'a logged-out deep link',
 			'/album/northern-lights/glass-river',
-			'/login?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river'
+			'/login/oidc?next=%2Falbum%2Fnorthern-lights%2Fglass-river'
 		],
-		['a lookalike of a legal address', '/impressum-foo', '/login?redirect=%2Fimpressum-foo']
+		['a lookalike of a legal address', '/impressum-foo', '/login/oidc?next=%2Fimpressum-foo']
 	])(
-		'sends %s to sign-in on a 401 (no known user, no check error)',
+		'sends %s to the sign-in start with a full navigation on a 401 (no known user, no check error)',
 		async (_label, path, signIn) => {
 			currentUser.set(null);
 			authLoading.set(true);
@@ -902,9 +916,32 @@ describe('auth check failure', () => {
 			});
 			mountLayout(path);
 
-			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(signIn, { replaceState: true }));
+			await vi.waitFor(() =>
+				expect(signInRedirects()).toEqual([`${window.location.origin}${signIn}`])
+			);
+			expect(goto).not.toHaveBeenCalled();
 		}
 	);
+
+	it.each([
+		'/login',
+		'/no-access',
+		'/auth/callback',
+		'/share/public-token',
+		'/legal',
+		'/datenschutz'
+	])('never sends the public address %s to sign-in', async (path) => {
+		currentUser.set(null);
+		authLoading.set(true);
+		vi.mocked(checkAuth).mockImplementation(async () => null);
+		mountLayout(path);
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(checkAuth).not.toHaveBeenCalled();
+		expect(signInRedirects()).toEqual([]);
+	});
 });
 
 // SvelteKit's start drops the library a reloaded entry carried, and shallow
@@ -943,8 +980,9 @@ describe('a reload over the phone Now Playing', () => {
 			surface: 'browse'
 		}
 	] as const)(
-		'1354_rule_31: stays on $page the sign-in redirect lands on',
+		'1354_rule_31: the sign-in start loads afresh from the entry the reload left, and the return stays on $page',
 		async ({ address, openAddress, surface }) => {
+			resetHistoryControllerForTests();
 			resetLibraryContextForTests();
 			const playlist = {
 				...libraryRootState(),
@@ -958,19 +996,26 @@ describe('a reload over the phone Now Playing', () => {
 			resetNavigationForTests();
 			loadLibraryHistoryPageForTests();
 			startFakeRouter();
+			const signInLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+			standInForDocumentLoadsForTests(signInLoads);
 			currentUser.set(null);
 			vi.mocked(checkAuth).mockImplementation(async () => null);
 			mountLayout(address);
 			await vi.waitFor(() =>
-				expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
+				expect(signInLoads.assign).toHaveBeenCalledWith(
+					`${window.location.origin}/login/oidc?next=${encodeURIComponent(address)}`
+				)
 			);
+			expect(signInLoads.replace).not.toHaveBeenCalled();
 			await historyStandsStill();
-			expect(location.pathname).toBe('/login');
 
+			// The server sends the person back to the address in a new document.
+			await unmountCurrentLayout();
 			vi.mocked(checkAuth).mockImplementation(async () => {
 				currentUser.set(USER);
 				return USER;
 			});
+			mountLayout(address);
 			await goto(resolve(address));
 			await openAddress();
 
@@ -983,12 +1028,12 @@ describe('a reload over the phone Now Playing', () => {
 	);
 });
 
-// A sign-out the server confirmed loads sign-in afresh over the account
+// A sign-out the server confirmed loads the identity provider's logout afresh over the account
 // menu's entry, replacing it: Back from there finds no menu entry to step off,
 // and nothing steps back on the way (#1340, ruling A). The account circle
 // lives on the Library (#1354 rule 25).
 describe('signing out on the phone', () => {
-	it("from the open account menu loads sign-in afresh over the menu's entry, and steps back nowhere", async () => {
+	it("from the open account menu loads the logout afresh over the menu's entry, and steps back nowhere", async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
 		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
@@ -1010,7 +1055,7 @@ describe('signing out on the phone', () => {
 		getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
 		await vi.waitFor(() =>
-			expect(documentLoads.replace).toHaveBeenCalledWith(`${window.location.origin}/login`)
+			expect(documentLoads.replace).toHaveBeenCalledWith('https://auth.example/logout?hint=1')
 		);
 		expect(replacedLayer).toBe('account-menu');
 		expect(documentLoads.assign).not.toHaveBeenCalled();
@@ -1168,7 +1213,7 @@ describe('the live library stream', () => {
 
 	it.each([
 		['Settings', '/settings/voices'],
-		['the login page', '/login'],
+		['the signed-out page', '/login'],
 		['a public share page', '/share/some-slug']
 	])('stays off %s, as it did before the layout owned it', async (_name, path) => {
 		await renderLayout(path);
@@ -1353,7 +1398,16 @@ describe('the library route group', () => {
 			.map((entry) => entry.name);
 
 		expect(topLevelDirs).toEqual(
-			expect.arrayContaining(['(library)', 'settings', 'login', 'legal', 'share', 'loras'])
+			expect.arrayContaining([
+				'(library)',
+				'settings',
+				'login',
+				'no-access',
+				'auth',
+				'legal',
+				'share',
+				'loras'
+			])
 		);
 		expect(topLevelDirs).not.toContain('album');
 		expect(topLevelDirs).not.toContain('playlist');

@@ -22,7 +22,7 @@ def ownership_factory(tmp_path):
     factory = init_test_db(tmp_path / "ownership.db")
     with factory() as session:
         for identity in ("actor", "foreign"):
-            session.add(User(id=identity, username=identity, password_hash="x", role="user"))
+            session.add(User(id=identity, username=identity, role="user"))
             session.flush()
             session.add(Album(
                 id=f"album-{identity}", title=identity, artist=identity, created_by=identity,

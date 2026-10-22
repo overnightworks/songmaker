@@ -20,7 +20,7 @@ from conftest import (
     login_and_csrf,
     make_fake_redis,
     make_test_app,
-    stored_hash,
+    seed_user,
     web_client,
 )
 from fastapi.testclient import TestClient
@@ -32,7 +32,8 @@ from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.health_api import compute_script_hashes
-from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
+from songmaker_cli.server import create_app, run_server
+from songmaker_cli.settings import get_settings
 
 _ADMIN_ID = "admin-user-id"
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -42,8 +43,7 @@ _UNTRUSTED_PEER = "203.0.113.50"
 
 def _seed_server_data(session) -> None:
     admin = User(
-        id=_ADMIN_ID, username="admin",
-        password_hash=stored_hash("admin12345"), role="admin",
+        id=_ADMIN_ID, username="admin", role="admin",
     )
     session.add(admin)
     session.add(Album(id="test_album", title="Test", artist="Test"))
@@ -65,7 +65,7 @@ def server_app(tmp_path: Path) -> TestClient:
     user_dir = audio_dir / _ADMIN_ID
     user_dir.mkdir(parents=True, exist_ok=True)
     (user_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     return client
 
 
@@ -82,6 +82,25 @@ def test_security_headers(server_app: TestClient) -> None:
     assert "frame-ancestors 'none'" in resp.headers["Content-Security-Policy"]
     assert resp.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
     assert "camera=()" in resp.headers["Permissions-Policy"]
+
+
+@pytest.mark.parametrize("path", ["/", "/albums/any-album", "/api/albums"])
+def test_content_security_policy_is_pinned_on_pages_and_api(tmp_path: Path, path: str) -> None:
+    """The build styles inline, so `style-src` carries `'unsafe-inline'`; scripts stay strict."""
+    inline_script = "boot()"
+    client, _ = make_test_app(
+        tmp_path, index_html=f"<html><script>{inline_script}</script></html>",
+    )
+    policy = client.get(path).headers["Content-Security-Policy"]
+    directives = dict(part.split(" ", 1) for part in policy.split("; "))
+    assert directives["default-src"] == "'none'"
+    assert directives["base-uri"] == "'self'"
+    assert directives["form-action"] == "'self'"
+    assert directives["script-src"].split() == ["'self'", f"'{_csp_sha256(inline_script)}'"]
+    assert directives["style-src"] == "'self' 'unsafe-inline'"
+    assert directives["connect-src"] == "'self'"
+    assert directives["font-src"] == "'self'"
+    assert directives["frame-ancestors"] == "'none'"
 
 
 def test_get_audio(server_app: TestClient) -> None:
@@ -185,8 +204,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(
-            id=admin_id, username="admin6",
-            password_hash=stored_hash("admin12345"), role="admin",
+            id=admin_id, username="admin6", role="admin",
         )
         session.add(admin)
         session.commit()
@@ -201,7 +219,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
     from conftest import login_and_csrf
-    login_and_csrf(client, "admin6", "admin12345")
+    login_and_csrf(client, "admin6")
     resp = client.get(f"/audio/{admin_id}/data.mp3")
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Not Found"
@@ -212,7 +230,7 @@ def auth_server_app(tmp_path: Path):
     from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
     from songmaker_cli.db.queries.albums import create_album
-    from songmaker_cli.db.queries.auth import create_session, create_user
+    from songmaker_cli.db.queries.auth import create_session
 
     audio_dir = tmp_path / "audio"
     data_dir = tmp_path / "data"
@@ -226,8 +244,8 @@ def auth_server_app(tmp_path: Path):
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        owner = create_user(session, "owner", stored_hash("pass1234"))
-        other = create_user(session, "other_user", stored_hash("pass1234"))
+        owner = seed_user(session, "owner")
+        other = seed_user(session, "other_user")
         session.flush()
 
         owner_dir = audio_dir / owner.id
@@ -242,7 +260,7 @@ def auth_server_app(tmp_path: Path):
         create_album(session, "other_album", "Other Album", created_by=other.id)
         session.flush()
 
-        expires = datetime.now(timezone.utc) + timedelta(days=30)
+        expires = datetime.now(timezone.utc) + timedelta(days=1)
         owner_session = create_session(session, owner.id, expires)
         other_session = create_session(session, other.id, expires)
         session.commit()
@@ -292,7 +310,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        user = User(username="tester", password_hash=stored_hash("pass1234"))
+        user = User(username="tester")
         session.add(user)
         session.flush()
         expired = datetime.now(timezone.utc) - timedelta(days=1)
@@ -484,7 +502,7 @@ def test_csrf_fetch_metadata_takes_precedence_over_the_origin_allowlist(
         assert response.json()["title"] == "Fetch metadata proof"
 
 
-def test_csrf_rejects_spoofed_host_with_matching_origin(server_app: TestClient) -> None:
+def test_a_spoofed_host_with_matching_origin_is_refused(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
         json={"title": "X", "album_id": "test_album"},
@@ -493,7 +511,7 @@ def test_csrf_rejects_spoofed_host_with_matching_origin(server_app: TestClient) 
     assert resp.status_code == 403
 
 
-def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
+def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -506,27 +524,25 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin2", password_hash=stored_hash("admin12345"), role="admin")
+        admin = User(username="admin2", role="admin")
         session.add(admin)
         album = Album(id="a1", title="A", artist="A")
         session.add(album)
         session.commit()
 
-    with patch.dict("os.environ", {"ALLOWED_HOSTS": "myapp.example.com"}):
-        exact, patterns = parse_allowed_hosts()
+    with patch.dict("os.environ", {"ALLOWED_HOSTS": "myapp.example.com,testserver"}):
+        get_settings.cache_clear()
         ctx = AppContext(
             db=factory,
             audio_dir=audio_dir,
             data_dir=data_dir,
             signing_key=TEST_SECRET,
-            allowed_hosts_exact=exact,
-            allowed_hosts_patterns=patterns,
             redis=make_fake_redis(),
         )
         app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
         client = web_client(app, cookies={})
         from conftest import login_and_csrf
-        login_and_csrf(client, "admin2", "admin12345")
+        login_and_csrf(client, "admin2")
 
         resp = client.post(
             "/api/songs",
@@ -954,7 +970,7 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
 # ── Wildcard ALLOWED_HOSTS pattern ─────────────────────────────────
 
 
-def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
+def test_wildcard_allowed_host_pattern(tmp_path: Path, fresh_settings) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -966,27 +982,25 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin4", password_hash=stored_hash("admin12345"), role="admin")
+        admin = User(username="admin4", role="admin")
         session.add(admin)
         album = Album(id="a1", title="A", artist="A")
         session.add(album)
         session.commit()
 
-    with patch.dict("os.environ", {"ALLOWED_HOSTS": "*.trycloudflare.com"}):
-        exact, patterns = parse_allowed_hosts()
+    with patch.dict("os.environ", {"ALLOWED_HOSTS": "*.trycloudflare.com,testserver"}):
+        get_settings.cache_clear()
         ctx = AppContext(
             db=factory,
             audio_dir=audio_dir,
             data_dir=data_dir,
             signing_key=TEST_SECRET,
-            allowed_hosts_exact=exact,
-            allowed_hosts_patterns=patterns,
             redis=make_fake_redis(),
         )
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
         client = web_client(app, cookies={})
         from conftest import login_and_csrf
-        login_and_csrf(client, "admin4", "admin12345")
+        login_and_csrf(client, "admin4")
 
         resp = client.post(
             "/api/songs",
@@ -1001,15 +1015,6 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
             headers={"origin": "https://evil.com"},
         )
         assert resp.status_code == 403
-
-
-# ── parse_allowed_hosts ─────────────────────────────────────────────
-
-
-def test_parse_allowed_hosts() -> None:
-    with patch.dict("os.environ", {"ALLOWED_HOSTS": "example.com"}):
-        exact, patterns = parse_allowed_hosts()
-        assert exact == {"example.com"}
 
 
 # ── CSP hashes for the inline scripts of index.html ────────────────
@@ -1127,7 +1132,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin5", password_hash=stored_hash("admin12345"))
+        admin = User(username="admin5")
         session.add(admin)
         session.commit()
 
@@ -1141,7 +1146,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
     from conftest import login_and_csrf
-    login_and_csrf(client, "admin5", "admin12345")
+    login_and_csrf(client, "admin5")
     resp = client.get("/audio/other-user-id/song.mp3")
     assert resp.status_code == 404
 
@@ -1160,49 +1165,6 @@ def test_spa_fallback_not_for_audio(server_app: TestClient) -> None:
     assert resp.status_code in (401, 404)
 
 
-# ── lifespan pruned login attempts log ──────────────────────────────
-
-
-def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
-    from songmaker_cli.db.models import LoginAttempt
-
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir(parents=True)
-    data_dir = tmp_path / "data"
-    data_dir.mkdir(parents=True)
-    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = tmp_path / "frontend" / "build"
-    sk_dir.mkdir(parents=True)
-    (sk_dir / "index.html").write_text("<html>Test</html>")
-
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
-        old_time = datetime.now(timezone.utc) - timedelta(days=100)
-        attempt = LoginAttempt(
-            username="test", ip_address="127.0.0.1", success=False,
-            attempted_at=old_time,
-        )
-        session.add(attempt)
-        session.commit()
-
-    with factory() as session:
-        assert session.query(LoginAttempt).count() == 1
-
-    ctx = AppContext(
-        db=factory,
-        audio_dir=audio_dir,
-        data_dir=data_dir,
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-    )
-    app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    with web_client(app):
-        pass
-
-    with factory() as session:
-        assert session.query(LoginAttempt).count() == 0
-
-
 # ── structured logging configuration ──────────────────────────────
 
 
@@ -1215,45 +1177,21 @@ class TestConfigureLogging:
         isolated_logging,
     ) -> None:
         monkeypatch.delenv("LOG_FORMAT", raising=False)
-        from songmaker_cli.logging_config import (
-            _SongmakerCliLogHandler,
-            _SongmakerLogHandler,
-            configure_logging,
-        )
+        from songmaker_cli.logging_config import _SongmakerLogHandler, configure_logging
 
         root = logging.getLogger()
-        cli_handler = _SongmakerCliLogHandler()
-        root.addHandler(cli_handler)
+        earlier_handler = _SongmakerLogHandler()
+        root.addHandler(earlier_handler)
 
         configure_logging()
         configure_logging()
         logging.getLogger("songmaker.test").info("text mode")
 
-        assert cli_handler not in root.handlers
+        assert earlier_handler not in root.handlers
         assert caplog.handler in root.handlers
         assert sum(isinstance(handler, _SongmakerLogHandler) for handler in root.handlers) == 1
         assert "text mode" in capsys.readouterr().err
         assert "text mode" in caplog.text
-
-    def test_cli_logging_replaces_only_its_own_handler(
-        self,
-        caplog: pytest.LogCaptureFixture,
-        isolated_logging,
-    ) -> None:
-        from songmaker_cli.logging_config import (
-            _SongmakerCliLogHandler,
-            configure_cli_logging,
-        )
-
-        root = logging.getLogger()
-        configure_cli_logging(logging.INFO)
-        configure_cli_logging(logging.DEBUG)
-
-        assert caplog.handler in root.handlers
-        assert sum(
-            isinstance(handler, _SongmakerCliLogHandler) for handler in root.handlers
-        ) == 1
-        assert root.level == logging.DEBUG
 
     def test_json_mode(
         self,
@@ -1303,7 +1241,7 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin6", password_hash=stored_hash("admin12345"), role="admin")
+        admin = User(username="admin6", role="admin")
         session.add(admin)
         session.commit()
 
@@ -1350,7 +1288,7 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin7", password_hash=stored_hash("admin12345"), role="admin")
+        admin = User(username="admin7", role="admin")
         session.add(admin)
         session.commit()
 
@@ -1394,7 +1332,7 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin8", password_hash=stored_hash("admin12345"), role="admin")
+        admin = User(username="admin8", role="admin")
         session.add(admin)
         session.commit()
 
@@ -1434,7 +1372,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(
-            username="admincap", password_hash=stored_hash("admin12345"), role="admin",
+            username="admincap", role="admin",
         )
         session.add(admin)
         for _ in range(3):
@@ -1479,7 +1417,7 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(
-            username="metrics_admin", password_hash=stored_hash("admin12345"), role="admin",
+            username="metrics_admin", role="admin",
         )
         session.add(admin)
         session.commit()
@@ -1532,7 +1470,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
     now = datetime.now(timezone.utc)
     with factory() as session:
         admin = User(
-            username="metrics_admin2", password_hash=stored_hash("admin12345"), role="admin",
+            username="metrics_admin2", role="admin",
         )
         session.add(admin)
         job = Job(type="generate", status="completed", started_at=now, completed_at=now)
@@ -1907,123 +1845,6 @@ def test_metrics_endpoint_offline_worker(
         'songmaker_acestep_worker_loaded_models{worker_id="acestep-worker-0"} 0'
         in body
     )
-
-
-# ── Auto-setup admin ──────────────────────────────────────────────
-
-
-@pytest.fixture
-def auto_setup_ctx(tmp_path: Path) -> AppContext:
-    return AppContext(
-        db=init_db(tmp_path / "test.db"),
-        audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET, redis=make_fake_redis(),
-    )
-
-
-def test_auto_setup_admin_creates_user(auto_setup_ctx: AppContext) -> None:
-    from songmaker_cli.app_context import build_password_hasher
-    from songmaker_cli.db.models import AuditLog, UserSession
-    from songmaker_cli.db.queries.auth import get_user_by_username
-    from songmaker_cli.lifecycle import auto_setup_admin
-
-    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}):
-        auto_setup_admin(auto_setup_ctx)
-
-    with auto_setup_ctx.db() as session:
-        user = get_user_by_username(session, "boss")
-        assert user is not None
-        assert user.role == "admin"
-        assert build_password_hasher().verify("Str0ng!Pass99", user.password_hash)
-        assert session.query(AuditLog).count() == 0
-        assert session.query(UserSession).count() == 0
-
-
-@pytest.mark.parametrize("admin_password", ["Str0ng!Pass99", "Zq7!pw"])
-def test_auto_setup_admin_leaves_an_existing_admin_untouched(
-    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture, admin_password: str,
-) -> None:
-    from songmaker_cli.db.queries.auth import create_user, list_users
-    from songmaker_cli.lifecycle import auto_setup_admin
-
-    with auto_setup_ctx.db() as session:
-        create_user(session, "existing", stored_hash("Test1234!"), role="admin")
-        session.commit()
-
-    with (
-        patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": admin_password}),
-        caplog.at_level(logging.INFO, logger="songmaker_cli.lifecycle"),
-    ):
-        auto_setup_admin(auto_setup_ctx)
-
-    with auto_setup_ctx.db() as session:
-        assert [user.username for user in list_users(session)] == ["existing"]
-    assert not any(record.name == "songmaker_cli.lifecycle" for record in caplog.records)
-
-
-def test_auto_setup_admin_skips_without_env_vars(
-    auto_setup_ctx: AppContext, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from songmaker_cli.db.queries.auth import user_count
-    from songmaker_cli.lifecycle import auto_setup_admin
-
-    monkeypatch.delenv("ADMIN_USERNAME", raising=False)
-    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
-    auto_setup_admin(auto_setup_ctx)
-
-    with auto_setup_ctx.db() as session:
-        assert user_count(session) == 0
-
-
-@pytest.mark.parametrize(
-    "admin_password, reason",
-    [
-        ("Zq7!pw", "Password must be at least 8 characters"),
-        ("password123", "Password is too common — choose something less predictable"),
-    ],
-)
-def test_auto_setup_admin_refuses_a_password_the_rule_rejects(
-    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture,
-    admin_password: str, reason: str,
-) -> None:
-    from songmaker_cli.db.queries.auth import user_count
-    from songmaker_cli.lifecycle import auto_setup_admin
-
-    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": admin_password}):
-        auto_setup_admin(auto_setup_ctx)
-
-    with auto_setup_ctx.db() as session:
-        assert user_count(session) == 0
-    errors = [record.getMessage() for record in caplog.records if record.levelno == logging.ERROR]
-    assert len(errors) == 1
-    assert reason in errors[0]
-    assert admin_password not in caplog.text
-
-
-@pytest.mark.parametrize("store_method", ["count", "create"])
-def test_auto_setup_admin_rolls_back_concurrent_startup(
-    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture, store_method: str,
-) -> None:
-    from webauth.ports import UsernameTakenError
-
-    from songmaker_cli.auth_stores import DatabaseUserStore
-    from songmaker_cli.db.models import AuditLog, UserSession
-    from songmaker_cli.db.queries.auth import user_count
-    from songmaker_cli.lifecycle import auto_setup_admin
-
-    failure = [0, 2] if store_method == "count" else UsernameTakenError("Username already exists")
-    with (
-        patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}),
-        patch.object(DatabaseUserStore, store_method, side_effect=failure),
-        caplog.at_level(logging.INFO, logger="songmaker_cli.lifecycle"),
-    ):
-        auto_setup_admin(auto_setup_ctx)
-
-    with auto_setup_ctx.db() as session:
-        assert user_count(session) == 0
-        assert session.query(UserSession).count() == 0
-        assert session.query(AuditLog).count() == 0
-    assert "concurrent startup" in caplog.text
 
 
 # ── PWA static routes ────────────────────────────────────────────────

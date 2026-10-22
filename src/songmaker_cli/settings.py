@@ -36,6 +36,8 @@ from songmaker_cli.constants import (
     LORA_TRAINING_HEARTBEAT_STALE_THRESHOLD_SECONDS,
     REIMPORT_BODY_MAX_BYTES,
     SCORER_TIMEOUT_SECONDS,
+    SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT,
+    SESSION_IDLE_SECONDS_DEFAULT,
     TEXT_ACCURACY_TIMEOUT_SECONDS,
     CoverExecutor,
     acestep_sse_read_timeout_seconds,
@@ -195,17 +197,22 @@ class Settings(BaseSettings):
     database_max_overflow: int = 10
 
     # ── Sessions / auth ───────────────────────────────────────────────
-    session_max_age_seconds: int = Field(default=60 * 60 * 24 * 30, alias="SESSION_MAX_AGE")
-    session_absolute_max_age_seconds: int = Field(
-        default=60 * 60 * 24 * 90, alias="SESSION_ABSOLUTE_MAX_AGE",
+    session_idle_seconds: int = Field(
+        default=SESSION_IDLE_SECONDS_DEFAULT, alias="SESSION_IDLE_SECONDS", ge=1,
     )
-    login_rate_limit: int = 5
-    login_lockout_threshold: int = 15
-    login_lockout_window_seconds: int = Field(default=3600, alias="LOGIN_LOCKOUT_WINDOW")
+    session_absolute_max_age_seconds: int = Field(
+        default=SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT, alias="SESSION_ABSOLUTE_MAX_AGE", ge=1,
+    )
     max_concurrent_sessions_per_user: int = Field(
         default=10, alias="MAX_CONCURRENT_SESSIONS_PER_USER", ge=1,
     )
     cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
+    # The OpenID Connect relying party. All three are required to serve the web
+    # app and are checked only where the relying party is built, so workers and
+    # the migrate step start without them. The secret is a file, never a value.
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret_file: Path | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30
@@ -362,10 +369,6 @@ class Settings(BaseSettings):
     # launches the MCP server via --mcp-config. Identifies the acting
     # user so tool calls can run the same ownership checks as HTTP.
     songmaker_mcp_user_id: str | None = None
-
-    # ── Admin auto-setup ──────────────────────────────────────────────
-    admin_username: str | None = None
-    admin_password: SecretStr | None = None
 
     # ── Filesystem roots (override via env for Docker volume mounts) ──
     audio_dir: str = "data/audio"

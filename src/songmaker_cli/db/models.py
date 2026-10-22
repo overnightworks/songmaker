@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Final
 
+from pydantic import SecretStr
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -43,6 +44,7 @@ SONG_SLUG_MAX_LENGTH: Final = 220
 PLAYLIST_SLUG_MAX_LENGTH: Final = 220
 ALBUM_SLUG_MAX_LENGTH: Final = 64
 LORA_SLUG_MAX_LENGTH: Final = 120
+USERNAME_MAX_LENGTH: Final = 100
 USERS_ID: Final = "users.id"
 ALBUMS_ID: Final = "albums.id"
 SONGS_ID: Final = "songs.id"
@@ -419,10 +421,8 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(200))
+    username: Mapped[str] = mapped_column(String(USERNAME_MAX_LENGTH))
     role: Mapped[str] = mapped_column(String(20), default="user")
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     default_generation_config: Mapped[str | None] = mapped_column(
         String(36), nullable=True, default=None,
     )
@@ -475,20 +475,16 @@ class UserSession(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey(USERS_ID), index=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)
-    ip_address: Mapped[str] = mapped_column(String(45), default="")
-    user_agent: Mapped[str] = mapped_column(String(500), default="")
+    stored_refresh_token: Mapped[str | None] = mapped_column("refresh_token", Text, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="sessions")
 
-
-class LoginAttempt(Base):
-    __tablename__ = "login_attempts"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
-    ip_address: Mapped[str] = mapped_column(String(45), index=True)
-    username: Mapped[str] = mapped_column(String(100))
-    success: Mapped[bool] = mapped_column(Boolean)
-    attempted_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+    @property
+    def refresh_token(self) -> SecretStr | None:
+        """The issuer's refresh token, wrapped so no repr, log or response prints it."""
+        if self.stored_refresh_token is None:
+            return None
+        return SecretStr(self.stored_refresh_token)
 
 
 class RateLimitSetting(Base):

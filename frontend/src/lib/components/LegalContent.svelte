@@ -75,9 +75,10 @@
 			<p>Wir verarbeiten folgende personenbezogene Daten:</p>
 			<ul>
 				<li>
-					<strong>Benutzerkonto:</strong> Benutzername und Passwort (nur als Argon2id-Hash gespeichert,
-					nicht im Klartext). Konten legt der Betreiber auf Einladung an. Rechtsgrundlage: Art. 6 Abs.
-					1 lit. b DSGVO (Vertragserfüllung).
+					<strong>Benutzerkonto:</strong> Benutzername und die Kennung Ihres Keycloak-Kontos. Die Anmeldung
+					läuft über den Keycloak-Dienst des Betreibers (auth.hallucinai.de); Passwörter gibt es dort,
+					songmaker speichert und sieht keine. Zugang und Verwaltungsrechte folgen aus Ihren Keycloak-Gruppen;
+					Konten legt der Betreiber auf Einladung an. Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung).
 				</li>
 				<li>
 					<strong>Inhalte, die Sie in songmaker anlegen:</strong> Alben, Songs, Liedtexte, Stilbeschreibungen,
@@ -96,11 +97,10 @@
 					Abs. 1 lit. b DSGVO.
 				</li>
 				<li>
-					<strong>Anmeldung und Sicherheit:</strong> Sitzungskennung, IP-Adresse, Browserkennung und Zeitpunkt
-					der Sitzung; Anmeldeversuche mit IP-Adresse, eingegebenem Benutzernamen, Zeitpunkt und Erfolg;
-					kurzlebige Zähler zur Ratenbegrenzung; ein Audit-Log mit Anmelde- und Änderungsereignissen,
-					der früheren und neuen IP-Adresse bei einem Wechsel und Verwaltungsaktionen. Rechtsgrundlage:
-					Art. 6 Abs. 1 lit. f DSGVO (Schutz vor Missbrauch).
+					<strong>Anmeldung und Sicherheit:</strong> Sitzungskennung und Zeitpunkt der Sitzung; kurzlebige
+					Zähler zur Ratenbegrenzung; ein Audit-Log mit Änderungsereignissen und Verwaltungsaktionen.
+					Anmeldeversuche und Passwörter speichert songmaker nicht. Rechtsgrundlage: Art. 6 Abs. 1 lit.
+					f DSGVO (Schutz vor Missbrauch).
 				</li>
 				<li>
 					<strong>Letzte Bearbeitungen und Wiedergaben:</strong> je Song der Zeitpunkt und die Art Ihrer
@@ -116,7 +116,7 @@
 				</li>
 			</ul>
 			<p>
-				Für ein Konto sind Benutzername und Passwort erforderlich; alle weiteren Inhalte geben Sie
+				Für ein Konto ist die Anmeldung über Keycloak erforderlich; alle weiteren Inhalte geben Sie
 				freiwillig ein. Eine gesetzliche oder vertragliche Pflicht zur Bereitstellung besteht nicht.
 				Eine automatisierte Entscheidungsfindung einschließlich Profiling im Sinne von Art. 22 DSGVO
 				findet nicht statt; die automatischen Bewertungen von Songs dienen nur Ihrer Orientierung.
@@ -233,7 +233,9 @@
 			<ul>
 				<li>
 					ein Sitzungs-Cookie für die Anmeldung (HttpOnly) und ein Sicherheits-Cookie gegen
-					Fremdanfragen (CSRF), beide nur für diese Domain, Laufzeit bis 30 Tage;
+					Fremdanfragen (CSRF), beide nur für songmaker.hallucinai.de, Laufzeit bis 30 Tage; während
+					der Anmeldung bei Keycloak kurzlebige Cookies für den Ablauf der Anmeldung und für das
+					Abmelden;
 				</li>
 				<li>
 					im Browser-Speicher die von Ihnen gewählten Anzeige- und Wiedergabeeinstellungen, Ihre
@@ -282,14 +284,7 @@
 				</li>
 				<li>
 					<strong>Sitzungen:</strong> Das Anmelde-Cookie im Browser gilt bis zu 30 Tage nach dem Einloggen;
-					über die Kommandozeile bleibt eine Anmeldung bis zu 90 Tage gültig, wenn zwischen zwei Aufrufen
-					weniger als 30 Tage liegen. Der Sitzungseintrag mit IP-Adresse und Browserkennung bleibt bis
-					zu etwa 120 Tage nach dem Einloggen gespeichert.
-				</li>
-				<li>
-					<strong>Anmeldeversuche:</strong> Einträge älter als 90 Tage werden gelöscht; der Löschlauf
-					findet derzeit nur beim Start des Servers statt, sodass Einträge auch länger liegen bleiben
-					können.
+					Anmeldeversuche und Passwörter werden nicht gespeichert.
 				</li>
 				<li><strong>Audit-Log:</strong> wird derzeit ohne feste Frist gespeichert.</li>
 				<li>
@@ -345,7 +340,7 @@
 		</section>
 
 		<footer class="legal-footer">
-			<p>Stand: 20. Oktober 2026</p>
+			<p>Stand: 21. Oktober 2026</p>
 		</footer>
 	{/if}
 
@@ -355,11 +350,11 @@
 
 			<h2>1. Leistungsbeschreibung</h2>
 			<p>
-				songmaker (unter hallucinai.de) ist ein privat betriebener, kostenloser Dienst, der nur auf
-				Einladung nutzbar ist. Er wandelt Liedtexte und Stilbeschreibungen auf dem Server des
-				Betreibers mit ACE-Step in Musik um. Der Co-Writer, die Textprüfung und Cover-Vorschläge
-				nutzen externe KI-Anbieter (siehe Datenschutzerklärung). Eine Verfügbarkeit wird nicht
-				garantiert.
+				songmaker (unter songmaker.hallucinai.de) ist ein privat betriebener, kostenloser Dienst,
+				der nur auf Einladung nutzbar ist. Er wandelt Liedtexte und Stilbeschreibungen auf dem
+				Server des Betreibers mit ACE-Step in Musik um. Der Co-Writer, die Textprüfung und
+				Cover-Vorschläge nutzen externe KI-Anbieter (siehe Datenschutzerklärung). Eine Verfügbarkeit
+				wird nicht garantiert.
 			</p>
 
 			<h2>2. KI-generierte Inhalte</h2>
@@ -436,7 +431,7 @@
 		</section>
 
 		<footer class="legal-footer">
-			<p>Stand: 20. Oktober 2026</p>
+			<p>Stand: 21. Oktober 2026</p>
 		</footer>
 	{/if}
 </div>

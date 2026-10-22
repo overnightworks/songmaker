@@ -63,6 +63,7 @@ def connect_db(url: str) -> sessionmaker[Session]:
     settings = get_settings()
     engine = create_engine(
         url, echo=False,
+        hide_parameters=True,
         pool_size=settings.database_pool_size,
         max_overflow=settings.database_max_overflow,
         pool_pre_ping=True,

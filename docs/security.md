@@ -3,8 +3,8 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.14.0` and hash-locked in
-`uv.lock` (#879). Module names below such as `webauth.dependencies` are its
+the `server` extra to the release wheel of tag `v0.20.1` and hash-locked in
+`uv.lock` (#879, #1765). Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
 
@@ -20,36 +20,47 @@ directory names — remain songmaker's decision, installed through
 
 ## Authentication
 
-Session-based auth with Argon2id password hashing (OWASP profile: 19 MiB memory, 2 iterations, 1 degree of parallelism).
+People sign in through the operator's Keycloak realm (OpenID Connect, authorization code with PKCE); songmaker holds no password, no password hash and no admin bootstrap. `GET /login/oidc?next=` starts the sign-in with a pending-login cookie, `GET /auth/callback` finishes it, `POST /auth/logout` ends it. After sign-in songmaker's own signed session cookie, backed by a DB row, is the credential; the realm is consulted only at sign-in and sign-out.
 
+- **Relying party**: `OIDC_ISSUER` and `OIDC_CLIENT_ID` come from the environment; the endpoints are derived from the issuer. The ID token's issuer is bound to the configured realm, so a token from another realm is refused. The settings are validated where the web relying party is built, so the workers and the migrate step start without them; a missing or unreadable client secret stops web and names only the path. `PUBLIC_BASE_URL` is also required: the redirect and post-logout addresses are built from it.
+- **Client secret**: the edge owns the file `~/.secrets/keycloak/clients/songmaker`. Compose mounts it read-only into `songmaker-web` alone, as the file-backed secret `keycloak_client_secret` at `/run/secrets/keycloak_client_secret`; `OIDC_CLIENT_SECRET_FILE` names that path. It is in no environment variable, log or response. The agent-CLI child processes of the web container run as the same OS user and can read the file; this is the accepted single-user trust model ([Trust model](#trust-model-and-accepted-risks)), not a boundary.
+- **Admission**: the ID token must carry the group `/apps/songmaker` or the sign-in ends at `/no-access` with no account, session or cookie. The group `/apps/songmaker/admin` makes the account an admin; both are re-read at every sign-in, so a promotion or demotion applies at the next sign-in. The account id is the Keycloak subject. An existing row whose id equals the subject is reused, otherwise a fresh account is created, and the username is display text only (it is not unique, and it is cut to the column length of 100 characters). Account creation and role changes are written to the audit trail without a person.
+- **Callback outcomes**: success is a 303 to the validated `next` (a path of this app, else `/`); a non-member is a 303 to `/no-access`; every other refusal (state mismatch, expired or missing pending login, foreign issuer, token-exchange failure) is a 403 carrying the SPA shell, "Login failed" and a "Try again" link to `/login/oidc`. The library clears the pending-login cookie that the submitted state names (foreign issuer, expired login) and leaves the others, so a callback with an unknown state keeps another tab's pending login intact until it expires. Admission and the new session are one database transaction under the write lock, committed before the cookies are issued, so a failed commit leaves no cookie, account or session. `/login/oidc`, `/auth/callback` and `/auth/logout` answer `Cache-Control: no-store`, refusals included.
 - **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in the DB.
-- **DB session authority**: Every authenticated request loads the session and account from the DB. `ExpiryColumnLiveness` checks `expires_at` and the absolute age from `created_at`; inactive accounts are refused. Renewal must update an existing row (`touch()` returns `True`); a missing or revoked row cannot be recreated. Login and pruning commit together before cookies are issued.
-- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak alone does not yield usable cookies. The secret comes from the `SESSION_SECRET` env var (min 32 chars) and is required at startup — Settings raises `ValidationError` if missing. There is no auto-generation fallback (was removed in the W1 no-silent-fallbacks cleanup; the old fallback masked deployment misconfigurations).
-- **Cookie flags and names**: `HttpOnly`, `SameSite=Strict`, `Secure` when `COOKIE_SECURE` is true (the default). The session and CSRF cookies are then also named with the `__Host-` prefix (`__Host-session_id`, `__Host-csrf_token`), which a browser accepts only on a `Secure` cookie carrying no `Domain` — a sibling subdomain cannot plant one. `COOKIE_SECURE=false` drops `Secure` and the `__Host-` prefix together, for local plain-http development; production never sets it false. Unlike the IP and proxy facts below, `COOKIE_SECURE` is one fixed deployment setting, not something a request's scheme or `X-Forwarded-Proto` can change.
-- **Session lifetime**: With the configured defaults, successful authentication (including `GET /api/auth/me`) renews DB `expires_at` for 30 days, subject to a 90-day absolute age from `created_at`. It does not reissue the browser cookie: that cookie gets `Max-Age=30 days` at login, so the browser is signed out no later than 30 days after login even with daily use. The CLI stores only the cookie name and signed value and sends them anew on each call, so it can remain signed in for up to 90 days if gaps between calls stay below 30 days. Revocation can end either session sooner.
-- **Session fixation**: Login adds an independent session and prunes only the oldest overflow once the per-user cap (`MAX_CONCURRENT_SESSIONS_PER_USER`, default 10) is exceeded. Expired sessions do not consume the cap. Password change, admin password reset, and the local `songmaker reset-password` CLI delete all existing DB sessions atomically with the password update. The CLI needs no Redis; self-service password change issues a fresh session only after commit.
-- **Logout**: `DELETE /api/auth/session` ends the DB session and clears the cookies. The session it deletes is named by the `verified_session_id` dependency, which resolves `get_current_user` first — see "Authorization" below.
-- **Session anomaly detection**: IP and user-agent changes are written to the audit trail in the authentication transaction.
-- **User deactivation**: Account deactivation and deletion of all its DB sessions commit together.
-- **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
-- **Account lockout**: After 15 failed attempts per username within 1 hour, the account is temporarily locked (returns 429 with Retry-After). This catches patient attackers who stay under the per-window rate limit. Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
-- **Constant-time verification**: Argon2id always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration. A stored hash that is not this host's Argon2id (wrong algorithm, wrong cost) raises loudly instead of being read as a wrong password.
-- **Login attempt cleanup**: Records older than 90 days are pruned at startup
-- **Password strength**: Common passwords (~200 entries including seasonal/year variants) and low-entropy passwords (< 4 unique chars) are rejected on setup, user creation, and password change
-- **Frontend auth-check classification**: The SPA's startup `GET /api/auth/me` (`checkAuth()` in `frontend/src/lib/stores/auth.ts`) treats a 401 or 403 as "not logged in" and redirects to `/login` — 403 covers `get_current_user` returning "Account disabled" for a deactivated account, which is a permanent revocation, not a transient failure. A 429 (e.g. from the per-IP rate limiter below), a 5xx, or a network error is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a logout. This prevents a fast-reloading browser or test harness from being logged out purely because it tripped the IP rate limit. Matches `probeResourceAuth` in `frontend/src/lib/stores/resourceSync.ts`, which already treats 401/403 alike.
+- **DB session authority**: Every authenticated request loads the session and account from the DB; the library checks the stored idle expiry and the absolute age from `created_at`. Renewal must update an existing row (`touch()` returns `True`); a missing or revoked row cannot be recreated.
+- **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB leak alone does not yield usable cookies. The secret comes from the `SESSION_SECRET` env var (min 32 chars) and is required at startup — Settings raises `ValidationError` if missing. There is no auto-generation fallback.
+- **Cookie flags and names**: The session cookie is `HttpOnly`, `SameSite=Strict`, `Secure` when `COOKIE_SECURE` is true (the default). The session and CSRF cookies are then named with the `__Host-` prefix (`__Host-session_id`, `__Host-csrf_token`), which a browser accepts only on a `Secure` cookie carrying no `Domain`. The CSRF cookie is deliberately not `HttpOnly`: the client reads it back into a header. The library's pending-login cookie is `SameSite=Lax`, because the return from Keycloak is a cross-site navigation, and the logout hint cookie is `__Secure-`, `HttpOnly`, `Strict` and scoped to the logout path. `COOKIE_SECURE=false` drops `Secure` and the `__Host-` prefix together, for local plain-http development and the CI stack; production never sets it false.
+- **Session lifetime**: `SESSION_IDLE_SECONDS` (default 7 days) is renewed by every authenticated request, including `GET /api/auth/me`, up to `SESSION_ABSOLUTE_MAX_AGE` (default 30 days) from `created_at`. The cap per account is `MAX_CONCURRENT_SESSIONS_PER_USER` (default 10); a sign-in ends the session its request carried and prunes only the oldest overflow.
+- **Logout**: `POST /auth/logout` is a same-origin fetch. It deletes the DB session, commits, clears all three cookies and answers `{logout_url}`: Keycloak's end-session address, with the ID-token hint when the browser still holds one. The SPA then navigates to it, which ends the Keycloak session too and returns to `/login` ("You are logged out."). The route is exempt from the CSRF token (a signed-out browser must be able to clear its cookies) but not from the origin check. Without a session it still clears the cookies and answers a `logout_url`; the hint is read from its own cookie independently of the session, so it is present whenever the browser still holds it.
+- **Session cookies of the old login**: the 0.14 library's cookies are refused (`401`); the migration also deletes every session row.
+- **Frontend auth-check classification**: A non-public 401 navigates the whole page to `/login/oidc?next=…`; the public paths (`/shared/*`, `/share/*`, the legal pages) never redirect. A 429, a 5xx or a network error on the SPA's startup `GET /api/auth/me` is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a sign-out.
+
+### Keycloak outage
+
+Signed-in requests never call Keycloak: the session is songmaker's own, so the app, generation, scoring and the co-writer keep working while the realm is down. Web boots without reaching the issuer. During an outage a new sign-in fails at the browser (the redirect to Keycloak does not load) or, when the failure happens while songmaker exchanges the code, ends in the "Login failed" page; sign-out ends the songmaker session and the redirect to Keycloak then fails in the browser. Existing sessions are not affected.
+
+### Revocation
+
+Keycloak is the account owner, but songmaker applies its answers only at sign-in. Disabling a user or removing them from `/apps/songmaker` ends nothing by itself: a session stays valid until it goes idle for `SESSION_IDLE_SECONDS` or reaches `SESSION_ABSOLUTE_MAX_AGE`, and continued use renews it, so the bound is the absolute age (30 days by default), not the idle time. Two ways to end access now:
+
+1. Sign out in Keycloak and in songmaker: `POST /auth/logout` on that device ends that device's session and the Keycloak session.
+2. Delete the sessions in the database: `DELETE FROM user_sessions WHERE user_id = '<subject>';` (all of them: `DELETE FROM user_sessions;`). The next request is a 401.
+
+Until the back-channel logout lands, a sign-out started at Keycloak (or by another application) does not end songmaker sessions. The exposure is a stolen session cookie (`HttpOnly`, `__Host-`, `Strict`) until it goes idle or reaches the cap; with one user this is accepted for the days until the back-channel is built.
+
+### Rollback
+
+A deploy that must be undone is undone by restore (`scripts/backup.sh` and `scripts/restore.sh`, which need both the database and the audio files): the migration drops the password-era columns and tables and its downgrade recreates them empty. Restore the paired database and audio backup taken before the deploy, then deploy the previous revision.
 
 ## Authorization
 
 Two-layer defense:
 
-1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` validates the signed cookie and DB session under `SELECT ... FOR UPDATE`, checks expiry/lifetime/active status, and renews the existing row. Its own short transaction commits renewal and identity audit before the endpoint runs, without committing endpoint writes. Manual stream callers commit and close their authentication transaction before starting the stream.
-   The logout route names the session it deletes through the factory's
-   `verified_session_id` dependency, which resolves `get_current_user` first —
-   so a session is only ever deleted after the request proved it holds it, and
-   a logout can never clear the cookie while leaving the stored session alive.
-2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. Public auth endpoints are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
+1. **Dependency-based auth** (`webauth.dependencies`, bound to songmaker's stores in `auth_dependencies.py`): `get_current_user` validates the signed cookie and the DB session, checks expiry and lifetime, and renews the existing row with an update-only `touch`, so a session deleted meanwhile stays deleted. Its own short transaction commits renewal before the endpoint runs, without committing endpoint writes. Manual stream callers commit and close their authentication transaction before starting the stream.
+   The logout route does not depend on `get_current_user`: the library's `log_out` reads the session cookie itself, deletes the stored session it names, and clears the cookies either way; the route then commits.
+2. **Endpoint** (`api.py`): Authenticated resource endpoints use `Depends(get_current_user)` and return 401 if unauthenticated. The sign-in routes are deliberately unauthenticated; worker control-plane routes under `/api/internal/*` use the internal token instead of sessions. Ownership checks enforce default-deny: access is blocked unless the resource belongs to the user (or the user is admin). Missing resources are denied.
 
-Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. Demotion or deactivation of the last active admin is blocked to prevent lockout. When a user is deactivated or their role is changed, all their sessions are immediately invalidated.
+Roles: `Literal["admin", "user"]` — validated at the Pydantic schema level. No other role values are accepted by the API. The role is set from the Keycloak admin group at each sign-in; there is no in-app account administration.
 
 Generation invalidation history is partitioned by `user_id` in PostgreSQL. Its
 monotonic sequence allocator and event row participate in the same transaction as
@@ -60,7 +71,7 @@ authenticated SSE endpoint reads only the exact authenticated user partition; ad
 role does not bypass this filter and frames contain no user ID. Authentication and
 the initial cursor reads finish in a function-local DB session before streaming
 begins. Polls use independent short sessions, and every connection ends after at
-most 60 seconds so deactivation or session expiry is enforced on reconnect.
+most 60 seconds so session expiry or revocation is enforced on reconnect.
 
 ## Proxy trust
 
@@ -79,8 +90,8 @@ local to one host and is dropped when an address is matched against a network,
 so the entry would silently widen to every interface.
 
 That decision governs `X-Forwarded-For`: it is read for the real client IP
-(rightmost untrusted entry) — every per-IP budget, the login/lockout counters,
-the access log, and the session's bound IP key use that address; from an
+(rightmost untrusted entry) — every per-IP budget and
+the access log use that address; from an
 untrusted peer the header is ignored and the direct peer address is used.
 `X-Forwarded-Proto` is read the same way for `request_is_https()` (used by
 share-link scheme resolution, see #339 below), but since webauth v0.11.0 it no
@@ -161,9 +172,9 @@ Deployment" below.
 Five-layer defense:
 
 1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
-2. **Session-bound CSRF token**: Login sets a `csrf_token` cookie (`__Host-csrf_token` when `COOKIE_SECURE` is true, non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login and internal worker routes) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
-3. **Origin verification**: When `Sec-Fetch-Site` is absent or `same-site`, mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
-4. **Form-submit blocking**: On that same fallback path, mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
+2. **Session-bound CSRF token**: The sign-in callback sets a `csrf_token` cookie (`__Host-csrf_token` when `COOKIE_SECURE` is true, non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests and `POST /auth/logout` (except the logout, which needs only the origin check, and the internal worker routes) must include an `X-CSRF-Token` header. The token policy lists its protected set explicitly (`/api/` and the exact logout path), so the sign-in routes are never token-checked. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
+3. **Origin verification**: When `Sec-Fetch-Site` is absent or `same-site`, every state-changing request (not only `/api/` and the sign-in routes: the `/shared/*/stream` share manifests too) with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
+4. **Form-submit blocking**: On that same fallback path, mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (fetch).
 5. **Fetch metadata**: `Sec-Fetch-Site` is checked before the Origin allowlist. `same-origin` passes the origin check; `cross-site` and `none` are rejected (403), even with an allowed Origin. `same-site` and a missing header follow the Origin/Referer allowlist and form-submit rules above. The session-bound token is still required. The internal worker routes remain token-exempt but still follow this origin check. [Server tests](../tests/test_server.py) prove the accepted and rejected header cases.
 
 ### History: deliberate changes with the webauth migration (#905)
@@ -174,9 +185,13 @@ Five-layer defense:
 
 ### History: deliberate changes with webauth v0.11.0 (#1320)
 
-- Password hashing moved to Argon2id (OWASP profile) from the prior library's algorithm. **Every hash stored under the old algorithm is now unreadable** — `verify()` raises `UnknownHashFormatError` instead of returning "wrong password", so an account with a pre-upgrade hash fails login loudly (500) rather than silently. This is why S5 lands together with S6 at an operator-named moment, immediately followed by `songmaker reset-password` for every account.
-- The session and CSRF cookie names are no longer request-scheme-dependent: they are fixed at startup from the static `COOKIE_SECURE` setting (`__Host-session_id` / `__Host-csrf_token` when true, `session_id` / `csrf_token` when false). `X-Forwarded-Proto` and `TRUSTED_PROXIES` no longer influence the `Secure` flag or `Strict-Transport-Security`; see "Authentication" and "Proxy trust" above. Every existing cookie becomes invalid at the same moment the names change, ending every session.
-- `issue_session_cookies()` no longer takes a `Request` argument — it reads `cookie_secure` from the installed `WebAuthConfig` only.
+- The session and CSRF cookie names are no longer request-scheme-dependent: they are fixed at startup from the static `COOKIE_SECURE` setting (`__Host-session_id` / `__Host-csrf_token` when true, `session_id` / `csrf_token` when false). `X-Forwarded-Proto` and `TRUSTED_PROXIES` no longer influence the `Secure` flag or `Strict-Transport-Security`; see "Authentication" and "Proxy trust" above.
+
+### History: deliberate changes with webauth v0.19.0 and v0.20.0 (#1765)
+
+- Sign-in moved from a password form to Keycloak; the password hasher, the login-attempt budget and the account lockout left with it, and the migration `7c3e91d0a4b2` dropped `users.password_hash`, `users.is_active`, `login_attempts` and the session origin columns (`ip_address`, `user_agent`), and the unique index on `users.username`. Every session row was deleted, so everyone signed in again once.
+- With v0.20.0 the session row holds the issuer's refresh token in `user_sessions.refresh_token` (added by the same migration; `NULL` when the issuer gave none, for example in seeded e2e sessions). It is a secret at rest: the column holds it as plain text (it is in the database dump), the `UserSession.refresh_token` property hands it out only as a `SecretStr`, the engine hides SQL parameters (`hide_parameters=True`) so a failed insert keeps it out of the traceback, and no response, log line or `/health` carries it; the only session-related response is a count of active sessions. It leaves with the row on logout, expiry, pruning and revocation. Nothing in songmaker renews an access token with it yet (`replace_refresh_token` stores a rotated token for the library's `fresh_access_token`, which no route calls).
+- The Host check is songmaker's own `TrustedHostMiddleware` over `ALLOWED_HOSTS` (the library's host lists are Origin allowlists only). A request for another Host is answered 400. Compose always appends `localhost`, `127.0.0.1` and `songmaker-web` to the list, because the container health check, the ACE-Step control plane and Prometheus call the web service by those names; the public host still comes from `ALLOWED_HOSTS`.
 
 ## Rate Limiting
 
@@ -184,7 +199,6 @@ Five-layer defense:
 
 | Resource     | Limit             | Scope    |
 |-------------|-------------------|----------|
-| Login        | 5 / 5 min         | Per IP + per username |
 | Generation   | 30 / hour         | Per user |
 | Scoring      | 100 / hour        | Per user |
 | Chat         | 300 / hour        | Per user |
@@ -265,9 +279,9 @@ traffic, unchanged by this split.
 
 Static `_app/` build assets and the static PWA root assets (`/manifest.webmanifest`, `/robots.txt`, `/favicon.svg`, `/icon-192.png`, `/icon-512.png`, `/service-worker.js`) are exempt from all three budgets — they're fetched by the browser and the service worker outside of user-driven navigation and would otherwise crowd out real calls from the same IP.
 
-When the request arrives from a peer inside a `TRUSTED_PROXIES` network, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), matching the login rate limiter's behavior — see "Proxy trust". Without it every visitor behind the same proxy shares one budget. If Redis is unavailable, the rate limiter fails closed (returns 503 with `Retry-After: 5`) rather than allowing all requests through.
+When the request arrives from a peer inside a `TRUSTED_PROXIES` network, the rate limiter uses the real client IP from `X-Forwarded-For` (rightmost untrusted entry), as every per-IP budget does — see "Proxy trust". Without it every visitor behind the same proxy shares one budget. If Redis is unavailable, the rate limiter fails closed (returns 503 with `Retry-After: 5`) rather than allowing all requests through.
 
-Configure via env vars: `LOGIN_RATE_LIMIT`, `LOGIN_LOCKOUT_THRESHOLD`, `LOGIN_LOCKOUT_WINDOW`, `GENERATION_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_USER`, `MAX_QUEUE_DEPTH`, `MAX_USER_ACTIVE_JOBS`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`, `RESOURCE_EVENT_STREAM_OPEN_LIMIT`.
+Configure via env vars: `GENERATION_RATE_LIMIT_USER`, `SCORING_RATE_LIMIT_USER`, `CHAT_RATE_LIMIT_USER`, `MAX_QUEUE_DEPTH`, `MAX_USER_ACTIVE_JOBS`, `IP_RATE_LIMIT`, `MEDIA_RATE_LIMIT`, `STREAM_RATE_LIMIT`, `RESOURCE_EVENT_STREAM_OPEN_LIMIT`.
 
 ### Resource-event streams
 
@@ -342,7 +356,7 @@ All responses include:
 
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
-- `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'`
+- `Content-Security-Policy: default-src 'none'; base-uri 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; form-action 'self'` (`script-src` also lists the hash of each inline script in the built `index.html`). The SvelteKit build applies inline styles, so `'unsafe-inline'` is the one source songmaker adds to webauth's default policy, in `request_policies.build_security_headers_policy`; no external host is allowed.
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (present whenever `COOKIE_SECURE` is true, the default; absent when it is false — see "Authentication")
@@ -981,9 +995,9 @@ as `unverified` rather than guessed as usable.
 
 ## Child Process Secret Scrubbing
 
-Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `agent_providers` (the Claude, Grok and Codex CLIs) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). The provider layer has one scrubber, `agent_providers.process.scrubbed_env()`, and all three CLI spawners go through it — the Claude backends in `agent_providers/claude/provider.py`, `agent_providers/grok/transport.py`, `agent_providers/codex/transport.py`, and the bounded runner's own `_child_env()`, which adds a spawner's explicit variables on top of that scrubbed base rather than beside it. Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.
+Two packages spawn *external* child processes that must not inherit every secret in the parent's environment: `agent_providers` (the Claude, Grok and Codex CLIs) and `acestep_worker.subprocess_runner` (the ACE-Step HTTP subprocess). The provider layer has one scrubber, `agent_providers.process.scrubbed_env()`, and all three CLI spawners go through it — the Claude backends in `agent_providers/claude/provider.py`, `agent_providers/grok/transport.py`, `agent_providers/codex/transport.py`, and the bounded runner's own `_child_env()`, which adds a spawner's explicit variables on top of that scrubbed base rather than beside it. Both packages scrub `os.environ.copy()` with a `SECRET_ENV_KEYS` tuple before passing `env=` to the child, covering `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `HF_TOKEN`, `GRAFANA_USER`, and `GRAFANA_PASSWORD`. A login is scrubbed as a pair — the name half is no secret on its own, but handing a child process one half of a credential buys nothing.
 
-The bootstrap admin credentials are on that list because compose sets them on the long-running web container, not on a one-shot setup job: `lifecycle.auto_setup_admin` re-reads `ADMIN_USERNAME`/`ADMIN_PASSWORD` at every startup so a database restored from empty gets its admin back. They therefore sit in the parent environment for the container's whole life, and this scrub is what keeps them out of every child it spawns.
+The Keycloak client secret is not in that list because it is not in the environment: it is a file, mounted into the web container only. The scrub cannot hide a file from a child that runs as the same OS user, so the agent-CLI processes can read it; see "Authentication".
 
 `acestep_worker` cannot import from `songmaker_cli` (engine packages are independent — see AGENTS.md "Code patterns"), so each package keeps its own `SECRET_ENV_KEYS` tuple: `songmaker_cli/constants.py` and `acestep_worker/constants.py`. `agent_providers` may import neither, so the provider layer scrubs with the list its host injects on `ProviderRuntimeConfig.secret_env_keys` — songmaker fills it from its own constant in `agent_runtime.py` (#836), which makes the injected runtime a third owner of the same list. `tests/test_secret_scrub_parity.py` pins all three against the same literal expected set of keys — so they cannot silently drift apart the way the first two did before issue #157 (the Claude CLI child inherited `SONGMAKER_INTERNAL_TOKEN` because the two lists disagreed), no list can quietly shrink to empty and still pass, and a drifted list names its own owner.
 
@@ -1133,9 +1147,9 @@ complete end state that was validated before the first install.
 
 ## Audit Trail
 
-Mutating operations are logged to the `audit_log` table:
+Mutating operations are logged to the `audit_log` table. Account creation and role changes made by the sign-in are written without a person (`user_id` null):
 
-- **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`, `deactivate`, `session_ip_change`, `session_ua_change`
+- **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
 - **Read access**: none over HTTP — the `GET /api/admin/audit-log` endpoint was removed until an admin surface shows the trail (#1190); the rows stay in the database and are read there.
 
@@ -1150,7 +1164,7 @@ Mutating operations are logged to the `audit_log` table:
 | CORS origin | Leave unset when the interface and API share an origin. For a separate trusted browser client, set one exact origin, for example `CORS_ORIGIN=https://client.yourdomain.com`. Cross-site browser mutations to `/api/` remain rejected by `Sec-Fetch-Site`, even with this permission. Startup rejects `*`, subdomain wildcards, and comma-separated lists; `SameSite=Strict` does not make sibling subdomains separate sites. |
 | Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting — see "Proxy trust". Cookie `Secure`/HSTS are unaffected either way; they follow `COOKIE_SECURE` alone. |
 | Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside" for share links (album/song/generation/playlist — issue #339); `api_helpers.resolve_public_base_url()` is the only caller site. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. Unset or malformed fails the share call with `500` rather than building a link with a guessed scheme. |
-| Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
+| Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification and as the Host allowlist. Compose always adds `localhost`, `127.0.0.1` and `songmaker-web`. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` only when the deployment's network policy keeps the service private. The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the Compose network needs it. |
 | Published ports | `docker-compose.yml` publishes `songmaker-web`, Grafana, and Prometheus as `127.0.0.1:8080:8080` / `127.0.0.1:3000:3000` / `127.0.0.1:9090:9090`. Do not drop the `127.0.0.1:` prefix: Docker's NAT chain bypasses the host INPUT chain, so a plain `8080:8080` reaches the whole LAN no matter what UFW says. The Prometheus API is host-local for the same reason; its lifecycle HTTP endpoints stay disabled, so Compose-network peers cannot stop or reload it. The tunnel (`cloudflared`), the Vite dev proxy, and the CLI all run host-local; in-cluster callers use `songmaker-web:8080` on the compose network. |
 | Workers | Production runs in Docker only. The web container uses a single uvicorn process; concurrency comes from arq worker containers (`MUSIC_MAX_JOBS`, `SCORING_MAX_JOBS`). PostgreSQL is the only supported production DB — SQLite is test-only. |
@@ -1249,6 +1263,8 @@ existing guards.
 
 ### Secrets
 
+- `OIDC_ISSUER`: Required, with no default; every `docker compose` command that reads `docker-compose.yml` refuses without it, like `GRAFANA_PASSWORD`. `OIDC_CLIENT_ID` defaults to `songmaker`. A leftover `ADMIN_USERNAME` or `ADMIN_PASSWORD` in `.env` stops startup (`Settings` rejects unknown keys), so remove them when deploying the Keycloak sign-in.
+- `keycloak_client_secret`: the Keycloak client secret, a file owned by the edge (`~/.secrets/keycloak/clients/songmaker`, or `KEYCLOAK_CLIENT_SECRET_FILE` for a throwaway stack), mounted read-only into the web container at `/run/secrets/keycloak_client_secret`. Never an environment variable.
 - `SESSION_SECRET`: HMAC signing key for session cookies. Required at startup (Settings raises ValidationError if missing).
 - `ANTHROPIC_API_KEY`: Optional (for server-side Claude chat). Never logged or returned in responses.
 - `GRAFANA_PASSWORD`: Required, with no default. When it is unset or empty, every `docker compose` command that reads `docker-compose.yml` refuses before it does anything, naming the variable — `up` and `build`, but also the recovery commands `down`, `logs`, and `ps` — so set it in `.env` first. `exec` into an already running service still works, and so do `ps`, `logs`, and `down` when the project is named without a file (`docker compose -p songmaker logs`, the project name being the checkout directory's name). Grafana never falls back to admin/admin. Setting it in the first place is the one command `./scripts/grafana-password`, run from the main checkout: if `.env` has no `GRAFANA_PASSWORD`, an empty one, or a publicly known one (`admin`, anything starting with `CHANGEME`), it writes a fresh random value there, then applies the `.env` value to the running Grafana and prints `set` (fresh value written) or `already set` once an authenticated API login with that value succeeds; if Grafana is not running, it says whether `.env` changed and asks you to start the stack and run it again. The value only seeds Grafana's first start, but the command applies whatever `.env` holds, so it also changes the admin password of an existing Grafana: put the new value in `.env` and run it. Without the command, put the new value in `.env`, run `docker compose up -d grafana`, then `docker compose exec -T grafana sh -c 'printf %s "$GF_SECURITY_ADMIN_PASSWORD" | grafana cli admin reset-admin-password --password-from-stdin'`. The password never appears in an argv (shell history, `ps`): the single quotes keep the host shell from expanding it, and `printf` is a builtin of the container's shell. Never pass it as the positional `<new password>` argument. CI uses a fixed throwaway literal (`.github/workflows/e2e.yml`).
@@ -1266,7 +1282,6 @@ All request models use Pydantic with strict constraints:
 - Numeric fields: `ge`/`le` bounds (BPM, duration, rating)
 - Generation params: Typed `GenerationParams` model with `extra="forbid"`, range-validated fields, and enum-validated string values
 - Role fields: `Literal["admin", "user"]` — no arbitrary role injection
-- Password strength: Common password blocklist + minimum unique character count
 - No raw SQL — 100% SQLAlchemy ORM with parameterized queries
 - No Python `eval` or `exec`, `shell=True`, or `yaml.load` in `src/`.
 - Untrusted arq data uses the JSON boundary above; trusted local scorer-process
@@ -1288,8 +1303,9 @@ Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on 
 ## Known Limitations
 
 - **Claude CLI agents**: `--disable-slash-commands` closes slash commands and skills (verified empty in the init event's `slash_commands` list — see Claude Chat Security above), but the CLI still lists five built-in *agents* (`claude`, `Explore`, `general-purpose`, `Plan`, `statusline-setup`) in that same init event even with every isolation flag set. No exploit path is confirmed: reaching one needs a `Task`-shaped tool, and `--tools ""` already removes that. A future CLI version that could reach an agent some other way would reopen this; the tool-surface gate does not check the `agents` field today.
-- **No IP binding on sessions**: A stolen session cookie works from any IP. The auth dependency calls `resolve_client_ip()` to obtain the real client IP when the direct peer is in `TRUSTED_PROXIES` (otherwise the direct peer), then stores it for later comparisons; an IP or user-agent change is written to the audit trail. It is not an authorization check: the session remains valid so ordinary mobile-network changes do not log a user out (#327).
-- **No MFA**: Single-factor auth only. Acceptable for invite-only deployments.
+- **No IP binding on sessions**: A stolen session cookie works from any IP. Songmaker stores no address or user agent per session; the session stays valid across mobile-network changes (#327).
+- **No MFA in songmaker**: second factors, if any, are Keycloak's. Acceptable for invite-only deployments.
+- **No back-channel logout yet**: a sign-out or disable in Keycloak ends no songmaker session; see "Revocation" under Authentication.
 - **Worker control endpoints have no cooldown**: `POST /api/admin/workers/{id}/restart`, `POST /api/admin/workers/{id}/pin_model`, and `POST /api/admin/registry/{mode}/download` are not rate-limited. Repeated calls by a compromised admin could disrupt GPU workers or exhaust download bandwidth. Admin-only auth is the only gate.
 - **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth (`health_api.py:211-218`). The web container binds port 8080 to `127.0.0.1`, so the repository makes this endpoint host-local by default (`docker-compose.yml:89-90`); a public deployment needs a filtering layer in front of it, which this repository does not provide (#327).
 
@@ -1303,11 +1319,11 @@ PostgreSQL is now required for production. SQLite is used only in tests (`init_t
 ### ~~2. Persistent rate limiting (Redis)~~ (Done)
 Redis-backed sliding-window rate limiting is now the only implementation. Rate limit state survives restarts and is shared across workers.
 
-### ~~3. Account lockout / progressive delays~~ (Done)
-Implemented: 15 failed attempts per username within 1 hour triggers account lockout (429). Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
+### ~~3. Account lockout / progressive delays~~ (Gone)
+Passwords left with the Keycloak sign-in; lockout and brute-force throttling are Keycloak's.
 
 ### 4. Multi-worker architecture
 **Priority: Medium** — PostgreSQL and Redis are in place. Multiple uvicorn workers can be added via `--workers N`. The arq worker already runs as a separate process.
 
 ### 5. Content Security Policy — remove `'unsafe-inline'` from `style-src`
-**Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The `style-src 'unsafe-inline'` directive is needed for SvelteKit dev mode but could be tightened in production. Consider nonce-based inline styles if a stricter policy is desired.
+**Priority: Low** — CSP now enforces `script-src 'self'` and `default-src 'none'`. The production build needs `style-src 'unsafe-inline'` for Svelte's inline styles and style attributes. Tightening means style hashes or nonces (`'unsafe-hashes'` for the attributes).

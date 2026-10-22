@@ -16,7 +16,7 @@ from conftest import (
     login_and_csrf,
     make_fake_redis,
     make_test_app,
-    stored_hash,
+    seed_user,
     web_client,
 )
 from fastapi.testclient import TestClient
@@ -39,7 +39,7 @@ _TRUSTED_PEER = "172.18.0.1"
 
 
 def _seed_sharing_data(session) -> None:
-    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+    admin = User(username="admin", role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(
@@ -64,7 +64,7 @@ def _make_sharing_app(tmp_path: Path) -> tuple[TestClient, Path]:
 @pytest.fixture
 def sharing_app(tmp_path: Path) -> TestClient:
     client, _ = _make_sharing_app(tmp_path)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     return client
 
 
@@ -82,7 +82,7 @@ def test_share_album(sharing_app: TestClient) -> None:
 
 
 def _seed_mixed_playability_album(session) -> None:
-    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+    admin = User(username="admin", role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(
@@ -127,7 +127,7 @@ def _seed_mixed_playability_album(session) -> None:
 
 def test_share_album_response_lists_songs_without_playable_take(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_mixed_playability_album)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
 
     resp = client.post("/api/albums/test_album/share")
 
@@ -145,7 +145,7 @@ def test_share_warning_agrees_with_what_the_share_page_actually_plays(tmp_path: 
     same playability rule -- a song can't vanish from one without showing up
     in the other (#147)."""
     client, _ = make_test_app(tmp_path, seed_db=_seed_mixed_playability_album)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
 
     share_resp = client.post("/api/albums/test_album/share")
     slug = share_resp.json()["share_slug"]
@@ -1258,7 +1258,7 @@ def _count_queries(
 
 
 def _seed_multi_track_album(session) -> None:
-    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+    admin = User(username="admin", role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     for i in range(4):
@@ -1286,7 +1286,7 @@ def _seed_multi_track_album(session) -> None:
 
 def test_shared_album_view_includes_pick_media(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_multi_track_album)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
@@ -1309,7 +1309,7 @@ def test_shared_album_view_includes_pick_media(tmp_path: Path) -> None:
 
 def test_shared_album_view_warms_versions_in_one_query(tmp_path: Path) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_multi_track_album)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
@@ -1331,7 +1331,7 @@ def test_shared_album_view_warms_versions_in_one_query(tmp_path: Path) -> None:
 
 
 def _seed_song_with_pick(session) -> None:
-    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+    admin = User(username="admin", role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(
@@ -1349,7 +1349,7 @@ def _seed_song_with_pick(session) -> None:
 
 def test_shared_song_view_includes_pick_media(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_song_with_pick)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.post("/api/songs/s1/share")
     slug = resp.json()["share_slug"]
 
@@ -1363,7 +1363,7 @@ def test_shared_song_view_includes_pick_media(tmp_path: Path) -> None:
 
 def test_shared_song_view_without_pick_returns_null_media(tmp_path: Path) -> None:
     def _seed(session) -> None:
-        admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+        admin = User(username="admin", role="admin")
         session.add(admin)
         session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
         session.add(
@@ -1371,7 +1371,7 @@ def test_shared_song_view_without_pick_returns_null_media(tmp_path: Path) -> Non
         )
 
     client, _ = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.post("/api/songs/s1/share")
     slug = resp.json()["share_slug"]
 
@@ -1589,7 +1589,7 @@ def test_shared_generation_reports_the_takes_measured_duration(
 
 
 def _seed_playlist_with_entries(session) -> None:
-    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+    admin = User(username="admin", role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(Playlist(id="pl1", title="My Playlist"))
@@ -1657,7 +1657,7 @@ def test_shared_playlist_names_each_member_album_without_expanding_cover_access_
     tmp_path: Path, album_state: str,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         album = session.get(Album, "test_album")
         assert album is not None
@@ -1704,7 +1704,7 @@ def test_shared_playlist_song_without_album_has_empty_album_title_1374_rule_10()
 
 def test_shared_playlist_view_includes_pick_media(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.post("/api/playlists/pl1/share")
     slug = resp.json()["share_slug"]
 
@@ -1723,7 +1723,7 @@ def test_shared_playlist_page_manifest_exposes_its_own_cover_and_stream_stays_au
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         playlist = session.get(Playlist, "pl1")
         assert playlist is not None
@@ -1751,7 +1751,7 @@ def test_shared_playlist_page_manifest_exposes_at_most_four_share_bound_mosaic_c
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         first_album = session.get(Album, "test_album")
         assert first_album is not None
@@ -1782,7 +1782,7 @@ def test_shared_playlist_page_manifest_exposes_at_most_four_share_bound_mosaic_c
 
 def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         album = session.get(Album, "test_album")
         assert album is not None
@@ -1821,7 +1821,7 @@ def test_shared_playlist_entries_carry_a_serving_album_cover_only_when_the_file_
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         album = session.get(Album, "test_album")
         assert album is not None
@@ -1848,7 +1848,7 @@ def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         member = session.get(Album, "test_album")
         assert member is not None
@@ -1877,7 +1877,7 @@ def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         album = session.get(Album, "test_album")
         assert album is not None
@@ -1898,7 +1898,7 @@ def test_reshared_playlist_does_not_revive_the_old_slugs_entry_cover_1374_rule_8
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     with client.app.state.ctx.db() as session:
         album = session.get(Album, "test_album")
         assert album is not None
@@ -1924,7 +1924,7 @@ def test_reshared_playlist_does_not_revive_the_old_slugs_entry_cover_1374_rule_8
 
 def test_shared_playlist_view_warms_versions_in_one_query(tmp_path: Path) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.post("/api/playlists/pl1/share")
     slug = resp.json()["share_slug"]
 
@@ -1954,7 +1954,7 @@ def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
     """The public share page is LimiterFailurePolicy.FAIL_OPEN: a broken
     limiter (Redis down) must let real listeners through rather than 503."""
     client, _ = _make_sharing_app(tmp_path)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     resp = client.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
@@ -2000,7 +2000,7 @@ def _shared_app_with_small_budget(
 
 
 def _shared_album_slug(client: TestClient) -> str:
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     return client.post("/api/albums/test_album/share").json()["share_slug"]
 
 
@@ -2055,7 +2055,6 @@ def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> Non
 
 def test_share_album_ownership_enforced(tmp_path: Path) -> None:
     from songmaker_cli.db.queries.albums import create_album
-    from songmaker_cli.db.queries.auth import create_user
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -2069,8 +2068,8 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        owner = create_user(session, "owner", stored_hash("pass1234"))
-        create_user(session, "other_user", stored_hash("pass1234"))
+        owner = seed_user(session, "owner")
+        seed_user(session, "other_user")
         session.flush()
         create_album(session, "owners_album", "Owners Album", created_by=owner.id)
         session.commit()
@@ -2085,7 +2084,7 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
     from songmaker_cli.server import create_app
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    login_and_csrf(client, "other_user", "pass1234")
+    login_and_csrf(client, "other_user")
 
     resp = client.post("/api/albums/owners_album/share")
     assert resp.status_code == 404
@@ -2229,7 +2228,7 @@ _SHARED_PLAYLIST_ENTRY_KEYS = {
 
 
 def _seed_song_with_two_takes(session) -> None:
-    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
+    admin = User(username="admin", role="admin")
     session.add(admin)
     session.flush()
     session.add(
@@ -2284,7 +2283,7 @@ def _seed_song_with_two_takes(session) -> None:
 @pytest.fixture
 def two_take_app(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path, seed_db=_seed_song_with_two_takes)
-    login_and_csrf(client, "admin", "admin12345")
+    login_and_csrf(client, "admin")
     return client
 
 

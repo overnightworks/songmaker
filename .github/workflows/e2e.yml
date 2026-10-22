@@ -23,9 +23,11 @@ env:
   POSTGRES_PASSWORD: e2e-ci-postgres-password
   SESSION_SECRET: e2e-ci-session-secret-do-not-reuse-anywhere-else
   SONGMAKER_INTERNAL_TOKEN: e2e-ci-internal-token
-  ADMIN_USERNAME: e2e-ci-admin
-  # Must pass check_password_strength (src/songmaker_cli/auth.py).
-  ADMIN_PASSWORD: "E2eCiSmoke#2026!"
+  # The admin account the seeding helper creates (frontend/e2e/support/seed_sessions.py).
+  E2E_ADMIN_USERNAME: e2e-ci-admin
+  # No identity provider runs in this stack: web boots without reaching the
+  # issuer, and the specs stub whatever leaves the app's origin.
+  OIDC_ISSUER: https://keycloak.invalid/realms/e2e
   # Compose refuses to load docker-compose.yml without it (#1357), so the
   # down, up, and logs steps below need it even though no step starts Grafana.
   GRAFANA_PASSWORD: e2e-ci-grafana-password
@@ -42,6 +44,12 @@ jobs:
           persist-credentials: false
 
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.x
+
+      - name: Write the throwaway Keycloak client secret
+        run: |
+          secret_file="$RUNNER_TEMP/keycloak-client-secret"
+          echo e2e-ci-client-secret > "$secret_file"
+          echo "KEYCLOAK_CLIENT_SECRET_FILE=$secret_file" >> "$GITHUB_ENV"
 
       - name: Reset stack
         run: docker compose $COMPOSE_FILES down -v
@@ -60,7 +68,6 @@ jobs:
         run: |
           set -euo pipefail
           base="http://localhost:${WEB_PORT}"
-          cookies="$(mktemp)"
 
           # /health always returns 200 regardless of body, so assert the body:
           # no music/scoring worker runs in this stack, so "degraded" is
@@ -73,16 +80,6 @@ jobs:
             echo "$health" >&2
             exit 1
           }
-
-          login_status="$(curl -sS -o /tmp/login.json -w '%{http_code}' -c "$cookies" \
-            -H 'Content-Type: application/json' \
-            -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
-            "$base/api/auth/login")"
-          [ "$login_status" = "200" ] || { echo "login failed: $login_status" >&2; cat /tmp/login.json >&2; exit 1; }
-          grep -q session_id "$cookies" || { echo "no session cookie set on login" >&2; exit 1; }
-
-          me_status="$(curl -sS -o /tmp/me.json -w '%{http_code}' -b "$cookies" "$base/api/auth/me")"
-          [ "$me_status" = "200" ] || { echo "me failed: $me_status" >&2; cat /tmp/me.json >&2; exit 1; }
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.x
         with:

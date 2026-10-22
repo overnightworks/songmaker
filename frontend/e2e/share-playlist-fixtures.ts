@@ -112,8 +112,8 @@ export interface RealPlaylist {
 }
 
 async function seedMemberSong(albumId: string, position: number): Promise<string> {
-	const owner = process.env.ADMIN_USERNAME;
-	if (!owner) throw new Error('ADMIN_USERNAME is required for the isolated E2E stack');
+	const owner = process.env.E2E_ADMIN_USERNAME;
+	if (!owner) throw new Error('E2E_ADMIN_USERNAME is required for the isolated E2E stack');
 	return new Promise((resolve, reject) => {
 		const child = execFile(
 			'docker',

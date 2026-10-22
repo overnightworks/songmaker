@@ -253,20 +253,29 @@ request budget per shell.
   `RAIL_FLOW_API_REQUEST_BUDGET` in `frontend/e2e/helpers.ts`) — that is the
   one place the number is written down, so it cannot drift out of sync with
   this doc the way it did before issue #326.
-- **One shared login per run.** Global setup authenticates once, seeds an
-  album, songs, takes, a pick and a share link through the public API, and
-  hands its session to every attempt as storage state. Mutable fixtures (the
-  playlist) are seeded per attempt so a retry starts clean. Two files sign in
-  on their own. `queue-continuity.spec.ts` creates a flow-owned account once
-  per project, signs it in through the API, seeds an album with three songs
-  and no pick, and deletes the account permanently afterwards: a library with
-  nothing picked cannot be reached from the shared admin library.
-  `auth-flows.spec.ts` signs in itself: signing in, being locked out, signing
-  out and expiring are what it proves (#872), so it starts from an explicitly
-  empty storage state and drives the login form. Its own numbers — the request budget, the failed
-  attempts it costs, and the `LOGIN_RATE_LIMIT` / `LOGIN_LOCKOUT_*` overrides in
-  `docker/docker-compose.ci.yml` that carry them — live in
-  `frontend/e2e/README.md`.
+- **One seeded session per run.** There is no Keycloak in the CI stack, so no
+  flow types a password. `frontend/e2e/support/seed_sessions.py` runs inside the
+  web container and opens database sessions whose cookies the 0.20.1 library
+  signs, and it creates the e2e admin (`E2E_ADMIN_USERNAME`) because the stack
+  has no admin bootstrap. Global setup seeds an album, songs, takes, a pick and
+  a share link through the public API with that admin's session and hands it to
+  every attempt as storage state. Mutable fixtures (the playlist) are seeded
+  per attempt so a retry starts clean. `queue-continuity.spec.ts` seeds a
+  flow-owned account once per project, gives it an album with three songs and
+  no pick, and deletes the account afterwards: a library with nothing picked
+  cannot be reached from the shared admin library. `auth-flows.spec.ts`
+  starts from an explicitly empty storage state and proves what runs without
+  Keycloak: the start redirect to the issuer, the signed-out, no-access and
+  failed pages, and logout. The identity provider is a stub
+  (`stubIdentityProvider`), and a real login is proven live, not in CI. The
+  stack's `OIDC_ISSUER` names an issuer that never answers and its client secret
+  is a throwaway file (`KEYCLOAK_CLIENT_SECRET_FILE`); web boots without
+  reaching the issuer. The spec's numbers live in `frontend/e2e/README.md`.
+- **Sign-in routes run against a fake issuer.** `tests/test_oidc_sign_in.py`
+  drives `/login/oidc`, `/auth/callback` and `/auth/logout` through the real
+  relying party; only the token request and the key set come from
+  `tests/fake_oidc_issuer.py`, which signs ID tokens with a test RSA key, so
+  every token is verified as in production.
 - **Selectors are roles and accessible names** from `frontend/src/lib/constants.ts`.
   No `data-testid`. A row that cannot be found by its accessible name is an
   accessibility defect, not a selector problem.
@@ -308,14 +317,16 @@ only `docker/docker-compose.ci.yml`.
 Run it under the probe lock with the isolated project and port:
 
 ```bash
+secret_file="$(mktemp)" && echo e2e-ci-client-secret > "$secret_file"
 flock /tmp/songmaker-probe.lock env \
   COMPOSE_PROJECT_NAME=songmaker-i689-probe \
   WEB_PORT=18080 \
   POSTGRES_PASSWORD=e2e-ci-postgres-password \
   SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else \
   SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token \
-  ADMIN_USERNAME=e2e-ci-admin \
-  ADMIN_PASSWORD='E2eCiSmoke#2026!' \
+  E2E_ADMIN_USERNAME=e2e-ci-admin \
+  OIDC_ISSUER=https://keycloak.invalid/realms/e2e \
+  KEYCLOAK_CLIENT_SECRET_FILE="$secret_file" \
   GRAFANA_PASSWORD=e2e-ci-grafana-password \
   PUBLIC_BASE_URL=http://localhost:18080 \
   E2E_BASE_URL=http://localhost:18080 \
@@ -330,7 +341,8 @@ run never tries to exercise the Voices-only worker:
 
 ```bash
 cd frontend
-E2E_VOICES_STACK=1 E2E_BASE_URL=http://localhost:18080 pnpm exec playwright test e2e/voices.spec.ts
+E2E_ADMIN_USERNAME=e2e-ci-admin E2E_VOICES_STACK=1 E2E_BASE_URL=http://localhost:18080 \
+  pnpm exec playwright test e2e/voices.spec.ts
 ```
 
 The fake worker uses the same internal worker registration, Redis heartbeat,
@@ -408,7 +420,7 @@ frontend/src/
 
 ```
 frontend/e2e/
-├── global-setup.ts                One login per run, seeds the library, saves the storage state
+├── global-setup.ts                One seeded admin session per run, seeds the library, saves the storage state
 ├── seed.ts                        Public-API seeding: per-run library, per-attempt playlist
 ├── helpers.ts                     Guards, shell facts, /api budgets, name matchers
 ├── library.spec.ts                Library flow and the rail's own disclosure/pin promises (#326),
@@ -419,8 +431,8 @@ frontend/e2e/
 The auth library's own tests are not in this repository. They moved with
 `webauth` to [overnightworks/webauth](https://github.com/overnightworks/webauth)
 in #879 and run in that repository's CI; songmaker installs the released wheel
-(tag `v0.14.0`) and proves the auth surface it builds on it through `test_auth_api.py`,
-`test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
+(tag `v0.20.1`) and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
+`test_auth_api.py`, `test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
 The provider library's own tests likewise left with it. They moved with
 `agent_providers` to

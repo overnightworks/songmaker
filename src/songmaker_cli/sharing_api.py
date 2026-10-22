@@ -10,7 +10,7 @@ from typing import Final
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 from webauth.proxies import resolve_client_ip
 from webauth.rate_limit import RedisRateLimitBackend
 

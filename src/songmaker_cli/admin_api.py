@@ -11,7 +11,7 @@ from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.acestep_state import (
     read_download_in_progress,

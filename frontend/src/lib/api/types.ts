@@ -521,9 +521,8 @@ export interface LoadedModelDetailItem {
 	size_gb: number;
 }
 
-export interface LoginRequest {
-	username: string;
-	password: string;
+export interface LogoutResponse {
+	logout_url: string;
 }
 
 export interface LoraCapacityErrorResponse {
@@ -1002,14 +1001,6 @@ export interface UnpinModelOnWorkerRequest {
 export interface UnplayableSongSummary {
 	id: string;
 	title: string;
-}
-
-export interface UserItem {
-	id: string;
-	username: string;
-	role: string;
-	is_active: boolean;
-	created_at: string;
 }
 
 export interface UserLoraCreateRequest {

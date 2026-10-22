@@ -9,15 +9,18 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_test_app, stored_hash, web_client
+from conftest import make_test_app, seed_user, web_client
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
-from webauth.policies import RateLimitClass
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, Version
-from songmaker_cli.db.queries.auth import create_user
-from songmaker_cli.request_policies import build_rate_limit_policy
+from songmaker_cli.request_policies import (
+    API_BUDGET_NAME,
+    MEDIA_BUDGET_NAME,
+    STREAM_BUDGET_NAME,
+    build_rate_limit_policy,
+)
 from songmaker_cli.settings import get_settings
 
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -59,13 +62,13 @@ def client(tmp_path: Path) -> TestClient:
 def _login_as(client: TestClient, role: str) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
-        user = create_user(session, f"test_{role}", stored_hash("t3stP@ssw0rd"), role=role)
+        user = seed_user(session, f"test_{role}", role=role)
         album = session.query(Album).filter_by(id="rock").first()
         if album and not album.created_by:
             album.created_by = user.id
         session.commit()
     from conftest import login_and_csrf
-    login_and_csrf(client, f"test_{role}", "t3stP@ssw0rd")
+    login_and_csrf(client, f"test_{role}")
 
 
 def _get_user_id(client: TestClient) -> str:
@@ -182,7 +185,7 @@ def test_stale_own_job_does_not_block_generate_at_active_job_limit(
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        other_user = create_user(session, "other_user", stored_hash("t3stP@ssw0rd"))
+        other_user = seed_user(session, "other_user")
         own_job = Job(
             type="generate", user_id=user_id, status="running",
             started_at=stale_at, heartbeat_at=stale_at,
@@ -389,48 +392,48 @@ def rate_limit_policy():
 # closed, and the documented exception (finding 2b: previously untested)
 # that `/shared/{slug}/cover` and `/shared/{slug}/stream` stay API however
 # their slug is spelled.
-@pytest.mark.parametrize(("path", "expected_class"), [
-    ("/audio/owner/file.mp3", RateLimitClass.MEDIA),
-    ("/api/queue-streams/some-id/audio", RateLimitClass.MEDIA),
-    ("/shared/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
-    ("/shared/song/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
-    ("/shared/gen/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
-    ("/shared/playlist/realslug/audio/owner/file.mp3", RateLimitClass.MEDIA),
-    ("/shared/queue-streams/some-id/audio", RateLimitClass.MEDIA),
-    ("/api/resource-events/stream", RateLimitClass.STREAM),
-    ("/api/jobs/some-job-id/stream", RateLimitClass.STREAM),
-    ("/this-path-does-not-exist", RateLimitClass.API),
-    ("/api/auth/check", RateLimitClass.API),
-    ("/api/audio/upload", RateLimitClass.API),
-    ("/api/queue-streams", RateLimitClass.API),
-    ("/api/queue-streams/library", RateLimitClass.API),
-    ("/api/queue-streams/some-id/pin", RateLimitClass.API),
-    ("/shared/realslug", RateLimitClass.API),
-    ("/shared/realslug/cover", RateLimitClass.API),
-    ("/shared/realslug/stream", RateLimitClass.API),
-    ("/shared/song/realslug", RateLimitClass.API),
-    ("/shared/song/realslug/cover", RateLimitClass.API),
-    ("/shared/gen/realslug", RateLimitClass.API),
-    ("/shared/playlist/realslug", RateLimitClass.API),
-    ("/shared/playlist/realslug/stream", RateLimitClass.API),
+@pytest.mark.parametrize(("path", "expected_budget"), [
+    ("/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
+    ("/api/queue-streams/some-id/audio", MEDIA_BUDGET_NAME),
+    ("/shared/realslug/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
+    ("/shared/song/realslug/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
+    ("/shared/gen/realslug/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
+    ("/shared/playlist/realslug/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
+    ("/shared/queue-streams/some-id/audio", MEDIA_BUDGET_NAME),
+    ("/api/resource-events/stream", STREAM_BUDGET_NAME),
+    ("/api/jobs/some-job-id/stream", STREAM_BUDGET_NAME),
+    ("/this-path-does-not-exist", API_BUDGET_NAME),
+    ("/api/auth/check", API_BUDGET_NAME),
+    ("/api/audio/upload", API_BUDGET_NAME),
+    ("/api/queue-streams", API_BUDGET_NAME),
+    ("/api/queue-streams/library", API_BUDGET_NAME),
+    ("/api/queue-streams/some-id/pin", API_BUDGET_NAME),
+    ("/shared/realslug", API_BUDGET_NAME),
+    ("/shared/realslug/cover", API_BUDGET_NAME),
+    ("/shared/realslug/stream", API_BUDGET_NAME),
+    ("/shared/song/realslug", API_BUDGET_NAME),
+    ("/shared/song/realslug/cover", API_BUDGET_NAME),
+    ("/shared/gen/realslug", API_BUDGET_NAME),
+    ("/shared/playlist/realslug", API_BUDGET_NAME),
+    ("/shared/playlist/realslug/stream", API_BUDGET_NAME),
     # Regression (review finding 1): a slug that literally reads "audio"
     # must not slide a real metadata route into Media by shape alone.
-    ("/shared/audio", RateLimitClass.API),
-    ("/shared/audio/cover", RateLimitClass.API),
-    ("/shared/audio/stream", RateLimitClass.API),
-    ("/shared/song/audio", RateLimitClass.API),
-    ("/shared/gen/audio", RateLimitClass.API),
-    ("/shared/playlist/audio", RateLimitClass.API),
+    ("/shared/audio", API_BUDGET_NAME),
+    ("/shared/audio/cover", API_BUDGET_NAME),
+    ("/shared/audio/stream", API_BUDGET_NAME),
+    ("/shared/song/audio", API_BUDGET_NAME),
+    ("/shared/gen/audio", API_BUDGET_NAME),
+    ("/shared/playlist/audio", API_BUDGET_NAME),
     # Blocker fix: the router resolves this to the playlist manifest POST
     # (`/shared/playlist/{slug}/stream`, slug="audio"), a metadata handler
     # -- not the bare-slug audio route ([^/]+="playlist", filename="stream").
-    ("/shared/playlist/audio/stream", RateLimitClass.API),
+    ("/shared/playlist/audio/stream", API_BUDGET_NAME),
     # ...but the genuine media route for a slug literally named "audio"
     # still classifies as Media -- it has a filename segment after "audio/".
-    ("/shared/audio/audio/owner/file.mp3", RateLimitClass.MEDIA),
+    ("/shared/audio/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
 ])
-def test_classify_path(rate_limit_policy, path: str, expected_class: RateLimitClass) -> None:
-    assert rate_limit_policy.classify(path) == expected_class
+def test_classify_path(rate_limit_policy, path: str, expected_budget: str) -> None:
+    assert rate_limit_policy.budget_for(path).name == expected_budget
 
 
 # ── Rate limit classes (issue #257) ─────────────────────────────────
@@ -534,12 +537,12 @@ def shared_slug_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, str]:
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        admin = create_user(session, "admin", stored_hash("t3stP@ssw0rd"), role="admin")
+        admin = seed_user(session, "admin", role="admin")
         album = session.query(Album).filter_by(id="shared_album").first()
         album.created_by = admin.id
         session.commit()
     from conftest import login_and_csrf
-    login_and_csrf(client, "admin", "t3stP@ssw0rd")
+    login_and_csrf(client, "admin")
     slug = client.post("/api/albums/shared_album/share").json()["share_slug"]
     client.cookies.clear()
     yield client, slug

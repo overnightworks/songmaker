@@ -33,7 +33,6 @@ import {
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
 	updateCowriterSettings,
-	login,
 	logout,
 	fetchMe,
 	ApiError
@@ -258,19 +257,13 @@ describe('API client', () => {
 });
 
 describe('Auth API', () => {
-	it('login sends POST', async () => {
-		mockOk({ id: 'u1', username: 'alice', role: 'user' });
-		const result = await login('alice', 'password123');
-		expect(result.username).toBe('alice');
-		expect(mockFetch.mock.calls[0][0]).toBe('/api/auth/login');
-	});
-
-	it('logout sends DELETE', async () => {
-		mockOk({ status: 'ok' });
-		await logout();
+	it('logout posts to the same-origin logout route and returns the identity provider address', async () => {
+		mockOk({ logout_url: 'https://auth.example/logout?hint=1' });
+		const logoutUrl = await logout();
 		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/api/auth/session');
-		expect(init.method).toBe('DELETE');
+		expect(url).toBe('/auth/logout');
+		expect(init.method).toBe('POST');
+		expect(logoutUrl).toBe('https://auth.example/logout?hint=1');
 	});
 
 	it('fetchMe calls GET /api/auth/me', async () => {

@@ -99,7 +99,7 @@ def seeded(db_factory, tmp_path: Path) -> dict:
 
     with db_factory() as session:
         session.add(
-            User(id=user_id, username="u1", password_hash="x", role="user"),
+            User(id=user_id, username="u1", role="user"),
         )
         session.add(
             UserLora(

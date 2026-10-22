@@ -1,5 +1,6 @@
-"""Grafana fails closed without its password (#1357), against the real compose.
+"""Compose fails closed without its required settings, against the real compose.
 
+Grafana needs its password (#1357) and the web app needs its Keycloak issuer.
 Each case runs the repository's docker-compose.yml through the real
 ``docker compose config --quiet`` — the same command the auto-deploy guard
 runs — with a scratch ``--env-file`` and a scratch project name, so the
@@ -18,6 +19,12 @@ SCRATCH_PROJECT_COMPOSE_ARGS = (
     "-f", "docker-compose.yml", "-p", "songmaker-compose-required-env-test",
 )
 SCRATCH_PASSWORD = "scratch-grafana-password-not-a-secret"
+SCRATCH_ISSUER = "https://keycloak.invalid/realms/scratch"
+EVERYTHING_REQUIRED = {"GRAFANA_PASSWORD": SCRATCH_PASSWORD, "OIDC_ISSUER": SCRATCH_ISSUER}
+
+
+def _env_file(**settings: str) -> str:
+    return "".join(f"{name}={value}\n" for name, value in settings.items())
 
 
 def _compose_config_quiet(
@@ -36,11 +43,11 @@ def _compose_config_quiet(
 @pytest.mark.parametrize(
     ("env_file", "process_env"),
     [
-        pytest.param(f"GRAFANA_PASSWORD={SCRATCH_PASSWORD}\n", {}, id="set-in-env-file"),
-        pytest.param("", {"GRAFANA_PASSWORD": SCRATCH_PASSWORD}, id="set-only-in-process-env"),
+        pytest.param(_env_file(**EVERYTHING_REQUIRED), {}, id="set-in-env-file"),
+        pytest.param("", EVERYTHING_REQUIRED, id="set-only-in-process-env"),
     ],
 )
-def test_compose_accepts_a_grafana_password_without_printing_it(
+def test_compose_accepts_the_required_settings_without_printing_the_password(
     tmp_path: Path, env_file: str, process_env: dict[str, str],
 ) -> None:
     result = _compose_config_quiet(tmp_path, env_file, process_env)
@@ -49,17 +56,15 @@ def test_compose_accepts_a_grafana_password_without_printing_it(
     assert SCRATCH_PASSWORD not in result.stdout + result.stderr
 
 
-@pytest.mark.parametrize(
-    "env_file",
-    [
-        pytest.param("GRAFANA_PASSWORD=\n", id="empty"),
-        pytest.param("", id="missing"),
-    ],
-)
-def test_compose_refuses_without_a_grafana_password_and_names_it(
-    tmp_path: Path, env_file: str,
+@pytest.mark.parametrize("required", sorted(EVERYTHING_REQUIRED))
+@pytest.mark.parametrize("state", ["empty", "missing"])
+def test_compose_refuses_without_a_required_setting_and_names_it(
+    tmp_path: Path, required: str, state: str,
 ) -> None:
+    others = {name: value for name, value in EVERYTHING_REQUIRED.items() if name != required}
+    env_file = _env_file(**others) + (f"{required}=\n" if state == "empty" else "")
+
     result = _compose_config_quiet(tmp_path, env_file, {})
 
     assert result.returncode != 0
-    assert "GRAFANA_PASSWORD must be set in .env" in result.stderr
+    assert f"{required} must be set in .env" in result.stderr

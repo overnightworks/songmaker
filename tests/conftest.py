@@ -17,11 +17,15 @@ os.environ.setdefault("SESSION_SECRET", "x" * 64)
 os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
 os.environ.setdefault("WORKER_ID", "test-worker")
 os.environ.setdefault("PUBLIC_BASE_URL", "https://songmaker.test")
+os.environ.setdefault("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1")
+os.environ.setdefault("OIDC_ISSUER", "https://issuer.test/realms/test")
+os.environ.setdefault("OIDC_CLIENT_ID", "songmaker-test")
 
 import functools  # noqa: E402
 import shutil  # noqa: E402
 import struct  # noqa: E402
 import subprocess  # noqa: E402
+import tempfile  # noqa: E402
 import wave  # noqa: E402
 from collections.abc import Callable, Mapping, Sequence  # noqa: E402
 from contextlib import contextmanager  # noqa: E402
@@ -40,11 +44,11 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
-from webauth.dependencies import AuthenticatedUser  # noqa: E402
+from webauth.ports import AuthenticatedUser  # noqa: E402
 from worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
 from acestep_engine.errors import AudioDownloadError  # noqa: E402
-from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402
+from songmaker_cli.app_context import AppContext  # noqa: E402
 from songmaker_cli.scheduler import (  # noqa: E402
     NoCapacityError,
     WorkerGenerationUnavailable,
@@ -52,6 +56,17 @@ from songmaker_cli.scheduler import (  # noqa: E402
 )
 
 pytest_plugins = ["redis_server"]
+
+TEST_CLIENT_SECRET = "test-client-secret"
+
+
+def _write_test_client_secret() -> str:
+    with tempfile.NamedTemporaryFile("w", suffix=".secret", delete=False) as secret_file:
+        secret_file.write(TEST_CLIENT_SECRET)
+    return secret_file.name
+
+
+os.environ.setdefault("OIDC_CLIENT_SECRET_FILE", _write_test_client_secret())
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
@@ -466,6 +481,16 @@ def mock_arq_pool():
 
 
 @pytest.fixture
+def fresh_settings():
+    """Let a test shape the environment before ``get_settings()`` first reads it."""
+    from songmaker_cli.settings import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture
 def fake_redis():
     """Provide a fresh fakeredis instance for tests that need Redis."""
     return fakeredis.FakeRedis(decode_responses=True)
@@ -504,10 +529,44 @@ def apply_csrf_header(client) -> None:
         client.headers["X-CSRF-Token"] = token
 
 
-def login_and_csrf(client, username: str, password: str) -> None:
-    """Login and configure CSRF header for subsequent requests."""
-    resp = client.post("/api/auth/login", json={"username": username, "password": password})
-    assert resp.status_code == 200
+def issued_cookies(session_id: str, config) -> dict[str, str]:
+    """The session and CSRF cookies the library issues for ``session_id``, by name."""
+    from fastapi import Response
+    from webauth.cookies import issue_session_cookies
+
+    carrier = Response()
+    issue_session_cookies(carrier, session_id, config)
+    return {
+        name: rest.partition(";")[0]
+        for name, _, rest in (h.partition("=") for h in carrier.headers.getlist("set-cookie"))
+    }
+
+
+def login_and_csrf(client, username: str) -> None:
+    """Open a session for the seeded ``username`` and configure the CSRF header.
+
+    Writes the session row straight to the database and issues the cookies the
+    callback would, because signing in itself needs the issuer.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from webauth.config import installed_web_auth_config
+
+    from songmaker_cli.auth_stores import DatabaseSessionRecordStore
+    from songmaker_cli.db.models import User
+
+    config = installed_web_auth_config(client.app)
+    now = datetime.now(timezone.utc)
+    with client.app.state.ctx.db() as session:
+        user_id = session.query(User).filter_by(username=username).one().id
+        idle = timedelta(seconds=config.session_lifetime.idle_seconds)
+        record = DatabaseSessionRecordStore(session).create(
+            user_id, now=now, expires_at=now + idle, refresh_token=None,
+        )
+        session.commit()
+        session_id = record.id
+    for name, value in issued_cookies(session_id, config).items():
+        client.cookies.set(name, value)
     apply_csrf_header(client)
 
 
@@ -624,12 +683,11 @@ def make_authenticated_user(
     role: str = "user",
     username: str | None = None,
 ) -> AuthenticatedUser:
-    """Build an active user, using the ID as the default username."""
+    """Build a user, using the ID as the default username."""
     return AuthenticatedUser(
         id=user_id,
         username=user_id if username is None else username,
         role=role,
-        is_active=True,
     )
 
 
@@ -672,20 +730,28 @@ def make_router_app(ctx: AppContext, *, user: AuthenticatedUser | None = None) -
     return app
 
 
-def stored_hash(password: str) -> str:
-    """The hash this deployment stores for ``password``, as a seeded user's column."""
-    return build_password_hasher().hash(password)
+def seed_user(
+    session: Session, username: str, role: str = "user", *, user_id: str | None = None,
+):
+    """Add an account the way admission would: its id is the issuer's subject."""
+    import uuid
+
+    from songmaker_cli.db.queries.auth import create_user
+
+    return create_user(session, user_id or str(uuid.uuid4()), username, role)
 
 
 def make_test_app(
     tmp_path: Path,
     seed_db: Callable | None = None,
+    index_html: str = "<html>Songmaker</html>",
 ) -> tuple:
     """Create a full test app with real middleware.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
     The optional ``seed_db`` callback receives a SQLAlchemy Session and can
-    add models before the app starts.
+    add models before the app starts; ``index_html`` is the built page whose
+    inline scripts the policy hashes.
     """
     from songmaker_cli.app_context import AppContext
     from songmaker_cli.db.engine import init_test_db as init_db
@@ -699,7 +765,7 @@ def make_test_app(
     (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
     sk_dir = project_root / "frontend" / "build"
     sk_dir.mkdir(parents=True, exist_ok=True)
-    (sk_dir / "index.html").write_text("<html>Songmaker</html>")
+    (sk_dir / "index.html").write_text(index_html)
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:

@@ -257,8 +257,20 @@ REDIS_JOB_STREAM_LEASE_GLOBAL_KEY = f"{REDIS_KEY_PREFIX}:job-stream:global"
 SESSION_CLEANUP_INTERVAL_SECONDS = 300
 REDIS_SOCKET_TIMEOUT_SECONDS: Final[float] = 2.0
 
-# Session
-HTTP_MAX_USER_AGENT_LENGTH = 500
+# Session lifetime: seven days without a request, thirty days from sign-in at most.
+SESSION_IDLE_SECONDS_DEFAULT: Final = 7 * 24 * 60 * 60
+SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT: Final = 30 * 24 * 60 * 60
+
+# Sign-in through the Keycloak realm. The groups name who may sign in and who
+# administers; the paths are the browser-visible routes of the contract.
+OIDC_LOGIN_GROUP: Final = "/apps/songmaker"
+OIDC_ADMIN_GROUP: Final = "/apps/songmaker/admin"
+OIDC_LEEWAY_SECONDS: Final = 30
+OIDC_START_PATH: Final = "/login/oidc"
+OIDC_CALLBACK_PATH: Final = "/auth/callback"
+LOGOUT_PATH: Final = "/auth/logout"
+SIGNED_OUT_PATH: Final = "/login"
+NO_ACCESS_PATH: Final = "/no-access"
 
 # The role name stored on every user row. `webauth` compares against whatever
 # `WebAuthConfig.admin_role` carries; this is the value songmaker injects.
@@ -753,15 +765,12 @@ class AuditAction(StrEnum):
     ARCHIVE = "archive"
     UNARCHIVE = "unarchive"
     HARD_DELETE = "hard_delete"
-    DEACTIVATE = "deactivate"
     CANCEL = "cancel"
     SHARE = "share"
     UNSHARE = "unshare"
     REMASTER = "remaster"
     MOVE = "move"
     CLEANUP = "cleanup"
-    SESSION_IP_CHANGE = "session_ip_change"
-    SESSION_UA_CHANGE = "session_ua_change"
     TRAIN_LORA = "train_lora"
 
 
@@ -805,13 +814,6 @@ class LimiterFailurePolicy(StrEnum):
 # AGENTS.md "Engine packages are independent") — and
 # tests/test_secret_scrub_parity.py pins the two as equal sets.
 #
-# ADMIN_USERNAME / ADMIN_PASSWORD: compose sets the bootstrap admin
-# credentials on the long-running web container, not just for a one-shot
-# setup step — lifecycle.auto_setup_admin re-reads them on every startup so
-# a restored-from-empty database gets its admin back. They therefore sit in
-# the parent environment for the container's whole life, and this scrub is
-# the only thing keeping them out of every child process it spawns.
-#
 # A login is scrubbed as a pair. The name half is no secret on its own, but
 # handing a child process one half of a credential is pointless generosity —
 # hence POSTGRES_USER and GRAFANA_USER beside their passwords. Every key here
@@ -828,8 +830,6 @@ SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
     "HF_TOKEN",
-    "ADMIN_USERNAME",
-    "ADMIN_PASSWORD",
     "GRAFANA_USER",
     "GRAFANA_PASSWORD",
 )

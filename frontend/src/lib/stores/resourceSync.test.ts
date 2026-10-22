@@ -28,7 +28,6 @@ import {
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
 } from '$lib/constants';
-import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import { offline } from '$lib/stores/connectivity';
 import {
 	ResourceSyncController,
@@ -1110,49 +1109,6 @@ describe('resource sync owner', () => {
 		expect(onUnauthorized).toHaveBeenCalledOnce();
 	});
 
-	it('a disabled-account probe stops the owner without running the session-lost reaction', async () => {
-		const onUnauthorized = vi.fn(async () => undefined);
-		const { controller, sources, store } = setup({
-			probeAuth: async () => 'disabled',
-			onUnauthorized
-		});
-		controller.start();
-		const source = latestSource(sources);
-		source.error();
-		await flush();
-		expect(source.closed).toBe(true);
-		expect(get(store).status).toBe('error');
-		expect(get(store).error).toBe(AUTH_ACCOUNT_DISABLED_MESSAGE);
-		expect(onUnauthorized).not.toHaveBeenCalled();
-	});
-
-	it('does not schedule a timer reconnect after a disabled-account probe', async () => {
-		vi.useFakeTimers();
-		const { controller, sources } = setup({ probeAuth: async () => 'disabled' });
-		controller.start();
-		latestSource(sources).error();
-		await flush();
-		expect(sources).toHaveLength(1);
-		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
-		await flush();
-		expect(sources).toHaveLength(1);
-	});
-
-	it('a manual retry after a disabled-account probe opens exactly one new EventSource', async () => {
-		const { controller, sources } = setup({ probeAuth: async () => 'disabled' });
-		controller.start();
-		latestSource(sources).error();
-		await flush();
-		expect(sources).toHaveLength(1);
-		expect(sources[0].closed).toBe(true);
-
-		void controller.retry();
-		await flush();
-
-		expect(sources).toHaveLength(2);
-		expect(sources[1].closed).toBe(false);
-	});
-
 	it('opens a native EventSource with credentials and cleans it up', async () => {
 		const { controller, sources, store } = setup();
 		controller.start();
@@ -1988,7 +1944,7 @@ describe('library resource sync wiring', () => {
 	});
 
 	it.each([
-		[403, 'error', AUTH_ACCOUNT_DISABLED_MESSAGE, false],
+		[403, 'reconnecting', null, false],
 		[429, 'reconnecting', null, false],
 		[500, 'reconnecting', null, false],
 		[502, 'reconnecting', null, true]
@@ -2018,7 +1974,7 @@ describe('library resource sync wiring', () => {
 			expect(get(resourceSync)).toMatchObject({ status: syncStatus, error, ready: false });
 			expect(get(offline)).toBe(pageOffline);
 			expect(documentLoads.reload).not.toHaveBeenCalled();
-			expect(MockEventSource.instances[0].closed).toBe(status === 403);
+			expect(MockEventSource.instances[0].closed).toBe(false);
 		}
 	);
 

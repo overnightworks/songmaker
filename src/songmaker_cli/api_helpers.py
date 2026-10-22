@@ -14,7 +14,7 @@ from fastapi import Depends, HTTPException, Query, Request
 from slugify import slugify as _slugify
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
+from webauth.ports import AuthenticatedUser
 from webauth.rate_limit import RedisRateLimitBackend
 
 from songmaker_cli.audio_paths import AudioFileNotFoundError
@@ -69,7 +69,6 @@ if TYPE_CHECKING:
 
 _RATE_LIMIT_LOCK_ID = 1
 _ALBUM_ID_LOCK_ID = 2
-_SESSION_CAP_LOCK_ID = 4
 _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
 _LORA_CAPACITY_LOCK_ID = 8

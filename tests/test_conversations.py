@@ -30,7 +30,7 @@ def db_session(tmp_path: Path) -> Session:
 
 
 def _seed_user(session: Session, user_id: str = "u1") -> User:
-    user = User(id=user_id, username=f"user-{user_id}", password_hash="x")
+    user = User(id=user_id, username=f"user-{user_id}")
     session.add(user)
     session.flush()
     return user

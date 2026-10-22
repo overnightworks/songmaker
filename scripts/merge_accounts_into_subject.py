@@ -15,8 +15,10 @@ with the venv's Python:
   transaction, then the queue-stream cache is cleared, then V1-V5 run.
 
 Any refusal, error or failed check means ``scripts/restore.sh <backup>``;
-there is no resume. The script reads and writes through SQLAlchemy Core so
-soft-deleted rows are included. It never prints a password hash.
+there is no resume. The script runs before the sign-in migration drops the
+password columns, so it reads the live schema by reflection rather than the
+current models. It reads and writes through SQLAlchemy Core so soft-deleted
+rows are included. It never prints a password hash.
 """
 
 from __future__ import annotations
@@ -57,13 +59,14 @@ prepend_own_checkout_src(__file__)
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import JOB_ACTIVE_STATUSES, ROLE_ADMIN, USER_LORAS_DIRNAME
 from songmaker_cli.db.engine import connect_db, resolve_database_url
-from songmaker_cli.db.models import Base
 from songmaker_cli.queue_streams import QUEUE_STREAM_DIRNAME
 from songmaker_cli.settings import get_settings
 from songmaker_cli.timestamps import utcnow
 
 RESTORE_HINT: Final = "Restore with scripts/restore.sh <backup>; there is no resume."
 USERS_ID_TARGET: Final = "users.id"
+# The users columns the sign-in migration drops; the folded account copies one of them.
+PASSWORD_ERA_USER_COLUMNS: Final = ("password_hash", "is_active")
 NO_OWNER: Final = None
 
 
@@ -230,6 +233,11 @@ def _structural_refusals(
         f"foreign key {_label(column)} to users.id has no policy"
         for column in owner_columns(metadata)
         if _label(column) not in OWNER_POLICIES
+    ]
+    refusals += [
+        f"users.{name} is gone: the sign-in migration already ran, and this script runs before it"
+        for name in PASSWORD_ERA_USER_COLUMNS
+        if name not in metadata.tables["users"].c
     ]
     if not _is_lowercase_uuid(subject):
         refusals.append(f"subject {subject!r} is not a lowercase 36-character UUID")
@@ -451,7 +459,7 @@ def _merge_database(
         id=subject, username=operator.username, password_hash=operator.password_hash,
         role=ROLE_ADMIN, is_active=True,
         default_generation_config=operator.default_generation_config,
-        created_at=operator.created_at,
+        created_at=operator.created_at, updated_at=operator.updated_at,
     ))
     for column, policy in policies.items():
         if policy is OwnerPolicy.OPERATOR_ONLY:
@@ -623,10 +631,17 @@ def _one_line(error: BaseException) -> str:
     return (str(cause).splitlines() or [""])[0]
 
 
+def reflect_live_schema(engine: Engine) -> MetaData:
+    metadata = MetaData()
+    metadata.reflect(bind=engine)
+    return metadata
+
+
 def run(
     engine: Engine, *, audio_dir: Path, stream_cache_dir: Path, operator_id: str,
-    subject: str, mode: Mode, metadata: MetaData = Base.metadata,
+    subject: str, mode: Mode,
 ) -> int:
+    metadata = reflect_live_schema(engine)
     with engine.connect() as conn:
         plan = build_plan(conn, metadata, audio_dir, operator_id, subject)
     print_plan(plan, operator_id, subject, mode)
