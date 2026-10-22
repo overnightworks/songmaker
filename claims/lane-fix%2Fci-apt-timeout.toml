@@ -1,0 +1,7 @@
+claim_id = "399bc907429347299b0745affaccd91e"
+agent = "claude"
+role = "builder"
+base = "09dbb05c3b970326ffde633808b74a0bfc464a32"
+branch = "fix/ci-apt-timeout"
+scope = [".github/workflows/ci.yml"]
+opened_commit = "6e3c6b688e9cebd679d75695f7fe58ed139a3b23"
