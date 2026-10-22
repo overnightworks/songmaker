@@ -1,8 +1,0 @@
-claim_id = "7bf3bd96497b4617ad72600db0a12a26"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "54e86b95646d541285f2f8d935776f27e1d39c64"
-branch = "claude/issue-1785-central-legal-links"
-scope = ["docs/architecture.md", "docs/security.md", "frontend/e2e", "frontend/src/lib/components/LegalContent.svelte", "frontend/src/lib/components/LegalContent.test.ts", "frontend/src/lib/components/LegalLinks.svelte", "frontend/src/lib/components/LegalLinks.test.ts", "frontend/src/lib/components/LegalPage.svelte", "frontend/src/lib/components/share", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/constants/legal.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/settingsSections.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/datenschutz", "frontend/src/routes/impressum", "frontend/src/routes/layout.test.ts", "frontend/src/routes/legal", "frontend/src/routes/login/page.test.ts", "frontend/src/routes/settings/+layout.svelte", "frontend/src/routes/settings/legal", "frontend/src/routes/settings/page.test.ts"]
-opened_commit = "cdfe8759bf6925ca34b0b5bf22e71d0a86eaabab"
-whole_reason = "One owner change: every legal link to the central pages and songmaker's copies out, with the tests that pin them."
