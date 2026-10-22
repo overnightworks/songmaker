@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path, PurePosixPath
-from typing import Final
-
-from fastapi import HTTPException
 
 log = logging.getLogger(__name__)
 
-NOT_FOUND_DETAIL: Final = "Not Found"
+
+class AudioPathRejectedError(Exception):
+    """The path escapes the audio root or is not in canonical form."""
 
 
 class AudioFileNotFoundError(FileNotFoundError):
@@ -40,7 +39,7 @@ def require_canonical_audio_filename(filename: str) -> None:
         or canonical_filename != filename
     ):
         log.warning("non-canonical audio path rejected")
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise AudioPathRejectedError("audio path is not in canonical form")
 
 
 def canonical_audio_filename(audio_dir: Path, filename: str) -> str | None:
@@ -56,7 +55,7 @@ def resolve_audio_path(audio_dir: Path, relative_path: str) -> Path:
     audio_path = _resolved_within_root(audio_dir, relative_path)
     if audio_path is None:
         log.warning("Audio path traversal denied")
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise AudioPathRejectedError("audio path escapes the audio root")
     if not audio_path.exists():
         raise AudioFileNotFoundError(relative_path)
     return audio_path
@@ -67,10 +66,10 @@ def canonical_audio_path(audio_dir: Path, filename: str) -> Path:
     audio_path = _resolved_within_root(audio_dir, filename)
     if audio_path is None:
         log.warning("Audio path traversal denied")
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise AudioPathRejectedError("audio path escapes the audio root")
     if audio_path.relative_to(_resolved_audio_root(audio_dir)).as_posix() != filename:
         log.warning("non-canonical audio path rejected")
-        raise HTTPException(404, NOT_FOUND_DETAIL)
+        raise AudioPathRejectedError("audio path is not in canonical form")
     return audio_path
 
 

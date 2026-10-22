@@ -106,7 +106,9 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "sqlalchemy": frozenset({"sqlalchemy"}),
     "structlog": frozenset({"structlog"}),
     "torch": frozenset({"functorch", "torch", "torchgen"}),
-    "torchaudio": frozenset({"torchaudio", "torio"}),
+    "torchaudio": frozenset({"torchaudio"}),
+    # torchcodec's top_level.txt lists a placeholder root next to the real one.
+    "torchcodec": frozenset({"FAKE_NAME", "torchcodec"}),
     "uvicorn": frozenset({"uvicorn"}),
 }
 
