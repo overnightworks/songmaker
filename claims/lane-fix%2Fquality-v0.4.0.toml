@@ -1,8 +1,0 @@
-claim_id = "0e63b0d96fff41f08dbf8198a155f72f"
-agent = "claude"
-role = "builder"
-base = "8ce42beef710d0bfd16026c17f468294677a7474"
-branch = "fix/quality-v0.4.0"
-scope = [".github/workflows/ci.yml", "pyproject.toml", "tests/test_quality_workflow.py", "uv.lock"]
-opened_commit = "33b3f77758c0f5dc53cc892ea9b76ea0a33effa7"
-whole_reason = "One gate bump: its pin, the test that pins it, and the lock upgrades the new advisory rule requires."
