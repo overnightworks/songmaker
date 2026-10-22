@@ -27,7 +27,12 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   good“): Home zeigt Listen und Write, Library nur Alben und Playlists nur
   Playlists, auf dem Telefon drei Tabs unten statt des Drawers, ‹ auf jeder
   geöffneten Seite, die Player-Karte über den Tabs. Wo ältere Zustände etwas
-  anderes zeigen, gilt (i).
+  anderes zeigen, gilt (i). Zustand (j) für #1784 freigegeben am 22.10.2026
+  (Operator: „2 sonst ok“, Desktop „ja a“): Account, Legal und Cleanup
+  verlassen die Settings, das Konto ist am Desktop wie am Telefon ein Kreis
+  mit Menü samt Rechtliches-Zeile; (j) überschreibt dort die Settings-Zeilen
+  von (e) und (h), das Konto-Menü von (h) und (i) und die Konto-Zeile der
+  Desktop-Leiste.
 - `admin-models.html` — der Admin-Tab „Models" (#317). Fassung 1 wurde am
   01.09.2026 freigegeben; Fassung 2 wurde am 06.09.2026 freigegeben: eine
   Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
@@ -39,7 +44,8 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   17.10.2026 freigegeben: die Worker-Karte mit VRAM-Zeile und der Liste der
   geladenen Modelle, auf der Songseite „Waiting for GPU…" und „Loading model…"
   mit Streifen und vergangener Zeit, der abgefangene Speicherfehler als „Too
-  long for the GPU right now" und „nicht verfügbar" — ohne Vorab-Prüfung.
+  long for the GPU right now" und „nicht verfügbar" — ohne Vorab-Prüfung. Der Abschnitt „Cleanup“ (#1784)
+  wurde am 22.10.2026 freigegeben.
 - `album-browsing.html` — Album-/Playlist-Browsing nach dem Öffnen (#348).
   Erste Fassung freigegeben am 01.09.2026, nach dem Ausprobieren eines
   bedienbaren Prototyps: die Kachelwand bleibt bestehen und schrumpft beim
