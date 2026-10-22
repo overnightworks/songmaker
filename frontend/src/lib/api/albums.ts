@@ -94,6 +94,18 @@ export async function selectAlbumCoverSuggestion(
 	});
 }
 
-export async function discardAlbumCoverSuggestions(albumId: string): Promise<void> {
-	await apiFetch(`/api/albums/${albumId}/cover-suggestions`, { method: 'DELETE' });
+/** What a discard deletes: the suggestions it names and those the named runs made. */
+export interface CoverSuggestionDiscard {
+	suggestionIds: readonly string[];
+	jobIds: readonly string[];
+}
+
+export async function discardAlbumCoverSuggestions(
+	albumId: string,
+	discard: CoverSuggestionDiscard
+): Promise<void> {
+	const params = new URLSearchParams();
+	for (const suggestionId of discard.suggestionIds) params.append('suggestion_id', suggestionId);
+	for (const jobId of discard.jobIds) params.append('job_id', jobId);
+	await apiFetch(`/api/albums/${albumId}/cover-suggestions?${params}`, { method: 'DELETE' });
 }

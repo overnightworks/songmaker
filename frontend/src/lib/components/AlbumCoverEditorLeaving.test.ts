@@ -191,7 +191,13 @@ describe('Leaving the album cover editor', () => {
 		await leave(target);
 
 		await editingClosed(target);
-		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() =>
+			expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local', {
+				suggestionIds: ['one'],
+				jobIds: ['cover-job']
+			})
+		);
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		expect(cancelJob).toHaveBeenCalledWith('cover-job');
 		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
 			discardAlbumCoverSuggestions.mock.invocationCallOrder[0]
@@ -291,7 +297,11 @@ describe('Leaving the album cover editor', () => {
 		asking.resolve(coverJob());
 
 		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
-		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledTimes(2));
+		expect(discardAlbumCoverSuggestions.mock.calls).toEqual([
+			['a-local', { suggestionIds: ['one'], jobIds: [] }],
+			['a-local', { suggestionIds: [], jobIds: ['cover-job'] }]
+		]);
 		expect(get(activeJobs)).toEqual([]);
 	});
 
@@ -350,7 +360,12 @@ describe('Leaving the album cover editor', () => {
 		selectedAlbumId.set('a-other');
 		uploading.resolve(coveredAlbum(UPLOADED));
 
-		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.waitFor(() =>
+			expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local', {
+				suggestionIds: ['one'],
+				jobIds: []
+			})
+		);
 		expect(discardAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 	});
 
@@ -505,7 +520,7 @@ describe('Leaving the album cover editor', () => {
 		expect(get(activeJobs)).toEqual([]);
 	});
 
-	it('a suggestion answered late after × never deletes the one asked for since', async () => {
+	it('a suggestion answered late after × discards only its own, never the one asked for since', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);
 		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
 		const firstAsk = deferred<JobItem>();
@@ -529,10 +544,39 @@ describe('Leaving the album cover editor', () => {
 		await vi.waitFor(() =>
 			expect(get(activeJobs).map((active) => active.job.id)).toEqual(['second-job'])
 		);
-		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+		await vi.waitFor(() =>
+			expect(discardAlbumCoverSuggestions.mock.calls).toEqual([
+				['a-local', { suggestionIds: [], jobIds: ['first-job'] }]
+			])
+		);
+		expect(cancelJob).not.toHaveBeenCalledWith('second-job');
 	});
 
-	it.each([
+	it('a load from before × that answers after the next Suggest follows that run', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		const staleLoad = deferred<CoverSuggestionsResponse>();
+		fetchAlbumCoverSuggestions
+			.mockReturnValueOnce(staleLoad.promise)
+			.mockResolvedValue(coverSuggestions());
+		createAlbumCoverSuggestions.mockResolvedValue(coverJob({ id: 'later-job' }));
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await reachSuggestionsLoads(1);
+		pressEditorButton(target, 'Close cover editing');
+		await editingClosed(target);
+		await openCoverEditing(target);
+		await pressSuggestOnceLoaded(target);
+		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+
+		staleLoad.resolve(coverSuggestions({ job: coverJob({ id: 'later-job', status: 'running' }) }));
+		await new Promise((settled) => setTimeout(settled, 0));
+
+		expect(cancelJob).not.toHaveBeenCalled();
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+		expect(get(activeJobs).map((active) => active.job.id)).toEqual(['later-job']);
+	});
+
+	const exitsBeforeTheFirstLoad = [
 		{
 			way: '×',
 			leave: (target: HTMLElement) => pressEditorButton(target, 'Close cover editing')
@@ -544,21 +588,39 @@ describe('Leaving the album cover editor', () => {
 				uploadCoverFile(target);
 			}
 		}
-	])('a run the first load reports after $way is stopped and discarded', async ({ leave }) => {
-		vi.stubGlobal('EventSource', FakeJobEventSource);
-		const firstLoad = deferred<CoverSuggestionsResponse>();
-		fetchAlbumCoverSuggestions.mockReturnValue(firstLoad.promise);
-		const target = await renderDetail();
-		await openCoverEditing(target);
-		await reachSuggestionsLoads(1);
+	];
+	const firstLoadReports = [
+		{
+			report: 'a running run',
+			answer: coverSuggestions({ job: coverJob({ status: 'running' }) }),
+			followed: ['cover-job']
+		},
+		{
+			report: 'a run that completed with its suggestion',
+			answer: coverSuggestions({ ...ONE_SUGGESTION, job: coverJob({ status: 'completed' }) }),
+			followed: []
+		}
+	];
+	it.each(
+		exitsBeforeTheFirstLoad.flatMap((exit) => firstLoadReports.map((r) => ({ ...exit, ...r })))
+	)(
+		'$report the first load answers after $way is neither stopped nor discarded',
+		async ({ leave, answer, followed }) => {
+			vi.stubGlobal('EventSource', FakeJobEventSource);
+			const firstLoad = deferred<CoverSuggestionsResponse>();
+			fetchAlbumCoverSuggestions.mockReturnValue(firstLoad.promise);
+			const target = await renderDetail();
+			await openCoverEditing(target);
+			await reachSuggestionsLoads(1);
 
-		leave(target);
-		await editingClosed(target);
-		expect(cancelJob).not.toHaveBeenCalled();
-		firstLoad.resolve(coverSuggestions({ job: coverJob({ status: 'running' }) }));
+			leave(target);
+			await editingClosed(target);
+			firstLoad.resolve(answer);
+			await new Promise((settled) => setTimeout(settled, 0));
 
-		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
-		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
-		expect(get(activeJobs)).toEqual([]);
-	});
+			expect(cancelJob).not.toHaveBeenCalled();
+			expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+			expect(get(activeJobs).map((active) => active.job.id)).toEqual(followed);
+		}
+	);
 });

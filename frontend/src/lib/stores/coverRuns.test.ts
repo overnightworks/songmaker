@@ -4,10 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api/fetch';
 import type { JobItem } from '$lib/api/types';
 import {
-	coverSuggestionAskedAfter,
 	discardMarkOf,
 	markCoverSuggestionsDiscarded,
-	recordCoverSuggestionAsked,
+	releaseCoverSuggestions,
 	stopCoverRun
 } from './coverRuns';
 import { activeJobs } from './jobs';
@@ -17,6 +16,11 @@ vi.mock('$lib/api/jobs', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/jobs')>()),
 	cancelJob: (...args: unknown[]) => cancelJob(...args)
 }));
+const discardAlbumCoverSuggestions = vi.fn();
+vi.mock('$lib/api/albums', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/albums')>()),
+	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
+}));
 
 function coverJob(): JobItem {
 	return { id: 'cover-job', type: 'cover', status: 'running', progress: 0 };
@@ -24,6 +28,7 @@ function coverJob(): JobItem {
 
 beforeEach(() => {
 	cancelJob.mockReset().mockResolvedValue({ ...coverJob(), status: 'cancelled' });
+	discardAlbumCoverSuggestions.mockReset().mockResolvedValue(undefined);
 	activeJobs.set([{ job: coverJob(), albumId: 'a-local' }]);
 });
 
@@ -66,23 +71,22 @@ describe('discard marks', () => {
 	});
 });
 
-describe('coverSuggestionAskedAfter', () => {
-	it('is false for a Suggest asked before the discard it is compared with', () => {
-		const markAtAsking = recordCoverSuggestionAsked('a-asked-before');
-		markCoverSuggestionsDiscarded('a-asked-before');
+describe('releaseCoverSuggestions', () => {
+	it('stops the named run before it discards what it names', async () => {
+		const discard = { suggestionIds: ['one'], jobIds: ['cover-job'] };
 
-		expect(coverSuggestionAskedAfter('a-asked-before', markAtAsking)).toBe(false);
+		await releaseCoverSuggestions('a-local', discard);
+
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local', discard);
+		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
+			discardAlbumCoverSuggestions.mock.invocationCallOrder[0]
+		);
 	});
 
-	it('is true once a Suggest was asked after that discard', () => {
-		const markAtFirstAsking = recordCoverSuggestionAsked('a-asked-after');
-		markCoverSuggestionsDiscarded('a-asked-after');
-		recordCoverSuggestionAsked('a-asked-after');
+	it('sends nothing when it names nothing', async () => {
+		await releaseCoverSuggestions('a-local', { suggestionIds: [], jobIds: [] });
 
-		expect(coverSuggestionAskedAfter('a-asked-after', markAtFirstAsking)).toBe(true);
-	});
-
-	it('is false for an album nothing was asked on', () => {
-		expect(coverSuggestionAskedAfter('a-never-asked', 0)).toBe(false);
+		expect(cancelJob).not.toHaveBeenCalled();
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 });

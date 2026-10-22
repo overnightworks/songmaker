@@ -1,3 +1,4 @@
+import { discardAlbumCoverSuggestions, type CoverSuggestionDiscard } from '$lib/api/albums';
 import { ApiError } from '$lib/api/fetch';
 import { cancelJob } from '$lib/api/jobs';
 import { removeJob } from '$lib/stores/jobs';
@@ -5,7 +6,6 @@ import { removeJob } from '$lib/stores/jobs';
 const HTTP_CONFLICT = 409;
 
 const discardMarks = new Map<string, number>();
-const latestAskMarks = new Map<string, number>();
 
 /**
  * Stops a cover suggestion run and stops following it. A run that already
@@ -31,22 +31,17 @@ export function markCoverSuggestionsDiscarded(albumId: string): void {
 }
 
 /**
- * Records that a Suggest is being asked for on this album and returns the
- * discard mark it was asked under.
+ * Stops the runs a discard names, then deletes what it names. The stop comes
+ * first: a run that ended just before it may have landed a suggestion, which
+ * the run's id still names. A discard that names nothing sends nothing.
  */
-export function recordCoverSuggestionAsked(albumId: string): number {
-	const mark = discardMarkOf(albumId);
-	latestAskMarks.set(albumId, mark);
-	return mark;
-}
-
-/**
- * Whether a Suggest was asked for after the discard that followed `mark`. The
- * only way to delete suggestions is album-wide, so a late cleanup of an older
- * run must not delete the suggestions that Suggest has made since.
- */
-export function coverSuggestionAskedAfter(albumId: string, mark: number): boolean {
-	return (latestAskMarks.get(albumId) ?? mark) > mark;
+export async function releaseCoverSuggestions(
+	albumId: string,
+	discard: CoverSuggestionDiscard
+): Promise<void> {
+	for (const jobId of discard.jobIds) await stopCoverRun(jobId);
+	if (discard.suggestionIds.length === 0 && discard.jobIds.length === 0) return;
+	await discardAlbumCoverSuggestions(albumId, discard);
 }
 
 export function discardMarkOf(albumId: string): number {

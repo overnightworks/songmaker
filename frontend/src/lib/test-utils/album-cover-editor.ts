@@ -44,6 +44,9 @@ export const THREE_SUGGESTIONS = {
 	]
 };
 
+/** What a discard names while the editor shows THREE_SUGGESTIONS and follows no run. */
+export const THREE_SHOWN = { suggestionIds: ['one', 'two', 'three'], jobIds: [] };
+
 export const COVERED = { card: '/cover-card.jpg', detail: '/cover-detail.jpg' };
 
 export const UPLOADED = { card: '/uploaded-card.jpg', detail: '/uploaded-detail.jpg' };

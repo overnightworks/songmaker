@@ -26,6 +26,7 @@ import {
 	coverJob,
 	ONE_SUGGESTION,
 	THREE_SUGGESTIONS,
+	THREE_SHOWN,
 	UPLOADED,
 	coveredAlbum,
 	editor,
@@ -429,7 +430,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		await editingClosed(target);
 		expect(selectAlbumCoverSuggestion).toHaveBeenCalledWith('a-local', { suggestion_id: 'two' });
-		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local');
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local', THREE_SHOWN);
 		expect(target.querySelector('.header-cover img')?.getAttribute('src')).toBe(
 			'/cover-detail.jpg'
 		);
@@ -500,7 +501,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		pressEditorButton(target, 'Close cover editing');
 
 		await editingClosed(target);
-		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local');
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local', THREE_SHOWN);
 		expect(selectAlbumCoverSuggestion).not.toHaveBeenCalled();
 		expect(cancelJob).not.toHaveBeenCalled();
 		expect(accessibleName(requireElement(target, 'button.header-cover'))).toBe('Add cover');
@@ -592,9 +593,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 
 		await editingClosed(target);
-		expect(target.querySelector('.header-cover img')?.getAttribute('src')).toBe(
-			'/uploaded-detail.jpg'
-		);
+		expect(target.querySelector('.header-cover img')?.getAttribute('src')).toBe(UPLOADED.detail);
 	});
 
 	it('another album closes the editor', async () => {

@@ -31,7 +31,7 @@
 "frontend/e2e/song-phone.spec.ts" = 866
 "frontend/e2e/song-versions.spec.ts" = 863
 "frontend/src/lib/api/types.ts" = 1146
-"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 976
+"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 975
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1580
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1892
