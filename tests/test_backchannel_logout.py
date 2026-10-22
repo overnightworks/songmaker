@@ -59,11 +59,17 @@ def test_a_failing_deleting_transaction_answers_400_and_keeps_the_sessions(
 ) -> None:
     _sign_in_twice(world)
 
-    with session_commit_failure(world.factory, message="commit failed"):
+    def ends_the_sessions(session: Session) -> bool:
+        """False for the lock's empty pre-commit, true only in the deleting transaction."""
+        return session.query(UserSession).filter_by(user_id=SUBJECT).count() == 0
+
+    with session_commit_failure(world.factory, when=ends_the_sessions):
         response = _backchannel(world, world.issuer.logout_token(SUBJECT))
 
     assert response.status_code == 400
     assert world.session_count() == 2
+    with world.factory() as session:
+        assert session.query(AuditLog).filter_by(resource_id=SUBJECT, action="delete").count() == 0
 
 
 @pytest.mark.parametrize(

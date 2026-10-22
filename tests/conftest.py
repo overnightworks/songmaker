@@ -748,13 +748,13 @@ def make_test_app(
     tmp_path: Path,
     seed_db: Callable | None = None,
     index_html: str = "<html>Songmaker</html>",
+    factory: sessionmaker[Session] | None = None,
 ) -> tuple:
-    """Create a full test app with real middleware.
+    """Create a full test app with real middleware on ``factory`` or a fresh SQLite file.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
-    The optional ``seed_db`` callback receives a SQLAlchemy Session and can
-    add models before the app starts; ``index_html`` is the built page whose
-    inline scripts the policy hashes.
+    ``seed_db`` receives a Session to add models before the app starts;
+    ``index_html`` is the built page whose inline scripts the policy hashes.
     """
     from songmaker_cli.app_context import AppContext
     from songmaker_cli.db.engine import init_test_db as init_db
@@ -770,7 +770,7 @@ def make_test_app(
     sk_dir.mkdir(parents=True, exist_ok=True)
     (sk_dir / "index.html").write_text(index_html)
 
-    factory = init_db(data_dir / "songmaker.db")
+    factory = factory or init_db(data_dir / "songmaker.db")
     with factory() as session:
         seed_judge_route(session)
         if seed_db is not None:
