@@ -464,7 +464,7 @@
 				type="button"
 				class="stage-nav"
 				aria-label={ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL}
-				disabled={shownSlotIndex === 0}
+				disabled={coverSuggestionsBusy || shownSlotIndex === 0}
 				onclick={() => showSlot(shownSlotIndex - 1)}>‹</button
 			>
 		{:else}
@@ -504,7 +504,7 @@
 				type="button"
 				class="stage-nav"
 				aria-label={ALBUM_COVER_NEXT_SUGGESTION_LABEL}
-				disabled={shownSlotIndex === stageSlots.length - 1}
+				disabled={coverSuggestionsBusy || shownSlotIndex === stageSlots.length - 1}
 				onclick={() => showSlot(shownSlotIndex + 1)}>›</button
 			>
 		{:else}
@@ -547,6 +547,7 @@
 			type="button"
 			class="cover-action"
 			data-hitbox="frequent"
+			disabled={coverSuggestionsBusy}
 			onclick={() => onupload(knownSuggestions())}>{ALBUM_COVER_EDITING_UPLOAD_LABEL}</button
 		>
 		<button
@@ -572,6 +573,7 @@
 				type="button"
 				class="cover-action cover-remove"
 				data-hitbox="frequent"
+				disabled={coverSuggestionsBusy}
 				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
 			>
 		{/if}

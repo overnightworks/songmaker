@@ -346,9 +346,10 @@ describe('Leaving the album cover editor', () => {
 				saving.reject(serverRefusal('Could not save'))
 		}
 	])(
-		'Suggest another stays disabled while Use saves and is enabled again once the save $outcome',
+		'the editor takes no other action while Use saves and takes them again once the save $outcome',
 		async ({ settle, editorCloses }) => {
 			vi.stubGlobal('EventSource', FakeJobEventSource);
+			albumList.set([coveredAlbum()]);
 			fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
 			const saving = deferred<AlbumItem>();
 			selectAlbumCoverSuggestion.mockReturnValue(saving.promise);
@@ -358,20 +359,27 @@ describe('Leaving the album cover editor', () => {
 			const suggestAnother = () =>
 				getByRoleButton(requireElement(target, '.cover-editor'), 'Suggest another');
 			await vi.waitFor(() => expect(suggestAnother().disabled).toBe(false));
+			const actions = ['Upload', 'Remove', 'Suggest another'].map(
+				(name) => () => getByRoleButton(requireElement(target, '.cover-editor'), name)
+			);
 
 			pressEditorButton(target, 'Use');
 			await vi.waitFor(() => expect(selectAlbumCoverSuggestion).toHaveBeenCalledTimes(1));
-			expect(suggestAnother().disabled).toBe(true);
-			suggestAnother().click();
+			for (const action of actions) {
+				expect(action().disabled).toBe(true);
+				action().click();
+			}
 			await tick();
 			expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
+			expect(deleteAlbumCover).not.toHaveBeenCalled();
+			expect(uploadAlbumCover).not.toHaveBeenCalled();
 
 			settle(saving);
 			if (editorCloses) {
 				await editingClosed(target);
 				await openCoverEditing(target);
 			}
-			await vi.waitFor(() => expect(suggestAnother().disabled).toBe(false));
+			for (const action of actions) await vi.waitFor(() => expect(action().disabled).toBe(false));
 		}
 	);
 
