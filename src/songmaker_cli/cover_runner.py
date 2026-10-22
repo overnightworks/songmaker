@@ -9,6 +9,7 @@ import shutil
 import time
 import uuid
 from contextlib import suppress
+from io import BytesIO
 from pathlib import Path
 from threading import Event, Lock
 from typing import Final
@@ -21,7 +22,10 @@ from agent_providers.codex.image import (
 )
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from agent_providers.images import ImagePolicy
+from PIL import Image
+from PIL.PngImagePlugin import PngInfo
 
+from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     COVER_GENERATED_EDGE_PIXELS,
@@ -53,6 +57,17 @@ from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.jobs._runtime import _sanitize_error, _touch_heartbeat, _update_job
 from songmaker_cli.settings import CoverExecutor, Settings, get_settings
+
+# The iTXt keyword under which PNG carries an XMP packet (XMP spec, part 3).
+XMP_PNG_KEYWORD: Final = "XML:com.adobe.xmp"
+AI_MARK_XMP_PACKET: Final = (
+    '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+    '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+    '<rdf:Description rdf:about="" '
+    'xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" '
+    'Iptc4xmpExt:DigitalSourceType="{source_type}"/>'
+    "</rdf:RDF></x:xmpmeta>"
+)
 
 log = logging.getLogger(__name__)
 
@@ -384,7 +399,12 @@ def _staging_path(audio_dir: Path, album_id: str, job_id: str) -> Path:
 
 
 def _write_staged_png(staging_dir: Path, suggestion_id: str, payload: bytes) -> None:
-    (staging_dir / f"{suggestion_id}.png").write_bytes(payload)
+    metadata = PngInfo()
+    metadata.add_itxt(
+        XMP_PNG_KEYWORD, AI_MARK_XMP_PACKET.format(source_type=IPTC_TRAINED_ALGORITHMIC_MEDIA),
+    )
+    with Image.open(BytesIO(payload)) as generated:
+        generated.save(staging_dir / f"{suggestion_id}.png", format="PNG", pnginfo=metadata)
 
 
 def _publish_suggestion(
