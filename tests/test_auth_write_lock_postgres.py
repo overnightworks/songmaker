@@ -71,12 +71,19 @@ def test_a_sequential_hold_keeps_the_lock_until_the_outer_commit(pg_factory) -> 
 
 
 class _CallbackPause:
-    """Holds the sign-in callback at its pending commit once its new session is flushed."""
+    """Holds the sign-in callback at its pending commit once its new session is flushed,
+    and names the backend that asks for the write lock while the callback waits there."""
 
     def __init__(self) -> None:
         self.reached = threading.Event()
         self.release = threading.Event()
         self.backend_pid: int | None = None
+        self.logout_pid: int | None = None
+
+    def note_lock_request(self, connection, _cursor, statement: str, *_execution) -> None:
+        asks_for_the_lock = "pg_advisory_xact_lock" in statement
+        if self.reached.is_set() and self.logout_pid is None and asks_for_the_lock:
+            self.logout_pid = connection.connection.dbapi_connection.info.backend_pid
 
     def __call__(self, session: Session) -> None:
         rows = session.identity_map.values()
@@ -88,22 +95,26 @@ class _CallbackPause:
             raise RuntimeError("The paused sign-in callback was never released")
 
 
-def _wait_until_the_logout_waits_behind(pg_factory, holder_pid: int) -> None:
-    """Exactly one other backend awaits the write lock the paused callback holds."""
+def _wait_until_the_logout_waits_behind(pg_factory, pause: _CallbackPause) -> None:
+    """The logout's own backend awaits the write lock the paused callback's backend holds."""
     lock_state = text("""
         SELECT coalesce(bool_or(granted AND pid = :holder), false),
-               count(*) FILTER (WHERE NOT granted AND pid <> :holder)
+               coalesce(bool_or(NOT granted AND pid = :waiter), false)
         FROM pg_locks
         WHERE locktype = 'advisory' AND classid = 0 AND objid = :key AND objsubid = 1
           AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
-    """).bindparams(holder=holder_pid, key=_USER_MANAGEMENT_LOCK_ID)
+    """)
     deadline = time.monotonic() + WAIT_SECONDS
     with pg_factory() as observer:
         while time.monotonic() < deadline:
-            held, waiting = observer.execute(lock_state).one()
-            observer.rollback()
-            if held and waiting == 1:
-                return
+            if pause.logout_pid is not None and pause.logout_pid != pause.backend_pid:
+                held, awaited = observer.execute(lock_state.bindparams(
+                    holder=pause.backend_pid, waiter=pause.logout_pid,
+                    key=_USER_MANAGEMENT_LOCK_ID,
+                )).one()
+                observer.rollback()
+                if held and awaited:
+                    return
             time.sleep(0.02)
     pytest.fail("The back-channel logout never waited on the lock the sign-in callback holds")
 
@@ -137,12 +148,14 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
         headers={"host": _backchannel_logout_host()},
     ))
     pause = _CallbackPause()
+    engine = pg_factory.kw["bind"]
     event.listen(pg_factory, "before_commit", pause)
+    event.listen(engine, "before_cursor_execute", pause.note_lock_request)
     try:
         callback.start()
         assert pause.reached.wait(WAIT_SECONDS), "The sign-in callback never reached its commit"
         logout.start()
-        _wait_until_the_logout_waits_behind(pg_factory, pause.backend_pid)
+        _wait_until_the_logout_waits_behind(pg_factory, pause)
         assert "logout" not in answers
     finally:
         pause.release.set()
@@ -150,6 +163,7 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
             if thread.ident is not None:
                 thread.join(WAIT_SECONDS)
         event.remove(pg_factory, "before_commit", pause)
+        event.remove(engine, "before_cursor_execute", pause.note_lock_request)
     assert not callback.is_alive() and not logout.is_alive(), "A route never answered"
 
     assert answers["callback"].status_code == 303
