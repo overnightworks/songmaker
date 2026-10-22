@@ -21,6 +21,7 @@ from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
 from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
+from xmp_packet import read_digital_source_type
 
 import songmaker_cli.cover_runner as cover_runner
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
@@ -556,6 +557,6 @@ def test_published_cover_suggestion_carries_the_ai_mark_in_its_xmp(
     with factory() as session:
         (suggestion,) = session.query(AlbumCoverSuggestion).all()
         png_path = audio_dir / suggestion.png_path
+    assert read_digital_source_type(png_path) == IPTC_TRAINED_ALGORITHMIC_MEDIA
     with Image.open(png_path) as published:
-        assert IPTC_TRAINED_ALGORITHMIC_MEDIA in published.info["XML:com.adobe.xmp"]
         assert published.size == (16, 16)

@@ -18,6 +18,7 @@ from conftest import (
 from fastapi.testclient import TestClient
 from PIL import Image
 from webauth.ports import AuthenticatedUser
+from xmp_packet import read_digital_source_type
 
 from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired
@@ -405,9 +406,7 @@ def test_selected_cover_suggestion_carries_the_ai_mark_in_every_published_file(
     published = sorted((tmp_path / "audio" / COVER_DIRNAME / "alice-album").iterdir())
     assert len(published) == 3
     for path in published:
-        with Image.open(path) as image:
-            xmp = image.info.get("xmp") or image.info.get("XML:com.adobe.xmp")
-        assert IPTC_TRAINED_ALGORITHMIC_MEDIA in str(xmp), path.name
+        assert read_digital_source_type(path) == IPTC_TRAINED_ALGORITHMIC_MEDIA, path.name
 
 
 def test_discard_suggestions_keeps_the_selected_cover(

@@ -61,8 +61,6 @@ AI_MARK_XMP_PACKET: Final = (
     f'Iptc4xmpExt:DigitalSourceType="{IPTC_TRAINED_ALGORITHMIC_MEDIA}"/>'
     "</rdf:RDF></x:xmpmeta>"
 )
-# JPEG carries the same packet in an APP1 segment behind this namespace header.
-_JPEG_XMP_NAMESPACE_HEADER: Final = b"http://ns.adobe.com/xap/1.0/\x00"
 
 
 def ai_mark_png_info() -> PngInfo:
@@ -398,7 +396,7 @@ def _save_variants(dest: Path, image: Image.Image, fmt: str, *, ai_generated: bo
         "format": "JPEG", "quality": COVER_JPEG_QUALITY, "optimize": True,
     }
     if ai_generated:
-        jpeg_options["xmp"] = _JPEG_XMP_NAMESPACE_HEADER + AI_MARK_XMP_PACKET.encode()
+        jpeg_options["xmp"] = AI_MARK_XMP_PACKET.encode()
     original_path = dest / original_name
     if fmt == COVER_FORMAT_JPEG:
         image.save(original_path, **jpeg_options)
