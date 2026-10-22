@@ -3,12 +3,6 @@
 [ccn."scripts/merge_accounts_into_subject.py"]
 "_plan_file_moves" = 16
 
-[ccn."scripts/requirement_binder.py"]
-"_predecessor_for" = 16
-
-[ccn."scripts/requirement_contract.py"]
-"_verify_witness_shelf" = 16
-
 [ccn."src/songmaker_cli/db/queries/songs.py"]
 "update_song" = 18
 
@@ -72,7 +66,6 @@
 "frontend/src/routes/layout.test.ts" = 1416
 "frontend/src/routes/settings/users/+page.svelte" = 1255
 "frontend/src/routes/settings/users/page.test.ts" = 1026
-"scripts/requirement_binder.py" = 1001
 "src/acestep_worker/wrapper.py" = 1092
 "src/songmaker_cli/constants.py" = 837
 "src/songmaker_cli/conversation_api.py" = 1130
@@ -85,11 +78,11 @@
 "tests/conftest.py" = 949
 "tests/test_acestep_worker_train_lora.py" = 1294
 "tests/test_admin_api.py" = 1055
-"tests/test_api.py" = 4764
+"tests/test_api.py" = 4765
 "tests/test_auto_deploy_alerting.py" = 2157
 "tests/test_client.py" = 870
-"tests/test_conversation_api.py" = 1141
-"tests/test_cowriter_providers.py" = 2189
+"tests/test_conversation_api.py" = 1142
+"tests/test_cowriter_providers.py" = 2191
 "tests/test_db.py" = 3642
 "tests/test_install_cli_credentials_mirror.py" = 1017
 "tests/test_jobs.py" = 3518
@@ -99,23 +92,14 @@
 "tests/test_playlists.py" = 1105
 "tests/test_postgresql.py" = 858
 "tests/test_queue_streams.py" = 2771
-"tests/test_requirement_binder.py" = 800
-"tests/test_requirement_contract.py" = 890
 "tests/test_resource_event_api.py" = 1239
 "tests/test_scheduler.py" = 1453
 "tests/test_scorers_extended.py" = 1035
 "tests/test_server.py" = 1995
-"tests/test_sharing.py" = 2570
+"tests/test_sharing.py" = 2571
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
-
-[function_lines."scripts/requirement_binder.py"]
-"_install_plan" = 98
-"bind_requirement_revision" = 91
-
-[function_lines."scripts/requirement_contract.py"]
-"read_approval_witness" = 84
 
 [function_lines."scripts/seed_e2e_job_states.py"]
 "main" = 63
@@ -196,14 +180,11 @@
 "run_scoring_pipeline" = 74
 
 [function_lines."src/songmaker_cli/server.py"]
-"_lifespan" = 82
+"_lifespan" = 85
 "create_app" = 182
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
 "_make_deps" = 64
-
-[function_lines."tests/test_acceptance_evidence.py"]
-"test_run_writes_a_success_record_for_a_passing_pytest_claim" = 60
 
 [function_lines."tests/test_acestep_state.py"]
 "test_heartbeat_payload_keys_match_admin_reader" = 66
@@ -234,7 +215,7 @@
 "test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
 
 [function_lines."tests/test_conversation_api.py"]
-"test_chat_turn_provider_change_preserves_conversation_context" = 81
+"test_chat_turn_provider_change_preserves_conversation_context" = 83
 
 [function_lines."tests/test_cover_accounting.py"]
 "test_postgresql_serializes_publication_and_cancellation" = 94
@@ -243,7 +224,7 @@
 "test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song" = 94
 
 [function_lines."tests/test_cowriter_providers.py"]
-"test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversation" = 170
+"test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversation" = 172
 "test_openai_adapter_allows_final_response_after_last_tool_round" = 63
 
 [function_lines."tests/test_db.py"]
