@@ -19,6 +19,7 @@ jobs:
   backend:
     name: Backend (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 35 # why: a hung job must not hold the queued main runs for six hours.
     strategy:
       matrix:
         python-version: ["3.12"]
@@ -102,6 +103,7 @@ jobs:
   alert-rules:
     name: Alert rules (promtool)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -126,6 +128,7 @@ jobs:
   postgresql-contract:
     name: PostgreSQL contract (serial)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -187,6 +190,7 @@ jobs:
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         node-version: ["22"]
