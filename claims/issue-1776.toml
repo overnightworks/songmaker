@@ -1,8 +1,0 @@
-claim_id = "38969698a585427e8f7b5b70c2d3948d"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "a8e62b3f816248ab863c0e29f3e308756d118069"
-branch = "claude/issue-1776-layers-contract"
-scope = [".importlinter", "docs/architecture.md", "src/songmaker_cli"]
-opened_commit = "3f2083a5bc370f7e4d3adb2c8dcb86bfd3d1cb27"
-whole_reason = "The final slice: the contracts, the one registry type move they need, and the role picture."
