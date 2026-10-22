@@ -3,10 +3,6 @@
 Audience: the musician shaping generated ideas into songs and coherent albums,
 and the people deciding what Songmaker should become.
 
-**Status: non-normative overview.** Ruled product sentences live in the
-[requirements](requirements/). This page explains direction; it does not
-approve or replace a requirement.
-
 ## Why Songmaker exists
 
 Generating another audio take is easy. Keeping the creative work understandable
@@ -39,8 +35,6 @@ and the choices made while curating it.
 
 - Scores do not automatically choose the album take.
 - Keeping a favourite does not silently make it the album take.
-- This vision is not a feature backlog, technical architecture, API contract,
-  or implementation-status report.
 
 The current product description in [AGENTS.md](../AGENTS.md), the running code,
 and GitHub issues are source material for requirement candidates. The ruled product sentences in
