@@ -1,7 +1,0 @@
-claim_id = "de9beb35c24447c4bb36bfdbe83b7ed9"
-agent = "claude"
-role = "builder"
-base = "09dbb05c3b970326ffde633808b74a0bfc464a32"
-branch = "fix/otel-advisory"
-scope = ["pyproject.toml", "uv.lock"]
-opened_commit = "eceaca02b7326efb895a4806c2eefb8ef8b10edc"
