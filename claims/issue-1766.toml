@@ -1,0 +1,8 @@
+claim_id = "30d09e886d954ed488364dea0252ee4c"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "9b8d4a830380ffd89fc67ca040273c3139955913"
+branch = "claude/issue-1766-backchannel-logout"
+scope = ["docker-compose.yml", "docker/.env.docker.example", "docs/security.md", "scripts/merge_accounts_into_subject.py", "src/songmaker_cli", "tests", "tests/test_merge_accounts_into_subject.py"]
+opened_commit = "35863fca37af4830b9995353455658b5959a0ee6"
+whole_reason = "One security boundary across the route, policies, compose network and its proof."
