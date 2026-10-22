@@ -1,8 +1,0 @@
-claim_id = "4d2430fde4594f2ea69247b1dc360ed3"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "88a5d6be157dc40b12c6ca697ce970262bf8a8cc"
-branch = "claude/issue-1785-central-legal-links"
-scope = ["frontend/e2e", "frontend/src/lib/components/LegalContent.svelte", "frontend/src/lib/components/LegalLinks.svelte", "frontend/src/lib/components/LegalPage.svelte", "frontend/src/routes/datenschutz", "frontend/src/routes/impressum", "frontend/src/routes/legal"]
-opened_commit = "d394d92cbfaf015a37dcef3dc3d11fdba047dcc9"
-whole_reason = "One owner change: every legal link to the central pages and songmaker's copies out."
