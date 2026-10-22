@@ -4,7 +4,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
 	import { visibleSettingsSections } from '$lib/settingsSections';
-	import { currentUser, isAdmin } from '$lib/stores/auth';
+	import { isAdmin } from '$lib/stores/auth';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 
 	let compact = $state<boolean | null>(null);
@@ -40,9 +40,6 @@
 					<a href={section.href} class="settings-row">
 						<Icon name={section.icon} size={20} class="settings-row-icon" />
 						<span class="settings-row-label">{section.label}</span>
-						{#if section.id === 'account'}
-							<span class="settings-row-value">{$currentUser?.username}</span>
-						{/if}
 						<Icon name="chevron-right" class="settings-row-chevron" />
 					</a>
 				</li>
@@ -100,10 +97,5 @@
 	.settings-row-label {
 		flex: 1;
 		min-width: 0;
-	}
-
-	.settings-row-value {
-		font-size: 0.78rem;
-		color: var(--text-subtle);
 	}
 </style>

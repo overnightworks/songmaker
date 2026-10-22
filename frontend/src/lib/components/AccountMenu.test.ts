@@ -9,16 +9,15 @@ vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation'
 
 import { goto } from '$app/navigation';
 import {
-	ACCOUNT_MENU_ACCOUNT_LABEL,
 	ACCOUNT_MENU_CLOSE_LABEL,
 	ACCOUNT_MENU_LABEL,
 	ACCOUNT_MENU_LOGOUT_LABEL,
-	ACCOUNT_MENU_SIGNED_IN_PREFIX,
 	RAIL_SETTINGS_LABEL,
 	THEME_SWITCH_TO_DARK_LABEL,
 	THEME_SWITCH_TO_LIGHT_LABEL
 } from '$lib/constants';
-import { signOutFailed } from '$lib/stores/auth';
+import { currentUser, signOutFailed } from '$lib/stores/auth';
+import { makeAuthUser } from '$lib/test-utils/factories';
 import { theme } from '$lib/stores/ui';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
@@ -30,12 +29,14 @@ import {
 import AccountMenu from './AccountMenu.svelte';
 
 const USERNAME = 'felix';
+const ACCOUNT_CONSOLE_URL = 'https://login.test/realms/songmaker/account';
 const TRIGGER_NAME = `${ACCOUNT_MENU_LABEL} · ${USERNAME}`;
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	theme.set('dark');
+	currentUser.set(makeAuthUser({ username: USERNAME, account_console_url: ACCOUNT_CONSOLE_URL }));
 	replaceHistoryEntry('/');
 	startFakeRouter();
 });
@@ -44,6 +45,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	vi.mocked(goto).mockReset();
 	signOutFailed.set(false);
+	currentUser.set(null);
 	document.body.replaceChildren();
 });
 
@@ -64,6 +66,12 @@ async function openMenu(target: HTMLElement): Promise<HTMLElement> {
 	return panel;
 }
 
+function requireElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {
+	const found = root.querySelector<T>(selector);
+	if (!found) throw new Error(`Expected ${selector}`);
+	return found;
+}
+
 function rowTexts(panel: HTMLElement): string[] {
 	return Array.from(panel.children).map(
 		(row) => row.textContent?.replace(/\s+/g, ' ').trim() ?? ''
@@ -77,27 +85,36 @@ describe('AccountMenu', () => {
 		expect(getByRoleButton(target, TRIGGER_NAME).textContent?.trim()).toBe('F');
 	});
 
-	it('names who is signed in, then Account, Settings, the theme switch, and Log out last', async () => {
+	it('lists the name, Settings, the theme switch, Sign out, then one quiet row of legal links', async () => {
 		const panel = await openMenu(await renderAccountMenu());
 
 		expect(rowTexts(panel)).toEqual([
-			`${ACCOUNT_MENU_SIGNED_IN_PREFIX} ${USERNAME}`,
-			ACCOUNT_MENU_ACCOUNT_LABEL,
+			USERNAME,
 			RAIL_SETTINGS_LABEL,
 			THEME_SWITCH_TO_LIGHT_LABEL,
-			ACCOUNT_MENU_LOGOUT_LABEL
+			ACCOUNT_MENU_LOGOUT_LABEL,
+			'ImpressumDatenschutzNutzungsbedingungen'
 		]);
+		expect(ACCOUNT_MENU_LOGOUT_LABEL).toBe('Sign out');
 	});
 
-	it('opens the account page and closes', async () => {
-		const target = await renderAccountMenu();
-		const panel = await openMenu(target);
+	it("opens the identity provider's account console in a new tab from the name", async () => {
+		const panel = await openMenu(await renderAccountMenu());
 
-		getByRoleButton(panel, ACCOUNT_MENU_ACCOUNT_LABEL).click();
-		await tick();
+		const name = requireElement<HTMLAnchorElement>(panel, 'a.account-name');
 
-		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/settings/account'));
-		expect(target.querySelector('[role="dialog"]')).toBeNull();
+		expect(name.getAttribute('href')).toBe(ACCOUNT_CONSOLE_URL);
+		expect(name.getAttribute('target')).toBe('_blank');
+		expect(name.getAttribute('rel')).toContain('noopener');
+		expect(name.querySelector('svg')).not.toBeNull();
+	});
+
+	it('shows the name as plain text when the server names no account console', async () => {
+		currentUser.set(makeAuthUser({ username: USERNAME, account_console_url: null }));
+		const panel = await openMenu(await renderAccountMenu());
+
+		expect(panel.querySelector('a.account-name')).toBeNull();
+		expect(rowTexts(panel)[0]).toBe(USERNAME);
 	});
 
 	it('switches the theme and then offers the way back', async () => {
@@ -142,7 +159,7 @@ describe('AccountMenu', () => {
 
 		getByRoleButton(panel, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
-		expect(onlogout).toHaveBeenCalledOnce();
+		await vi.waitFor(() => expect(onlogout).toHaveBeenCalledOnce());
 	});
 
 	it('stays open and says so when the server did not confirm the sign-out', async () => {
@@ -181,32 +198,24 @@ describe('AccountMenu focus', () => {
 		await tick();
 	}
 
-	it('moves focus to Account, its first item, when it opens', async () => {
+	it('moves focus to the name, its first item, when it opens', async () => {
 		const panel = await openMenu(await renderAccountMenu());
 
-		expect(document.activeElement).toBe(getByRoleButton(panel, ACCOUNT_MENU_ACCOUNT_LABEL));
+		expect(document.activeElement).toBe(requireElement(panel, 'a.account-name'));
 	});
 
 	it.each([
-		{
-			from: ACCOUNT_MENU_LOGOUT_LABEL,
-			shiftKey: false,
-			to: ACCOUNT_MENU_ACCOUNT_LABEL,
-			way: 'Tab past Log out'
-		},
-		{
-			from: ACCOUNT_MENU_ACCOUNT_LABEL,
-			shiftKey: true,
-			to: ACCOUNT_MENU_LOGOUT_LABEL,
-			way: 'Shift+Tab before Account'
-		}
-	])('keeps focus inside: $way wraps to $to', async ({ from, shiftKey, to }) => {
+		{ way: 'Tab past the last legal link', shiftKey: false },
+		{ way: 'Shift+Tab before the name', shiftKey: true }
+	])('keeps focus inside: $way wraps around', async ({ shiftKey }) => {
 		const panel = await openMenu(await renderAccountMenu());
-		getByRoleButton(panel, from).focus();
+		const name = requireElement<HTMLElement>(panel, 'a.account-name');
+		const lastLegal = Array.from(panel.querySelectorAll<HTMLElement>('a.legal-link')).at(-1);
+		(shiftKey ? name : lastLegal)?.focus();
 
 		press('Tab', shiftKey);
 
-		expect(document.activeElement).toBe(getByRoleButton(panel, to));
+		expect(document.activeElement).toBe(shiftKey ? lastLegal : name);
 	});
 
 	it.each([

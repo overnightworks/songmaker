@@ -1,6 +1,6 @@
 import type { Pathname } from '$app/types';
 
-type SettingsSectionId = 'generation' | 'voices' | 'account' | 'admin' | 'cleanup' | 'legal';
+type SettingsSectionId = 'generation' | 'voices' | 'admin' | 'legal';
 
 interface SettingsSection {
 	readonly id: SettingsSectionId;
@@ -19,9 +19,7 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
 		adminOnly: false
 	},
 	{ id: 'voices', href: '/settings/voices', label: 'Voices', icon: 'mic', adminOnly: false },
-	{ id: 'account', href: '/settings/account', label: 'Account', icon: 'user', adminOnly: false },
 	{ id: 'admin', href: '/settings/users', label: 'Admin', icon: 'shield', adminOnly: true },
-	{ id: 'cleanup', href: '/settings/cleanup', label: 'Cleanup', icon: 'broom', adminOnly: true },
 	{ id: 'legal', href: '/settings/legal', label: 'Legal', icon: 'file-text', adminOnly: false }
 ];
 
