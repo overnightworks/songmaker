@@ -14,7 +14,7 @@ from conftest import make_test_app
 from fastapi.testclient import TestClient
 
 from acestep_worker.heartbeat import worker_state_key
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
+from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
 
 _FIXTURE_PATH = Path(__file__).with_name("e2e_fixtures") / "fake_training_worker.py"

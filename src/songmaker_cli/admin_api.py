@@ -42,6 +42,7 @@ from songmaker_cli.auth_dependencies import (
     require_admin,
 )
 from songmaker_cli.constants import (
+    INTERNAL_TOKEN_HEADER,
     MODEL_CONFIG_PATHS,
     AuditAction,
     JobFunction,
@@ -53,7 +54,6 @@ from songmaker_cli.db.queries.auth import (
 )
 from songmaker_cli.db.queries.loras import list_user_loras_for_admin
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.settings import get_settings
 
 log = logging.getLogger(__name__)

@@ -45,7 +45,7 @@ from songmaker_cli.library_cursor import (
     decode_library_cursor,
     encode_library_cursor,
 )
-from songmaker_cli.queue_stream_api import (
+from songmaker_cli.queue_streams import (
     check_queue_stream_rate_limit,
     resolve_library_pool_membership,
 )

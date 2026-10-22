@@ -21,23 +21,21 @@ from fastapi import HTTPException
 from songmaker_cli import audio_files
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
-from songmaker_cli.queue_stream_api import (
-    _library_skip,
-    check_queue_stream_rate_limit,
-    collect_library_pool_generations,
-    generation_matches_pool,
-    shuffle_library_sources,
-)
 from songmaker_cli.queue_streams import (
     FFMPEG_TIMEOUT_SECONDS,
     QUEUE_STREAM_DURATION_LIMIT_DETAIL,
     QUEUE_STREAM_MAX_DURATION_SECONDS,
     QueueStreamSource,
+    _library_skip,
     build_queue_stream_snapshot,
+    check_queue_stream_rate_limit,
+    collect_library_pool_generations,
+    generation_matches_pool,
     probe_audio_duration,
     queue_stream_duration_fits_ffmpeg_timeout,
     queue_stream_ffmpeg_timeout_seconds,
     run_ffmpeg_concat,
+    shuffle_library_sources,
     track_source_from_generation,
 )
 
@@ -189,7 +187,7 @@ def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
 
     limiter = BrokenLimiter()
     monkeypatch.setattr(
-        "songmaker_cli.queue_stream_api._get_queue_stream_limiter",
+        "songmaker_cli.queue_streams._get_queue_stream_limiter",
         lambda _request: limiter,
     )
     user = make_authenticated_user("owner-id", username="owner")
@@ -382,10 +380,8 @@ def test_authenticated_queue_stream_rate_limited(
 ) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.constants as consts
-    import songmaker_cli.queue_stream_api as queue_stream_api
 
     monkeypatch.setattr(consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
-    monkeypatch.setattr(queue_stream_api._consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
@@ -1956,7 +1952,7 @@ def test_library_stream_without_shuffle_keeps_album_track_order(
 
 def test_library_stream_shuffle_uses_injected_rng(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
-    monkeypatch.setattr("songmaker_cli.queue_stream_api.random.shuffle", _reverse_in_place)
+    monkeypatch.setattr("songmaker_cli.queue_streams.random.shuffle", _reverse_in_place)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
@@ -1980,19 +1976,18 @@ def test_library_stream_scan_is_bounded_and_marks_unscanned_tail(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_stream_api as queue_stream_api
     import songmaker_cli.queue_streams as queue_streams
 
-    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 2)
+    monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 2)
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
-    original_skip = queue_stream_api._library_skip
+    original_skip = queue_streams._library_skip
     scanned: list[str] = []
 
     def recording_skip(ctx, generation):
         scanned.append(generation.id)
         return original_skip(ctx, generation)
 
-    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
@@ -2014,7 +2009,7 @@ def test_library_stream_default_scan_limit_is_explicitly_partial(
     import songmaker_cli.queue_stream_api as queue_stream_api
     import songmaker_cli.queue_streams as queue_streams
 
-    assert queue_stream_api.LIBRARY_QUEUE_STREAM_SCAN_LIMIT == 1_000
+    assert queue_streams.LIBRARY_QUEUE_STREAM_SCAN_LIMIT == 1_000
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     login_and_csrf(client, "usera")
     album = Album(id="scan-album", title="Scan", artist="A", created_by="user-a")
@@ -2045,7 +2040,7 @@ def test_library_stream_default_scan_limit_is_explicitly_partial(
     def recording_skip(_ctx, generation):
         scanned.append(generation.id)
         if generation.id == "scan-gen-1001":
-            return queue_stream_api.QueueStreamSkipResponse(
+            return queue_streams.QueueStreamSkipResponse(
                 song_id=generation.song_id,
                 generation_id=generation.id,
                 reason="missing_file",
@@ -2067,8 +2062,8 @@ def test_library_stream_default_scan_limit_is_explicitly_partial(
         )
 
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 1_500)
-    monkeypatch.setattr(queue_stream_api, "list_songs", lambda *_args, **_kwargs: songs)
-    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(queue_streams, "list_songs", lambda *_args, **_kwargs: songs)
+    monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     monkeypatch.setattr(
         queue_stream_api,
         "prepare_queue_stream_admission",
@@ -2092,19 +2087,18 @@ def test_library_stream_scan_stops_after_one_more_than_track_limit(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_stream_api as queue_stream_api
     import songmaker_cli.queue_streams as queue_streams
 
-    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 10)
+    monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 10)
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 1)
-    original_skip = queue_stream_api._library_skip
+    original_skip = queue_streams._library_skip
     scanned: list[str] = []
 
     def recording_skip(ctx, generation):
         scanned.append(generation.id)
         return original_skip(ctx, generation)
 
-    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
@@ -2120,20 +2114,19 @@ def test_library_stream_scan_stops_after_one_more_than_track_limit(
 
 def test_library_stream_shuffles_before_bounded_scan(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_stream_api as queue_stream_api
     import songmaker_cli.queue_streams as queue_streams
 
-    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
+    monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
-    monkeypatch.setattr(queue_stream_api.random, "shuffle", _reverse_in_place)
-    original_skip = queue_stream_api._library_skip
+    monkeypatch.setattr(queue_streams.random, "shuffle", _reverse_in_place)
+    original_skip = queue_streams._library_skip
     scanned: list[str] = []
 
     def recording_skip(ctx, generation):
         scanned.append(generation.id)
         return original_skip(ctx, generation)
 
-    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
@@ -2150,19 +2143,18 @@ def test_library_stream_start_is_first_and_scanned_once_with_small_budget(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_stream_api as queue_stream_api
     import songmaker_cli.queue_streams as queue_streams
 
-    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
+    monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
-    original_skip = queue_stream_api._library_skip
+    original_skip = queue_streams._library_skip
     scanned: list[str] = []
 
     def recording_skip(ctx, generation):
         scanned.append(generation.id)
         return original_skip(ctx, generation)
 
-    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
@@ -2182,19 +2174,18 @@ def test_library_stream_unplayable_start_is_scanned_once_with_small_budget(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_stream_api as queue_stream_api
     import songmaker_cli.queue_streams as queue_streams
 
-    monkeypatch.setattr(queue_stream_api, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
+    monkeypatch.setattr(queue_streams, "LIBRARY_QUEUE_STREAM_SCAN_LIMIT", 1)
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 5)
-    original_skip = queue_stream_api._library_skip
+    original_skip = queue_streams._library_skip
     scanned: list[str] = []
 
     def recording_skip(ctx, generation):
         scanned.append(generation.id)
         return original_skip(ctx, generation)
 
-    monkeypatch.setattr(queue_stream_api, "_library_skip", recording_skip)
+    monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     (tmp_path / "audio" / "user-a" / "g4.mp3").unlink()
@@ -2572,7 +2563,7 @@ def test_library_skip_maps_file_failures_to_unreadable(
             raise HTTPException(422, "probe failed")
 
         monkeypatch.setattr(
-            "songmaker_cli.queue_stream_api.queue_streams.probe_audio_duration",
+            "songmaker_cli.queue_streams.probe_audio_duration",
             fail_probe,
         )
 
@@ -2693,10 +2684,8 @@ def test_library_pool_queue_empty_pool_is_422(tmp_path: Path, monkeypatch) -> No
 def test_library_pool_queue_rate_limited(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.constants as consts
-    import songmaker_cli.queue_stream_api as queue_stream_api
 
     monkeypatch.setattr(consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
-    monkeypatch.setattr(queue_stream_api._consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
@@ -2720,7 +2709,7 @@ def test_library_pool_queue_rate_limiter_failure_is_503(
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     login_and_csrf(client, "usera")
     monkeypatch.setattr(
-        "songmaker_cli.queue_stream_api._get_queue_stream_limiter",
+        "songmaker_cli.queue_streams._get_queue_stream_limiter",
         lambda _request: BrokenLimiter(),
     )
 
