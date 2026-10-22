@@ -46,6 +46,7 @@ jobs:
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg redis-server
+        timeout-minutes: 10 # why: a hung apt mirror must fail fast, not hold the queued main runs behind it for hours.
 
       - name: Install dependencies
         run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
