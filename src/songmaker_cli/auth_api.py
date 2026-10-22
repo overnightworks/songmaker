@@ -190,6 +190,11 @@ async def end_sessions_on_realm_logout(request: Request) -> Response:
     return Response(status_code=200 if accepted else 400)
 
 
+def _account_console_url() -> str | None:
+    issuer = get_settings().oidc_issuer
+    return f"{issuer.rstrip('/')}/account" if issuer else None
+
+
 @router.get("/me")
 def me(
     current_user: AuthenticatedUser = Depends(get_current_user),
@@ -198,4 +203,5 @@ def me(
         id=current_user.id,
         username=current_user.username,
         role=current_user.role,
+        account_console_url=_account_console_url(),
     )

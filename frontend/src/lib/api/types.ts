@@ -99,6 +99,7 @@ export interface AuthUser {
 	id: string;
 	username: string;
 	role: 'admin' | 'user';
+	account_console_url?: string | null;
 }
 
 export interface AvailableModelResponse {
@@ -366,6 +367,7 @@ export interface GenerationRetentionReportResponse {
 	deleted_count: number;
 	retention_days: number;
 	hard_delete_days: number;
+	scheduled_hour_utc: number;
 	dry_run: boolean;
 }
 

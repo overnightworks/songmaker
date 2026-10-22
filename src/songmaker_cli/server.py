@@ -48,9 +48,8 @@ from songmaker_cli.cover_runner import (
     recover_web_cover_jobs,
 )
 from songmaker_cli.health_api import compute_script_hashes
+from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.lifecycle import (
-    BackgroundLoopName,
-    BackgroundLoopRegistry,
     cleanup_expired_resource_events,
     pin_judge_route,
     provider_status_refresh_loop,

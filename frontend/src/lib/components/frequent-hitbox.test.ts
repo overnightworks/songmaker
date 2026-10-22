@@ -129,11 +129,9 @@ import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import PlayerBar from './PlayerBar.svelte';
-import ThemeToggle from './ThemeToggle.svelte';
 import Breadcrumb from './Breadcrumb.svelte';
 import RailSearch from './shell/RailSearch.svelte';
 import Layout from '../../routes/+layout.svelte';
-import themeToggleSource from './ThemeToggle.svelte?raw';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import playlistPickerSource from './PlaylistPicker.svelte?raw';
@@ -151,7 +149,6 @@ import railSearchSource from './shell/RailSearch.svelte?raw';
 // rules included. Vitest never extracts a mounted component's <style> into
 // the document on its own; see test-utils/component-styles.ts.
 const COMPONENT_STYLE_SOURCES = {
-	ThemeToggle: { source: themeToggleSource, filename: 'ThemeToggle.svelte' },
 	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
 	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
 	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
@@ -170,11 +167,6 @@ const COMPONENT_STYLE_SOURCES = {
 type ComponentId = keyof typeof COMPONENT_STYLE_SOURCES;
 
 const INVENTORY = [
-	{
-		name: 'theme-toggle',
-		selector: '[data-hitbox="frequent"][aria-label="Toggle theme"]',
-		component: 'ThemeToggle'
-	},
 	{
 		name: 'playlist-move-up',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
@@ -442,7 +434,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const root = document.createElement('div');
 	document.body.append(root);
 
-	const themeTarget = document.createElement('div');
 	const breadcrumbTarget = document.createElement('div');
 	const playlistTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
@@ -450,7 +441,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const layoutTarget = document.createElement('div');
 	const playerTarget = document.createElement('div');
 	root.append(
-		themeTarget,
 		breadcrumbTarget,
 		playlistTarget,
 		pickerTarget,
@@ -461,7 +451,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 
 	const playlistPickerOnClose = vi.fn();
 
-	mounted.push(mount(ThemeToggle, { target: themeTarget }));
 	// The song editor's header carries the breadcrumb.
 	mounted.push(
 		mount(Breadcrumb, {
@@ -647,7 +636,6 @@ describe('frequent action hitboxes', () => {
 			'.entry-overflow-item[data-hitbox="frequent"]',
 			PLAYLIST_ENTRY_REMOVE_LABEL
 		);
-		const themeBtn = requireButton(root, 'theme-toggle', '[aria-label="Toggle theme"]');
 
 		upBtn.focus();
 		expect(document.activeElement).toBe(upBtn);
@@ -670,10 +658,6 @@ describe('frequent action hitboxes', () => {
 		removeBtnAfterMove.click();
 		await tick();
 		expect(removeFromPlaylist).toHaveBeenCalled();
-
-		themeBtn.click();
-		await tick();
-		expect(document.documentElement.dataset.theme).toBe('light');
 	});
 });
 

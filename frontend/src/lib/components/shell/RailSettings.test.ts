@@ -108,14 +108,7 @@ describe('RailSettings', () => {
 		toggle.click();
 		await tick();
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
-		expect(itemLabels(target)).toEqual([
-			'Generation',
-			'Voices',
-			'Account',
-			'Admin',
-			'Cleanup',
-			'Legal'
-		]);
+		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'Admin', 'Legal']);
 	});
 
 	it('links exactly the sections the shared settings list owns', async () => {
@@ -141,7 +134,7 @@ describe('RailSettings', () => {
 		currentUser.set(makeAuthUser());
 		pageState.url = new URL('https://songmaker.test/settings/generation');
 		const target = await render();
-		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Legal']);
+		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'Legal']);
 	});
 
 	it('persists its open state under RAIL_SETTINGS_OPEN_STORAGE_KEY', async () => {

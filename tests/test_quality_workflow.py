@@ -71,11 +71,13 @@ def test_g1_mandatory_names_match_rendered_dependencies():
     assert set(config["gate"]) == {"mandatory_jobs", "loosened"}
     loosened = config["gate"]["loosened"]
     assert isinstance(loosened, list)
-    assert len(loosened) == 1
-    entry = loosened[0]
-    assert set(entry) == {"what", "item", "date", "reason"}
-    assert isinstance(entry["date"], datetime.date)
-    assert entry["what"] == 'mandatory job "Acceptance evidence (integration)" removed'
+    assert [(entry["item"], entry["what"]) for entry in loosened] == [
+        ("#1734", 'mandatory job "Acceptance evidence (integration)" removed'),
+        ("#1784", "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"),
+    ]
+    for entry in loosened:
+        assert set(entry) == {"what", "item", "date", "reason"}
+        assert isinstance(entry["date"], datetime.date)
     mandatory = config["gate"]["mandatory_jobs"]
     assert len(mandatory) == len(set(mandatory)) == 4
     assert set(mandatory) == rendered_names

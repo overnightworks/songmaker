@@ -27,7 +27,7 @@
 "frontend/e2e/seed.ts" = 1205
 "frontend/e2e/song-phone.spec.ts" = 866
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1144
+"frontend/src/lib/api/types.ts" = 1146
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 1168
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1109
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1580
@@ -43,8 +43,7 @@
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.svelte" = 1083
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1319
-"frontend/src/lib/components/frequent-hitbox.test.ts" = 806
-"frontend/src/lib/constants.ts" = 851
+"frontend/src/lib/constants.ts" = 849
 "frontend/src/lib/history/historyController.test.ts" = 1103
 "frontend/src/lib/history/historyController.ts" = 953
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
@@ -61,7 +60,7 @@
 "frontend/src/lib/stores/resourceSync.test.ts" = 2040
 "frontend/src/lib/stores/resourceSync.ts" = 1070
 "frontend/src/routes/layout.test.ts" = 1416
-"frontend/src/routes/settings/users/+page.svelte" = 1255
+"frontend/src/routes/settings/users/+page.svelte" = 1243
 "frontend/src/routes/settings/users/page.test.ts" = 1026
 "src/acestep_worker/wrapper.py" = 1092
 "src/songmaker_cli/constants.py" = 837

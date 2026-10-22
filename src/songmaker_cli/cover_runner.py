@@ -50,7 +50,7 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.songs import list_songs
-from songmaker_cli.health_types import BackgroundLoopName
+from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.jobs._runtime import _sanitize_error, _touch_heartbeat, _update_job
 from songmaker_cli.settings import CoverExecutor, Settings, get_settings
 
@@ -180,7 +180,7 @@ async def run_next_cover_job(
     return True
 
 
-async def cover_runner_loop(app, registry) -> None:
+async def cover_runner_loop(app, registry: BackgroundLoopRegistry) -> None:
     """Poll the dark web cover queue and publish one completed suggestion per tick."""
     settings = get_settings()
     if settings.cover_executor is not CoverExecutor.WEB:

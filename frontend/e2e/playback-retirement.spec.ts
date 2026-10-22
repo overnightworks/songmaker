@@ -15,7 +15,6 @@ import {
 	nameStartingWith,
 	HOME_PATH,
 	observePlayingAudio,
-	openRailNav,
 	openLibraryWall,
 	playingAudioState,
 	shellOf,
@@ -88,15 +87,11 @@ async function signIn(page: Page, library: ProofLibrary): Promise<void> {
 }
 
 async function signOut(page: Page, shell: Shell): Promise<void> {
-	if (shell === 'mobile') {
-		await openLibraryWall(page, shell);
-		await accountCircle(page).click();
-		await accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click();
-	} else {
-		const rail = await openRailNav(page, shell);
-		await rail.getByRole('button', { name: 'Logout', exact: true }).click();
-	}
-	// Log out ends at the issuer's logout address, outside the app's origin.
+	// The phone carries the account circle on the Library only.
+	if (shell === 'mobile') await openLibraryWall(page, shell);
+	await accountCircle(page).click();
+	await accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click();
+	// Sign out ends at the issuer's logout address, outside the app's origin.
 	await expect.poll(() => leftTheApp(page)).toBe(true);
 }
 
