@@ -1,0 +1,8 @@
+claim_id = "cbf80fe98fd447648a5902445adaa5c8"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "5a9a5fdc157b89c31f90d0717c0b393b3b954793"
+branch = "claude/issue-1779-path-rejection-error"
+scope = [".importlinter", "src/songmaker_cli/audio_paths.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/server.py", "src/songmaker_cli/sharing_api.py", "tests"]
+opened_commit = "451cd71ec9c4a1b04ce9d373b383ad1bcbdd418d"
+whole_reason = "One security path: the rejection error, its single handler and its three catches."
