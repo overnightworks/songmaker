@@ -478,9 +478,9 @@
 				<div class="stage-making" role="status">
 					<span class="stage-ring" aria-hidden="true"></span>
 					<span
-						>{ALBUM_COVER_SUGGESTING_LABEL}{#if shownSlot.startedAt}<span aria-hidden="true">
-								&nbsp;·&nbsp;<CoverRunElapsed startedAt={shownSlot.startedAt} /></span
-							>{/if}</span
+						>{ALBUM_COVER_SUGGESTING_LABEL}{#if shownSlot.startedAt}<CoverRunElapsed
+								startedAt={shownSlot.startedAt}
+							/>{/if}</span
 					>
 				</div>
 			{:else if album.cover}

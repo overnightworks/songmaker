@@ -33,20 +33,15 @@ describe('CoverRunElapsed', () => {
 
 	it('shows the time since the server started the run and ticks every second', () => {
 		show(secondsBeforeNow(42));
-		expect(target.textContent).toBe('0:42');
+		expect(target.textContent).toBe('\u00a0·\u00a00:42');
 
 		vi.advanceTimersByTime(3000);
 		flushSync();
-		expect(target.textContent).toBe('0:45');
+		expect(target.textContent).toBe('\u00a0·\u00a00:45');
 	});
 
 	it('shows 0:00 when the client clock is behind the server', () => {
 		show(secondsBeforeNow(-30));
-		expect(target.textContent).toBe('0:00');
-	});
-
-	it('keeps the ticking time out of the announced text', () => {
-		show(secondsBeforeNow(5));
-		expect(target.querySelector('[aria-hidden="true"]')?.textContent).toBe('0:05');
+		expect(target.textContent).toBe('\u00a0·\u00a00:00');
 	});
 });

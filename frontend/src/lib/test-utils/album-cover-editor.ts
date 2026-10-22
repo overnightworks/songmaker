@@ -1,7 +1,7 @@
 import { expect, vi } from 'vitest';
 
 import { makeAlbum as album } from '$lib/test-utils/factories';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { announcedText, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { requireElement } from '$lib/components/shell/rail-test-fixtures';
 import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 
@@ -74,6 +74,14 @@ export async function editingClosed(target: HTMLElement): Promise<void> {
 
 export function countLine(target: HTMLElement): string {
 	return (target.querySelector('.cover-count')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+export function stageText(target: HTMLElement): string {
+	return target.querySelector('.cover-stage')?.textContent ?? '';
+}
+
+export function stageAnnouncement(target: HTMLElement): string {
+	return announcedText(requireElement(target, '.cover-stage [role="status"]'));
 }
 
 export function shownImage(target: HTMLElement): string | null {

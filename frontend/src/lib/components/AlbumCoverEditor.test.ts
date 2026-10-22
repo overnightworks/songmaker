@@ -33,6 +33,8 @@ import {
 	openCoverEditing,
 	editingClosed,
 	countLine,
+	stageAnnouncement,
+	stageText,
 	shownImage,
 	pressSuggestOnceLoaded,
 	pressEditorButton,
@@ -638,10 +640,9 @@ describe('AlbumCoverEditor in the album header', () => {
 		const target = await renderDetail();
 		await openCoverEditing(target);
 
-		await vi.waitFor(() =>
-			expect(target.querySelector('.cover-stage')?.textContent).toMatch(/cover\s·\s0:4\d/)
-		);
+		await vi.waitFor(() => expect(stageText(target)).toMatch(/cover\s·\s0:4\d/));
 		expect(target.querySelector('[role="progressbar"]')).toBeNull();
+		expect(stageAnnouncement(target)).toBe('Making a cover');
 		await vi.waitFor(() => expect(FakeJobEventSource.sources).toHaveLength(1));
 		FakeJobEventSource.sources[0].emit(
 			coverJob({ status: 'failed', error: 'Cover suggestion could not be generated' })
@@ -927,9 +928,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		suggestionJob.resolve(coverJob());
-		await vi.waitFor(() =>
-			expect(target.querySelector('.cover-stage')?.textContent).toContain('Making a cover')
-		);
+		await vi.waitFor(() => expect(stageText(target)).toContain('Making a cover'));
 	});
 });
 
