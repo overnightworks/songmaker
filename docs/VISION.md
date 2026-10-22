@@ -35,8 +35,3 @@ and the choices made while curating it.
 
 - Scores do not automatically choose the album take.
 - Keeping a favourite does not silently make it the album take.
-
-The current product description in [AGENTS.md](../AGENTS.md), the running code,
-and GitHub issues are source material for requirement candidates. The ruled product sentences in
-[docs/requirements/](requirements/README.md) are
-normative; they change only by an operator ruling that the pull request names.
