@@ -12,7 +12,7 @@ const discardMarks = new Map<string, number>();
  * ended answers 409, which is the outcome asked for; any other failure leaves
  * the run going and is raised.
  */
-export async function stopCoverRun(jobId: string): Promise<void> {
+async function stopCoverRun(jobId: string): Promise<void> {
 	try {
 		await cancelJob(jobId);
 	} catch (error) {

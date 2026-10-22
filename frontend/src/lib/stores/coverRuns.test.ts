@@ -3,12 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '$lib/api/fetch';
 import type { JobItem } from '$lib/api/types';
-import {
-	discardMarkOf,
-	markCoverSuggestionsDiscarded,
-	releaseCoverSuggestions,
-	stopCoverRun
-} from './coverRuns';
+import { discardMarkOf, markCoverSuggestionsDiscarded, releaseCoverSuggestions } from './coverRuns';
 import { activeJobs } from './jobs';
 
 const cancelJob = vi.fn();
@@ -30,33 +25,6 @@ beforeEach(() => {
 	cancelJob.mockReset().mockResolvedValue({ ...coverJob(), status: 'cancelled' });
 	discardAlbumCoverSuggestions.mockReset().mockResolvedValue(undefined);
 	activeJobs.set([{ job: coverJob(), albumId: 'a-local' }]);
-});
-
-describe('stopCoverRun', () => {
-	it('cancels the run and stops following it', async () => {
-		await stopCoverRun('cover-job');
-
-		expect(cancelJob).toHaveBeenCalledWith('cover-job');
-		expect(get(activeJobs)).toEqual([]);
-	});
-
-	it('treats a run that already ended as stopped', async () => {
-		cancelJob.mockRejectedValue(
-			new ApiError(409, 'Job already finished', '/api/jobs/cover-job/cancel')
-		);
-
-		await stopCoverRun('cover-job');
-
-		expect(get(activeJobs)).toEqual([]);
-	});
-
-	it('raises any other failure and keeps following the run', async () => {
-		cancelJob.mockRejectedValue(new ApiError(500, 'Server error', '/api/jobs/cover-job/cancel'));
-
-		await expect(stopCoverRun('cover-job')).rejects.toBeInstanceOf(ApiError);
-
-		expect(get(activeJobs)).toHaveLength(1);
-	});
 });
 
 describe('discard marks', () => {
@@ -81,6 +49,35 @@ describe('releaseCoverSuggestions', () => {
 		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
 			discardAlbumCoverSuggestions.mock.invocationCallOrder[0]
 		);
+	});
+
+	it('cancels the named run and stops following it', async () => {
+		await releaseCoverSuggestions('a-local', { suggestionIds: [], jobIds: ['cover-job'] });
+
+		expect(cancelJob).toHaveBeenCalledWith('cover-job');
+		expect(get(activeJobs)).toEqual([]);
+	});
+
+	it('treats a run that already ended as stopped', async () => {
+		cancelJob.mockRejectedValue(
+			new ApiError(409, 'Job already finished', '/api/jobs/cover-job/cancel')
+		);
+
+		await releaseCoverSuggestions('a-local', { suggestionIds: [], jobIds: ['cover-job'] });
+
+		expect(get(activeJobs)).toEqual([]);
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalled();
+	});
+
+	it('raises any other failure, keeps following the run and discards nothing', async () => {
+		cancelJob.mockRejectedValue(new ApiError(500, 'Server error', '/api/jobs/cover-job/cancel'));
+
+		await expect(
+			releaseCoverSuggestions('a-local', { suggestionIds: ['one'], jobIds: ['cover-job'] })
+		).rejects.toBeInstanceOf(ApiError);
+
+		expect(get(activeJobs)).toHaveLength(1);
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
 	it('sends nothing when it names nothing', async () => {
