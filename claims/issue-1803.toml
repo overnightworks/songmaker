@@ -1,8 +1,0 @@
-claim_id = "4ab95ffbe7d14236b8a796c6a849a77d"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "09dbb05c3b970326ffde633808b74a0bfc464a32"
-branch = "claude/issue-1803-repaint-range-duration"
-scope = ["frontend/src/lib/components/WaveformRangePicker.svelte", "frontend/src/lib/components/editor", "frontend/src/lib/components/editor/PhoneRecipeSection.svelte", "frontend/src/lib/components/editor/RecipePanel.svelte", "frontend/src/lib/stores", "frontend/src/lib/stores/recipe.ts", "frontend/src/lib/utils", "frontend/src/lib/utils/recipe-summary.ts"]
-opened_commit = "5f01cc965cfbb5dde82899f32457fde0fb94e679"
-whole_reason = "One duration source for two callers plus their tests in the editor, stores and utils."
