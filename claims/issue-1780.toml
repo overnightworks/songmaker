@@ -1,0 +1,8 @@
+claim_id = "3ffb9b226b814bd8b86ec4c65c4f35ad"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "5a9a5fdc157b89c31f90d0717c0b393b3b954793"
+branch = "claude/issue-1780-route-helpers-leave-routes"
+scope = ["src/songmaker_cli/admin_api.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/internal_api.py", "src/songmaker_cli/jobs/model_lifecycle.py", "src/songmaker_cli/library_api.py", "src/songmaker_cli/queue_stream_api.py", "src/songmaker_cli/queue_streams.py", "src/songmaker_cli/scheduler.py", "tests"]
+opened_commit = "f7fa2efe60b79f29d9248a460614db839be25af5"
+whole_reason = "Two small import-move cards bundled under one lead; each moves one owner."
