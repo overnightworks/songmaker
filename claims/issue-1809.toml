@@ -1,8 +1,0 @@
-claim_id = "62ddfa7736354352b42d036d3ae736dd"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "eaab093b09ed2fd2f6e54d447c734478c7730016"
-branch = "claude/issue-1809-cover-elapsed"
-scope = ["docs/design/album-browsing.html", "frontend/e2e", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumCoverEditorLeaving.test.ts", "frontend/src/lib/components/CoverRunElapsed.svelte", "frontend/src/lib/components/CoverRunElapsed.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/test-utils/accessible-name.ts", "frontend/src/lib/test-utils/album-cover-editor.ts", "quality/baseline.toml"]
-opened_commit = "2f56a028146337fd2daba73bf8e008c3610501d3"
-whole_reason = "One display change: the editor's making slot, its elapsed-time component, the label, the tests, e2e and the frozen picture that pin them."
