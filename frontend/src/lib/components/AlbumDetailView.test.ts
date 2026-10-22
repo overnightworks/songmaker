@@ -89,7 +89,8 @@ vi.mock('$lib/api/songs', () => ({
 }));
 vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
-	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args)
+	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
+	discardAlbumCoverSuggestions: async () => undefined
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn(),
@@ -105,10 +106,7 @@ vi.mock('$lib/stores/playlists', async (importOriginal) => {
 });
 vi.mock('$lib/stores/navigation', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
-	return {
-		...actual,
-		selectSong: vi.fn()
-	};
+	return { ...actual, selectSong: vi.fn() };
 });
 vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();

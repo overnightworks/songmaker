@@ -405,7 +405,10 @@ def test_discard_suggestions_keeps_the_selected_cover(
     cover_dir = tmp_path / "audio" / "covers" / "alice-album"
     assert cover_dir.is_dir()
 
-    discarded = client.delete("/api/albums/alice-album/cover-suggestions")
+    discarded = client.delete(
+        "/api/albums/alice-album/cover-suggestions",
+        params={"suggestion_id": [suggestion_id, other_id]},
+    )
 
     assert discarded.status_code == 200
     assert client.get("/api/albums/alice-album").json()["cover"] is not None
@@ -413,6 +416,65 @@ def test_discard_suggestions_keeps_the_selected_cover(
     assert client.get("/api/albums/alice-album/cover-suggestions").json()["suggestions"] == []
     assert not (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album").exists()
     assert client.get("/api/albums/alice-album/cover-suggestions").json()["used_today"] == 2
+
+
+def _suggestion_ids_left(factory) -> set[str]:
+    with factory() as session:
+        return {suggestion.id for suggestion in session.query(AlbumCoverSuggestion)}
+
+
+def _job_of(factory, suggestion_id: str) -> str:
+    with factory() as session:
+        return session.query(AlbumCoverSuggestion).filter_by(id=suggestion_id).one().job_id
+
+
+@pytest.mark.parametrize("named_by", ["suggestion_id", "job_id"])
+def test_discard_deletes_only_what_it_names(
+    alice_app: tuple[TestClient, object], tmp_path: Path, named_by: str,
+) -> None:
+    """A suggestion asked for after the discard, here or in another tab, survives it."""
+    client, factory = alice_app
+    audio_dir = tmp_path / "audio"
+    discarded_id = _add_suggestion(factory, audio_dir, suggestion_id="a" * 36)
+    later_id = _add_suggestion(factory, audio_dir, suggestion_id="b" * 36)
+    named = discarded_id if named_by == "suggestion_id" else _job_of(factory, discarded_id)
+
+    response = client.delete(
+        "/api/albums/alice-album/cover-suggestions", params={named_by: named},
+    )
+
+    assert response.status_code == 200
+    assert _suggestion_ids_left(factory) == {later_id}
+    assert not _suggestion_file(audio_dir, discarded_id).exists()
+    assert _suggestion_file(audio_dir, later_id).is_file()
+
+
+@pytest.mark.parametrize("named_by", ["suggestion_id", "job_id"])
+def test_discard_never_deletes_another_albums_suggestion(
+    alice_app: tuple[TestClient, object], tmp_path: Path, named_by: str,
+) -> None:
+    client, factory = alice_app
+    foreign_id = _add_suggestion(factory, tmp_path / "audio", album_id="bob-album")
+    named = foreign_id if named_by == "suggestion_id" else _job_of(factory, foreign_id)
+
+    response = client.delete(
+        "/api/albums/alice-album/cover-suggestions", params={named_by: named},
+    )
+
+    assert response.status_code == 200
+    assert _suggestion_ids_left(factory) == {foreign_id}
+
+
+def test_discard_naming_nothing_is_refused(
+    alice_app: tuple[TestClient, object], tmp_path: Path,
+) -> None:
+    client, factory = alice_app
+    suggestion_id = _add_suggestion(factory, tmp_path / "audio")
+
+    response = client.delete("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 422
+    assert _suggestion_ids_left(factory) == {suggestion_id}
 
 
 def test_delete_selected_cover_keeps_suggestions(
@@ -477,7 +539,11 @@ def test_put_cover_keeps_json_requests_within_the_standard_body_budget(
         ("post", "/api/albums/alice-album/cover-suggestions", {}),
         ("get", "/api/albums/alice-album/cover-suggestions/" + "a" * 36, {}),
         ("put", "/api/albums/alice-album/cover", {"json": {"suggestion_id": "a" * 36}}),
-        ("delete", "/api/albums/alice-album/cover-suggestions", {}),
+        (
+            "delete",
+            "/api/albums/alice-album/cover-suggestions",
+            {"params": {"suggestion_id": "a" * 36}},
+        ),
     ],
 )
 def test_foreign_cover_suggestion_routes_are_not_found(
@@ -591,11 +657,14 @@ def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_f
     client, factory = alice_app
     audio_dir = tmp_path / "audio"
     kept_id = _add_suggestion(factory, audio_dir, suggestion_id="b" * 36)
-    _add_suggestion(factory, audio_dir, stored_path=ESCAPING_STORED_PATH)
+    escaping_id = _add_suggestion(factory, audio_dir, stored_path=ESCAPING_STORED_PATH)
     outside = tmp_path / "outside.png"
     outside.write_bytes(_png_bytes())
 
-    response = client.delete("/api/albums/alice-album/cover-suggestions")
+    response = client.delete(
+        "/api/albums/alice-album/cover-suggestions",
+        params={"suggestion_id": [kept_id, escaping_id]},
+    )
 
     assert response.status_code == 200
     assert outside.read_bytes() == _png_bytes()

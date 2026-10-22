@@ -2,11 +2,10 @@
 	import { ApiError, describeFailure, NetworkError } from '$lib/api/fetch';
 	import {
 		createAlbumCoverSuggestions,
-		discardAlbumCoverSuggestions,
 		fetchAlbumCoverSuggestions,
-		selectAlbumCoverSuggestion
+		selectAlbumCoverSuggestion,
+		type CoverSuggestionDiscard
 	} from '$lib/api/albums';
-	import { cancelJob } from '$lib/api/jobs';
 	import type { AlbumItem, CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 	import {
 		RATE_LIMITED_STATUS,
@@ -35,7 +34,12 @@
 	} from '$lib/constants';
 	import { updateAlbumInList } from '$lib/stores/libraryData';
 	import { addToast } from '$lib/stores/toast';
-	import { activeJobs, removeJob, trackJob } from '$lib/stores/jobs';
+	import {
+		discardMarkOf,
+		markCoverSuggestionsDiscarded,
+		releaseCoverSuggestions
+	} from '$lib/stores/coverRuns';
+	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { holdOpenWhile } from '$lib/stores/layers';
 	import Icon from './Icon.svelte';
@@ -43,7 +47,8 @@
 	interface Props {
 		album: AlbumItem;
 		onclose: () => void;
-		onupload: () => void;
+		/** Upload, with what a successful upload releases. */
+		onupload: (known: CoverSuggestionDiscard) => void;
 		onremove: () => void;
 		/** An upload or removal the album page is saving, which × waits for. */
 		saving: boolean;
@@ -86,8 +91,6 @@
 	let chosenSlot = $state<number | null>(null);
 	let runningSuggestionJobId: string | null = null;
 	let followedRunId = $state<string | null>(null);
-	let discardedAlbumId: string | null = null;
-	let albumVisit = new AbortController();
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
 
 	const activeCoverJob = $derived(
@@ -126,7 +129,10 @@
 			: null
 	);
 	const canSuggestCover = $derived(
-		!isCoverSuggestionGenerating && !coverSuggestionsLoading && !dailyLimitNote
+		!isCoverSuggestionGenerating &&
+			!coverSuggestionsLoading &&
+			!coverSuggestionsBusy &&
+			!dailyLimitNote
 	);
 	// At the daily limit the limit is the one word the editor says, so the
 	// failure of a run from before this visit stays silent beside it; a run
@@ -168,10 +174,8 @@
 	$effect(() => () => coverSuggestionsReloads.dispose());
 
 	// Opening the editor only reads what exists: a suggestion spends today's
-	// quota, so only Suggest makes one, and a mistap closed at once costs
-	// nothing (#1186). However the editor leaves an album -- ×, Back, Upload,
-	// Use or another album -- it leaves nothing unused behind: a suggestion
-	// still running is stopped and what × or Use did not already discard goes.
+	// quota, so only Suggest makes one. Leaving it -- Back, Escape, another page
+	// or album -- stops and discards nothing; only ×, Use and Upload do.
 	$effect(() => {
 		const albumId = currentAlbumId;
 		coverSuggestionsState = {
@@ -182,13 +186,7 @@
 		};
 		followedRunId = null;
 		coverSuggestionsReloads.stop();
-		const visit = new AbortController();
-		albumVisit = visit;
 		queueMicrotask(() => void loadCoverSuggestions(albumId));
-		return () => {
-			visit.abort();
-			discardUnusedOnLeave(albumId);
-		};
 	});
 
 	function reloadCoverSuggestions(): void {
@@ -274,7 +272,7 @@
 	async function suggestCover(): Promise<void> {
 		if (!canSuggestCover) return;
 		const albumId = currentAlbumId;
-		const left = albumVisit.signal;
+		const markAtAsking = discardMarkOf(albumId);
 		chosenSlot = null;
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
@@ -287,12 +285,16 @@
 		}));
 		try {
 			const job = await createAlbumCoverSuggestions(albumId);
-			if (left.aborted) {
-				discardUnusedInBackground(albumId, job.id);
+			if (discardMarkOf(albumId) !== markAtAsking) {
+				// ×, Use or Upload came first: this run and what it made go.
+				releaseCoverSuggestions(albumId, { suggestionIds: [], jobIds: [job.id] }).catch(
+					(error: unknown) => reportDiscardFailure(albumId, error)
+				);
 				return;
 			}
-			runningSuggestionJobId = job.id;
 			followRun(job, albumId);
+			if (albumId !== currentAlbumId) return;
+			runningSuggestionJobId = job.id;
 			void loadCoverSuggestions(albumId);
 		} catch (error) {
 			if (albumId !== currentAlbumId) return;
@@ -345,60 +347,53 @@
 		showSuggestFailure(albumId, refusal);
 	}
 
-	// A load still answering from before the stop would report the run as
-	// running and track the job being cancelled again, so it is dropped.
-	async function stopSuggestionRun(jobId: string): Promise<void> {
-		suggestionsRequest += 1;
-		runningSuggestionJobId = null;
-		try {
-			await cancelJob(jobId);
-		} catch (error) {
-			const alreadyEnded = error instanceof ApiError && error.status === HTTP_CONFLICT;
-			if (!alreadyEnded) {
-				runningSuggestionJobId = jobId;
-				throw error;
-			}
+	// What ×, Use and Upload release: the suggestions shown and the run the
+	// editor follows. A run it has not learned of yet keeps going and waits.
+	function knownSuggestions(): CoverSuggestionDiscard {
+		return {
+			suggestionIds: coverSuggestions?.suggestions.map((suggestion) => suggestion.id) ?? [],
+			jobIds: runningSuggestionJobId ? [runningSuggestionJobId] : []
+		};
+	}
+
+	// A load answering from before the stop would track the job being
+	// cancelled again, so it is dropped.
+	async function discardUnused(albumId: string, known: CoverSuggestionDiscard): Promise<void> {
+		const runToStop = known.jobIds[0] ?? null;
+		if (runToStop) {
+			suggestionsRequest += 1;
+			runningSuggestionJobId = null;
 		}
-		removeJob(jobId);
+		try {
+			await releaseCoverSuggestions(albumId, known);
+		} catch (error) {
+			if (runToStop) runningSuggestionJobId = runToStop;
+			throw error;
+		}
 	}
 
-	// The run stops before the discard, and a run that ended just before
-	// its stop may already have landed its suggestion, so the discard
-	// follows every stopped run.
-	async function discardUnused(albumId: string, runToStop: string | null): Promise<void> {
-		if (runToStop) await stopSuggestionRun(runToStop);
-		await discardAlbumCoverSuggestions(albumId);
-		discardedAlbumId = albumId;
-	}
-
-	function discardUnusedInBackground(albumId: string, runToStop: string | null): void {
-		discardUnused(albumId, runToStop).catch((error: unknown) =>
-			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error')
-		);
-	}
-
-	function discardUnusedOnLeave(albumId: string): void {
-		const runToStop = runningSuggestionJobId;
-		const unusedLeft =
-			discardedAlbumId !== albumId &&
-			coverSuggestionsState?.albumId === albumId &&
-			(coverSuggestionsState.data?.suggestions.length ?? 0) > 0;
-		if (runToStop || unusedLeft) discardUnusedInBackground(albumId, runToStop);
+	// The server deletes the rows and commits before it removes the files, so
+	// a failed or uncertain discard may come after the suggestions are gone:
+	// the editor shows what the server still has.
+	function reportDiscardFailure(albumId: string, error: unknown): void {
+		addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+		void loadCoverSuggestions(albumId);
 	}
 
 	async function discardAndClose(): Promise<void> {
-		const runToStop = runningSuggestionJobId;
-		if (!hasSuggestions && !runToStop) {
+		const albumId = currentAlbumId;
+		markCoverSuggestionsDiscarded(albumId);
+		const known = knownSuggestions();
+		if (!hasSuggestions && !runningSuggestionJobId) {
 			onclose();
 			return;
 		}
-		const albumId = currentAlbumId;
 		coverSuggestionsBusyAlbumId = albumId;
 		try {
-			await discardUnused(albumId, runToStop);
+			await discardUnused(albumId, known);
 			onclose();
 		} catch (error) {
-			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+			reportDiscardFailure(albumId, error);
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
@@ -406,16 +401,22 @@
 
 	async function selectCoverSuggestion(suggestionId: string): Promise<void> {
 		const albumId = currentAlbumId;
+		const known = knownSuggestions();
 		coverSuggestionsBusyAlbumId = albumId;
 		try {
 			const updated = await holdOpenWhile(
 				'cover-saving',
 				selectAlbumCoverSuggestion(albumId, { suggestion_id: suggestionId })
 			);
+			markCoverSuggestionsDiscarded(albumId);
 			try {
-				await discardUnused(albumId, null);
+				// A run whose answer came during the save is followed by now.
+				await discardUnused(albumId, {
+					suggestionIds: known.suggestionIds,
+					jobIds: knownSuggestions().jobIds
+				});
 			} catch (error) {
-				addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
+				reportDiscardFailure(albumId, error);
 			}
 			updateAlbumInList(albumId, () => updated);
 			addToast('Cover saved', 'success');
@@ -463,7 +464,7 @@
 				type="button"
 				class="stage-nav"
 				aria-label={ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL}
-				disabled={shownSlotIndex === 0}
+				disabled={coverSuggestionsBusy || shownSlotIndex === 0}
 				onclick={() => showSlot(shownSlotIndex - 1)}>‹</button
 			>
 		{:else}
@@ -493,7 +494,8 @@
 					draggable="false"
 				/>
 			{:else}
-				<button type="button" class="stage-empty" onclick={onupload}>{ALBUM_COVER_ADD_LABEL}</button
+				<button type="button" class="stage-empty" onclick={() => onupload(knownSuggestions())}
+					>{ALBUM_COVER_ADD_LABEL}</button
 				>
 			{/if}
 		</div>
@@ -502,7 +504,7 @@
 				type="button"
 				class="stage-nav"
 				aria-label={ALBUM_COVER_NEXT_SUGGESTION_LABEL}
-				disabled={shownSlotIndex === stageSlots.length - 1}
+				disabled={coverSuggestionsBusy || shownSlotIndex === stageSlots.length - 1}
 				onclick={() => showSlot(shownSlotIndex + 1)}>›</button
 			>
 		{:else}
@@ -541,8 +543,12 @@
 	</p>
 
 	<div class="cover-actions">
-		<button type="button" class="cover-action" data-hitbox="frequent" onclick={onupload}
-			>{ALBUM_COVER_EDITING_UPLOAD_LABEL}</button
+		<button
+			type="button"
+			class="cover-action"
+			data-hitbox="frequent"
+			disabled={coverSuggestionsBusy}
+			onclick={() => onupload(knownSuggestions())}>{ALBUM_COVER_EDITING_UPLOAD_LABEL}</button
 		>
 		<button
 			type="button"
@@ -567,6 +573,7 @@
 				type="button"
 				class="cover-action cover-remove"
 				data-hitbox="frequent"
+				disabled={coverSuggestionsBusy}
 				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
 			>
 		{/if}

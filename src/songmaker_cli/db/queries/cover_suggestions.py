@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import AlbumCoverSuggestion
@@ -28,10 +29,22 @@ def get_album_cover_suggestion(
     )
 
 
-def delete_album_cover_suggestions(
-    session: Session, album_id: str,
+def delete_named_cover_suggestions(
+    session: Session, album_id: str, suggestion_ids: list[str], job_ids: list[str],
 ) -> list[str]:
-    return _delete_cover_suggestions(session, list_album_cover_suggestions(session, album_id))
+    """Delete this album's suggestions that are named or were made by a named run."""
+    suggestions = (
+        session.query(AlbumCoverSuggestion)
+        .filter(
+            AlbumCoverSuggestion.album_id == album_id,
+            or_(
+                AlbumCoverSuggestion.id.in_(suggestion_ids),
+                AlbumCoverSuggestion.job_id.in_(job_ids),
+            ),
+        )
+        .all()
+    )
+    return _delete_cover_suggestions(session, suggestions)
 
 
 def delete_job_cover_suggestions(

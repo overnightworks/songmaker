@@ -31,8 +31,8 @@
 "frontend/e2e/song-phone.spec.ts" = 866
 "frontend/e2e/song-versions.spec.ts" = 863
 "frontend/src/lib/api/types.ts" = 1146
-"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 1168
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1109
+"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 975
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1580
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1892
 "frontend/src/lib/components/LibraryWall.test.ts" = 1134
@@ -99,9 +99,6 @@
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
-
-[function_lines."scripts/seed_e2e_job_states.py"]
-"main" = 63
 
 [function_lines."src/acestep_worker/__main__.py"]
 "build_deps" = 76
