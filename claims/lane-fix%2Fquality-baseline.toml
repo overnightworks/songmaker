@@ -1,7 +1,0 @@
-claim_id = "f4ff8a0413414f52bb404beb505bf25b"
-agent = "claude"
-role = "builder"
-base = "1a0774a1039b4f2992972df1440b87657c671101"
-branch = "fix/quality-baseline"
-scope = ["quality/baseline.toml"]
-opened_commit = "c1ea6b2a5726be622734705f3b2b843dcff2570e"
