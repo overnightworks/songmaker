@@ -6,7 +6,8 @@
 # package's own imports, so a chain reaching the application through one of
 # them is not caught here. The persistence-below-http-contract contract keeps
 # songmaker_cli.db from importing songmaker_cli.api_models, directly or through
-# another in-tree module.
+# another in-tree module. The persistence-below-http-framework contract keeps
+# songmaker_cli.db from importing fastapi or starlette.
 [importlinter]
 include_external_packages = True
 root_packages =
@@ -32,3 +33,12 @@ source_modules =
     songmaker_cli.db
 forbidden_modules =
     songmaker_cli.api_models
+
+[importlinter:contract:persistence-below-http-framework]
+name = Persistence does not import the HTTP framework
+type = forbidden
+source_modules =
+    songmaker_cli.db
+forbidden_modules =
+    fastapi
+    starlette
