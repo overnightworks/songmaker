@@ -84,10 +84,11 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
 )
 
 # The realm calls this over the private network `hal_backchannel_songmaker`, where
-# songmaker-web carries the alias of the public host, on the container's fixed port. Only
-# the Host "<public host>:<port>" reaches the handler, so a public request never does.
+# songmaker-web carries the alias of the public host, on the container's fixed port. The
+# Logout Token's signature is the boundary and the edge denies the path publicly; the Host
+# "<public host>:<port>" only filters routing: any other admitted Host gets an empty 404, an
+# unlisted one TrustedHost's 400.
 BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
-BACKCHANNEL_LOGOUT_PORT: Final = 8080
 BACKCHANNEL_LOGOUT_MAX_BODY_BYTES: Final = 32 * 1024
 
 # Static PWA root assets are fetched by the browser and the service worker

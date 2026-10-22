@@ -7,6 +7,7 @@ from conftest import web_client
 from fake_oidc_issuer import Person
 from httpx import Response
 from oidc_world import World
+from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import AuditLog, UserSession
 
@@ -53,21 +54,40 @@ def test_a_valid_logout_token_ends_every_session_of_its_subject(world: World) ->
     assert audited == 1
 
 
-def test_the_answer_is_200_only_after_the_commit(world: World, session_commit_failure) -> None:
+def test_a_failing_deleting_transaction_answers_400_and_keeps_the_sessions(
+    world: World, session_commit_failure,
+) -> None:
     _sign_in_twice(world)
-    commits = 0
 
-    def fail_the_deleting_commit(_session) -> bool:
-        nonlocal commits
-        commits += 1
-        return commits == 2
-
-    with session_commit_failure(
-        world.factory, message="commit failed", when=fail_the_deleting_commit,
-    ):
+    with session_commit_failure(world.factory, message="commit failed"):
         response = _backchannel(world, world.issuer.logout_token(SUBJECT))
 
-    assert (response.status_code, commits) == (400, 2)
+    assert response.status_code == 400
+    assert world.session_count() == 2
+
+
+@pytest.mark.parametrize(
+    "failing_step",
+    [
+        pytest.param("__init__", id="session-construction"),
+        pytest.param("rollback", id="rollback"),
+        pytest.param("close", id="session-exit"),
+    ],
+)
+def test_a_failure_around_the_database_session_answers_400_and_keeps_the_sessions(
+    world: World, monkeypatch: pytest.MonkeyPatch, failing_step: str,
+) -> None:
+    _sign_in_twice(world)
+    refused_token = world.issuer.logout_token(SUBJECT, nonce="n")
+
+    def fail(*_args, **_kwargs) -> None:
+        raise RuntimeError("database session failed")
+
+    with monkeypatch.context() as failing:
+        failing.setattr(Session, failing_step, fail)
+        response = _backchannel(world, refused_token)
+
+    assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2
 
 
@@ -151,6 +171,15 @@ def test_a_wrong_host_gets_an_empty_404_and_ends_nothing(world: World, host: str
     response = _backchannel(world, world.issuer.logout_token(SUBJECT), host=host)
 
     assert (response.status_code, response.content) == (404, b"")
+    assert world.session_count() == 2
+
+
+def test_an_unlisted_host_gets_the_trusted_host_400_and_ends_nothing(world: World) -> None:
+    _sign_in_twice(world)
+
+    response = _backchannel(world, world.issuer.logout_token(SUBJECT), host="evil.example:8080")
+
+    assert response.status_code == 400
     assert world.session_count() == 2
 
 

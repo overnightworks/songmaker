@@ -39,8 +39,8 @@ from songmaker_cli.constants import (
     OIDC_CALLBACK_PATH,
     OIDC_START_PATH,
 )
-from songmaker_cli.request_policies import BACKCHANNEL_LOGOUT_PATH, BACKCHANNEL_LOGOUT_PORT
-from songmaker_cli.settings import get_settings
+from songmaker_cli.request_policies import BACKCHANNEL_LOGOUT_PATH
+from songmaker_cli.settings import DEFAULT_SERVER_PORT, get_settings
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import sessionmaker
@@ -151,8 +151,8 @@ def _end_subject_sessions(
     sign_in: OidcSignIn, factory: sessionmaker[Session], form_body: bytes, content_type: str | None,
 ) -> bool:
     """Run the logout in its own session and transaction; True only once committed."""
-    with factory() as db:
-        try:
+    try:
+        with factory() as db:
             result = receive_backchannel_logout(
                 sign_in.relying_party, form_body, content_type,
                 accounts=DatabaseSubjectUserStore(db),
@@ -164,16 +164,15 @@ def _end_subject_sessions(
                 db.rollback()
                 return False
             db.commit()
-        except Exception:
-            db.rollback()
-            log.exception("Back-channel logout failed")
-            return False
+    except Exception:
+        log.exception("Back-channel logout failed")
+        return False
     return True
 
 
 def _backchannel_logout_host() -> str:
     """The Host the realm's call carries: the public host on the container port."""
-    return f"{urlsplit(resolve_public_base_url()).hostname}:{BACKCHANNEL_LOGOUT_PORT}"
+    return f"{urlsplit(resolve_public_base_url()).hostname}:{DEFAULT_SERVER_PORT}"
 
 
 @sign_in_router.post(BACKCHANNEL_LOGOUT_PATH)

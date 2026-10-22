@@ -7,12 +7,14 @@ from typing import Annotated, Optional
 
 from cyclopts import App, Parameter
 
+from songmaker_cli.settings import DEFAULT_SERVER_PORT
+
 app = App(name="songmaker", help="AI-powered song generation platform.")
 
 
 @app.command
 def server(
-    port: Annotated[int, Parameter(help="Server port")] = 8080,
+    port: Annotated[int, Parameter(help="Server port")] = DEFAULT_SERVER_PORT,
     root: Annotated[Optional[str], Parameter(help="Project root")] = None,
     open_browser: Annotated[
         bool, Parameter(name="--open", help="Open browser on start"),

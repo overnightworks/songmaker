@@ -572,4 +572,3 @@ def test_a_cookie_signed_the_old_way_is_refused_even_for_a_live_session(world: W
     old = web_client(world.client.app, cookies={SESSION_COOKIE: f"{session_id}.{legacy_signature}"})
 
     assert old.get("/api/auth/me").status_code == 401
-

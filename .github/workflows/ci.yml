@@ -178,7 +178,7 @@ jobs:
               case for case in ET.parse("postgresql-contract.xml").iter("testcase")
               if case.attrib["classname"].endswith("test_auth_write_lock_postgres")
           ]
-          assert len(lock_cases) == 2, f"Expected 2 PostgreSQL write lock proofs, got {len(lock_cases)}"
+          assert len(lock_cases) == 3, f"Expected 3 PostgreSQL write lock proofs, got {len(lock_cases)}"
           assert not any(case.find("skipped") is not None for case in lock_cases), "Write lock proof skipped"
           print(f"PostgreSQL write lock proofs: {len(lock_cases)} passed, 0 skipped")
           PYTHON
