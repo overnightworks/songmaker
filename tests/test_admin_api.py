@@ -1025,7 +1025,6 @@ def test_retention_run_requires_admin(client: TestClient) -> None:
 def test_retention_preview_returns_counts(client: TestClient) -> None:
     _login_as_admin(client)
     _seed_album_with_gens(client)
-
     resp = client.get("/api/admin/generation-retention/preview")
     assert resp.status_code == 200
     body = resp.json()
