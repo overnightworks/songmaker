@@ -11,6 +11,8 @@ from acestep_engine.settings import get_engine_settings
 
 APP_NAME = "Hallucinai"
 
+INTERNAL_TOKEN_HEADER = "X-Internal-Token"  # nosec B105
+
 JOB_ERROR_AUDIO_DOWNLOAD_FAILED: Final[str] = "Failed to download generated audio"
 JOB_ERROR_SERVER_UNREACHABLE: Final[str] = "ACE-Step server not reachable"
 JOB_ERROR_GENERATION_TIMED_OUT: Final[str] = "Generation timed out"

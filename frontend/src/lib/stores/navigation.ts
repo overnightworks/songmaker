@@ -220,6 +220,7 @@ export function openAlbum(albumId: string): Promise<void> {
 		selectedSongId.set(null);
 		selectedGenerationId.set(null);
 		void loadSongsForAlbum(albumId);
+		hydrateAlbumIntoLibrary(albumId);
 		setLibrarySurface('detail');
 		await pushLibraryHistory();
 	});
@@ -546,8 +547,12 @@ function hydrateSongIntoLibrary(song: SongItem): void {
 	if (!get(songList).some((item) => item.id === song.id)) {
 		songList.update((list) => [...list, song]);
 	}
-	if (get(albumList).some((item) => item.id === song.album_id)) return;
-	void fetchAlbum(song.album_id)
+	hydrateAlbumIntoLibrary(song.album_id);
+}
+
+function hydrateAlbumIntoLibrary(albumId: string): void {
+	if (get(albumList).some((item) => item.id === albumId)) return;
+	void fetchAlbum(albumId)
 		.then((album) => {
 			albumList.update((list) =>
 				list.some((item) => item.id === album.id) ? list : [...list, album]

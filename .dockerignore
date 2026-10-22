@@ -33,8 +33,7 @@ data/
 .idea/
 .vscode/
 
-# Plans and docs (not needed in image)
-plans/
+# Docs (not needed in image)
 docs/
 
 # Environment (secrets)

@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import Actor, can_access_album
+from songmaker_cli.audio_paths import AudioPathRejectedError, canonical_audio_path
 from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.albums import get_album
@@ -100,7 +101,6 @@ def _lock_cover_suggestion_request(session: Session) -> None:
 
 def suggestion_png_path(audio_dir: Path, album_id: str, suggestion_id: str) -> Path:
     relative_path = _expected_relative_path(album_id, suggestion_id)
-    from songmaker_cli.audio_paths import canonical_audio_path
 
     return canonical_audio_path(audio_dir, relative_path)
 
@@ -111,7 +111,6 @@ def resolve_suggestion_png(
     expected_path = _expected_relative_path(album_id, suggestion_id)
     if stored_path != expected_path:
         raise FileNotFoundError(stored_path)
-    from songmaker_cli.audio_paths import canonical_audio_path
 
     path = canonical_audio_path(audio_dir, stored_path)
     if not path.is_file():
@@ -120,15 +119,12 @@ def resolve_suggestion_png(
 
 
 def remove_cover_suggestion_files(audio_dir: Path, paths: list[str]) -> None:
-    from fastapi import HTTPException
-
-    from songmaker_cli.audio_paths import canonical_audio_path
 
     root = (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).resolve()
     for stored_path in paths:
         try:
             path = canonical_audio_path(audio_dir, stored_path)
-        except HTTPException:
+        except AudioPathRejectedError:
             log.warning("Cover suggestion path traversal denied: %r", stored_path)
             continue
         if not path.is_relative_to(root) or path.suffix != ".png":
@@ -140,11 +136,9 @@ def remove_cover_suggestion_files(audio_dir: Path, paths: list[str]) -> None:
 
 
 def remove_album_cover_suggestion_files(audio_dir: Path, album_id: str) -> None:
-    from fastapi import HTTPException
-
     try:
         path = suggestion_png_path(audio_dir, album_id, "placeholder").parent
-    except HTTPException:
+    except AudioPathRejectedError:
         log.warning("Cover suggestion album traversal denied: %r", album_id)
         return
     root = (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).resolve()
@@ -162,9 +156,7 @@ def _expected_relative_path(album_id: str, suggestion_id: str) -> str:
         or ".." in relative_path.parts
         or relative_path.as_posix().startswith("/")
     ):
-        from fastapi import HTTPException
-
-        raise HTTPException(404, "Not Found")
+        raise AudioPathRejectedError("cover suggestion path is not a direct child of its album")
     return relative_path.as_posix()
 
 

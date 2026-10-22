@@ -8,8 +8,8 @@ import pytest
 from conftest import make_test_app, seed_user
 from fastapi.testclient import TestClient
 
+from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
 from songmaker_cli.db.queries.loras import create_user_lora
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 
 
 @pytest.fixture

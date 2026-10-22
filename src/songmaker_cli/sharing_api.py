@@ -42,6 +42,7 @@ from songmaker_cli.api_models.songs import (
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import (
     AudioFileNotFoundError,
+    AudioPathRejectedError,
     canonical_audio_path,
     require_canonical_audio_filename,
     require_existing_audio_path,
@@ -192,7 +193,7 @@ def _shared_audio_url_for_take(route: str, generation: Generation) -> str | None
         return None
     try:
         require_canonical_audio_filename(generation.mp3_path)
-    except HTTPException:
+    except AudioPathRejectedError:
         return None
     return f"{route}/{generation.id}{SHARED_AUDIO_SUFFIX}"
 

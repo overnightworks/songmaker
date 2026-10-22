@@ -24,6 +24,7 @@ from songmaker_cli.acestep_state import read_queue_depth
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
+    INTERNAL_TOKEN_HEADER,
     JOB_ERROR_GENERATION_FAILED,
     JOB_ERROR_GENERATION_UNAVAILABLE,
     GenerationPhase,
@@ -50,7 +51,6 @@ from songmaker_cli.db.queries.jobs import (
     update_job_status,
 )
 from songmaker_cli.db.queries.workers import register_worker
-from songmaker_cli.internal_api import INTERNAL_TOKEN_HEADER
 from songmaker_cli.jobs import (
     GenerationContext,
     _apply_cover_overrides,
