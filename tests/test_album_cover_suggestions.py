@@ -26,6 +26,7 @@ from songmaker_cli.cover_suggestions import (
     CoverSuggestionAlbumNotFoundError,
     CoverSuggestionAlreadyRunningError,
     CoverSuggestionDailyLimitReachedError,
+    remove_album_cover_suggestion_files,
     remove_cover_suggestion_files,
     request_cover_suggestions,
 )
@@ -588,6 +589,20 @@ def test_hard_delete_cleanup_removes_suggestions_from_expired_albums(
         assert job.user_id is not None
         assert job.status == JobStatus.COMPLETED
         assert job.started_at is not None
+
+
+@pytest.mark.parametrize("album_id", ["../outside", "nested/album", "..", "/abs"])
+def test_album_suggestion_cleanup_skips_a_malformed_album_id(
+    tmp_path: Path, album_id: str,
+) -> None:
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    remove_album_cover_suggestion_files(audio_dir, album_id)
+
+    assert outside.is_dir()
 
 
 def test_suggestion_cleanup_refuses_paths_outside_its_private_tree(tmp_path: Path) -> None:

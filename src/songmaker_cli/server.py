@@ -32,6 +32,7 @@ from songmaker_cli.app_context import (
     build_web_auth_config,
     parse_trusted_proxies,
 )
+from songmaker_cli.audio_paths import AudioPathRejectedError
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
     APP_NAME,
@@ -195,6 +196,14 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await shutdown_tool_surface_background_tasks()
 
 
+async def audio_path_rejected_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """Answer a rejected audio path exactly like a missing resource."""
+    return JSONResponse({"detail": NOT_FOUND_DETAIL}, status_code=404)
+
+
 def create_app(
     audio_dir: Path,
     data_dir: Path,
@@ -276,6 +285,8 @@ def create_app(
         compresslevel=GZIP_COMPRESS_LEVEL,
     )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
+
+    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
