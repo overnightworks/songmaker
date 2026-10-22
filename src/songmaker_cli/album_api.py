@@ -535,7 +535,9 @@ def api_select_album_cover_suggestion(
         payload = resolve_suggestion_png(
             ctx.audio_dir, album.id, suggestion.id, suggestion.png_path,
         ).read_bytes()
-        cover_key = write_album_cover(ctx.audio_dir, album.id, payload)
+        cover_key = write_album_cover(
+            ctx.audio_dir, album.id, payload, ai_generated=True,
+        )
     except (FileNotFoundError, AudioPathRejectedError):
         raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
     except CoverRejectedError as exc:
