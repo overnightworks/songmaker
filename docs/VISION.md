@@ -3,9 +3,9 @@
 Audience: the musician shaping generated ideas into songs and coherent albums,
 and the people deciding what Songmaker should become.
 
-**Status: non-normative overview.** Approved product truth lives only in the
-active tips of the [requirement registry](requirements/revisions.toml). This
-page explains direction; it does not approve or replace a requirement.
+**Status: non-normative overview.** Ruled product sentences live in the
+[requirements](requirements/). This page explains direction; it does not
+approve or replace a requirement.
 
 ## Why Songmaker exists
 
@@ -43,6 +43,6 @@ and the choices made while curating it.
   or implementation-status report.
 
 The current product description in [AGENTS.md](../AGENTS.md), the running code,
-and GitHub issues are source material for requirement candidates. Only the
-[requirement revision lifecycle](requirements/README.md#revision-lifecycle)
-turns reviewed candidate bytes into normative intent.
+and GitHub issues are source material for requirement candidates. The ruled product sentences in
+[docs/requirements/](requirements/README.md) are
+normative; they change only by an operator ruling that the pull request names.

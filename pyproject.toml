@@ -155,9 +155,6 @@ skips = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = [
-    "acceptance(identifier): exact Acceptance evidence claim.",
-]
 
 # ---------------------------------------------------------------
 # External tools (must be on system PATH):

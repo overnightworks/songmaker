@@ -208,9 +208,8 @@ log_err() { log err "$*"; }
 # Every Git command in this tick goes through this narrow runner. The deploy
 # checkout is a privileged execution boundary: repository hooks and an
 # fsmonitor configured in its admin directory must not run from the timer.
-# Keep the environment equally narrow, following requirement_binder.py's
-# trusted-Git pattern, rather than inheriting arbitrary Git configuration from
-# the service or its caller.
+# Keep the environment equally narrow rather than inheriting arbitrary Git
+# configuration from the service or its caller.
 GIT_BINARY="/usr/bin/git"
 GIT_PATH="/usr/bin:/bin"
 SAFE_GIT_COMMAND=(

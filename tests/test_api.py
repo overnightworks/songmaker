@@ -877,7 +877,6 @@ def test_pick_generation_api(client: TestClient) -> None:
     assert resp.json()["is_picked"] is True
 
 
-@pytest.mark.acceptance("ACC-CURATION-02")
 @pytest.mark.parametrize(
     ("action", "flag", "previous_remains"),
     [
@@ -888,6 +887,8 @@ def test_pick_generation_api(client: TestClient) -> None:
 def test_pick_replaces_previous_while_keep_is_additive(
     client: TestClient, action: str, flag: str, previous_remains: bool,
 ) -> None:
+    """Spec: REQ-CURATION-02 -- After a musician selects a second take as a Pick for the same song,
+    the former Pick is not selected and the second take is selected."""
     first = client.post(f"/api/generations/g1/{action}")
     assert first.status_code == 200
     second = client.post(f"/api/generations/g2/{action}")
