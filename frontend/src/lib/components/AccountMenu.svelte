@@ -81,7 +81,7 @@
 				{SIGN_OUT_FAILED_MESSAGE}
 			</p>
 		{/if}
-		<div class="account-legal"><LegalLinks /></div>
+		<div class="account-legal"><LegalLinks newTab /></div>
 	</MenuPopover>
 </div>
 

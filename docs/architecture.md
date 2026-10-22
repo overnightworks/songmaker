@@ -704,7 +704,7 @@ that is not a layer — clearing the rail search, cancelling a title edit —
 calls `event.preventDefault()`, and both askers yield to that. No component
 keeps its own Escape handler for its overlay; `aria-modal` stays only for
 screen readers. The stack depends on nothing app-only, so the logged-out
-share page holds its Now Playing and legal modal on it too.
+share page holds its Now Playing on it too.
 
 Library context — the open collection, filter, search, sort, loaded page,
 scroll, selected song/generation — lives on its history entry, as the
