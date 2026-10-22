@@ -14,7 +14,7 @@ import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.queue_streams as queue_streams
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.lifecycle import BackgroundLoopRegistry
+from songmaker_cli.health_types import BackgroundLoopRegistry
 
 
 @pytest.fixture
