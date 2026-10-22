@@ -23,7 +23,9 @@ from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
 from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
+from xmp_packet import read_digital_source_type
 
+from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     COVER_IMAGE_TOOL_UNAVAILABLE_ERROR,
@@ -226,7 +228,7 @@ def test_cover_job_generates_one_normalized_png_through_isolated_fake_cli(
         with Image.open(audio_dir / path) as image:
             assert image.size == (1024, 1024)
             assert image.mode == "RGB"
-            assert image.info == {}
+            assert read_digital_source_type(audio_dir / path) == IPTC_TRAINED_ALGORITHMIC_MEDIA
     assert not list((audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME).glob(".*.staging"))
     assert all(not Path(call["cwd"]).exists() for call in calls)
     assert all(Path(call["cwd"]).name == "work" for call in calls)
