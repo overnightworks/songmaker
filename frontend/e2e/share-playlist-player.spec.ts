@@ -550,7 +550,7 @@ for (const height of [900, 600]) {
 			await bar(page).getByRole('button', { name: 'Play', exact: true }).click();
 			await expect(bar(page).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
 			const [footer, transport] = await boundingBoxes(
-				page.getByRole('button', { name: 'Impressum' }),
+				page.getByRole('link', { name: 'Impressum' }),
 				bar(page)
 			);
 			expect(footer.y + footer.height).toBeLessThanOrEqual(transport.y);

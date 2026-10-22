@@ -87,7 +87,7 @@ const CASES = [
 				await openMockSharedAlbum(page, mockSongs(40));
 				await control(page, TRANSPORT_PLAY_LABEL).click();
 			},
-			lastContent: (page: Page) => page.getByRole('button', { name: 'Impressum', exact: true }),
+			lastContent: (page: Page) => page.getByRole('link', { name: 'Impressum', exact: true }),
 			offline: false,
 			refusals: [MOCK_STREAM_REFUSAL]
 		}))

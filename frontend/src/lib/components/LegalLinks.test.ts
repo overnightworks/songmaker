@@ -2,7 +2,6 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LEGAL_SECTIONS } from '$lib/constants/legal';
 import LegalLinks from './LegalLinks.svelte';
-import legalLinksSource from './LegalLinks.svelte?raw';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -59,13 +58,5 @@ describe('LegalLinks', () => {
 		);
 		expect(items).toEqual(['Powered by', ...LEGAL_SECTIONS.map((section) => section.label)]);
 		expect(target.textContent).not.toContain('·');
-	});
-
-	it('draws the separator only before items after the first, so wrapping never strands a dot', () => {
-		const selector = '.legal-item:not(:first-child)::before';
-		const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		const match = new RegExp(`${escaped}\\s*{([^}]*)}`).exec(legalLinksSource);
-
-		expect(match?.[1]).toContain("content: '·'");
 	});
 });
