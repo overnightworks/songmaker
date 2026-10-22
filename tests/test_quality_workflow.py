@@ -50,7 +50,7 @@ def test_g1_caller_identity_and_pin():
         reference,
     )
     assert re.search(
-        rf"^\s+uses: {re.escape(reference)} # v0\.4\.0$",
+        rf"^\s+uses: {re.escape(reference)} # v0\.5\.0$",
         WORKFLOW_TEXT,
         re.MULTILINE,
     )

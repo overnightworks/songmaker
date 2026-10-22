@@ -92,12 +92,12 @@ Security verification also runs weekly. The live checks are:
 
 | Job | What |
 |---|---|
-| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · `lint-imports` · pytest + 93% coverage |
+| Backend | `ruff check src/ tests/` · `scripts/check_no_silent_fallbacks.py src/` · `scripts/check_root_layout.py` · `scripts/generate_types.py --check` · pytest + 93% coverage |
 | PostgreSQL contract | Serial PostgreSQL 16 tests for dialect-specific migrations, concurrency, rollback, and event retention gaps |
 | Quality | `quality / verdict`: hygiene, Sonar findings, mandatory jobs and both coverage reports |
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker/docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
-| Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` (the frontend audit retries registry outages and annotates an inconclusive result) |
+| Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit (Python lockfiles are covered by quality's advisory rule; the frontend has only devDependencies, so no production audit applies, and its `pnpm-lock.yaml` is not audited until quality's advisory rule reads it) |
 
 ### No-silent-fallbacks check
 
