@@ -7,7 +7,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
+import type { AlbumItem, CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 import { serverRefusal } from '$lib/test-utils/network';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { resetConnectivityForTests } from '$lib/stores/connectivity';
@@ -303,6 +303,34 @@ describe('Leaving the album cover editor', () => {
 			['a-local', { suggestionIds: [], jobIds: ['cover-job'] }]
 		]);
 		expect(get(activeJobs)).toEqual([]);
+	});
+
+	it('a run whose answer arrives while Use saves is stopped once the cover is saved', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		const asking = deferred<JobItem>();
+		createAlbumCoverSuggestions.mockReturnValue(asking.promise);
+		const saving = deferred<AlbumItem>();
+		selectAlbumCoverSuggestion.mockReturnValue(saving.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
+		await askForAnotherSuggestion(target);
+
+		pressEditorButton(target, 'Use');
+		serverRunsUntilCancelled(ONE_SUGGESTION);
+		asking.resolve(coverJob());
+		await vi.waitFor(() =>
+			expect(get(activeJobs).map((active) => active.job.id)).toEqual(['cover-job'])
+		);
+		expect(cancelJob).not.toHaveBeenCalled();
+		saving.resolve(coveredAlbum());
+
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledTimes(1));
+		expect(discardAlbumCoverSuggestions.mock.calls).toEqual([
+			['a-local', { suggestionIds: ['one'], jobIds: ['cover-job'] }]
+		]);
 	});
 
 	it.each([

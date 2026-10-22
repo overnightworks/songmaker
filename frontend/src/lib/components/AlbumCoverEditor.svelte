@@ -407,7 +407,11 @@
 			);
 			markCoverSuggestionsDiscarded(albumId);
 			try {
-				await discardUnused(albumId, known);
+				// A run whose answer came during the save is followed by now.
+				await discardUnused(albumId, {
+					suggestionIds: known.suggestionIds,
+					jobIds: knownSuggestions().jobIds
+				});
 			} catch (error) {
 				reportDiscardFailure(albumId, error);
 			}

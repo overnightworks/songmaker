@@ -141,7 +141,8 @@
 	let coverInput: HTMLInputElement | null = $state(null);
 	// What the editor knew when Upload was pressed; a successful upload releases
 	// exactly that.
-	let releasedByUpload: CoverSuggestionDiscard = { suggestionIds: [], jobIds: [] };
+	const NOTHING_KNOWN: CoverSuggestionDiscard = { suggestionIds: [], jobIds: [] };
+	let releasedByUpload = NOTHING_KNOWN;
 
 	async function onCoverFile(event: Event): Promise<void> {
 		const input = event.target as HTMLInputElement;
@@ -150,6 +151,7 @@
 		if (!file || !selectedAlbum) return;
 		const uploadedAlbumId = selectedAlbum.id;
 		const known = releasedByUpload;
+		releasedByUpload = NOTHING_KNOWN;
 		coverBusy = true;
 		try {
 			const updated = await holdOpenWhile('cover-saving', uploadAlbumCover(uploadedAlbumId, file));
