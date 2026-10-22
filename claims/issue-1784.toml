@@ -1,8 +1,0 @@
-claim_id = "ba703756f7e44677a04e94541ed665f9"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "0c7a13007a24f66e660b09c6ca0f557ffc0e4e7c"
-branch = "claude/issue-1784-settings-after-keycloak"
-scope = ["docs/design", "frontend/e2e", "frontend/src/lib/components/shell", "frontend/src/lib/settingsSections.ts", "frontend/src/routes/settings"]
-opened_commit = "93d743ac665f3a4306ffffe8d2521417d3219eb6"
-whole_reason = "One surface pass over Settings and the account menu, picture first."
