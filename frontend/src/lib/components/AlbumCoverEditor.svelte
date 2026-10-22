@@ -35,8 +35,10 @@
 	import { updateAlbumInList } from '$lib/stores/libraryData';
 	import { addToast } from '$lib/stores/toast';
 	import {
+		coverSuggestionAskedAfter,
 		discardMarkOf,
 		markCoverSuggestionsDiscarded,
+		recordCoverSuggestionAsked,
 		stopCoverRun
 	} from '$lib/stores/coverRuns';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
@@ -170,9 +172,8 @@
 	$effect(() => () => coverSuggestionsReloads.dispose());
 
 	// Opening the editor only reads what exists: a suggestion spends today's
-	// quota, so only Suggest makes one, and a mistap closed at once costs
-	// nothing (#1186). Leaving the editor -- Back, Escape, another page or
-	// another album -- stops and discards nothing; only ×, Use and Upload do.
+	// quota, so only Suggest makes one. Leaving it -- Back, Escape, another page
+	// or album -- stops and discards nothing; only ×, Use and Upload do.
 	$effect(() => {
 		const albumId = currentAlbumId;
 		coverSuggestionsState = {
@@ -212,6 +213,7 @@
 
 	async function loadCoverSuggestions(albumId: string): Promise<void> {
 		const request = ++suggestionsRequest;
+		const markAtLoad = discardMarkOf(albumId);
 		coverSuggestionsBackoffSpent = false;
 		updateCoverSuggestionsState(albumId, (state) => ({ ...state, isLoading: true }));
 		try {
@@ -228,6 +230,10 @@
 				response.job?.status === 'queued' || response.job?.status === 'running'
 					? response.job
 					: null;
+			if (runningJob && discardMarkOf(albumId) !== markAtLoad) {
+				discardLateRunInBackground(albumId, runningJob.id, markAtLoad);
+				return;
+			}
 			runningSuggestionJobId = runningJob?.id ?? null;
 			if (runningJob) followRun(runningJob, albumId);
 		} catch (error) {
@@ -269,7 +275,7 @@
 	async function suggestCover(): Promise<void> {
 		if (!canSuggestCover) return;
 		const albumId = currentAlbumId;
-		const markAtAsking = discardMarkOf(albumId);
+		const markAtAsking = recordCoverSuggestionAsked(albumId);
 		chosenSlot = null;
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
@@ -283,7 +289,7 @@
 		try {
 			const job = await createAlbumCoverSuggestions(albumId);
 			if (discardMarkOf(albumId) !== markAtAsking) {
-				discardUnusedInBackground(albumId, job.id);
+				discardLateRunInBackground(albumId, job.id, markAtAsking);
 				return;
 			}
 			followRun(job, albumId);
@@ -341,10 +347,9 @@
 		showSuggestFailure(albumId, refusal);
 	}
 
-	// The run stops before the discard, and a run that ended just before
-	// its stop may already have landed its suggestion, so the discard
-	// follows every stopped run. A load still answering from before the stop
-	// would report the run as running and track the job being cancelled
+	// The run stops before the discard, and the discard follows every stopped
+	// run: one that ended just before its stop may have landed a suggestion. A
+	// load answering from before the stop would track the job being cancelled
 	// again, so it is dropped.
 	async function discardUnused(albumId: string, runToStop: string | null): Promise<void> {
 		if (runToStop) {
@@ -368,10 +373,15 @@
 		void loadCoverSuggestions(albumId);
 	}
 
-	function discardUnusedInBackground(albumId: string, runToStop: string | null): void {
-		discardUnused(albumId, runToStop).catch((error: unknown) =>
-			reportDiscardFailure(albumId, error)
-		);
+	// A run that arrives after the album was released is stopped, and the unused
+	// suggestions go -- unless a Suggest was asked for since: the discard would
+	// delete that one's too.
+	function discardLateRunInBackground(albumId: string, runId: string, mark: number): void {
+		stopCoverRun(runId)
+			.then(() =>
+				coverSuggestionAskedAfter(albumId, mark) ? undefined : discardAlbumCoverSuggestions(albumId)
+			)
+			.catch((error: unknown) => reportDiscardFailure(albumId, error));
 	}
 
 	async function discardAndClose(): Promise<void> {

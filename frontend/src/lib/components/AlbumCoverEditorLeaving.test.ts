@@ -1,6 +1,6 @@
 // Leaving the cover editor stops nothing; only ×, a successful Use and a
-// successful Upload stop a running suggestion and discard the unused ones
-// (#1133, #1799). Every way out is driven through the album header.
+// successful Upload stop a running suggestion and discard the unused ones.
+// Every way out is driven through the album header.
 
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { tick } from 'svelte';
@@ -387,29 +387,46 @@ describe('Leaving the album cover editor', () => {
 		expect(editor(target)).not.toBeNull();
 	});
 
+	it('a failed Use save keeps the run, the suggestions and the editor, and says why', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		selectAlbumCoverSuggestion.mockRejectedValue(serverRefusal('Could not save'));
+		const target = await renderDetail();
+		await openEditorWithRunningSuggestion(target, ONE_SUGGESTION);
+
+		pressEditorButton(target, 'Previous suggestion');
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
+		pressEditorButton(target, 'Use');
+
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Could not save', 'error'));
+		expect(selectAlbumCoverSuggestion).toHaveBeenCalledWith('a-local', { suggestion_id: 'one' });
+		expect(editor(target)).not.toBeNull();
+		expect(shownImage(target)).toBe('/suggestion-one.png');
+		expect(cancelJob).not.toHaveBeenCalled();
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+		expect(get(activeJobs).map((active) => active.job.id)).toEqual(['cover-job']);
+	});
+
 	it.each([
-		{
-			what: 'a failed Use save',
-			act: (target: HTMLElement) => {
-				selectAlbumCoverSuggestion.mockRejectedValue(serverRefusal('Could not save'));
-				pressEditorButton(target, 'Use');
-			}
-		},
 		{
 			what: 'a failed Upload',
 			act: (target: HTMLElement) => {
 				uploadAlbumCover.mockRejectedValue(serverRefusal('Cover must be an image'));
 				uploadCoverFile(target);
+				return vi.waitFor(() =>
+					expect(addToast).toHaveBeenCalledWith('Cover must be an image', 'error')
+				);
 			}
 		},
 		{
 			what: 'a cancelled Upload picker',
-			act: (target: HTMLElement) => {
+			act: async (target: HTMLElement) => {
 				const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 				vi.spyOn(input, 'click').mockImplementation(() => undefined);
 				pressEditorButton(target, 'Upload');
 				Object.defineProperty(input, 'files', { configurable: true, value: [] });
 				input.dispatchEvent(new Event('change', { bubbles: true }));
+				await tick();
+				expect(uploadAlbumCover).not.toHaveBeenCalled();
 			}
 		}
 	])('$what stops nothing and discards nothing', async ({ act }) => {
@@ -417,9 +434,7 @@ describe('Leaving the album cover editor', () => {
 		const target = await renderDetail();
 		await openEditorWithRunningSuggestion(target, ONE_SUGGESTION);
 
-		act(target);
-		await new Promise((settled) => setTimeout(settled, 0));
-		await tick();
+		await act(target);
 
 		expect(editor(target)).not.toBeNull();
 		expect(cancelJob).not.toHaveBeenCalled();
@@ -487,6 +502,63 @@ describe('Leaving the album cover editor', () => {
 		suggestionJob.resolve(coverJob());
 
 		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		expect(get(activeJobs)).toEqual([]);
+	});
+
+	it('a suggestion answered late after × never deletes the one asked for since', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		const firstAsk = deferred<JobItem>();
+		createAlbumCoverSuggestions
+			.mockReturnValueOnce(firstAsk.promise)
+			.mockResolvedValue(coverJob({ id: 'second-job' }));
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
+		await askForAnotherSuggestion(target);
+		pressEditorButton(target, 'Close cover editing');
+		await editingClosed(target);
+		discardAlbumCoverSuggestions.mockClear();
+
+		await openCoverEditing(target);
+		await askForAnotherSuggestion(target);
+		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledTimes(2));
+		firstAsk.resolve(coverJob({ id: 'first-job' }));
+
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('first-job'));
+		await vi.waitFor(() =>
+			expect(get(activeJobs).map((active) => active.job.id)).toEqual(['second-job'])
+		);
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{
+			way: '×',
+			leave: (target: HTMLElement) => pressEditorButton(target, 'Close cover editing')
+		},
+		{
+			way: 'Upload',
+			leave: (target: HTMLElement) => {
+				uploadAlbumCover.mockResolvedValue(coveredAlbum(UPLOADED));
+				uploadCoverFile(target);
+			}
+		}
+	])('a run the first load reports after $way is stopped and discarded', async ({ leave }) => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		const firstLoad = deferred<CoverSuggestionsResponse>();
+		fetchAlbumCoverSuggestions.mockReturnValue(firstLoad.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await reachSuggestionsLoads(1);
+
+		leave(target);
+		await editingClosed(target);
+		expect(cancelJob).not.toHaveBeenCalled();
+		firstLoad.resolve(coverSuggestions({ job: coverJob({ status: 'running' }) }));
+
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 		expect(get(activeJobs)).toEqual([]);
 	});
 });

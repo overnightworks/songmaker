@@ -3,7 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '$lib/api/fetch';
 import type { JobItem } from '$lib/api/types';
-import { discardMarkOf, markCoverSuggestionsDiscarded, stopCoverRun } from './coverRuns';
+import {
+	coverSuggestionAskedAfter,
+	discardMarkOf,
+	markCoverSuggestionsDiscarded,
+	recordCoverSuggestionAsked,
+	stopCoverRun
+} from './coverRuns';
 import { activeJobs } from './jobs';
 
 const cancelJob = vi.fn();
@@ -57,5 +63,26 @@ describe('discard marks', () => {
 
 		expect(discardMarkOf('a-marked')).toBe(before + 1);
 		expect(discardMarkOf('a-other')).toBe(otherBefore);
+	});
+});
+
+describe('coverSuggestionAskedAfter', () => {
+	it('is false for a Suggest asked before the discard it is compared with', () => {
+		const markAtAsking = recordCoverSuggestionAsked('a-asked-before');
+		markCoverSuggestionsDiscarded('a-asked-before');
+
+		expect(coverSuggestionAskedAfter('a-asked-before', markAtAsking)).toBe(false);
+	});
+
+	it('is true once a Suggest was asked after that discard', () => {
+		const markAtFirstAsking = recordCoverSuggestionAsked('a-asked-after');
+		markCoverSuggestionsDiscarded('a-asked-after');
+		recordCoverSuggestionAsked('a-asked-after');
+
+		expect(coverSuggestionAskedAfter('a-asked-after', markAtFirstAsking)).toBe(true);
+	});
+
+	it('is false for an album nothing was asked on', () => {
+		expect(coverSuggestionAskedAfter('a-never-asked', 0)).toBe(false);
 	});
 });

@@ -1,4 +1,4 @@
-// A cover suggestion keeps running when the person leaves (#1133, #1799; frames
+// A cover suggestion keeps running when the person leaves (frames
 // C6-C9 of docs/design/album-browsing.html §(i)): leaving the cover editor
 // stops nothing, a run that finished while away waits as an unused suggestion,
 // and only × stops a run. CI's stack mounts no image route, so the run is
