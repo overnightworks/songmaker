@@ -1273,7 +1273,7 @@ The in-tree packages beside the application — `acestep_engine`, `acestep_worke
 
 Persistence sits beneath the HTTP contract: `db/` never imports `api_models/`, directly or through another in-tree module. The value objects both use — generation knobs (`generation_params.py`) and Whisper time marks (`whisper_cues.py`) — live beside them in `songmaker_cli/`; `api_models` re-exports them because `scripts/generate_types.py` reads its `__all__`. `.importlinter` enforces the direction (#925 G1).
 
-Inside `songmaker_cli` the `application-layers` contract holds one direction for every module: a layer imports only layers below it, and the routes never import each other. `scoring/` stays free of persistence and the HTTP framework (`scoring-is-self-contained`). Which role each layer plays, from the importing side down:
+Inside `songmaker_cli` the `application-layers` contract holds one direction for every module it lists: a layer imports only layers below it, and the routes never import each other. Leaf modules the contract does not list (for example `parser`, `timestamps`, `covers`, `scoring`, `health_types`) are free of it. `scoring/` stays free of persistence and the HTTP framework (`scoring-is-self-contained`). Which role each layer plays, from the importing side down:
 
 ```mermaid
 flowchart TB
