@@ -138,8 +138,8 @@ test.describe('phone bottom places', { tag: ONLY_IN_SHELL.mobile }, () => {
 		}) => {
 			await page.goto(HOME_PATH);
 			if (destination === 'Settings section') {
-				await openSettingsSection(page, 'mobile', 'Account');
-				await expect(page).toHaveURL(/\/settings\/account$/);
+				await openSettingsSection(page, 'mobile', 'Voices');
+				await expect(page).toHaveURL(/\/settings\/voices$/);
 			} else await page.goto('/loras');
 			await expectCurrent(page, null);
 			await expect(page.getByRole('contentinfo')).toBeVisible();

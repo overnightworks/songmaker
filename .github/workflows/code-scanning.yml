@@ -1,0 +1,22 @@
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    uses: overnightworks/quality/.github/workflows/codeql.yml@61fd8621b20a604a7ef4b1154d1b6ed484d2ed66 # v0.4.0
+    with:
+      languages: '["actions", "javascript-typescript", "python"]'

@@ -46,7 +46,7 @@ from songmaker_cli.api_models.queue_streams import (
 )
 from songmaker_cli.api_models.songs import generation_version_lyrics
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.audio_paths import resolve_audio_path
+from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
 from songmaker_cli.constants import REDIS_RL_QUEUE_STREAM_PREFIX, LimiterFailurePolicy
 from songmaker_cli.db.models import Generation, Song
 from songmaker_cli.db.queries.songs import list_songs
@@ -895,7 +895,7 @@ def _library_skip(ctx: AppContext, generation: Generation) -> QueueStreamSkipRes
                 generation_id=generation.id,
                 reason="missing_file",
             )
-    except (HTTPException, OSError):
+    except (AudioPathRejectedError, OSError):
         return QueueStreamSkipResponse(
             song_id=generation.song_id,
             generation_id=generation.id,

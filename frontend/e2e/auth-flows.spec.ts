@@ -11,12 +11,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import {
-	ACCOUNT_MENU_ACCOUNT_LABEL,
-	ACCOUNT_MENU_LOGOUT_LABEL,
-	RAIL_SETTINGS_LABEL,
-	SETTINGS_NAV_LABEL
-} from '../src/lib/constants';
+import { ACCOUNT_MENU_LOGOUT_LABEL, SETTINGS_NAV_LABEL } from '../src/lib/constants';
 import {
 	NO_ACCESS_BACK_LABEL,
 	NO_ACCESS_HEADING,
@@ -26,24 +21,14 @@ import {
 	SIGNED_OUT_HEADING
 } from '../src/lib/constants/auth';
 import {
-	accountCircle,
-	accountMenu,
 	FlowGuard,
 	leftTheApp,
 	nameStartingWith,
 	nextSignInStart,
-	type Shell,
 	shellOf,
 	stubIdentityProvider
 } from './helpers';
-import {
-	BASE_URL,
-	runMarker,
-	seedAccount,
-	seedAdminAccount,
-	signedInApi,
-	type SeededAccount
-} from './seed';
+import { BASE_URL, runMarker, seedAccount, signedInApi, type SeededAccount } from './seed';
 
 // The service worker answers a navigation on the page's behalf, and Playwright
 // then reports the server's redirect only until the worker has taken the page
@@ -144,7 +129,7 @@ for (const address of ['/share/song/no-such-share']) {
 	});
 }
 
-test('no access offers Log out and Back, and Back leads to the signed-out page', async ({
+test('no access offers Sign out and Back, and Back leads to the signed-out page', async ({
 	page
 }) => {
 	const guard = new FlowGuard(page);
@@ -160,7 +145,7 @@ test('no access offers Log out and Back, and Back leads to the signed-out page',
 	guard.assertClean();
 });
 
-test('Log out on no access asks the server for the issuer logout address and leaves for it', async ({
+test('Sign out on no access asks the server for the issuer logout address and leaves for it', async ({
 	page
 }) => {
 	const guard = new FlowGuard(page);
@@ -256,9 +241,6 @@ for (const [refusal, query] of [
 	});
 }
 
-const MEMBER_SECTIONS = ['Generation', 'Voices', 'Account'];
-const ADMIN_SECTIONS = ['Admin', 'Cleanup'];
-
 function settingsSections(page: Page): Locator {
 	return page.getByRole('navigation', { name: SETTINGS_NAV_LABEL });
 }
@@ -267,65 +249,6 @@ async function signInAs(page: Page, account: SeededAccount): Promise<void> {
 	await page.context().clearCookies();
 	await page.context().addCookies(account.cookies);
 }
-
-/**
- * Account from the person menu: the phone's account circle, which only the
- * Library carries, or the desktop rail's user row.
- */
-async function openAccountFromPersonMenu(
-	page: Page,
-	account: SeededAccount,
-	shell: Shell
-): Promise<void> {
-	if (shell === 'mobile') {
-		await page.goto('/library');
-		await accountCircle(page).click();
-		const menu = accountMenu(page);
-		await expect(
-			menu.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })
-		).toBeVisible();
-		await menu.getByRole('button', { name: ACCOUNT_MENU_ACCOUNT_LABEL, exact: true }).click();
-	} else {
-		await page.getByRole('link', { name: account.username, exact: true }).click();
-	}
-}
-
-test('a member keeps Account and the member Settings sections, an admin also gets the admin ones, and nobody meets a password field or Users', async ({
-	page
-}, info) => {
-	const shell = shellOf(info);
-	const guard = new FlowGuard(page);
-	const member = await seedAccount(`e2e-member-${info.project.name}-${runMarker()}`);
-	const admin = await seedAdminAccount();
-
-	for (const [account, shown, hidden] of [
-		[member, MEMBER_SECTIONS, ADMIN_SECTIONS],
-		[admin, [...MEMBER_SECTIONS, ...ADMIN_SECTIONS], []]
-	] as const) {
-		await signInAs(page, account);
-		await page.goto('/settings');
-		const sections = settingsSections(page);
-		await expect(sections).toBeVisible();
-		for (const label of shown) {
-			await expect(sections.getByRole('link', { name: nameStartingWith(label) })).toBeVisible();
-		}
-		for (const label of [...hidden, 'Users']) {
-			await expect(sections.getByRole('link', { name: nameStartingWith(label) })).toHaveCount(0);
-		}
-
-		await openAccountFromPersonMenu(page, account, shell);
-
-		await expect(page).toHaveURL(/\/settings\/account$/);
-		await expect(page.getByRole('heading', { name: 'Account', level: 1 })).toBeVisible();
-		await expect(
-			page.locator('.settings-page').getByText(account.username, { exact: true })
-		).toBeVisible();
-		await expect(page.locator('input[type="password"]')).toHaveCount(0);
-		await expect(page.getByLabel(/password/i)).toHaveCount(0);
-		await expect(page.getByText('Users', { exact: true })).toHaveCount(0);
-	}
-	guard.assertClean();
-});
 
 test('an open page whose session ended on the server leaves for the sign-in start with its own address', async ({
 	page

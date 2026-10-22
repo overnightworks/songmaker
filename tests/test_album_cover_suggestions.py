@@ -7,7 +7,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_authenticated_user, make_test_app
+from conftest import (
+    login_and_csrf,
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    make_test_app,
+    web_client,
+)
 from fastapi.testclient import TestClient
 from PIL import Image
 from webauth.ports import AuthenticatedUser
@@ -16,6 +23,7 @@ from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     ARQ_MUSIC_QUEUE_NAME,
+    COVER_SUGGESTION_NOT_FOUND,
     JSON_REQUEST_BODY_MAX_BYTES,
     CoverExecutor,
     JobFunction,
@@ -26,6 +34,7 @@ from songmaker_cli.cover_suggestions import (
     CoverSuggestionAlbumNotFoundError,
     CoverSuggestionAlreadyRunningError,
     CoverSuggestionDailyLimitReachedError,
+    remove_album_cover_suggestion_files,
     remove_cover_suggestion_files,
     request_cover_suggestions,
 )
@@ -91,10 +100,12 @@ def _add_suggestion(
     *,
     album_id: str = "alice-album",
     suggestion_id: str = "a" * 36,
+    stored_path: str | None = None,
 ) -> str:
     path = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / album_id / f"{suggestion_id}.png"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(_png_bytes())
+    if stored_path is None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(_png_bytes())
     with factory() as session:
         album = session.query(Album).filter_by(id=album_id).one()
         job = Job(
@@ -109,9 +120,8 @@ def _add_suggestion(
             id=suggestion_id,
             album_id=album.id,
             job_id=job.id,
-            png_path=(
-                f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{album.id}/{suggestion_id}.png"
-            ),
+            png_path=stored_path
+            or f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{album.id}/{suggestion_id}.png",
         ))
         session.commit()
     return suggestion_id
@@ -498,6 +508,35 @@ def test_cover_suggestions_have_no_public_share_route(
     assert response.json() == {"detail": "Not Found"}
 
 
+@pytest.mark.parametrize(
+    ("method", "path_for", "kwargs_for"),
+    [
+        ("get", lambda sid: f"/api/albums/alice-album/cover-suggestions/{sid}", lambda sid: {}),
+        (
+            "put",
+            lambda sid: "/api/albums/alice-album/cover",
+            lambda sid: {"json": {"suggestion_id": sid}},
+        ),
+    ],
+)
+def test_full_app_answers_a_suggestion_outside_the_audio_root_like_a_missing_one(
+    alice_app: tuple[TestClient, object], tmp_path: Path, method: str, path_for, kwargs_for,
+) -> None:
+    client, factory = alice_app
+    audio_dir = tmp_path / "audio"
+    suggestion_id = _add_suggestion(factory, audio_dir)
+    album_dir = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
+    album_dir.rename(tmp_path / "moved-album")
+    album_dir.symlink_to(tmp_path / "moved-album", target_is_directory=True)
+    missing_id = "b" * 36
+
+    rejected = getattr(client, method)(path_for(suggestion_id), **kwargs_for(suggestion_id))
+    missing = getattr(client, method)(path_for(missing_id), **kwargs_for(missing_id))
+
+    assert rejected.status_code == missing.status_code == 404
+    assert rejected.json() == missing.json() == {"detail": "Not Found"}
+
+
 def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
     alice_app: tuple[TestClient, object],
 ) -> None:
@@ -510,6 +549,57 @@ def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
 
     assert missing.status_code == traversal.status_code == 404
     assert missing.json() == traversal.json() == {"detail": "Not Found"}
+    with factory() as session:
+        assert session.query(AlbumCoverSuggestion).count() == 0
+
+
+ESCAPING_STORED_PATH = "../outside.png"
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "kwargs"),
+    [
+        ("get", "/api/albums/alice-album/cover-suggestions/" + "a" * 36, {}),
+        ("put", "/api/albums/alice-album/cover", {"json": {"suggestion_id": "a" * 36}}),
+    ],
+)
+def test_a_suggestion_resolving_outside_the_audio_root_answers_like_a_missing_suggestion(
+    tmp_path: Path, method: str, path: str, kwargs: dict,
+) -> None:
+    # The router app keeps the endpoint's own detail; create_app rewrites every API 404.
+    factory = init_test_db(tmp_path / "test.db")
+    with factory() as session:
+        _seed_albums(session)
+        session.commit()
+        owner = _album_owner(session)
+    audio_dir = tmp_path / "audio"
+    _add_suggestion(factory, audio_dir)
+    album_dir = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
+    album_dir.rename(tmp_path / "moved-album")
+    album_dir.symlink_to(tmp_path / "moved-album", target_is_directory=True)
+    client = web_client(make_router_app(make_router_ctx(tmp_path, db=factory), user=owner))
+
+    response = getattr(client, method)(path, **kwargs)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": COVER_SUGGESTION_NOT_FOUND}
+
+
+def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_file(
+    alice_app: tuple[TestClient, object], tmp_path: Path,
+) -> None:
+    client, factory = alice_app
+    audio_dir = tmp_path / "audio"
+    kept_id = _add_suggestion(factory, audio_dir, suggestion_id="b" * 36)
+    _add_suggestion(factory, audio_dir, stored_path=ESCAPING_STORED_PATH)
+    outside = tmp_path / "outside.png"
+    outside.write_bytes(_png_bytes())
+
+    response = client.delete("/api/albums/alice-album/cover-suggestions")
+
+    assert response.status_code == 200
+    assert outside.read_bytes() == _png_bytes()
+    assert not _suggestion_file(audio_dir, kept_id).exists()
     with factory() as session:
         assert session.query(AlbumCoverSuggestion).count() == 0
 
@@ -588,6 +678,25 @@ def test_hard_delete_cleanup_removes_suggestions_from_expired_albums(
         assert job.user_id is not None
         assert job.status == JobStatus.COMPLETED
         assert job.started_at is not None
+
+
+@pytest.mark.parametrize("album_id", ["../outside", "nested/album", "..", "/abs"])
+def test_album_suggestion_cleanup_skips_a_malformed_album_id(
+    tmp_path: Path, album_id: str,
+) -> None:
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.png").write_bytes(b"keep")
+    suggestions = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME
+    (suggestions / "alice-album").mkdir(parents=True)
+    (suggestions / "alice-album" / "keep.png").write_bytes(b"keep")
+
+    remove_album_cover_suggestion_files(audio_dir, album_id)
+
+    assert (outside / "keep.png").read_bytes() == b"keep"
+    assert (suggestions / "alice-album" / "keep.png").read_bytes() == b"keep"
 
 
 def test_suggestion_cleanup_refuses_paths_outside_its_private_tree(tmp_path: Path) -> None:

@@ -24,13 +24,14 @@ scoring = [
     "librosa>=0.10,<2",
     "soundfile",
     "audiobox-aesthetics>=0.0.4,<1",
-    "torch>=2.2,<3",
-    "torchaudio>=2.2,<3",
+    "torch>=2.14,<2.15",
+    "torchaudio>=2.11,<3",
+    "torchcodec>=0.14,<0.15",  # torchaudio 2.9+ decodes through torchcodec, whose minor tracks torch's
     "nvidia-ml-py3>=7.352,<8",
 ]
 whisper = [
     "faster-whisper>=1.1,<2",
-    "torch>=2.2,<3",
+    "torch>=2.14,<2.15",
     "soundfile",
     "librosa>=0.10,<2",
     "numba",
@@ -117,13 +118,14 @@ override-dependencies = [
 ]
 
 [[tool.uv.index]]
-name = "pytorch-cu121"
-url = "https://download.pytorch.org/whl/cu121"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu121" }
-torchaudio = { index = "pytorch-cu121" }
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }
+torchcodec = { index = "pytorch-cpu" }
 
 # ---------------------------------------------------------------
 # Tool configuration
@@ -153,9 +155,6 @@ skips = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-markers = [
-    "acceptance(identifier): exact Acceptance evidence claim.",
-]
 
 # ---------------------------------------------------------------
 # External tools (must be on system PATH):

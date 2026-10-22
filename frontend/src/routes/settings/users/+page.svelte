@@ -32,8 +32,10 @@
 	} from '$lib/api/types';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
+	import { ADMIN_TABS, parseAdminTab, type AdminTab } from '$lib/adminTabs';
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
+	import TakeRetentionPanel from '$lib/components/TakeRetentionPanel.svelte';
 	import ModelsTaskRow, {
 		MODELS_ROUTES,
 		MODELS_ROUTE_NOT_AVAILABLE_CODE,
@@ -56,7 +58,6 @@
 		ADMIN_VOICES_NAME_LABEL,
 		ADMIN_VOICES_OWNER_LABEL,
 		ADMIN_VOICES_STATUS_LABEL,
-		ADMIN_VOICES_TAB_LABEL,
 		MODELS_COLUMN_MODEL_LABEL,
 		MODELS_COLUMN_PROVIDER_LABEL,
 		MODELS_COLUMN_ROUTE_LABEL,
@@ -88,16 +89,6 @@
 	let error = $state('');
 	let compact = $state(false);
 
-	const ADMIN_TABS = [
-		{ id: 'voices', label: ADMIN_VOICES_TAB_LABEL },
-		{ id: 'ratelimits', label: 'Rate Limits' },
-		{ id: 'generation', label: 'Generation' },
-		{ id: 'models', label: 'Models' },
-		{ id: 'acestep', label: 'ACE-Step' }
-	] as const;
-
-	type AdminTab = (typeof ADMIN_TABS)[number]['id'];
-
 	let tab = $state<AdminTab>('voices');
 	let tabVisit = 0;
 
@@ -113,13 +104,6 @@
 		ensureCompactUiStyles();
 		return subscribeCompactLayout((value) => (compact = value));
 	});
-
-	function parseAdminTab(value: string): AdminTab | null {
-		for (const item of ADMIN_TABS) {
-			if (item.id === value) return item.id;
-		}
-		return null;
-	}
 
 	function selectTab(next: AdminTab): void {
 		if (tab !== next) tabVisit += 1;
@@ -835,6 +819,10 @@
 					{/each}
 				</div>
 			</section>
+		{/if}
+
+		{#if tab === 'cleanup'}
+			<TakeRetentionPanel />
 		{/if}
 	</div>
 {/if}

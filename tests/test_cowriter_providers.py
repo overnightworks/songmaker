@@ -404,10 +404,11 @@ def test_cowriter_save_preserves_the_legacy_active_pair(
         }
 
 
-@pytest.mark.acceptance("ACC-COWRITER-15")
 def test_cowriter_get_returns_card_defaults_without_catalog_fallback(
     admin_client, every_provider_is_configured,
 ):
+    """Spec: REQ-COWRITER-10 -- When no Co-Writer provider is stored, the Co-Writer settings
+    boundary returns Claude as the provider."""
     client, _ = admin_client
 
     response = client.get("/api/settings/cowriter")
@@ -608,12 +609,13 @@ def test_cowriter_save_keeps_a_route_that_cannot_answer_and_names_why(
     assert (stored.provider, stored.model) == ("claude", "")
 
 
-@pytest.mark.acceptance("ACC-COWRITER-14")
 def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversation(
     admin_client,
     every_provider_is_configured,
     monkeypatch,
 ):
+    """Spec: REQ-COWRITER-12 -- A Claude API Co-Writer turn persists its owned song write and leaves
+    a foreign song unchanged."""
     client, factory = admin_client
     with factory() as session:
         session.add(User(

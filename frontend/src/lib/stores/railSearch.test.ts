@@ -203,9 +203,7 @@ describe('groupRailSearchResults', () => {
 			settingsPages: [
 				settingsPage('Generation', '/settings/generation'),
 				settingsPage('Voices', '/settings/voices'),
-				settingsPage('Account', '/settings/account'),
-				settingsPage('Admin', '/settings/users'),
-				settingsPage('Cleanup', '/settings/cleanup')
+				settingsPage('Admin', '/settings/users')
 			]
 		},
 		{
@@ -213,8 +211,7 @@ describe('groupRailSearchResults', () => {
 			admin: false,
 			settingsPages: [
 				settingsPage('Generation', '/settings/generation'),
-				settingsPage('Voices', '/settings/voices'),
-				settingsPage('Account', '/settings/account')
+				settingsPage('Voices', '/settings/voices')
 			]
 		}
 	])(

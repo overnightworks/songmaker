@@ -11,6 +11,7 @@
 		SIGN_IN_PATH,
 		signInAddress
 	} from '$lib/api/fetch';
+	import AccountMenu from '$lib/components/AccountMenu.svelte';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import PhoneTabs from '$lib/components/shell/PhoneTabs.svelte';
@@ -331,8 +332,9 @@
 			class:rail-collapsed={$railCollapsed}
 			style:--rail-expanded-width={`${$railWidth}px`}
 		>
-			<Rail account={{ username: me.username, onlogout: logout }} collapsed={$railCollapsed} />
+			<Rail collapsed={$railCollapsed} />
 			<div class="app-shell desktop">
+				<div class="desktop-topbar"><AccountMenu username={me.username} onlogout={logout} /></div>
 				{@render children()}
 			</div>
 			{@render nowPlayingView()}
@@ -397,12 +399,23 @@
 	}
 
 	.app-shell.desktop {
+		position: relative;
 		flex: 1;
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.desktop-topbar {
+		display: flex;
+		flex: none;
+		align-items: center;
+		justify-content: flex-end;
+		height: var(--header-height);
+		padding: 0 14px;
+		border-bottom: 1px solid var(--border);
 	}
 
 	.app-shell.mobile {

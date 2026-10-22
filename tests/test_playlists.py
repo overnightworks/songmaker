@@ -777,6 +777,42 @@ def test_api_add_album_to_playlist(client: TestClient) -> None:
     assert len(resp.json()["entries"]) == 2
 
 
+def _point_take_outside_the_audio_root(client: TestClient, generation_id: str) -> None:
+    with client.app.state.ctx.db() as session:
+        session.get(Generation, generation_id).mp3_path = "../escape.mp3"
+        session.commit()
+
+
+def test_api_add_song_with_a_take_outside_the_audio_root_has_no_playable_take(
+    client: TestClient,
+) -> None:
+    _point_take_outside_the_audio_root(client, "g1")
+    playlist_id = client.post("/api/playlists", json={"title": "Test"}).json()["id"]
+
+    response = client.post(
+        f"/api/playlists/{playlist_id}/entries/song", json={"song_id": "s1"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Song has no playable take"
+
+
+def test_api_add_album_skips_a_take_outside_the_audio_root_and_adds_the_album(
+    client: TestClient,
+) -> None:
+    _point_take_outside_the_audio_root(client, "g1")
+    playlist_id = client.post("/api/playlists", json={"title": "Test"}).json()["id"]
+
+    response = client.post(
+        f"/api/playlists/{playlist_id}/entries/album", json={"album_id": "a1"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["added_count"] == 1
+    assert [item["song_id"] for item in body["skipped"]] == ["s1"]
+
+
 def test_api_add_album_to_playlist_hides_missing_and_foreign_albums(client: TestClient) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:

@@ -643,12 +643,10 @@ export const SONG_NEXT_LABEL = 'Next song';
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 
-// The phone's account circle and the menu it opens (issue #1158).
+// The account circle and the menu it opens (issue #1158).
 export const ACCOUNT_MENU_LABEL = 'Account';
 export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
-export const ACCOUNT_MENU_ACCOUNT_LABEL = 'Account';
-export const ACCOUNT_MENU_SIGNED_IN_PREFIX = 'Signed in as';
-export const ACCOUNT_MENU_LOGOUT_LABEL = 'Log out';
+export const ACCOUNT_MENU_LOGOUT_LABEL = 'Sign out';
 // A sign-out the server did not confirm leaves the session standing (#1340).
 export const SIGN_OUT_FAILED_MESSAGE = "Couldn't sign out. Check your connection and try again.";
 export const THEME_SWITCH_TO_LIGHT_LABEL = 'Light theme';

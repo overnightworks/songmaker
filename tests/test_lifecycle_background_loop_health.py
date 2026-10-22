@@ -14,10 +14,9 @@ from conftest import make_test_app, override_provider_runtime
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
-from songmaker_cli.health_types import BackgroundLoopStatus
+from songmaker_cli.health_types import BackgroundLoopRegistry, BackgroundLoopStatus
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
-    BackgroundLoopRegistry,
 )
 
 
@@ -238,8 +237,8 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
     started = threading.Event()
     recovered = []
 
-    async def idle_cover_runner(app) -> None:
-        lifecycle.background_loop_registry(app).record_success(BackgroundLoopName.COVER_RUNNER)
+    async def idle_cover_runner(app, registry) -> None:
+        registry.record_success(BackgroundLoopName.COVER_RUNNER)
         started.set()
         await asyncio.Future()
 

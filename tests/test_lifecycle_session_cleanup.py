@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import User, UserSession
-from songmaker_cli.health_types import BackgroundLoopName
-from songmaker_cli.lifecycle import BackgroundLoopRegistry, _cleanup_sessions, session_cleanup_loop
+from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
+from songmaker_cli.lifecycle import _cleanup_sessions, session_cleanup_loop
 
 
 @pytest.fixture

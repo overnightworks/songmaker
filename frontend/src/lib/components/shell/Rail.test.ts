@@ -40,10 +40,7 @@ vi.mock('$lib/api/client', async () => (await import('./rail-test-fixtures')).ra
 
 import Rail from './Rail.svelte';
 
-const onlogout = vi.fn();
-const { render, cleanup } = createComponentMount(Rail, {
-	account: { username: 'felix', onlogout }
-});
+const { render, cleanup } = createComponentMount(Rail);
 let collapsedMounted: ReturnType<typeof mount> | undefined;
 
 async function renderCollapsedRail(): Promise<HTMLElement> {
@@ -51,7 +48,7 @@ async function renderCollapsedRail(): Promise<HTMLElement> {
 	document.body.append(target);
 	collapsedMounted = mount(Rail, {
 		target,
-		props: { account: { username: 'felix', onlogout }, collapsed: true }
+		props: { collapsed: true }
 	});
 	await tick();
 	return target;
@@ -150,7 +147,7 @@ afterEach(async () => {
 });
 
 describe('Rail', () => {
-	it('renders the brand, the LIBRARY and PLAYLISTS groups, the settings disclosure, and the user row', async () => {
+	it('renders the brand, the LIBRARY and PLAYLISTS groups, and the settings disclosure, and no account row', async () => {
 		albumList.set([album({ id: 'a1', title: 'A' })]);
 		const target = await render();
 		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
@@ -163,7 +160,7 @@ describe('Rail', () => {
 		expect(groupRows[0]?.querySelector('.meta')?.textContent).toBe('1');
 		expect(groupRows[1]?.textContent).toContain('Playlists');
 		expect(groupRows[2]?.textContent).toContain('Settings');
-		expect(target.textContent).toContain('felix');
+		expect(target.querySelector('.rail-bottom, .user-row, .collapsed-account')).toBeNull();
 	});
 
 	it('renders the only search field directly beneath the brand', async () => {
@@ -172,16 +169,6 @@ describe('Rail', () => {
 		expect(searchFields).toHaveLength(1);
 		expect(searchFields[0]?.getAttribute('placeholder')).toBe('Search or go to…');
 		expect(target.querySelector('.rail-top + .rail-search-region .rail-search')).not.toBeNull();
-	});
-
-	it('holds the collapsed Account initial for the unsaved-changes dialog while the song has a dirty draft (issue #1143)', async () => {
-		setDraftLyrics('unsaved edit');
-		const target = await renderCollapsedRail();
-
-		requireElement<HTMLAnchorElement>(target, '.collapsed-account').click();
-
-		expect(get(pendingDirtyNavigation)).not.toBeNull();
-		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 	});
 
 	it('reduces the rail to labelled group icons when collapsed', async () => {
@@ -200,9 +187,6 @@ describe('Rail', () => {
 			);
 			expect(group?.getAttribute('title')).toBe(label);
 		}
-		expect(
-			requireElement<HTMLAnchorElement>(rail, '.collapsed-account').getAttribute('aria-label')
-		).toBe('Account');
 		expect(rail.querySelector('input[type="range"]')).toBeNull();
 	});
 
@@ -364,7 +348,7 @@ describe('Rail', () => {
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
-	it('scrolls the LIBRARY and PLAYLISTS groups, pinning Settings and the user row below them', async () => {
+	it('scrolls the LIBRARY and PLAYLISTS groups, pinning Settings below them', async () => {
 		const target = await render();
 		const scroll = requireElement(target, '.rail-scroll');
 		const scrolledGroups = scroll.querySelectorAll('.rail-group > .disclose-row');
@@ -378,10 +362,6 @@ describe('Rail', () => {
 			'.rail-group > .disclose-row > button.disclose'
 		);
 		expect(settingsToggle?.textContent).toContain('Settings');
-
-		const bottom = requireElement(target, '.rail-bottom');
-		expect(bottom.textContent).toContain('felix');
-		expect(target.querySelector('.rail-scroll ~ .rail-settings-pin ~ .rail-bottom')).not.toBeNull();
 	});
 
 	it('opens an album through the kinetic rail click', async () => {

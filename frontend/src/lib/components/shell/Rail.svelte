@@ -6,16 +6,14 @@
 	import { page } from '$app/state';
 	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
 	import { standingPathname } from '$lib/routes/standingAddress';
-	import { followAppPageLink, followPlainClick, openHome } from '$lib/stores/navigation';
+	import { followPlainClick, openHome } from '$lib/stores/navigation';
 	import { APP_NAME, HOME_PAGE_LABEL, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
-	import { accountInitial } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 	import RailSearch from './RailSearch.svelte';
 	import RailSettings from './RailSettings.svelte';
-	import UserRow from './UserRow.svelte';
 	import { RAIL_ITEM_SELECTOR } from './rail-item-selector';
 	import {
 		adjustRailWidth,
@@ -27,12 +25,7 @@
 		toggleRailCollapsed
 	} from '$lib/stores/ui';
 
-	interface RailAccount {
-		username: string;
-		onlogout: () => void;
-	}
-
-	let { account, collapsed = false }: { account: RailAccount; collapsed?: boolean } = $props();
+	let { collapsed = false }: { collapsed?: boolean } = $props();
 
 	setRailCollapsed(() => collapsed);
 	const homePlace: Place = 'home';
@@ -135,22 +128,6 @@
 
 	<div class="rail-settings-pin">
 		<RailSettings />
-	</div>
-
-	<div class="rail-bottom">
-		{#if collapsed}
-			<a
-				class="collapsed-account"
-				href="/settings/account"
-				aria-label="Account"
-				title="Account"
-				onclick={(event) => followAppPageLink(event, '/settings/account')}
-			>
-				{accountInitial(account.username)}
-			</a>
-		{:else}
-			<UserRow username={account.username} onlogout={account.onlogout} />
-		{/if}
 	</div>
 
 	<button
@@ -279,12 +256,6 @@
 		overflow-y: auto;
 	}
 
-	.rail-bottom {
-		flex-shrink: 0;
-		border-top: 1px solid var(--border);
-		padding: 4px 0;
-	}
-
 	.rail-collapse {
 		position: absolute;
 		top: 50%;
@@ -377,23 +348,5 @@
 		overflow: hidden;
 		clip: rect(0 0 0 0);
 		white-space: nowrap;
-	}
-
-	.rail-collapsed .rail-bottom {
-		width: 100%;
-		padding: 8px 0;
-		text-align: center;
-	}
-
-	.collapsed-account {
-		display: inline-grid;
-		width: 28px;
-		height: 28px;
-		place-items: center;
-		border-radius: 50%;
-		background: var(--accent);
-		color: var(--bg);
-		font-size: 0.8rem;
-		font-weight: 600;
 	}
 </style>

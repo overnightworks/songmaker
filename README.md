@@ -6,129 +6,46 @@ SvelteKit frontend + FastAPI backend + PostgreSQL + Redis + arq job workers + GP
 
 ## Run with Docker
 
-Songmaker is Docker-only — there is no native local-dev path. The Docker stack runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL, Redis, Prometheus, and Grafana.
+Songmaker is Docker-only; there is no native local-dev path. The stack runs the web app, both arq workers, the ACE-Step GPU worker, PostgreSQL, Redis, Prometheus, and Grafana.
 
-Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation), and a Hugging Face token (for downloading ACE-Step model weights).
+Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation), and a Hugging Face token (for downloading model weights).
 
-```bash
-# 1. Install songmaker-web's AppArmor profile (once per profile change, needs sudo;
-#    it survives reboots, and songmaker-web does not start without it)
-sudo ./scripts/apparmor/install.sh
-
-# 2. First-time setup
-cp docker/.env.docker.example .env     # edit with your secrets — see file for required fields
-docker compose up -d --build --wait
-# Cold-cache rebuild takes 8-15 min the first time. Never wrap in `timeout`
-# (see "Setup and run" in AGENTS.md for the full reasoning).
-
-# 3. Install the agent-CLI login mirror (one-time, needs sudo)
-sudo ./scripts/install-cli-credentials-mirror.sh
-
-# 4. Install the boot autostart unit (one-time, needs sudo)
-sudo ./scripts/install-autostart.sh
-```
-
-The AppArmor profile is installed under `/etc/apparmor.d/`, so the host loads
-it at every boot before Docker starts — see
-[docs/security.md](docs/security.md) for rollout, proof and removal.
-
-`restart: unless-stopped` alone does not survive every reboot: a container that
-was created but never started (e.g. a mid-boot GPU driver mismatch) is never
-retried by Docker on its own, no matter how many times the host reboots.
-`scripts/install-autostart.sh` installs a systemd unit that runs
-`docker compose up -d` after every boot, which does retry it — see
-[docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
-
-The first start downloads ~3.5 GB of ACE-Step model weights into the `songmaker_hfcache` Docker volume (one-time). All persistent state (PostgreSQL DB, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and `--build` rebuilds.
-
-### Day-to-day operations
+Install and first start:
 
 ```bash
-# Update after pulling new code
-git pull && docker compose up -d --build --wait
-
-# View logs (one service at a time)
-docker compose logs -f songmaker-web                # API + frontend
-docker compose logs -f songmaker-music-worker       # generation jobs (arq)
-docker compose logs -f songmaker-scoring-worker     # scoring jobs (arq)
-docker compose logs -f songmaker-acestep-worker-0   # GPU subprocess (ACE-Step)
-
-# Container status
-docker compose ps -a                                # all services + health (-a: includes a Created-but-never-started container, which plain `ps` hides)
-
-# Stop / start the stack (preserves volumes)
-docker compose stop
-docker compose start
-
-# Cloudflare tunnel (if you've set one up for remote access)
-sudo systemctl start cloudflared
-sudo systemctl stop cloudflared
-sudo systemctl status cloudflared
+sudo ./scripts/apparmor/install.sh                # songmaker-web does not start without its AppArmor profile
+cp docker/.env.docker.example .env                # fill in the required secrets
+docker compose up -d --build --wait               # never wrap in `timeout`
+sudo ./scripts/install-cli-credentials-mirror.sh  # agent-CLI login mirror
+sudo ./scripts/install-autostart.sh               # start the stack after every boot
 ```
 
-### Required env vars (in `.env`)
+- [`docker/.env.docker.example`](docker/.env.docker.example) lists every setting, which ones are required, and how to generate secrets.
+- A cold-cache build takes 8-15 minutes; [AGENTS.md](AGENTS.md#setup-and-run) says why it must not be interrupted. The first start also downloads the ACE-Step model weights into a Docker volume.
+- All persistent state (database, audio files, model cache, Grafana dashboards) lives in named Docker volumes and survives `docker compose down` and rebuilds.
+- AppArmor rollout, proof and removal: [docs/security.md](docs/security.md). Why Docker's restart policy alone does not survive every reboot, and what the autostart unit adds: [docs/acestep.md](docs/acestep.md#restart-policy-limits-and-boot-autostart).
 
-These are the four secrets that must be set or `Settings` will raise `ValidationError` at startup:
+## Operations
 
-| Var | Purpose |
-|---|---|
-| `SESSION_SECRET` | HMAC signing key for session cookies (min 32 chars) |
-| `POSTGRES_PASSWORD` | PostgreSQL password (substituted into the postgres container env) |
-| `SONGMAKER_INTERNAL_TOKEN` | Shared secret for worker → web internal API auth |
-| `HF_TOKEN` | Hugging Face token for downloading ACE-Step + scoring model weights |
+- **Updates:** a systemd timer (`scripts/install-autodeploy.sh` installs it) runs `scripts/auto-deploy.sh`, which pulls and redeploys `main` once its checks are green and no job is running; its header owns the rules.
+- **Logs and status:** `docker compose logs -f <service>` and `docker compose ps -a` (`-a` also shows a created-but-never-started container).
+- **Stop and start:** `docker compose stop` / `docker compose start` keep the volumes.
+- **Backup:** PostgreSQL and the audio volume must be backed up together with `scripts/backup.sh`; setup, cron and restore are in [`scripts/BACKUP.md`](scripts/BACKUP.md).
 
-Generate secrets with `python3 -c "import secrets; print(secrets.token_hex(32))"`. See [`docker/.env.docker.example`](docker/.env.docker.example) for the full list including all optional overrides.
+## Development
 
-## Local toolchain (tests, lint, IDE)
-
-The local Python `.venv` exists for **tests, type checking, and IDE autocomplete only** — not for running the live app. The live app always runs in Docker.
-
-```bash
-# One-time setup
-uv sync --extra server --extra scoring --extra whisper --extra mcp --extra image --extra dev
-
-# Run the tests that prove your change (the full suite runs in CI)
-pytest tests/test_foo.py tests/test_bar.py -q --tb=short
-
-# Run the linter on the files you changed
-ruff check src/songmaker_cli/foo.py tests/test_foo.py
-
-# Frontend: named test files, lint, type-check
-cd frontend && pnpm install && pnpm exec vitest run src/lib/stores/player.test.ts && pnpm lint && pnpm check
-```
-
-The full suite and coverage gates run in CI; see [docs/testing.md](docs/testing.md). Tests run against an in-memory SQLite database (no Postgres needed for unit tests) and `fakeredis`. The live Docker stack and the test suite are fully independent — you can run tests while the Docker stack is up.
-
-The auth layer and the provider layer are external dependencies:
-`overnightworks-webauth` is pinned to the `v0.14.0` release wheel of
-[overnightworks/webauth](https://github.com/overnightworks/webauth), and
-`overnightworks-agent-providers` to the `v0.1.3` release wheel of
-[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers).
-Both are in the `server` extra and hash-locked in `uv.lock`, so `uv sync`
-installs them like any other dependency and their own tests run in those
-repositories.
-
-## Backup
-
-Both PostgreSQL and the audio files Docker volume must be backed up together. See [`scripts/BACKUP.md`](scripts/BACKUP.md) for the setup, cron, and restore instructions. The default `BACKUP_DIR` is `/mnt/backup/songmaker` but can be overridden via env var.
-
-```bash
-BACKUP_DIR=/path/to/backup ./scripts/backup.sh
-```
+Local tests, lint, type checking and the Python and frontend toolchain are in [AGENTS.md](AGENTS.md#checks); test structure and coverage gates are in [docs/testing.md](docs/testing.md). The live app never runs from the local `.venv`.
 
 ## Docs
 
-- [AGENTS.md](AGENTS.md) — project conventions, code patterns, and known constraints. Read this first if you're contributing.
-- [docs/VISION.md](docs/VISION.md) — non-normative product overview and pointer to approved intent
-- [docs/requirements/](docs/requirements/) — normative requirement grammar and revision registry
-- [docs/PRODUCT.md](docs/PRODUCT.md) — generated requirement/acceptance count view; no implementation claim yet
-- [docs/architecture.md](docs/architecture.md) — system design, data model, API endpoints, worker pool, monitoring, backup
-- [docs/security.md](docs/security.md) — auth, sessions, CSRF, rate limiting, security headers, trust boundaries
-- [docs/testing.md](docs/testing.md) — test structure, fixtures, coverage targets
-- [docs/acestep.md](docs/acestep.md) — ACE-Step integration, model variants, worker pool, generation parameters
-- [plans/](plans/) — design plans for in-flight and proposed work. Each has a `**Status:**` header.
-- [overnightworks/webauth](https://github.com/overnightworks/webauth) — the extracted auth library songmaker installs by tag
-- [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers) — the extracted provider library songmaker installs by tag
+- [AGENTS.md](AGENTS.md): project conventions, code patterns, and known constraints. Read this first if you are contributing.
+- [docs/VISION.md](docs/VISION.md): why Songmaker exists, desired outcomes, guardrails, non-goals
+- [docs/requirements/](docs/requirements/): ruled product sentences
+- [docs/architecture.md](docs/architecture.md): system design, data model, API endpoints, worker pool, monitoring
+- [docs/security.md](docs/security.md): auth, sessions, CSRF, rate limiting, security headers, trust boundaries
+- [docs/testing.md](docs/testing.md): test structure, fixtures, coverage targets
+- [docs/acestep.md](docs/acestep.md): ACE-Step integration, model variants, worker pool, generation parameters
+- [docs/design/](docs/design/README.md): UI mockups
 
 ## License
 

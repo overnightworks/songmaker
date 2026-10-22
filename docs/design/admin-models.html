@@ -1228,6 +1228,33 @@
 	}
 	.sp-elapsed { font-variant-numeric: tabular-nums; color: var(--text-muted); margin-left: .3rem; }
 	.sp-pair { display: flex; flex-direction: column; gap: .6rem; }
+
+	/* ── #1784 proposal: Cleanup as a section of the Admin page; scoped to .cln ── */
+	.cln .atabs { display: flex; gap: 2px; padding: 0 .9rem; border-bottom: 1px solid var(--rule); background: var(--panel); overflow-x: auto; }
+	.cln .atabs span { padding: .55rem .85rem; border-bottom: 2px solid transparent; color: var(--muted); font-size: .8rem; white-space: nowrap; }
+	.cln .atabs span.on { color: var(--violet); border-color: var(--violet); font-weight: 600; }
+	.cln .atabs span.new { outline: 2px dashed var(--violet); outline-offset: -3px; border-radius: 2px; }
+	.cln .asel { display: flex; align-items: center; justify-content: space-between; margin: .6rem .7rem 0; padding: .5rem .7rem; border: 1px solid var(--rule-strong); border-radius: 4px; background: var(--panel); font-size: .85rem; }
+	.cln .asel .caret { color: var(--muted); }
+	.cln .cl-head { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin-bottom: .9rem; }
+	.cln .cl-head h4 { margin: 0; }
+	.cln .auto { display: inline-flex; align-items: center; gap: .35rem; padding: .12rem .55rem; border-radius: 999px; border: 1px solid var(--rule-strong); background: var(--panel-sunk); color: var(--ink-soft); font-size: .72rem; }
+	.cln .info { display: inline-grid; place-items: center; width: 1.15rem; height: 1.15rem; border: 1px solid var(--rule-strong); border-radius: 50%; color: var(--muted); font-size: .7rem; font-style: normal; }
+	.cln .cl-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .7rem; max-width: 52rem; }
+	.cln .cl-card { padding: .7rem .85rem; border: 1px solid var(--rule); border-radius: 4px; background: var(--panel); }
+	.cln .cl-card .n { font-family: "Barlow Condensed", sans-serif; font-size: 1.7rem; line-height: 1; color: var(--ink); }
+	.cln .cl-card .l { margin-top: .3rem; font-size: .74rem; color: var(--muted); }
+	.cln .cl-card.del { border-left: 3px solid var(--bad-ink); }
+	.cln .cl-card.del .n { color: var(--bad-ink); }
+	.cln .cl-card.del .l::before { content: "▲ "; color: var(--bad-ink); }
+	.cln .cl-acts { display: flex; gap: .5rem; margin-top: 1rem; }
+	.cln .cl-confirm { margin-top: 1rem; max-width: 52rem; padding: .7rem .85rem; border-left: 3px solid var(--bad-ink); background: color-mix(in srgb, var(--bad-bg) 60%, transparent); }
+	.cln .cl-confirm p { margin: 0 0 .6rem; font-size: .85rem; line-height: 1.4; }
+	.cln .act.go { background: var(--bad-ink); border-color: var(--bad-ink); color: var(--panel); }
+	.cln .cl-empty { margin-top: 1rem; color: var(--ink-soft); font-size: .85rem; }
+	.cln .cl-empty .mark { color: var(--good); margin-right: .35rem; }
+	.cln .phone .cl-grid { grid-template-columns: 1fr 1fr; }
+	.cln .phone .cl-acts .act { min-height: 44px; flex: 1; }
 </style>
 </head>
 <body>
@@ -2429,6 +2456,101 @@
 
 	<hr class="rule">
 
+	<section class="decisions cln" id="cleanup">
+		<h2>Neu · #1784 — Cleanup auf der Admin-Seite<span class="proposed-tag">Blessed 22.10.2026 · #1784</span></h2>
+		<div class="decision">
+			<p>
+				Heute ist „Cleanup“ ein eigener Eintrag in den Settings (<code>/settings/cleanup</code>, Titel
+				<strong>Take Retention</strong>). Der Vorschlag: <strong>Cleanup wird ein Abschnitt der Admin-Seite</strong>,
+				der letzte Tab hinter ACE-Step — dort, wo ein Admin Wartung sucht: Rate Limits, Worker, jetzt auch das
+				Aufräumen alter Takes. Der Settings-Eintrag fällt weg (<code>navigation.html</code> (j)). Die Fläche
+				selbst ändert sich nicht: Vorschau, „Run now“ mit Bestätigung, automatischer Lauf. <strong>Models bleibt
+				unverändert</strong>; #1476 zeichnet den Abschnitt neu.
+			</p>
+			<p>
+				Neu am Bild: der Satz „Takes, die weder <em>picked</em> noch <em>kept</em> sind …“ steht nicht mehr
+				als Absatz über der Fläche, sondern hinter dem ⓘ; der automatische Lauf ist ein kleines Abzeichen
+				(„Auto · daily 03:00 UTC“), keine Prosa. Rot bleibt dem Löschen vorbehalten, das nur ein Mensch beenden
+				kann: die „to hard-delete“-Karte trägt ▲ und den roten Rand. Die Bestätigung nennt die Zahlen und sagt, dass
+				Löschen nicht rückgängig zu machen ist.
+			</p>
+		</div>
+
+		<div class="states">
+			<article class="state wide">
+				<div class="state-head"><h3>(t) Cleanup · Vorschau</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1784</span></div>
+				<p class="state-note">
+					Der Normalfall mit Arbeit. Zwei Fenster (archive after 30 days, hard-delete 90 days after the archive),
+					zwei Zahlen, was <em>jetzt</em> fällig ist. „Refresh“ und „Run now“ sind die beiden Handgriffe;
+					„Run now“ fragt nach (u).
+				</p>
+				<div class="screen">
+					<div class="screen-top"><span>Settings › Admin › <strong>Cleanup</strong></span><span>Admin</span></div>
+					<div class="atabs"><span>Voices</span><span>Rate Limits</span><span>Generation</span><span>Models</span><span>ACE-Step</span><span class="on new">Cleanup</span></div>
+					<div class="screen-body">
+						<div class="cl-head"><h4 class="screen-title" style="margin:0">Take Retention</h4><i class="info" aria-label="What this does">i</i><span class="auto">↻ Auto · daily 03:00 UTC</span></div>
+						<div class="cl-grid">
+							<div class="cl-card"><div class="n">30 days</div><div class="l">Archive after</div></div>
+							<div class="cl-card"><div class="n">90 days</div><div class="l">Hard-delete after archive</div></div>
+							<div class="cl-card"><div class="n">12</div><div class="l">to archive now</div></div>
+							<div class="cl-card del"><div class="n">3</div><div class="l">to hard-delete now</div></div>
+						</div>
+						<div class="cl-acts"><button class="act">Refresh</button><button class="act danger">Run now</button></div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(u) Cleanup · Bestätigung</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1784</span></div>
+				<p class="state-note">
+					Nach „Run now“. Ein Satz mit beiden Zahlen, ein Satz Folge, zwei Knöpfe: „Cancel“ und das rote
+					Verb mit der Zahl. Während des Laufs steht „Running…“ im Knopf. Leer (nichts fällig) sagt die Seite
+					ehrlich „Nothing to clean up“ und bietet keinen Knopf an.
+				</p>
+				<div class="screen">
+					<div class="screen-top"><span>Settings › Admin › <strong>Cleanup</strong></span><span>Admin</span></div>
+					<div class="atabs"><span>Voices</span><span>Rate Limits</span><span>Generation</span><span>Models</span><span>ACE-Step</span><span class="on">Cleanup</span></div>
+					<div class="screen-body">
+						<div class="cl-head"><h4 class="screen-title" style="margin:0">Take Retention</h4><i class="info" aria-label="What this does">i</i><span class="auto">↻ Auto · daily 03:00 UTC</span></div>
+						<div class="cl-grid">
+							<div class="cl-card"><div class="n">30 days</div><div class="l">Archive after</div></div>
+							<div class="cl-card"><div class="n">90 days</div><div class="l">Hard-delete after archive</div></div>
+							<div class="cl-card"><div class="n">12</div><div class="l">to archive now</div></div>
+							<div class="cl-card del"><div class="n">3</div><div class="l">to hard-delete now</div></div>
+						</div>
+						<div class="cl-confirm"><p>Archive <strong>12</strong> takes and permanently delete <strong>3</strong>. Deleting cannot be undone.</p><div class="cl-acts" style="margin-top:0"><button class="act">Cancel</button><button class="act go">Delete 3</button></div></div>
+						<p class="cl-empty"><span class="mark">✓</span><em>Nothing due:</em> “Nothing to clean up right now.” — the counts show 0 and the buttons are gone.</p>
+					</div>
+				</div>
+			</article>
+		</div>
+
+		<div class="states states-390">
+			<article class="state">
+				<div class="state-head"><h3>(v) Cleanup · gestapelt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1784</span></div>
+				<p class="state-note">
+					Am Telefon ist die Tab-Leiste die kompakte Auswahl der Admin-Seite („Admin sections“); Cleanup ist
+					ihr letzter Eintrag. Die vier Karten stehen als 2 × 2, die Knöpfe teilen sich die Breite, 44 px hoch.
+				</p>
+				<div class="phone p390">
+					<div class="ph-top"><span>Settings › Admin › <strong>Cleanup</strong></span><span>Admin</span></div>
+					<div class="asel"><span>Cleanup</span><span class="caret">⌄</span></div>
+					<div class="ph-body">
+						<div class="cl-head"><h4 class="screen-title" style="margin:0">Take Retention</h4><i class="info" aria-label="What this does">i</i><span class="auto">↻ Auto · daily 03:00 UTC</span></div>
+						<div class="cl-grid">
+							<div class="cl-card"><div class="n">30 days</div><div class="l">Archive after</div></div>
+							<div class="cl-card"><div class="n">90 days</div><div class="l">Hard-delete after archive</div></div>
+							<div class="cl-card"><div class="n">12</div><div class="l">to archive now</div></div>
+							<div class="cl-card del"><div class="n">3</div><div class="l">to hard-delete now</div></div>
+						</div>
+						<div class="cl-acts"><button class="act">Refresh</button><button class="act danger">Run now</button></div>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
 	<section class="decisions">
 		<div class="decision">
 			<h3>Was offen bleibt</h3>
@@ -2450,7 +2572,7 @@
 				Das Provider-Select in der Cover-Zeile ist ebenfalls Zielzustand: Der Cover-Weg ist im
 				Code heute fest die Codex-CLI — <code>cover_image_provider_method()</code> in
 				<code>src/songmaker_cli/cowriter/routing.py</code>, aufgerufen von
-				<code>cover_runner.py</code> und <code>jobs/cover_suggestions.py</code>, mit
+				<code>cover_runner.py</code>, mit
 				<code>generate_codex_cover_image</code> als einzigem Generator. Ein echtes
 				Provider-Setting für Cover ist Backend-Arbeit und hat heute kein Issue.
 			</p>

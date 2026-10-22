@@ -500,7 +500,7 @@ describe('app shell', () => {
 		expect(strip.querySelector('.back')?.textContent?.trim()).toBe('Album');
 	});
 
-	it('renders the rail inline on wide layouts, keeping its Settings group and user row', async () => {
+	it('renders the rail inline on wide layouts, keeping its Settings group and no account row', async () => {
 		stubMatchMedia(false);
 		delete document.documentElement.dataset.pointer;
 		const target = await renderLayout(LIBRARY_ROUTE_PATH);
@@ -508,7 +508,7 @@ describe('app shell', () => {
 		expect(target.querySelector('.phone-tabs')).toBeNull();
 		const rail = requireElement<HTMLElement>(target, '.rail');
 		expect(rail.textContent).toContain(RAIL_SETTINGS_LABEL);
-		expect(requireElement(rail, '.rail-bottom').textContent).toContain(USER.username);
+		expect(rail.querySelector('.rail-bottom')).toBeNull();
 	});
 
 	it('makes the desktop workspace follow the rail edge control', async () => {

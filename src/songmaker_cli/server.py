@@ -32,6 +32,7 @@ from songmaker_cli.app_context import (
     build_web_auth_config,
     parse_trusted_proxies,
 )
+from songmaker_cli.audio_paths import AudioPathRejectedError
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
     APP_NAME,
@@ -47,9 +48,8 @@ from songmaker_cli.cover_runner import (
     recover_web_cover_jobs,
 )
 from songmaker_cli.health_api import compute_script_hashes
+from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
 from songmaker_cli.lifecycle import (
-    BackgroundLoopName,
-    BackgroundLoopRegistry,
     cleanup_expired_resource_events,
     pin_judge_route,
     provider_status_refresh_loop,
@@ -76,8 +76,6 @@ from songmaker_cli.request_policies import (
 from songmaker_cli.settings import CoverExecutor, get_settings
 
 log = logging.getLogger(__name__)
-
-NOT_FOUND_DETAIL: Final = "Not Found"
 
 STATIC_ASSET_MEDIA_TYPES: Final = {".woff2": "font/woff2"}
 
@@ -172,7 +170,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ]
     if settings.cover_executor is CoverExecutor.WEB:
         loop_tasks.append(
-            (BackgroundLoopName.COVER_RUNNER, asyncio.create_task(cover_runner_loop(app))),
+            (
+                BackgroundLoopName.COVER_RUNNER,
+                asyncio.create_task(cover_runner_loop(app, registry)),
+            ),
         )
     app.state.background_loop_tasks = dict(loop_tasks)
     for name, task in loop_tasks:
@@ -193,6 +194,14 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await drain_lease_releases()
         await close_arq_pool()
         await shutdown_tool_surface_background_tasks()
+
+
+def audio_path_rejected_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """Answer a rejected audio path exactly like a missing resource."""
+    return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
 
 
 def create_app(
@@ -277,6 +286,8 @@ def create_app(
     )
     app.add_middleware(ResourceStreamDeadlineMiddleware)
 
+    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
+
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(
         request: Request,
@@ -332,7 +343,7 @@ def create_app(
     @app.get("/service-worker.js", include_in_schema=False)
     async def serve_service_worker() -> FileResponse:
         if not sw_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(
             sw_path,
             media_type="application/javascript",
@@ -342,19 +353,19 @@ def create_app(
     @app.get("/manifest.webmanifest", include_in_schema=False)
     async def serve_webmanifest() -> FileResponse:
         if not manifest_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(manifest_path, media_type="application/manifest+json")
 
     @app.get("/icon-192.png", include_in_schema=False)
     async def serve_icon_192() -> FileResponse:
         if not icon_192_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(icon_192_path, media_type="image/png")
 
     @app.get("/icon-512.png", include_in_schema=False)
     async def serve_icon_512() -> FileResponse:
         if not icon_512_path.exists():
-            raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+            raise HTTPException(status_code=404, detail=HTTP_NOT_FOUND)
         return FileResponse(icon_512_path, media_type="image/png")
 
     sk_index = sveltekit_dir / "index.html"

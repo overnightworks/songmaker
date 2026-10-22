@@ -35,6 +35,7 @@ from songmaker_cli.api_models import (
     StatusResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
+from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     COVER_MAX_BYTES,
@@ -71,7 +72,6 @@ from songmaker_cli.db.queries.playlists import (
     set_playlist_cover_key,
     update_playlist,
 )
-from songmaker_cli.queue_streams import resolve_audio_path
 
 log = logging.getLogger(__name__)
 
@@ -277,7 +277,7 @@ def api_add_song_to_playlist(
         raise HTTPException(400, "Song has no playable take")
     try:
         resolve_audio_path(ctx.audio_dir, playable.mp3_path)
-    except (HTTPException, OSError):
+    except (AudioPathRejectedError, OSError):
         raise HTTPException(400, "Song has no playable take")
     try:
         add_song_to_playlist(session, playlist_id, req.song_id)
@@ -304,7 +304,7 @@ def api_add_album_to_playlist(
     def _readable(generation: Generation) -> bool:
         try:
             resolve_audio_path(ctx.audio_dir, generation.mp3_path)
-        except (HTTPException, OSError):
+        except (AudioPathRejectedError, OSError):
             return False
         return True
 

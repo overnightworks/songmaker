@@ -36,6 +36,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.api_models.songs import UnplayableSongSummary
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool, is_music_worker_healthy
+from songmaker_cli.audio_paths import AudioPathRejectedError
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
@@ -506,7 +507,7 @@ def api_get_cover_suggestion(
         raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND)
     try:
         path = resolve_suggestion_png(ctx.audio_dir, album.id, suggestion.id, suggestion.png_path)
-    except (FileNotFoundError, HTTPException):
+    except (FileNotFoundError, AudioPathRejectedError):
         raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
     return FileResponse(path, media_type="image/png", headers=COVER_RESPONSE_HEADERS)
 
@@ -535,7 +536,7 @@ def api_select_album_cover_suggestion(
             ctx.audio_dir, album.id, suggestion.id, suggestion.png_path,
         ).read_bytes()
         cover_key = write_album_cover(ctx.audio_dir, album.id, payload)
-    except (FileNotFoundError, HTTPException):
+    except (FileNotFoundError, AudioPathRejectedError):
         raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
     except CoverRejectedError as exc:
         raise HTTPException(422, str(exc)) from exc

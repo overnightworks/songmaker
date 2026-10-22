@@ -35,6 +35,15 @@ def test_me_authenticated(client: TestClient) -> None:
     assert (response.json()["username"], response.json()["role"]) == ("admin", "admin")
 
 
+def test_me_names_the_account_console_under_the_issuer(client: TestClient) -> None:
+    _seed_admin(client)
+    login_and_csrf(client, "admin")
+
+    assert client.get("/api/auth/me").json()["account_console_url"] == (
+        "https://issuer.test/realms/test/account"
+    )
+
+
 def test_me_unauthenticated(client: TestClient) -> None:
     assert client.get("/api/auth/me").status_code == 401
 

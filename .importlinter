@@ -1,12 +1,22 @@
 # The application may build on the independent packages; none of them may
 # depend on the application. CI runs `lint-imports` over the in-tree import
-# graph, so a chain through another in-tree package is caught as well as a
+# graph, so a chain through another in-tree module is caught as well as a
 # direct import. include_external_packages records an import of an installed
 # package (agent_providers, webauth) as one opaque node and never scans that
 # package's own imports, so a chain reaching the application through one of
-# them is not caught here. The persistence-below-http-contract contract keeps
-# songmaker_cli.db from importing songmaker_cli.api_models, directly or through
-# another in-tree module.
+# them is not caught here.
+#
+# independent-packages: the engine packages never depend on the application.
+# persistence-below-http-contract: songmaker_cli.db never imports
+#   songmaker_cli.api_models, directly or through another in-tree module.
+# persistence-below-http-framework: songmaker_cli.db never imports fastapi or
+#   starlette.
+# application-layers: songmaker_cli modules import only downward (entry points,
+#   workers, routes, runners, co-writer and MCP, services, HTTP contract,
+#   persistence, settings, constants), and the routes never import each other.
+#   A route that is not listed in the routes row is unconstrained.
+# scoring-is-self-contained: the scorers reach neither persistence nor the HTTP
+#   framework.
 [importlinter]
 include_external_packages = True
 root_packages =
@@ -32,3 +42,44 @@ source_modules =
     songmaker_cli.db
 forbidden_modules =
     songmaker_cli.api_models
+
+[importlinter:contract:persistence-below-http-framework]
+name = Persistence does not import the HTTP framework
+type = forbidden
+source_modules =
+    songmaker_cli.db
+forbidden_modules =
+    fastapi
+    starlette
+
+[importlinter:contract:application-layers]
+name = The application's layers point downward and routes stay apart
+type = layers
+containers =
+    songmaker_cli
+layers =
+    main
+    server | music_worker | scoring_worker
+    api | worker_base
+    (admin_api) | (album_api) | (auth_api) | (conversation_api) | (generation_api) | (health_api) | (internal_api) | (jobs_api) | (library_api) | (lora_api) | (playlist_api) | (queue_stream_api) | (reimport_api) | (resource_event_api) | (settings_api) | (sharing_api) | (song_api)
+    lifecycle
+    (cover_runner)
+    jobs
+    cowriter
+    mcp_server
+    (api_helpers) : (auth_dependencies) : (auth_stores) : (cleanup) : (config) : (cover_suggestions) : (oidc_client) : (queue_streams) : (reference_audio) : (reimport) : (scheduler)
+    api_models
+    db
+    settings
+    constants
+
+[importlinter:contract:scoring-is-self-contained]
+name = Scorers reach neither persistence nor HTTP
+type = forbidden
+source_modules =
+    songmaker_cli.scoring
+forbidden_modules =
+    songmaker_cli.db
+    sqlalchemy
+    fastapi
+    starlette

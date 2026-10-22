@@ -202,6 +202,7 @@ class GenerationRetentionReportResponse(BaseModel):
     deleted_count: int
     retention_days: int
     hard_delete_days: int
+    scheduled_hour_utc: int
     dry_run: bool
 
 

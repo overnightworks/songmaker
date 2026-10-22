@@ -1074,37 +1074,7 @@ The most a compromised worker can do is publish bogus state to Redis, register w
 
 If exposure to untrusted traffic becomes a concern, the next step is to bind `/api/internal/*` to a separate port (and bind it to the Docker network, not `0.0.0.0`). Today the single-port design has no repository-provided edge path filter; its safety depends on the loopback-only published port and on any operator-provided upstream access policy.
 
-## Requirement Approval Witnesses
-
-Requirement approval uses an authorization comment from the configured
-repository account. The operator may act directly or explicitly delegate the
-posting to a coordinating agent after the required independent reviews and a
-transparent disclosure in the owning issue. The offline registry pins a strict
-witness file by SHA-256; the witness pins the numeric repository, issue,
-comment, and author identities, timestamps, and exact approval body. This proves
-durable byte relationships but neither human authorship nor compliance with the
-procedural review/disclosure policy.
-
-The live verifier uses Python's standard HTTPS stack with the default verified
-TLS context. It permits only `api.github.com` and three fixed read-only route
-shapes for `FlexOr2/songmaker`, does not follow redirects, checks API and HTML
-URLs across the repository→issue→comment chain, and fails closed on malformed or
-oversized responses. Responses are capped at 256 KiB, reads/connects at 15
-seconds, and the internal monotonic deadline is 120 seconds. The workflow also
-wraps the process in a 120-second OS watchdog, with a three-minute GitHub job
-timeout as provider-level defense. Registry, requirement, acceptance, witness,
-and decoded-body inputs also have explicit count/byte bounds.
-
-GitHub Actions grants only `contents: read` and `issues: read`. Checkout never
-persists credentials, and `GITHUB_TOKEN` is passed as an environment variable
-only to the live-verifier step. The token-bearing job skips fork pull requests;
-the tokenless offline gate continues to validate those diffs.
-Live results prove the state observed during that run. Approval-comment edits
-or deletions do not trigger verification; they are detected by the next push to
-main, same-repository pull-request run, weekly scheduled run, or manual dispatch
-that executes the verifier. Scheduling guarantees no maximum detection delay.
-The binder re-fetches immediately before a local write, and
-the resulting pushed commit must pass the live workflow.
+## CI Supply Chain
 
 Every third-party GitHub Action is pinned to the full commit SHA of its reviewed
 release tag (with the release series recorded beside it), so a moved tag cannot
@@ -1114,36 +1084,6 @@ pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All
 third-party dependencies must be wheels except `nvidia-ml-py3`, whose locked,
 hash-verified release has no published wheel.
-
-The local requirement binder now owns that write boundary. A parent process
-enforces a 120-second wall limit over one guarded private worker process group;
-an inherited pipe terminates that group if the parent disappears, and timeouts
-return the manual-recovery exit code. The worker holds a no-symlink lock in the
-worktree Git directory through its prepared-success output, requires an index
-exactly matching HEAD and exactly one candidate delta, and rechecks HEAD, Git status, candidate,
-and owned outputs before and after the network phase. Git is invoked only as the
-fixed local `/usr/bin/git`, without a shell or network command, under short
-timeouts and output caps. Every Git child receives an allowlisted environment
-that excludes `GITHUB_TOKEN`, user/system Git configuration, replacement
-objects, lazy object fetches, and interactive prompts. Repository-local config
-remains inside the cooperative trust boundary, while explicit overrides disable
-fsmonitor, ignorestat, untracked-cache, and file-mode shortcuts. Assume-unchanged,
-skip-worktree, sparse, or otherwise nonordinary index entries are refused.
-Contract-visible directory scans stream entries and stop at the same fixed
-file-count bound used for baseline materialization before sorting or building sets.
-
-Witness JSON has one canonical ASCII representation: sorted keys, compact
-separators, no NaN, and exactly one final LF. New witness installation uses a
-same-directory temporary file plus atomic hard-link no-clobber. Registry and
-PRODUCT replacements preserve their snapshotted permission bits and are
-protected against cooperating binders by the lock. A noncooperating process
-with the same OS identity is outside this boundary; snapshot comparisons detect
-it at defined gates, and rollback removes a witness only when the successful
-link's held descriptor, target identity, exact bytes, and mode still prove binder
-ownership.
-There is no false multi-file atomicity claim: interruption may leave the original
-candidate-only state, a partial state that the offline gate rejects, or the
-complete end state that was validated before the first install.
 
 ## Audit Trail
 

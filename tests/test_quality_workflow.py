@@ -1,5 +1,6 @@
 """G1–G3: Repository contract for the reusable quality gate (live proof is CI)."""
 
+import datetime
 import os
 import re
 import subprocess
@@ -24,7 +25,6 @@ REPORTS = ("reports/coverage.xml", "reports/frontend-coverage/lcov.info")
             "needs",
             [
                 "backend",
-                "acceptance-evidence",
                 "alert-rules",
                 "postgresql-contract",
                 "frontend",
@@ -50,7 +50,7 @@ def test_g1_caller_identity_and_pin():
         reference,
     )
     assert re.search(
-        rf"^\s+uses: {re.escape(reference)} # v0\.2\.1$",
+        rf"^\s+uses: {re.escape(reference)} # v0\.4\.0$",
         WORKFLOW_TEXT,
         re.MULTILINE,
     )
@@ -68,9 +68,18 @@ def test_g1_mandatory_names_match_rendered_dependencies():
             rendered_names.add(name)
     config = tomllib.loads((ROOT / "quality/config.toml").read_text())
     assert set(config) == {"gate"}
-    assert set(config["gate"]) == {"mandatory_jobs"}
+    assert set(config["gate"]) == {"mandatory_jobs", "loosened"}
+    loosened = config["gate"]["loosened"]
+    assert isinstance(loosened, list)
+    assert [(entry["item"], entry["what"]) for entry in loosened] == [
+        ("#1734", 'mandatory job "Acceptance evidence (integration)" removed'),
+        ("#1784", "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"),
+    ]
+    for entry in loosened:
+        assert set(entry) == {"what", "item", "date", "reason"}
+        assert isinstance(entry["date"], datetime.date)
     mandatory = config["gate"]["mandatory_jobs"]
-    assert len(mandatory) == len(set(mandatory)) == 5
+    assert len(mandatory) == len(set(mandatory)) == 4
     assert set(mandatory) == rendered_names
 
 

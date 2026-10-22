@@ -58,7 +58,7 @@ import {
 } from './seed';
 
 const SONG_PHONE_SONG_TITLE = 'Song Phone Takes';
-const ACCOUNT_SECTION = 'Account';
+const SETTINGS_SECTION = 'Generation';
 // Chosen to prove the player names the real seeded version rather than an
 // assumed v1 — the whole point of L12's "version number as seeded" clause.
 const SONG_PHONE_VERSION_NUMBER = 7;
@@ -395,18 +395,18 @@ test.describe('song page at phone width', () => {
 				library.songPhoneAlbumId
 			);
 
-			await openSettingsSectionFromSearch(page, ACCOUNT_SECTION);
+			await openSettingsSectionFromSearch(page, SETTINGS_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
 			await unsavedDraftDialog
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 				.click();
 
-			const accountHeading = page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 });
-			await expect(page).toHaveURL(/\/settings\/account$/);
-			await expect(accountHeading).toBeVisible();
+			const settingsHeading = page.getByRole('heading', { name: SETTINGS_SECTION, level: 1 });
+			await expect(page).toHaveURL(/\/settings\/generation$/);
+			await expect(settingsHeading).toBeVisible();
 			await page.reload();
-			await expect(page).toHaveURL(/\/settings\/account$/);
-			await expect(accountHeading).toBeVisible();
+			await expect(page).toHaveURL(/\/settings\/generation$/);
+			await expect(settingsHeading).toBeVisible();
 		}
 	);
 
@@ -705,14 +705,14 @@ test.describe('song page at phone width', () => {
 				library.songPhoneAlbumId
 			);
 
-			await openSettingsSection(page, 'desktop', ACCOUNT_SECTION);
+			await openSettingsSection(page, 'desktop', SETTINGS_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
 			await unsavedDraftDialog
 				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 				.click();
 
-			await expect(page).toHaveURL(/\/settings\/account$/);
-			await expect(page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 })).toBeVisible();
+			await expect(page).toHaveURL(/\/settings\/generation$/);
+			await expect(page.getByRole('heading', { name: SETTINGS_SECTION, level: 1 })).toBeVisible();
 		}
 	);
 });

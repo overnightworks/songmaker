@@ -52,13 +52,11 @@ describe('settings index on the phone', () => {
 	it('lists every section an admin can open, each linking to its page, without redirecting', async () => {
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Admin', 'Cleanup']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Admin']);
 		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([
 			'/settings/generation',
 			'/settings/voices',
-			'/settings/account',
-			'/settings/users',
-			'/settings/cleanup'
+			'/settings/users'
 		]);
 		expect(navigation.goto).not.toHaveBeenCalled();
 	});
@@ -67,25 +65,13 @@ describe('settings index on the phone', () => {
 		currentUser.set(makeAuthUser());
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Account']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices']);
 	});
 
 	it('names the tab after the Settings list', async () => {
 		await render();
 
 		expect(document.title).toBe(`${RAIL_SETTINGS_LABEL} — ${APP_NAME}`);
-	});
-
-	it('1346-F16-name: shows the signed-in username beside Account', async () => {
-		currentUser.set(makeAuthUser({ role: 'admin', username: 'account-owner' }));
-		const target = await render();
-		const account = listRows(target).find(
-			(row) => row.getAttribute('href') === '/settings/account'
-		);
-
-		expect(account?.querySelector('.settings-row-value')?.textContent?.trim()).toBe(
-			'account-owner'
-		);
 	});
 });
 

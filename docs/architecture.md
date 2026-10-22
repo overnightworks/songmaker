@@ -149,8 +149,7 @@ pinned at the top; a scroll container in the middle holding the LIBRARY
 group, built on the shared `RailGroup.svelte` (chevron, icon, label, count —
 one row shape for every group); and, on the desktop only, pinned below that
 scroll container, the SETTINGS group (also a `RailGroup.svelte`, via
-`RailSettings.svelte`) and a user row (username, theme toggle, Logout —
-inline, no popup menu; `shell/UserRow.svelte`). On ≤768px or any coarse pointer, `PhoneTabs` provides Home,
+`RailSettings.svelte`); the rail has no account row. On ≤768px or any coarse pointer, `PhoneTabs` provides Home,
 Library and Playlists in desktop order. `+layout.svelte` derives their pathname
 from `standingPathname(page.state)` and mounts them only for signed-in private
 pages outside song routes, while the transport is visible. Settings and `/loras`
@@ -172,9 +171,10 @@ the guarded replacement when it executes. Both song traversal and fallback reuse
 the existing dirty-draft question; a parked action resolving does not mean the
 person has agreed to leave. 🔍 on every page
 opens the one search, `RailSearch`, in a sheet. The Library and the Playlists page carry the brand
-and a 44px account circle at the right edge, whose menu (`AccountMenu.svelte`)
-holds Settings, the theme switch and Log out; the song carries its title, share and song menu instead. `Rail`
-renders the block only when the layout hands it an `account`. Choosing
+and a 44px account circle at the right edge (the desktop: top right of the main area). Its menu
+(`AccountMenu.svelte`) holds the name (opens `/api/auth/me`'s `account_console_url` in a new tab),
+Settings, the theme switch, Sign out and a quiet row of legal links; the song carries its title,
+share and song menu instead. Choosing
 Settings in the account menu while `/settings` is already on screen only
 closes the menu.
 In the LIBRARY and PLAYLISTS groups the word is a link to the group's own list
@@ -1273,6 +1273,24 @@ modules to it in both directions, so a constant cannot quietly change sides.
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `agent_providers` and `webauth` are now installed distributions rather than directories under `src/`, and their own boundaries are contracted in their repositories; because `include_external_packages` is on, `.importlinter` still resolves them in songmaker's real import graph. CI's `lint-imports` step breaks the build on a violation, reading that graph rather than grepping the package directories.
 
 Persistence sits beneath the HTTP contract: `db/` never imports `api_models/`, directly or through another in-tree module. The value objects both use — generation knobs (`generation_params.py`) and Whisper time marks (`whisper_cues.py`) — live beside them in `songmaker_cli/`; `api_models` re-exports them because `scripts/generate_types.py` reads its `__all__`. `.importlinter` enforces the direction (#925 G1).
+
+Inside `songmaker_cli` the `application-layers` contract holds one direction for every module it lists: a layer imports only layers below it, and the routes never import each other. Leaf modules the contract does not list (for example `parser`, `timestamps`, `covers`, `scoring`, `health_types`) are free of it. `scoring/` stays free of persistence and the HTTP framework (`scoring-is-self-contained`). Which role each layer plays, from the importing side down:
+
+```mermaid
+flowchart TB
+    entry["Entry: main"]
+    workers["Workers and server: server, music_worker, scoring_worker"]
+    routes["Routes: the *_api modules, api, worker_base"]
+    runtime["Runners, lifecycle, jobs"]
+    ai["Co-writer and MCP server"]
+    services["Services: auth, config, cleanup, scheduler, queue_streams, ..."]
+    contract["HTTP contract: api_models"]
+    persistence["Persistence: db"]
+    base["Settings and constants"]
+    entry --> workers --> routes --> runtime --> ai --> services --> contract --> persistence --> base
+```
+
+The diagram answers which role may import which; it derives from the `application-layers` contract in `.importlinter`, which owns the module list, and the docs do not repeat it. Known gap: a new or renamed route is unconstrained until it is listed there. The exits are a `songmaker_cli.routes` package, or `exhaustive = true` once quality ships quality#148 C8.
 
 ## Data Model
 
