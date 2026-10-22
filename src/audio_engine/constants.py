@@ -13,7 +13,7 @@ INT16_MAX: Final[float] = 32768.0
 # comment, cover PNG as XMP (Iptc4xmpExt:DigitalSourceType).
 
 IPTC_TRAINED_ALGORITHMIC_MEDIA: Final[str] = (
-    "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"
+    "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"  # NOSONAR(S5332) IPTC term id, never fetched.  # noqa: E501
 )
 AI_MARK_ID3_DESCRIPTION: Final[str] = "DigitalSourceType"
 
