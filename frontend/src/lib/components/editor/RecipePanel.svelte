@@ -23,6 +23,7 @@
 		repaintStrength,
 		sourceGeneration,
 		sourceMode,
+		sourceTakeDurationSeconds,
 		takesPerGenerate,
 		type RepaintMode,
 		type SourceMode
@@ -401,7 +402,7 @@
 				<p class="source-mode-hint">{RECIPE_SOURCE_MODE_HINT}</p>
 
 				{#if $sourceMode === 'repaint'}
-					{@const duration = gen.generation_params?.audio_duration ?? 180}
+					{@const duration = sourceTakeDurationSeconds(gen)}
 					<WaveformRangePicker
 						audioUrl={`/audio/${gen.mp3_path}`}
 						{duration}
