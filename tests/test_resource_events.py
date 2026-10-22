@@ -31,8 +31,8 @@ from songmaker_cli.db.queries.resource_events import (
     get_resource_event_high_water_mark,
     list_resource_events_after,
 )
+from songmaker_cli.health_types import BackgroundLoopRegistry
 from songmaker_cli.lifecycle import (
-    BackgroundLoopRegistry,
     cleanup_expired_resource_events,
     resource_event_cleanup_loop,
 )

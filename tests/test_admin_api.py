@@ -311,7 +311,7 @@ def test_last_error_stays_out_of_public_and_musician_paths(
     from songmaker_cli.db.queries.albums import create_album
     from songmaker_cli.db.queries.auth import get_user_by_username
     from songmaker_cli.db.queries.songs import create_song
-    from songmaker_cli.lifecycle import BackgroundLoopName, BackgroundLoopRegistry
+    from songmaker_cli.health_types import BackgroundLoopName, BackgroundLoopRegistry
     from songmaker_cli.worker_liveness import WorkerLiveness, acestep_worker_liveness
 
     sentinel = "PRIVATE-WORKER-DIAGNOSTIC-18.5-GB"

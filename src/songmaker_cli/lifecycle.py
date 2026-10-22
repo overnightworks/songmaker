@@ -7,8 +7,8 @@ import logging
 import shutil
 import subprocess
 import threading
-from collections.abc import Awaitable, Callable, Collection, Mapping
-from dataclasses import dataclass, replace
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Final, Literal
 
@@ -26,8 +26,8 @@ from songmaker_cli.constants import (
     JobType,
 )
 from songmaker_cli.health_types import (
-    BackgroundLoopHealth,
     BackgroundLoopName,
+    BackgroundLoopRegistry,
     CodexImageSandboxRuntimeHealth,
 )
 from songmaker_cli.worker_liveness import WorkerLiveness
@@ -67,42 +67,6 @@ _CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
 # The web process owns stale-job recovery for every job type.
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
-
-
-class BackgroundLoopRegistry:
-    def __init__(self, loop_names: Collection[BackgroundLoopName] | None = None) -> None:
-        self._loops = {
-            name: BackgroundLoopHealth(name=name)
-            for name in (loop_names or BackgroundLoopName)
-        }
-        self._shutting_down = False
-
-    @property
-    def shutting_down(self) -> bool:
-        return self._shutting_down
-
-    def begin_shutdown(self) -> None:
-        self._shutting_down = True
-
-    def record_success(self, name: BackgroundLoopName) -> None:
-        health = self._loops[name]
-        health.consecutive_failures = 0
-        health.last_error = None
-
-    def record_failure(self, name: BackgroundLoopName, error: Exception) -> int:
-        health = self._loops[name]
-        health.consecutive_failures += 1
-        health.last_error = type(error).__name__
-        return health.consecutive_failures
-
-    def mark_dead(self, name: BackgroundLoopName, error: BaseException | None) -> None:
-        health = self._loops[name]
-        health.is_alive = False
-        health.last_error = "task ended" if error is None else type(error).__name__
-
-    def loop_health(self) -> dict[BackgroundLoopName, BackgroundLoopHealth]:
-        """Return copies of the current health for each registered loop."""
-        return {name: replace(health) for name, health in self._loops.items()}
 
 
 def background_loop_registry(app: FastAPI) -> BackgroundLoopRegistry:
