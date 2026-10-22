@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import Actor, can_access_album
-from songmaker_cli.audio_paths import NOT_FOUND_DETAIL, AudioPathRejectedError, canonical_audio_path
+from songmaker_cli.audio_paths import AudioPathRejectedError, canonical_audio_path
 from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries.albums import get_album
@@ -156,7 +156,7 @@ def _expected_relative_path(album_id: str, suggestion_id: str) -> str:
         or ".." in relative_path.parts
         or relative_path.as_posix().startswith("/")
     ):
-        raise AudioPathRejectedError(NOT_FOUND_DETAIL)
+        raise AudioPathRejectedError("cover suggestion path is not a direct child of its album")
     return relative_path.as_posix()
 
 

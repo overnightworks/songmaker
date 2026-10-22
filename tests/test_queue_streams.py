@@ -1282,6 +1282,59 @@ def test_library_stream_start_take_is_the_clicked_generation(tmp_path: Path, mon
     assert [t["generation_id"] for t in tracks] == ["g1", "g1b", "g2"]
 
 
+def _seed_library_with_escaping_take(session) -> None:
+    _seed_library_data(session)
+    session.get(Generation, "g2").mp3_path = "../outside.mp3"
+
+
+def _library_queue_requests(client, **body):
+    """The two library entry points that scan takes through the same skip rule."""
+    return {
+        "stream": lambda: client.post("/api/queue-streams/library", json=body),
+        "pool-queue": lambda: client.get("/api/library/pool-queue", params=body),
+    }
+
+
+def _library_answer(response, entry: str) -> tuple[list[str], list[tuple[str, str]]]:
+    data = response.json()
+    taken = [t["generation_id"] for t in data["tracks" if entry == "stream" else "takes"]]
+    skipped = [(s["generation_id"], s["reason"]) for s in data["skipped"]]
+    return taken, skipped
+
+
+@pytest.mark.parametrize("entry", ["stream", "pool-queue"])
+def test_library_scan_skips_a_take_escaping_the_audio_root_as_missing(
+    tmp_path: Path, monkeypatch, entry: str,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
+    _write_library_audio_files(tmp_path)
+    (tmp_path / "outside.mp3").write_bytes(b"outside")
+    login_and_csrf(client, "usera")
+
+    response = _library_queue_requests(client)[entry]()
+
+    assert response.status_code == 200
+    taken, skipped = _library_answer(response, entry)
+    assert taken == ["g1b"]
+    assert ("g2", "missing_file") in skipped
+
+
+@pytest.mark.parametrize("entry", ["stream", "pool-queue"])
+def test_library_scan_refuses_a_start_take_escaping_the_audio_root(
+    tmp_path: Path, monkeypatch, entry: str,
+) -> None:
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
+    _write_library_audio_files(tmp_path)
+    login_and_csrf(client, "usera")
+
+    response = _library_queue_requests(client, start_generation_id="g2")[entry]()
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
+
+
 def test_library_stream_start_generation_id_not_found_returns_404(
     tmp_path: Path,
     monkeypatch,
