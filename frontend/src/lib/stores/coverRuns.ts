@@ -39,7 +39,7 @@ export async function releaseCoverSuggestions(
 	albumId: string,
 	discard: CoverSuggestionDiscard
 ): Promise<void> {
-	for (const jobId of discard.jobIds) await stopCoverRun(jobId);
+	await Promise.all(discard.jobIds.map(stopCoverRun));
 	if (discard.suggestionIds.length === 0 && discard.jobIds.length === 0) return;
 	await discardAlbumCoverSuggestions(albumId, discard);
 }

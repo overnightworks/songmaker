@@ -9,7 +9,7 @@ import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 // album header, so these helpers drive the page as a person does.
 
 export class FakeJobEventSource {
-	static sources: FakeJobEventSource[] = [];
+	static readonly sources: FakeJobEventSource[] = [];
 	onmessage: ((event: MessageEvent) => void) | null = null;
 	onerror: ((event: Event) => void) | null = null;
 
@@ -17,7 +17,9 @@ export class FakeJobEventSource {
 		FakeJobEventSource.sources.push(this);
 	}
 
-	close(): void {}
+	close(): void {
+		// The fake holds no connection, so there is nothing to release.
+	}
 
 	emit(job: JobItem): void {
 		this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(job) }));

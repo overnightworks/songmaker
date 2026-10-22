@@ -546,7 +546,10 @@ def api_select_album_cover_suggestion(
     return _single_album_response(session, album)
 
 
-@router.delete("/albums/{album_id}/cover-suggestions")
+@router.delete(
+    "/albums/{album_id}/cover-suggestions",
+    responses={422: {"description": "Nothing named to discard"}},
+)
 def api_delete_cover_suggestions(
     album_id: str,
     suggestion_id: list[str] = Query(default_factory=list),

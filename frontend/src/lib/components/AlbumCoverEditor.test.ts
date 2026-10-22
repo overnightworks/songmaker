@@ -130,7 +130,7 @@ beforeEach(() => {
 	cancelJob.mockReset().mockResolvedValue(coverJob({ status: 'cancelled' }));
 	vi.mocked(addToast).mockReset();
 	activeJobs.set([]);
-	FakeJobEventSource.sources = [];
+	FakeJobEventSource.sources.length = 0;
 });
 
 afterEach(async () => {
