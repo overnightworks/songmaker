@@ -43,10 +43,10 @@ Signed-in requests never call Keycloak: the session is songmaker's own, so the a
 
 Keycloak is the account owner, but songmaker applies its answers only at sign-in. Disabling a user or removing them from `/apps/songmaker` ends nothing by itself: a session stays valid until it goes idle for `SESSION_IDLE_SECONDS` or reaches `SESSION_ABSOLUTE_MAX_AGE`, and continued use renews it, so the bound is the absolute age (30 days by default), not the idle time. Two ways to end access now:
 
-1. Sign out in Keycloak and in songmaker: `POST /auth/logout` on that device ends that device's session and the Keycloak session.
+1. Sign out in Keycloak or in songmaker: `POST /auth/logout` on that device ends that device's session and the Keycloak session, and a sign-out at Keycloak ends every songmaker session of that account through the back channel (below).
 2. Delete the sessions in the database: `DELETE FROM user_sessions WHERE user_id = '<subject>';` (all of them: `DELETE FROM user_sessions;`). The next request is a 401.
 
-Until the back-channel logout lands, a sign-out started at Keycloak (or by another application) does not end songmaker sessions. The exposure is a stolen session cookie (`HttpOnly`, `__Host-`, `Strict`) until it goes idle or reaches the cap; with one user this is accepted for the days until the back-channel is built.
+**Back-channel logout.** Keycloak posts a signed Logout Token to `POST /auth/backchannel-logout`, and songmaker ends every session of the token's subject (`webauth.oidc_login.receive_backchannel_logout`, audited as a `delete` of resource `session` without a person). The token must be a `logout+jwt` of the bound issuer for this client, carry the back-channel logout event and a `sub`, and no `nonce`; the realm client sets `backchannel.logout.session.required` to `false` because `sid` is ignored. The route answers 200 only after the commit and 400 for any refusal or failure, in its own worker-thread session and transaction. It is reachable only under the Host `<PUBLIC_BASE_URL host>:8080` on the external network `hal_backchannel_songmaker` (declared `external: true`, created by the edge stack, joined by `songmaker-web` alone, which carries the public host as its alias there); any other Host, the public host without the port and `songmaker-web:8080` included, gets an empty 404, the edge denies the path publicly, and the body is capped at 32 KiB. The exact path is exempt from the rate limit and from the origin check, and from nothing else; a variant such as `/auth/backchannel-logoutx` is not. A logout that completes before a later sign-in cannot end that later session; this limit is accepted.
 
 ### Rollback
 
@@ -1087,7 +1087,7 @@ hash-verified release has no published wheel.
 
 ## Audit Trail
 
-Mutating operations are logged to the `audit_log` table. Account creation and role changes made by the sign-in are written without a person (`user_id` null):
+Mutating operations are logged to the `audit_log` table. Account creation, role changes and back-channel logouts are written without a person (`user_id` null):
 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`

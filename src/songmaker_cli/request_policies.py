@@ -83,9 +83,17 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(r"^/api/queue-streams/[^/]+/audio$"),     # /api/queue-streams/{id}/audio
 )
 
+# The realm calls this over the private network `hal_backchannel_songmaker`, where
+# songmaker-web carries the alias of the public host, on the container's fixed port. Only
+# the Host "<public host>:<port>" reaches the handler, so a public request never does.
+BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
+BACKCHANNEL_LOGOUT_PORT: Final = 8080
+BACKCHANNEL_LOGOUT_MAX_BODY_BYTES: Final = 32 * 1024
+
 # Static PWA root assets are fetched by the browser and the service worker
 # outside of user-driven navigation, so they must not compete with `/api/*`
-# calls for any class's budget. No API path belongs in this allowlist.
+# calls for any class's budget. No API path belongs in this allowlist, except the
+# realm's back-channel call, which a throttled caller must not be able to starve.
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
 # endpoint (a DB query plus ~6 Redis round trips for worker/queue state),
@@ -94,6 +102,7 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
 # exempting it would let an anonymous caller hammer the priciest endpoint
 # for free. It stays in the API class.
 RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
+    BACKCHANNEL_LOGOUT_PATH,
     "/manifest.webmanifest",
     "/robots.txt",
     "/favicon.svg",
@@ -107,8 +116,10 @@ RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
 CSRF_TOKEN_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({LOGOUT_PATH})
 CSRF_TOKEN_EXEMPT_PREFIXES: Final[tuple[str, ...]] = ("/api/internal/",)
 
-# The three sign-in routes answer redirects and refusals that no cache may keep.
-SIGN_IN_PATHS: Final[frozenset[str]] = frozenset({OIDC_START_PATH, OIDC_CALLBACK_PATH, LOGOUT_PATH})
+# The sign-in routes answer redirects and refusals that no cache may keep.
+SIGN_IN_PATHS: Final[frozenset[str]] = frozenset({
+    OIDC_START_PATH, OIDC_CALLBACK_PATH, LOGOUT_PATH, BACKCHANNEL_LOGOUT_PATH,
+})
 SIGN_IN_CACHE_CONTROL: Final = "no-store"
 
 # Large multipart uploads are a path-exact allowlist, never a suffix match:
@@ -155,8 +166,12 @@ def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
 
 
 def build_csrf_origin_policy() -> CsrfPolicy:
-    """Every state-changing request is checked for the same origin."""
-    return CsrfPolicy()
+    """Every state-changing request is checked for the same origin.
+
+    The realm's back-channel call is a server-to-server POST with no Origin and no
+    session; its Logout Token is its proof.
+    """
+    return CsrfPolicy(exempt=PathRules(exact=frozenset({BACKCHANNEL_LOGOUT_PATH})))
 
 
 def build_csrf_token_policy() -> CsrfPolicy:
@@ -174,6 +189,10 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
     return BodySizePolicy(
         default_max_bytes=settings.max_request_body_bytes,
         rules=(
+            BodySizeRule(
+                paths=PathRules(exact=frozenset({BACKCHANNEL_LOGOUT_PATH})),
+                max_bytes=BACKCHANNEL_LOGOUT_MAX_BODY_BYTES,
+            ),
             BodySizeRule(
                 paths=PathRules(exact=frozenset({AUDIO_UPLOAD_PATH})),
                 max_bytes=settings.max_upload_body_bytes,
