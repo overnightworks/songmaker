@@ -73,6 +73,15 @@ test('the account circle opens a menu with the name, Settings, the theme, Sign o
 	for (const legal of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen']) {
 		await expect(menu.getByRole('link', { name: legal, exact: true })).toBeVisible();
 	}
+	// The separator trails its item, so no line of the legal row starts on one:
+	// each link stands at the left edge of its own item.
+	const items = menu.locator('.legal-item');
+	for (let index = 0; index < (await items.count()); index += 1) {
+		const item = items.nth(index);
+		const itemBox = await item.boundingBox();
+		const linkBox = await item.getByRole('link').boundingBox();
+		expect(linkBox?.x).toBe(itemBox?.x);
+	}
 	await expect(menu.getByText('Signed in as')).toHaveCount(0);
 
 	if (shell === 'desktop') {

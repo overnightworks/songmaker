@@ -33,14 +33,15 @@
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: center;
+		column-gap: 0.35em;
 		margin: 0;
 	}
 
-	/* The dot is drawn, not written, and only before an item that follows
-	   another, so a wrapped row never starts or ends on one. */
-	.legal-item:not(:first-child)::before {
+	/* The dot is drawn, not written, and belongs to the item before it, so a
+	   wrapped row never starts on one and the last item has none. */
+	.legal-item:not(:last-child)::after {
 		content: '·';
-		margin: 0 0.35em;
+		margin-left: 0.35em;
 	}
 
 	.legal-link {
