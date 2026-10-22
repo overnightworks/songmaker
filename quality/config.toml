@@ -5,3 +5,9 @@ mandatory_jobs = [
     "PostgreSQL contract (serial)",
     "Frontend (Node 22)",
 ]
+
+[[gate.loosened]]
+what = 'mandatory job "Acceptance evidence (integration)" removed'
+item = "#1734"
+date = 2026-10-22
+reason = "the operator ruled the requirement shelf machinery out on 20.10.2026"
