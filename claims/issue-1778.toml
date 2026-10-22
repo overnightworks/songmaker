@@ -1,0 +1,8 @@
+claim_id = "ae9218d141cd4649b559a824ebe64df1"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "b3533fc6a6cfb02a9cf2b94f72d7cfd43b38ae1d"
+branch = "claude/issue-1778-scoring-cpu-torch"
+scope = ["docker/scoring-worker.Dockerfile", "docs/acestep.md", "pyproject.toml", "tests/test_packaging_boundary.py", "uv.lock"]
+opened_commit = "47ed263f87bf9dda9c69efdb85b91ba03db86213"
+whole_reason = "One dependency swap: the torch index pin, its lock, the image that installs it, the doc and the packaging test that name it."
