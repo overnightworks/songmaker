@@ -1,8 +1,0 @@
-claim_id = "04eca282ae3540e1ae30bcc51757ab06"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "5a9a5fdc157b89c31f90d0717c0b393b3b954793"
-branch = "claude/issue-1774-docs-plans-agents"
-scope = [".dockerignore", "AGENTS.md", "docker/.env.docker.example", "docs/acestep.md", "frontend/src/lib/constants/acestep-params.ts", "plans", "prompts/prompt-architecture-review.md", "sonar-project.properties", "src/songmaker_cli/acestep_capabilities.py", "tests/test_acestep_contract.py"]
-opened_commit = "01cc129d5fbac2cf6b125a985119f8205d634a78"
-whole_reason = "One docs pass: the plans/ directory and every dead pointer to it, plus the agent guide; each path is a one-line or deletion edit."
