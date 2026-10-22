@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { APP_NAME } from '$lib/constants';
 import { SIGN_IN_ACTION_LABEL, SIGNED_OUT_HEADING } from '$lib/constants/auth';
-import { LEGAL_SECTIONS } from '$lib/components/LegalLinks.svelte';
+import { LEGAL_SECTIONS } from '$lib/constants/legal';
 import Page from './+page.svelte';
 
 let component: ReturnType<typeof mount> | undefined;

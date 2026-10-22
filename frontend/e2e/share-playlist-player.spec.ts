@@ -591,12 +591,6 @@ test('1374_rule_10 P14: uploaded cover mosaic revoke legal and signed-out rights
 	await rights(page, realPlaylist.payload);
 	await startStream(page, realPlaylist, () => control(page, 'Play').click());
 	await rights(page, realPlaylist.payload);
-	for (const name of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen']) {
-		await page.getByRole('button', { name, exact: true }).click();
-		await expect(page.getByRole('dialog', { name: 'Legal information' })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(page.getByRole('dialog')).toHaveCount(0);
-	}
 	await realPlaylist.setUpload(false);
 	await page.reload();
 	await expect(page.locator('.cover-art .playlist-cover-image')).toHaveCount(0);

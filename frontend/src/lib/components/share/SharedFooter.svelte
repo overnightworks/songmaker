@@ -1,56 +1,15 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { tick } from 'svelte';
 	import { APP_NAME } from '$lib/constants';
 	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
-	import LegalContent from '../LegalContent.svelte';
-	import LegalLinks, { type LegalSection } from '../LegalLinks.svelte';
-
-	const legalSection = historyLayerState<LegalSection | null>('shared-legal', null);
-	let modal: HTMLDivElement | undefined = $state();
-
-	function closeLegal(): void {
-		$legalSection = null;
-	}
-
-	$effect(() => {
-		if (!$legalSection) return;
-		void tick().then(() => {
-			if (modal) focusFirstIn(modal);
-		});
-	});
-
-	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!$legalSection || !modal) return;
-		handleFocusTrapKeydown(modal, event);
-	}
+	import LegalLinks from '../LegalLinks.svelte';
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} />
-
 <footer class="powered">
-	<LegalLinks onopen={(section) => ($legalSection = section)}>
+	<LegalLinks newTab>
 		{#snippet lead()}Powered by <a href={HOME_ROUTE_PATH}>{APP_NAME}</a>{/snippet}
 	</LegalLinks>
 </footer>
-
-{#if $legalSection}
-	<div class="legal-overlay">
-		<button class="legal-backdrop" tabindex="-1" onclick={closeLegal} aria-label="Close"></button>
-		<div
-			bind:this={modal}
-			class="legal-modal"
-			role="dialog"
-			aria-modal="true"
-			aria-label="Legal information"
-			tabindex="-1"
-		>
-			<LegalContent initialSection={$legalSection} onback={closeLegal} />
-		</div>
-	</div>
-{/if}
 
 <style>
 	.powered {
@@ -70,36 +29,5 @@
 
 	.powered a:hover {
 		-webkit-text-fill-color: transparent;
-	}
-
-	.legal-overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 150;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.legal-backdrop {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		border: 0;
-		background: rgba(0, 0, 0, 0.8);
-		backdrop-filter: blur(4px);
-		cursor: default;
-	}
-
-	.legal-modal {
-		position: relative;
-		max-height: 85dvh;
-		max-width: 700px;
-		width: 95%;
-		overflow-y: auto;
-		background: var(--bg, #0a0a0a);
-		border: 1px solid var(--border, #333);
-		border-radius: 8px;
-		box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 10%, transparent);
 	}
 </style>

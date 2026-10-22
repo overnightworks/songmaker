@@ -503,15 +503,6 @@ test.describe('rights and neighbours', () => {
 			}
 		}
 	});
-
-	test('1374_rule_2 F3: the footer legal links still open', async ({ visitor }) => {
-		await openMockAlbum(visitor);
-		const { page } = visitor;
-
-		await page.getByRole('button', { name: 'Impressum' }).click();
-
-		await expect(page.getByRole('dialog', { name: 'Legal information' })).toBeVisible();
-	});
 });
 
 test.describe('short windows', () => {

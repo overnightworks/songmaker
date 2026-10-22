@@ -129,7 +129,7 @@ test('an API request without a session is refused with 401 and nothing redirects
 	expect(response.status()).toBe(401);
 });
 
-for (const address of ['/legal', '/impressum', '/datenschutz', '/share/song/no-such-share']) {
+for (const address of ['/share/song/no-such-share']) {
 	test(`${address} opens without a session and never asks to sign in`, async ({ page }) => {
 		const started: string[] = [];
 		page.on('request', (request) => {
@@ -256,7 +256,7 @@ for (const [refusal, query] of [
 	});
 }
 
-const MEMBER_SECTIONS = ['Generation', 'Voices', 'Account', 'Legal'];
+const MEMBER_SECTIONS = ['Generation', 'Voices', 'Account'];
 const ADMIN_SECTIONS = ['Admin', 'Cleanup'];
 
 function settingsSections(page: Page): Locator {

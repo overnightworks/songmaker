@@ -52,21 +52,13 @@ describe('settings index on the phone', () => {
 	it('lists every section an admin can open, each linking to its page, without redirecting', async () => {
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual([
-			'Generation',
-			'Voices',
-			'Account',
-			'Admin',
-			'Cleanup',
-			'Legal'
-		]);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Admin', 'Cleanup']);
 		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([
 			'/settings/generation',
 			'/settings/voices',
 			'/settings/account',
 			'/settings/users',
-			'/settings/cleanup',
-			'/settings/legal'
+			'/settings/cleanup'
 		]);
 		expect(navigation.goto).not.toHaveBeenCalled();
 	});
@@ -75,7 +67,7 @@ describe('settings index on the phone', () => {
 		currentUser.set(makeAuthUser());
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Legal']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Account']);
 	});
 
 	it('names the tab after the Settings list', async () => {

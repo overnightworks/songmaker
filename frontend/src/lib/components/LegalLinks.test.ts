@@ -1,14 +1,14 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import LegalLinks, { LEGAL_SECTIONS, type LegalSection } from './LegalLinks.svelte';
+import { afterEach, describe, expect, it } from 'vitest';
+import { LEGAL_SECTIONS } from '$lib/constants/legal';
+import LegalLinks from './LegalLinks.svelte';
 import legalLinksSource from './LegalLinks.svelte?raw';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
 async function render(
 	props: {
-		onopen?: (section: LegalSection) => void;
+		newTab?: boolean;
 		lead?: ReturnType<typeof createRawSnippet>;
 	} = {}
 ): Promise<HTMLElement> {
@@ -26,33 +26,29 @@ afterEach(async () => {
 });
 
 describe('LegalLinks', () => {
-	it('links each legal text to its section of the legal page', async () => {
+	it('links each legal text to its section on the central site, in the same tab', async () => {
 		const target = await render();
 
-		expect(
-			Array.from(target.querySelectorAll('a')).map((link) => [
-				link.textContent,
-				link.getAttribute('href')
-			])
-		).toEqual([
-			['Impressum', '/legal#impressum'],
-			['Datenschutz', '/legal#datenschutz'],
-			['Nutzungsbedingungen', '/legal#nutzungsbedingungen']
+		const links = Array.from(target.querySelectorAll('a'));
+		expect(links.map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+			['Impressum', 'https://hallucinai.de/impressum#songmaker'],
+			['Datenschutz', 'https://hallucinai.de/datenschutz#songmaker'],
+			['Nutzungsbedingungen', 'https://hallucinai.de/nutzungsbedingungen#songmaker']
 		]);
+		expect(links.map((link) => link.getAttribute('target'))).toEqual([null, null, null]);
 	});
 
-	it.each(LEGAL_SECTIONS)(
-		'opens $label in place for a page that must not be left',
-		async ({ id, label }) => {
-			const onopen = vi.fn();
-			const target = await render({ onopen });
+	it('opens the links in a new tab for a page that must not be left', async () => {
+		const target = await render({ newTab: true });
 
-			getByRoleButton(target, label).click();
-
-			expect(onopen).toHaveBeenCalledWith(id);
-			expect(target.querySelectorAll('a')).toHaveLength(0);
+		const links = Array.from(target.querySelectorAll('a'));
+		expect(links).toHaveLength(LEGAL_SECTIONS.length);
+		for (const link of links) {
+			expect(link.getAttribute('target')).toBe('_blank');
+			expect(link.getAttribute('rel')).toContain('noopener');
 		}
-	);
+		expect(target.querySelectorAll('button')).toHaveLength(0);
+	});
 
 	it('puts what leads the row first, with the dot drawn by CSS rather than written', async () => {
 		const lead = createRawSnippet(() => ({ render: () => '<span>Powered by</span>' }));

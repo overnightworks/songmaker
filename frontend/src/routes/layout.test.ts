@@ -360,19 +360,14 @@ describe('app shell', () => {
 		);
 	});
 
-	it.each([
-		'/login',
-		'/no-access',
-		'/auth/callback',
-		'/legal',
-		'/impressum',
-		'/datenschutz',
-		'/share/public-token'
-	])('keeps the PlayerBar and reservation out of public route %s', async (path) => {
-		const target = await renderLayout(path);
-		expect(target.querySelector('.player-bar')).toBeNull();
-		expect(target.querySelector('.app-shell')).toBeNull();
-	});
+	it.each(['/login', '/no-access', '/auth/callback', '/share/public-token'])(
+		'keeps the PlayerBar and reservation out of public route %s',
+		async (path) => {
+			const target = await renderLayout(path);
+			expect(target.querySelector('.player-bar')).toBeNull();
+			expect(target.querySelector('.app-shell')).toBeNull();
+		}
+	);
 
 	it('keeps the PlayerBar and reservation out while auth is loading', async () => {
 		currentUser.set(null);
@@ -429,8 +424,7 @@ describe('app shell', () => {
 		['/share/public', false],
 		['/login', false],
 		['/no-access', false],
-		['/auth/callback', false],
-		['/legal/privacy', false]
+		['/auth/callback', false]
 	])('1354_rule_28 1354_rule_33 1354_49: mount-time tabs at %s are %s', async (path, shown) => {
 		replaceHistoryEntry(path);
 		selectedSongId.set('retained-song');
@@ -900,8 +894,7 @@ describe('auth check failure', () => {
 			'a logged-out deep link',
 			'/album/northern-lights/glass-river',
 			'/login/oidc?next=%2Falbum%2Fnorthern-lights%2Fglass-river'
-		],
-		['a lookalike of a legal address', '/impressum-foo', '/login/oidc?next=%2Fimpressum-foo']
+		]
 	])(
 		'sends %s to the sign-in start with a full navigation on a 401 (no known user, no check error)',
 		async (_label, path, signIn) => {
@@ -923,25 +916,21 @@ describe('auth check failure', () => {
 		}
 	);
 
-	it.each([
-		'/login',
-		'/no-access',
-		'/auth/callback',
-		'/share/public-token',
-		'/legal',
-		'/datenschutz'
-	])('never sends the public address %s to sign-in', async (path) => {
-		currentUser.set(null);
-		authLoading.set(true);
-		vi.mocked(checkAuth).mockImplementation(async () => null);
-		mountLayout(path);
-		await tick();
-		await Promise.resolve();
-		await tick();
+	it.each(['/login', '/no-access', '/auth/callback', '/share/public-token'])(
+		'never sends the public address %s to sign-in',
+		async (path) => {
+			currentUser.set(null);
+			authLoading.set(true);
+			vi.mocked(checkAuth).mockImplementation(async () => null);
+			mountLayout(path);
+			await tick();
+			await Promise.resolve();
+			await tick();
 
-		expect(checkAuth).not.toHaveBeenCalled();
-		expect(signInRedirects()).toEqual([]);
-	});
+			expect(checkAuth).not.toHaveBeenCalled();
+			expect(signInRedirects()).toEqual([]);
+		}
+	);
 });
 
 // SvelteKit's start drops the library a reloaded entry carried, and shallow
@@ -1392,7 +1381,7 @@ describe('the library route group', () => {
 		expect(readdirSync(join(libraryGroupDir, 'library'))).toContain('+page.svelte');
 	});
 
-	it('leaves settings, auth, share and legal pages outside the group', () => {
+	it('leaves settings, auth, and share pages outside the group', () => {
 		const topLevelDirs = readdirSync(routesDir, { withFileTypes: true })
 			.filter((entry) => entry.isDirectory())
 			.map((entry) => entry.name);
@@ -1404,7 +1393,6 @@ describe('the library route group', () => {
 				'login',
 				'no-access',
 				'auth',
-				'legal',
 				'share',
 				'loras'
 			])
