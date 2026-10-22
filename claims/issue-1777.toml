@@ -1,0 +1,8 @@
+claim_id = "0ff8ed872acc4ff1befed3d92ec99069"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "2910af7b0bd801c5936332e418d331e067607ece"
+branch = "claude/issue-1777-quality-v050"
+scope = [".github/workflows", "quality", "scripts/check_root_layout.py"]
+opened_commit = "979dc64fa4f1f4542466a474fef212f8a3076dcc"
+whole_reason = "One pin bump across the two workflow callers and the quality config they read."
