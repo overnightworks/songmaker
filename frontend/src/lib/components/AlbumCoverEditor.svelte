@@ -129,7 +129,10 @@
 			: null
 	);
 	const canSuggestCover = $derived(
-		!isCoverSuggestionGenerating && !coverSuggestionsLoading && !dailyLimitNote
+		!isCoverSuggestionGenerating &&
+			!coverSuggestionsLoading &&
+			!coverSuggestionsBusy &&
+			!dailyLimitNote
 	);
 	// At the daily limit the limit is the one word the editor says, so the
 	// failure of a run from before this visit stays silent beside it; a run

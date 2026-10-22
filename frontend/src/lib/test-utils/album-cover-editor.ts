@@ -101,7 +101,13 @@ export function uploadCoverFile(target: HTMLElement): void {
 export function deferred<T>(): {
 	promise: Promise<T>;
 	resolve: (value: T | PromiseLike<T>) => void;
+	reject: (reason: unknown) => void;
 } {
 	let resolve!: (value: T | PromiseLike<T>) => void;
-	return { promise: new Promise<T>((done) => (resolve = done)), resolve };
+	let reject!: (reason: unknown) => void;
+	const promise = new Promise<T>((done, fail) => {
+		resolve = done;
+		reject = fail;
+	});
+	return { promise, resolve, reject };
 }
