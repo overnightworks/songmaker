@@ -24,8 +24,6 @@ from oidc_world import World
 
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
 
-pytest_plugins = ("oidc_world",)
-
 MEMBER = "/apps/songmaker"
 ADMIN = "/apps/songmaker/admin"
 SUBJECT = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"

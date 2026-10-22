@@ -11,8 +11,6 @@ from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import AuditLog, UserSession
 
-pytest_plugins = ("oidc_world",)
-
 MEMBER = "/apps/songmaker"
 SUBJECT = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
 OTHER_SUBJECT = "0a9b8c7d-dddd-4eee-8fff-ba9876543210"
