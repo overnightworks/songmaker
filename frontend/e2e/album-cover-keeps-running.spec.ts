@@ -5,7 +5,7 @@
 // seeded in the database (scripts/seed_e2e_job_states.py). Each test makes a
 // fresh album of its own and archives it afterwards.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	ALBUM_COVER_EDITING_CLOSE_LABEL,
 	ALBUM_COVER_EDITING_LABEL,
@@ -27,6 +27,22 @@ interface CoverSuggestionsReading {
 }
 
 const RUN_STARTED_SECONDS_AGO = 90;
+const ELAPSED_TIME_SLACK_SECONDS = 20;
+const SECONDS_PER_MINUTE = 60;
+
+// The running slot names the time since the server started the run (E3), and
+// it is a status, not a progress bar: the run has no percentage.
+async function expectElapsedTimeSinceStart(editing: Locator): Promise<void> {
+	const making = editing.getByRole('status').filter({ hasText: ALBUM_COVER_SUGGESTING_LABEL });
+	await expect(making).toBeVisible();
+	await expect(editing.getByRole('progressbar')).toHaveCount(0);
+	const [, minutes = '', secondsPart = ''] =
+		(await making.textContent())?.match(/(\d+):(\d{2})/) ?? [];
+	expect(minutes).not.toBe('');
+	const seconds = Number(minutes) * SECONDS_PER_MINUTE + Number(secondsPart);
+	expect(seconds).toBeGreaterThanOrEqual(RUN_STARTED_SECONDS_AGO);
+	expect(seconds).toBeLessThanOrEqual(RUN_STARTED_SECONDS_AGO + ELAPSED_TIME_SLACK_SECONDS);
+}
 
 async function createFreshAlbum(page: Page, shell: string): Promise<FreshAlbum> {
 	const title = `E2E Cover Keeps Running ${shell} ${Date.now()}`;
@@ -72,9 +88,7 @@ test('leaving the cover editor and coming back finds the suggestion still runnin
 			startedSecondsAgo: RUN_STARTED_SECONDS_AGO
 		});
 		const editing = await openCoverEditor(page, album);
-		await expect(
-			editing.getByRole('progressbar', { name: ALBUM_COVER_SUGGESTING_LABEL })
-		).toBeVisible();
+		await expectElapsedTimeSinceStart(editing);
 
 		await page.goto(HOME_PATH);
 		await expect
@@ -85,9 +99,7 @@ test('leaving the cover editor and coming back finds the suggestion still runnin
 			});
 
 		const reopened = await openCoverEditor(page, album);
-		await expect(
-			reopened.getByRole('progressbar', { name: ALBUM_COVER_SUGGESTING_LABEL })
-		).toBeVisible();
+		await expectElapsedTimeSinceStart(reopened);
 		expect((await readSuggestions(page, album.id)).job).toMatchObject({ status: 'running' });
 	});
 });
@@ -99,7 +111,7 @@ test('a suggestion that finished while away waits when the editor opens again', 
 		const jobId = await seedRunningCoverJob(album.id);
 		const editing = await openCoverEditor(page, album);
 		await expect(
-			editing.getByRole('progressbar', { name: ALBUM_COVER_SUGGESTING_LABEL })
+			editing.getByRole('status').filter({ hasText: ALBUM_COVER_SUGGESTING_LABEL })
 		).toBeVisible();
 		await page.goto(HOME_PATH);
 
@@ -120,7 +132,7 @@ test('× stops the running suggestion', async ({ page }, testInfo) => {
 		const jobId = await seedRunningCoverJob(album.id);
 		const editing = await openCoverEditor(page, album);
 		await expect(
-			editing.getByRole('progressbar', { name: ALBUM_COVER_SUGGESTING_LABEL })
+			editing.getByRole('status').filter({ hasText: ALBUM_COVER_SUGGESTING_LABEL })
 		).toBeVisible();
 
 		await editing.getByRole('button', { name: ALBUM_COVER_EDITING_CLOSE_LABEL }).click();

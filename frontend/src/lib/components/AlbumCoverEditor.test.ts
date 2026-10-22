@@ -191,7 +191,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 		await vi.waitFor(() =>
-			expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+			expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 		);
 		await vi.waitFor(() => expect(FakeJobEventSource.sources).toHaveLength(1));
 		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
@@ -406,7 +406,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		pressEditorButton(target, 'Suggest another');
 
 		await vi.waitFor(() => expect(countLine(target)).toBe('7 of 10 left today'));
-		expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull();
+		expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull();
 		expect(stageLabel(target)).toBeNull();
 		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
@@ -619,11 +619,12 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
-	it('shows progress only while the suggestion runs and names a run that hit its time limit', async () => {
+	it('shows the elapsed time only while the suggestion runs and names a run that hit its time limit', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);
+		const fortyTwoSecondsAgo = new Date(Date.now() - 42_000).toISOString();
 		fetchAlbumCoverSuggestions
 			.mockResolvedValueOnce(
-				coverSuggestions({ job: coverJob({ status: 'running', progress: 0.5 }) })
+				coverSuggestions({ job: coverJob({ status: 'running', started_at: fortyTwoSecondsAgo }) })
 			)
 			.mockResolvedValue(
 				coverSuggestions({
@@ -638,11 +639,9 @@ describe('AlbumCoverEditor in the album header', () => {
 		await openCoverEditing(target);
 
 		await vi.waitFor(() =>
-			expect(
-				target.querySelector('.cover-stage [role="progressbar"]')?.getAttribute('aria-valuenow')
-			).toBe('50')
+			expect(target.querySelector('.cover-stage')?.textContent).toMatch(/cover\s·\s0:4\d/)
 		);
-		expect(target.querySelector('.cover-stage')?.textContent).toContain('Making your cover…');
+		expect(target.querySelector('[role="progressbar"]')).toBeNull();
 		await vi.waitFor(() => expect(FakeJobEventSource.sources).toHaveLength(1));
 		FakeJobEventSource.sources[0].emit(
 			coverJob({ status: 'failed', error: 'Cover suggestion could not be generated' })
@@ -656,7 +655,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(target.querySelector('[role="alert"]')?.textContent).toContain(
 			'Cover suggestion could not be generated'
 		);
-		expect(target.querySelector('[role="progressbar"]')).toBeNull();
+		expect(target.querySelector('.cover-stage [role="status"]')).toBeNull();
 		expect(target.querySelector('.suggestion-placeholder')).toBeNull();
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
@@ -685,7 +684,7 @@ describe('AlbumCoverEditor in the album header', () => {
 				used_today: 3
 			}),
 			shows: (target: HTMLElement) =>
-				expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+				expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 		},
 		{
 			reread: 'shows the suggestion of a run that ended meanwhile',
@@ -929,7 +928,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		suggestionJob.resolve(coverJob());
 		await vi.waitFor(() =>
-			expect(target.querySelector('.cover-stage')?.textContent).toContain('Making your cover…')
+			expect(target.querySelector('.cover-stage')?.textContent).toContain('Making a cover')
 		);
 	});
 });

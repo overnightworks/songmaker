@@ -42,6 +42,7 @@
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { holdOpenWhile } from '$lib/stores/layers';
+	import CoverRunElapsed from './CoverRunElapsed.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -69,7 +70,7 @@
 	>;
 
 	type StageSlot =
-		{ kind: 'suggestion'; id: string; url: string } | { kind: 'making'; progress: number };
+		{ kind: 'suggestion'; id: string; url: string } | { kind: 'making'; startedAt: string | null };
 
 	const HTTP_CONFLICT = 409;
 
@@ -146,8 +147,8 @@
 				? (latestCoverJob?.error ?? ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
 				: null)
 	);
-	const coverSuggestionsProgress = $derived(
-		activeCoverJob?.job.progress ?? latestCoverJob?.progress ?? 0
+	const coverSuggestionsStartedAt = $derived(
+		activeCoverJob?.job.started_at ?? latestCoverJob?.started_at ?? null
 	);
 	const suggestionCount = $derived(coverSuggestions?.suggestions.length ?? 0);
 	const hasSuggestions = $derived(suggestionCount > 0);
@@ -157,7 +158,7 @@
 			...suggestion
 		})),
 		...(isCoverSuggestionGenerating
-			? [{ kind: 'making', progress: coverSuggestionsProgress } as const]
+			? [{ kind: 'making', startedAt: coverSuggestionsStartedAt } as const]
 			: [])
 	]);
 	const shownSlotIndex = $derived(
@@ -474,18 +475,13 @@
 			{#if shownSlot?.kind === 'suggestion'}
 				<img src={shownSlot.url} alt={albumCoverSuggestionAlt(album.title)} draggable="false" />
 			{:else if shownSlot?.kind === 'making'}
-				<div class="stage-making">
-					<span>{ALBUM_COVER_SUGGESTING_LABEL}</span>
-					<div
-						class="stage-progress"
-						role="progressbar"
-						aria-label={ALBUM_COVER_SUGGESTING_LABEL}
-						aria-valuemin={0}
-						aria-valuemax={100}
-						aria-valuenow={Math.round(shownSlot.progress * 100)}
+				<div class="stage-making" role="status">
+					<span class="stage-ring" aria-hidden="true"></span>
+					<span
+						>{ALBUM_COVER_SUGGESTING_LABEL}{#if shownSlot.startedAt}<span aria-hidden="true">
+								&nbsp;·&nbsp;<CoverRunElapsed startedAt={shownSlot.startedAt} /></span
+							>{/if}</span
 					>
-						<span style:width={`${Math.max(4, shownSlot.progress * 100)}%`}></span>
-					</div>
 				</div>
 			{:else if album.cover}
 				<img
@@ -679,19 +675,20 @@
 		text-align: center;
 	}
 
-	.stage-progress {
-		height: 0.25rem;
-		overflow: hidden;
-		border-radius: 999px;
-		background: var(--border);
+	.stage-ring {
+		align-self: center;
+		width: 2rem;
+		height: 2rem;
+		border: 3px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: stage-turn 2.4s linear infinite;
 	}
 
-	.stage-progress span {
-		display: block;
-		height: 100%;
-		border-radius: inherit;
-		background: var(--accent);
-		transition: width 180ms ease-out;
+	@keyframes stage-turn {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.cover-failure {
@@ -792,8 +789,8 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.stage-progress span {
-			transition: none;
+		.stage-ring {
+			animation: none;
 		}
 	}
 </style>

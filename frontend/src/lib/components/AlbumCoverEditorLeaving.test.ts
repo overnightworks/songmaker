@@ -93,7 +93,7 @@ async function openEditorWithRunningSuggestion(
 	serverRunsUntilCancelled(extra);
 	await openCoverEditing(target);
 	await vi.waitFor(() =>
-		expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+		expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 	);
 }
 
@@ -257,7 +257,7 @@ describe('Leaving the album cover editor', () => {
 		await openCoverEditing(target);
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+			expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 		);
 		expect(countLine(target)).toBe('9 of 10 left today');
 	});
@@ -542,7 +542,7 @@ describe('Leaving the album cover editor', () => {
 		const target = await renderDetail();
 		await openCoverEditing(target);
 		await vi.waitFor(() =>
-			expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+			expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
 		);
 
 		pressEditorButton(target, 'Close cover editing');
