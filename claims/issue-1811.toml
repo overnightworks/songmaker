@@ -1,0 +1,8 @@
+claim_id = "1242f9d686f14c5b89f09769b804ffd4"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "82da89276c6994530d318316d9d1bd69c7543a12"
+branch = "claude/issue-1811-ai-mark-files"
+scope = ["src/audio_engine", "src/songmaker_cli/constants.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/covers.py", "src/songmaker_cli/generate.py", "tests"]
+opened_commit = "e6aab4b7072e31cd3e8ebf58f6c8ce54f219479d"
+whole_reason = "One mark written by the three file writers that produce generated media, with its tests."
