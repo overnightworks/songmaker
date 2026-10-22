@@ -132,6 +132,8 @@ User clicks "Generate"                    User clicks "Score"
    stores user + assistant messages)
 ```
 
+Newly generated audio (MP3, WAV) and generated album covers (the suggestion PNG and every published cover file after USE) carry the IPTC digital source type `trainedAlgorithmicMedia` as machine-readable metadata; an uploaded cover is not AI-generated and does not.
+
 ## Layers
 
 ### Frontend (`frontend/`)

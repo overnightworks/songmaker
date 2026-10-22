@@ -18,11 +18,14 @@ from conftest import (
 from fastapi.testclient import TestClient
 from PIL import Image
 from webauth.ports import AuthenticatedUser
+from xmp_packet import read_digital_source_type
 
+from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
     ARQ_MUSIC_QUEUE_NAME,
+    COVER_DIRNAME,
     COVER_SUGGESTION_NOT_FOUND,
     JSON_REQUEST_BODY_MAX_BYTES,
     CoverExecutor,
@@ -389,6 +392,21 @@ def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
     assert selected.status_code == 200
     assert selected.json()["cover"] is not None
     assert client.get("/api/albums/alice-album/cover-suggestions").json()["used_today"] == 1
+
+
+def test_selected_cover_suggestion_carries_the_ai_mark_in_every_published_file(
+    alice_app: tuple[TestClient, object], tmp_path: Path,
+) -> None:
+    client, factory = alice_app
+    suggestion_id = _add_suggestion(factory, tmp_path / "audio")
+
+    selected = client.put("/api/albums/alice-album/cover", json={"suggestion_id": suggestion_id})
+
+    assert selected.status_code == 200
+    published = sorted((tmp_path / "audio" / COVER_DIRNAME / "alice-album").iterdir())
+    assert len(published) == 3
+    for path in published:
+        assert read_digital_source_type(path) == IPTC_TRAINED_ALGORITHMIC_MEDIA, path.name
 
 
 def test_discard_suggestions_keeps_the_selected_cover(

@@ -21,8 +21,10 @@ from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
 from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
+from xmp_packet import read_digital_source_type
 
 import songmaker_cli.cover_runner as cover_runner
+from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, JobType
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
@@ -535,3 +537,26 @@ def test_web_runner_task_cancellation_reaps_the_codex_process(tmp_path: Path, mo
     assert reaped.is_set()
     assert process_pool.reservation_count() == 0
     assert not list(audio_dir.rglob(".*.staging"))
+
+
+def test_published_cover_suggestion_carries_the_ai_mark_in_its_xmp(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    factory, audio_dir, _job_id = _cover_job(tmp_path)
+    monkeypatch.setattr(
+        cover_runner, "generate_codex_cover_image", lambda *_args, **_kwargs: _png_bytes(),
+    )
+    monkeypatch.setattr(
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
+    )
+
+    assert asyncio.run(cover_runner.run_next_cover_job(
+        db_factory=factory, audio_dir=audio_dir, settings=_settings(CoverExecutor.WEB),
+    ))
+
+    with factory() as session:
+        (suggestion,) = session.query(AlbumCoverSuggestion).all()
+        png_path = audio_dir / suggestion.png_path
+    assert read_digital_source_type(png_path) == IPTC_TRAINED_ALGORITHMIC_MEDIA
+    with Image.open(png_path) as published:
+        assert published.size == (16, 16)

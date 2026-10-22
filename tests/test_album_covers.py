@@ -199,6 +199,25 @@ def test_upload_jpeg_cover_and_get_variants(alice_app: tuple[TestClient, object]
     assert original.headers["content-type"].startswith("image/jpeg")
 
 
+@pytest.mark.parametrize("make_payload", [_png_bytes, _jpeg_bytes])
+def test_uploaded_cover_does_not_carry_the_ai_mark(
+    alice_app: tuple[TestClient, object], tmp_path: Path, make_payload,
+) -> None:
+    client, _ = alice_app
+    uploaded = client.post(
+        "/api/albums/alice-album/cover",
+        files={"file": ("cover", make_payload(), "application/octet-stream")},
+    )
+
+    assert uploaded.status_code == 200, uploaded.text
+    published = list((tmp_path / "audio" / COVER_DIRNAME / "alice-album").iterdir())
+    assert len(published) == 3
+    for path in published:
+        with Image.open(path) as image:
+            assert "xmp" not in image.info
+            assert "XML:com.adobe.xmp" not in image.info
+
+
 def test_upload_rejects_svg(alice_app: tuple[TestClient, object]) -> None:
     client, _ = alice_app
     resp = client.post(
