@@ -1,8 +1,0 @@
-claim_id = "b8b02b94b1604744aa23b3f1fc0c2852"
-agent = "claude"
-role = "builder"
-base = "5e01b060fc060a770b8e77cf424e439e2d004d91"
-branch = "claude/issue-1734-requirement-machinery-out"
-scope = [".github/workflows/ci.yml", ".github/workflows/requirement-witnesses.yml", ".github/workflows/requirements.yml", "README.md", "docs/PRODUCT.md", "docs/VISION.md", "docs/acceptance", "docs/requirements/README.md", "docs/requirements/revisions.toml", "docs/requirements/witnesses", "docs/security.md", "docs/testing.md", "plans/issue-518-codex-cli-turn.md", "pyproject.toml", "quality/config.toml", "scripts/acceptance_evidence.py", "scripts/auto-deploy.sh", "scripts/bind_requirement_revision.py", "scripts/check_requirement_witnesses.py", "scripts/check_requirements.py", "scripts/requirement_binder.py", "scripts/requirement_contract.py", "scripts/requirement_witness.py", "tests/test_acceptance_evidence.py", "tests/test_api.py", "tests/test_bind_requirement_revision.py", "tests/test_check_requirement_witnesses.py", "tests/test_check_requirements.py", "tests/test_conversation_api.py", "tests/test_cowriter_dispatch.py", "tests/test_cowriter_providers.py", "tests/test_quality_workflow.py", "tests/test_requirement_binder.py", "tests/test_requirement_contract.py", "tests/test_requirement_witness.py", "tests/test_sharing.py"]
-opened_commit = "9978c73b8e13056bd6f89c058e6b745ff62148da"
-whole_reason = "Removing one gate means deleting its scripts, tests, workflows, CI job, verdict entry and every doc that describes it; split, CI would demand a job that no longer exists."
