@@ -130,6 +130,22 @@ def _in_thread(answers: dict[str, Response | BaseException], name: str,
     return threading.Thread(target=run, name=name, daemon=True)
 
 
+def _stop_workers(pg_factory, threads: tuple[threading.Thread, ...],
+                  backend_pids: tuple[int | None, ...]) -> list[str]:
+    """Joins the route threads, ends the database work of any that stay, names those still alive."""
+    for thread in threads:
+        if thread.ident is not None:
+            thread.join(WAIT_SECONDS)
+    if any(thread.is_alive() for thread in threads):
+        with pg_factory() as observer:
+            for pid in filter(None, backend_pids):
+                observer.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": pid})
+            observer.commit()
+        for thread in threads:
+            thread.join(WAIT_SECONDS)
+    return [thread.name for thread in threads if thread.is_alive()]
+
+
 def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_session(
     pg_factory, tmp_path,
 ) -> None:
@@ -159,12 +175,11 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
         assert "logout" not in answers
     finally:
         pause.release.set()
-        for thread in (callback, logout):
-            if thread.ident is not None:
-                thread.join(WAIT_SECONDS)
+        stuck = _stop_workers(pg_factory, (callback, logout), (pause.backend_pid, pause.logout_pid))
         event.remove(pg_factory, "before_commit", pause)
         event.remove(engine, "before_cursor_execute", pause.note_lock_request)
-    assert not callback.is_alive() and not logout.is_alive(), "A route never answered"
+        if stuck:
+            pytest.fail(f"Route threads never stopped: {', '.join(stuck)}")
 
     assert answers["callback"].status_code == 303
     assert answers["logout"].status_code == 200

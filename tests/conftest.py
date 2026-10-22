@@ -6,10 +6,9 @@ import asyncio
 import logging
 import os
 
-# Required env vars for Settings construction at module-import time.
-# Real values from the environment win — these are only safe defaults
-# so importing songmaker_cli.music_worker (which constructs Settings at
-# class-definition time) does not fail in unit tests.
+# Required env vars for Settings construction at module-import time. Real values from the
+# environment win — these are only safe defaults so importing songmaker_cli.music_worker
+# (which constructs Settings at class-definition time) does not fail in unit tests.
 os.environ["SONGMAKER_SKIP_ENV_FILE"] = "1"
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -17,7 +16,8 @@ os.environ.setdefault("SESSION_SECRET", "x" * 64)
 os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
 os.environ.setdefault("WORKER_ID", "test-worker")
 os.environ.setdefault("PUBLIC_BASE_URL", "https://songmaker.test")
-os.environ.setdefault("ALLOWED_HOSTS", "testserver,localhost,songmaker-web,songmaker.test")
+os.environ.setdefault(
+    "ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,songmaker-web,songmaker.test")
 os.environ.setdefault("OIDC_ISSUER", "https://issuer.test/realms/test")
 os.environ.setdefault("OIDC_CLIENT_ID", "songmaker-test")
 
