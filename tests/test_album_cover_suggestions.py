@@ -508,6 +508,35 @@ def test_cover_suggestions_have_no_public_share_route(
     assert response.json() == {"detail": "Not Found"}
 
 
+@pytest.mark.parametrize(
+    ("method", "path_for", "kwargs_for"),
+    [
+        ("get", lambda sid: f"/api/albums/alice-album/cover-suggestions/{sid}", lambda sid: {}),
+        (
+            "put",
+            lambda sid: "/api/albums/alice-album/cover",
+            lambda sid: {"json": {"suggestion_id": sid}},
+        ),
+    ],
+)
+def test_full_app_answers_a_suggestion_outside_the_audio_root_like_a_missing_one(
+    alice_app: tuple[TestClient, object], tmp_path: Path, method: str, path_for, kwargs_for,
+) -> None:
+    client, factory = alice_app
+    audio_dir = tmp_path / "audio"
+    suggestion_id = _add_suggestion(factory, audio_dir)
+    album_dir = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
+    album_dir.rename(tmp_path / "moved-album")
+    album_dir.symlink_to(tmp_path / "moved-album", target_is_directory=True)
+    missing_id = "b" * 36
+
+    rejected = getattr(client, method)(path_for(suggestion_id), **kwargs_for(suggestion_id))
+    missing = getattr(client, method)(path_for(missing_id), **kwargs_for(missing_id))
+
+    assert rejected.status_code == missing.status_code == 404
+    assert rejected.json() == missing.json() == {"detail": "Not Found"}
+
+
 def test_owner_cannot_distinguish_missing_and_traversal_suggestions(
     alice_app: tuple[TestClient, object],
 ) -> None:
