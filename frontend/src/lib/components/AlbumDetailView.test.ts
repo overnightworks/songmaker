@@ -64,7 +64,6 @@ const updateAlbum = vi.fn();
 const archiveAlbum = vi.fn();
 const unarchiveAlbum = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();
-const discardAlbumCoverSuggestions = vi.fn();
 const createSong = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -91,7 +90,7 @@ vi.mock('$lib/api/songs', () => ({
 vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
-	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
+	discardAlbumCoverSuggestions: async () => undefined
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn(),
@@ -107,10 +106,7 @@ vi.mock('$lib/stores/playlists', async (importOriginal) => {
 });
 vi.mock('$lib/stores/navigation', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
-	return {
-		...actual,
-		selectSong: vi.fn()
-	};
+	return { ...actual, selectSong: vi.fn() };
 });
 vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
@@ -166,7 +162,6 @@ beforeEach(() => {
 	archiveAlbum.mockReset();
 	unarchiveAlbum.mockReset();
 	fetchAlbumCoverSuggestions.mockReset().mockResolvedValue(NO_COVER_SUGGESTIONS);
-	discardAlbumCoverSuggestions.mockReset().mockResolvedValue(undefined);
 	vi.mocked(addToast).mockReset();
 	vi.mocked(selectSong).mockReset();
 	createSong.mockReset();
@@ -612,45 +607,6 @@ describe('AlbumDetailView header', () => {
 				`${ALBUM_COVER_ALT_TYPE} Night Drive`
 			)
 		);
-	});
-
-	it('discards the unused cover suggestions of the album the upload was started on', async () => {
-		albumList.set([
-			album({ id: 'a-local', title: 'Night Drive' }),
-			album({ id: 'a-other', title: 'Other Night' })
-		]);
-		let finishUpload!: (uploaded: ReturnType<typeof album>) => void;
-		uploadAlbumCover.mockReturnValue(
-			new Promise<ReturnType<typeof album>>((done) => (finishUpload = done))
-		);
-		const target = await renderDetail();
-		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		await uploadFromCoverEditor(target);
-		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
-		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledWith('a-local', file));
-
-		selectedAlbumId.set('a-other');
-		finishUpload(album({ id: 'a-local', title: 'Night Drive' }));
-
-		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
-		expect(discardAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
-	});
-
-	it('discards no cover suggestion when the upload fails', async () => {
-		uploadAlbumCover.mockRejectedValue(serverRefusal('Cover must be an image'));
-		const target = await renderDetail();
-		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		await uploadFromCoverEditor(target);
-		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
-		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-
-		await vi.waitFor(() =>
-			expect(addToast).toHaveBeenCalledWith('Cover must be an image', 'error')
-		);
-		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
 	it.each([
