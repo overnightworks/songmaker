@@ -137,6 +137,29 @@ describe('RecipePanel', () => {
 		expect(get(sourceGeneration)?.id).toBe('g1');
 	});
 
+	it('shows a finite end time when the repaint source take was made with auto Duration', async () => {
+		const target = await render();
+		setSourceFromGeneration(
+			makeGeneration({ generation_params: { audio_duration: 0 }, audio_duration_sec: 123.4 }),
+			'repaint'
+		);
+		await tick();
+		const endHandle = target.querySelector<HTMLElement>('.handle-end');
+		const picker = target.querySelector<HTMLElement>('.waveform-picker');
+		if (!endHandle || !picker) throw new Error('Expected the repaint range picker');
+		picker.getBoundingClientRect = () => new DOMRect(0, 0, 1000, 40);
+		endHandle.setPointerCapture = vi.fn();
+		const pointer = (type: string, clientX: number) =>
+			new MouseEvent(type, { clientX, bubbles: true, cancelable: true });
+		endHandle.dispatchEvent(pointer('pointerdown', 1000));
+		endHandle.dispatchEvent(pointer('pointermove', 500));
+		await tick();
+		const times = Array.from(target.querySelectorAll('.time-display span')).map(
+			(el) => el.textContent
+		);
+		expect(times).toEqual(['0:00.00', '1:01.72']);
+	});
+
 	it.each(['repaint', 'cover'] as const)(
 		'says that %s uses the lyrics and style currently in the editor',
 		async (mode) => {
