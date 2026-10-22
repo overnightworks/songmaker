@@ -607,7 +607,7 @@ export const ALBUM_COVER_EDITING_REMOVE_LABEL = 'Remove';
 export const ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL = 'Previous suggestion';
 export const ALBUM_COVER_NEXT_SUGGESTION_LABEL = 'Next suggestion';
 export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestion…';
-export const ALBUM_COVER_SUGGESTING_LABEL = 'Making your cover…';
+export const ALBUM_COVER_SUGGESTING_LABEL = 'Making a cover';
 export const ALBUM_COVER_SUGGESTION_FAILED_TITLE = 'Couldn’t make a cover suggestion';
 export const ALBUM_COVER_SUGGESTION_FAILED_FALLBACK = 'The cover suggestion failed. Try again.';
 // The server's own words for a spent daily limit, so the editor says it the
