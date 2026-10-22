@@ -44,5 +44,5 @@ and the choices made while curating it.
 
 The current product description in [AGENTS.md](../AGENTS.md), the running code,
 and GitHub issues are source material for requirement candidates. The ruled product sentences in
-[docs/requirements/](requirements/README.md) (moving to `docs/specs/`) are
+[docs/requirements/](requirements/README.md) are
 normative; they change only by an operator ruling that the pull request names.

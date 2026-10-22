@@ -1,5 +1,6 @@
 """G1–G3: Repository contract for the reusable quality gate (live proof is CI)."""
 
+import datetime
 import os
 import re
 import subprocess
@@ -67,7 +68,14 @@ def test_g1_mandatory_names_match_rendered_dependencies():
             rendered_names.add(name)
     config = tomllib.loads((ROOT / "quality/config.toml").read_text())
     assert set(config) == {"gate"}
-    assert set(config["gate"]) - {"loosened"} == {"mandatory_jobs"}
+    assert set(config["gate"]) == {"mandatory_jobs", "loosened"}
+    loosened = config["gate"]["loosened"]
+    assert isinstance(loosened, list)
+    assert len(loosened) == 1
+    entry = loosened[0]
+    assert set(entry) == {"what", "item", "date", "reason"}
+    assert isinstance(entry["date"], datetime.date)
+    assert entry["what"] == 'mandatory job "Acceptance evidence (integration)" removed'
     mandatory = config["gate"]["mandatory_jobs"]
     assert len(mandatory) == len(set(mandatory)) == 4
     assert set(mandatory) == rendered_names
