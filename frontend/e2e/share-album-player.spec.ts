@@ -6,6 +6,7 @@
 
 import { mkdirSync } from 'node:fs';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
+import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
 import {
 	NOW_PLAYING_GO_TO_SONG,
 	SEEK_PLAYBACK_LABEL,
@@ -482,7 +483,7 @@ test.describe('rights and neighbours', () => {
 		const hrefs = await page
 			.locator(`${PLAYER_SCROLL_ROOT} a`)
 			.evaluateAll((links) => links.map((link) => link.getAttribute('href')));
-		expect(hrefs).toEqual(['/']);
+		expect(hrefs).toEqual(['/', ...LEGAL_SECTIONS.map(({ href }) => href)]);
 	});
 
 	test('1374_rule_2 F2: an unshared address still shows its status line', async ({ browser }) => {

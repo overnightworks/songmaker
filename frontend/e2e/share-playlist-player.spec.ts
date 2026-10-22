@@ -1,6 +1,7 @@
 import { expect, test as base, type Page, type Locator } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
+import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
 // 1354_65_A4: playlist transport proofs use the shared-player control owner.
 import { control } from './share-album-fixtures';
 import type { SharedPlaylistPayload } from '../src/lib/api/types';
@@ -576,7 +577,7 @@ async function rights(page: Page, payload: SharedPlaylistPayload) {
 		await page
 			.locator('.shared-page a')
 			.evaluateAll((links) => links.map((link) => link.getAttribute('href')))
-	).toEqual(['/']);
+	).toEqual(['/', ...LEGAL_SECTIONS.map(({ href }) => href)]);
 }
 
 test('1374_rule_10 P14: uploaded cover mosaic revoke legal and signed-out rights', async ({
