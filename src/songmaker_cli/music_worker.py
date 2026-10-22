@@ -23,6 +23,7 @@ from songmaker_cli.constants import (
     JobFunction,
     JobType,
 )
+from songmaker_cli.cover_runner import run_cover_suggestion_job
 from songmaker_cli.jobs import (
     download_model_on_worker as _download_model_on_worker_impl,
 )
@@ -30,7 +31,6 @@ from songmaker_cli.jobs import (
     load_model_on_worker as _load_model_on_worker_impl,
 )
 from songmaker_cli.jobs import (
-    run_cover_suggestion_job,
     run_generation_job,
     run_lora_training_job,
 )

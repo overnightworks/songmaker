@@ -238,8 +238,8 @@ def test_web_cover_runner_is_visible_in_lifecycle_health(
     started = threading.Event()
     recovered = []
 
-    async def idle_cover_runner(app) -> None:
-        lifecycle.background_loop_registry(app).record_success(BackgroundLoopName.COVER_RUNNER)
+    async def idle_cover_runner(app, registry) -> None:
+        registry.record_success(BackgroundLoopName.COVER_RUNNER)
         started.set()
         await asyncio.Future()
 

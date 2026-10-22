@@ -87,11 +87,8 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 - **CI PostgreSQL contract**: `tests/test_postgresql.py`, `tests/test_cover_accounting.py`, `tests/test_reference_quota.py`, `tests/test_auth_write_lock_postgres.py` and `tests/test_merge_accounts_into_subject.py` (the one-shot account merge, deleted with its script after the switch) run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, the user-management write lock held once per transaction, transactional rollback, retention gaps, and cover publication/cancellation accounting; SQLite tests do not stand in for these guarantees. The reference quota proofs (`1301-F3-Q-BOUNDARY`, `-CONCURRENT`, `-FAILURE`, `-PATH`, `-SURFACE`) cover exact limits, retained and crash-file accounting, concurrent owner admission, independent owners, unrelated same-user writes, failed writes and request cancellation. Require the PostgreSQL contract job log to show the PostgreSQL quota cases and both write-lock cases passed with zero skipped; collection alone is not evidence. Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
 - **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
-GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, `security.yml`,
-`requirements.yml`, and `requirement-witnesses.yml`) run on push/PR to `main`.
-Security and live requirement-witness verification also run weekly. The
-requirement workflows are separate visible checks, not enforced merge gates
-while issue #31 remains open. The live checks are:
+GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, and `security.yml`) run on push/PR to `main`.
+Security verification also runs weekly. The live checks are:
 
 | Job | What |
 |---|---|
@@ -101,9 +98,6 @@ while issue #31 remains open. The live checks are:
 | Frontend | `pnpm check` · `pnpm lint` · `pnpm test:coverage` · `pnpm build` |
 | E2E | Boots the CI stack (`docker/docker-compose.ci.yml`), curl-smokes it, then drives the desktop library flow in Chromium against it |
 | Security | bandit (`pyproject.toml`: skip B101/B110/B310/B404/B603, exclude tests; B104/B105/B608 nosec only on known false positives) · pip-audit · `pnpm audit --prod` (the frontend audit retries registry outages and annotates an inconclusive result) |
-| Requirements | strict offline requirement/acceptance schema · exact bytes and linear history · exact PR/push base · derived PRODUCT view |
-| Requirement witnesses | fixed GitHub repo/issue/comment re-fetch · exact identity, URL, author, timestamp, and approval-body match |
-| Acceptance evidence | #42-A1 runs the marked Pick-replacement API test and retains its commit-bound JSON report for 30 days |
 
 ### No-silent-fallbacks check
 
@@ -169,39 +163,6 @@ sample of the series already carries it (issue #333). CI runs this as the
 docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
   --entrypoint promtool prom/prometheus:latest test rules alert.rules.test.yml
 ```
-
-### Acceptance evidence pilot
-
-#42-A1 is one Pytest integration proof for `ACC-CURATION-02` →
-`REQ-CURATION-02`. It exercises the FastAPI router and SQLite persistence through
-the test client with its test-auth override. It does not prove session/login,
-PostgreSQL, a separate server, browser, UI, accessibility, or E2E behavior.
-`scripts/acceptance_evidence.py` accepts only one literal direct marker per
-top-level test, rejects unknown or orphaned critical integration claims, runs the
-claimed tests serially, and writes a point-in-time report containing the checked
-out commit, command, exit status, and result. The CI job uploads that report even
-when the test fails; its visible result is not a required merge gate until branch
-protection is configured.
-
-The witness test suite uses injected fake GitHub clients and transports; local
-tests never need a token or make network calls. It covers strict witness parsing,
-the empty no-network path, resource and time limits including the outer watchdog,
-fixed routes, fork-PR token isolation, pathological JSON, and mismatches at each
-link of the repository→issue→comment identity
-chain. Live results prove the state observed during that run. Approval-comment edits
-or deletions do not trigger verification; they are detected by the next push to
-main, same-repository pull-request run, weekly scheduled run, or manual dispatch
-that executes the verifier. Scheduling guarantees no maximum detection delay.
-
-The local binder is covered separately by
-`tests/test_requirement_binder.py` and `tests/test_bind_requirement_revision.py`.
-Those tests use temporary Git repositories and fake GitHub clients. They cover
-Genesis/successor lineage, canonical witness bytes, exact Git/index states,
-token isolation from Git, live-capture TOCTOU, process locking and wall timeout,
-no-clobber collisions, permission preservation, full planned-contract checks,
-same-byte foreign ownership, bounded ignored-directory scans, the final expected
-delta, and rollback/manual-recovery behavior at every write boundary. They never
-create a real approval or make a network request.
 
 ## End-to-end flows
 

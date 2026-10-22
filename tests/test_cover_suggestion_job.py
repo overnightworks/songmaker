@@ -37,12 +37,15 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.cover_runner import COVER_IMAGE_POLICY
+from songmaker_cli.cover_runner import (
+    COVER_IMAGE_POLICY,
+    build_cover_prompt,
+    run_cover_suggestion_job,
+)
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Job, Song, User, Version
 from songmaker_cli.db.queries.settings import set_cover_settings
-from songmaker_cli.jobs.cover_suggestions import build_cover_prompt, run_cover_suggestion_job
 
 _REDACTED_CODEX_LOGIN = {
     "auth_mode": "chatgpt",

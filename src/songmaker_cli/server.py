@@ -171,7 +171,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ]
     if settings.cover_executor is CoverExecutor.WEB:
         loop_tasks.append(
-            (BackgroundLoopName.COVER_RUNNER, asyncio.create_task(cover_runner_loop(app))),
+            (
+                BackgroundLoopName.COVER_RUNNER,
+                asyncio.create_task(cover_runner_loop(app, registry)),
+            ),
         )
     app.state.background_loop_tasks = dict(loop_tasks)
     for name, task in loop_tasks:

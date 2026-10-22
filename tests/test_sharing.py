@@ -1074,8 +1074,9 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
     assert traversal_log == "Audio path traversal denied"
 
 
-@pytest.mark.acceptance("ACC-SHARE-18")
 def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:
+    """Spec: REQ-SHARE-18 -- A public share audio request for an unknown share returns the same
+    silent not-found response as a missing file."""
     unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get("/shared/bad-slug/audio/g1.mp3")
     assert resp.status_code == 404

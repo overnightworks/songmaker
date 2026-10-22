@@ -721,8 +721,9 @@ def test_chat_turn_reuses_active_conversation_across_turns(client):
         assert session.query(ChatMessage).count() == 4
 
 
-@pytest.mark.acceptance("ACC-COWRITER-16")
 def test_chat_turn_provider_change_preserves_conversation_context(client):
+    """Spec: REQ-COWRITER-13 -- Changing the Co-Writer provider between chat turns preserves the
+    active conversation, its history, memory, mentions, and take context."""
     c, factory = client
     with factory() as session:
         session.add(Generation(

@@ -105,7 +105,6 @@ def test_cli_dispatch_uses_only_the_explicit_provider_adapter(
     assert stream.closed
 
 
-@pytest.mark.acceptance("ACC-COWRITER-09")
 @pytest.mark.parametrize(
     ("provider", "transport_factory"),
     [
@@ -116,6 +115,8 @@ def test_cli_dispatch_uses_only_the_explicit_provider_adapter(
 def test_cli_turn_uses_its_transport_through_the_shared_tool_loop(
     monkeypatch, provider, transport_factory,
 ):
+    """Spec: REQ-COWRITER-09 -- A Grok Co-Writer turn with a subscription token uses the Grok CLI
+    route only."""
     class Transport:
         closed = False
 
@@ -374,13 +375,15 @@ def _assert_cli_failure_never_falls_back_to_http(
     assert raised.value.reason.code is SafeRouteReasonCode.CLI_AUTH_REJECTED
 
 
-@pytest.mark.acceptance("ACC-COWRITER-11")
 def test_grok_cli_failure_never_falls_back_to_http(monkeypatch):
+    """Spec: REQ-COWRITER-11 -- A Grok CLI failure ends the turn with its named error and does not
+    switch to HTTP."""
     _assert_cli_failure_never_falls_back_to_http(monkeypatch, "grok", "GrokCliToolTransport")
 
 
-@pytest.mark.acceptance("ACC-COWRITER-13")
 def test_codex_cli_failure_never_falls_back_to_http(monkeypatch):
+    """Spec: REQ-COWRITER-11 -- A Codex CLI failure ends the turn with its named error and does not
+    switch to HTTP."""
     _assert_cli_failure_never_falls_back_to_http(monkeypatch, "codex", "CodexCliToolTransport")
 
 
@@ -660,10 +663,11 @@ def test_every_saved_cowriter_route_selects_exactly_one_transport(
     assert taken == [(expected_target, expected_key)]
 
 
-@pytest.mark.acceptance("ACC-COWRITER-12")
 def test_a_codex_turn_on_the_mirrored_cli_credential_never_falls_back_to_the_api_route(
     tmp_path: Path, monkeypatch,
 ) -> None:
+    """Spec: REQ-COWRITER-09 -- A Codex Co-Writer turn with a mirrored subscription access token
+    uses the Codex CLI route only."""
     auth_file = tmp_path / "auth.json"
     auth_file.write_text('{"tokens": {"access_token": "mirrored-subscription-token"}}')
     override_provider_runtime(codex_cli_auth_file=auth_file)
