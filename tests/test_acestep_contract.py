@@ -1,8 +1,7 @@
 """Contract test: AceStepConfig must round-trip through the vendored ACE-Step model.
 
-This is the lock that enforces Phase 3 of plans/acestep-naming-and-magic-strings.md.
-If a future ACE-Step upgrade renames a field, this test fails on rebase rather
-than at generation time.
+This is the lock on the ACE-Step parameter names. If a future ACE-Step
+upgrade renames a field, this test fails on rebase rather than at generation time.
 
 The vendored model lives in vendor/acestep/ and is normally only importable
 inside the ACE-Step venv. We inject the source dir into sys.path; the warning
