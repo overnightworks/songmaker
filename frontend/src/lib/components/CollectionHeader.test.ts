@@ -327,7 +327,7 @@ describe('CollectionHeader', () => {
 		expect(menuRowLabels(menu)).toEqual([
 			'Edit details',
 			'Cover',
-			'Curate',
+			'Pick album takes',
 			'Add to playlist',
 			'Share',
 			'Archive',

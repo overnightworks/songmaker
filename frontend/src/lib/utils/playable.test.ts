@@ -6,6 +6,7 @@ import {
 	albumHasPlayableTake,
 	albumRowOffersPlay,
 	bestTake,
+	queueHoldsOneTake,
 	songHasPlayableTake,
 	songPlayability,
 	songTakesLoaded
@@ -87,5 +88,21 @@ describe('defect:#1550 album row play', () => {
 		['songs settled with nothing to hear', { album: 'idle' }, false]
 	])('when %s', (_, songLoads, expected) => {
 		expect(albumRowOffersPlay(album, silent, songLoads)).toBe(expected);
+	});
+});
+
+describe('1831_N1 the queue holds one take', () => {
+	const song = () => songWith(1, [playable()]);
+	it.each<[string, number, Parameters<typeof queueHoldsOneTake>[1], boolean]>([
+		['non-album with one item', 1, null, true],
+		['non-album with two items', 2, null, false],
+		['album with one settled playable song', 1, { songs: [song()], load: 'idle' }, true],
+		['album with many songs', 1, { songs: [song(), song()], load: 'idle' }, false],
+		['album with an unsettled load', 1, { songs: [song()], load: 'loading' }, false],
+		['album with a load never started', 1, { songs: [], load: undefined }, false],
+		['empty queue', 0, null, false],
+		['empty queue in an album', 0, { songs: [], load: 'idle' }, false]
+	])('%s', (_name, queuedCount, album, expected) => {
+		expect(queueHoldsOneTake(queuedCount, album)).toBe(expected);
 	});
 });
