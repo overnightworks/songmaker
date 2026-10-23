@@ -27,6 +27,7 @@
 		waitingStartOf
 	} from '$lib/stores/player';
 	import { openAlbum } from '$lib/stores/navigation';
+	import { songHasPlayableTake } from '$lib/utils/playable';
 	import { addToast } from '$lib/stores/toast';
 	import { openCollection } from '$lib/stores/collection';
 	import {
@@ -165,7 +166,17 @@
 		if (docked) closeNowPlaying();
 		// This take for a queue of one, Queue for several; the surface keeps the
 		// tab it opened on, so a queue that grows while open does not move it.
-		else openNowPlaying(buildQueueViewModel(ctx, current).items.length === 1 ? 'take' : 'queue');
+		else openNowPlaying(queueHoldsOneTake() ? 'take' : 'queue');
+	}
+
+	// An album starts with a one-take queue the rest of the album joins a moment
+	// later, so its extent is the album's playable songs, not the queue so far.
+	function queueHoldsOneTake(): boolean {
+		const queued = buildQueueViewModel(ctx, current).items.length;
+		if (ctx.type !== 'album') return queued === 1;
+		const albumId = ctx.albumId;
+		const playable = songs.filter((s) => s.album_id === albumId && songHasPlayableTake(s));
+		return queued <= 1 && playable.length <= 1;
 	}
 
 	$effect(() => {

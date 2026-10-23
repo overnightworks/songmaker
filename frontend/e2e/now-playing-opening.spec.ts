@@ -19,7 +19,7 @@ import {
 	NOW_PLAYING_QUEUE_TAB,
 	NOW_PLAYING_TAKE_TAB
 } from '../src/lib/constants/now-playing';
-import { FlowGuard, shellOf, workspace } from './helpers';
+import { FlowGuard, ONLY_IN_SHELL, openAlbumFromRail, shellOf, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
 let guard: FlowGuard;
@@ -93,6 +93,46 @@ test('several takes queued open Now Playing on Queue', async ({ page, request },
 
 	await expectOpenedOn(page, testInfo, NOW_PLAYING_QUEUE_TAB);
 });
+
+// The album's queue starts as the one take that plays and widens a moment
+// later, so the bar reads the album, not the queue so far.
+test(
+	'an album played from its page opens Now Playing on Queue at once',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }, testInfo) => {
+		const library = readSeededLibrary();
+		expect(library.albumTracks.length).toBeGreaterThan(1);
+		await page.goto(`/album/${library.albumId}`);
+
+		await playCollection(page, 'album');
+		await openNowPlayingFromBar(page, testInfo, library.albumTracks[0].songTitle);
+
+		await expectOpenedOn(page, testInfo, NOW_PLAYING_QUEUE_TAB);
+	}
+);
+
+test(
+	'Now Playing stays on This take while the queue grows behind it',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page, request }, testInfo) => {
+		const library = readSeededLibrary();
+		const playlist = await seedPlaylist(request, library, 1);
+		await page.goto(`/playlist/${playlist.slug}`);
+		await playCollection(page, 'playlist');
+		await openNowPlayingFromBar(page, testInfo, playlist.songTitles[0]);
+		await expectOpenedOn(page, testInfo, NOW_PLAYING_TAKE_TAB);
+
+		await openAlbumFromRail(page, shellOf(testInfo), library.albumTitle);
+		await playCollection(page, 'album');
+		await expect(
+			page.getByRole('contentinfo').getByRole('button', { name: 'Next', exact: true })
+		).toBeEnabled();
+
+		await expectOpenedOn(page, testInfo, NOW_PLAYING_TAKE_TAB);
+		await page.getByRole('tab', { name: NOW_PLAYING_QUEUE_TAB }).click();
+		await expect(page.locator('.queue-row')).toHaveCount(library.albumTracks.length);
+	}
+);
 
 test('the album walk is "Pick album takes" and ends with "Done"', async ({ page }, testInfo) => {
 	const library = readSeededLibrary();
