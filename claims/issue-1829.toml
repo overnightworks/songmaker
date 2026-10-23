@@ -1,7 +1,0 @@
-claim_id = "f6ed130f942f4c49a3df1252a9394191"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "def7d3ea5b5db3f6ef0a4a5b08dbd2a6aa181434"
-branch = "claude/issue-1829-worker-pool-tab-flake"
-scope = ["frontend/e2e/generation-unavailable.spec.ts"]
-opened_commit = "3c588f215eaaa1ad03db0c7d1ef0d777dc3c7c41"
