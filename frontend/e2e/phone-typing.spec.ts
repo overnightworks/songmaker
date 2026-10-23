@@ -54,6 +54,9 @@ const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of
 	'\n'
 );
 const LYRICS_TYPED_ON = ' and on';
+const LAST_SECTION_LABEL = '[Outro]';
+// A scroll position snaps to the device's pixel grid, so a line can end a quarter pixel past the keyboard.
+const SUBPIXEL_ROUNDING_PX = 1;
 const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
 const CONVERSATIONS_PATH = '/api/conversations';
 // The route error frame the server ends a turn with when the provider cannot
@@ -227,6 +230,65 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await expect(progress.getByText(RUNNING_JOB_TAKE_COUNTER)).toBeVisible();
 		await expect(progress.getByText(RUNNING_JOB_PERCENT)).toBeVisible();
 		await expect(editTab).toBeInViewport();
+
+		guard.assertClean();
+	});
+
+	// #1836 (#1804 rule S1, phone half): the field grows with its text, so the
+	// library's main region scrolls, and the caret's line must stay inside the
+	// part of the screen the keyboard leaves free. The last line is a section
+	// label, so its own box, painted by the browser, is the oracle.
+	test('typing at the end of a long lyric keeps the caret line above the keyboard', async ({
+		page
+	}) => {
+		const guard = new FlowGuard(page);
+		await openSeededSongFromItsAlbum(page);
+		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		await lyrics.click();
+		await showOnScreenKeyboard(page, true);
+		await lyrics.fill(`${LONG_LYRICS}\n${LAST_SECTION_LABEL}`);
+		await page.keyboard.press('Control+End');
+		await page.keyboard.type(LYRICS_TYPED_ON);
+
+		const lastLabel = page.locator('.mirror .section-label', { hasText: LAST_SECTION_LABEL });
+		// The part of the screen the keyboard leaves free: the visual viewport
+		// below the top of the scrolling main region.
+		const freeBand = () =>
+			page.evaluate(() => {
+				const visible = window.visualViewport;
+				const main = document.querySelector('main');
+				if (!visible || !main) throw new Error('Expected a visual viewport and a main region');
+				return {
+					top: Math.max(visible.offsetTop, main.getBoundingClientRect().top),
+					bottom: visible.offsetTop + visible.height
+				};
+			});
+		const box = async () => {
+			const found = await lastLabel.boundingBox();
+			if (!found) throw new Error('Expected the last section label to be laid out');
+			return found;
+		};
+		// `linesBelow` empty lines under the label must fit above the keyboard.
+		const expectLineWithinBand = async (linesBelow: number) => {
+			const lineHeightPx = await lastLabel.evaluate((label) =>
+				parseFloat(getComputedStyle(label).lineHeight)
+			);
+			await expect
+				.poll(async () => {
+					const [band, label] = await Promise.all([freeBand(), box()]);
+					return Math.min(
+						label.y - band.top,
+						band.bottom - (label.y + label.height + linesBelow * lineHeightPx)
+					);
+				})
+				.toBeGreaterThanOrEqual(-SUBPIXEL_ROUNDING_PX);
+		};
+
+		await expectLineWithinBand(0);
+
+		// Enter at the end opens an empty line below the label, one line high.
+		await page.keyboard.press('Enter');
+		await expectLineWithinBand(1);
 
 		guard.assertClean();
 	});

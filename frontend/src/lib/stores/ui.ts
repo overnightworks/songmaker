@@ -44,11 +44,15 @@ const ON_SCREEN_KEYBOARD_MIN_HEIGHT_PX = 150;
 // The on-screen keyboard shrinks only the visual viewport; the layout viewport
 // keeps its height. Pinch zoom shrinks the visual viewport too, so its height
 // is compared at the page's own scale.
-function onScreenKeyboardOpen(root: Document): boolean {
+export function onScreenKeyboardHeightPx(root: Document): number {
 	const viewport = root.defaultView?.visualViewport;
-	if (!viewport) return false;
+	if (!viewport) return 0;
 	const visibleHeight = viewport.height * viewport.scale;
-	return root.documentElement.clientHeight - visibleHeight >= ON_SCREEN_KEYBOARD_MIN_HEIGHT_PX;
+	return Math.max(0, root.documentElement.clientHeight - visibleHeight);
+}
+
+function onScreenKeyboardOpen(root: Document): boolean {
+	return onScreenKeyboardHeightPx(root) >= ON_SCREEN_KEYBOARD_MIN_HEIGHT_PX;
 }
 
 const typingOnPhoneState = writable(false);
