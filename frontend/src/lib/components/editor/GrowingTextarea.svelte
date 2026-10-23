@@ -24,7 +24,7 @@
 
 	// The mirror holds exactly `${value}\n`, so the caret's offset in the field
 	// is the same offset in the mirror's text. A collapsed range has no box on
-	// an empty line in some browsers, so the neighbouring character stands in.
+	// an empty line in some browsers, so the neighbouring characters stand in.
 	function caretLineRect(mirrorElement: HTMLElement, caretOffset: number): DOMRect | undefined {
 		const walker = document.createTreeWalker(mirrorElement, NodeFilter.SHOW_TEXT);
 		const range = document.createRange();
@@ -43,39 +43,64 @@
 				range.setEnd(node, offset + 1);
 				rects.push(range.getBoundingClientRect());
 			}
+			if (offset > 0) {
+				range.setStart(node, offset - 1);
+				range.setEnd(node, offset);
+				rects.push(range.getBoundingClientRect());
+			}
 			return rects.find((rect) => rect.height > 0);
 		}
 		return undefined;
 	}
 
+	function scrollingAncestor(element: HTMLElement): HTMLElement | undefined {
+		for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+			const { overflowY } = getComputedStyle(parent);
+			if (overflowY === 'auto' || overflowY === 'scroll') return parent;
+		}
+		return undefined;
+	}
+
+	// The keyboard covers the bottom of the layout viewport, so the scroller
+	// cannot bring a line near the end of the text above it without room under
+	// the text. It is added only while the keyboard is open.
+	let keyboardRoomPx = $state(0);
+
 	// The browser reveals a caret only inside the layout viewport, and the page
-	// scrolls, not the field. The keyboard shortens the visual viewport alone, so
-	// the caret's line is brought into it by scrolling the page.
+	// does not scroll, its main region does. The keyboard shortens the visual
+	// viewport alone, so the caret's line is brought into the part of the
+	// scroller the keyboard leaves free by scrolling that region.
 	async function keepCaretVisible(): Promise<void> {
-		await tick();
 		const visible = window.visualViewport;
 		if (!$typingOnPhone || !visible || !textarea || !mirror) return;
+		keyboardRoomPx = Math.max(0, document.documentElement.clientHeight - visible.height);
+		await tick();
 		if (document.activeElement !== textarea) return;
+		const scroller = scrollingAncestor(textarea);
 		const line = caretLineRect(mirror, textarea.selectionEnd);
-		if (!line) return;
-		const visibleBottom = visible.offsetTop + visible.height;
-		if (line.bottom > visibleBottom) window.scrollBy(0, line.bottom - visibleBottom);
-		else if (line.top < visible.offsetTop) window.scrollBy(0, line.top - visible.offsetTop);
+		if (!scroller || !line) return;
+		const scrollerRect = scroller.getBoundingClientRect();
+		const bandTop = Math.max(scrollerRect.top, visible.offsetTop);
+		const bandBottom = Math.min(scrollerRect.bottom, visible.offsetTop + visible.height);
+		if (line.bottom > bandBottom) scroller.scrollBy(0, line.bottom - bandBottom);
+		else if (line.top < bandTop) scroller.scrollBy(0, line.top - bandTop);
 	}
 
 	$effect(() => {
-		if (!textarea || !$typingOnPhone) return;
-		const field = textarea;
+		if (!$typingOnPhone) {
+			keyboardRoomPx = 0;
+			return;
+		}
 		void keepCaretVisible();
-		field.addEventListener('selectionchange', keepCaretVisible);
-		return () => field.removeEventListener('selectionchange', keepCaretVisible);
+		document.addEventListener('selectionchange', keepCaretVisible);
+		return () => document.removeEventListener('selectionchange', keepCaretVisible);
 	});
 </script>
 
 <!-- The mirror and the textarea share one grid cell and the same metrics, so
      the cell is as tall as the mirrored text and the field never scrolls.
      The mirror only paints; the textarea stays the one editable node. -->
-<div class="growing" class:monospace>
+<div class="growing" class:monospace style:padding-bottom="{keyboardRoomPx}px">
 	<textarea
 		bind:this={textarea}
 		{id}

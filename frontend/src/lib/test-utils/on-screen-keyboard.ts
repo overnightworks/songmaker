@@ -13,6 +13,7 @@ export interface PhoneViewport {
 export function phoneViewport(): PhoneViewport {
 	const viewport = Object.assign(new EventTarget(), {
 		height: PHONE_VIEWPORT_HEIGHT_PX,
+		offsetTop: 0,
 		scale: 1
 	});
 	Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });

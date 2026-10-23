@@ -54,6 +54,9 @@ const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of
 	'\n'
 );
 const LYRICS_TYPED_ON = ' and on';
+const LAST_SECTION_LABEL = '[Outro]';
+// A scroll position snaps to the device's pixel grid, so a line can end a quarter pixel past the keyboard.
+const SUBPIXEL_ROUNDING_PX = 1;
 const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
 const CONVERSATIONS_PATH = '/api/conversations';
 // The route error frame the server ends a turn with when the provider cannot
@@ -232,10 +235,10 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 	});
 
 	// #1836 (#1804 rule S1, phone half): the field grows with its text, so the
-	// page scrolls, and the caret's line must stay inside the part of the screen
-	// the keyboard leaves free. The mirror paints the same text, so a Range over
-	// the caret's offset in it is the caret line's box.
-	test('typing near the end of a long lyric keeps the caret line above the keyboard', async ({
+	// library's main region scrolls, and the caret's line must stay inside the
+	// part of the screen the keyboard leaves free. The last line is a section
+	// label, so its own box, painted by the browser, is the oracle.
+	test('typing at the end of a long lyric keeps the caret line above the keyboard', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
@@ -243,41 +246,33 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 		await lyrics.click();
 		await showOnScreenKeyboard(page, true);
-		await lyrics.fill(LONG_LYRICS);
+		await lyrics.fill(`${LONG_LYRICS}\n${LAST_SECTION_LABEL}`);
 		await page.keyboard.press('Control+End');
-		await page.keyboard.press('ArrowUp');
-		await page.keyboard.press('ArrowUp');
 		await page.keyboard.type(LYRICS_TYPED_ON);
 
+		const lastLabel = page.locator('.mirror .section-label', { hasText: LAST_SECTION_LABEL });
+		const keyboardTop = () =>
+			page.evaluate(() => {
+				const visible = window.visualViewport;
+				if (!visible) throw new Error('This browser has no visual viewport');
+				return visible.offsetTop + visible.height;
+			});
+		const box = async () => {
+			const found = await lastLabel.boundingBox();
+			if (!found) throw new Error('Expected the last section label to be laid out');
+			return found;
+		};
+
 		await expect
-			.poll(() =>
-				page.evaluate(() => {
-					const field = document.activeElement;
-					const visible = window.visualViewport;
-					const mirror = field?.parentElement?.querySelector('.mirror');
-					if (!(field instanceof HTMLTextAreaElement) || !visible || !mirror) {
-						throw new Error('Expected the focused lyrics field, its mirror and a visual viewport');
-					}
-					const walker = document.createTreeWalker(mirror, NodeFilter.SHOW_TEXT);
-					let passed = 0;
-					for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-						const length = node.textContent?.length ?? 0;
-						if (field.selectionEnd > passed + length) {
-							passed += length;
-							continue;
-						}
-						const range = document.createRange();
-						range.setStart(node, field.selectionEnd - passed);
-						range.setEnd(node, field.selectionEnd - passed + 1);
-						const line = range.getBoundingClientRect();
-						return (
-							line.top >= visible.offsetTop && line.bottom <= visible.offsetTop + visible.height
-						);
-					}
-					return false;
-				})
-			)
-			.toBe(true);
+			.poll(async () => (await keyboardTop()) - (await box()).y - (await box()).height)
+			.toBeGreaterThanOrEqual(-SUBPIXEL_ROUNDING_PX);
+
+		// Enter at the end opens an empty line below the label; it needs one
+		// more line of room, which the label's own height stands in for.
+		await page.keyboard.press('Enter');
+		await expect
+			.poll(async () => (await keyboardTop()) - (await box()).y - 2 * (await box()).height)
+			.toBeGreaterThanOrEqual(-SUBPIXEL_ROUNDING_PX);
 
 		guard.assertClean();
 	});
