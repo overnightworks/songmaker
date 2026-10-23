@@ -905,17 +905,17 @@ export async function completeGenerationJobWithoutEvent(jobId: string): Promise<
 }
 
 /**
- * A fresh playlist for one test attempt. The flow adds, reorders and removes
- * entries, so a retry must not inherit the previous attempt's order.
+ * A fresh playlist per test attempt; `takeCount` starts it with fewer takes.
  */
 export async function seedPlaylist(
 	api: APIRequestContext,
-	library: SeededLibrary
+	library: SeededLibrary,
+	takeCount = library.playlistTakes.length
 ): Promise<SeededPlaylist> {
 	const seed = await SeedApi.fromSession(api);
 	const title = `${PLAYLIST_TITLE_PREFIX} ${runMarker()}`;
 	const playlist = await seed.postJson<CreatedPlaylist>('/api/playlists', { title });
-	for (const take of library.playlistTakes) {
+	for (const take of library.playlistTakes.slice(0, takeCount)) {
 		await seed.postJson(`/api/playlists/${playlist.id}/entries/generation`, {
 			generation_id: take.takeId
 		});
@@ -923,7 +923,7 @@ export async function seedPlaylist(
 	return {
 		title,
 		slug: playlist.slug,
-		songTitles: library.playlistTakes.map((take) => take.songTitle)
+		songTitles: library.playlistTakes.slice(0, takeCount).map((take) => take.songTitle)
 	};
 }
 

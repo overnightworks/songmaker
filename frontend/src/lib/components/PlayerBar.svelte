@@ -2,6 +2,7 @@
 	import type { Attachment } from 'svelte/attachments';
 	import { albumList, songList, albumSongsErrorMessage } from '$lib/stores/libraryData';
 	import {
+		buildQueueViewModel,
 		closeNowPlaying,
 		ensureGenerationsLoaded,
 		idlePlayTarget,
@@ -162,7 +163,9 @@
 	function onNowPlayingClick(): void {
 		if (!shownTake) return;
 		if (docked) closeNowPlaying();
-		else openNowPlaying('queue');
+		// This take for a queue of one, Queue for several; the surface keeps the
+		// tab it opened on, so a queue that grows while open does not move it.
+		else openNowPlaying(buildQueueViewModel(ctx, current).items.length === 1 ? 'take' : 'queue');
 	}
 
 	$effect(() => {
