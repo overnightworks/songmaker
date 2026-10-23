@@ -44,7 +44,6 @@
 "frontend/src/lib/components/SongDetailView.svelte" = 1114
 "frontend/src/lib/components/SongDetailView.test.ts" = 2314
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
-"frontend/src/lib/components/editor/TakesList.svelte" = 1083
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1319
 "frontend/src/lib/constants.ts" = 849
 "frontend/src/lib/history/historyController.test.ts" = 1103
