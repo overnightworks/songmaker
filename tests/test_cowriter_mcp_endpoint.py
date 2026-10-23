@@ -14,7 +14,7 @@ import time
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -629,6 +629,25 @@ def test_k_a_missing_or_invalid_origin_leaves_mcp_answering_503(
 
     assert verdict.problem is problem
     assert drive(wrapped, headers_for(None), rpc("ping")).status == 503
+
+
+def test_k_a_tool_declaration_the_mcp_library_rejects_leaves_mcp_answering_503(
+    web, mcp_environment, monkeypatch, caplog,
+):
+    tool = COWRITER_TOOLS[0]
+    unpaired_surrogate = "\ud800"
+    monkeypatch.setattr(
+        "songmaker_cli.cowriter.mcp_endpoint.COWRITER_TOOLS",
+        [replace(tool, description=unpaired_surrogate), *COWRITER_TOOLS[1:]],
+    )
+    app, _ = web
+
+    with caplog.at_level(logging.WARNING):
+        wrapped, verdict = compose_mcp_endpoint(app, settings_now())
+
+    assert verdict.problem is McpKeyProblem.TOOLS_INVALID
+    assert drive(wrapped, headers_for(None), rpc("ping")).status == 503
+    assert unpaired_surrogate not in caplog.text
 
 
 def test_k_an_unset_key_file_setting_is_unavailable_missing(web, monkeypatch):

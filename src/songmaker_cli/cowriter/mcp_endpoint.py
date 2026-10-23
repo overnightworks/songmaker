@@ -54,6 +54,7 @@ class McpKeyProblem(StrEnum):
     UNSOUND_KEY = "unsound key"
     ORIGIN_MISSING = "origin missing"
     ORIGIN_INVALID = "origin invalid"
+    TOOLS_INVALID = "tools invalid"
 
 
 @dataclass(frozen=True)
@@ -86,7 +87,10 @@ def _server_or_problem(
         McpServer(origin, key, [])  # the server validates the origin first; no tools to blame
     except ValidationError:
         return McpEndpointAvailability(McpKeyProblem.ORIGIN_INVALID), None
-    return McpEndpointAvailability(), McpServer(origin, key, _tools_for(app, settings))
+    try:
+        return McpEndpointAvailability(), McpServer(origin, key, _tools_for(app, settings))
+    except ValidationError as invalid:
+        return McpEndpointAvailability(McpKeyProblem.TOOLS_INVALID, type(invalid).__name__), None
 
 
 def _verification_key(settings: Settings) -> CapabilityVerificationKey | McpEndpointAvailability:
