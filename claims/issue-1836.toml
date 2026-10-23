@@ -1,8 +1,0 @@
-claim_id = "28dd3ff547e04b6d875cf306d18709c1"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "f94688c0dcea5181fb1a916e4662fff4b6edaff5"
-branch = "claude/issue-1836-phone-caret"
-scope = ["frontend/e2e", "frontend/src/lib/components/editor/GrowingTextarea.svelte", "frontend/src/lib/components/editor/GrowingTextarea.test.ts", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "frontend/src/lib/test-utils/on-screen-keyboard.ts"]
-opened_commit = "05767a7be8afb6e06dc39ca8b328f6ed7a82292b"
-whole_reason = "One field component, the keyboard-height owner it reads, its test helper and the phone e2e cell that proves it."
