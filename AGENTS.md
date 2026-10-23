@@ -30,9 +30,9 @@ The live app is Docker-only; there is no local server path. `.venv` is for tests
 
 CI runs the pinned reusable quality gate (`quality / verdict`, mandatory jobs in `quality/config.toml`); coverage floors, Sonar and transport are in [testing](docs/testing.md#static-analysis-sonarcloud).
 
-Local runs are targeted: `ruff check` and `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
+Local runs are targeted: `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
 
-Cheap and path-triggered: `python scripts/check_no_silent_fallbacks.py src/` when touching `src/`; `python scripts/generate_types.py --check` when touching API models; `python scripts/check_root_layout.py` when adding or moving a root-level file (it owns the root allowlist).
+Before reporting a tip, run `bash scripts/static_checks.sh`: it runs CI's static gates (ruff, import contracts, the repository scripts, svelte-check, eslint, prettier, quality hygiene at CI's pin) and stops at the first red one, naming it. It needs `.venv` and `frontend/node_modules`; the script lists the gates.
 
 Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrade head`.
 
