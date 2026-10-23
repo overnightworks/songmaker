@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Now Playing Opening</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Open+Sans:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* ── page chrome: the same tokens as song-page.html ───────────────────── */
+:root{--paper:#f3f2f6;--panel:#ffffff;--ink:#1b1a20;--ink-soft:#4f4b58;--muted:#7d7887;--rule:#e2dfe8;--violet:#5a2fc2;--mark:#e0457b}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#131218;--panel:#1c1a22;--ink:#eeecf2;--ink-soft:#b3aebe;--muted:#8f899c;--rule:#302c3a;--violet:#b49cff}}
+:root[data-theme="dark"]{--paper:#131218;--panel:#1c1a22;--ink:#eeecf2;--ink-soft:#b3aebe;--muted:#8f899c;--rule:#302c3a;--violet:#b49cff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Open Sans',Arial,sans-serif;font-size:15px;line-height:1.5;padding:28px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px))}
+.wrap{max-width:1540px;margin:0 auto;display:flex;flex-direction:column;gap:26px;min-width:0}
+.eyebrow{font-family:Oswald,Impact,sans-serif;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);font-weight:500}
+.top{display:flex;flex-direction:column;gap:6px}
+.topline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.top h1{font-family:Oswald,Impact,sans-serif;font-weight:500;font-size:clamp(28px,5vw,40px);letter-spacing:.02em;margin:0;line-height:1.1}
+.lede{max-width:92ch;color:var(--ink-soft);margin:0}
+.lede b{color:var(--ink);font-weight:600}
+code{font-size:.88em}
+.changes{margin:2px 0 0;padding-left:1.15rem;color:var(--ink-soft);font-size:14.5px;max-width:110ch;display:flex;flex-direction:column;gap:4px}
+.changes b{color:var(--ink);font-weight:600}
+.changes li::marker{color:var(--violet)}
+.legend{font-size:13.5px;color:var(--ink-soft)}
+.swatch{display:inline-block;width:22px;height:12px;outline:2px dashed var(--mark);border-radius:3px;vertical-align:-1px;margin-right:.35rem}
+.theme{display:inline-flex;border:1px solid var(--rule);border-radius:4px;overflow:hidden;background:var(--panel)}
+.theme button{font:inherit;font-family:Oswald,Impact,sans-serif;font-size:12.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:none;border:0;padding:0 14px;min-height:36px;cursor:pointer}
+.theme button+button{border-left:1px solid var(--rule)}
+.theme button[aria-pressed="true"]{color:var(--violet);background:color-mix(in srgb,var(--violet) 10%,transparent)}
+.part{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px clamp(12px,2vw,24px);display:flex;flex-direction:column;gap:18px;min-width:0}
+.part>h2{font-family:Oswald,Impact,sans-serif;font-weight:500;font-size:24px;letter-spacing:.03em;text-transform:uppercase;margin:0;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.part>h2 small{font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink-soft);font-family:'Open Sans',Arial,sans-serif;font-weight:400}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:6px 2px 12px;max-width:100%}
+.frames{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+figure{margin:0;display:flex;flex-direction:column;gap:8px;min-width:0;max-width:100%}
+figcaption{font-size:14px;color:var(--ink-soft);max-width:min(400px, calc(100vw - 40px));line-height:1.45}
+figcaption.w{max-width:min(1100px, calc(100vw - 40px))}
+figcaption b{color:var(--ink);font-weight:600}
+
+/* ── app frames: frontend/src/app.css tokens, light ([data-theme=light]) and dark (:root) ── */
+.app{--action:#7a18c0;--link:#7a18c0;--on-action:#ffffff;--bg:#f4f4f6;--surface:#ffffff;--surface-hover:#ebebed;--border:#d0d0d4;--text:#1a1a1e;--text-muted:#555555;--text-subtle:#555555;--text-disabled:#9a9a9a;--header-bg:#f0f0f2;--score-good:#1e7a1e;--score-ok:#b07000;--score-bad:#c02020;--keep:#c03040;--tile:#e3e0e8;--track:#d4d1d9;--knob:#1a1a1e;--fd:'Oswald',Impact,sans-serif;--fb:'Open Sans',Arial,sans-serif;
+	position:relative;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px;line-height:1.4;border-radius:10px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,.08),0 14px 40px rgba(0,0,0,.12);flex:none;text-align:left}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .app{--action:#a020f0;--link:#c27bff;--bg:#0d0d0d;--surface:#111111;--surface-hover:#1a1a1a;--border:#333333;--text:#e0e0e0;--text-muted:#888888;--text-subtle:#888888;--text-disabled:#555555;--header-bg:#0a0a0a;--score-good:#44ff44;--score-ok:#f0a030;--score-bad:#ff4444;--keep:#e04050;--tile:#1e1e1e;--track:#3a3a3e;--knob:#ffffff}}
+:root[data-theme="dark"] .app{--action:#a020f0;--link:#c27bff;--bg:#0d0d0d;--surface:#111111;--surface-hover:#1a1a1a;--border:#333333;--text:#e0e0e0;--text-muted:#888888;--text-subtle:#888888;--text-disabled:#555555;--header-bg:#0a0a0a;--score-good:#44ff44;--score-ok:#f0a030;--score-bad:#ff4444;--keep:#e04050;--tile:#1e1e1e;--track:#3a3a3e;--knob:#ffffff}
+.app *{box-sizing:border-box}
+.app p{margin:0}
+.ic{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.sm{width:15px;height:15px}.ic.xs{width:13px;height:13px}.ic.md{width:18px;height:18px}.ic.lg{width:22px;height:22px}.ic.xl{width:26px;height:26px}
+.icon-btn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);flex:none;border-radius:4px}
+.icon-btn.ink{color:var(--text)}
+.icon-btn.off{color:var(--text-disabled)}
+.icon-btn.on{color:var(--link)}
+.slot{width:44px;height:44px;flex:none}
+.circle{width:64px;height:64px;border-radius:50%;background:var(--action);color:var(--on-action);display:inline-flex;align-items:center;justify-content:center;flex:none}
+.circle.c48{width:48px;height:48px}.circle.c44{width:44px;height:44px}
+.new{outline:2px dashed var(--mark);outline-offset:2px;border-radius:4px}
+.art-a{background:linear-gradient(135deg,#7a18c0,#2b2545)}
+.art-k{background:linear-gradient(135deg,#d0662c,#5b1d6e 70%)}
+.art-n{background:linear-gradient(135deg,#2b3a8f,#0e0b18 75%)}
+
+/* ── phone Now Playing: navigation.html (i) I6 chrome + NowPlayingFrame's sheet ── */
+.device{width:390px;height:844px;display:flex;flex-direction:column}
+.np-top{position:relative;z-index:2;flex:none;height:56px;display:flex;align-items:center;gap:2px;padding:0 12px 0 4px}
+.np-label{font-family:var(--fd);font-size:.85rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted)}
+.np-scroll{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:0 22px}
+.cover{width:278px;height:278px;border-radius:8px;flex:none;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+.np-title{margin-top:22px;font-family:var(--fd);font-weight:500;font-size:1.6rem;letter-spacing:.03em;text-transform:uppercase;text-align:center;line-height:1.15}
+.np-from{margin-top:6px;color:var(--link);font-size:.95rem}
+.np-take{margin-top:4px;color:var(--text-muted);font-size:.88rem}
+.seek{position:relative;align-self:stretch;height:44px;margin-top:12px;flex:none}
+.seek .track{position:absolute;left:0;right:0;top:19px;height:6px;border-radius:3px;background:var(--track);overflow:hidden}
+.seek .track i{display:block;height:100%;background:var(--action)}
+.seek .knob{position:absolute;top:11px;width:22px;height:22px;border-radius:50%;background:var(--knob);box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.times{align-self:stretch;display:flex;justify-content:space-between;font-family:var(--fd);font-size:.85rem;color:var(--text-muted);flex:none}
+.transport{align-self:stretch;display:grid;grid-template-columns:repeat(5,1fr);place-items:center;margin-top:12px;flex:none}
+.np-lyrics{align-self:stretch;margin-top:22px;display:flex;flex-direction:column;gap:8px}
+.lyr-h{font-family:var(--fd);font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-subtle)}
+.lyr p{margin:0 0 .45rem;color:var(--text-muted);line-height:1.55;font-size:1rem}
+.lyr p.on{color:var(--text);font-weight:600}
+.trigger{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;padding:.6rem 1.4rem .75rem;border-top:1px solid var(--border);background:var(--header-bg)}
+.trigger .un{font-size:.72rem;color:var(--text-subtle)}
+.trigger .tl{display:inline-flex;align-items:center;gap:.3rem;font-family:var(--fd);font-size:.8rem;letter-spacing:.5px;text-transform:uppercase;color:var(--text)}
+.scrim{position:absolute;inset:0;z-index:1;background:rgba(0,0,0,.42)}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:3;max-height:512px;padding:.9rem 1rem 1rem;background:var(--header-bg);border-top:1px solid var(--border);display:flex;flex-direction:column;gap:.7rem}
+.sheet.full{height:512px}
+.panel{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.panel.at-end{justify-content:flex-end}
+
+/* ── the right panel: vocabulary.html §3 tab strip; NowPlayingTake / NowPlayingQueue ── */
+.tabs{display:flex;border-bottom:1px solid var(--border);flex:none}
+.tabs span{flex:1;min-height:44px;display:flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs span.on{color:var(--link);border-bottom-color:var(--action)}
+.take{display:flex;flex-direction:column;gap:.8rem;min-width:0;flex:none}
+.th-row{display:flex;align-items:center;gap:.5rem}
+.th{font-family:var(--fd);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);white-space:nowrap}
+.openv{display:inline-flex;align-items:center;gap:2px;height:26px;padding:0 .45rem 0 .55rem;border:1px solid var(--border);border-radius:13px;background:var(--surface);color:var(--link);font-size:.78rem;white-space:nowrap}
+.badges{display:flex;gap:.4rem;margin-left:auto}
+.badge{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:50%;color:var(--text-muted)}
+.badge.pick-on{color:var(--action);border-color:var(--action)}
+.badge.keep-on{color:var(--keep);border-color:var(--keep)}
+.sec{display:flex;flex-direction:column;gap:.45rem}
+.st{font-family:var(--fd);font-size:.68rem;letter-spacing:.5px;text-transform:uppercase;color:var(--text-subtle)}
+.scores{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}
+.sc{display:flex;flex-direction:column;padding:.45rem .6rem;border-radius:4px;background:var(--surface);border-left:3px solid var(--score-good)}
+.sc.ok{border-left-color:var(--score-ok)}
+.sc .l{font-family:var(--fd);font-size:.66rem;letter-spacing:.4px;text-transform:uppercase;color:var(--text-subtle)}
+.sc .v{font-family:var(--fd);font-size:1.05rem;color:var(--text)}
+.dev{margin:0;padding:.6rem .7rem;background:var(--surface);border-radius:4px;font-family:'Courier New',monospace;font-size:.8rem;line-height:1.8;color:var(--text-muted);overflow-wrap:break-word}
+.dev .ch{color:var(--score-bad);text-decoration:underline dotted;text-underline-offset:2px}
+.dev .mi{color:var(--text-subtle);text-decoration:line-through}
+.dev .ad{color:var(--score-ok);text-decoration:underline dotted;text-underline-offset:2px}
+.recipe{display:flex;align-items:center;gap:4px}
+.rating{display:flex;align-items:center;gap:.6rem}
+.slider{flex:1;height:4px;border-radius:2px;background:var(--track);position:relative}
+.slider i{position:absolute;left:0;top:0;bottom:0;width:50%;background:var(--action);border-radius:2px}
+.slider b{position:absolute;left:calc(50% - 8px);top:-6px;width:16px;height:16px;border-radius:50%;background:var(--action)}
+.rnum{font-family:var(--fd);font-size:1rem;min-width:28px;text-align:right}
+.notes{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:.4rem .55rem;font-size:.8rem;color:var(--text-disabled);height:52px}
+.links{display:flex;flex-wrap:wrap;gap:.5rem}
+.lk{display:inline-flex;align-items:center;gap:.35rem;height:28px;padding:0 .7rem;border:1px solid var(--border);border-radius:16px;color:var(--text-muted);font-family:var(--fd);font-size:.72rem;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap}
+.lk .hint{font-family:var(--fb);text-transform:none;letter-spacing:0;font-size:.72rem;color:var(--text-subtle);font-variant-numeric:tabular-nums}
+.queue{display:flex;flex-direction:column;gap:.6rem;flex:none}
+.qh{font-family:var(--fd);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.qlist{border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.qrow{display:flex;align-items:center;gap:.6rem;min-height:40px;padding:.5rem .7rem;border-bottom:1px solid var(--border);background:var(--surface);font-size:.85rem}
+.qrow:last-child{border-bottom:0}
+.qrow.cur{background:color-mix(in srgb,var(--action) 10%,var(--surface));border-left:3px solid var(--action);padding-left:calc(.7rem - 3px)}
+.qpos{width:1.2rem;text-align:center;color:var(--text-subtle);font-size:.72rem;flex:none}
+.qt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qm{color:var(--text-subtle);font-size:.72rem;flex:none}
+.upnext{font-size:.75rem;color:var(--text-muted)}
+
+/* ── the album walk's card: NowPlayingCuration ── */
+.walk{width:min(320px,80%);display:flex;flex-direction:column;align-items:center;gap:.55rem;padding:.8rem .8rem .3rem;border:1px solid var(--border);border-radius:6px;background:color-mix(in srgb,var(--surface) 70%,transparent);flex:none}
+.walk-h{font-family:var(--fd);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);text-align:center}
+.walk-row{display:flex;align-items:center;gap:1.1rem}
+.wb{width:48px;height:48px;border-radius:50%;border:2px solid var(--border);display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted)}
+.wb.pick{width:60px;height:60px;border-color:var(--action);color:var(--action)}
+.walk-done{min-height:44px;display:inline-flex;align-items:center;padding:0 .9rem;font-size:.76rem;color:var(--text-subtle);text-decoration:underline;text-underline-offset:2px}
+
+/* ── desktop 1440: the full surface (NowPlayingFrame, not stacked) ── */
+.desk{width:1440px;height:900px;display:flex;flex-direction:column}
+.desk.crop{height:640px}
+.npd-head{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:.6rem;padding:1rem 1.4rem 0}
+.kicker{font-family:var(--fd);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.npd-title{font-family:var(--fd);font-size:1.05rem;letter-spacing:.04em;text-transform:uppercase;font-weight:400;margin-top:2px}
+.npd-actions{display:flex;align-items:center;gap:.3rem}
+.surface-btn{height:32px;padding:0 .8rem;border:1px solid var(--border);border-radius:4px;font-family:var(--fd);font-size:.72rem;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted);display:inline-flex;align-items:center}
+.npd-body{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2rem;padding:1.2rem 1.4rem 1.4rem}
+.col{display:flex;flex-direction:column;justify-content:center;gap:1.2rem;min-width:0;min-height:0}
+.col.cover-col{align-items:center}
+.cover-d{width:320px;height:320px;border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.45);flex:none}
+.meta{display:flex;flex-direction:column;align-items:center;gap:.2rem;text-align:center}
+.meta .t{font-family:var(--fd);font-size:1.4rem;text-transform:uppercase;letter-spacing:.03em}
+.meta .l{font-size:.8rem;color:var(--text-muted)}
+.prog{width:320px;flex:none}
+.prog .seek{margin-top:0;height:24px}
+.prog .seek .track{top:10px;height:4px}
+.prog .seek .knob{top:5px;width:14px;height:14px}
+.prog .times{font-size:.8rem}
+.dtrans{align-self:stretch;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;flex:none}
+.dtrans .side{display:flex;gap:1rem;align-items:center}
+.dtrans .side.b{justify-content:flex-end}
+.go-song{align-self:flex-start;min-height:44px;display:inline-flex;align-items:center;padding:0 .9rem;border:1px solid var(--border);border-radius:4px;font-size:.8rem;background:color-mix(in srgb,var(--surface) 80%,transparent)}
+.col .lyr p{font-size:1rem}
+
+/* ── desktop shell for the album page: navigation.html (i) D2, brand as song-page.html ── */
+.shell{width:1440px;height:900px;display:grid;grid-template-columns:264px minmax(0,1fr);grid-template-rows:minmax(0,1fr) 88px}
+.shell.docked{grid-template-columns:264px minmax(0,1fr) 400px}
+.shell.crop{height:640px;grid-template-rows:minmax(0,1fr)}
+.rail{grid-column:1;grid-row:1;background:var(--header-bg);border-right:1px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;gap:2px;font-size:.88rem;min-height:0;overflow:hidden}
+.rail .brand{font-family:var(--fd);font-size:1.1rem;letter-spacing:1px;margin-bottom:8px;padding:0 8px}
+.rail .search{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:4px;color:var(--text-disabled);font-size:.82rem}
+.rail .grp{display:flex;align-items:center;gap:8px;min-height:34px;padding:0 8px;font-family:var(--fd);font-size:.85rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.rail .grp .n{margin-left:auto;font-family:var(--fb);font-size:.72rem;letter-spacing:0;color:var(--text-disabled)}
+.rail .row{display:flex;align-items:center;gap:9px;min-height:30px;padding:0 8px 0 22px;border-radius:4px;color:var(--text);font-size:.85rem}
+.rail .row i{width:20px;height:20px;border-radius:3px;background:var(--tile);font-style:normal;font-family:var(--fd);font-size:.55rem;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);flex:none}
+.rail .row.on{background:color-mix(in srgb,var(--action) 14%,var(--header-bg));color:var(--link);font-weight:600;box-shadow:inset 3px 0 0 var(--action)}
+.rail .spacer{flex:1}
+.main{grid-column:2;grid-row:1;min-width:0;min-height:0;overflow:hidden;position:relative}
+.alb{padding:22px 28px;display:flex;flex-direction:column;gap:12px}
+.alb-head{display:flex;gap:18px;align-items:flex-start}
+.back{width:32px;height:32px;border:1px solid var(--border);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);flex:none}
+.alb-cover{width:135px;height:135px;border-radius:6px;flex:none}
+.alb-info{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+.alb-title{font-family:var(--fd);font-weight:500;font-size:2rem;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
+.alb-sub{font-size:.8rem;color:var(--text-muted)}
+.alb-actions{display:flex;align-items:center;gap:10px;margin-top:10px}
+.menu-anchor{position:relative;margin-left:auto;align-self:flex-end}
+.more-btn{width:32px;height:32px;border:1px solid var(--border);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:var(--text)}
+.more-btn.pressed{background:color-mix(in srgb,var(--action) 14%,var(--surface));border-color:var(--action)}
+.songs{display:flex;flex-direction:column;gap:6px}
+.songbox{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:.95rem}
+.songbox .c{margin-left:auto;font-size:.78rem;color:var(--text-muted)}
+.songbox .pen{color:var(--text-muted)}
+.songbox.playing{border-color:var(--action);color:var(--link);background:color-mix(in srgb,var(--action) 10%,var(--surface))}
+.songbox .eq{color:var(--link)}
+.newsong{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;color:var(--text-muted);font-size:.9rem}
+.pbar{grid-column:1/-1;position:relative;display:flex;align-items:center;gap:14px;padding:0 22px;background:var(--header-bg);border-top:1px solid var(--border)}
+.pbar .line{position:absolute;left:0;right:0;top:-1px;height:3px;background:var(--track)}
+.pbar .line i{display:block;width:38%;height:100%;background:var(--action)}
+.pbar .ctl{display:flex;align-items:center;gap:6px}
+.pbar .tile{width:42px;height:42px;border-radius:4px;flex:none}
+.pbar .tt{display:flex;flex-direction:column;line-height:1.3}
+.pbar .tt b{font-weight:600;font-size:.95rem}
+.pbar .tt u{font-size:.8rem;color:var(--text-muted);text-underline-offset:2px}
+.np-pill{margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border:1px solid var(--border);border-radius:16px;font-family:var(--fd);font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.np-pill.pressed{border-color:var(--action);color:var(--link);background:color-mix(in srgb,var(--action) 12%,var(--header-bg))}
+
+/* docked Now Playing column */
+.dock{grid-column:3;grid-row:1;border-left:1px solid var(--border);background:var(--header-bg);display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.dock .npd-head{padding:.9rem 1rem 0}
+.dock-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:1.1rem;padding:.9rem 1rem 1.2rem}
+.dock .cover-col{display:flex;flex-direction:column;align-items:center;gap:1.2rem}
+.dock .cover-d{width:220px;height:220px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.dock .meta .t{font-size:1.1rem}
+.fold{position:absolute;left:0;right:0;bottom:0;height:64px;background:linear-gradient(to bottom,transparent,var(--header-bg) 70%);display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
+.note-tag{font-family:var(--fd);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:var(--action);border-radius:3px;padding:2px 7px;white-space:nowrap}
+
+/* ── the menu popover: song-page.html .lmenu on app tokens ── */
+.lmenu{width:238px;display:flex;flex-direction:column;gap:2px;padding:8px;background:var(--header-bg);border:1px solid var(--border);border-radius:6px;font-size:16px;line-height:1.4;color:var(--text);box-shadow:0 6px 24px rgba(0,0,0,.14)}
+.lmenu.floating{position:absolute;right:0;top:40px;z-index:5}
+.lhead{margin:0 0 4px;padding:.3rem .6rem .5rem;font-family:var(--fd);font-size:.7rem;letter-spacing:.5px;text-transform:uppercase;color:var(--text-subtle);border-bottom:1px solid var(--border)}
+.lmi{display:flex;align-items:center;gap:.5rem;min-height:44px;padding:.5rem .6rem;border-radius:4px;font-size:.87rem;color:var(--text);width:100%}
+.lmi.hover{background:var(--surface-hover)}
+.lmi.destructive{color:var(--score-bad)}
+.lhint{margin-left:auto;font-size:.75rem;color:var(--text-subtle)}
+.li{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ── phone album page: navigation.html (i) I3/I4 ── */
+.ph-top{flex:none;height:56px;display:flex;align-items:center;gap:4px;padding:0 6px 0 4px;border-bottom:1px solid var(--border);background:var(--header-bg)}
+.ph-top b{font-family:var(--fd);font-weight:500;font-size:1.1rem;letter-spacing:.04em;flex:1}
+.ph-alb{flex:1;min-height:0;overflow:hidden;padding:14px 12px;display:flex;flex-direction:column;gap:12px}
+.ph-alb .alb-head{gap:14px;align-items:center}
+.ph-alb .alb-cover{width:58px;height:58px}
+.ph-alb .alb-title{font-size:1.5rem}
+.ph-alb .alb-actions{margin-top:0;justify-content:space-between;position:relative}
+.ph-alb .more-btn{width:44px;height:44px}
+.ph-alb .songbox{min-height:56px;font-size:1rem}
+.ph-alb .lmenu.floating{right:0;top:52px}
+.dockcard{flex:none;padding:6px 8px 6px;background:var(--header-bg)}
+.pcard{position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;height:68px;padding:6px 6px 0 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.pcard .tile{width:46px;height:46px;border-radius:4px;flex:none}
+.pcard .m{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.pcard .m b{font-family:var(--fd);font-weight:500;font-size:1.05rem;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcard .m small{font-size:.8rem;color:var(--text-muted)}
+.pcard .line{position:absolute;left:0;bottom:0;width:38%;height:3px;background:var(--action)}
+.ptabs{flex:none;height:54px;display:grid;grid-template-columns:repeat(3,1fr);background:var(--header-bg)}
+.ptabs span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--text-muted);font-family:var(--fd);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase}
+.ptabs span.on{color:var(--text)}
+.ptabs span.on .ic{color:var(--link)}
+
+@media (max-width:1640px){.desk,.shell{zoom:.9}}
+@media (max-width:480px){.device{zoom:.85}.part{padding:14px 8px}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chev-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+  <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.97a4 4 0 0 0 3.3-1.73l5.46-8.54A4 4 0 0 1 16.03 6H22"/><path d="M2 6h1.97a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.04a4 4 0 0 1-3.3-1.73l-.54-.84"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20" fill="currentColor"/><line x1="5" x2="5" y1="19" y2="5"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4" fill="currentColor"/><line x1="19" x2="19" y1="5" y2="19"/></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+  <symbol id="i-star-f" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+  <symbol id="i-heart-f" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" fill="currentColor"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+  <symbol id="i-listplus" viewBox="0 0 24 24"><path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="M18 9v6"/><path d="M21 12h-6"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
+  <symbol id="i-eq" viewBox="0 0 24 24"><path d="M5 20V12M10 20V6M15 20V10M20 20V15" stroke-width="3"/></symbol>
+</svg>
+
+<div class="wrap">
+
+<div class="top">
+  <div class="topline">
+    <div class="eyebrow">Songmaker · Picture for #1816 · blessed 23.10.2026 · #1826</div>
+    <div class="theme" role="group" aria-label="Theme"><button type="button" data-set-theme="light">Light</button><button type="button" data-set-theme="dark">Dark</button></div>
+  </div>
+  <h1>Now Playing opens on what matters</h1>
+  <p class="lede"><b>Three changes, nothing else.</b> Everything not marked is today's code (origin/main def7d3ea), drawn in the frames of <code>navigation.html</code> (i) and <code>song-page.html</code> and the shapes of <code>vocabulary.html</code>.</p>
+  <ul class="changes">
+    <li><b>One take queued:</b> Now Playing opens on <b>This take</b>. Several queued: it opens on <b>Queue</b>, as today. The other tab stays one tap away.</li>
+    <li><b>Pin seed</b> becomes <b>Use seed</b>, with the take menu's pin and the seed as its hint (<code>song-page.html</code>, #1804 S5).</li>
+    <li><b>Curate</b> becomes <b>Pick album takes</b>; the walk's card says the same name, and <b>Done curating</b> becomes <b>Done</b>.</li>
+  </ul>
+  <p class="legend"><span class="swatch"></span>what this picture changes</p>
+</div>
+
+<!-- ═══════════════════════ 1 · one take ═══════════════════════ -->
+<section class="part">
+<h2>1 · One take queued <small>it opens on This take</small></h2>
+<div class="frames">
+
+<figure>
+<div class="app device">
+  <div class="np-top"><span class="icon-btn ink" aria-label="Close"><svg class="ic xl"><use href="#i-chev-down"/></svg></span><span class="np-label">Now playing</span></div>
+  <div class="np-scroll">
+    <div class="cover art-k" aria-hidden="true"></div>
+    <div class="np-title">Feierabend</div>
+    <div class="np-from">from Kaltstart ›</div>
+    <div class="np-take">v4 · take 7</div>
+    <div class="seek"><span class="track"><i style="width:40%"></i></span><span class="knob" style="left:calc(40% - 11px)"></span></div>
+    <div class="times"><span>1:12</span><span>3:02</span></div>
+    <div class="transport"><span class="icon-btn" aria-label="Shuffle"><svg class="ic"><use href="#i-shuffle"/></svg></span><span class="icon-btn off" aria-label="Previous song"><svg class="ic"><use href="#i-prev"/></svg></span><span class="circle" aria-label="Pause"><svg class="ic xl"><use href="#i-pause"/></svg></span><span class="icon-btn off" aria-label="Next song"><svg class="ic"><use href="#i-next"/></svg></span><span class="slot"></span></div>
+  </div>
+  <div class="trigger"><span class="tl">This take <svg class="ic xs"><use href="#i-chev-up"/></svg></span></div>
+  <div class="scrim"></div>
+  <div class="sheet full">
+    <div class="tabs new"><span>Queue</span><span class="on">This take</span></div>
+    <div class="panel">
+      <div class="take">
+        <div class="th-row"><span class="th">v4 · take 7 · 3:02 · xl-turbo</span><span class="openv">Open v4<svg class="ic xs"><use href="#i-chev-right"/></svg></span><span class="badges"><span class="badge" aria-label="Pick"><svg class="ic md"><use href="#i-star"/></svg></span><span class="badge keep-on" aria-label="Unkeep"><svg class="ic md"><use href="#i-heart-f"/></svg></span></span></div>
+        <div class="sec"><span class="st">Scores</span><div class="scores"><div class="sc"><span class="l">Lyrics sung</span><span class="v">86%</span></div><div class="sc ok"><span class="l">Dynamics</span><span class="v">54</span></div><div class="sc"><span class="l">Quality</span><span class="v">7.41</span></div><div class="sc ok"><span class="l">Enjoyment</span><span class="v">6.88</span></div><div class="sc"><span class="l">Coherence</span><span class="v">8</span></div><div class="sc"><span class="l">BPM</span><span class="v">96</span></div></div></div>
+        <div class="sec"><span class="st">Sung vs. lyrics</span><p class="dev">Laptop zu, die Stadt wird <span class="ch" title="Lyrics: leise">heiser</span> der Kaffee kalt, <span class="mi">der</span> Kopf auf Reise Fahrrad raus, das Licht wird gelb die Woche fällt mir aus der Welt Feierabend, Feierabend alles, was ich heute hab <span class="ad" title="Not in lyrics">yeah</span> Feierabend, Feierabend nimm mir nur die Zeit nicht ab Nachbarn grillen, irgendwer lacht die Straße summt in die Nacht</p></div>
+        <div class="sec"><span class="st recipe">▸ Recipe</span></div>
+        <div class="sec"><div class="rating"><span class="st">Your rating</span><span class="slider"><i></i><b></b></span><span class="rnum">50</span></div><div class="notes">Notes (optional)</div></div>
+        <div class="links"><span class="lk new"><svg class="ic xs"><use href="#i-pin"/></svg>Use seed <span class="hint">1838245</span></span><span class="lk">Repaint</span><span class="lk">Cover</span><span class="lk">Re-score</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<figcaption><b>P1 · Phone, one take, opened from the player card.</b> The sheet opens straight on This take, because a queue of one has nothing to choose: pick, keep, scores and what was sung come first, and Queue is the tab beside it.</figcaption>
+</figure>
+
+<figure>
+<div class="app device">
+  <div class="np-top"><span class="icon-btn ink" aria-label="Close"><svg class="ic xl"><use href="#i-chev-down"/></svg></span><span class="np-label">Now playing</span></div>
+  <div class="np-scroll">
+    <div class="cover art-k" aria-hidden="true"></div>
+    <div class="np-title">Feierabend</div>
+    <div class="np-from">from Kaltstart ›</div>
+    <div class="np-take">v4 · take 7</div>
+    <div class="seek"><span class="track"><i style="width:40%"></i></span><span class="knob" style="left:calc(40% - 11px)"></span></div>
+    <div class="times"><span>1:12</span><span>3:02</span></div>
+  </div>
+  <div class="trigger"><span class="tl">This take <svg class="ic xs"><use href="#i-chev-up"/></svg></span></div>
+  <div class="scrim"></div>
+  <div class="sheet full">
+    <div class="tabs"><span>Queue</span><span class="on">This take</span></div>
+    <div class="panel at-end">
+      <div class="take">
+        <div class="th-row"><span class="th">v4 · take 7 · 3:02 · xl-turbo</span><span class="openv">Open v4<svg class="ic xs"><use href="#i-chev-right"/></svg></span><span class="badges"><span class="badge"><svg class="ic md"><use href="#i-star"/></svg></span><span class="badge keep-on"><svg class="ic md"><use href="#i-heart-f"/></svg></span></span></div>
+        <div class="sec"><span class="st">Scores</span><div class="scores"><div class="sc"><span class="l">Lyrics sung</span><span class="v">86%</span></div><div class="sc ok"><span class="l">Dynamics</span><span class="v">54</span></div><div class="sc"><span class="l">Quality</span><span class="v">7.41</span></div><div class="sc ok"><span class="l">Enjoyment</span><span class="v">6.88</span></div><div class="sc"><span class="l">Coherence</span><span class="v">8</span></div><div class="sc"><span class="l">BPM</span><span class="v">96</span></div></div></div>
+        <div class="sec"><span class="st">Sung vs. lyrics</span><p class="dev">Laptop zu, die Stadt wird <span class="ch" title="Lyrics: leise">heiser</span> der Kaffee kalt, <span class="mi">der</span> Kopf auf Reise Fahrrad raus, das Licht wird gelb die Woche fällt mir aus der Welt Feierabend, Feierabend alles, was ich heute hab <span class="ad" title="Not in lyrics">yeah</span> Feierabend, Feierabend nimm mir nur die Zeit nicht ab Nachbarn grillen, irgendwer lacht die Straße summt in die Nacht</p></div>
+        <div class="sec"><span class="st recipe">▸ Recipe</span></div>
+        <div class="sec"><div class="rating"><span class="st">Your rating</span><span class="slider"><i></i><b></b></span><span class="rnum">50</span></div><div class="notes">Notes (optional)</div></div>
+        <div class="links"><span class="lk new"><svg class="ic xs"><use href="#i-pin"/></svg>Use seed <span class="hint">1838245</span></span><span class="lk">Repaint</span><span class="lk">Cover</span><span class="lk">Re-score</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<figcaption><b>P1b · The same sheet, scrolled to its end.</b> “Pin seed 1838245” now reads <b>Use seed</b> with the pin and the seed as a quiet hint, the same word and look as the take ⋯ menu's third row.</figcaption>
+</figure>
+
+<figure>
+<div class="scroll"><div class="app desk">
+  <div class="npd-head"><div><p class="kicker">Now Playing</p><p class="npd-title">Feierabend</p></div><div class="npd-actions"><span class="surface-btn">Collapse</span><span class="icon-btn" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+  <div class="npd-body">
+    <section class="col cover-col">
+      <div class="cover-d art-k" aria-hidden="true"></div>
+      <div class="meta"><span class="t">Feierabend</span><span class="l">Kaltstart · Felix</span><span class="l">v4 · take 7</span></div>
+      <div class="prog"><div class="seek"><span class="track"><i style="width:40%"></i></span><span class="knob" style="left:calc(40% - 7px)"></span></div><div class="times"><span>1:12</span><span>3:02</span></div></div>
+      <div class="dtrans"><div class="side b"><span class="icon-btn"><svg class="ic md"><use href="#i-shuffle"/></svg></span><span class="icon-btn off"><svg class="ic"><use href="#i-prev"/></svg></span></div><span class="circle"><svg class="ic xl"><use href="#i-pause"/></svg></span><div class="side"><span class="icon-btn off"><svg class="ic"><use href="#i-next"/></svg></span><span class="slot"></span></div></div>
+    </section>
+    <section class="col">
+      <div class="np-lyrics lyr"><span class="lyr-h">Lyrics</span>
+        <p>Laptop zu, die Stadt wird leise</p><p class="on">der Kaffee kalt, der Kopf auf Reise</p><p>Fahrrad raus, das Licht wird gelb</p><p>die Woche fällt mir aus der Welt</p><p>Feierabend, Feierabend</p><p>alles, was ich heute hab</p><p>Feierabend, Feierabend</p><p>nimm mir nur die Zeit nicht ab</p><p>Nachbarn grillen, irgendwer lacht</p><p>die Straße summt in die Nacht</p>
+      </div>
+      <span class="go-song">Go to song</span>
+    </section>
+    <section class="col">
+      <div class="tabs new"><span>Queue</span><span class="on">This take</span></div>
+      <div class="take">
+        <div class="th-row"><span class="th">v4 · take 7 · 3:02 · xl-turbo</span><span class="openv">Open v4<svg class="ic xs"><use href="#i-chev-right"/></svg></span><span class="badges"><span class="badge"><svg class="ic md"><use href="#i-star"/></svg></span><span class="badge keep-on"><svg class="ic md"><use href="#i-heart-f"/></svg></span></span></div>
+        <div class="sec"><span class="st">Scores</span><div class="scores"><div class="sc"><span class="l">Lyrics sung</span><span class="v">86%</span></div><div class="sc ok"><span class="l">Dynamics</span><span class="v">54</span></div><div class="sc"><span class="l">Quality</span><span class="v">7.41</span></div><div class="sc ok"><span class="l">Enjoyment</span><span class="v">6.88</span></div><div class="sc"><span class="l">Coherence</span><span class="v">8</span></div><div class="sc"><span class="l">BPM</span><span class="v">96</span></div></div></div>
+        <div class="sec"><span class="st">Sung vs. lyrics</span><p class="dev">Laptop zu, die Stadt wird <span class="ch" title="Lyrics: leise">heiser</span> der Kaffee kalt, <span class="mi">der</span> Kopf auf Reise Fahrrad raus, das Licht wird gelb die Woche fällt mir aus der Welt Feierabend, Feierabend alles, was ich heute hab <span class="ad" title="Not in lyrics">yeah</span> Feierabend, Feierabend nimm mir nur die Zeit nicht ab Nachbarn grillen, irgendwer lacht die Straße summt in die Nacht</p></div>
+        <div class="sec"><span class="st recipe">▸ Recipe</span></div>
+        <div class="sec"><div class="rating"><span class="st">Your rating</span><span class="slider"><i></i><b></b></span><span class="rnum">50</span></div><div class="notes">Notes (optional)</div></div>
+        <div class="links"><span class="lk new"><svg class="ic xs"><use href="#i-pin"/></svg>Use seed <span class="hint">1838245</span></span><span class="lk">Repaint</span><span class="lk">Cover</span><span class="lk">Re-score</span></div>
+      </div>
+    </section>
+  </div>
+</div></div>
+<figcaption class="w"><b>D1 · Desktop 1440, the same single take, Now Playing expanded.</b> The right column opens on This take with Use seed in its last row; Queue is the tab beside it, holding the one row that is playing.</figcaption>
+</figure>
+
+</div>
+</section>
+
+<!-- ═══════════════════════ 2 · several ═══════════════════════ -->
+<section class="part">
+<h2>2 · Several queued <small>it opens on Queue, as today</small></h2>
+<div class="frames">
+
+<figure>
+<div class="app device">
+  <div class="np-top"><span class="icon-btn ink" aria-label="Close"><svg class="ic xl"><use href="#i-chev-down"/></svg></span><span class="np-label">Now playing</span></div>
+  <div class="np-scroll">
+    <div class="cover art-a" aria-hidden="true"></div>
+    <div class="np-title">Storytime</div>
+    <div class="np-from">from Homeoffice ›</div>
+    <div class="np-take">v6 · take 11</div>
+    <div class="seek"><span class="track"><i style="width:37%"></i></span><span class="knob" style="left:calc(37% - 11px)"></span></div>
+    <div class="times"><span>1:12</span><span>3:13</span></div>
+    <div class="transport"><span class="icon-btn" aria-label="Shuffle"><svg class="ic"><use href="#i-shuffle"/></svg></span><span class="icon-btn ink" aria-label="Previous song"><svg class="ic"><use href="#i-prev"/></svg></span><span class="circle" aria-label="Pause"><svg class="ic xl"><use href="#i-pause"/></svg></span><span class="icon-btn ink" aria-label="Next song"><svg class="ic"><use href="#i-next"/></svg></span><span class="slot"></span></div>
+    <div class="np-lyrics lyr"><span class="lyr-h">Lyrics</span><p>Okay. Storytime. No cap. Alles echt passiert. So halb.</p><p class="on">Firmenlaptop glüht, lowkey Spiegeleier braten,</p><p>die Firmen-Ka-I lädt, ich krieg graue Haare beim Warten.</p></div>
+  </div>
+  <div class="trigger"><span class="un">Up next: Patchday</span><span class="tl">Queue <svg class="ic xs"><use href="#i-chev-up"/></svg></span></div>
+</div>
+<figcaption><b>P2 · Phone, a whole album queued.</b> Now Playing opens on cover and lyrics as today; the bar at the bottom names what plays next and opens Queue.</figcaption>
+</figure>
+
+<figure>
+<div class="app device">
+  <div class="np-top"><span class="icon-btn ink" aria-label="Close"><svg class="ic xl"><use href="#i-chev-down"/></svg></span><span class="np-label">Now playing</span></div>
+  <div class="np-scroll">
+    <div class="cover art-a" aria-hidden="true"></div>
+    <div class="np-title">Storytime</div>
+    <div class="np-from">from Homeoffice ›</div>
+    <div class="np-take">v6 · take 11</div>
+    <div class="seek"><span class="track"><i style="width:37%"></i></span><span class="knob" style="left:calc(37% - 11px)"></span></div>
+    <div class="times"><span>1:12</span><span>3:13</span></div>
+    <div class="transport"><span class="icon-btn"><svg class="ic"><use href="#i-shuffle"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-prev"/></svg></span><span class="circle"><svg class="ic xl"><use href="#i-pause"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-next"/></svg></span><span class="slot"></span></div>
+  </div>
+  <div class="trigger"><span class="un">Up next: Patchday</span><span class="tl">Queue <svg class="ic xs"><use href="#i-chev-up"/></svg></span></div>
+  <div class="scrim"></div>
+  <div class="sheet">
+    <div class="tabs"><span class="on">Queue</span><span>This take</span></div>
+    <div class="queue">
+      <span class="qh">Queue · Homeoffice</span>
+      <div class="qlist">
+        <div class="qrow cur"><span class="qpos"></span><span class="qt">Storytime</span><span class="qm">v6 · take 11</span><span class="qm">3:13</span></div>
+        <div class="qrow"><span class="qpos">2</span><span class="qt">Patchday</span><span class="qm">v3 · take 2</span><span class="qm">2:58</span></div>
+        <div class="qrow"><span class="qpos">3</span><span class="qt">Ticket 404</span><span class="qm">v2 · take 5</span><span class="qm">3:40</span></div>
+      </div>
+      <span class="upnext">Up next: Patchday</span>
+    </div>
+  </div>
+</div>
+<figcaption><b>P2b · A tap on that bar.</b> The sheet opens on Queue: the playing row is marked, a tap on another row jumps there, and This take is the tab beside it.</figcaption>
+</figure>
+
+<figure>
+<div class="scroll"><div class="app desk">
+  <div class="npd-head"><div><p class="kicker">Now Playing</p><p class="npd-title">Storytime</p></div><div class="npd-actions"><span class="surface-btn">Collapse</span><span class="icon-btn" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+  <div class="npd-body">
+    <section class="col cover-col">
+      <div class="cover-d art-a" aria-hidden="true"></div>
+      <div class="meta"><span class="t">Storytime</span><span class="l">Homeoffice · Felix</span><span class="l">v6 · take 11</span></div>
+      <div class="prog"><div class="seek"><span class="track"><i style="width:37%"></i></span><span class="knob" style="left:calc(37% - 7px)"></span></div><div class="times"><span>1:12</span><span>3:13</span></div></div>
+      <div class="dtrans"><div class="side b"><span class="icon-btn"><svg class="ic md"><use href="#i-shuffle"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-prev"/></svg></span></div><span class="circle"><svg class="ic xl"><use href="#i-pause"/></svg></span><div class="side"><span class="icon-btn ink"><svg class="ic"><use href="#i-next"/></svg></span><span class="slot"></span></div></div>
+    </section>
+    <section class="col">
+      <div class="np-lyrics lyr"><span class="lyr-h">Lyrics</span>
+        <p>Okay. Storytime. No cap. Alles echt passiert. So halb.</p><p class="on">Firmenlaptop glüht, lowkey Spiegeleier braten,</p><p>die Firmen-Ka-I lädt, ich krieg graue Haare beim Warten.</p><p>Homeoffice, nebendran mein PC, Digga, pure Power,</p><p>ein Meter, ein Stick, Big Brain, Main Character, ich bin schlauer.</p><p>Hundert Commits am Tag, ich war mein eigenes Team,</p><p>alles signiert: Leo-nardos Ateljee, der da Vinci von Sie-mens.</p><p>Spritze oder Stuhl, Bro, ich bin cooked,</p><p>ein Stick im Homeoffice, und Texas hat mich gebucht.</p>
+      </div>
+      <span class="go-song">Go to song</span>
+    </section>
+    <section class="col">
+      <div class="tabs"><span class="on">Queue</span><span>This take</span></div>
+      <div class="queue">
+        <span class="qh">Queue · Homeoffice</span>
+        <div class="qlist">
+          <div class="qrow cur"><span class="qpos"></span><span class="qt">Storytime</span><span class="qm">v6 · take 11</span><span class="qm">3:13</span></div>
+          <div class="qrow"><span class="qpos">2</span><span class="qt">Patchday</span><span class="qm">v3 · take 2</span><span class="qm">2:58</span></div>
+          <div class="qrow"><span class="qpos">3</span><span class="qt">Ticket 404</span><span class="qm">v2 · take 5</span><span class="qm">3:40</span></div>
+        </div>
+        <span class="upnext">Up next: Patchday</span>
+      </div>
+    </section>
+  </div>
+</div></div>
+<figcaption class="w"><b>D2 · Desktop 1440, the album Homeoffice queued.</b> The right column opens on Queue, as today, because with several songs the order is the question; This take is one click away.</figcaption>
+</figure>
+
+</div>
+</section>
+
+<!-- ═══════════════════════ 3 · the album walk ═══════════════════════ -->
+<section class="part">
+<h2>3 · The album walk <small>Curate becomes Pick album takes</small></h2>
+<div class="frames">
+
+<figure>
+<div class="app device">
+  <div class="ph-top"><span class="icon-btn ink" aria-label="Back"><svg class="ic"><use href="#i-chev-left"/></svg></span><b>Library</b><span class="icon-btn ink" aria-label="Search"><svg class="ic"><use href="#i-search"/></svg></span></div>
+  <div class="ph-alb">
+    <div class="alb-head"><div class="alb-cover art-n" aria-hidden="true"></div><div class="alb-info"><span class="alb-title">Nightdrive</span><span class="alb-sub">5 songs</span></div></div>
+    <div class="alb-actions"><span class="circle c48" aria-label="Play"><svg class="ic lg"><use href="#i-play"/></svg></span>
+      <span class="menu-anchor"><span class="more-btn pressed" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></span>
+        <div class="lmenu floating"><p class="lhead">Album · Nightdrive</p>
+          <span class="lmi"><svg class="li"><use href="#i-pencil"/></svg>Edit details</span>
+          <span class="lmi"><svg class="li"><use href="#i-image"/></svg>Cover<span class="lhint">upload · suggest</span></span>
+          <span class="lmi hover new"><svg class="li"><use href="#i-spark"/></svg>Pick album takes</span>
+          <span class="lmi"><svg class="li"><use href="#i-listplus"/></svg>Add to playlist</span>
+          <span class="lmi"><svg class="li"><use href="#i-share"/></svg>Share<span class="lhint">off</span></span>
+          <span class="lmi"><svg class="li"><use href="#i-archive"/></svg>Archive</span>
+          <span class="lmi destructive"><svg class="li"><use href="#i-trash"/></svg>Delete</span>
+        </div></span></div>
+    <div class="songs">
+      <div class="songbox">Opening Move<span class="c">4 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Headlights<span class="c">2 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Berlin, 1984<span class="c">3 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Harbour Lights<span class="c">1 take</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Tidewater<span class="c">no take yet</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+    </div>
+  </div>
+  <div class="dockcard"><div class="pcard"><span class="tile art-a" aria-hidden="true"></span><span class="m"><b>Storytime</b><small>Homeoffice</small></span><span class="circle c44"><svg class="ic md"><use href="#i-pause"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-next"/></svg></span><span class="line"></span></div></div>
+  <nav class="ptabs" aria-label="Places"><span><svg class="ic"><use href="#i-home"/></svg>Home</span><span class="on"><svg class="ic"><use href="#i-grid"/></svg>Library</span><span><svg class="ic"><use href="#i-note"/></svg>Playlists</span></nav>
+</div>
+<figcaption><b>P3 · Phone, the album's ⋯.</b> Curate is now <b>Pick album takes</b>: same place, same spark, a name that says you will choose the album's takes song by song.</figcaption>
+</figure>
+
+<figure>
+<div class="app device">
+  <div class="np-top"><span class="icon-btn ink" aria-label="Close"><svg class="ic xl"><use href="#i-chev-down"/></svg></span><span class="np-label">Now playing</span></div>
+  <div class="np-scroll">
+    <div class="cover art-n" aria-hidden="true"></div>
+    <div class="np-title">Headlights</div>
+    <div class="np-from">from Nightdrive ›</div>
+    <div class="np-take">v2 · take 2</div>
+    <div class="walk new" style="margin-top:16px" role="group" aria-label="Pick album takes">
+      <p class="walk-h">Pick album takes · Song 2 of 4</p>
+      <div class="walk-row"><span class="wb" aria-label="Keep"><svg class="ic lg"><use href="#i-heart"/></svg></span><span class="wb pick" aria-label="Pick"><svg class="ic xl"><use href="#i-star"/></svg></span><span class="wb" aria-label="Skip — Next song"><svg class="ic lg"><use href="#i-skip"/></svg></span></div>
+      <span class="walk-done">Done</span>
+    </div>
+    <div class="seek"><span class="track"><i style="width:22%"></i></span><span class="knob" style="left:calc(22% - 11px)"></span></div>
+    <div class="times"><span>0:41</span><span>3:08</span></div>
+    <div class="transport"><span class="icon-btn"><svg class="ic"><use href="#i-shuffle"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-prev"/></svg></span><span class="circle"><svg class="ic xl"><use href="#i-pause"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-next"/></svg></span><span class="slot"></span></div>
+  </div>
+  <div class="trigger"><span class="un">Up next: Berlin, 1984</span><span class="tl">This take <svg class="ic xs"><use href="#i-chev-up"/></svg></span></div>
+</div>
+<figcaption><b>P4 · The walk, on the phone.</b> Its card carries the same name over “Song 2 of 4”: ♡ keeps, ★ picks this take and moves on, ⏭ skips, <b>Done</b> ends the walk. It starts at the first song without a pick and counts only songs that have a take.</figcaption>
+</figure>
+
+<figure>
+<div class="scroll"><div class="app shell crop">
+  <aside class="rail">
+    <div class="brand">SONGMAKER</div>
+    <div class="search"><svg class="ic sm"><use href="#i-search"/></svg>Search or go to…</div>
+    <div class="grp"><svg class="ic sm"><use href="#i-home"/></svg>Home</div>
+    <div class="grp"><svg class="ic sm"><use href="#i-grid"/></svg>Library<span class="n">6</span></div>
+    <div class="row"><i>AC</i>Amber Coast</div>
+    <div class="row"><i>HO</i>Homeoffice</div>
+    <div class="row"><i>KS</i>Kaltstart</div>
+    <div class="row on"><i>ND</i>Nightdrive</div>
+    <div class="row"><i>PM</i>Paper Moons</div>
+    <div class="row"><i>QH</i>Quiet Harbour</div>
+    <div class="grp"><svg class="ic sm"><use href="#i-note"/></svg>Playlists<span class="n">2</span></div>
+  </aside>
+  <main class="main"><div class="alb">
+    <div class="alb-head"><span class="back"><svg class="ic sm"><use href="#i-chev-left"/></svg></span><div class="alb-cover art-n" aria-hidden="true"></div>
+      <div class="alb-info"><span class="alb-title">Nightdrive</span><span class="alb-sub">5 songs</span><div class="alb-actions"><span class="circle c44"><svg class="ic md"><use href="#i-play"/></svg></span></div></div>
+      <span class="menu-anchor"><span class="more-btn pressed" aria-label="More"><svg class="ic md"><use href="#i-more"/></svg></span>
+        <div class="lmenu floating"><p class="lhead">Album · Nightdrive</p>
+          <span class="lmi"><svg class="li"><use href="#i-pencil"/></svg>Edit details</span>
+          <span class="lmi"><svg class="li"><use href="#i-image"/></svg>Cover<span class="lhint">upload · suggest</span></span>
+          <span class="lmi hover new"><svg class="li"><use href="#i-spark"/></svg>Pick album takes</span>
+          <span class="lmi"><svg class="li"><use href="#i-listplus"/></svg>Add to playlist</span>
+          <span class="lmi"><svg class="li"><use href="#i-share"/></svg>Share<span class="lhint">off</span></span>
+          <span class="lmi"><svg class="li"><use href="#i-archive"/></svg>Archive</span>
+          <span class="lmi destructive"><svg class="li"><use href="#i-trash"/></svg>Delete</span>
+        </div></span>
+    </div>
+    <div class="songs">
+      <div class="songbox">Opening Move<span class="c">4 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Headlights<span class="c">2 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Berlin, 1984<span class="c">3 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Harbour Lights<span class="c">1 take</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Tidewater<span class="c">no take yet</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+    </div>
+    <div class="newsong"><svg class="ic sm"><use href="#i-plus"/></svg>New song</div>
+  </div></main>
+</div></div>
+<figcaption class="w"><b>D3 · Desktop 1440, the album's ⋯ (top of the page).</b> The same row in the same place: <b>Pick album takes</b>, third, between Cover and Add to playlist.</figcaption>
+</figure>
+
+<figure>
+<div class="scroll"><div class="app shell docked">
+  <aside class="rail">
+    <div class="brand">SONGMAKER</div>
+    <div class="search"><svg class="ic sm"><use href="#i-search"/></svg>Search or go to…</div>
+    <div class="grp"><svg class="ic sm"><use href="#i-home"/></svg>Home</div>
+    <div class="grp"><svg class="ic sm"><use href="#i-grid"/></svg>Library<span class="n">6</span></div>
+    <div class="row"><i>AC</i>Amber Coast</div>
+    <div class="row"><i>HO</i>Homeoffice</div>
+    <div class="row"><i>KS</i>Kaltstart</div>
+    <div class="row on"><i>ND</i>Nightdrive</div>
+    <div class="row"><i>PM</i>Paper Moons</div>
+    <div class="row"><i>QH</i>Quiet Harbour</div>
+    <div class="grp"><svg class="ic sm"><use href="#i-note"/></svg>Playlists<span class="n">2</span></div>
+  </aside>
+  <main class="main"><div class="alb">
+    <div class="alb-head"><span class="back"><svg class="ic sm"><use href="#i-chev-left"/></svg></span><div class="alb-cover art-n" aria-hidden="true"></div>
+      <div class="alb-info"><span class="alb-title">Nightdrive</span><span class="alb-sub">5 songs</span><div class="alb-actions"><span class="circle c44"><svg class="ic md"><use href="#i-pause"/></svg></span></div></div>
+      <span class="menu-anchor"><span class="more-btn" aria-label="More"><svg class="ic md"><use href="#i-more"/></svg></span></span>
+    </div>
+    <div class="songs">
+      <div class="songbox">Opening Move<span class="c">4 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox playing"><svg class="ic sm eq"><use href="#i-eq"/></svg>Headlights<span class="c">2 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Berlin, 1984<span class="c">3 takes</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Harbour Lights<span class="c">1 take</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+      <div class="songbox">Tidewater<span class="c">no take yet</span><svg class="ic sm pen"><use href="#i-pencil"/></svg></div>
+    </div>
+    <div class="newsong"><svg class="ic sm"><use href="#i-plus"/></svg>New song</div>
+  </div></main>
+  <aside class="dock">
+    <div class="npd-head"><div><p class="kicker">Now Playing</p><p class="npd-title">Headlights</p></div><div class="npd-actions"><span class="surface-btn">Expand</span><span class="icon-btn" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+    <div class="dock-body">
+      <section class="cover-col">
+        <div class="cover-d art-n" aria-hidden="true"></div>
+        <div class="meta"><span class="t">Headlights</span><span class="l">Nightdrive · Felix</span><span class="l">v2 · take 2</span></div>
+        <div class="walk new" role="group" aria-label="Pick album takes">
+          <p class="walk-h">Pick album takes · Song 2 of 4</p>
+          <div class="walk-row"><span class="wb"><svg class="ic lg"><use href="#i-heart"/></svg></span><span class="wb pick"><svg class="ic xl"><use href="#i-star"/></svg></span><span class="wb"><svg class="ic lg"><use href="#i-skip"/></svg></span></div>
+          <span class="walk-done">Done</span>
+        </div>
+      </section>
+      <div class="np-lyrics lyr" style="margin-top:0"><span class="lyr-h">Lyrics</span><p class="on">Headlights over Potsdamer Platz,</p><p>every signal stuck on red,</p><p>you said drive until it's morning,</p><p>so I drove until you slept.</p><p>Headlights, headlights,</p><p>nothing on the radio but us,</p><p>headlights, headlights,</p><p>Berlin is a sleeping bus.</p></div>
+    </div>
+    <div class="fold"><span class="note-tag">↓ Below: Go to song, then Queue · This take</span></div>
+  </aside>
+  <div class="pbar"><span class="line"><i></i></span>
+    <div class="ctl"><span class="icon-btn"><svg class="ic md"><use href="#i-shuffle"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-prev"/></svg></span><span class="circle c48"><svg class="ic lg"><use href="#i-pause"/></svg></span><span class="icon-btn ink"><svg class="ic"><use href="#i-next"/></svg></span></div>
+    <span class="tile art-n" aria-hidden="true"></span><span class="tt"><b>Headlights</b><u>Nightdrive</u></span>
+    <span class="np-pill pressed">Now Playing <svg class="ic xs"><use href="#i-chev-down"/></svg></span>
+  </div>
+</div></div>
+<figcaption class="w"><b>D4 · Desktop 1440, the walk in the docked column (the default).</b> The walk's card sits under the cover with the same name and Done; the album beside it marks the song that is playing.</figcaption>
+</figure>
+
+</div>
+</section>
+
+</div>
+<script>
+(function () {
+	var root = document.documentElement;
+	var buttons = document.querySelectorAll('[data-set-theme]');
+	function current() {
+		var chosen = root.getAttribute('data-theme');
+		if (chosen) return chosen;
+		return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+	}
+	function sync() {
+		var theme = current();
+		buttons.forEach(function (button) {
+			button.setAttribute('aria-pressed', String(button.getAttribute('data-set-theme') === theme));
+		});
+	}
+	buttons.forEach(function (button) {
+		button.addEventListener('click', function () {
+			root.setAttribute('data-theme', button.getAttribute('data-set-theme'));
+			sync();
+		});
+	});
+	sync();
+})();
+</script>
+</body>
+</html>
