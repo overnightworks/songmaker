@@ -63,6 +63,11 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   den Tabs Song · Generate · Engine) sowie von Repaint und Cover als
   Aufgabenkarte am Take. Seit 23.10.2026 (#1825) auch der Takes pro Version
   gefaltet in der Listen-Spalte samt Bestätigung „Delete N“.
+- `now-playing.html` — Now Playing öffnet auf dem, was zählt (#1816, #1826).
+  Freigegeben am 23.10.2026 (Operator: „ok bilder passen“). Besitzer des Tabs,
+  auf dem Now Playing öffnet (ein Take in der Schlange: This take, mehrere:
+  Queue), des Namens „Use seed“ und von „Pick album takes“ / „Done“ im Walk;
+  Telefon 390 und Desktop 1440.
 - `song-editor-take.html` — eingefrorener früherer Stand (#230, freigegeben am
   03.09.2026): Repaint/Cover als Zeilenaktionen am Take. Überholt: die
   Take-Zeile gehört seit 20.09.2026 `song-page-phone.html` (sechs-zeiliges
