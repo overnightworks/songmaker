@@ -113,8 +113,8 @@ table.map td b{font-weight:600;color:var(--violet)}
 .box{padding:10px 13px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:15px;line-height:1.5}
 .box.focus{border-color:var(--action);box-shadow:0 0 0 2px rgba(122,24,192,.15)}
 .lyr{font-family:'Courier New',monospace;font-size:14.5px;line-height:1.6;white-space:pre-wrap}
-/* section labels: the same editable characters, shown as small caps in a muted accent */
-.lyr .mk{font-family:var(--fd);font-size:12px;letter-spacing:1.1px;text-transform:uppercase;color:#9b6fd0;font-weight:500}
+/* section labels: the same editable characters in the field's own font, the accent colour only */
+.lyr .mk{color:var(--action)}
 .caret{display:inline-block;width:2px;height:1.1em;background:var(--action);vertical-align:-3px;margin-left:1px}
 .verchip{display:inline-flex;align-items:center;gap:2px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:12px;background:var(--surface);font-family:var(--fb);font-size:12px;letter-spacing:0;text-transform:none;color:var(--text)}
 /* the recipe: closed, one quiet line; open, three value-free tabs */
@@ -420,7 +420,7 @@ ein Stick im Homeoffice, und Texas hat mich gebucht.</div>
 </div>
 <div class="player"><div class="bar"><i></i></div><div class="art"></div><div class="tt"><span>Storytime</span><small>v6 · take 11 · 1:12 / 3:13</small></div><span class="grow"></span><button class="icon-btn"><svg class="ic f" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button class="icon-btn"><svg class="ic f" viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg></button></div>
 </div>
-</div></div><figcaption class="w"><b>D1 · Writing and listening.</b> Left the whole song as one document: the recipe closed to its one line “Recipe ›” — nothing is changed, so it shows nothing — then Style, then the Lyrics, both growing with their text; the page scrolls, no box scrolls inside. <b>[Intro]</b>, <b>[Verse 1]</b>, <b>[Chorus]</b> are the same editable characters, shown as small caps in a muted accent, so the eye finds a part without reading. Right the takes of v6 with the one live take; earlier versions are one folded row each.</figcaption></figure>
+</div></div><figcaption class="w"><b>D1 · Writing and listening.</b> Left the whole song as one document: the recipe closed to its one line “Recipe ›” — nothing is changed, so it shows nothing — then Style, then the Lyrics, both growing with their text; the page scrolls, no box scrolls inside. <b>[Intro]</b>, <b>[Verse 1]</b>, <b>[Chorus]</b> are the same editable characters, shown in the accent colour, so the eye finds a part without reading. Right the takes of v6 with the one live take; earlier versions are one folded row each.</figcaption></figure>
 <figure><div class="scroll"><div class="app desk">
 <aside class="rail">
   <div class="brand">SONGMAKER</div>
@@ -736,7 +736,7 @@ Spritze oder Stuhl, Bro, ich bin cooked,
 ein Stick im Homeoffice, und Texas hat mich gebucht.</div>
 </div></div>
 <div class="actionbar"><button class="btn-primary">Generate</button></div><div class="player"><div class="bar"><i></i></div><div class="art"></div><div class="tt"><span>Storytime</span><small>v6 · take 11 · 1:12 / 3:13</small></div><span class="grow"></span><button class="icon-btn"><svg class="ic f" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg></button><button class="icon-btn"><svg class="ic f" viewBox="0 0 24 24"><path d="M5 5l9 7-9 7zM16 5h3v14h-3z"/></svg></button></div>
-</div><figcaption><b>P1 · Edit.</b> The closed line “Recipe ›”, then Style and Lyrics growing; section labels in small caps; the page scrolls, Generate stays in its bar.</figcaption></figure>
+</div><figcaption><b>P1 · Edit.</b> The closed line “Recipe ›”, then Style and Lyrics growing; section labels in the accent colour; the page scrolls, Generate stays in its bar.</figcaption></figure>
 <figure><div class="app device ph">
 <div class="appbar"><button class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button><h1>Storytime</h1><button class="icon-btn"><svg class="ic f" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
 <div class="tabs"><button class="">Edit</button><button class="">Co-writer</button><button class="on">Takes <span class="cnt">11</span></button></div>
@@ -906,7 +906,7 @@ ein Stick im Homeoffice, und Texas hat mich gebucht.<span class="caret"></span><
 <div class="krow"><i class="w">⇧</i><i>y</i><i>x</i><i>c</i><i>v</i><i>b</i><i>n</i><i>m</i><i class="w">⌫</i></div>
 <div class="krow"><i class="w">123</i><i class="sp">Leerzeichen</i><i class="w">↵</i></div>
 </div>
-</div><figcaption><b>P7 · Typing in the lyrics, keyboard up.</b> Tabs, Generate bar and player step aside (blessed rule); the lyrics grow and the page scrolls; the section labels keep their small-caps look while typing.</figcaption></figure>
+</div><figcaption><b>P7 · Typing in the lyrics, keyboard up.</b> Tabs, Generate bar and player step aside (blessed rule); the lyrics grow and the page scrolls; the section labels keep their accent colour while typing.</figcaption></figure>
 </div></section>
 <section class="part unfold"><h2>Takes per version <small>the Listen column folded per version; blessed 23.10.2026 · #1804 slice 4</small></h2>
 <p class="verdict"><b>What this adds</b> to At the Take: the right column’s takes folded per version, as ruled in <b>S3</b>. The current version is open, each earlier version is one row that unfolds in place, and archived takes show only inside an unfolded version, as compact rows. The frames follow <b>D3</b> (Save and its hint stay put; folding touches only the right column) and <b>D6</b> (“current” is the latest saved version and always open; a dirty draft keeps today’s banner; Imported folds like a version). <b>S11:</b> Delete N asks first, with the confirmation a single take’s Delete opens. A selection and a delete never include a take the person cannot see.</p>

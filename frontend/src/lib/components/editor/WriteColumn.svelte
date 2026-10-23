@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick, type Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 	import {
 		draftLoadedFrom,
 		editLyrics,
@@ -17,70 +17,23 @@
 		versionLoadedFromLabel
 	} from '$lib/constants';
 	import Icon from '../Icon.svelte';
+	import GrowingTextarea from './GrowingTextarea.svelte';
 	import TakeStrip from './TakeStrip.svelte';
 	import VersionsSheet from './VersionsSheet.svelte';
 
 	interface Props {
 		song: SongItem;
 		coWriterOpen: boolean;
-		compact: boolean;
 		cowriterPanel: Snippet;
 	}
 
-	let { song, coWriterOpen, compact, cowriterPanel }: Props = $props();
+	let { song, coWriterOpen, cowriterPanel }: Props = $props();
 
 	const lyricsFieldId = $props.id();
 	const generationActions = getGenerationActions();
 
 	function loadVersion(versionId: string): Promise<boolean> {
 		return generationActions.clickVersion(versionId);
-	}
-
-	// At compact width the page itself is the one scroll surface (L9): a
-	// fixed-height field whose content overflows becomes its own nested
-	// scroll box, which is what this replaces. Desktop keeps its own
-	// resizable, min-height-floored box untouched — this action only ever
-	// touches the node when `active` is true. `value` is watched too so a
-	// draft loaded from the store (switching songs, a co-writer write, a
-	// version restore) resizes the same as one typed in — but `update` runs
-	// as a render effect before the template effect that lands the new
-	// `value` on the textarea, so it must wait a tick before measuring, or it
-	// reads the old DOM value and leaves the field short. `scrollHeight` sits
-	// inside the border box while the set height is the border-box height
-	// (`box-sizing: border-box`), so the border itself has to be added back
-	// on top. A window resize (rotation) re-wraps the same text to a
-	// different height, so the listener stays live for as long as the field
-	// does.
-	function autogrowTextarea(node: HTMLTextAreaElement, params: { active: boolean; value: string }) {
-		let autogrowing = false;
-		function resize() {
-			node.style.height = 'auto';
-			node.style.height = `${node.scrollHeight + node.offsetHeight - node.clientHeight}px`;
-		}
-		// Desktop's `active: false` must leave the node fully alone so its own
-		// manual resize handle keeps working (#993): no listener, and the height
-		// is only cleared on the way out of compact — clearing it on every
-		// keystroke threw away a height the musician had dragged (#999).
-		function apply(next: { active: boolean; value: string }) {
-			if (next.active) {
-				tick().then(resize);
-				node.addEventListener('input', resize);
-				window.addEventListener('resize', resize);
-			} else if (autogrowing) {
-				node.style.height = '';
-				node.removeEventListener('input', resize);
-				window.removeEventListener('resize', resize);
-			}
-			autogrowing = next.active;
-		}
-		apply(params);
-		return {
-			update: apply,
-			destroy() {
-				node.removeEventListener('input', resize);
-				window.removeEventListener('resize', resize);
-			}
-		};
 	}
 </script>
 
@@ -117,12 +70,7 @@
 	<div class="write-mode">
 		<label class="edit-field">
 			<span>{EDITOR_STYLE_PROMPT_LABEL}</span>
-			<textarea
-				rows="4"
-				class:auto-grow={compact}
-				use:autogrowTextarea={{ active: compact, value: $editPrompt }}
-				value={$editPrompt}
-				oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
+			<GrowingTextarea value={$editPrompt} oninput={setDraftPrompt} minimumLines={4} />
 		</label>
 		<div class="edit-field">
 			<span>
@@ -130,14 +78,14 @@
 				<VersionsSheet {song} onload={loadVersion} />
 			</span>
 			{@render loadedFromHint()}
-			<textarea
+			<GrowingTextarea
 				id={lyricsFieldId}
 				class="lyrics-area"
-				class:auto-grow={compact}
-				use:autogrowTextarea={{ active: compact, value: $editLyrics }}
-				rows="15"
 				value={$editLyrics}
-				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
+				oninput={setDraftLyrics}
+				minimumLines={15}
+				monospace
+			/>
 		</div>
 	</div>
 {/if}
@@ -184,7 +132,6 @@
 		color: var(--text-subtle);
 	}
 
-	.edit-field textarea,
 	.style-field textarea,
 	.lyrics-area {
 		padding: 0.6rem 0.8rem;
@@ -197,7 +144,6 @@
 		min-width: 0;
 	}
 
-	.edit-field textarea:focus,
 	.style-field textarea:focus,
 	.lyrics-area:focus {
 		border-color: var(--accent);
@@ -211,18 +157,6 @@
 		line-height: 1.6;
 		min-height: 200px;
 		resize: vertical;
-	}
-
-	/* Compact write mode is one scrolling column (L9): a fixed-height field
-	   whose content overflows becomes its own nested scroll box, which is
-	   what a phone must not have. The JS action sets an explicit height that
-	   tracks content, so a manual resize handle (and its own internal
-	   scrollbar underneath) would fight it — `resize: none` leaves growth to
-	   that height alone. Desktop keeps `resize: vertical` and its own
-	   min-height floor untouched. */
-	.auto-grow {
-		resize: none;
-		overflow: hidden;
 	}
 
 	/* Filling a fixed height only works where every part has a column of its
