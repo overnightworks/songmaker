@@ -631,15 +631,32 @@ def test_k_a_missing_or_invalid_origin_leaves_mcp_answering_503(
     assert drive(wrapped, headers_for(None), rpc("ping")).status == 503
 
 
+def _surrogate_description(tools):
+    return [replace(tools[0], description="\ud800"), *tools[1:]], "\ud800"
+
+
+def _surrogate_property_name(tools):
+    parameters = {
+        "type": "object",
+        "properties": {"\ud800": {"type": "string"}},
+        "additionalProperties": False,
+    }
+    return [replace(tools[0], parameters=parameters), *tools[1:]], "\ud800"
+
+
+def _duplicate_tool_name(tools):
+    return [*tools, tools[0]], tools[0].name
+
+
+@pytest.mark.parametrize(
+    "declare_rejected_tools",
+    [_surrogate_description, _surrogate_property_name, _duplicate_tool_name],
+)
 def test_k_a_tool_declaration_the_mcp_library_rejects_leaves_mcp_answering_503(
-    web, mcp_environment, monkeypatch, caplog,
+    web, mcp_environment, monkeypatch, caplog, declare_rejected_tools,
 ):
-    tool = COWRITER_TOOLS[0]
-    unpaired_surrogate = "\ud800"
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.mcp_endpoint.COWRITER_TOOLS",
-        [replace(tool, description=unpaired_surrogate), *COWRITER_TOOLS[1:]],
-    )
+    rejected_tools, content = declare_rejected_tools(COWRITER_TOOLS)
+    monkeypatch.setattr("songmaker_cli.cowriter.mcp_endpoint.COWRITER_TOOLS", rejected_tools)
     app, _ = web
 
     with caplog.at_level(logging.WARNING):
@@ -647,7 +664,7 @@ def test_k_a_tool_declaration_the_mcp_library_rejects_leaves_mcp_answering_503(
 
     assert verdict.problem is McpKeyProblem.TOOLS_INVALID
     assert drive(wrapped, headers_for(None), rpc("ping")).status == 503
-    assert unpaired_surrogate not in caplog.text
+    assert content not in caplog.text
 
 
 def test_k_an_unset_key_file_setting_is_unavailable_missing(web, monkeypatch):

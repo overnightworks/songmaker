@@ -45,6 +45,7 @@ CAPABILITY_PURPOSE: Final = "cowriter"
 _REFUSED: Final = ToolOutcome("The tool call was refused.", is_error=True)
 _KEY_SETTING: Final = "agent_service_capability_key_file"
 _ORIGIN_SETTING: Final = "agent_service_mcp_origin"
+_TOOL_CATALOG: Final = "the co-writer tool catalog"
 
 
 class McpKeyProblem(StrEnum):
@@ -89,7 +90,7 @@ def _server_or_problem(
         return McpEndpointAvailability(McpKeyProblem.ORIGIN_INVALID), None
     try:
         return McpEndpointAvailability(), McpServer(origin, key, _tools_for(app, settings))
-    except ValidationError as invalid:
+    except ValueError as invalid:  # duplicate names raise ValueError; ValidationError subclasses it
         return McpEndpointAvailability(McpKeyProblem.TOOLS_INVALID, type(invalid).__name__), None
 
 
@@ -112,11 +113,12 @@ def _verification_key(settings: Settings) -> CapabilityVerificationKey | McpEndp
 
 
 def _log_unavailable(availability: McpEndpointAvailability) -> None:
-    setting = (
-        _ORIGIN_SETTING
-        if availability.problem in (McpKeyProblem.ORIGIN_MISSING, McpKeyProblem.ORIGIN_INVALID)
-        else _KEY_SETTING
-    )
+    if availability.problem in (McpKeyProblem.ORIGIN_MISSING, McpKeyProblem.ORIGIN_INVALID):
+        setting = _ORIGIN_SETTING
+    elif availability.problem is McpKeyProblem.TOOLS_INVALID:
+        setting = _TOOL_CATALOG
+    else:
+        setting = _KEY_SETTING
     log.warning(
         "Co-writer MCP endpoint unavailable, /mcp answers 503: %s %s %s",
         setting,
