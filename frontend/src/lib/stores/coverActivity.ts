@@ -225,14 +225,13 @@ export function updateCoverActivity(
 }
 
 /** A Suggest on its way, named by the discard mark it began under. */
-type CoverAsk = number;
 
 /**
  * Suggest was pressed. A read still on its way is dropped, so its older
  * answer cannot erase the job Suggest creates; the page waits on the POST.
  * Returns the ask, which a later ×, USE or Upload retires.
  */
-export function beginCoverSuggestion(albumId: string): CoverAsk {
+export function beginCoverSuggestion(albumId: string): number {
 	supersedeReads(albumId);
 	reloadsOf(albumId)?.stop();
 	updateCoverActivity(albumId, (state) => ({
@@ -245,7 +244,7 @@ export function beginCoverSuggestion(albumId: string): CoverAsk {
 }
 
 /** A retired ask releases what it made and changes nothing of what came after. */
-export function isCoverAskRetired(albumId: string, ask: CoverAsk): boolean {
+export function isCoverAskRetired(albumId: string, ask: number): boolean {
 	return discardMarkOf(albumId) !== ask;
 }
 
