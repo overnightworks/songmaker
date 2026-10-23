@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { typingOnPhone } from '$lib/stores/ui';
+	import { onScreenKeyboardHeightPx, typingOnPhone } from '$lib/stores/ui';
 
 	interface Props {
 		value: string;
@@ -73,7 +73,9 @@
 	async function keepCaretVisible(): Promise<void> {
 		const visible = window.visualViewport;
 		if (!$typingOnPhone || !visible || !textarea || !mirror) return;
-		keyboardRoomPx = Math.max(0, document.documentElement.clientHeight - visible.height);
+		const focused = document.activeElement === textarea;
+		keyboardRoomPx = focused ? onScreenKeyboardHeightPx(document) : 0;
+		if (!focused) return;
 		await tick();
 		if (document.activeElement !== textarea) return;
 		const scroller = scrollingAncestor(textarea);

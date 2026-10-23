@@ -1,6 +1,10 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { removePhoneViewport, phoneViewport } from '$lib/test-utils/on-screen-keyboard';
+import {
+	PHONE_VIEWPORT_HEIGHT_PX,
+	phoneViewport,
+	removePhoneViewport
+} from '$lib/test-utils/on-screen-keyboard';
 import { watchTypingOnPhone } from '$lib/stores/ui';
 import GrowingTextarea from './GrowingTextarea.svelte';
 
@@ -63,6 +67,7 @@ describe('GrowingTextarea', () => {
 describe('GrowingTextarea on the phone with the keyboard open', () => {
 	const KEYBOARD_TOP = 500;
 	const LINE_HEIGHT = 20;
+	const PHONE_BELOW_BAND = PHONE_VIEWPORT_HEIGHT_PX + 56;
 	let unwatch: (() => void) | undefined;
 
 	afterEach(() => {
@@ -84,6 +89,8 @@ describe('GrowingTextarea on the phone with the keyboard open', () => {
 		const scrollBy = vi.fn();
 		scroller.scrollBy = scrollBy;
 		document.body.append(scroller);
+		const otherField = render('style');
+		scroller.append(otherField);
 		const target = render('one\ntwo');
 		scroller.append(target);
 		const viewport = phoneViewport();
@@ -93,8 +100,13 @@ describe('GrowingTextarea on the phone with the keyboard open', () => {
 		textarea.focus();
 		unwatch = watchTypingOnPhone(document, true);
 		await tick();
+		await tick();
 		scrollBy.mockClear();
-		return { textarea, scrollBy, viewport };
+		return { textarea, scrollBy, viewport, otherField, field: target };
+	}
+
+	function roomUnder(field: HTMLElement): string {
+		return field.querySelector<HTMLElement>('.growing')?.style.paddingBottom ?? '';
 	}
 
 	async function typeIn(textarea: HTMLTextAreaElement) {
@@ -131,10 +143,18 @@ describe('GrowingTextarea on the phone with the keyboard open', () => {
 	});
 
 	it('leaves the scroller alone when no keyboard is open', async () => {
-		const { textarea, scrollBy, viewport } = await typeOnPhone(KEYBOARD_TOP + 60);
+		const { textarea, scrollBy, viewport, field } = await typeOnPhone(PHONE_BELOW_BAND);
 		viewport.closeKeyboard();
 		await tick();
 		await typeIn(textarea);
 		expect(scrollBy).not.toHaveBeenCalled();
+		expect(roomUnder(field)).toBe('0px');
+	});
+
+	it('gives the keyboard room only to the field being typed in', async () => {
+		const { textarea, otherField, field } = await typeOnPhone(KEYBOARD_TOP - 10);
+		await typeIn(textarea);
+		expect(roomUnder(otherField)).toBe('0px');
+		expect(roomUnder(field)).toBe(`${PHONE_VIEWPORT_HEIGHT_PX - KEYBOARD_TOP}px`);
 	});
 });

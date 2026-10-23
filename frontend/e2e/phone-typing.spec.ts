@@ -251,28 +251,44 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		await page.keyboard.type(LYRICS_TYPED_ON);
 
 		const lastLabel = page.locator('.mirror .section-label', { hasText: LAST_SECTION_LABEL });
-		const keyboardTop = () =>
+		// The part of the screen the keyboard leaves free: the visual viewport
+		// below the top of the scrolling main region.
+		const freeBand = () =>
 			page.evaluate(() => {
 				const visible = window.visualViewport;
-				if (!visible) throw new Error('This browser has no visual viewport');
-				return visible.offsetTop + visible.height;
+				const main = document.querySelector('main');
+				if (!visible || !main) throw new Error('Expected a visual viewport and a main region');
+				return {
+					top: Math.max(visible.offsetTop, main.getBoundingClientRect().top),
+					bottom: visible.offsetTop + visible.height
+				};
 			});
 		const box = async () => {
 			const found = await lastLabel.boundingBox();
 			if (!found) throw new Error('Expected the last section label to be laid out');
 			return found;
 		};
+		// `linesBelow` empty lines under the label must fit above the keyboard.
+		const expectLineWithinBand = async (linesBelow: number) => {
+			const lineHeightPx = await lastLabel.evaluate((label) =>
+				parseFloat(getComputedStyle(label).lineHeight)
+			);
+			await expect
+				.poll(async () => {
+					const [band, label] = await Promise.all([freeBand(), box()]);
+					return Math.min(
+						label.y - band.top,
+						band.bottom - (label.y + label.height + linesBelow * lineHeightPx)
+					);
+				})
+				.toBeGreaterThanOrEqual(-SUBPIXEL_ROUNDING_PX);
+		};
 
-		await expect
-			.poll(async () => (await keyboardTop()) - (await box()).y - (await box()).height)
-			.toBeGreaterThanOrEqual(-SUBPIXEL_ROUNDING_PX);
+		await expectLineWithinBand(0);
 
-		// Enter at the end opens an empty line below the label; it needs one
-		// more line of room, which the label's own height stands in for.
+		// Enter at the end opens an empty line below the label, one line high.
 		await page.keyboard.press('Enter');
-		await expect
-			.poll(async () => (await keyboardTop()) - (await box()).y - 2 * (await box()).height)
-			.toBeGreaterThanOrEqual(-SUBPIXEL_ROUNDING_PX);
+		await expectLineWithinBand(1);
 
 		guard.assertClean();
 	});
