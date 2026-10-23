@@ -38,7 +38,6 @@
 	import { forgetListenedPlace, readRestoredPlace } from '$lib/stores/libraryOrder';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
-	import { markCoverSuggestionsDiscarded } from '$lib/stores/coverRuns';
 	import {
 		coverStanding,
 		discardCoverSuggestions,
@@ -171,7 +170,6 @@
 		coverBusy = true;
 		try {
 			const updated = await holdOpenWhile('cover-saving', uploadAlbumCover(uploadedAlbumId, file));
-			markCoverSuggestionsDiscarded(uploadedAlbumId);
 			updateAlbumInList(uploadedAlbumId, () => updated);
 			addToast('Cover saved', 'success');
 			await discardSuggestionsAfterUpload(uploadedAlbumId, knownAfterSave(uploadedAlbumId, known));

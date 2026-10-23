@@ -4,7 +4,12 @@ import { describeFailure, NetworkError } from '$lib/api/fetch';
 import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 import { ALBUM_COVER_SUGGESTION_FAILED_FALLBACK } from '$lib/constants';
 import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-import { releaseCoverSuggestions } from '$lib/stores/coverRuns';
+import {
+	discardMarkOf,
+	markCoverSuggestionsDiscarded,
+	namesNothing,
+	releaseCoverSuggestions
+} from '$lib/stores/coverRuns';
 import { activeJobs, trackJob } from '$lib/stores/jobs';
 
 /**
@@ -68,8 +73,28 @@ export const coverStanding = derived(
 );
 
 let watchedAlbumId: string | null = null;
-let latestRead = 0;
 let unreachableReloads: ReturnType<typeof reloadWhileUnreachable> | null = null;
+
+/**
+ * Each album's newest read. A stop, a Suggest or a discard on one album drops
+ * only that album's reads still on their way, never another album's.
+ */
+const newestReads = new Map<string, number>();
+
+function supersedeReads(albumId: string): number {
+	const read = (newestReads.get(albumId) ?? 0) + 1;
+	newestReads.set(albumId, read);
+	return read;
+}
+
+function isNewestRead(albumId: string, read: number): boolean {
+	return newestReads.get(albumId) === read && albumId === watchedAlbumId;
+}
+
+/** The unreachable reloads belong to the watched album alone. */
+function reloadsOf(albumId: string): ReturnType<typeof reloadWhileUnreachable> | null {
+	return albumId === watchedAlbumId ? unreachableReloads : null;
+}
 
 function isRunning(job: JobItem): boolean {
 	return job.status === 'queued' || job.status === 'running';
@@ -82,7 +107,7 @@ function isRunning(job: JobItem): boolean {
  */
 export function watchCoverActivity(albumId: string): () => void {
 	watchedAlbumId = albumId;
-	latestRead += 1;
+	supersedeReads(albumId);
 	const reloads = reloadWhileUnreachable(() => void readCoverActivity(albumId));
 	unreachableReloads = reloads;
 	coverActivity.set({
@@ -111,7 +136,7 @@ export function watchCoverActivity(albumId: string): () => void {
 		if (watchedAlbumId !== albumId) return;
 		watchedAlbumId = null;
 		unreachableReloads = null;
-		latestRead += 1;
+		supersedeReads(albumId);
 	};
 }
 
@@ -135,11 +160,11 @@ function readWhenRunEnds(albumId: string): () => void {
  */
 export async function readCoverActivity(albumId: string): Promise<void> {
 	if (albumId !== watchedAlbumId) return;
-	const read = ++latestRead;
+	const read = supersedeReads(albumId);
 	updateCoverActivity(albumId, (state) => ({ ...state, isLoading: true, reloadsExhausted: false }));
 	try {
 		const response = await fetchAlbumCoverSuggestions(albumId);
-		if (read !== latestRead || albumId !== watchedAlbumId) return;
+		if (!isNewestRead(albumId, read)) return;
 		const running = response.job && isRunning(response.job) ? response.job : null;
 		coverActivity.update((state) => ({
 			albumId,
@@ -150,10 +175,10 @@ export async function readCoverActivity(albumId: string): Promise<void> {
 			reloadsExhausted: false,
 			runId: running?.id ?? null
 		}));
-		unreachableReloads?.stop();
+		reloadsOf(albumId)?.stop();
 		if (running) trackJob(running, { albumId });
 	} catch (error) {
-		if (read !== latestRead || albumId !== watchedAlbumId) return;
+		if (!isNewestRead(albumId, read)) return;
 		showCoverActivityFailure(albumId, error, { keepData: true });
 		updateCoverActivity(albumId, (state) => ({ ...state, isLoading: state.suggesting }));
 	}
@@ -178,11 +203,12 @@ export function showCoverActivityFailure(
 		data: options.keepData ? state.data : null,
 		isLoading: false
 	}));
+	const reloads = reloadsOf(albumId);
 	if (!outcome.unreachable) {
-		unreachableReloads?.stop();
+		reloads?.stop();
 		return;
 	}
-	const reloadsExhausted = unreachableReloads?.afterNetworkFailure() === 'exhausted';
+	const reloadsExhausted = reloads?.afterNetworkFailure() === 'exhausted';
 	updateCoverActivity(albumId, (state) => ({ ...state, reloadsExhausted }));
 }
 
@@ -198,19 +224,29 @@ export function updateCoverActivity(
 	coverActivity.update((state) => (state?.albumId === albumId ? update(state) : state));
 }
 
+/** A Suggest on its way, named by the discard mark it began under. */
+export type CoverAsk = number;
+
 /**
  * Suggest was pressed. A read still on its way is dropped, so its older
  * answer cannot erase the job Suggest creates; the page waits on the POST.
+ * Returns the ask, which a later ×, USE or Upload retires.
  */
-export function beginCoverSuggestion(albumId: string): void {
-	latestRead += 1;
-	unreachableReloads?.stop();
+export function beginCoverSuggestion(albumId: string): CoverAsk {
+	supersedeReads(albumId);
+	reloadsOf(albumId)?.stop();
 	updateCoverActivity(albumId, (state) => ({
 		...state,
 		...COVER_ACTIVITY_SETTLED,
 		isLoading: true,
 		suggesting: true
 	}));
+	return discardMarkOf(albumId);
+}
+
+/** A retired ask releases what it made and changes nothing of what came after. */
+export function isCoverAskRetired(albumId: string, ask: CoverAsk): boolean {
+	return discardMarkOf(albumId) !== ask;
 }
 
 /** The Suggest POST answered or failed; a read may end the wait again. */
@@ -253,23 +289,28 @@ export function knownAfterSave(
 }
 
 /**
- * Stops the run and deletes the suggestions a discard names, then reads the
- * state again whatever the outcome. A read answering from before the stop
- * would track the job being cancelled again, and one sent before the delete
- * would keep the deleted suggestions, so both are dropped; a stop that fails
- * leaves the run known.
+ * What ×, USE and Upload do: retire the ask still on its way, so it frees
+ * Suggest now and stops its run as it answers; stop the run and delete the
+ * suggestions the discard names, if it names any, then read the state again
+ * whatever the outcome. A read answering from before the stop would track the
+ * job being cancelled again, and one sent before the delete would keep the
+ * deleted suggestions, so both are dropped; a stop that fails leaves the run
+ * known.
  */
 export async function discardCoverSuggestions(
 	albumId: string,
 	known: CoverSuggestionDiscard
 ): Promise<void> {
+	markCoverSuggestionsDiscarded(albumId);
+	updateCoverActivity(albumId, (state) =>
+		state.suggesting ? { ...state, suggesting: false, isLoading: false } : state
+	);
+	if (namesNothing(known)) return;
 	const runToStop = known.jobIds[0] ?? null;
 	if (runToStop) {
-		latestRead += 1;
+		supersedeReads(albumId);
 		updateCoverActivity(albumId, (state) => ({ ...state, runId: null }));
 	}
-	// An ask still on its way is released when it answers; it no longer holds Suggest.
-	updateCoverActivity(albumId, (state) => ({ ...state, suggesting: false }));
 	try {
 		await releaseCoverSuggestions(albumId, known);
 	} catch (error) {

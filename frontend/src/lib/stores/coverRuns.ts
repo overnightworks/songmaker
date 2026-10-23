@@ -40,8 +40,12 @@ export async function releaseCoverSuggestions(
 	discard: CoverSuggestionDiscard
 ): Promise<void> {
 	await Promise.all(discard.jobIds.map(stopCoverRun));
-	if (discard.suggestionIds.length === 0 && discard.jobIds.length === 0) return;
+	if (namesNothing(discard)) return;
 	await discardAlbumCoverSuggestions(albumId, discard);
+}
+
+export function namesNothing(discard: CoverSuggestionDiscard): boolean {
+	return discard.suggestionIds.length === 0 && discard.jobIds.length === 0;
 }
 
 export function discardMarkOf(albumId: string): number {

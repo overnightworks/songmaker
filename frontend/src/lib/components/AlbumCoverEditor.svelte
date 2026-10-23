@@ -29,11 +29,7 @@
 	} from '$lib/constants';
 	import { updateAlbumInList } from '$lib/stores/libraryData';
 	import { addToast } from '$lib/stores/toast';
-	import {
-		discardMarkOf,
-		markCoverSuggestionsDiscarded,
-		releaseCoverSuggestions
-	} from '$lib/stores/coverRuns';
+	import { releaseCoverSuggestions } from '$lib/stores/coverRuns';
 	import {
 		beginCoverSave,
 		beginCoverSuggestion,
@@ -43,6 +39,7 @@
 		endCoverSave,
 		endCoverSuggestion,
 		followCoverRun,
+		isCoverAskRetired,
 		knownAfterSave,
 		knownCoverSuggestions,
 		readCoverActivity,
@@ -155,12 +152,11 @@
 	async function suggestCover(): Promise<void> {
 		if (!canSuggestCover) return;
 		const albumId = currentAlbumId;
-		const markAtAsking = discardMarkOf(albumId);
 		chosenSlot = null;
-		beginCoverSuggestion(albumId);
+		const ask = beginCoverSuggestion(albumId);
 		try {
 			const job = await createAlbumCoverSuggestions(albumId);
-			if (discardMarkOf(albumId) !== markAtAsking) {
+			if (isCoverAskRetired(albumId, ask)) {
 				// ×, Use or Upload came first: this run and what it made go.
 				void releaseCoverSuggestions(albumId, { suggestionIds: [], jobIds: [job.id] }).then(
 					() => readCoverActivity(albumId),
@@ -177,8 +173,9 @@
 			if (albumId !== currentAlbumId) return;
 			void readCoverActivity(albumId);
 		} catch (error) {
-			// A discard has already ended the wait of an ask it came after.
-			if (discardMarkOf(albumId) === markAtAsking) endCoverSuggestion(albumId);
+			// A discard has already ended this ask's wait; its failure is not the newer state's.
+			if (isCoverAskRetired(albumId, ask)) return;
+			endCoverSuggestion(albumId);
 			if (albumId !== currentAlbumId) return;
 			if (isRefusal(error)) {
 				await rereadAfterRefusal(albumId, error);
@@ -227,12 +224,7 @@
 
 	async function discardAndClose(): Promise<void> {
 		const albumId = currentAlbumId;
-		markCoverSuggestionsDiscarded(albumId);
 		const known = knownCoverSuggestions(albumId);
-		if (known.suggestionIds.length === 0 && known.jobIds.length === 0) {
-			onclose();
-			return;
-		}
 		beginCoverSave(albumId);
 		try {
 			await discardCoverSuggestions(albumId, known);
@@ -253,7 +245,6 @@
 				'cover-saving',
 				selectAlbumCoverSuggestion(albumId, { suggestion_id: suggestionId })
 			);
-			markCoverSuggestionsDiscarded(albumId);
 			try {
 				await discardCoverSuggestions(albumId, knownAfterSave(albumId, known));
 			} catch (error) {

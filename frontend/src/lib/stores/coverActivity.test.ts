@@ -15,9 +15,11 @@ import {
 	discardCoverSuggestions,
 	endCoverSave,
 	endCoverSuggestion,
+	followCoverRun,
 	knownAfterSave,
 	readCoverActivity,
 	savingCoverAlbumIds,
+	showCoverActivityFailure,
 	watchCoverActivity
 } from './coverActivity';
 import { NetworkError } from '$lib/api/fetch';
@@ -29,6 +31,10 @@ vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
 	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
+}));
+vi.mock('$lib/api/jobs', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/jobs')>()),
+	cancelJob: async () => coverJob({ status: 'cancelled' })
 }));
 
 type Deletion = ReturnType<typeof deferred<unknown>>;
@@ -249,5 +255,50 @@ describe('the watched album cover state', () => {
 		endCoverSuggestion('a-local');
 		await readCoverActivity('a-local');
 		expect(get(coverActivity)?.isLoading).toBe(false);
+	});
+
+	it.each([
+		{
+			action: 'a discard that stops a run',
+			act: () => discardCoverSuggestions('a-first', { suggestionIds: [], jobIds: ['job-a'] })
+		},
+		{ action: 'a Suggest', act: async () => beginCoverSuggestion('a-first') },
+		{ action: 'a reread', act: () => readCoverActivity('a-first') },
+		{ action: 'a Suggest that answers', act: async () => followCoverRun(coverJob(), 'a-first') },
+		{
+			action: 'a Suggest that fails',
+			act: async () =>
+				showCoverActivityFailure('a-first', new NetworkError('/albums', new TypeError('offline')), {
+					keepData: true
+				})
+		}
+	])('$action on another album lets the watched album’s opening read land', async ({ act }) => {
+		watch('a-first');
+		await settled();
+		stopWatching?.();
+		const openingRead = deferred<ReturnType<typeof coverSuggestions>>();
+		fetchAlbumCoverSuggestions.mockReturnValueOnce(openingRead.promise);
+		watch('a-second');
+
+		await act();
+		openingRead.resolve(coverSuggestions({ suggestions: [{ id: 'b', url: '/b.png' }] }));
+
+		await settled();
+		expect(get(coverActivity)).toMatchObject({
+			albumId: 'a-second',
+			data: { suggestions: [{ id: 'b' }] }
+		});
+	});
+
+	it('a discard that names nothing still frees Suggest from the ask it came after', async () => {
+		watch();
+		await settled();
+		beginCoverSuggestion('a-local');
+
+		await discardCoverSuggestions('a-local', { suggestionIds: [], jobIds: [] });
+
+		await settled();
+		expect(get(coverActivity)?.suggesting).toBe(false);
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 });
