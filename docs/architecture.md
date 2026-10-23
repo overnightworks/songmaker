@@ -508,7 +508,13 @@ bare verb with one icon: Edit details · Cover · Curate · Add to playlist ·
 Share · Archive · Delete (red, last). Edit details opens `AlbumMetaEditor`
 in place of the title, where title, subtitle and year change together;
 Cover opens the album's cover editor (`AlbumCoverEditor`) in place of the
-cover, which owns upload, suggestions and removal. Playlist entries are
+cover, which owns upload, suggestions and removal. One store,
+`stores/coverActivity.ts`, owns the open album's cover state for both the
+editor and the mark on the closed cover (a ring and the time while a
+suggestion runs, "● n waiting" while unused ones wait until USE, Upload or ×
+discards them). It reads the server's state when the album page opens, when the
+page returns to the foreground and when the editor closes or a run ends, never
+by polling, so a second tab or device sees the same run and its time. Playlist entries are
 Share playlist · Upload… · Remove cover (only when a cover is set) · Save
 offline · Rename · Delete playlist. The Share row is a 44 px menu row that
 shows its state ("on"/"off", a link or share icon, `aria-pressed`); it and

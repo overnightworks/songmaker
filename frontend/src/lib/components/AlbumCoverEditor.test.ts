@@ -156,7 +156,6 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(place.textContent).toContain('Add cover');
 		expect(editor(target)).toBeNull();
 		expect(target.textContent).not.toContain('Choose a cover');
-		expect(fetchAlbumCoverSuggestions).not.toHaveBeenCalled();
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
@@ -495,7 +494,9 @@ describe('AlbumCoverEditor in the album header', () => {
 	});
 
 	it('× discards the unused suggestions and closes the editor', async () => {
-		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
+		fetchAlbumCoverSuggestions.mockImplementation(async () =>
+			coverSuggestions(discardAlbumCoverSuggestions.mock.calls.length ? {} : THREE_SUGGESTIONS)
+		);
 		const target = await renderDetail();
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
@@ -835,31 +836,29 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(addToast).not.toHaveBeenCalled();
 	});
 
-	it.each(['failure before close', 'failure after close', 'success after close'])(
-		'1160-F44-disposal: a closed editor never reloads after %s',
+	it.each(['failure before leaving', 'failure after leaving', 'success after leaving'])(
+		'1160-F44-disposal: a left album page never reloads after %s',
 		async (settlement) => {
 			vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 			const pending = deferred<CoverSuggestionsResponse>();
 			fetchAlbumCoverSuggestions.mockImplementation(() => pending.promise);
-			const target = await renderDetail();
-			await openCoverEditing(target);
+			await renderDetail();
 			await reachSuggestionsLoads(1);
 			const settle = () =>
-				pending.resolve(
-					settlement === 'success after close' ? coverSuggestions() : Promise.reject(lostNetwork())
-				);
-			if (settlement === 'failure before close') {
+				settlement.startsWith('success')
+					? pending.resolve(coverSuggestions())
+					: pending.reject(lostNetwork());
+			if (settlement === 'failure before leaving') {
 				settle();
 				await vi.advanceTimersByTimeAsync(0);
 			}
-			pressEditorButton(target, 'Close cover editing');
-			await editingClosed(target);
-			if (settlement !== 'failure before close') settle();
+			selectedAlbumId.set(null);
+			await tick();
+			if (settlement !== 'failure before leaving') settle();
 			await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
 			reportResourceStreamReachable(false);
 			reportResourceStreamReachable(true);
 			await tick();
-			expect(editor(target)).toBeNull();
 			expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		}
 	);

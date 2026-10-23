@@ -40,6 +40,12 @@
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
 	import { markCoverSuggestionsDiscarded, releaseCoverSuggestions } from '$lib/stores/coverRuns';
 	import {
+		coverStanding,
+		knownAfterSave,
+		knownCoverSuggestions,
+		watchCoverActivity
+	} from '$lib/stores/coverActivity';
+	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
@@ -137,10 +143,19 @@
 		$newSongIn = null;
 	}
 
+	// The album page keeps the cover state read, for the closed cover's mark and
+	// for the editor, whether or not the editor is open.
+	$effect(() => {
+		if (currentAlbumId) return watchCoverActivity(currentAlbumId);
+	});
+	const coverMark = $derived(
+		$coverStanding?.albumId === currentAlbumId ? $coverStanding : undefined
+	);
+
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
-	// What the editor knew when Upload was pressed; a successful upload releases
-	// exactly that.
+	// What the cover state knew when Upload was pressed; a successful upload
+	// releases that, and the run known by then.
 	const NOTHING_KNOWN: CoverSuggestionDiscard = { suggestionIds: [], jobIds: [] };
 	let releasedByUpload = NOTHING_KNOWN;
 
@@ -158,7 +173,7 @@
 			markCoverSuggestionsDiscarded(uploadedAlbumId);
 			updateAlbumInList(uploadedAlbumId, () => updated);
 			addToast('Cover saved', 'success');
-			await discardSuggestionsAfterUpload(uploadedAlbumId, known);
+			await discardSuggestionsAfterUpload(uploadedAlbumId, knownAfterSave(uploadedAlbumId, known));
 		} catch (e) {
 			addToast(describeFailure(e, 'Cover upload failed'), 'error');
 		} finally {
@@ -180,8 +195,8 @@
 		}
 	}
 
-	function onCoverAction(known: CoverSuggestionDiscard): void {
-		releasedByUpload = known;
+	function onCoverAction(): void {
+		releasedByUpload = selectedAlbum ? knownCoverSuggestions(selectedAlbum.id) : NOTHING_KNOWN;
 		coverInput?.click();
 	}
 
@@ -350,6 +365,7 @@
 			onarchive={onAlbumArchive}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			oncurate={onCurate}
+			{coverMark}
 		>
 			{#snippet detailsEditor(close: () => void)}
 				<AlbumMetaEditor

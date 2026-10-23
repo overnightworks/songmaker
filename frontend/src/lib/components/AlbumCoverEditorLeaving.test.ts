@@ -86,11 +86,17 @@ function serverRunsUntilCancelled(extra: Partial<CoverSuggestionsResponse> = {})
 	);
 }
 
+// The album page read the state when it opened; coming back to it reads again.
+function comeBackToThePage(): void {
+	document.dispatchEvent(new Event('visibilitychange'));
+}
+
 async function openEditorWithRunningSuggestion(
 	target: HTMLElement,
 	extra: Partial<CoverSuggestionsResponse> = {}
 ): Promise<void> {
 	serverRunsUntilCancelled(extra);
+	comeBackToThePage();
 	await openCoverEditing(target);
 	await vi.waitFor(() =>
 		expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
@@ -701,4 +707,90 @@ describe('Leaving the album cover editor', () => {
 			expect(get(activeJobs).map((active) => active.job.id)).toEqual(followed);
 		}
 	);
+
+	it('Suggest stays disabled after a Remove finishes first and the editor is opened again during a Use save', async () => {
+		albumList.set([coveredAlbum()]);
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		const removal = deferred<ReturnType<typeof coveredAlbum>>();
+		const useSave = deferred<ReturnType<typeof coveredAlbum>>();
+		deleteAlbumCover.mockReturnValue(removal.promise);
+		selectAlbumCoverSuggestion.mockReturnValue(useSave.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
+
+		pressEditorButton(target, 'Remove');
+		pressEditorButton(target, 'Use');
+		removal.resolve({ ...coveredAlbum(), cover: null });
+		await editingClosed(target);
+		await openCoverEditing(target);
+
+		await tick();
+		expect(
+			getByRoleButton(requireElement(target, '.cover-editor'), 'Suggest another').disabled
+		).toBe(true);
+		useSave.resolve(coveredAlbum(UPLOADED));
+		await editingClosed(target);
+	});
+
+	it('Swiping to another suggestion during a Use save shows nothing else', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
+		const useSave = deferred<ReturnType<typeof coveredAlbum>>();
+		selectAlbumCoverSuggestion.mockReturnValue(useSave.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
+		pressEditorButton(target, 'Use');
+
+		for (const [from, to] of [
+			[200, 100],
+			[100, 200]
+		]) {
+			const stage = requireElement(target, '.cover-stage');
+			const at = (clientX: number) => ({ bubbles: true, pointerId: 1, clientX, clientY: 100 });
+			stage.dispatchEvent(new PointerEvent('pointerdown', at(from)));
+			stage.dispatchEvent(new PointerEvent('pointerup', at(to)));
+		}
+		await tick();
+
+		expect(shownImage(target)).toBe('/suggestion-three.png');
+		useSave.resolve(coveredAlbum(UPLOADED));
+		await editingClosed(target);
+	});
+
+	it('Upload pressed before the first read answered stops the run that read finds', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		const firstRead = deferred<CoverSuggestionsResponse>();
+		const uploading = deferred<ReturnType<typeof coveredAlbum>>();
+		fetchAlbumCoverSuggestions.mockReturnValue(firstRead.promise);
+		uploadAlbumCover.mockReturnValue(uploading.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+
+		uploadCoverFile(target);
+		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledOnce());
+		firstRead.resolve(coverSuggestions({ job: coverJob({ status: 'running' }) }));
+		await vi.waitFor(() => expect(get(activeJobs)).toHaveLength(1));
+		uploading.resolve(coveredAlbum(UPLOADED));
+
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local', {
+			suggestionIds: [],
+			jobIds: ['cover-job']
+		});
+	});
+
+	it('closing the editor reads the cover state once more and stops nothing', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions());
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await reachSuggestionsLoads(1);
+
+		pressEditorButton(target, 'Close cover editing');
+		await editingClosed(target);
+
+		await reachSuggestionsLoads(2);
+		expect(cancelJob).not.toHaveBeenCalled();
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+	});
 });
