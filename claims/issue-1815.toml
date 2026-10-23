@@ -1,0 +1,8 @@
+claim_id = "ccaba44ebda046a2bb719b3e422b583d"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "dbc250c1ee8b0edcb6bea5de82bbb151ab7c9990"
+branch = "claude/issue-1815-song-page-picture"
+scope = ["docs/design/song-editor-take.html", "docs/design/song-page-phone.html", "docs/design/song-page.html", "docs/design/song-versions.html", "docs/design/vocabulary.html"]
+opened_commit = "d53d82d846da627643eb1a5d2f5b028ad224dcbe"
+whole_reason = "One picture freeze and the alignment of the four older pictures it overrides."
