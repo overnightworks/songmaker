@@ -225,7 +225,7 @@ export function updateCoverActivity(
 }
 
 /** A Suggest on its way, named by the discard mark it began under. */
-export type CoverAsk = number;
+type CoverAsk = number;
 
 /**
  * Suggest was pressed. A read still on its way is dropped, so its older
