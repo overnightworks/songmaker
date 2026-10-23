@@ -619,8 +619,8 @@ section{
 			<div class="strip" style="align-items:flex-start;gap:12px">
 				<div class="unit" style="flex:1;min-width:0">
 					<span class="tag">In a label row · opens on hover and on tap</span>
-					<div class="strip" style="gap:6px"><span class="t11">Repaint strength</span><button class="infobtn" aria-label="About repaint strength"><i>i</i></button></div>
-					<div class="tipbox">How much of the source take is kept. Low keeps the arrangement, high rewrites it.</div>
+					<div class="strip" style="gap:6px"><span class="t11">How close to the take</span><button class="infobtn" aria-label="About how close to the take"><i>i</i></button></div>
+					<div class="tipbox">How much of the source take is kept. Free rewrites it, strict keeps the arrangement.</div>
 				</div>
 				<div class="unit" style="flex:1;min-width:0">
 					<span class="tag">Never this</span>
@@ -676,16 +676,15 @@ section{
 		<div class="spec">
 			<span class="caps">Not a chip any more — the recipe badge strip</span>
 			<div class="strip" style="gap:5px;opacity:.5">
-				<span class="pill" style="border-radius:4px">Model <b class="v">sft</b></span><span class="pill" style="border-radius:4px">Takes <b class="v">×1</b></span><span class="pill" style="border-radius:4px">BPM <b class="v">Auto</b></span><span class="pill" style="border-radius:4px">Duration <b class="v">180 s</b></span><span class="pill" style="border-radius:4px">Key <b class="v">—</b></span><span class="pill" style="border-radius:4px">Voice <b class="v">None</b></span><span class="pill" style="border-radius:4px">Seed <b class="v">Random</b></span><span class="pill" style="border-radius:4px">LM <b class="v">Default</b></span><span class="pill" style="border-radius:4px">DIT <b class="v">Default</b></span><span class="pill" style="border-radius:4px">Repaint <b class="v">Off</b></span>
+				<span class="pill" style="border-radius:4px">Model <b class="v">sft</b></span><span class="pill" style="border-radius:4px">Takes <b class="v">×1</b></span><span class="pill" style="border-radius:4px">BPM <b class="v">Auto</b></span><span class="pill" style="border-radius:4px">Duration <b class="v">180 s</b></span><span class="pill" style="border-radius:4px">Key <b class="v">—</b></span><span class="pill" style="border-radius:4px">Voice <b class="v">None</b></span><span class="pill" style="border-radius:4px">Seed <b class="v">Random</b></span><span class="pill" style="border-radius:4px">LM <b class="v">Default</b></span><span class="pill" style="border-radius:4px">DIT <b class="v">Default</b></span>
 			</div>
-			<span class="note"><b>Gone.</b> Not states — ten editable settings in a state's clothes, none of them pressable. They become one collapsible recipe card (§4, §6): a summary line to glance at, label/value rows to change.</span>
+			<span class="note"><b>Gone.</b> Not states — nine editable settings in a state's clothes, none of them pressable. Their values live in the recipe card, closed by default to one value-free line, “Recipe ›” (a dot when anything differs from its standard), and opened to the tabs Song · Generate · Engine — the picture is <code>song-page.html</code>. Repaint and Cover are tasks on a take, not recipe settings.</span>
 		</div>
 		<div class="spec tight" style="width:318px">
 			<span class="caps">…&nbsp;becomes this</span>
 			<button class="kvrow">
 				<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left">
-					<span style="font-size:11px;color:var(--text-subtle)">Recipe</span>
-					<span style="font-size:.85rem">sft · 3:00 · Auto BPM · ×1</span>
+										<span style="font-size:.85rem">Recipe ›</span>
 				</span>
 				<span class="caret"><svg class="ic"><use href="#i-down"/></svg></span>
 			</button>
@@ -707,9 +706,9 @@ section{
 			</nav>
 			<span class="caps">Segmented control — picks a short value</span>
 			<div class="strip" style="--h:32px;--fs:.8rem">
-				<div class="seg"><button>Off</button><button class="on">Conservative</button><button>Full</button></div>
+				<div class="seg"><button class="on">A–Z</button><button>Last played</button></div>
 			</div>
-			<span class="note">The editor's <code>CO-WRITER | RECIPE</code> toggle pills are a view switch, so they become this strip — two tabs over the right panel of the desktop editor. How many panels that editor has is the song page's picture to decide, not this vocabulary's.</span>
+			<span class="note">The editor's <code>CO-WRITER | RECIPE</code> toggle pills are a view switch, so they become this strip. Which tabs the song page has is <code>song-page.html</code>'s to decide, not this vocabulary's.</span>
 		</div>
 		<div class="spec phone">
 			<span class="caps">Phone · 390 — the same strip, scrolled</span>
@@ -774,8 +773,8 @@ all mine if I stay</div>
 		</div>
 		<div class="spec tight" style="width:364px">
 			<span class="caps">Range — one slider, wherever a quantity moves</span>
-			<div class="field"><span class="label">Repaint strength <span class="stamp">recipe</span></span>
-				<div class="rangerow"><span class="rng"><span class="track"></span><span class="done" style="width:62%"></span><span class="knob" style="left:62%"></span></span><span class="num">62 %</span></div>
+			<div class="field"><span class="label">How close to the take <span class="stamp">task card at the take</span></span>
+				<div class="rangerow"><span class="rng"><span class="track"></span><span class="done" style="width:65%"></span><span class="knob" style="left:65%"></span></span><span class="num">65 %</span></div>
 			</div>
 			<div class="field"><span class="label">Seek <span class="stamp">player · transport and Now&nbsp;Playing</span></span>
 				<div class="rangerow"><span class="rng"><span class="track"></span><span class="done" style="width:38%"></span><span class="knob" style="left:38%"></span></span><span class="num">1:09</span></div>
@@ -786,7 +785,7 @@ all mine if I stay</div>
 			<span class="note">4&nbsp;px track, the travelled part in the action colour, a 16&nbsp;px knob, and <b>the value always beside it in words a person reads</b> — a percent, a time, a pixel count. A slider without its number is a guess.</span>
 		</div>
 	</div>
-	<div class="foot2"><div class="ex"><span class="k">Example</span><span class="t11">LYRICS</span> <span class="t13">v7 · draft</span> — the label is uppercase because it names the field; the identifier beside it is sentence case because it is a fact, not a label (§8). <code>[Chorus]</code> inside the lyrics is Oswald in muted ink: it is structure, not an action, so it takes no accent.</div><div class="kills"><span class="k">Replaces</span><span class="gone">3 kinds</span> — bordered field, unstyled native <code>&lt;select&gt;</code> (recipe, admin, create form), monospace textarea in a fixed scroll box — plus the bare <code>accent-color</code> checkbox and seven differently-styled <code>input[type=range]</code> (recipe ×3, two seek bars, the rail resize, the take rating). Labels move above the field everywhere.</div></div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span><span class="t11">LYRICS</span> <span class="t13">v7 · draft</span> — the label is uppercase because it names the field; the identifier beside it is sentence case because it is a fact, not a label (§8). <code>[Chorus]</code> inside the lyrics is Oswald in muted ink: it is structure, not an action, so it takes no accent.</div><div class="kills"><span class="k">Replaces</span><span class="gone">3 kinds</span> — bordered field, unstyled native <code>&lt;select&gt;</code> (recipe, admin, create form), monospace textarea in a fixed scroll box — plus the bare <code>accent-color</code> checkbox and seven differently-styled <code>input[type=range]</code> (recipe, two seek bars, the rail resize, the take rating). Labels move above the field everywhere.</div></div>
 </section>
 
 <!-- ═══ 5 ══════════════════════════════════════════════════════════════ -->
@@ -920,7 +919,7 @@ all mine if I stay</div>
 			<span class="note"><b>The title carries the object</b> — “Delete album?”, “Delete take?” — so the button is the bare <b>DELETE</b>, and the consequence list names the thing. It is the last outline-with-a-word pair left: <b>CANCEL</b> beside it is the only secondary button in the system. <b>Typing the name is only for a thing with children</b> — an album or a song, which take other things down with them. A take or a playlist entry is a plain confirm: one sentence of consequence, Cancel, and the destructive button. Making every delete a typing exercise teaches the hand to type without reading.</span>
 		</div>
 	</div>
-	<div class="foot2"><div class="ex"><span class="k">Example</span>The recipe opens <b>in place</b> — the collapsed card of §2 unfolds into label/value rows below it. The red-bordered bottom sheet with native selects is gone; so is <code>EditorSheet</code>.</div><div class="kills"><span class="k">Replaces</span><span class="gone">5 implementations</span> — ConfirmDialog, EditorSheet, CollectionMenu/SongMenu, TakeMenu, PlaylistPicker; two menu vocabularies one screen apart (album: sentence case + icons + red delete · take: uppercase, no icons, plain DELETE) become one — <b>and one take menu now serves both widths</b>. <b>ConfirmDeleteDialog is extended, not replaced</b> — it is the reference, and it gains the typed name for album and song. <b>ShareDialog stays a dialog</b> — it publishes. <b>RailDrawer stays</b> — it is navigation. <b>EditorSheet goes</b> — it edited content. Z-layers: popover 300, drawer 400, modal 1000.</div></div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span>The recipe opens <b>in place</b> — the closed line “Recipe ›” unfolds into its tabs and label/value rows. The red-bordered bottom sheet with native selects is gone; so is <code>EditorSheet</code>.</div><div class="kills"><span class="k">Replaces</span><span class="gone">5 implementations</span> — ConfirmDialog, EditorSheet, CollectionMenu/SongMenu, TakeMenu, PlaylistPicker; two menu vocabularies one screen apart (album: sentence case + icons + red delete · take: uppercase, no icons, plain DELETE) become one — <b>and one take menu now serves both widths</b>. <b>ConfirmDeleteDialog is extended, not replaced</b> — it is the reference, and it gains the typed name for album and song. <b>ShareDialog stays a dialog</b> — it publishes. <b>RailDrawer stays</b> — it is navigation. <b>EditorSheet goes</b> — it edited content. Z-layers: popover 300, drawer 400, modal 1000.</div></div>
 </section>
 
 <!-- ═══ 7 ══════════════════════════════════════════════════════════════ -->
@@ -1040,7 +1039,7 @@ all mine if I stay</div>
 					<span class="hd"><svg class="ic sm"><use href="#i-check"/></svg>Uppercase — Oswald</span>
 					<ul>
 						<li>Page title — <b class="t22" style="font-size:13px">LIBRARY</b></li>
-						<li>Tab strip and segment — <span class="t12">USERS</span> · <span class="t12">CONSERVATIVE</span></li>
+						<li>Tab strip and segment — <span class="t12">USERS</span> · <span class="t12">LAST PLAYED</span></li>
 						<li>Field label — <span class="t11">STYLE PROMPT</span></li>
 						<li>Button label — <span class="t12">GENERATE</span> / <span class="t12">DELETE</span></li>
 						<li>Pill label — <span class="pill queued"><i class="shape"></i>Queued</span> <span class="pill">Model <b class="v">sft</b></span></li>
