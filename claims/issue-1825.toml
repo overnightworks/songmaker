@@ -1,7 +1,0 @@
-claim_id = "33430ba936444279ac7a780c836e7246"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "def7d3ea5b5db3f6ef0a4a5b08dbd2a6aa181434"
-branch = "claude/issue-1825-slice4-frames"
-scope = ["docs/design/README.md", "docs/design/song-page.html"]
-opened_commit = "d1e7dea2b0e6bf705219d40594f44eab8203786a"
