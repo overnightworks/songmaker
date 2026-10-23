@@ -21,6 +21,7 @@ import {
 } from '@playwright/test';
 import {
 	ALBUM_COVER_EDITING_CLOSE_LABEL,
+	ALBUM_COVER_EDITING_UPLOAD_LABEL,
 	ALBUM_COVER_EDITING_LABEL,
 	ALBUM_COVER_SUGGESTING_LABEL,
 	albumCoverSuggestionAlt
@@ -302,7 +303,13 @@ test('Upload clears the waiting mark', async ({ page }, testInfo) => {
 
 		await closedCover(page, '1 waiting').click();
 		const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
-		await page.locator('.cover-file-input').setInputFiles({
+		// Upload is pressed as a person does: the press is when the page takes
+		// note of the suggestions an uploaded cover releases.
+		const [chooser] = await Promise.all([
+			page.waitForEvent('filechooser'),
+			editing.getByRole('button', { name: ALBUM_COVER_EDITING_UPLOAD_LABEL }).click()
+		]);
+		await chooser.setFiles({
 			name: 'album-cover.png',
 			mimeType: 'image/png',
 			buffer: COVER_PNG
