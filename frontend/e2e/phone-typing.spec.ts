@@ -231,6 +231,57 @@ test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 		guard.assertClean();
 	});
 
+	// #1836 (#1804 rule S1, phone half): the field grows with its text, so the
+	// page scrolls, and the caret's line must stay inside the part of the screen
+	// the keyboard leaves free. The mirror paints the same text, so a Range over
+	// the caret's offset in it is the caret line's box.
+	test('typing near the end of a long lyric keeps the caret line above the keyboard', async ({
+		page
+	}) => {
+		const guard = new FlowGuard(page);
+		await openSeededSongFromItsAlbum(page);
+		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		await lyrics.click();
+		await showOnScreenKeyboard(page, true);
+		await lyrics.fill(LONG_LYRICS);
+		await page.keyboard.press('Control+End');
+		await page.keyboard.press('ArrowUp');
+		await page.keyboard.press('ArrowUp');
+		await page.keyboard.type(LYRICS_TYPED_ON);
+
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const field = document.activeElement;
+					const visible = window.visualViewport;
+					const mirror = field?.parentElement?.querySelector('.mirror');
+					if (!(field instanceof HTMLTextAreaElement) || !visible || !mirror) {
+						throw new Error('Expected the focused lyrics field, its mirror and a visual viewport');
+					}
+					const walker = document.createTreeWalker(mirror, NodeFilter.SHOW_TEXT);
+					let passed = 0;
+					for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+						const length = node.textContent?.length ?? 0;
+						if (field.selectionEnd > passed + length) {
+							passed += length;
+							continue;
+						}
+						const range = document.createRange();
+						range.setStart(node, field.selectionEnd - passed);
+						range.setEnd(node, field.selectionEnd - passed + 1);
+						const line = range.getBoundingClientRect();
+						return (
+							line.top >= visible.offsetTop && line.bottom <= visible.offsetTop + visible.height
+						);
+					}
+					return false;
+				})
+			)
+			.toBe(true);
+
+		guard.assertClean();
+	});
+
 	test('1354_37a_A4: the mini-player and the Generate bar come back when a focused field leaves the page', async ({
 		page
 	}) => {
