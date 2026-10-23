@@ -309,13 +309,6 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 }
 .card-head .grow { display: flex; flex-direction: column; gap: .05rem; flex: 1; min-width: 0; }
 .card-head .lbl { font-size: .72rem; color: var(--text-subtle); }
-.summary-line {
-	font-size: .85rem;
-	color: var(--text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
 
 /* recipe fields — RecipePanel's groups as label/value rows */
 .group-title {
@@ -724,7 +717,10 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	<code>#914</code> und <code>#924</code>). Besitzer der Telefon-Songseite (#914); sie hebt
 	Zustand (f) in <code>navigation.html</code> für die Songseite auf — keine Albumzeile mit
 	Prev/Next — sowie die Take-Zeile in <code>song-editor-take.html</code> auf beiden Breiten:
-	sechs-zeiliges Menü statt beschrifteter Zeilenaktionen.
+	sechs-zeiliges Menü statt beschrifteter Zeilenaktionen. Seit 22.10.2026 (#1804, #1815)
+	gilt für die geschlossene und geöffnete Recipe-Karte sowie Repaint und Cover am Take
+	<a href="song-page.html"><code>song-page.html</code></a>; die Recipe-Karte steht hier nur noch als
+	geschlossene Zeile „Recipe ›“.
 </p>
 <p class="freeze-note">
 	Drei Tabs freigegeben 26.09.2026 (Operator: „logo", aus <code>~/songmaker-mockups/v7-tabs/</code>,
@@ -765,9 +761,8 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -859,74 +854,7 @@ I don't take the<span class="type-caret" aria-hidden="true"></span></div>
 	</div>
 </figure>
 
-<figure>
-	<figcaption><b>2 · Edit</b> — recipe expanded in place, the page scrolls on</figcaption>
-	<div class="device" id="f2">
-		<header class="appbar">
-			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-			<h1>AMIF</h1>
-			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
-			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-		</header>
-		<nav class="tabs" aria-label="Song tabs">
-			<button class="active" aria-current="page">Edit</button>
-			<button>Co-writer</button>
-			<button>Takes <span class="count">(4)</span></button>
-		</nav>
-		<div class="body">
-			<div class="card">
-			<button class="card-head">
-					<span class="grow">
-						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span>
-					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg></span>
-				</button>
-				<div class="group-title">Sound</div>
-				<div class="kv"><span class="k">Model</span><span class="v">XL-TURBO <span class="state ok"><span class="shape" aria-hidden="true"></span>loaded</span> <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Duration</span><span class="v">3:00 <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">BPM</span><span class="v">96 <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Key</span><span class="v">A minor <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Takes per Generate</span><span class="v">×1 <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Voice</span><span class="v">Mara <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="group-title">Reproduce</div>
-				<div class="kv"><span class="k">Seed</span><span class="v">Random <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="card-foot">Generate uses this recipe</div>
-			</div>
-			<div class="field">
-				<span class="label">Style</span>
-				<div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div>
-			</div>
-			<div class="field">
-				<span class="label">Lyrics <span class="field-stamp">v7 · draft</span></span>
-				<div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
-Headlights cut the rain in two
-Every mile is a mile of you
-I keep the radio low and warm
-so the quiet never turns to storm
-
-<span class="mark">[Chorus]</span>
-All mine if I follow
-all mine if I stay
-the road keeps the promise
-the morning gives away</div>
-			</div>
-		</div>
-		<div class="actionbar">
-			<button class="btn-primary">Generate</button>
-		</div>
-		<div class="player">
-			<span class="cover" aria-hidden="true"></span>
-			<span class="track">
-				<span class="track-title">AMIF</span>
-				<span class="track-detail">v7 · take 2</span>
-			</span>
-			<button class="icon-btn ink" aria-label="Pause" title="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
-			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
-			<span class="line"><span></span></span>
-		</div>
-	</div>
-</figure>
+<p class="frame-note" style="width:390px;flex:none"><b>2 · Edit — recipe expanded</b> — entfallen am 22.10.2026 (#1815): die geöffnete Recipe-Karte zeigt <a href="song-page.html"><code>song-page.html</code></a> (At the Take, P4).</p>
 
 <figure>
 	<figcaption><b>3 · Edit</b> — generating: the action carries the progress, × cancels, the same 56 px bar. Blessed 26.09.2026, #1011 (frame A4).</figcaption>
@@ -947,9 +875,8 @@ the morning gives away</div>
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -1010,9 +937,8 @@ the morning gives away</div>
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -1070,9 +996,8 @@ the morning gives away</div>
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -1527,9 +1452,8 @@ can wait a mile for me</span></div>
 				<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">

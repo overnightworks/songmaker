@@ -494,6 +494,7 @@ section{
 <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 006 .5l2.5-2.5a4 4 0 00-5.7-5.7L11.5 7.7"/><path d="M14 10a4 4 0 00-6-.5L5.5 12a4 4 0 005.7 5.7l1.3-1.3"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
 <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></symbol>
 <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
 <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4.5 4.5L19 7" stroke-width="2.4"/></symbol>
@@ -706,7 +707,6 @@ section{
 			</nav>
 			<span class="caps">Segmented control — picks a short value</span>
 			<div class="strip" style="--h:32px;--fs:.8rem">
-				<div class="seg"><button class="on">Random</button><button>Pinned</button></div>
 				<div class="seg"><button>Off</button><button class="on">Conservative</button><button>Full</button></div>
 			</div>
 			<span class="note">The editor's <code>CO-WRITER | RECIPE</code> toggle pills are a view switch, so they become this strip — two tabs over the right panel of the desktop editor. How many panels that editor has is the song page's picture to decide, not this vocabulary's.</span>
@@ -732,7 +732,7 @@ section{
 			<span class="note">Rows in one bordered card, 44&nbsp;px each, the dot and the label both in the action colour when chosen. The two-line <code>&lt;small&gt;</code> under each option today goes behind its ⓘ — an explanation is never inline.</span>
 		</div>
 	</div>
-	<div class="foot2"><div class="ex"><span class="k">Example</span><b>WRITE · TAKES 4</b> on the song page and <b>USERS · VOICES · SESSIONS …</b> in admin are the same component at two widths. <b>QUEUE | THIS TAKE</b> in Now Playing is a view, so it becomes a tab strip, not a segment; <b>Random | Pinned</b> is a value, so it stays a segment.</div><div class="kills"><span class="k">Replaces</span><span class="gone">underline strip · CO-WRITER|RECIPE toggle pills · QUEUE|THIS TAKE red-outline segment · RANDOM|PINNED red-fill segment · CHAT|LYRICS phone strip · the phone's native select · the red-shadow playback cards</span> — 5 patterns, the degraded select, and the one radio group that was styled as neither.</div></div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span><b>WRITE · TAKES 4</b> on the song page and <b>USERS · VOICES · SESSIONS …</b> in admin are the same component at two widths. <b>QUEUE | THIS TAKE</b> in Now Playing is a view, so it becomes a tab strip, not a segment.</div><div class="kills"><span class="k">Replaces</span><span class="gone">underline strip · CO-WRITER|RECIPE toggle pills · QUEUE|THIS TAKE red-outline segment · CHAT|LYRICS phone strip · the phone's native select · the red-shadow playback cards</span> — 4 patterns, the degraded select, and the one radio group that was styled as neither.</div></div>
 </section>
 
 <!-- ═══ 4 ══════════════════════════════════════════════════════════════ -->
@@ -828,7 +828,7 @@ all mine if I stay</div>
 				<div class="row playing"><button class="icon-btn" aria-label="Pause take 2"><span class="face round" style="border-color:var(--action);color:var(--action)"><svg class="ic"><use href="#i-pause"/></svg></span></button><span class="ident">Take 2</span><span class="meta">3:05</span><span class="score good"><i class="shape"></i>82</span><button class="icon-btn mark on" aria-label="Picked — take 2"><svg class="ic"><use href="#i-star-f"/></svg></button><button class="icon-btn" aria-label="Take 2 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
 				<div class="row"><button class="icon-btn" aria-label="Play take 1"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button><span class="ident">Take 1</span><span class="meta">3:04</span><span class="score ok"><i class="shape"></i>61</span><button class="icon-btn mark" aria-label="Pick take 1"><svg class="ic"><use href="#i-star"/></svg></button><span class="keepmark" role="img" aria-label="Kept"><svg class="ic"><use href="#i-heart-f"/></svg></span><button class="icon-btn" aria-label="Take 1 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
 			</div>
-			<span class="note">The star is here too — picking is the one thing a musician does most, so it never hides in a menu. <b>Repaint, Cover, Keep, Share and Delete</b> are one tap away in <span style="letter-spacing:1px">…</span> — the same five, in the same order, on the desktop.</span>
+			<span class="note">The star is here too — picking is the one thing a musician does most, so it never hides in a menu. <b>Repaint, Cover, Use seed, Add to playlist, Share and Delete</b> are one tap away in <span style="letter-spacing:1px">…</span> — the same six, in the same order, on the desktop.</span>
 		</div>
 	</div>
 	<div class="cols">
@@ -866,12 +866,12 @@ all mine if I stay</div>
 				<div class="phead">Take 2</div>
 				<button><svg class="ic sm"><use href="#i-pencil"/></svg>Repaint</button>
 				<button><svg class="ic sm"><use href="#i-disc"/></svg>Cover</button>
-				<button><svg class="ic sm"><use href="#i-heart"/></svg>Keep</button>
+				<button><svg class="ic sm"><use href="#i-pin"/></svg>Use seed<span style="margin-left:auto;font-size:11px;color:var(--text-subtle)">4127730</span></button>
 				<button><svg class="ic sm"><use href="#i-plus"/></svg>Add to playlist</button>
 				<button><svg class="ic sm"><use href="#i-share"/></svg>Share</button>
 				<button class="del"><svg class="ic sm"><use href="#i-trash"/></svg>Delete</button>
 			</div>
-			<span class="note">The head names what the menu acts on, so every row is a bare verb — <b>Delete</b>, not “Delete take”. The ruled order is <b>Repaint · Cover · Keep · Add to playlist · Share · Delete</b> — six rows, this sequence, at both widths: the two that make a new take, then the three that place this one, then the red one. <b>Keep</b> reads <b>Unkeep</b> on a take that is already kept; the row toggles, it never doubles. The red last row is a menu row, not the destructive <i>button</i> role, which lives only in the confirm dialog.</span>
+			<span class="note">The head names what the menu acts on, so every row is a bare verb — <b>Delete</b>, not “Delete take”. The order is <b>Repaint · Cover · Use seed · Add to playlist · Share · Delete</b> (<code>song-page.html</code>) — six rows, this sequence, at both widths: the three that hand something of this take to the next run (a range, the whole take, its seed), then the two that place it, then the red one. Keep is the heart in the row, not a menu row. <b>Use seed</b> shows the seed as its hint, where Share shows on/off. The red last row is a menu row, not the destructive <i>button</i> role, which lives only in the confirm dialog.</span>
 		</div>
 		<div class="spec tight" style="width:252px">
 			<span class="caps">Popover · the song menu — another owner</span>
@@ -888,7 +888,7 @@ all mine if I stay</div>
 				<div class="phead">Take 2</div>
 				<button><svg class="ic sm"><use href="#i-pencil"/></svg>Repaint</button>
 				<button><svg class="ic sm"><use href="#i-disc"/></svg>Cover</button>
-				<button><svg class="ic sm"><use href="#i-heart"/></svg>Keep</button>
+				<button><svg class="ic sm"><use href="#i-pin"/></svg>Use seed<span style="margin-left:auto;font-size:11px;color:var(--text-subtle)">4127730</span></button>
 				<button><svg class="ic sm"><use href="#i-plus"/></svg>Add to playlist</button>
 				<button><svg class="ic sm"><use href="#i-share"/></svg>Share</button>
 				<button class="del"><svg class="ic sm"><use href="#i-trash"/></svg>Delete</button>
@@ -1040,7 +1040,7 @@ all mine if I stay</div>
 					<span class="hd"><svg class="ic sm"><use href="#i-check"/></svg>Uppercase — Oswald</span>
 					<ul>
 						<li>Page title — <b class="t22" style="font-size:13px">LIBRARY</b></li>
-						<li>Tab strip and segment — <span class="t12">USERS</span> · <span class="t12">RANDOM</span></li>
+						<li>Tab strip and segment — <span class="t12">USERS</span> · <span class="t12">CONSERVATIVE</span></li>
 						<li>Field label — <span class="t11">STYLE PROMPT</span></li>
 						<li>Button label — <span class="t12">GENERATE</span> / <span class="t12">DELETE</span></li>
 						<li>Pill label — <span class="pill queued"><i class="shape"></i>Queued</span> <span class="pill">Model <b class="v">sft</b></span></li>
