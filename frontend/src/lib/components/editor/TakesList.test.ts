@@ -575,9 +575,10 @@ describe('TakesList', () => {
 			params: { batch_size: 2, delivered_batch_size: 2 },
 			badge: null
 		},
-		{ name: 'no batch-size info at all', params: {}, badge: null }
+		{ name: 'no batch-size info at all', params: {}, badge: null },
+		{ name: 'no generation params at all', params: null, badge: null }
 	])(
-		'shows the batch-reduction badge $badge when the worker delivered $name',
+		'shows $badge as the batch-reduction badge when the worker delivered $name',
 		async ({ params, badge }) => {
 			const { target } = await render({
 				song: song({
@@ -997,8 +998,7 @@ describe('TakesList', () => {
 
 	it('deletes only takes of the song on screen when another song left ids in the selection', async () => {
 		const { target } = await render();
-		toggleSelection('g-other-song');
-		toggleSelection('g2');
+		['g-other-song', 'g2'].forEach(toggleSelection);
 		await tick();
 
 		target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();

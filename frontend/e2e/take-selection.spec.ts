@@ -1,8 +1,10 @@
 // A take selection belongs to the song it was made on (#1824): leaving song A
 // with takes ticked must not carry "n selected" to song B, where Delete
-// Selected would remove A's takes for good. Desktop only: the selection
-// toolbar and the Ctrl/⌘-click on a take's play control are the same on the
-// phone's Takes tab, and the 1440 px cell is the one the item names.
+// Selected would remove A's takes for good. The spec asserts the toolbar is
+// gone; Delete is not driven (the component test owns the deletion boundary).
+// Desktop only: the toolbar and the Ctrl/⌘-click on a take's play control are
+// the same on the phone's Takes tab, and the 1440 px cell is the one the item
+// names.
 
 import { expect, test, type Page } from '@playwright/test';
 import { songEditorOpenLabel } from '../src/lib/constants';
@@ -37,7 +39,7 @@ async function openSong(page: Page, title: string): Promise<void> {
 }
 
 test(
-	'1824 a selection made on one song is gone on another and leaves that song’s takes alone',
+	'1824 a selection made on one song leaves no toolbar on another song',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
 		const headers = await csrfHeaders(page);
@@ -63,10 +65,6 @@ test(
 			await openSong(page, SONG_B_TITLE);
 			await expect(toolbar).toHaveCount(0);
 			await expect(page.getByText(/\d+ selected/)).toHaveCount(0);
-
-			await page.goBack();
-			await openSong(page, SONG_A_TITLE);
-			await expect(toolbar).toHaveCount(0);
 		} finally {
 			await archiveOwnedAlbum(page.request, albumId);
 		}

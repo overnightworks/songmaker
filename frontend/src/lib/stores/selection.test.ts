@@ -1,13 +1,13 @@
 import { makeGeneration as generation } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
+import { selectedSongId } from './player';
 
 import {
 	clearSelection,
 	selectAllUnkept,
 	selectedIds,
 	selectionCount,
-	scopeSelectionToSong,
 	selectionMode,
 	toggleSelection
 } from './selection';
@@ -93,21 +93,33 @@ describe('selection', () => {
 	});
 
 	it('starts empty with select mode off when the song on screen changes', () => {
-		scopeSelectionToSong('song-a');
+		selectedSongId.set('song-a');
 		toggleSelection('g1');
 		toggleSelection('g2');
 
-		scopeSelectionToSong('song-b');
+		selectedSongId.set('song-b');
 
 		expect(get(selectedIds)).toEqual(new Set());
 		expect(get(selectionMode)).toBe(false);
 	});
 
-	it('keeps the selection while the same song stays on screen', () => {
-		scopeSelectionToSong('song-a');
+	it('starts empty on returning to a song after another one was shown with no take list mounted', () => {
+		selectedSongId.set('song-a');
 		toggleSelection('g1');
 
-		scopeSelectionToSong('song-a');
+		selectedSongId.set('song-b');
+		selectedSongId.set('song-a');
+
+		expect(get(selectedIds)).toEqual(new Set());
+		expect(get(selectionMode)).toBe(false);
+	});
+
+	it('keeps the selection while the same song stays on screen or no song is shown', () => {
+		selectedSongId.set('song-a');
+		toggleSelection('g1');
+
+		selectedSongId.set('song-a');
+		selectedSongId.set(null);
 
 		expect(get(selectedIds)).toEqual(new Set(['g1']));
 		expect(get(selectionMode)).toBe(true);

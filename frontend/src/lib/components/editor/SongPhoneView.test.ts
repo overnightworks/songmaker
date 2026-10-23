@@ -5,7 +5,8 @@ import { detailTab, type DetailTab } from '$lib/stores/navigation';
 import type { RecipeChip } from '$lib/stores/recipe';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
-import { clearSelection } from '$lib/stores/selection';
+import { clearSelection, toggleSelection } from '$lib/stores/selection';
+import { selectedSongId } from '$lib/stores/player';
 import { watchTypingOnPhone } from '$lib/stores/ui';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
@@ -126,6 +127,32 @@ describe('SongPhoneView', () => {
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
 		expectGenerateAsPrimaryAction(target);
 		expect(target.querySelector('.takes-list')).toBeNull();
+	});
+
+	it('shows no selection toolbar on returning to a song whose take list was hidden while another song was shown', async () => {
+		const target = await render({
+			song: makeSong({ id: 'song-a', generations: [makeGeneration()], generation_count: 1 })
+		});
+		selectedSongId.set('song-a');
+		toggleSelection('g1');
+		selectedSongId.set('song-b');
+		selectedSongId.set('song-a');
+		showTab(target, 'takes');
+		await tick();
+		expect(target.querySelector('.selection-toolbar')).toBeNull();
+	});
+
+	it('drops a selection of takes that are not on screen when Delete is pressed', async () => {
+		const target = await render({
+			song: makeSong({ id: 'song-a', generations: [makeGeneration()], generation_count: 1 })
+		});
+		showTab(target, 'takes');
+		selectedSongId.set('song-a');
+		toggleSelection('gone');
+		await tick();
+		target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
+		await tick();
+		expect(target.querySelector('.selection-toolbar')).toBeNull();
 	});
 
 	it.each([
