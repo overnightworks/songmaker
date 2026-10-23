@@ -1,0 +1,8 @@
+claim_id = "b5fbbbaf493645a1bc2fd9ade9f92f47"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "dbc250c1ee8b0edcb6bea5de82bbb151ab7c9990"
+branch = "claude/issue-1819-growing-text"
+scope = ["docs/architecture.md", "frontend/e2e", "frontend/src/lib/actions", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/GrowingTextarea.svelte", "frontend/src/lib/components/editor/GrowingTextarea.test.ts", "frontend/src/lib/components/editor/WriteColumn.svelte", "frontend/src/lib/components/editor/WriteColumn.test.ts", "quality/baseline.toml"]
+opened_commit = "aefa36908743418528a420dd819773443a890ebb"
+whole_reason = "One field component for style and lyrics, its two callers' CSS, and the tests and e2e that pin them."
