@@ -64,7 +64,6 @@ class McpEndpointAvailability:
     reason: str = ""
 
 
-
 def compose_mcp_endpoint(app, settings: Settings):
     """The app to serve and whether ``/mcp`` is available on it."""
     availability, server = _server_or_problem(app, settings)
@@ -84,19 +83,21 @@ def _server_or_problem(
     if isinstance(key, McpEndpointAvailability):
         return key, None
     try:
-        server = McpServer(origin, key, _tools_for(app, settings))
+        McpServer(origin, key, [])  # the server validates the origin first; no tools to blame
     except ValidationError:
         return McpEndpointAvailability(McpKeyProblem.ORIGIN_INVALID), None
-    return McpEndpointAvailability(), server
+    return McpEndpointAvailability(), McpServer(origin, key, _tools_for(app, settings))
 
 
 def _verification_key(settings: Settings) -> CapabilityVerificationKey | McpEndpointAvailability:
     path = settings.agent_service_capability_key_file
-    if path is None or not path.exists():
+    if path is None:
         return McpEndpointAvailability(McpKeyProblem.MISSING)
-    if not path.is_file():
-        return McpEndpointAvailability(McpKeyProblem.NOT_A_FILE)
     try:
+        if not path.exists():
+            return McpEndpointAvailability(McpKeyProblem.MISSING)
+        if not path.is_file():
+            return McpEndpointAvailability(McpKeyProblem.NOT_A_FILE)
         pem = path.read_bytes()
     except OSError:
         return McpEndpointAvailability(McpKeyProblem.UNREADABLE)

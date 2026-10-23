@@ -300,8 +300,10 @@ def test_m3_a_call_on_another_persons_song_is_not_found_and_changes_no_row(
             capability, "update_song_lyrics", song_id="song-ben", lyrics="stolen",
         ).tool_result()
 
-    assert read[0] is True and "not found" in read[1]
-    assert write[0] is True and "not found" in write[1]
+    assert read[0] is True
+    assert "not found" in read[1]
+    assert write[0] is True
+    assert "not found" in write[1]
     assert endpoint.snapshot() == before
 
 
@@ -583,8 +585,9 @@ def test_k3_an_unsound_key_is_logged_with_the_rule_the_verifier_names_never_the_
     broken_key, web, mcp_environment, caplog,
 ):
     app, _ = web
+    pem = mcp_environment.read_bytes()
     with pytest.raises(UnsoundVerificationKey) as rule:
-        CapabilityVerificationKey.from_pem(mcp_environment.read_bytes())
+        CapabilityVerificationKey.from_pem(pem)
 
     with caplog.at_level(logging.INFO):
         _, verdict = compose_mcp_endpoint(app, settings_now())
@@ -594,11 +597,14 @@ def test_k3_an_unsound_key_is_logged_with_the_rule_the_verifier_names_never_the_
     assert "BEGIN" not in caplog.text
 
 
-def test_k_an_unreadable_key_file_is_unavailable_unreadable(web, mcp_environment):
-    mcp_environment.chmod(0)
+@pytest.mark.parametrize("locked", ["file", "parent_directory"])
+def test_k_an_unreadable_key_file_is_unavailable_unreadable(web, mcp_environment, locked):
+    (mcp_environment if locked == "file" else mcp_environment.parent).chmod(0)
     app, _ = web
-
-    _, verdict = compose_mcp_endpoint(app, settings_now())
+    try:
+        _, verdict = compose_mcp_endpoint(app, settings_now())
+    finally:
+        mcp_environment.parent.chmod(0o700)
 
     assert verdict.problem is McpKeyProblem.UNREADABLE
 

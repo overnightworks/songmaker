@@ -59,6 +59,9 @@ class CowriterTool:
     write: bool
     handler: Callable[..., Any]
 
+    def __post_init__(self) -> None:
+        require_supported_declaration(self.parameters)
+
 
 def _object(
     properties: Mapping[str, object], required: list[str] | None = None,
@@ -192,9 +195,6 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
         tool_suggest_album_cover,
     ),
 )
-
-for _tool in COWRITER_TOOLS:
-    require_supported_declaration(_tool.parameters)
 
 _TOOLS_BY_NAME = {tool.name: tool for tool in COWRITER_TOOLS}
 

@@ -17,8 +17,8 @@ from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.cowriter.tools import (
     COWRITER_TOOL_CATALOG,
     COWRITER_TOOLS,
+    CowriterTool,
     execute_cowriter_tool,
-    require_supported_declaration,
 )
 
 SHIPPED_PROMPT = (
@@ -98,4 +98,4 @@ def test_arguments_that_break_the_declaration_are_refused_naming_the_field_befor
 )
 def test_a_declaration_beyond_the_supported_subset_is_refused_at_definition(parameters):
     with pytest.raises(ValueError):
-        require_supported_declaration(parameters)
+        CowriterTool("bad_tool", "A tool.", parameters, False, execute_cowriter_tool)
