@@ -4,7 +4,8 @@
 // ordinary editable text. Runs in both shells (1440 and 390 wide).
 //
 // The song is seeded straight against the database into the album
-// song-phone.spec.ts owns.
+// song-phone.spec.ts owns, once per shell: every song seeded there adds a
+// request to that spec's API budget (SONG_PHONE_FLOW_API_REQUEST_BUDGET).
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { songEditorOpenLabel } from '../src/lib/constants';
@@ -19,10 +20,8 @@ const LYRICS = [
 ].join('\n');
 const STYLE = Array.from({ length: 6 }, (_, line) => `style note ${line + 1}`).join('\n');
 
-async function openSeededSong(page: Page): Promise<void> {
+async function openSeededSong(page: Page, songTitle: string): Promise<void> {
 	const library = readSeededLibrary();
-	const songTitle = `${GROWING_TEXT_SONG_TITLE} ${runMarker()}`;
-	await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
 	await page.goto(`/album/${library.songPhoneAlbumId}`);
 	await workspace(page)
 		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
@@ -70,11 +69,18 @@ async function charactersAfterCaretClickedAtTheEnd(field: Locator): Promise<numb
 }
 
 test.describe('text that is never clipped', () => {
+	let songTitle: string;
+
+	test.beforeAll(async () => {
+		songTitle = `${GROWING_TEXT_SONG_TITLE} ${runMarker()}`;
+		await seedSongPhoneSong(readSeededLibrary().songPhoneAlbumId, songTitle, 1, 1);
+	});
+
 	test('a 60-line lyric and a 6-line style show whole, and the page scrolls to their end', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
-		await openSeededSong(page);
+		await openSeededSong(page, songTitle);
 
 		const style = page.getByRole('textbox', { name: /^Style/ });
 		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
@@ -96,7 +102,7 @@ test.describe('text that is never clipped', () => {
 
 	test('[Intro] and [Verse 1] stand out and stay plain text in the field', async ({ page }) => {
 		const guard = new FlowGuard(page);
-		await openSeededSong(page);
+		await openSeededSong(page, songTitle);
 
 		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 		await lyrics.fill('[Intro]\nla la');
@@ -112,7 +118,7 @@ test.describe('text that is never clipped', () => {
 		page
 	}) => {
 		const guard = new FlowGuard(page);
-		await openSeededSong(page);
+		await openSeededSong(page, songTitle);
 
 		const style = page.getByRole('textbox', { name: /^Style/ });
 		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
