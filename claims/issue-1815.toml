@@ -1,8 +1,0 @@
-claim_id = "5c09952f834d4fd495825e50d1945f71"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "d7250418f669ce6e10997a4777797ad87b2f3b19"
-branch = "claude/issue-1815-song-page-picture"
-scope = ["docs/architecture.md", "docs/design/README.md", "docs/design/song-editor-take.html", "docs/design/song-page-phone.html", "docs/design/song-page.html", "docs/design/song-versions.html", "docs/design/vocabulary.html"]
-opened_commit = "2c858d16c14736dd78e241cd5183176720576f1e"
-whole_reason = "One picture freeze and the alignment of the older pictures and docs that describe the same surface."
