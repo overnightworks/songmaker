@@ -61,7 +61,8 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   und Telefon 390. Freigegeben am 22.10.2026. Besitzer der Desktop-Songseite
   und der Recipe-Karte (geschlossen als eine Zeile „Recipe ›“, geöffnet mit
   den Tabs Song · Generate · Engine) sowie von Repaint und Cover als
-  Aufgabenkarte am Take.
+  Aufgabenkarte am Take. Seit 23.10.2026 (#1825) auch der Takes pro Version
+  gefaltet in der Listen-Spalte samt Bestätigung „Delete N“.
 - `song-editor-take.html` — eingefrorener früherer Stand (#230, freigegeben am
   03.09.2026): Repaint/Cover als Zeilenaktionen am Take. Überholt: die
   Take-Zeile gehört seit 20.09.2026 `song-page-phone.html` (sechs-zeiliges
