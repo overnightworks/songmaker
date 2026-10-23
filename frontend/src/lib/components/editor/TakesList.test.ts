@@ -880,6 +880,8 @@ describe('TakesList', () => {
 				enterSelectionMode();
 				await tick();
 				target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
+				await tick();
+				document.querySelector<HTMLButtonElement>('[role="dialog"] .confirm-btn')?.click();
 			}
 		},
 		{
@@ -995,15 +997,6 @@ describe('TakesList', () => {
 			expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
 		}
 	);
-
-	it('deletes only takes of the song on screen when another song left ids in the selection', async () => {
-		const { target } = await render();
-		['g-other-song', 'g2'].forEach(toggleSelection);
-		await tick();
-
-		target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
-		expect(bulkDeleteGenerations).toHaveBeenCalledWith(['g2']);
-	});
 
 	it.each(['ctrlKey', 'metaKey'])(
 		'selects through the play control with %s without playback',

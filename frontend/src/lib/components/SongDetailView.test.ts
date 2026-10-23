@@ -850,11 +850,11 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView();
 		toggleSelection('g1');
 		await tick();
-		clickNamed(target, 'Delete Selected');
+		clickNamed(target, 'Delete 1');
 		await tick();
-		await Promise.resolve();
+		clickNamed(document.body, 'Delete');
 		await tick();
-		expect(get(selectedGenerationId)).toBeNull();
+		await vi.waitFor(() => expect(get(selectedGenerationId)).toBeNull());
 		expect(historyEntry().generationId).toBeNull();
 	});
 });

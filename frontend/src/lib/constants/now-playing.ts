@@ -32,6 +32,20 @@ export function nowPlayingTakeLabel(
 
 export const TAKE_SELECT_LABEL = 'Select';
 
+export const TAKE_SELECT_ALL_UNKEPT_LABEL = 'Select all unkept';
+
+export function selectedCountLabel(count: number): string {
+	return `${count} selected`;
+}
+
+export function bulkDeleteLabel(count: number): string {
+	return `Delete ${count}`;
+}
+
+export function bulkDeleteTitle(count: number): string {
+	return `Delete ${count} take${count === 1 ? '' : 's'}?`;
+}
+
 export function takeRowLabel(generationNumber: number): string {
 	return `Take ${generationNumber}`;
 }
