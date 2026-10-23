@@ -1,8 +1,0 @@
-claim_id = "4a236ae5ad6f4a3f86577a4cf0273518"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "f94688c0dcea5181fb1a916e4662fff4b6edaff5"
-branch = "claude/issue-1824-selection-per-song"
-scope = ["frontend/e2e", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/TakeRow.svelte", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/stores/selection.test.ts", "frontend/src/lib/stores/selection.ts"]
-opened_commit = "f521a113bb34373ef4642ab4557057110934e2d9"
-whole_reason = "The selection owner, the song views that own which song is on screen, the take list and row, and the tests that pin the song scope."
