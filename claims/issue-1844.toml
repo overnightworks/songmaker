@@ -1,0 +1,8 @@
+claim_id = "6e1c59c331754d82a71c529f420a84c7"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "7d8eb397b743fe55e58715d7f6b118649644af7d"
+branch = "claude/issue-1844-bulk-delete-asks-first"
+scope = ["frontend/e2e/README.md", "frontend/e2e/take-selection.spec.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/components/editor/TakesListBulkDelete.test.ts", "frontend/src/lib/constants/now-playing.test.ts", "frontend/src/lib/constants/now-playing.ts"]
+opened_commit = "203d2bcf5439fdd0174508557a10ad11976d221c"
+whole_reason = "The toolbar, its confirmation and the tests that pin today's immediate delete are one change to one irreversible action."
