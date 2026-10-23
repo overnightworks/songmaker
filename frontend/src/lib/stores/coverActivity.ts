@@ -224,12 +224,11 @@ export function updateCoverActivity(
 	coverActivity.update((state) => (state?.albumId === albumId ? update(state) : state));
 }
 
-/** A Suggest on its way, named by the discard mark it began under. */
-
 /**
  * Suggest was pressed. A read still on its way is dropped, so its older
  * answer cannot erase the job Suggest creates; the page waits on the POST.
- * Returns the ask, which a later ×, USE or Upload retires.
+ * Returns the ask, the discard mark this Suggest began under, which a later
+ * ×, USE or Upload retires.
  */
 export function beginCoverSuggestion(albumId: string): number {
 	supersedeReads(albumId);
