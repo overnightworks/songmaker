@@ -1,8 +1,0 @@
-claim_id = "b52609788a0a49b5b0c49c808c716df3"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "dbc250c1ee8b0edcb6bea5de82bbb151ab7c9990"
-branch = "claude/issue-1820-take-row"
-scope = ["frontend/src/lib/components/TakeRow.svelte", "frontend/src/lib/components/TakesList.svelte", "frontend/src/lib/components/TakesList.test.ts", "quality/baseline.toml"]
-opened_commit = "def7fe41d0b87007b00973942af413c172ebbea9"
-whole_reason = "A pure move of the take row out of TakesList and the baseline line it lowers."
