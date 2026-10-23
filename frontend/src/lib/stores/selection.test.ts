@@ -7,6 +7,7 @@ import {
 	selectAllUnkept,
 	selectedIds,
 	selectionCount,
+	scopeSelectionToSong,
 	selectionMode,
 	toggleSelection
 } from './selection';
@@ -88,6 +89,27 @@ describe('selection', () => {
 		]);
 
 		expect(get(selectedIds)).toEqual(new Set(['available']));
+		expect(get(selectionMode)).toBe(true);
+	});
+
+	it('starts empty with select mode off when the song on screen changes', () => {
+		scopeSelectionToSong('song-a');
+		toggleSelection('g1');
+		toggleSelection('g2');
+
+		scopeSelectionToSong('song-b');
+
+		expect(get(selectedIds)).toEqual(new Set());
+		expect(get(selectionMode)).toBe(false);
+	});
+
+	it('keeps the selection while the same song stays on screen', () => {
+		scopeSelectionToSong('song-a');
+		toggleSelection('g1');
+
+		scopeSelectionToSong('song-a');
+
+		expect(get(selectedIds)).toEqual(new Set(['g1']));
 		expect(get(selectionMode)).toBe(true);
 	});
 });

@@ -28,6 +28,7 @@
 		selectedIds,
 		selectAllUnkept,
 		clearSelection,
+		scopeSelectionToSong,
 		selectionCount
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
@@ -105,8 +106,13 @@
 		return result;
 	});
 
+	$effect(() => {
+		scopeSelectionToSong(song.id);
+	});
+
 	async function handleBulkDelete(): Promise<void> {
-		const ids = [...$selectedIds];
+		const songTakeIds = new Set(song.generations.map((gen) => gen.id));
+		const ids = [...$selectedIds].filter((id) => songTakeIds.has(id));
 		if (ids.length === 0) return;
 		const openGenerationId = $selectedGenerationId;
 		try {

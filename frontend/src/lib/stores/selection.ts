@@ -4,6 +4,8 @@ import type { GenerationItem } from '$lib/api/types';
 export const selectedIds = writable<Set<string>>(new Set());
 export const selectionMode = writable(false);
 
+let selectionSongId: string | null = null;
+
 export const selectionCount = derived(selectedIds, ($ids) => $ids.size);
 
 export function toggleSelection(id: string): void {
@@ -44,4 +46,12 @@ export function selectAllUnkept(generations: GenerationItem[]): void {
 export function clearSelection(): void {
 	selectedIds.set(new Set());
 	selectionMode.set(false);
+}
+
+/** A selection belongs to the song it was made on; a different song starts empty. */
+export function scopeSelectionToSong(songId: string): void {
+	if (songId !== selectionSongId) {
+		clearSelection();
+		selectionSongId = songId;
+	}
 }
