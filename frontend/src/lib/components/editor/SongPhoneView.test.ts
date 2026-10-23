@@ -48,6 +48,7 @@ beforeEach(() => {
 	generateAction.set(IDLE_GENERATE);
 	detailTab.set('edit');
 	generationFailures.set({});
+	selectedSongId.set(null);
 	clearSelection();
 });
 

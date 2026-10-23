@@ -13,6 +13,7 @@ import {
 } from './selection';
 
 beforeEach(() => {
+	selectedSongId.set(null);
 	clearSelection();
 });
 
@@ -122,6 +123,19 @@ describe('selection', () => {
 		selectedSongId.set(null);
 
 		expect(get(selectedIds)).toEqual(new Set(['g1']));
+		expect(get(selectionMode)).toBe(true);
+	});
+
+	it('keeps a new selection on returning to the same song after Cancel', () => {
+		selectedSongId.set('song-a');
+		toggleSelection('g1');
+		clearSelection();
+		toggleSelection('g2');
+
+		selectedSongId.set(null);
+		selectedSongId.set('song-a');
+
+		expect(get(selectedIds)).toEqual(new Set(['g2']));
 		expect(get(selectionMode)).toBe(true);
 	});
 });

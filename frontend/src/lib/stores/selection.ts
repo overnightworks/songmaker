@@ -47,7 +47,6 @@ export function selectAllUnkept(generations: GenerationItem[]): void {
 export function clearSelection(): void {
 	selectedIds.set(new Set());
 	selectionMode.set(false);
-	selectionSongId = null;
 }
 
 // A selection belongs to the song it was made on; a different song starts empty.
