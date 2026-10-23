@@ -320,7 +320,7 @@ test('shuffle while a library take plays keeps the position reached during the p
 		})
 		.click();
 	// The library's pool of one pick queues a single take, so Now Playing opens
-	// on This take; the phone then puts the sheet away on Queue.
+	// on This take; Escape then puts the sheet away on the phone.
 	await page.getByRole('tab', { name: NOW_PLAYING_QUEUE_TAB, exact: true }).click();
 	if (shell === 'mobile') await page.keyboard.press('Escape');
 	const controls = shell === 'desktop' ? transport : page.getByRole('dialog');

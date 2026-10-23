@@ -1,6 +1,11 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
-	import { albumList, songList, albumSongsErrorMessage } from '$lib/stores/libraryData';
+	import {
+		albumList,
+		songList,
+		albumSongsErrorMessage,
+		albumSongsLoad
+	} from '$lib/stores/libraryData';
 	import {
 		buildQueueViewModel,
 		closeNowPlaying,
@@ -27,7 +32,7 @@
 		waitingStartOf
 	} from '$lib/stores/player';
 	import { openAlbum } from '$lib/stores/navigation';
-	import { songHasPlayableTake } from '$lib/utils/playable';
+	import { queueHoldsOneTake } from '$lib/utils/playable';
 	import { addToast } from '$lib/stores/toast';
 	import { openCollection } from '$lib/stores/collection';
 	import {
@@ -166,17 +171,17 @@
 		if (docked) closeNowPlaying();
 		// This take for a queue of one, Queue for several; the surface keeps the
 		// tab it opened on, so a queue that grows while open does not move it.
-		else openNowPlaying(queueHoldsOneTake() ? 'take' : 'queue');
+		else openNowPlaying(queueOpensOnThisTake() ? 'take' : 'queue');
 	}
 
-	// An album starts with a one-take queue the rest of the album joins a moment
-	// later, so its extent is the album's playable songs, not the queue so far.
-	function queueHoldsOneTake(): boolean {
+	function queueOpensOnThisTake(): boolean {
 		const queued = buildQueueViewModel(ctx, current).items.length;
-		if (ctx.type !== 'album') return queued === 1;
+		if (ctx.type !== 'album') return queueHoldsOneTake(queued, null);
 		const albumId = ctx.albumId;
-		const playable = songs.filter((s) => s.album_id === albumId && songHasPlayableTake(s));
-		return queued <= 1 && playable.length <= 1;
+		return queueHoldsOneTake(queued, {
+			songs: songs.filter((s) => s.album_id === albumId),
+			load: $albumSongsLoad[albumId]
+		});
 	}
 
 	$effect(() => {

@@ -127,6 +127,9 @@ test(
 		await expect(
 			page.getByRole('contentinfo').getByRole('button', { name: 'Next', exact: true })
 		).toBeEnabled();
+		// The album's songs have all been fetched, so the queue has grown behind the
+		// tab, which stays where it opened.
+		await page.waitForLoadState('networkidle');
 
 		await expectOpenedOn(page, testInfo, NOW_PLAYING_TAKE_TAB);
 		await page.getByRole('tab', { name: NOW_PLAYING_QUEUE_TAB }).click();
