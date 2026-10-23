@@ -73,6 +73,7 @@
 	textarea:focus {
 		border-color: var(--accent);
 		outline: none;
+		box-shadow: var(--input-focus-glow);
 	}
 
 	.mirror {
@@ -80,10 +81,9 @@
 		pointer-events: none;
 	}
 
-	/* Same family and size as the text around it: a different width would
-	   shift the caret off the characters it edits. */
+	/* Colour only: any other change of font, size or weight changes the
+	   advance widths and shifts the caret off the characters it edits. */
 	.section-label {
 		color: var(--accent);
-		font-weight: 600;
 	}
 </style>
