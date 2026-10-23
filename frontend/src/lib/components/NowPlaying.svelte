@@ -62,7 +62,7 @@
 	// Seeded once from the shared request store, not bound to it: a take-row
 	// click (playTakeAndShowNowPlaying) leaves it on 'take' before opening
 	// this surface, while PlayerBar's own Now Playing button opens on the tab
-	// openNowPlaying picks from the queue. Each open is a fresh mount, so this stays correct
+	// its queue calls for. Each open is a fresh mount, so this stays correct
 	// without the tab flipping under the listener while the panel is open.
 	let rightPanelTab: 'queue' | 'take' = $state(get(nowPlayingPanel));
 	let queueTabBtn: HTMLButtonElement | undefined = $state();
