@@ -343,13 +343,6 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 }
 .card-head .grow { display: flex; flex-direction: column; gap: .05rem; flex: 1; min-width: 0; }
 .card-head .lbl { font-size: .72rem; color: var(--text-subtle); }
-.summary-line {
-	font-size: .85rem;
-	color: var(--text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
 
 /* recipe fields — RecipePanel's groups as label/value rows */
 .group-title {
@@ -816,8 +809,6 @@ h2.row-title small { font-family: var(--font-body); font-size: 13px; color: #6a6
 .loaded-hint { font-size: .74rem; color: var(--text-subtle); margin-top: -.1rem; display: inline-flex; align-items: center; gap: .3rem; }
 .loaded-hint .ic { width: 13px; height: 13px; }
 #p4 .dialog { top: 120px; }
-figure:has(.desk) figcaption { max-width: 900px; }
-.desk .toast { left: auto; right: 24px; bottom: 84px; width: 380px; }
 
 /* toast */
 .toast {
@@ -866,36 +857,10 @@ figure:has(.desk) figcaption { max-width: 900px; }
 .np-empty { font-size: .88rem; color: var(--text-muted); padding: .7rem .8rem; border: 1px dashed var(--border); border-radius: var(--card-radius); line-height: 1.45; }
 
 
-/* desktop frame */
-.desk {
-	position: relative; width: 1440px; height: 900px; flex: none;
-	display: grid; grid-template-columns: 248px 1fr; grid-template-rows: 1fr 64px;
-	background: var(--bg); color: var(--text); border-radius: 10px; overflow: hidden;
-	box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 14px 40px rgba(0,0,0,.12);
-}
-.rail { grid-row: 1; background: var(--header-bg); border-right: 1px solid var(--border); padding: 14px 12px; display: flex; flex-direction: column; gap: .3rem; font-size: .88rem; }
-.rail .brand { font-family: var(--font-display); font-size: 1.1rem; letter-spacing: 1px; margin-bottom: .6rem; }
-.rail .item { padding: .35rem .5rem; border-radius: 4px; color: var(--text-light); }
-.rail .item.sec { font-family: var(--font-display); font-size: .74rem; color: var(--text-subtle); letter-spacing: .5px; text-transform: uppercase; margin-top: .6rem; }
-.rail .item.on { background: color-mix(in srgb, var(--action) 9%, transparent); color: var(--action); }
-.dmain { grid-row: 1; display: flex; flex-direction: column; min-width: 0; }
-.dhead { display: flex; align-items: center; gap: .8rem; height: 60px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--header-bg); }
-.dhead h1 { font-family: var(--font-display); font-weight: 500; font-size: 1.4rem; letter-spacing: .5px; }
-.dhead .crumb { font-size: .82rem; color: var(--text-subtle); }
-.dhead .grow { flex: 1; }
-.dhead .toggle { height: 34px; padding: 0 .8rem; border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-display); font-size: .85rem; letter-spacing: .5px; text-transform: uppercase; display: inline-flex; align-items: center; color: var(--text-light); background: var(--surface); }
-.dcols { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
-.dcol { padding: 16px 20px; display: flex; flex-direction: column; gap: .8rem; min-width: 0; overflow: hidden; }
-.dcol + .dcol { border-left: 1px solid var(--border); }
-.dplayer { grid-column: 1 / -1; display: flex; align-items: center; gap: .8rem; padding: 0 20px; border-top: 1px solid var(--border); background: var(--header-bg); position: relative; }
-.dplayer .line { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--border); }
-.dplayer .line span { display: block; width: 38%; height: 100%; background: var(--action); }
-.desk .actions-row { display: flex; gap: .6rem; }
-
 </style>
 </head>
 <body>
-<p class="freeze-note"><b>Bild Versionen — freigegeben 02.10.2026</b> (Operator: „ja passen! die bilder!“, <code>#1245</code>, aus <code>~/songmaker-mockups/bild-versionen/</code>). Erweitert <code>song-page-phone.html</code> (Besitzer der Songseite). Aus #1213 Befund 9: „Earlier versions cannot be viewed or restored, only deleted.“ Operator-Entscheid 01.10.2026: kein Nur-Lesen-Zustand — eine Version antippen lädt sie als Entwurf in den Editor. Neu Eingezeichnetes ist <span style="outline:2px dashed #e0457b;padding:0 .3rem">gestrichelt pink</span> umrandet.</p>
+<p class="freeze-note"><b>Bild Versionen — freigegeben 02.10.2026</b> (Operator: „ja passen! die bilder!“, <code>#1245</code>, aus <code>~/songmaker-mockups/bild-versionen/</code>). Erweitert <code>song-page-phone.html</code> (Besitzer der Songseite). Aus #1213 Befund 9: „Earlier versions cannot be viewed or restored, only deleted.“ Operator-Entscheid 01.10.2026: kein Nur-Lesen-Zustand — eine Version antippen lädt sie als Entwurf in den Editor. Neu Eingezeichnetes ist <span style="outline:2px dashed #e0457b;padding:0 .3rem">gestrichelt pink</span> umrandet. Seit 22.10.2026 (#1804, #1815) gehören die Desktop-Songseite und die Recipe-Karte <a href="song-page.html"><code>song-page.html</code></a>; die Phone-Frames zeigen die Karte nur noch als geschlossene Zeile „Recipe ›“.</p>
 <div class="board">
 <h2 class="row-title">Der Versions-Chip <small>phone 390 × 844</small></h2>
 <figure><figcaption><b>P1 · Edit — current version</b> — the stamp next to “Lyrics” is now a chip: <i>v7 ▾</i>. It is the one door to the versions. Nothing else on the page changed.</figcaption><div class="device" id="p1"><header class="appbar">
@@ -903,7 +868,7 @@ figure:has(.desk) figcaption { max-width: 900px; }
 	<h1>AMIF</h1>
 	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
 <div class="field"><span class="label">Lyrics <button class="ver-chip  new">v7<svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
 Headlights cut the rain in two
 Every mile is a mile of you
@@ -920,7 +885,7 @@ the morning gives away</div></div></div><div class="actionbar"><button class="bt
 	<h1>AMIF</h1>
 	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
 <div class="field"><span class="label">Lyrics <button class="ver-chip  new">v7<svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
 Headlights cut the rain in two
 Every mile is a mile of you
@@ -945,7 +910,7 @@ the morning gives away</div></div></div><div class="actionbar"><button class="bt
 	<h1>AMIF</h1>
 	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:30 · 84 BPM · F minor · ×2</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">slow synthwave ballad, soft pads, female alto, rain on glass</div></div>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">slow synthwave ballad, soft pads, female alto, rain on glass</div></div>
 <div class="field"><span class="label">Lyrics <button class="ver-chip new">v7 <span class="draft">· draft</span><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><span class="loaded-hint new"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>Loaded from v5</span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
 Rain on the window, the city asleep
 Every mile is a promise I keep
@@ -962,7 +927,7 @@ the morning gives away</div></div></div><div class="actionbar"><button class="bt
 	<h1>AMIF</h1>
 	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
 <div class="field"><span class="label">Lyrics <button class="ver-chip new">v7 <span class="draft">· draft</span><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
 Headlights cut the rain in two
 Every mile is a mile of you
@@ -984,7 +949,7 @@ the morning gives away</div></div></div><div class="actionbar"><button class="bt
 <div class="vrow "><span class="vnum">v1</span><span class="grow"><span class="l1">3 takes</span><span class="l2">24 Sep · First draft, nothing rhymes yet</span></span><button class="icon-btn del" aria-label="Delete v1"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
 </div><div class="scrim"></div><div class="dialog new"><h3>Replace your unsaved draft?</h3><p>Your draft has changes that are not in any version. Loading v5 replaces them. You can undo right after.</p><div class="btns"><button class="btn-text">Cancel</button><button class="btn-primary">Replace</button></div></div></div></figure>
 <h2 class="row-title">Wo eine Version sonst auftaucht <small>Takes-Header, Now Playing</small></h2>
-<figure><figcaption><b>P6 · Takes</b> — each group header names its version and loads it: <i>Open v5 ›</i> switches to Edit with v5 as the draft (P3, or P4 first when the draft is unsaved). Imported takes have no version and say so; their header is plain text.</figcaption><div class="device" id="p6"><header class="appbar">
+<figure><figcaption><b>P6 · Takes</b> — each group header names its version and loads it: <i>Open v5 ›</i> switches to Edit with v5 as the draft (P3, or P4 first when the draft is unsaved). Earlier versions are folded to one row each (<code>song-page.html</code>, 22.10.2026, #1815). Imported takes have no version and say so; their row is plain text.</figcaption><div class="device" id="p6"><header class="appbar">
 	<button class="icon-btn ink" aria-label="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 	<h1>AMIF</h1>
 	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
@@ -999,14 +964,7 @@ the morning gives away</div></div></div><div class="actionbar"><button class="bt
 <button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
 <span class="take-meta"><span class="take-duration">3:04</span><span class="score ok"><span class="shape"></span>61</span></span>
 <button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div>
-<button class="version-link new">v5 · 2 takes<span class="open">Open v5<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 2</span>
-<span class="take-meta"><span class="take-duration">3:31</span><span class="score good"><span class="shape"></span>77</span></span>
-<button class="icon-btn star on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
-<span class="take-meta"><span class="take-duration">3:29</span><span class="score ok"><span class="shape"></span>49</span></span>
-<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div>
-<div class="version-header">Imported · 1 take</div><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
-<span class="take-meta"><span class="take-duration">2:41</span><span class="score ok"><span class="shape"></span>55</span></span>
-<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div></div><div class="player"><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span>
+<button class="version-link new">v5 · 2 takes<span class="open">Open v5<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="version-header">Imported · 1 take</div></div><div class="player"><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span>
 	<button class="icon-btn ink" aria-label="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="icon-btn" aria-label="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button><span class="line"><span></span></span></div></div><div class="frame-note"><p><b>No version actions in the take list.</b> The take ⋯ menu stays at its ruled rows; the group header is only a link. A version without takes (v4) appears only in the sheet.</p></div></figure><figure><figcaption><b>P7 · Now Playing — a take from v5</b> — the lyrics shown are v5's (already so, #43). New: <i>Open v5 ›</i> next to the take name closes Now Playing and loads v5 into the song's Edit tab (P3, or P4 first), so you can keep working from what you hear.</figcaption><div class="device" id="p7"><div class="np-top"><button class="icon-btn ink" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><span class="grow">Now playing</span><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div>
 <div class="np-cover"></div><div class="np-title">AMIF</div><div class="np-sub">Nightdrive · Mara</div>
 <div class="np-line"><span></span></div><div class="np-times"><span>1:19</span><span>3:31</span></div>
@@ -1029,37 +987,7 @@ the morning gives away</div></div></div></figure><figure><figcaption><b>P7b · N
 <div class="np-take"><div class="np-take-head"><h3>Imported take</h3></div>
 <div class="np-empty new">This take was imported, so no lyrics were saved with it. The song's own lyrics may not match what is sung.</div></div></div></figure>
 
-<h2 class="row-title">Desktop 1440 — v5 geladen <small>dieselbe Logik; die Versionsliste ist am Desktop ein Popover am Chip statt eines Sheets</small></h2><figure><figcaption><b>D1 · Desktop — tapped v5, draft was clean</b>: the Write column holds v5 as the editable draft (chip <i>v7 · draft</i>, <i>Loaded from v5</i>); Generate in the header is on and makes v8. The Takes column is unchanged.</figcaption><div class="desk" id="d1"><aside class="rail"><div class="brand">SONGMAKER</div><div class="item">Library</div><div class="item sec">Nightdrive</div>
-<div class="item">1 · Neon Vows</div><div class="item on">2 · AMIF</div><div class="item">3 · Exit 9</div><div class="item">4 · Afterglow</div><div class="item">5 · Last Train</div>
-<div style="flex:1"></div><div class="item">Settings</div><div class="item">Felix</div></aside><div class="dmain"><div class="dhead"><span class="crumb">Nightdrive ›</span><h1>AMIF</h1><button class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><span class="grow"></span><span class="toggle">Co-writer</span><span class="toggle">Recipe</span><span style="width:1px;height:28px;background:var(--border)"></span><button class="btn-primary" style="height:36px">Generate</button></div>
-<div class="dcols"><div class="dcol"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:30 · 84 BPM · F minor · ×2</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">slow synthwave ballad, soft pads, female alto, rain on glass</div></div>
-<div class="field"><span class="label">Lyrics <button class="ver-chip new">v7 <span class="draft">· draft</span><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><span class="loaded-hint new"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>Loaded from v5</span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
-Rain on the window, the city asleep
-Every mile is a promise I keep
-Radio whispers your name in the static
-nothing between us but the night
-
-<span class="mark">[Chorus]</span>
-All mine if I follow
-all mine if I stay
-the road keeps the promise
-the morning gives away</div></div></div><div class="dcol">
-<button class="version-link">v7 · 4 takes<span class="open">Open v7<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 4</span>
-<span class="take-meta"><span class="take-duration">2:58</span><span class="score bad"><span class="shape"></span>34</span></span>
-<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 3</span>
-<span class="take-meta"><span class="take-duration">3:02</span><span class="score ok"><span class="shape"></span>58</span></span>
-<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row playing"><button class="icon-btn on"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button><span class="take-label">Take 2</span>
-<span class="take-meta"><span class="take-duration">3:05</span><span class="score good"><span class="shape"></span>82</span></span>
-<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
-<span class="take-meta"><span class="take-duration">3:04</span><span class="score ok"><span class="shape"></span>61</span></span>
-<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div>
-<button class="version-link">v5 · 2 takes<span class="open">Open v5<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 2</span>
-<span class="take-meta"><span class="take-duration">3:31</span><span class="score good"><span class="shape"></span>77</span></span>
-<button class="icon-btn star on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
-<span class="take-meta"><span class="take-duration">3:29</span><span class="score ok"><span class="shape"></span>49</span></span>
-<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div></div></div></div>
-<div class="dplayer"><span class="line"><span></span></span><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span></div>
-<div class="toast new"><span class="grow">v5 loaded</span><button>Undo</button></div></div></figure>
+<h2 class="row-title">Desktop 1440</h2><p class="freeze-note">D1 · Desktop — entfallen am 22.10.2026 (#1815): die Songseite am Desktop (Write-Spalte, Takes-Spalte, frühere Versionen als gefaltete Zeilen, „Open vN“ als Entwurf laden) zeigt <a href="song-page.html"><code>song-page.html</code></a> (At the Take, #1804).</p>
 </div>
 </body>
 </html>

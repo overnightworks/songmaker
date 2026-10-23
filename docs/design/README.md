@@ -57,10 +57,15 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   `navigation.html` (i). Wo ihre Rahmen einen Brotkrumenpfad, einen
   Shuffle-Knopf auf Album- oder Playlistseite oder eine Zeile „All albums“
   zeigen, gilt ebenfalls `navigation.html` (i).
-- `song-editor-take.html` — Repaint/Cover am Take im Song-Editor (#230).
-  Erste Fassung freigegeben am 03.09.2026. Seit 20.09.2026 überschreibt
-  `song-page-phone.html` die Take-Zeile auf beiden Breiten: sechs-zeiliges
-  Menü statt beschrifteter Zeilenaktionen.
+- `song-page.html` — die Songseite „At the Take“ (#1804, #1815): Desktop 1440
+  und Telefon 390. Freigegeben am 22.10.2026. Besitzer der Desktop-Songseite
+  und der Recipe-Karte (geschlossen als eine Zeile „Recipe ›“, geöffnet mit
+  den Tabs Song · Generate · Engine) sowie von Repaint und Cover als
+  Aufgabenkarte am Take.
+- `song-editor-take.html` — eingefrorener früherer Stand (#230, freigegeben am
+  03.09.2026): Repaint/Cover als Zeilenaktionen am Take. Überholt: die
+  Take-Zeile gehört seit 20.09.2026 `song-page-phone.html` (sechs-zeiliges
+  Menü), Repaint und Cover am Take seit 22.10.2026 `song-page.html`.
 - `song-page-phone.html` — die Telefon-Songseite (#914). Freigegeben
   20.09.2026 (Operator: „looks good" / „fine" mit den Rulings in #914 und
   #924). Besitzer der Telefon-Songseite; überschreibt Zustand (f) in
