@@ -1,0 +1,8 @@
+claim_id = "6b4f376dab9b40ce93dd5fe93fc59d0e"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "dbc250c1ee8b0edcb6bea5de82bbb151ab7c9990"
+branch = "claude/issue-1817-cover-mark"
+scope = ["docs/architecture.md", "docs/design/album-browsing.html", "frontend/e2e", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumCoverEditorLeaving.test.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionHeaderFrame.svelte", "frontend/src/lib/components/CoverActivityMark.svelte", "frontend/src/lib/components/CoverActivityMark.test.ts", "frontend/src/lib/stores/coverActivity.test.ts", "frontend/src/lib/stores/coverActivity.ts", "frontend/src/lib/stores/coverRuns.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/test-utils", "quality/baseline.toml"]
+opened_commit = "35da78b3eaa6d2154bc8de23007a802cd244768a"
+whole_reason = "One shared owner of an album's cover state with its two readers (editor and mark), their tests, e2e and the aligned picture."
