@@ -28,7 +28,7 @@ import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
 
 function enterSelectionMode(): void {
-	toggleSelection('selection-mode-seed');
+	toggleSelection('g2');
 }
 
 function stubCoarsePointer(isCoarse: boolean): void {
@@ -564,41 +564,31 @@ describe('TakesList', () => {
 		expect(target.querySelector('.model-badge')).toBeNull();
 	});
 
-	it('shows a batch-reduction badge when the worker delivered fewer takes than asked', async () => {
-		const { target } = await render({
-			song: song({
-				...versionedSongDefaults(),
-				generations: [
-					generation({
-						...measuredTakeDefaults(),
-						generation_params: { batch_size: 2, delivered_batch_size: 1 }
-					})
-				]
-			})
-		});
-		const badge = target.querySelector<HTMLElement>('.batch-badge');
-		expect(badge?.textContent?.trim()).toBe('⚠ 1 of 2');
-	});
-
-	it('shows no batch-reduction badge when the worker delivered exactly what was asked', async () => {
-		const { target } = await render({
-			song: song({
-				...versionedSongDefaults(),
-				generations: [
-					generation({
-						...measuredTakeDefaults(),
-						generation_params: { batch_size: 2, delivered_batch_size: 2 }
-					})
-				]
-			})
-		});
-		expect(target.querySelector('.batch-badge')).toBeNull();
-	});
-
-	it('shows no batch-reduction badge for a take with no batch-size info at all', async () => {
-		const { target } = await render();
-		expect(target.querySelector('.batch-badge')).toBeNull();
-	});
+	it.each([
+		{
+			name: 'fewer takes than asked',
+			params: { batch_size: 2, delivered_batch_size: 1 },
+			badge: '⚠ 1 of 2'
+		},
+		{
+			name: 'exactly what was asked',
+			params: { batch_size: 2, delivered_batch_size: 2 },
+			badge: null
+		},
+		{ name: 'no batch-size info at all', params: {}, badge: null },
+		{ name: 'no generation params at all', params: null, badge: null }
+	])(
+		'shows $badge as the batch-reduction badge when the worker delivered $name',
+		async ({ params, badge }) => {
+			const { target } = await render({
+				song: song({
+					...versionedSongDefaults(),
+					generations: [generation({ ...measuredTakeDefaults(), generation_params: params })]
+				})
+			});
+			expect(target.querySelector('.batch-badge')?.textContent?.trim() ?? null).toBe(badge);
+		}
+	);
 
 	it('flags a take with no vocals detected', async () => {
 		const { target } = await render({
@@ -1005,6 +995,15 @@ describe('TakesList', () => {
 			expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
 		}
 	);
+
+	it('deletes only takes of the song on screen when another song left ids in the selection', async () => {
+		const { target } = await render();
+		['g-other-song', 'g2'].forEach(toggleSelection);
+		await tick();
+
+		target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
+		expect(bulkDeleteGenerations).toHaveBeenCalledWith(['g2']);
+	});
 
 	it.each(['ctrlKey', 'metaKey'])(
 		'selects through the play control with %s without playback',
