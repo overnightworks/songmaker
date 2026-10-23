@@ -6,6 +6,8 @@
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
 	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '$lib/constants';
+	import { albumCoverMarkedLabel } from '$lib/constants/album-cover-mark';
+	import type { CoverMark } from './CoverActivityMark.svelte';
 	import { songCountLabel } from '$lib/utils/format';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { collectionTransport, toggleOrStartCollection, setShuffle } from '$lib/stores/player';
@@ -55,6 +57,8 @@
 		 * editing through the close it is handed.
 		 */
 		coverEditor?: Snippet<[close: () => void]>;
+		/** Album-only: what the closed cover carries, a running suggestion or waiting ones. */
+		coverMark?: CoverMark;
 	}
 
 	let {
@@ -86,7 +90,8 @@
 		playlistCover,
 		meta = '',
 		detailsEditor,
-		coverEditor
+		coverEditor,
+		coverMark
 	}: Props = $props();
 
 	let editableTitle: EditableTitle | undefined = $state();
@@ -109,10 +114,12 @@
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
+	const coverLabel = $derived(showCover ? ALBUM_COVER_EDIT_LABEL : ALBUM_COVER_ADD_LABEL);
 	const coverOpening = $derived(
 		coverEditor
 			? {
-					label: showCover ? ALBUM_COVER_EDIT_LABEL : ALBUM_COVER_ADD_LABEL,
+					label: coverLabel,
+					name: albumCoverMarkedLabel(coverLabel, coverMark),
 					onopen: openCoverEditing
 				}
 			: undefined
@@ -229,6 +236,7 @@
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}
 	{coverOpening}
+	{coverMark}
 	coverEditing={$editingCover ? coverEditing : undefined}
 />
 

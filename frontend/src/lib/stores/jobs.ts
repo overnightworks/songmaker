@@ -184,7 +184,8 @@ function endedWithTakes(job: JobStatus): boolean {
 	return job.status === 'completed' || job.status === 'partial';
 }
 
-// A cover job's end is shown in place by the cover editor that asked for it,
+// A cover job's end is shown in place -- by the cover editor, or by the closed
+// cover's mark, which coverActivity rereads when the run leaves activeJobs --
 // so a toast would only announce the same outcome a second time.
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	if (job.type === JOB_TYPE_COVER) return;

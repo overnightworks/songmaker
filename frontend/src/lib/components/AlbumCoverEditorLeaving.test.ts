@@ -33,7 +33,8 @@ import {
 	pressSuggestOnceLoaded,
 	pressEditorButton,
 	uploadCoverFile,
-	deferred
+	deferred,
+	afterPageRead
 } from '$lib/test-utils/album-cover-editor';
 
 const createAlbumCoverSuggestions = vi.fn();
@@ -86,11 +87,17 @@ function serverRunsUntilCancelled(extra: Partial<CoverSuggestionsResponse> = {})
 	);
 }
 
+// The album page read the state when it opened; coming back to it reads again.
+function comeBackToThePage(): void {
+	document.dispatchEvent(new Event('visibilitychange'));
+}
+
 async function openEditorWithRunningSuggestion(
 	target: HTMLElement,
 	extra: Partial<CoverSuggestionsResponse> = {}
 ): Promise<void> {
 	serverRunsUntilCancelled(extra);
+	comeBackToThePage();
 	await openCoverEditing(target);
 	await vi.waitFor(() =>
 		expect(target.querySelector('.cover-stage [role="status"]')).not.toBeNull()
@@ -111,6 +118,8 @@ async function reachSuggestionsLoads(count: number): Promise<void> {
 	await vi.waitFor(() => expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(count));
 	await tick();
 }
+
+const renderAfterPageRead = () => afterPageRead(renderDetail, fetchAlbumCoverSuggestions);
 
 beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Night Drive' })]);
@@ -462,11 +471,11 @@ describe('Leaving the album cover editor', () => {
 	});
 
 	it('a failed discard is shown and the editor rereads what the server still has', async () => {
+		discardAlbumCoverSuggestions.mockRejectedValue(serverRefusal('Could not discard suggestions'));
+		const target = await renderAfterPageRead();
 		fetchAlbumCoverSuggestions
 			.mockResolvedValueOnce(coverSuggestions(ONE_SUGGESTION))
 			.mockResolvedValue(coverSuggestions());
-		discardAlbumCoverSuggestions.mockRejectedValue(serverRefusal('Could not discard suggestions'));
-		const target = await renderDetail();
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
 
@@ -556,14 +565,14 @@ describe('Leaving the album cover editor', () => {
 	it('× stops the run once when the suggestions still load as it stops', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);
 		const loadAfterAsking = deferred<CoverSuggestionsResponse>();
+		createAlbumCoverSuggestions.mockResolvedValue(coverJob());
+		const stopping = deferred<JobItem>();
+		cancelJob.mockReturnValue(stopping.promise);
+		const target = await renderAfterPageRead();
 		fetchAlbumCoverSuggestions
 			.mockResolvedValueOnce(coverSuggestions())
 			.mockReturnValueOnce(loadAfterAsking.promise)
 			.mockReturnValue(deferred<CoverSuggestionsResponse>().promise);
-		createAlbumCoverSuggestions.mockResolvedValue(coverJob());
-		const stopping = deferred<JobItem>();
-		cancelJob.mockReturnValue(stopping.promise);
-		const target = await renderDetail();
 		await openCoverEditing(target);
 		await pressSuggestOnceLoaded(target);
 		await reachSuggestionsLoads(2);
@@ -633,11 +642,11 @@ describe('Leaving the album cover editor', () => {
 	it('a load from before × that answers after the next Suggest follows that run', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);
 		const staleLoad = deferred<CoverSuggestionsResponse>();
+		createAlbumCoverSuggestions.mockResolvedValue(coverJob({ id: 'later-job' }));
+		const target = await renderAfterPageRead();
 		fetchAlbumCoverSuggestions
 			.mockReturnValueOnce(staleLoad.promise)
 			.mockResolvedValue(coverSuggestions());
-		createAlbumCoverSuggestions.mockResolvedValue(coverJob({ id: 'later-job' }));
-		const target = await renderDetail();
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(1);
 		pressEditorButton(target, 'Close cover editing');
@@ -686,8 +695,8 @@ describe('Leaving the album cover editor', () => {
 		async ({ leave, answer, followed }) => {
 			vi.stubGlobal('EventSource', FakeJobEventSource);
 			const firstLoad = deferred<CoverSuggestionsResponse>();
+			const target = await renderAfterPageRead();
 			fetchAlbumCoverSuggestions.mockReturnValue(firstLoad.promise);
-			const target = await renderDetail();
 			await openCoverEditing(target);
 			await reachSuggestionsLoads(1);
 
@@ -701,4 +710,89 @@ describe('Leaving the album cover editor', () => {
 			expect(get(activeJobs).map((active) => active.job.id)).toEqual(followed);
 		}
 	);
+
+	it('Suggest stays disabled after a Remove finishes first and the editor is opened again during a Use save', async () => {
+		albumList.set([coveredAlbum()]);
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		const removal = deferred<ReturnType<typeof coveredAlbum>>();
+		const useSave = deferred<ReturnType<typeof coveredAlbum>>();
+		deleteAlbumCover.mockReturnValue(removal.promise);
+		selectAlbumCoverSuggestion.mockReturnValue(useSave.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
+
+		pressEditorButton(target, 'Remove');
+		pressEditorButton(target, 'Use');
+		removal.resolve({ ...coveredAlbum(), cover: null });
+		await editingClosed(target);
+		await openCoverEditing(target);
+
+		await tick();
+		expect(
+			getByRoleButton(requireElement(target, '.cover-editor'), 'Suggest another').disabled
+		).toBe(true);
+		useSave.resolve(coveredAlbum(UPLOADED));
+		await editingClosed(target);
+	});
+
+	it('Swiping to another suggestion during a Use save shows nothing else', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
+		const useSave = deferred<ReturnType<typeof coveredAlbum>>();
+		selectAlbumCoverSuggestion.mockReturnValue(useSave.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
+		pressEditorButton(target, 'Use');
+
+		for (const [from, to] of [
+			[200, 100],
+			[100, 200]
+		]) {
+			const stage = requireElement(target, '.cover-stage');
+			const at = (clientX: number) => ({ bubbles: true, pointerId: 1, clientX, clientY: 100 });
+			stage.dispatchEvent(new PointerEvent('pointerdown', at(from)));
+			stage.dispatchEvent(new PointerEvent('pointerup', at(to)));
+		}
+		await tick();
+
+		expect(shownImage(target)).toBe('/suggestion-three.png');
+		useSave.resolve(coveredAlbum(UPLOADED));
+		await editingClosed(target);
+	});
+
+	it('Upload pressed before the first read answered stops the run that read finds', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		const firstRead = deferred<CoverSuggestionsResponse>();
+		const uploading = deferred<ReturnType<typeof coveredAlbum>>();
+		fetchAlbumCoverSuggestions.mockReturnValue(firstRead.promise);
+		uploadAlbumCover.mockReturnValue(uploading.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+
+		uploadCoverFile(target);
+		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledOnce());
+		firstRead.resolve(coverSuggestions({ job: coverJob({ status: 'running' }) }));
+		await vi.waitFor(() => expect(get(activeJobs)).toHaveLength(1));
+		uploading.resolve(coveredAlbum(UPLOADED));
+
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local', {
+			suggestionIds: [],
+			jobIds: ['cover-job']
+		});
+	});
+
+	it('closing the editor reads the cover state once more and stops nothing', async () => {
+		const target = await renderAfterPageRead();
+		await openCoverEditing(target);
+		await reachSuggestionsLoads(1);
+
+		pressEditorButton(target, 'Close cover editing');
+		await editingClosed(target);
+
+		await reachSuggestionsLoads(2);
+		expect(cancelJob).not.toHaveBeenCalled();
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+	});
 });
