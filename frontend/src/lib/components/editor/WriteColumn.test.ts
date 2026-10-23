@@ -17,7 +17,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchLibraryPoolQueue: vi.fn()
 	};
 });
-import { editLyrics, loadSongData, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
+import { editLyrics, loadSongData } from '$lib/stores/editor';
 import { nowPlayingOpen } from '$lib/stores/player';
 import { fetchLibraryPoolQueue } from '$lib/api/client';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -39,16 +39,6 @@ function draftSongDefaults(): Partial<SongItem> {
 		generations: [generation()],
 		created_at: ''
 	};
-}
-
-// jsdom never lays a textarea out, so `scrollHeight` is a fixed 0 unless a
-// test asks for it to track content the way a real browser would.
-function stubScrollHeight() {
-	return vi
-		.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
-		.mockImplementation(function (this: HTMLTextAreaElement) {
-			return this.value.length;
-		});
 }
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -92,7 +82,6 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const props = {
 		song: testSong,
 		coWriterOpen: false,
-		compact: false,
 		cowriterPanel: makeCowriterPanel(testSong),
 		...overrides
 	};
@@ -115,105 +104,15 @@ describe('WriteColumn write mode', () => {
 		expect(get(editLyrics)).toBe('verse two');
 	});
 
-	it.each([false, true])(
-		'leaves the co-writer to its own tab and toggle (compact: %s)',
-		async (compact) => {
-			const { target } = await render({ compact });
-			const buttonTexts = Array.from(target.querySelectorAll('button'), (b) => b.textContent);
-			expect(buttonTexts.some((text) => text?.includes(EDITOR_VIEW_COWRITER_LABEL))).toBe(false);
-		}
-	);
+	it('leaves the co-writer to its own tab and toggle', async () => {
+		const { target } = await render();
+		const buttonTexts = Array.from(target.querySelectorAll('button'), (b) => b.textContent);
+		expect(buttonTexts.some((text) => text?.includes(EDITOR_VIEW_COWRITER_LABEL))).toBe(false);
+	});
 
 	it('leaves takes to the Takes tab in compact Write mode', async () => {
-		const { target } = await render({ compact: true });
+		const { target } = await render();
 		expect(target.querySelector('.take-strip')).toBeNull();
-	});
-
-	// L9: the compact page is the one scroll surface, so a field that
-	// overflows its box must grow the page rather than scroll inside itself.
-	it.each([
-		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
-		['lyrics', '.lyrics-area']
-	])('grows the compact %s field with its content, not inside a fixed box', async (_, selector) => {
-		const scrollHeightSpy = stubScrollHeight();
-		try {
-			const { target } = await render({ compact: true });
-			const field = target.querySelector<HTMLTextAreaElement>(selector);
-			if (!field) throw new Error(`Expected a ${_} textarea`);
-			field.value = 'one\ntwo\nthree';
-			field.dispatchEvent(new Event('input', { bubbles: true }));
-			await tick();
-			expect(field.style.height).toBe(`${field.value.length}px`);
-		} finally {
-			scrollHeightSpy.mockRestore();
-		}
-	});
-
-	it.each([
-		['style prompt', '.edit-field textarea:not(.lyrics-area)', setDraftPrompt],
-		['lyrics', '.lyrics-area', setDraftLyrics]
-	])(
-		're-measures the compact %s field once an external draft write lands',
-		async (_, selector, setDraft) => {
-			const scrollHeightSpy = stubScrollHeight();
-			try {
-				const { target } = await render({ compact: true });
-				const field = target.querySelector<HTMLTextAreaElement>(selector);
-				if (!field) throw new Error(`Expected a ${_} textarea`);
-				setDraft('one\ntwo\nthree\nfour');
-				await tick();
-				await Promise.resolve();
-				await tick();
-				expect(field.value).toBe('one\ntwo\nthree\nfour');
-				expect(field.style.height).toBe(`${field.value.length}px`);
-			} finally {
-				scrollHeightSpy.mockRestore();
-			}
-		}
-	);
-
-	it('re-measures the compact lyrics field on a window resize', async () => {
-		const scrollHeightSpy = stubScrollHeight();
-		try {
-			const { target } = await render({ compact: true });
-			const field = target.querySelector<HTMLTextAreaElement>('.lyrics-area');
-			if (!field) throw new Error('Expected a lyrics textarea');
-			field.value = 'one\ntwo\nthree\nfour\nfive';
-			field.dispatchEvent(new Event('input', { bubbles: true }));
-			await tick();
-			field.style.height = '3px';
-			window.dispatchEvent(new Event('resize'));
-			expect(field.style.height).toBe(`${field.value.length}px`);
-		} finally {
-			scrollHeightSpy.mockRestore();
-		}
-	});
-
-	it.each([
-		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
-		['lyrics', '.lyrics-area']
-	])('keeps the height a desktop %s field was dragged to while typing', async (_, selector) => {
-		// A stubbed, non-zero scrollHeight is what actually proves the action
-		// leaves the desktop field alone (#993 regression: an `input` listener
-		// attached regardless of `active` grew a real Chromium textarea to
-		// 980px). Without the stub jsdom's own scrollHeight of 0 would pass
-		// trivially even with the listener still wired up. The dragged height
-		// is the #999 regression: each keystroke's draft write cleared it.
-		const scrollHeightSpy = stubScrollHeight();
-		try {
-			const { target } = await render({ compact: false });
-			const field = target.querySelector<HTMLTextAreaElement>(selector);
-			if (!field) throw new Error(`Expected a ${_} textarea`);
-			field.style.height = '300px';
-			field.value = 'one\ntwo\nthree';
-			field.dispatchEvent(new Event('input', { bubbles: true }));
-			await tick();
-			await Promise.resolve();
-			await tick();
-			expect(field.style.height).toBe('300px');
-		} finally {
-			scrollHeightSpy.mockRestore();
-		}
 	});
 });
 
