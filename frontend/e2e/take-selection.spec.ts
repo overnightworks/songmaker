@@ -9,8 +9,13 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
-import { songEditorOpenLabel } from '../src/lib/constants';
-import { bulkDeleteLabel, bulkDeleteTitle } from '../src/lib/constants/now-playing';
+import { songEditorOpenLabel, TAKE_DELETE_MESSAGE } from '../src/lib/constants';
+import {
+	bulkDeleteLabel,
+	bulkDeleteTitle,
+	selectedCountLabel,
+	TAKE_SELECT_ALL_UNKEPT_LABEL
+} from '../src/lib/constants/now-playing';
 import { csrfHeaders, FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
 
@@ -109,7 +114,12 @@ test(
 					.click({ modifiers: ['ControlOrMeta'] });
 			}
 			const toolbar = page.locator('.selection-toolbar');
-			await expect(toolbar).toContainText(`${SELECTED_TAKE_COUNT} selected`);
+			await expect(toolbar.locator(':scope > *')).toHaveText([
+				TAKE_SELECT_ALL_UNKEPT_LABEL,
+				selectedCountLabel(SELECTED_TAKE_COUNT),
+				bulkDeleteLabel(SELECTED_TAKE_COUNT),
+				'Cancel'
+			]);
 
 			const deleteButton = toolbar.getByRole('button', {
 				name: bulkDeleteLabel(SELECTED_TAKE_COUNT),
@@ -117,7 +127,7 @@ test(
 			});
 			const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(SELECTED_TAKE_COUNT) });
 			await deleteButton.click();
-			await expect(dialog).toContainText('Audio files will be permanently deleted');
+			await expect(dialog).toContainText(TAKE_DELETE_MESSAGE);
 			await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
 			await expect(toolbar).toContainText(`${SELECTED_TAKE_COUNT} selected`);

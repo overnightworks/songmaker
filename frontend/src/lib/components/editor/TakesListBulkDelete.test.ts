@@ -205,6 +205,20 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		expect(bulkDeleteGenerations).not.toHaveBeenCalled();
 	});
 
+	it('opens no dialog and sends nothing on Delete after a removal left no ticked take', async () => {
+		const { target, removeTakes } = await render(4);
+		await tickTakes('g1', 'g2');
+		deleteButton(target).click();
+		await tick();
+		await removeTakes('g1', 'g2');
+
+		deleteButton(target).click();
+		await tick();
+
+		expect(dialog()).toBeNull();
+		expect(bulkDeleteGenerations).not.toHaveBeenCalled();
+	});
+
 	it('keeps the ticks and select mode after a failed request', async () => {
 		vi.mocked(bulkDeleteGenerations).mockRejectedValueOnce(
 			new ApiError(500, 'boom', '/api/generations')

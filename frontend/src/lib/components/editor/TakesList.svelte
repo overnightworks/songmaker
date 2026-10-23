@@ -120,9 +120,18 @@
 		if (tickedIds.length === 0) confirmingBulkDelete = false;
 	});
 
+	function openBulkDelete(): void {
+		if (tickedIds.length === 0) clearSelection();
+		else confirmingBulkDelete = true;
+	}
+
 	async function handleBulkDelete(): Promise<void> {
 		const ids = tickedIds;
 		confirmingBulkDelete = false;
+		if (ids.length === 0) {
+			clearSelection();
+			return;
+		}
 		const openGenerationId = $selectedGenerationId;
 		try {
 			await bulkDeleteGenerations(ids);
@@ -269,11 +278,7 @@
 					{TAKE_SELECT_ALL_UNKEPT_LABEL}
 				</button>
 				<span class="toolbar-count">{selectedCountLabel(tickedIds.length)}</span>
-				<button
-					type="button"
-					class="toolbar-btn destructive"
-					onclick={() => (confirmingBulkDelete = true)}
-				>
+				<button type="button" class="toolbar-btn destructive" onclick={openBulkDelete}>
 					{bulkDeleteLabel(tickedIds.length)}
 				</button>
 				<button type="button" class="toolbar-btn cancel" onclick={clearSelection}>Cancel</button>
@@ -376,7 +381,7 @@
 	}
 
 	.toolbar-btn {
-		min-height: 2.75rem;
+		min-height: var(--hitbox-frequent);
 		padding: 0.3rem 0.8rem;
 		border: 1px solid var(--border);
 		border-radius: var(--btn-radius-sm);
@@ -415,7 +420,7 @@
 	@media (max-width: 768px) {
 		.selection-toolbar {
 			display: grid;
-			grid-template-columns: 1fr auto;
+			grid-template-columns: 1fr 1fr;
 			gap: 0.4rem 0.7rem;
 		}
 
@@ -425,6 +430,7 @@
 
 		.cancel {
 			grid-area: 1 / 2;
+			justify-self: end;
 		}
 
 		.select-all {
