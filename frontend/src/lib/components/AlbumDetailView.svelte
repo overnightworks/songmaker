@@ -38,9 +38,10 @@
 	import { forgetListenedPlace, readRestoredPlace } from '$lib/stores/libraryOrder';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
-	import { markCoverSuggestionsDiscarded, releaseCoverSuggestions } from '$lib/stores/coverRuns';
+	import { markCoverSuggestionsDiscarded } from '$lib/stores/coverRuns';
 	import {
 		coverStanding,
+		discardCoverSuggestions,
 		knownAfterSave,
 		knownCoverSuggestions,
 		watchCoverActivity
@@ -182,14 +183,13 @@
 	}
 
 	// An uploaded cover ends the suggestions the editor knew: its run is stopped
-	// before they go. A failure is told here; the next open of the editor reads
-	// what the server still has.
+	// before they go. A failure is told here; the state is read again either way.
 	async function discardSuggestionsAfterUpload(
 		albumId: string,
 		known: CoverSuggestionDiscard
 	): Promise<void> {
 		try {
-			await releaseCoverSuggestions(albumId, known);
+			await discardCoverSuggestions(albumId, known);
 		} catch (error) {
 			addToast(describeFailure(error, 'Cover suggestions could not be discarded'), 'error');
 		}

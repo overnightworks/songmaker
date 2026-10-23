@@ -513,7 +513,8 @@ cover, which owns upload, suggestions and removal. One store,
 editor and the mark on the closed cover (a ring and the time while a
 suggestion runs, "● n waiting" while unused ones wait until USE, Upload or ×
 discards them). It reads the server's state when the album page opens, when the
-page returns to the foreground and when the editor closes or a run ends, never
+page returns to the foreground, when the editor opens or closes, when a run ends
+and after a discard, never
 by polling, so a second tab or device sees the same run and its time. Playlist entries are
 Share playlist · Upload… · Remove cover (only when a cover is set) · Save
 offline · Rename · Delete playlist. The Share row is a 44 px menu row that

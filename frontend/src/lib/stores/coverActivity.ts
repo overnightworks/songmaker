@@ -20,6 +20,8 @@ interface CoverActivity {
 	unreachable: boolean;
 	limitNote: string | null;
 	isLoading: boolean;
+	/** A Suggest POST is on its way; no read may end the wait before it answers. */
+	suggesting: boolean;
 	/** The unreachable reloads ran out; the person may retry. */
 	reloadsExhausted: boolean;
 	/** The run this page knows and would stop on a discard. */
@@ -38,8 +40,8 @@ const NOTHING_KNOWN: CoverSuggestionDiscard = { suggestionIds: [], jobIds: [] };
 
 export const coverActivity = writable<CoverActivity | null>(null);
 
-/** The album a Use save is under way for; it outlives the editor that began it. */
-export const savingCoverAlbumId = writable<string | null>(null);
+/** The albums a cover save is under way for; each outlives the editor that began it. */
+export const savingCoverAlbumIds = writable<ReadonlySet<string>>(new Set());
 
 /** What the closed cover and the editor's stage say about the album's run. */
 interface CoverStanding {
@@ -88,6 +90,7 @@ export function watchCoverActivity(albumId: string): () => void {
 		data: null,
 		...COVER_ACTIVITY_SETTLED,
 		isLoading: true,
+		suggesting: false,
 		reloadsExhausted: false,
 		runId: null
 	});
@@ -138,19 +141,21 @@ export async function readCoverActivity(albumId: string): Promise<void> {
 		const response = await fetchAlbumCoverSuggestions(albumId);
 		if (read !== latestRead || albumId !== watchedAlbumId) return;
 		const running = response.job && isRunning(response.job) ? response.job : null;
-		coverActivity.set({
+		coverActivity.update((state) => ({
 			albumId,
 			data: response,
 			...COVER_ACTIVITY_SETTLED,
-			isLoading: false,
+			isLoading: state?.albumId === albumId && state.suggesting,
+			suggesting: state?.albumId === albumId && state.suggesting,
 			reloadsExhausted: false,
 			runId: running?.id ?? null
-		});
+		}));
 		unreachableReloads?.stop();
 		if (running) trackJob(running, { albumId });
 	} catch (error) {
 		if (read !== latestRead || albumId !== watchedAlbumId) return;
-		showCoverActivityFailure(albumId, error, { keepData: false });
+		showCoverActivityFailure(albumId, error, { keepData: true });
+		updateCoverActivity(albumId, (state) => ({ ...state, isLoading: state.suggesting }));
 	}
 }
 
@@ -203,8 +208,14 @@ export function beginCoverSuggestion(albumId: string): void {
 	updateCoverActivity(albumId, (state) => ({
 		...state,
 		...COVER_ACTIVITY_SETTLED,
-		isLoading: true
+		isLoading: true,
+		suggesting: true
 	}));
+}
+
+/** The Suggest POST answered or failed; a read may end the wait again. */
+export function endCoverSuggestion(albumId: string): void {
+	updateCoverActivity(albumId, (state) => ({ ...state, suggesting: false }));
 }
 
 /** Follows a run this page just started or found: tracked, and known to a discard. */
@@ -227,9 +238,9 @@ export function knownCoverSuggestions(albumId: string): CoverSuggestionDiscard {
 }
 
 /**
- * What a save that finished releases: the suggestions known when it began and
- * the run known now, since a run whose answer came during the save is followed
- * by then.
+ * What a save that finished releases: the suggestions and runs known when it
+ * began, and any run learned of since for the same album, since a run whose
+ * answer came during the save is followed by then.
  */
 export function knownAfterSave(
 	albumId: string,
@@ -237,14 +248,16 @@ export function knownAfterSave(
 ): CoverSuggestionDiscard {
 	return {
 		suggestionIds: knownAtStart.suggestionIds,
-		jobIds: knownCoverSuggestions(albumId).jobIds
+		jobIds: [...new Set([...knownAtStart.jobIds, ...knownCoverSuggestions(albumId).jobIds])]
 	};
 }
 
 /**
- * Stops the run and deletes the suggestions a discard names. A read answering
- * from before the stop would track the job being cancelled again, so it is
- * dropped; a stop that fails leaves the run known.
+ * Stops the run and deletes the suggestions a discard names, then reads the
+ * state again whatever the outcome. A read answering from before the stop
+ * would track the job being cancelled again, and one sent before the delete
+ * would keep the deleted suggestions, so both are dropped; a stop that fails
+ * leaves the run known.
  */
 export async function discardCoverSuggestions(
 	albumId: string,
@@ -255,18 +268,26 @@ export async function discardCoverSuggestions(
 		latestRead += 1;
 		updateCoverActivity(albumId, (state) => ({ ...state, runId: null }));
 	}
+	// An ask still on its way is released when it answers; it no longer holds Suggest.
+	updateCoverActivity(albumId, (state) => ({ ...state, suggesting: false }));
 	try {
 		await releaseCoverSuggestions(albumId, known);
 	} catch (error) {
 		if (runToStop) updateCoverActivity(albumId, (state) => ({ ...state, runId: runToStop }));
 		throw error;
+	} finally {
+		void readCoverActivity(albumId);
 	}
 }
 
 export function beginCoverSave(albumId: string): void {
-	savingCoverAlbumId.set(albumId);
+	savingCoverAlbumIds.update((saving) => new Set(saving).add(albumId));
 }
 
 export function endCoverSave(albumId: string): void {
-	savingCoverAlbumId.update((saving) => (saving === albumId ? null : saving));
+	savingCoverAlbumIds.update((saving) => {
+		const remaining = new Set(saving);
+		remaining.delete(albumId);
+		return remaining;
+	});
 }

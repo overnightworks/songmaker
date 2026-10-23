@@ -8,6 +8,9 @@
 // seeded in the database (scripts/seed_e2e_job_states.py). Each test makes a
 // fresh album of its own and archives it afterwards.
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
 	expect,
 	test,
@@ -26,6 +29,10 @@ import { albumCoverWaitingText } from '../src/lib/constants/album-cover-mark';
 import { csrfHeaders, HOME_PATH, shellOf, workspace } from './helpers';
 import { archiveOwnedAlbum, BASE_URL, STORAGE_STATE_FILE } from './seed';
 import { completeCoverJob, seedRunningCoverJob } from './seed-cover';
+
+const COVER_PNG = readFileSync(
+	path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'static', 'icon-192.png')
+);
 
 interface FreshAlbum {
 	id: string;
@@ -283,5 +290,27 @@ test('Use clears the waiting mark', async ({ page }, testInfo) => {
 		await expect(editing).toHaveCount(0);
 		await expect(workspace(page).getByRole('button', { name: /^Edit cover$/ })).toBeVisible();
 		await expect(workspace(page).locator('.cover-mark')).toHaveCount(0);
+	});
+});
+
+test('Upload clears the waiting mark', async ({ page }, testInfo) => {
+	await withFreshAlbum(page, shellOf(testInfo), async (album) => {
+		const jobId = await seedRunningCoverJob(album.id);
+		await completeCoverJob(jobId);
+		await page.goto(`/album/${album.id}`);
+		await expectWaitingMark(page, 1);
+
+		await closedCover(page, '1 waiting').click();
+		const editing = workspace(page).getByRole('group', { name: ALBUM_COVER_EDITING_LABEL });
+		await page.locator('.cover-file-input').setInputFiles({
+			name: 'album-cover.png',
+			mimeType: 'image/png',
+			buffer: COVER_PNG
+		});
+
+		await expect(editing).toHaveCount(0);
+		await expectNoMark(page);
+		await page.reload();
+		await expectNoMark(page);
 	});
 });

@@ -41,12 +41,13 @@
 		coverStanding,
 		discardCoverSuggestions,
 		endCoverSave,
+		endCoverSuggestion,
 		followCoverRun,
 		knownAfterSave,
 		knownCoverSuggestions,
 		readCoverActivity,
 		retryCoverActivity,
-		savingCoverAlbumId,
+		savingCoverAlbumIds,
 		showCoverActivityFailure,
 		updateCoverActivity
 	} from '$lib/stores/coverActivity';
@@ -86,7 +87,7 @@
 	const coverSuggestionsReloadsExhausted = $derived(
 		Boolean(activity?.unreachable && !$offline && activity.reloadsExhausted)
 	);
-	const coverSuggestionsBusy = $derived($savingCoverAlbumId === currentAlbumId);
+	const coverSuggestionsBusy = $derived($savingCoverAlbumIds.has(currentAlbumId));
 	const latestCoverJob = $derived(coverSuggestions?.job ?? null);
 	const isCoverSuggestionGenerating = $derived(standing?.running ?? false);
 	const dailySuggestionsSpent = $derived(
@@ -134,14 +135,16 @@
 		shownSuggestionNumber ? albumCoverStageLabel(shownSuggestionNumber, suggestionCount) : undefined
 	);
 
-	// The album page keeps the cover state read; the editor only shows it.
-	// Opening reads nothing new: a suggestion spends today's quota, so only
-	// Suggest makes one. Leaving the editor -- Back, Escape, another page or
-	// album -- stops and discards nothing, and reads the state once more for
-	// the closed cover; only ×, Use and Upload discard.
+	// The album page keeps the cover state read; the editor shows it. Opening
+	// reads it once more, so a day that turned while the page stayed open frees
+	// the quota; a read only looks, and only Suggest makes a suggestion. Leaving
+	// the editor -- Back, Escape, another page or album -- stops and discards
+	// nothing, and reads the state once more for the closed cover; only ×, Use
+	// and Upload discard.
 	$effect(() => {
 		const albumId = currentAlbumId;
 		followedRunId = null;
+		void readCoverActivity(albumId);
 		return () => void readCoverActivity(albumId);
 	});
 
@@ -161,15 +164,21 @@
 				// ×, Use or Upload came first: this run and what it made go.
 				void releaseCoverSuggestions(albumId, { suggestionIds: [], jobIds: [job.id] }).then(
 					() => readCoverActivity(albumId),
-					(error: unknown) => reportDiscardFailure(albumId, error)
+					(error: unknown) => {
+						reportDiscardFailure(error);
+						return readCoverActivity(albumId);
+					}
 				);
 				return;
 			}
+			endCoverSuggestion(albumId);
 			followedRunId = job.id;
 			followCoverRun(job, albumId);
 			if (albumId !== currentAlbumId) return;
 			void readCoverActivity(albumId);
 		} catch (error) {
+			// A discard has already ended the wait of an ask it came after.
+			if (discardMarkOf(albumId) === markAtAsking) endCoverSuggestion(albumId);
 			if (albumId !== currentAlbumId) return;
 			if (isRefusal(error)) {
 				await rereadAfterRefusal(albumId, error);
@@ -210,11 +219,10 @@
 	}
 
 	// The server deletes the rows and commits before it removes the files, so
-	// a failed or uncertain discard may come after the suggestions are gone:
-	// the editor shows what the server still has.
-	function reportDiscardFailure(albumId: string, error: unknown): void {
+	// a failed or uncertain discard may come after the suggestions are gone;
+	// the discard reads the state again, so the editor shows what is left.
+	function reportDiscardFailure(error: unknown): void {
 		addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
-		void readCoverActivity(albumId);
 	}
 
 	async function discardAndClose(): Promise<void> {
@@ -230,7 +238,7 @@
 			await discardCoverSuggestions(albumId, known);
 			onclose();
 		} catch (error) {
-			reportDiscardFailure(albumId, error);
+			reportDiscardFailure(error);
 		} finally {
 			endCoverSave(albumId);
 		}
@@ -249,7 +257,7 @@
 			try {
 				await discardCoverSuggestions(albumId, knownAfterSave(albumId, known));
 			} catch (error) {
-				reportDiscardFailure(albumId, error);
+				reportDiscardFailure(error);
 			}
 			updateAlbumInList(albumId, () => updated);
 			addToast('Cover saved', 'success');
