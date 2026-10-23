@@ -1,0 +1,8 @@
+claim_id = "a8f4e4f882a2401fbc88c6ab8feb56d6"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "def7d3ea5b5db3f6ef0a4a5b08dbd2a6aa181434"
+branch = "claude/issue-1826-now-playing-picture"
+scope = ["docs/design/README.md", "docs/design/album-browsing.html", "docs/design/navigation.html", "docs/design/now-playing.html", "docs/design/song-page-phone.html"]
+opened_commit = "8bc8a2fd7bcf88b2c1105f634b3250afb51d0b14"
+whole_reason = "One frozen picture plus the four older pictures it aligns."
