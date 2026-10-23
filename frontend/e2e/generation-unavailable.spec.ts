@@ -2,6 +2,7 @@ import { expect, test as base, type Locator, type Page } from '@playwright/test'
 import type { JobItem } from '../src/lib/api/types';
 import {
 	ADMIN_TABS_LABEL,
+	ADMIN_WORKER_POOL_HREF,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_OPEN_WORKER_POOL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
@@ -179,12 +180,11 @@ for (const width of WIDTHS) {
 						const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 						const draft = `${await lyrics.inputValue()}\nQA keep this draft`;
 						await lyrics.fill(draft);
-						// Playwright reports a modifier-click tab only if it attaches before the
-						// tab's document commits; a fast commit leaves the tab half-registered and
-						// every wait on it hangs. Hold the document until the tab is reported.
+						// Hold the tab's document until Playwright has reported the tab, so the
+						// commit cannot outrun its attach and leave it half-registered.
 						const context = page.context();
 						const popupReady = context.waitForEvent('page');
-						const workerPoolDocument = '**/settings/users?tab=acestep';
+						const workerPoolDocument = `**${ADMIN_WORKER_POOL_HREF}`;
 						await context.route(workerPoolDocument, async (route) => {
 							await popupReady;
 							await route.continue();
