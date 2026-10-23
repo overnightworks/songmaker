@@ -14,6 +14,10 @@
 		takesDraftBanner
 	} from '$lib/constants';
 	import {
+		TAKE_SELECT_ALL_UNKEPT_LABEL,
+		bulkDeleteLabel,
+		bulkDeleteTitle,
+		selectedCountLabel,
 		openVersionLabel,
 		takeVersion,
 		takeGroupLabel,
@@ -27,8 +31,7 @@
 		selectionMode,
 		selectedIds,
 		selectAllUnkept,
-		clearSelection,
-		selectionCount
+		clearSelection
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
 	import { bulkDeleteGenerations } from '$lib/api/client';
@@ -105,13 +108,21 @@
 		return result;
 	});
 
-	async function handleBulkDelete(): Promise<void> {
+	// A selection can hold ids of takes this song no longer shows; only the
+	// takes on screen are ever counted or sent.
+	const tickedIds = $derived.by((): string[] => {
 		const songTakeIds = new Set(song.generations.map((gen) => gen.id));
-		const ids = [...$selectedIds].filter((id) => songTakeIds.has(id));
-		if (ids.length === 0) {
-			clearSelection();
-			return;
-		}
+		return [...$selectedIds].filter((id) => songTakeIds.has(id));
+	});
+	let confirmingBulkDelete = $state(false);
+
+	$effect(() => {
+		if (tickedIds.length === 0) confirmingBulkDelete = false;
+	});
+
+	async function handleBulkDelete(): Promise<void> {
+		const ids = tickedIds;
+		confirmingBulkDelete = false;
 		const openGenerationId = $selectedGenerationId;
 		try {
 			await bulkDeleteGenerations(ids);
@@ -250,14 +261,22 @@
 
 		{#if $selectionMode}
 			<div class="selection-toolbar">
-				<button type="button" class="toolbar-btn" onclick={() => selectAllUnkept(song.generations)}>
-					Select All Unkept
+				<button
+					type="button"
+					class="toolbar-btn select-all"
+					onclick={() => selectAllUnkept(song.generations)}
+				>
+					{TAKE_SELECT_ALL_UNKEPT_LABEL}
 				</button>
-				<span class="toolbar-count">{$selectionCount} selected</span>
-				<button type="button" class="toolbar-btn destructive" onclick={handleBulkDelete}>
-					Delete Selected
+				<span class="toolbar-count">{selectedCountLabel(tickedIds.length)}</span>
+				<button
+					type="button"
+					class="toolbar-btn destructive"
+					onclick={() => (confirmingBulkDelete = true)}
+				>
+					{bulkDeleteLabel(tickedIds.length)}
 				</button>
-				<button type="button" class="toolbar-btn" onclick={clearSelection}> Cancel </button>
+				<button type="button" class="toolbar-btn cancel" onclick={clearSelection}>Cancel</button>
 			</div>
 		{/if}
 	</div>
@@ -274,6 +293,16 @@
 			if (id) actions.del(id);
 		}}
 		oncancel={() => (deleteFor = null)}
+	/>
+{/if}
+
+{#if confirmingBulkDelete}
+	<ConfirmDialog
+		title={bulkDeleteTitle(tickedIds.length)}
+		message={TAKE_DELETE_MESSAGE}
+		confirmLabel={TAKE_DELETE_LABEL}
+		onconfirm={handleBulkDelete}
+		oncancel={() => (confirmingBulkDelete = false)}
 	/>
 {/if}
 
@@ -347,6 +376,7 @@
 	}
 
 	.toolbar-btn {
+		min-height: 2.75rem;
 		padding: 0.3rem 0.8rem;
 		border: 1px solid var(--border);
 		border-radius: var(--btn-radius-sm);
@@ -379,6 +409,31 @@
 		font-family: var(--font-display);
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
+	}
+
+	/* UP3: the count and Cancel over Select all unkept and Delete N. */
+	@media (max-width: 768px) {
+		.selection-toolbar {
+			display: grid;
+			grid-template-columns: 1fr auto;
+			gap: 0.4rem 0.7rem;
+		}
+
+		.toolbar-count {
+			grid-area: 1 / 1;
+		}
+
+		.cancel {
+			grid-area: 1 / 2;
+		}
+
+		.select-all {
+			grid-area: 2 / 1;
+		}
+
+		.destructive {
+			grid-area: 2 / 2;
+		}
 	}
 
 	.mobile-hint {
