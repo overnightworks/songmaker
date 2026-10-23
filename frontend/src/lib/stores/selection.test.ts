@@ -7,7 +7,6 @@ import {
 	clearSelection,
 	selectAllUnkept,
 	selectedIds,
-	selectionCount,
 	selectionMode,
 	toggleSelection
 } from './selection';
@@ -22,7 +21,6 @@ describe('selection', () => {
 		toggleSelection('g1');
 
 		expect(get(selectionMode)).toBe(true);
-		expect(get(selectionCount)).toBe(1);
 		expect(get(selectedIds).has('g1')).toBe(true);
 
 		toggleSelection('g1');
@@ -54,12 +52,10 @@ describe('selection', () => {
 		]);
 
 		expect(get(selectedIds)).toEqual(new Set(['g1', 'g2']));
-		expect(get(selectionCount)).toBe(2);
 
 		clearSelection();
 
 		expect(get(selectionMode)).toBe(false);
-		expect(get(selectionCount)).toBe(0);
 	});
 
 	it('selects only generations that are neither picked nor kept', () => {

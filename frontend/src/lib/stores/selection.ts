@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import type { GenerationItem } from '$lib/api/types';
 import { selectedSongId } from '$lib/stores/player';
 
@@ -6,8 +6,6 @@ export const selectedIds = writable<Set<string>>(new Set());
 export const selectionMode = writable(false);
 
 let selectionSongId: string | null = null;
-
-export const selectionCount = derived(selectedIds, ($ids) => $ids.size);
 
 export function toggleSelection(id: string): void {
 	selectedIds.update((ids) => {
