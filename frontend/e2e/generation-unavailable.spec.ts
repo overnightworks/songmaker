@@ -43,7 +43,7 @@ const SOURCES = ['live', 'reload'] as const;
 // This slice consumes already classified jobs and identity. Arrange those API
 // boundaries; song editing, history, playback and the destination use the real app.
 async function arrangeAudience(page: Page, role: (typeof ROLES)[number]): Promise<void> {
-	await page.route('**/api/auth/me', async (route) => {
+	await page.context().route('**/api/auth/me', async (route) => {
 		const response = await route.fetch();
 		const user = await response.json();
 		await route.fulfill({ response, json: { ...user, role } });
@@ -179,9 +179,19 @@ for (const width of WIDTHS) {
 						const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 						const draft = `${await lyrics.inputValue()}\nQA keep this draft`;
 						await lyrics.fill(draft);
-						const popupReady = page.context().waitForEvent('page');
+						// Playwright reports a modifier-click tab only if it attaches before the
+						// tab's document commits; a fast commit leaves the tab half-registered and
+						// every wait on it hangs. Hold the document until the tab is reported.
+						const context = page.context();
+						const popupReady = context.waitForEvent('page');
+						const workerPoolDocument = '**/settings/users?tab=acestep';
+						await context.route(workerPoolDocument, async (route) => {
+							await popupReady;
+							await route.continue();
+						});
 						await link.click({ modifiers: ['ControlOrMeta'] });
 						const popup = await popupReady;
+						await context.unroute(workerPoolDocument);
 						await popup.setViewportSize({ width, height: 900 });
 						try {
 							await expectWorkerPool(popup, width);
