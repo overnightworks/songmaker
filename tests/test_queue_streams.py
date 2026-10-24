@@ -1669,9 +1669,9 @@ def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:
     assert not corrupt.exists()
 
 
-def _expired_shared_snapshot_with_stored_pin(
+def _expired_shared_snapshot_with_pin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[TestClient, str, Path]:
+) -> tuple[TestClient, Path]:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
@@ -1688,7 +1688,7 @@ def _expired_shared_snapshot_with_stored_pin(
     manifest["pinned"] = True
     manifest["pinned_at"] = now.isoformat()
     manifest_path.write_text(json.dumps(manifest))
-    return public, snapshot_id, manifest_path
+    return public, manifest_path
 
 
 def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
@@ -1697,25 +1697,21 @@ def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
     """1859_R1 -- an expired manifest that still says pinned is swept like any other."""
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
-    public, snapshot_id, manifest_path = _expired_shared_snapshot_with_stored_pin(
-        tmp_path, monkeypatch
-    )
+    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch)
 
     cleanup_expired_queue_streams(public.app.state.ctx)
 
     assert not manifest_path.exists()
-    assert not (manifest_path.parent / f"{snapshot_id}.mp3").exists()
+    assert not manifest_path.with_suffix(".mp3").exists()
 
 
 def test_expired_snapshot_whose_manifest_still_says_pinned_is_not_served(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """1859_R1 -- an expired manifest that still says pinned is not served."""
-    public, snapshot_id, _ = _expired_shared_snapshot_with_stored_pin(tmp_path, monkeypatch)
+    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch)
 
-    audio = public.get(f"/shared/queue-streams/{snapshot_id}/audio")
-
-    assert audio.status_code == 404
+    assert public.get(f"/shared/queue-streams/{manifest_path.stem}/audio").status_code == 404
 
 
 @pytest.mark.parametrize("method", [pytest.param("post"), pytest.param("delete")])
