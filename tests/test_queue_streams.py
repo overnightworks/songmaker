@@ -17,6 +17,7 @@ from conftest import (
     web_client,
 )
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from songmaker_cli import audio_files
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
@@ -462,8 +463,6 @@ def test_queue_stream_request_no_longer_sweeps_expired_snapshots(
                 "expires_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
                 "total_duration": 1.0,
                 "windowed": False,
-                "pinned": False,
-                "pinned_at": None,
                 "tracks": [],
             }
         )
@@ -1547,9 +1546,6 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) 
     assert audio.status_code == 404
 
 
-# ── Pinning tests ───────────────────────────────────────────────────────────
-
-
 @pytest.mark.parametrize(
     "snapshot_id",
     [
@@ -1558,7 +1554,7 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) 
         pytest.param("0" * 32, id="unknown-hex"),
     ],
 )
-def test_queue_stream_audio_and_pinning_reject_unknown_snapshot_ids(
+def test_queue_stream_audio_rejects_unknown_snapshot_ids(
     tmp_path: Path,
     snapshot_id: str,
 ) -> None:
@@ -1566,210 +1562,8 @@ def test_queue_stream_audio_and_pinning_reject_unknown_snapshot_ids(
     login_and_csrf(client, "owner")
 
     audio = client.get(f"/api/queue-streams/{snapshot_id}/audio")
-    pin = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-    unpin = client.delete(f"/api/queue-streams/{snapshot_id}/pin")
 
     assert audio.status_code == 404
-    assert pin.status_code == 404
-    assert unpin.status_code == 404
-
-
-def test_pinned_snapshot_survives_ttl_on_access(tmp_path: Path, monkeypatch) -> None:
-    """An expired snapshot that is actively pinned must not be reaped on access."""
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-    manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
-
-    manifest = json.loads(manifest_path.read_text())
-    manifest["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-    manifest["pinned"] = True
-    manifest["pinned_at"] = datetime.now(timezone.utc).isoformat()
-    manifest_path.write_text(json.dumps(manifest))
-
-    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
-
-    assert audio.status_code == 206
-
-
-def test_pinned_snapshot_survives_cleanup_sweep(tmp_path: Path, monkeypatch) -> None:
-    """An expired but actively pinned snapshot must not be deleted by the cleanup sweep."""
-    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
-
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-    stream_dir = tmp_path / "data" / "queue-streams"
-    manifest_path = stream_dir / f"{snapshot_id}.json"
-
-    manifest = json.loads(manifest_path.read_text())
-    manifest["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-    manifest["pinned"] = True
-    manifest["pinned_at"] = datetime.now(timezone.utc).isoformat()
-    manifest_path.write_text(json.dumps(manifest))
-
-    cleanup_expired_queue_streams(client.app.state.ctx)
-
-    assert manifest_path.exists()
-    assert (stream_dir / f"{snapshot_id}.mp3").exists()
-
-
-def test_abandoned_pin_is_reaped_by_cleanup_sweep(tmp_path: Path, monkeypatch) -> None:
-    """A pinned snapshot whose pin_at is older than PIN_MAX_AGE must be reaped."""
-    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
-
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-    stream_dir = tmp_path / "data" / "queue-streams"
-    manifest_path = stream_dir / f"{snapshot_id}.json"
-
-    manifest = json.loads(manifest_path.read_text())
-    manifest["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-    manifest["pinned"] = True
-    manifest["pinned_at"] = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
-    manifest_path.write_text(json.dumps(manifest))
-
-    cleanup_expired_queue_streams(client.app.state.ctx)
-
-    assert not manifest_path.exists()
-    assert not (stream_dir / f"{snapshot_id}.mp3").exists()
-
-
-def test_pinned_snapshot_excluded_from_quota_eviction(tmp_path: Path, monkeypatch) -> None:
-    """Quota eviction must evict an unpinned snapshot rather than a pinned one."""
-    _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_CACHE_BYTES", 1)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    # Build snapshot A and pin it via direct manifest edit
-    resp_a = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp_a.status_code == 200
-    snapshot_a = resp_a.json()["snapshot_id"]
-    manifest_path_a = tmp_path / "data" / "queue-streams" / f"{snapshot_a}.json"
-    manifest_a = json.loads(manifest_path_a.read_text())
-    manifest_a["pinned"] = True
-    manifest_a["pinned_at"] = datetime.now(timezone.utc).isoformat()
-    manifest_path_a.write_text(json.dumps(manifest_a))
-
-    # Build snapshot B (unpinned) — quota enforcement runs on every build
-    resp_b = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g2"}]})
-    assert resp_b.status_code == 200
-    snapshot_b = resp_b.json()["snapshot_id"]
-
-    # Build snapshot C with different content — quota enforcement must evict B not A
-    resp_c = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
-    )
-    assert resp_c.status_code == 200
-    snapshot_c = resp_c.json()["snapshot_id"]
-
-    stream_dir = tmp_path / "data" / "queue-streams"
-    assert (stream_dir / f"{snapshot_a}.mp3").exists(), "Pinned snapshot must not be evicted"
-    assert (stream_dir / f"{snapshot_c}.mp3").exists(), "Just-built snapshot must survive"
-    assert not (stream_dir / f"{snapshot_b}.mp3").exists(), "Unpinned snapshot should be evicted"
-
-
-def test_pin_snapshot_refused_when_pinned_bytes_cap_exceeded(tmp_path: Path, monkeypatch) -> None:
-    """PIN must be refused with 409 when the pinned-bytes cap would be exceeded."""
-    _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "QUEUE_STREAM_PINNED_MAX_BYTES", 0)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-
-    pin_resp = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-
-    assert pin_resp.status_code == 409
-
-
-def test_pin_unpin_round_trip_via_endpoints(tmp_path: Path, monkeypatch) -> None:
-    """POST .../pin sets pinned=True; DELETE .../pin clears it back to False."""
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-
-    pin_resp = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-    assert pin_resp.status_code == 200
-    pin_data = pin_resp.json()
-    assert pin_data["snapshot_id"] == snapshot_id
-    assert pin_data["pinned"] is True
-    assert pin_data["pinned_at"] is not None
-
-    unpin_resp = client.delete(f"/api/queue-streams/{snapshot_id}/pin")
-    assert unpin_resp.status_code == 200
-    unpin_data = unpin_resp.json()
-    assert unpin_data["snapshot_id"] == snapshot_id
-    assert unpin_data["pinned"] is False
-    assert unpin_data["pinned_at"] is None
-
-
-@pytest.mark.parametrize(
-    "method",
-    [pytest.param("post", id="pin"), pytest.param("delete", id="unpin")],
-)
-@pytest.mark.parametrize("scope", [pytest.param("foreign"), pytest.param("shared")])
-def test_queue_stream_pin_and_unpin_hide_foreign_and_shared_snapshots(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    method: str,
-    scope: str,
-) -> None:
-    """Pinning controls hide foreign and shared snapshots behind a 404."""
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    if scope == "foreign":
-        stream_resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-        other_client = web_client(client.app, cookies={})
-        login_and_csrf(other_client, "other")
-        request_client = other_client
-    else:
-        share = client.post("/api/playlists/pl1/share")
-        slug = share.json()["share_slug"]
-        public = web_client(client.app, cookies={})
-        stream_resp = public.post(f"/shared/playlist/{slug}/stream")
-        request_client = client
-
-    assert stream_resp.status_code == 200
-    snapshot_id = stream_resp.json()["snapshot_id"]
-
-    response = getattr(request_client, method)(f"/api/queue-streams/{snapshot_id}/pin")
-
-    assert response.status_code == 404
 
 
 def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch) -> None:
@@ -1875,31 +1669,68 @@ def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:
     assert not corrupt.exists()
 
 
-def test_legacy_manifest_without_pin_fields_is_accessible(tmp_path: Path, monkeypatch) -> None:
-    """A pre-pin manifest (no pinned/pinned_at fields) is read as unpinned."""
+def _expired_shared_snapshot_with_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[TestClient, Path]:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = web_client(client.app, cookies={})
+    stream = public.post(f"/shared/playlist/{slug}/stream")
+    assert stream.status_code == 200
+    snapshot_id = stream.json()["snapshot_id"]
     manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
-
-    # Simulate a legacy manifest by removing the pin fields
     manifest = json.loads(manifest_path.read_text())
-    manifest.pop("pinned", None)
-    manifest.pop("pinned_at", None)
+    now = datetime.now(timezone.utc)
+    manifest["expires_at"] = (now - timedelta(seconds=1)).isoformat()
+    manifest["pinned"] = True
+    manifest["pinned_at"] = now.isoformat()
     manifest_path.write_text(json.dumps(manifest))
+    return public, manifest_path
 
-    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
-    assert audio.status_code == 206
 
-    unpin_resp = client.delete(f"/api/queue-streams/{snapshot_id}/pin")
-    assert unpin_resp.status_code == 200
-    assert unpin_resp.json()["pinned"] is False
-    assert unpin_resp.json()["pinned_at"] is None
+def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1859_R1 -- an expired manifest that still says pinned is swept like any other."""
+    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
+
+    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch)
+
+    cleanup_expired_queue_streams(public.app.state.ctx)
+
+    assert not manifest_path.exists()
+    assert not manifest_path.with_suffix(".mp3").exists()
+
+
+def test_expired_snapshot_whose_manifest_still_says_pinned_is_not_served(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1859_R1 -- an expired manifest that still says pinned is not served."""
+    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch)
+
+    assert public.get(f"/shared/queue-streams/{manifest_path.stem}/audio").status_code == 404
+
+
+@pytest.mark.parametrize("method", [pytest.param("post"), pytest.param("delete")])
+def test_the_pin_routes_are_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, method: str
+) -> None:
+    """1859_R1 -- the pin addresses answer like any unknown address."""
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner")
+    snapshot_id = client.post(
+        "/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]}
+    ).json()["snapshot_id"]
+
+    pin = getattr(client, method)(f"/api/queue-streams/{snapshot_id}/pin")
+    unknown = getattr(client, method)(f"/api/queue-streams/{snapshot_id}/no-such-route")
+
+    assert (pin.status_code, pin.json()) == (unknown.status_code, unknown.json())
 
 
 def _reverse_in_place(items: list) -> None:
