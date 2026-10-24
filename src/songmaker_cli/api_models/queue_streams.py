@@ -128,9 +128,3 @@ class QueueStreamManifestResponse(BaseModel):
     windowed: bool = False
     skipped: list[QueueStreamSkipResponse] = Field(default_factory=list)
     skipped_complete: bool = True
-
-
-class QueueStreamPinResponse(BaseModel):
-    snapshot_id: str
-    pinned: bool
-    pinned_at: str | None

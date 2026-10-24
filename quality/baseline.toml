@@ -30,7 +30,7 @@
 "frontend/e2e/seed.ts" = 1205
 "frontend/e2e/song-phone.spec.ts" = 866
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1146
+"frontend/src/lib/api/types.ts" = 1140
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1580
@@ -69,7 +69,7 @@
 "src/songmaker_cli/conversation_api.py" = 1130
 "src/songmaker_cli/jobs/generation.py" = 1203
 "src/songmaker_cli/jobs/lora_training.py" = 1552
-"src/songmaker_cli/queue_streams.py" = 1096
+"src/songmaker_cli/queue_streams.py" = 978
 "src/songmaker_cli/settings_api.py" = 827
 "src/songmaker_cli/sharing_api.py" = 868
 "tests/acestep_worker/test_wrapper.py" = 1631
@@ -89,7 +89,7 @@
 "tests/test_lora_api.py" = 1297
 "tests/test_playlists.py" = 1105
 "tests/test_postgresql.py" = 858
-"tests/test_queue_streams.py" = 2771
+"tests/test_queue_streams.py" = 2602
 "tests/test_resource_event_api.py" = 1239
 "tests/test_scheduler.py" = 1453
 "tests/test_scorers_extended.py" = 1035
@@ -168,7 +168,7 @@
 "build_server" = 173
 
 [function_lines."src/songmaker_cli/queue_streams.py"]
-"_build_queue_stream_snapshot" = 65
+"_build_queue_stream_snapshot" = 63
 "resolve_library_pool_membership" = 60
 
 [function_lines."src/songmaker_cli/scoring/pipeline.py"]
