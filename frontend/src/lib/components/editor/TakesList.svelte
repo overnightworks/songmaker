@@ -108,7 +108,7 @@
 
 	$effect.pre(() => settleTakeFolds(groups));
 	$effect.pre(() => {
-		if (loadStatus !== 'loading' && $selectedIds.size > 0) keepOnlySelected(renderedIds);
+		if ($selectedIds.size > 0) keepOnlySelected(renderedIds);
 	});
 
 	let confirmingBulkDelete = $state(false);

@@ -85,6 +85,7 @@ interface RenderOptions {
 	versionCount?: number;
 	dirty?: boolean;
 	draftVersionNumber?: number;
+	loadStatus?: 'loading' | 'ready' | 'error';
 }
 
 // The song lives in a reactive cell so a test can play a Save's response or a
@@ -110,6 +111,7 @@ async function render(options: RenderOptions = {}) {
 			get song() {
 				return cell.get('song') as SongItem;
 			},
+			loadStatus: options.loadStatus ?? 'ready',
 			dirty: options.dirty ?? false,
 			draftVersionNumber: options.draftVersionNumber ?? 4,
 			get latestVersionNumber() {
@@ -334,7 +336,11 @@ describe('Imported (Q1 a)', () => {
 		expect(rowIds(target)).toEqual(['c1', 'c2']);
 		await clickThenTick(foldToggle(target, foldedGroupLabel(null, 2, 0)));
 		expect(rowIds(target)).toEqual(['c1', 'c2', 'i1', 'i2']);
-		expect(target.textContent).not.toContain(openVersionLabel(0));
+		expect(
+			foldToggle(target, foldedGroupLabel(null, 2, 0))
+				.closest('.version-section')
+				?.querySelector('.version-link')
+		).toBeNull();
 	});
 
 	it('does not fold on its own when a generated take arrives later', async () => {
@@ -346,7 +352,7 @@ describe('Imported (Q1 a)', () => {
 	});
 });
 
-describe('the selection stays within the rendered takes', () => {
+describe('the selection stays within the rendered takes (rules 6 and 7, cells 16-18/21-24/26/27)', () => {
 	it('never counts a ticked take of a folded version', async () => {
 		const { target } = await render();
 
@@ -409,6 +415,19 @@ describe('the selection stays within the rendered takes', () => {
 		expect(toolbarCount(again.target)).toBe(selectedCountLabel(1));
 	});
 
+	it('clears the ticks of a folded version in the same way while the takes are still loading', async () => {
+		const { target } = await render({ loadStatus: 'loading' });
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await ctrlTickTakes('c1');
+		await ctrlTickTakes('a1');
+
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
+
+		expect([...get(selectedIds)]).toEqual(['c1']);
+		expect(target.querySelector('#take-a1.selected')).toBeNull();
+	});
+
 	it('drops a ticked take that a reload of the song no longer holds', async () => {
 		const { target, replaceTakes } = await render();
 		await ctrlTickTakes('c1');
@@ -433,7 +452,7 @@ describe('the selection stays within the rendered takes', () => {
 	});
 });
 
-describe('Delete sends rendered takes only, checked at confirm time', () => {
+describe('Delete sends rendered takes only, checked at confirm time (rule 8, cells 30/31/33-35)', () => {
 	it('sends only the rendered ticked takes when a version folds under an open dialog', async () => {
 		vi.mocked(bulkDeleteGenerations).mockResolvedValueOnce(undefined as never);
 		const { target } = await render();
@@ -526,7 +545,7 @@ describe('Delete sends rendered takes only, checked at confirm time', () => {
 	});
 });
 
-describe('folds belong to the song they were made on', () => {
+describe('folds belong to the song they were made on (rule 12, cells 36/39)', () => {
 	it('keeps the open versions while no take list is mounted and no other song is shown', async () => {
 		selectedSongId.set('song-a');
 		const { target, component } = await render();
@@ -556,7 +575,7 @@ describe('folds belong to the song they were made on', () => {
 	});
 });
 
-describe('a link to a take inside a folded version', () => {
+describe('a link to a take inside a folded version (rule 10, cells 43/44)', () => {
 	function repaintOf(sourceId: string): GenerationItem {
 		return takeOn('c1', 3, {
 			generation_params: { task_type: 'repaint' },
