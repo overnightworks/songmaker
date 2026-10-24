@@ -1,0 +1,8 @@
+claim_id = "5dcab2a82b4a4727ad28e2df6c2060a8"
+agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
+role = "builder"
+base = "4804e6209d01be4c77b1a8e5e5f165bd3a8b090b"
+branch = "claude/issue-1869-h6f-leave-prompt"
+scope = ["docs/architecture.md", "frontend/e2e/README.md", "frontend/e2e/leave-prompt.spec.ts", "frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/editorUnloadGuard.test.ts", "frontend/src/routes/+layout.svelte"]
+opened_commit = "b50cb3467335baa3e145657f37a832eec3405ae8"
+whole_reason = "The draft owner's unload guard, its layout wiring, the unit and e2e proof and the one doc sentence are one change: the guard is dead code without the layout effect and unproven without the rows."
