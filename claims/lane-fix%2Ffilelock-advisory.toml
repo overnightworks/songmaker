@@ -1,0 +1,7 @@
+claim_id = "b0a00af0fd344800bcf53cbf2e1da8d0"
+agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
+role = "builder"
+base = "3f77c4db1a6e5c474310e7b3a6a75a6ba5d69f69"
+branch = "fix/filelock-advisory"
+scope = ["pyproject.toml", "uv.lock"]
+opened_commit = "561461688e8f49b3590c46aadd61f3cfe8162879"
