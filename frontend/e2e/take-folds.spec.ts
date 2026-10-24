@@ -109,9 +109,9 @@ async function showTab(page: Page, label: string): Promise<void> {
 	if (await tab.isVisible()) await tab.click();
 }
 
-const v1Row = (page: Page) =>
+const v1Row = (page: Page, takeCount = FIRST_VERSION_TAKE_COUNT) =>
 	workspace(page).getByRole('button', {
-		name: foldedGroupLabel(1, FIRST_VERSION_TAKE_COUNT, 0),
+		name: foldedGroupLabel(1, takeCount, 0),
 		exact: false
 	});
 const v2Row = (page: Page) =>
@@ -565,7 +565,11 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 
 		await showTab(page, EDITOR_TAB_TAKES_LABEL);
 
-		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'true');
+		await expect(v1Row(page, FIRST_VERSION_TAKE_COUNT - 1)).toHaveAttribute(
+			'aria-expanded',
+			'true'
+		);
+		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
 		await expect(workspace(page).locator('.take-row.selected')).toHaveCount(0);
 		await expect(toolbar(page)).toHaveCount(0);
 		expect(await toolbarWasShown()).toBe(false);
