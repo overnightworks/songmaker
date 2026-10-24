@@ -1693,6 +1693,7 @@ def _expired_shared_snapshot_with_stored_pin(
 def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """1859_R1 -- an expired manifest that still says pinned is swept like any other."""
     from songmaker_cli.queue_streams import cleanup_expired_queue_streams
 
     public, snapshot_id, manifest_path = _expired_shared_snapshot_with_stored_pin(
@@ -1708,6 +1709,7 @@ def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
 def test_expired_snapshot_whose_manifest_still_says_pinned_is_not_served(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """1859_R1 -- an expired manifest that still says pinned is not served."""
     public, snapshot_id, _ = _expired_shared_snapshot_with_stored_pin(tmp_path, monkeypatch)
 
     audio = public.get(f"/shared/queue-streams/{snapshot_id}/audio")
@@ -1719,6 +1721,7 @@ def test_expired_snapshot_whose_manifest_still_says_pinned_is_not_served(
 def test_the_pin_routes_are_gone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, method: str
 ) -> None:
+    """1859_R1 -- the pin addresses answer like any unknown address."""
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
