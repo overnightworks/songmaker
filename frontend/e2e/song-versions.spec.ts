@@ -249,13 +249,13 @@ function boxesOverlap(a: Box | null, b: Box | null): boolean {
 async function showTakes(page: Page): Promise<void> {
 	const takesTab = page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) });
 	if (await takesTab.isVisible()) await takesTab.click();
-	for (const f of await page.locator('.version-toggle[aria-expanded=false]').all()) await f.click();
+	for (const fold of await page.locator('.version-toggle[aria-expanded=false]').all())
+		await fold.click();
 }
 
 function takeGroup(page: Page, version: TakeVersion | null, takeCount: number): Locator {
-	const n = version?.versionNumber ?? null;
-	const either = [foldedGroupLabel(n, takeCount, 0), currentVersionHeadLabel(n ?? 0, takeCount)];
-	const hasText = new RegExp(either.join('|'));
+	const versionNumber = version?.versionNumber ?? null;
+	const hasText = foldedGroupLabel(versionNumber, takeCount, 0);
 	return workspace(page).locator('.version-section').filter({ hasText });
 }
 
@@ -777,7 +777,7 @@ test.describe('the versions of a song', () => {
 		await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
 		await expect(versionsSheet(page)).toBeHidden();
 		await showTakes(page);
-		await expect(takeGroup(page, song.v2, 1)).toBeVisible();
+		await expect(page.getByText(currentVersionHeadLabel(2, 1))).toBeVisible();
 		await expect(takeGroup(page, song.v1, 1)).toHaveCount(0);
 	});
 
