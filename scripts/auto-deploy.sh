@@ -240,8 +240,9 @@ declare -Ar TEMP_FILE_PREFIXES=(
     [gh-stderr]=songmaker-autodeploy.gh-stderr.
 )
 
-sweep_stale_temp_files() {
-    local prefix path suffix failed=0 LC_ALL=C
+sweep_stale_temp_files() (
+    local prefix path suffix failed=0
+    LC_ALL=C
     for prefix in "${TEMP_FILE_PREFIXES[@]}"; do
         for path in "$GIT_ADMIN_DIR/$prefix"*; do
             suffix="${path#"$GIT_ADMIN_DIR/$prefix"}"
@@ -255,7 +256,7 @@ sweep_stale_temp_files() {
         done
     done
     return "$failed"
-}
+)
 
 # The only network-facing git commands of a tick, so the only ones with a
 # deadline. `timeout` cannot run the shell function above, but it can run the
@@ -382,6 +383,7 @@ describe_timeout_status() {
     case "$1" in
         124) printf 'timed out' ;;
         137) printf 'was killed by SIGKILL' ;;
+        *) ;;
     esac
 }
 # Bounds the container-readiness wait of step 10 only; the image build in
