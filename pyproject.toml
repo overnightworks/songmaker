@@ -12,21 +12,21 @@ dependencies = [
     "scipy>=1.12,<2",
     "pydantic>=2.0,<3",
     "pydantic-settings>=2.0,<3",
-    "cyclopts>=4.0,<5",
+    "cyclopts>=4.0,<6",
     "pyloudnorm>=0.1,<1",
     "httpx>=0.27,<1",
-    "python-slugify>=8.0,<9",
+    "python-slugify>=8.0,<10",
 ]
 
 [project.optional-dependencies]
-similarity = ["sentence-transformers>=3,<6"]
+similarity = ["sentence-transformers>=3,<7"]
 scoring = [
     "librosa>=0.10,<2",
     "soundfile",
     "audiobox-aesthetics>=0.0.4,<1",
     "torch>=2.14,<2.15",
     "torchaudio>=2.11,<3",
-    "torchcodec>=0.14,<0.15",  # torchaudio 2.9+ decodes through torchcodec, whose minor tracks torch's
+    "torchcodec>=0.14,<0.18",  # torchaudio 2.9+ decodes through torchcodec, whose minor tracks torch's
     "nvidia-ml-py3>=7.352,<8",
 ]
 whisper = [
@@ -74,7 +74,7 @@ acestep-worker = [
     "fastapi>=0.100,<1",
     "uvicorn>=0.20,<1",
     "redis[hiredis]>=5.0,<9",
-    "huggingface_hub>=0.20,<2",
+    "huggingface_hub>=0.20,<3",
     "nvidia-ml-py3>=7.352,<8",
 ]
 dev = [
