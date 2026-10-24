@@ -402,9 +402,9 @@ describe('history adapter', () => {
 	});
 
 	it('stepBackTo on the first entry resolves at once', async () => {
-		seedForeignEntry('/legal');
+		seedForeignEntry('/no-access');
 		vi.spyOn(history, 'length', 'get').mockReturnValue(1);
-		const first = replaceEntry('/legal', {});
+		const first = replaceEntry('/no-access', {});
 		vi.restoreAllMocks();
 		const back = vi.spyOn(history, 'back');
 
@@ -491,7 +491,7 @@ describe('history adapter', () => {
 
 	it("a page's own Back steps back onto the page of the tab it was opened from", async () => {
 		const signIn = pushEntry('/login', {});
-		pushEntry('/legal', {});
+		pushEntry('/no-access', {});
 		vi.mocked(goto).mockClear();
 
 		await stepBackOrGoTo('/login');
@@ -545,8 +545,8 @@ describe('history adapter', () => {
 			standing: 'the page the app was entered on from one of its own pages',
 			arrange: () => {
 				seedForeignEntry('/login');
-				history.pushState(null, '', '/legal');
-				enterApp('/legal', 2, addressOf('/login'));
+				history.pushState(null, '', '/no-access');
+				enterApp('/no-access', 2, addressOf('/login'));
 			},
 			lands: '/login',
 			next: null
@@ -578,7 +578,7 @@ describe('history adapter', () => {
 	])(
 		"a page's own Back on the page the app was entered on $opened goes to the fallback, written over it",
 		async ({ tabLength }) => {
-			enterApp('/legal', tabLength);
+			enterApp('/no-access', tabLength);
 			const back = vi.spyOn(history, 'back');
 			vi.mocked(goto).mockClear();
 

@@ -23,7 +23,7 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1306
+"frontend/e2e/back-closes-overlay.spec.ts" = 1267
 "frontend/e2e/helpers.ts" = 861
 "frontend/e2e/library.spec.ts" = 1305
 "frontend/e2e/offline.spec.ts" = 816
@@ -61,7 +61,7 @@
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2040
 "frontend/src/lib/stores/resourceSync.ts" = 1070
-"frontend/src/routes/layout.test.ts" = 1416
+"frontend/src/routes/layout.test.ts" = 1404
 "frontend/src/routes/settings/users/+page.svelte" = 1243
 "frontend/src/routes/settings/users/page.test.ts" = 1026
 "src/acestep_worker/wrapper.py" = 1092

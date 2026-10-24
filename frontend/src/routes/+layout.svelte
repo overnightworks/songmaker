@@ -93,10 +93,7 @@
 		page.url.pathname === SIGN_IN_PATH ||
 			page.url.pathname === NO_ACCESS_PATH ||
 			page.url.pathname === SIGN_IN_FAILED_PATH ||
-			page.url.pathname.startsWith('/share/') ||
-			page.url.pathname.startsWith('/legal') ||
-			page.url.pathname === '/impressum' ||
-			page.url.pathname === '/datenschutz'
+			page.url.pathname.startsWith('/share/')
 	);
 	const me = $derived($currentUser);
 	const hasPrivatePlayer = $derived(me !== null);

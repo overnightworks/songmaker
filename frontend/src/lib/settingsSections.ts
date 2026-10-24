@@ -1,6 +1,6 @@
 import type { Pathname } from '$app/types';
 
-type SettingsSectionId = 'generation' | 'voices' | 'admin' | 'legal';
+type SettingsSectionId = 'generation' | 'voices' | 'admin';
 
 interface SettingsSection {
 	readonly id: SettingsSectionId;
@@ -19,8 +19,7 @@ const SETTINGS_SECTIONS: readonly SettingsSection[] = [
 		adminOnly: false
 	},
 	{ id: 'voices', href: '/settings/voices', label: 'Voices', icon: 'mic', adminOnly: false },
-	{ id: 'admin', href: '/settings/users', label: 'Admin', icon: 'shield', adminOnly: true },
-	{ id: 'legal', href: '/settings/legal', label: 'Legal', icon: 'file-text', adminOnly: false }
+	{ id: 'admin', href: '/settings/users', label: 'Admin', icon: 'shield', adminOnly: true }
 ];
 
 export function visibleSettingsSections(admin: boolean): SettingsSection[] {
