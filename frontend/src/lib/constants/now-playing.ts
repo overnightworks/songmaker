@@ -86,10 +86,8 @@ export function foldedGroupLabel(
 	archivedCount: number
 ): string {
 	const origin = versionNumber === null ? IMPORTED_TAKES_GROUP : `v${versionNumber}`;
-	const archived =
-		archivedCount === 0
-			? ''
-			: `${META_SEPARATOR}${archivedCount === count ? 'all' : archivedCount} archived`;
+	const archivedShare = archivedCount === count ? 'all' : archivedCount;
+	const archived = archivedCount === 0 ? '' : `${META_SEPARATOR}${archivedShare} archived`;
 	return `${origin}${META_SEPARATOR}${takeCountLabel(count)}${archived}`;
 }
 
