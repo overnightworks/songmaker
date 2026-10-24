@@ -1,58 +1,33 @@
 import type {
-	ChatMessageItem,
+	AssistantTextEvent,
+	ChatTurnFailureFrame,
+	ChatTurnFinalFrame,
+	ChatTurnRouteErrorFrame,
+	ChatTurnV2Request,
 	ConversationItem,
 	ConversationListResponse,
-	ConversationMessagesResponse
+	ConversationMessagesResponse,
+	ToolCallEvent,
+	ToolResultEvent
 } from './types';
 import { COWRITER_TURN_PATH, COWRITER_TURN_TIMEOUT_MS } from '$lib/constants';
 import { apiFetch, sseFetch } from './fetch';
 
 export type CoWriterStreamEvent =
-	| { type: 'assistant_text'; text: string }
-	| { type: 'tool_call'; tool_use_id: string; name: string; input: Record<string, unknown> }
-	| {
-			type: 'tool_result';
-			tool_use_id: string;
-			content: string;
-			is_error: boolean;
-	  }
-	| {
-			type: 'final';
-			conversation_id: string;
-			user_message: ChatMessageItem;
-			assistant_message: ChatMessageItem;
-	  }
-	| {
-			type: 'error';
-			status: number;
-			message?: string;
-			provider?: string;
-			reason?: { message?: string };
-	  };
+	| AssistantTextEvent
+	| ToolCallEvent
+	| ToolResultEvent
+	| ChatTurnFinalFrame
+	| ChatTurnRouteErrorFrame
+	| ChatTurnFailureFrame;
 
-export interface CoWriterTurnRequest {
-	message: string;
-	current_song_id: string | null;
-	mentioned_song_ids?: string[];
-	mentioned_version_ids?: string[];
-	mentioned_album_id?: string | null;
-	current_generation_id?: string | null;
-}
-
-export function streamCoWriterTurn(req: CoWriterTurnRequest): AsyncGenerator<CoWriterStreamEvent> {
+export function streamCoWriterTurn(req: ChatTurnV2Request): AsyncGenerator<CoWriterStreamEvent> {
 	return sseFetch<CoWriterStreamEvent>(
 		COWRITER_TURN_PATH,
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				message: req.message,
-				current_song_id: req.current_song_id,
-				mentioned_song_ids: req.mentioned_song_ids ?? [],
-				mentioned_version_ids: req.mentioned_version_ids ?? [],
-				mentioned_album_id: req.mentioned_album_id ?? null,
-				current_generation_id: req.current_generation_id ?? null
-			})
+			body: JSON.stringify(req)
 		},
 		COWRITER_TURN_TIMEOUT_MS
 	);
