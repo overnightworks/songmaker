@@ -7,7 +7,14 @@ updates:
     groups:
       python-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
+    # why: keep pyproject ranges, move only uv.lock, so CI's `uv lock --check` holds
+    versioning-strategy: lockfile-only
+    ignore:
+      # torchcodec's minor tracks torch's, which pyproject pins to one minor
+      - dependency-name: "torchcodec"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -16,6 +23,7 @@ updates:
     groups:
       npm-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
     # frontend/package.json pins pnpm.overrides.cookie to 1.1.1: @sveltejs/kit's
     # loose `cookie: '>=0.7.0'` range lets pnpm resolve cookie 2.x, which
@@ -34,4 +42,5 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
