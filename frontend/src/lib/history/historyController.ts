@@ -204,10 +204,10 @@ function entryOfHistoryState(state: unknown): HistoryEntry | null {
 	return isHistoryEntry(entry) ? entry : null;
 }
 
+export const standingHistoryState = (): unknown => history.state;
+
 // The entry history stands on, as the controller stamped it.
-function standingEntry(): HistoryEntry | null {
-	return entryOfHistoryState(history.state);
-}
+const standingEntry = (): HistoryEntry | null => entryOfHistoryState(standingHistoryState());
 
 // SvelteKit's place for an entry among the tab's entries: one more than the
 // entry it was pushed over, the same as the entry it was written over.
