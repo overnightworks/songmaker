@@ -133,6 +133,7 @@ def test_generates_shared_repaint_mode_alias() -> None:
 
 
 def test_defect_1856_skips_a_field_the_model_never_serializes() -> None:
+    """defect:#1856 -- a field the model never serializes stays out of the TypeScript."""
     interface = generate_types._model_to_interface(ExcludedFieldModel)
 
     assert "label: string;" in interface

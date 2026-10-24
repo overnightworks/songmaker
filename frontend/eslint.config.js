@@ -143,11 +143,10 @@ export default ts.config(
 			'src/lib/api/settings.ts', // twins of generated models
 			'src/lib/api/admin.ts', // twin of a generated model
 			'src/lib/api/generations.ts', // twins of generated models, camelCase call options
-			'src/lib/api/queue-streams.ts', // twin of a generated model
 			'src/lib/api/loras.ts', // twin of a generated model
 			'src/lib/api/shared.ts', // map of generated names
 			'src/lib/api/songs.ts', // twins of generated request models
-			'src/lib/api/albums.ts', // twin of a generated model
+			'src/lib/api/albums.ts', // twin of a generated model, frontend-only call shape
 			'src/lib/api/library.ts', // frontend-only call shape
 			'src/lib/api/fetch.ts' // transport internals
 		],
