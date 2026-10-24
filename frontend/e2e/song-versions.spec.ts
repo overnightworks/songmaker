@@ -249,7 +249,7 @@ function boxesOverlap(a: Box | null, b: Box | null): boolean {
 async function showTakes(page: Page): Promise<void> {
 	const takesTab = page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) });
 	if (await takesTab.isVisible()) await takesTab.click();
-	for (const f of await workspace(page).locator('[aria-expanded="false"]').all()) await f.click();
+	for (const f of await page.locator('.version-toggle[aria-expanded=false]').all()) await f.click();
 }
 
 function takeGroup(page: Page, version: TakeVersion | null, takeCount: number): Locator {
@@ -685,7 +685,7 @@ test.describe('the versions of a song', () => {
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
-		const openV1 = page.getByRole('button', { name: openVersionLabel(1), exact: true });
+		const openV1 = page.getByRole('button', { name: openVersionLabel(1), exact: true }).last();
 		await openV1.click();
 
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
@@ -742,7 +742,8 @@ test.describe('the versions of a song', () => {
 		}
 		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB }).click();
 
-		await page.getByRole('button', { name: openVersionLabel(1), exact: true }).click();
+		const openV1 = page.getByRole('button', { name: openVersionLabel(1), exact: true }).last();
+		await openV1.click();
 
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));

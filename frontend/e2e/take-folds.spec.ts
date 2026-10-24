@@ -110,6 +110,8 @@ const v1Row = (page: Page) =>
 		name: foldedGroupLabel(1, FIRST_VERSION_TAKE_COUNT, 0),
 		exact: false
 	});
+const v2Row = (page: Page) =>
+	workspace(page).getByRole('button', { name: foldedGroupLabel(2, SECOND_VERSION_TAKE_COUNT, 0) });
 const takeRow = (page: Page, id: string) => workspace(page).locator(`#take-${id}`);
 const toolbar = (page: Page) => workspace(page).locator('.selection-toolbar');
 
@@ -294,7 +296,7 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
 
 		await release();
-		await expect(v1Row(page)).toBeVisible();
+		await expect(v2Row(page)).toBeVisible();
 		await page.getByRole('dialog').getByRole('button', { name: TAKE_DELETE_LABEL }).click();
 
 		await expect(page.getByRole('dialog')).toHaveCount(0);
