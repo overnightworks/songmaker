@@ -1,0 +1,7 @@
+claim_id = "e3e2b8dac1874f10b5cdba673f850f63"
+agent = "Codex 01a16e6e-b075-7e61-bee8-0b712b0d5fd9"
+role = "builder"
+base = "5f67bbd14144758e13d1aee6a6fd6010417f39fe"
+branch = "codex/issue-1874-reauth-search-sync"
+scope = ["frontend/e2e/playback-retirement.spec.ts"]
+opened_commit = "be21b03e0ad20f4d037d6666b049e35b729f9654"
