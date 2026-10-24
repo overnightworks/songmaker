@@ -7,7 +7,14 @@ updates:
     groups:
       python-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
+    # why: keep pyproject ranges, move only uv.lock, so CI's `uv lock --check` holds
+    versioning-strategy: lockfile-only
+    ignore:
+      # torchcodec's minor tracks torch's, which pyproject pins to one minor
+      - dependency-name: "torchcodec"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -16,13 +23,14 @@ updates:
     groups:
       npm-dependencies:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
     # frontend/package.json pins pnpm.overrides.cookie to 1.1.1: @sveltejs/kit's
     # loose `cookie: '>=0.7.0'` range lets pnpm resolve cookie 2.x, which
     # renamed parse/serialize and breaks `pnpm build` against kit's runtime
     # import (no fixed kit release exists yet — see PR #130/issue #112).
-    # Not a dependabot ignore: kit itself isn't a major bump, so there is no
-    # matching semver-major rule to add here.
+    # Not a dependabot ignore: the pin lives in package.json, and a kit major
+    # now arrives as its own PR because the groups carry only minor and patch.
     ignore:
       # TypeScript 7 needs svelte-check's dual TS6+TS7 --tsgo setup
       - dependency-name: "typescript"
@@ -34,4 +42,5 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
