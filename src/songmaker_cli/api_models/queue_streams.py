@@ -15,21 +15,6 @@ LibraryTakePool = Literal["mix", "picks", "keeps", "all"]
 DEFAULT_LIBRARY_TAKE_POOL: LibraryTakePool = "mix"
 
 
-class QueueStreamTrackRequest(BaseModel):
-    generation_id: str = Field(min_length=1, max_length=36)
-    entry_id: str | None = Field(default=None, max_length=100)
-
-
-class QueueStreamSnapshotRequest(BaseModel):
-    tracks: list[QueueStreamTrackRequest] = Field(min_length=1, max_length=500)
-
-
-class QueueStreamLibraryRequest(BaseModel):
-    start_generation_id: str | None = Field(default=None, max_length=36)
-    shuffle: bool = False
-    pool: LibraryTakePool = DEFAULT_LIBRARY_TAKE_POOL
-
-
 class QueueStreamTrackResponse(BaseModel):
     key: str
     index: int

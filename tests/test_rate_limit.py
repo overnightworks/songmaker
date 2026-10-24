@@ -385,16 +385,11 @@ def rate_limit_policy():
     return build_rate_limit_policy(get_settings())
 
 
-# Media: `/audio/*`, the authenticated queue-stream audio route (review
-# finding 2a: previously untested), and every public share's audio route.
-# Stream: the two SSE endpoints. Everything else, including a slug that
-# literally reads "audio" hitting a real metadata route, is API -- fail
-# closed, and the documented exception (finding 2b: previously untested)
-# that `/shared/{slug}/cover` and `/shared/{slug}/stream` stay API however
-# their slug is spelled.
+# Range-serving audio routes use Media. Removed routes and share metadata,
+# even when their slug reads "audio", use the ordinary API budget.
 @pytest.mark.parametrize(("path", "expected_budget"), [
     ("/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
-    ("/api/queue-streams/some-id/audio", MEDIA_BUDGET_NAME),
+    ("/api/queue-streams/some-id/audio", API_BUDGET_NAME),
     ("/shared/realslug/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
     ("/shared/song/realslug/audio/owner/file.mp3", MEDIA_BUDGET_NAME),
     ("/shared/gen/realslug/audio/owner/file.mp3", MEDIA_BUDGET_NAME),

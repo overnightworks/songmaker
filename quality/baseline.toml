@@ -30,7 +30,7 @@
 "frontend/e2e/seed.ts" = 1205
 "frontend/e2e/song-phone.spec.ts" = 866
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1174
+"frontend/src/lib/api/types.ts" = 1159
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1580
@@ -69,7 +69,7 @@
 "src/songmaker_cli/conversation_api.py" = 1109
 "src/songmaker_cli/jobs/generation.py" = 1203
 "src/songmaker_cli/jobs/lora_training.py" = 1552
-"src/songmaker_cli/queue_streams.py" = 978
+"src/songmaker_cli/queue_streams.py" = 976
 "src/songmaker_cli/settings_api.py" = 827
 "src/songmaker_cli/sharing_api.py" = 868
 "tests/acestep_worker/test_wrapper.py" = 1631
@@ -89,12 +89,12 @@
 "tests/test_lora_api.py" = 1297
 "tests/test_playlists.py" = 1105
 "tests/test_postgresql.py" = 858
-"tests/test_queue_streams.py" = 2602
+"tests/test_queue_streams.py" = 2422
 "tests/test_resource_event_api.py" = 1239
 "tests/test_scheduler.py" = 1453
 "tests/test_scorers_extended.py" = 1035
 "tests/test_server.py" = 1995
-"tests/test_sharing.py" = 2571
+"tests/test_sharing.py" = 2554
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
 "main" = 65
@@ -265,7 +265,6 @@
 "_seed_library_data" = 113
 "_seed_library_pool_data" = 106
 "test_concurrent_builds_for_same_content_hash_do_not_race_lock_removal" = 71
-"test_library_stream_default_scan_limit_is_explicitly_partial" = 78
 
 [function_lines."tests/test_reference_quota.py"]
 "test_postgresql_failed_reference_write_releases_admission" = 77
