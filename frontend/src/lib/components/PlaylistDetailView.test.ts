@@ -259,7 +259,7 @@ describe('PlaylistDetailView header', () => {
 		expect(header.querySelector('.playlist-cover-initials')?.textContent).toBe('ND');
 	});
 
-	it('lists Share playlist, Upload…, Rename and Delete playlist in the menu, with no Save offline', async () => {
+	it('1859_R1: lists Share playlist, Upload…, Rename and Delete playlist in the menu, with no Save offline', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);
 		mounted.push(mount(PlaylistDetailView, { target }));

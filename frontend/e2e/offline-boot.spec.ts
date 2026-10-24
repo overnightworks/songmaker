@@ -35,7 +35,7 @@ test('1160-F42-boot: an online health navigation still shows the server response
 	});
 });
 
-test('a browser holding offline copies from the old build loses them when the service worker takes over, and still boots offline', async ({
+test('1859_R1: a browser holding offline copies from the old build loses them when the service worker takes over, and still boots offline', async ({
 	page,
 	context
 }) => {
