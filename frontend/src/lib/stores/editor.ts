@@ -166,8 +166,7 @@ export const draftHasUnversionedChanges = derived(
 /**
  * Makes the browser ask before the document unloads (reload, tab close, a
  * history leave out of the app) while the draft holds unversioned changes. The
- * listener exists only then: any `beforeunload` listener keeps the page out of
- * the back-forward cache.
+ * listener exists only then so clean pages need no unload handling.
  */
 export function followUnsavedDraftAtUnload(): () => void {
 	const askBeforeUnload = (unload: BeforeUnloadEvent) => unload.preventDefault();
