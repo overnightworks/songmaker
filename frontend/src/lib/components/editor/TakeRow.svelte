@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { flushSync } from 'svelte';
 	import type { SongItem, GenerationItem, UserLoraItem } from '$lib/api/types';
 	import type { SourceMode } from '$lib/stores/recipe';
 	import {
@@ -29,6 +30,7 @@
 	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '$lib/utils/scores';
 	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
 	import { selectionMode, selectedIds, toggleSelection } from '$lib/stores/selection';
+	import { revealTakeGroup, takeGroupKey } from '$lib/stores/takeFolds';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 	import TransportButtonIcon from '../TransportButtonIcon.svelte';
@@ -150,7 +152,7 @@
 
 	interface TakeProvenance {
 		label: string;
-		sourceId: string | null;
+		source: GenerationItem | null;
 	}
 
 	function takeProvenance(gen: GenerationItem): TakeProvenance | null {
@@ -162,7 +164,7 @@
 		const sourceVersionNumber = source?.version_number ?? gen.src_generation_version_number ?? null;
 		return {
 			label: `${taskType === 'repaint' ? TAKE_PROVENANCE_REPAINT_PREFIX : TAKE_PROVENANCE_COVER_PREFIX} ${nowPlayingTakeLabel(sourceVersionNumber, gen.src_generation_number)}`,
-			sourceId: source?.id ?? null
+			source: source ?? null
 		};
 	}
 
@@ -171,13 +173,23 @@
 		return loraId ? voices.find((voice) => voice.id === loraId) : undefined;
 	}
 
+	// An archived take is only a name in a list that cleanup will empty, so it
+	// carries no control or detail that promises it will stay.
+	const compact = $derived(gen.is_archived);
 	const transport = $derived(isGenPlaying(gen) ? audioPlayer.transport : 'idle');
 	const duration = $derived(formatDuration(gen));
-	const provenance = $derived(takeProvenance(gen));
-	const headline = $derived(headlineScore(gen));
-	const flag = $derived(qualityFlag(gen.scores));
-	const batchNotice = $derived(takeBatchReductionLabel(gen.generation_params));
-	const voice = $derived(voiceForGeneration(gen));
+	const provenance = $derived(compact ? null : takeProvenance(gen));
+	const headline = $derived(compact ? null : headlineScore(gen));
+	const flag = $derived(compact ? null : qualityFlag(gen.scores));
+	const batchNotice = $derived(compact ? null : takeBatchReductionLabel(gen.generation_params));
+	const voice = $derived(compact ? undefined : voiceForGeneration(gen));
+	// A link into a folded version unfolds it first; the browser then follows the
+	// hash to the take, which exists by the time it looks.
+	function revealSource(source: GenerationItem): void {
+		revealTakeGroup(takeGroupKey(source));
+		flushSync();
+	}
+
 	const takeName = $derived(nowPlayingTakeLabel(gen.version_number, gen.generation_number));
 </script>
 
@@ -253,7 +265,7 @@
 				</span>
 			{/if}
 
-			{#if $rescoringTakeIds.has(gen.id)}
+			{#if !compact && $rescoringTakeIds.has(gen.id)}
 				<span class="rescoring-badge">{TAKE_RESCORING_LABEL}</span>
 			{/if}
 
@@ -281,8 +293,11 @@
 				</button>
 			{:else}
 				<span class="take-origin">
-					{#if provenance.sourceId}
-						<a href={`#take-${provenance.sourceId}`}>{provenance.label}</a>
+					{#if provenance.source}
+						{@const source = provenance.source}
+						<a href={`#take-${source.id}`} onclick={() => revealSource(source)}
+							>{provenance.label}</a
+						>
 					{:else}
 						{provenance.label}
 					{/if}
@@ -298,34 +313,36 @@
 	</span>
 
 	<span class="take-actions">
-		<button
-			type="button"
-			class="pick-btn"
-			class:picked={gen.is_picked}
-			data-hitbox="frequent"
-			onclick={(e) => {
-				e.stopPropagation();
-				actions.pick(gen.id, !gen.is_picked);
-			}}
-			aria-pressed={gen.is_picked}
-			aria-label={`${gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL} ${takeName}`}
-		>
-			<Icon name={gen.is_picked ? 'star-filled' : 'star'} size={16} />
-		</button>
-		<button
-			type="button"
-			class="keep-btn"
-			class:kept={gen.is_kept}
-			data-hitbox="frequent"
-			onclick={(e) => {
-				e.stopPropagation();
-				actions.keep(gen.id, !gen.is_kept);
-			}}
-			aria-pressed={gen.is_kept}
-			aria-label={`${gen.is_kept ? TAKE_UNKEEP_LABEL : TAKE_KEEP_LABEL} ${takeName}`}
-		>
-			<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
-		</button>
+		{#if !compact}
+			<button
+				type="button"
+				class="pick-btn"
+				class:picked={gen.is_picked}
+				data-hitbox="frequent"
+				onclick={(e) => {
+					e.stopPropagation();
+					actions.pick(gen.id, !gen.is_picked);
+				}}
+				aria-pressed={gen.is_picked}
+				aria-label={`${gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL} ${takeName}`}
+			>
+				<Icon name={gen.is_picked ? 'star-filled' : 'star'} size={16} />
+			</button>
+			<button
+				type="button"
+				class="keep-btn"
+				class:kept={gen.is_kept}
+				data-hitbox="frequent"
+				onclick={(e) => {
+					e.stopPropagation();
+					actions.keep(gen.id, !gen.is_kept);
+				}}
+				aria-pressed={gen.is_kept}
+				aria-label={`${gen.is_kept ? TAKE_UNKEEP_LABEL : TAKE_KEEP_LABEL} ${takeName}`}
+			>
+				<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
+			</button>
+		{/if}
 		{#if !$selectionMode}
 			<TakeMenu
 				{gen}

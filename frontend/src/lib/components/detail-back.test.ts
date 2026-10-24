@@ -11,6 +11,7 @@ import {
 import { historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
+import { currentVersionHeadLabel } from '$lib/constants/now-playing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -141,7 +142,7 @@ describe('detail views own no content back', () => {
 		expect(generationTarget.querySelector('.back-btn')).toBeNull();
 		expect(generationTarget.textContent?.replace(/\s+/g, ' ')).toContain('Local Only');
 		expect(generationTarget.querySelector('.version-header')?.textContent?.trim()).toBe(
-			'v1 · 1 take'
+			currentVersionHeadLabel(1, 1)
 		);
 		expect(generationTarget.querySelector('.take-label')?.textContent?.trim()).toBe('Take 1');
 		expect(generationTarget.textContent).toContain(EDITOR_STYLE_PROMPT_LABEL);

@@ -64,7 +64,8 @@ import {
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,
 	openVersionLabel,
-	takeGroupLabel,
+	currentVersionHeadLabel,
+	foldedGroupLabel,
 	takeRowLabel,
 	takeVersion,
 	type TakeVersion
@@ -244,16 +245,18 @@ function boxesOverlap(a: Box | null, b: Box | null): boolean {
 	return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
-// The phone shows the takes on their own tab; the desktop beside the editor.
+// The phone shows the takes on their own tab, the desktop beside the editor; every folded version unfolds.
 async function showTakes(page: Page): Promise<void> {
 	const takesTab = page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) });
 	if (await takesTab.isVisible()) await takesTab.click();
+	for (const f of await workspace(page).locator('[aria-expanded="false"]').all()) await f.click();
 }
 
 function takeGroup(page: Page, version: TakeVersion | null, takeCount: number): Locator {
-	return workspace(page)
-		.locator('.version-section')
-		.filter({ hasText: takeGroupLabel(version, takeCount) });
+	const n = version?.versionNumber ?? null;
+	const either = [foldedGroupLabel(n, takeCount, 0), currentVersionHeadLabel(n ?? 0, takeCount)];
+	const hasText = new RegExp(either.join('|'));
+	return workspace(page).locator('.version-section').filter({ hasText });
 }
 
 // The phone's full Now Playing carries the transport while it covers the
@@ -644,9 +647,7 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		await showTakes(page);
 
-		await takeGroup(page, song.v1, 1)
-			.getByRole('button', { name: new RegExp(openVersionLabel(1)) })
-			.click();
+		await page.getByRole('button', { name: openVersionLabel(1) }).click();
 
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
@@ -662,9 +663,7 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		await showTakes(page);
 
-		await takeGroup(page, song.v2, 1)
-			.getByRole('button', { name: new RegExp(openVersionLabel(2)) })
-			.click();
+		await page.getByRole('button', { name: openVersionLabel(2) }).click();
 
 		await expect(lyricsField(page)).toBeFocused();
 		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);

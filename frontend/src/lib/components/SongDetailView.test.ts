@@ -6,7 +6,7 @@ import {
 	makeSong as song,
 	makeVersion as version
 } from '$lib/test-utils/factories';
-import { mount, tick, unmount } from 'svelte';
+import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { phoneAppBar } from '$lib/stores/ui';
@@ -1829,12 +1829,16 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		}
 	);
 
-	function takeGroupOpenLink(target: HTMLElement, versionNumber: number): HTMLButtonElement {
-		const link = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-link')).find(
-			(button) => button.textContent?.includes(openVersionLabel(versionNumber))
-		);
-		if (!link) throw new Error(`Expected the Open v${versionNumber} link on its take group`);
-		return link;
+	async function openFromTakeGroup(target: HTMLElement, n: number): Promise<void> {
+		const buttons = (css: string) => [...target.querySelectorAll<HTMLButtonElement>(css)];
+		const named = (css: string, text: string) =>
+			buttons(css).find((button) => button.textContent?.includes(text));
+		named('button[aria-expanded="false"]', `v${n} ·`)?.click();
+		flushSync();
+		named('.version-link', openVersionLabel(n))?.click();
+		await tick();
+		await Promise.resolve();
+		await tick();
 	}
 
 	it('Open v1 on a take group loads v1 as the draft and shows it on Edit', async () => {
@@ -1842,10 +1846,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		const target = await renderView();
 		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
 
-		takeGroupOpenLink(target, 1).click();
-		await tick();
-		await Promise.resolve();
-		await tick();
+		await openFromTakeGroup(target, 1);
 
 		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe('first draft');
 		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
@@ -1864,7 +1865,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		const target = await renderView();
 		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
 
-		takeGroupOpenLink(target, 2).click();
+		await openFromTakeGroup(target, 2);
 		await vi.waitFor(() =>
 			expect(document.activeElement).toBe(target.querySelector('textarea.lyrics-area'))
 		);
@@ -1956,10 +1957,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			reload: async (target: HTMLElement) => {
 				navigateToSongTab('takes');
 				await tick();
-				takeGroupOpenLink(target, 1).click();
-				await tick();
-				await Promise.resolve();
-				await tick();
+				await openFromTakeGroup(target, 1);
 			}
 		}
 	])(
