@@ -16,7 +16,6 @@ from songmaker_cli.api_helpers import (
 from songmaker_cli.api_models.queue_streams import (
     QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
-    QueueStreamPinResponse,
     QueueStreamSnapshotRequest,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
@@ -26,17 +25,14 @@ from songmaker_cli.constants import (
     AUDIO_MEDIA_TYPES,
 )
 from songmaker_cli.queue_streams import (
-    PinnedBytesExceededError,
     build_queue_stream_snapshot,
     check_queue_stream_rate_limit,
     ensure_sources_detachable,
     load_queue_stream_manifest,
-    pin_snapshot,
     prepare_queue_stream_admission,
     queue_stream_audio_path,
     resolve_library_pool_membership,
     track_source_from_generation,
-    unpin_snapshot,
 )
 
 router = APIRouter()
@@ -143,53 +139,3 @@ def api_get_queue_stream_audio(
     audio_path = queue_stream_audio_path(ctx, snapshot_id)
     media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, "application/octet-stream")
     return FileResponse(audio_path, media_type=media_type)
-
-
-@router.post(
-    "/queue-streams/{snapshot_id}/pin",
-    responses={
-        404: {"description": "Queue stream does not exist"},
-        409: {"description": "Pinned storage cap is reached"},
-    },
-)
-def api_pin_queue_stream(
-    snapshot_id: str,
-    request: Request,
-    user: AuthenticatedUser = Depends(get_current_user),
-    ctx: AppContext = Depends(get_app_context),
-) -> QueueStreamPinResponse:
-    check_queue_stream_rate_limit(request, user)
-    manifest = load_queue_stream_manifest(ctx, snapshot_id)
-    if manifest.scope != "auth" or manifest.scope_id != user.id:
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-    try:
-        updated = pin_snapshot(ctx, snapshot_id)
-    except PinnedBytesExceededError:
-        raise HTTPException(409, "Pinned storage cap reached")
-    return QueueStreamPinResponse(
-        snapshot_id=snapshot_id,
-        pinned=updated.pinned,
-        pinned_at=updated.pinned_at.isoformat() if updated.pinned_at else None,
-    )
-
-
-@router.delete(
-    "/queue-streams/{snapshot_id}/pin",
-    responses={404: {"description": "Queue stream does not exist"}},
-)
-def api_unpin_queue_stream(
-    snapshot_id: str,
-    request: Request,
-    user: AuthenticatedUser = Depends(get_current_user),
-    ctx: AppContext = Depends(get_app_context),
-) -> QueueStreamPinResponse:
-    check_queue_stream_rate_limit(request, user)
-    manifest = load_queue_stream_manifest(ctx, snapshot_id)
-    if manifest.scope != "auth" or manifest.scope_id != user.id:
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-    updated = unpin_snapshot(ctx, snapshot_id)
-    return QueueStreamPinResponse(
-        snapshot_id=snapshot_id,
-        pinned=updated.pinned,
-        pinned_at=updated.pinned_at.isoformat() if updated.pinned_at else None,
-    )

@@ -687,12 +687,6 @@ export interface QueueStreamManifest {
 	skipped_complete: boolean;
 }
 
-export interface QueueStreamPinResponse {
-	snapshot_id: string;
-	pinned: boolean;
-	pinned_at: string | null;
-}
-
 export interface QueueStreamSkipItem {
 	song_id: string;
 	generation_id: string;

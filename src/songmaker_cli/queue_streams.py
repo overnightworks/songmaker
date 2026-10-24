@@ -61,8 +61,6 @@ QUEUE_STREAM_FFMPEG_MIN_AUDIO_SECONDS_PER_WALL_SECOND = 100
 QUEUE_STREAM_FFMPEG_TIMEOUT_RESERVE_SECONDS = 120
 QUEUE_STREAM_MAX_DURATION_SECONDS = 60 * 60 * 6
 QUEUE_STREAM_MAX_CACHE_BYTES = 1024 * 1024 * 1024
-QUEUE_STREAM_PINNED_MAX_BYTES = 4 * 1024 * 1024 * 1024  # 4 GiB server-wide cap for pinned snapshots
-QUEUE_STREAM_PIN_MAX_AGE = timedelta(days=30)  # Abandoned pins expire after this age
 
 
 def queue_stream_ffmpeg_timeout_seconds(duration_seconds: float) -> int:
@@ -82,10 +80,6 @@ QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
 QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL: Final = "Queue stream audio not found"
 
 
-class PinnedBytesExceededError(Exception):
-    """Pinning this snapshot would exceed the server-wide pinned bytes cap."""
-
-
 SnapshotScope = Literal["auth", "shared-playlist", "shared-album"]
 
 
@@ -97,7 +91,6 @@ class _BuildLockEntry:
 
 _build_locks: dict[str, _BuildLockEntry] = {}
 _build_locks_guard = threading.Lock()
-_pin_lock = threading.Lock()
 
 
 class QueueStreamManifest(BaseModel):
@@ -117,8 +110,6 @@ class QueueStreamManifest(BaseModel):
     total_duration: float
     tracks: list[QueueStreamTrackResponse]
     windowed: bool = False
-    pinned: bool = False
-    pinned_at: datetime | None = None
 
     @classmethod
     def load(cls, manifest_path: Path) -> QueueStreamManifest | None:
@@ -286,8 +277,6 @@ def _build_queue_stream_snapshot(
         expires_at=expires_at,
         total_duration=round(offset, 3),
         windowed=windowed,
-        pinned=False,
-        pinned_at=None,
         tracks=tracks,
     )
     manifest.save(manifest_path)
@@ -450,7 +439,7 @@ def load_queue_stream_manifest(ctx: AppContext, snapshot_id: str) -> QueueStream
         raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
 
     now = datetime.now(timezone.utc)
-    if manifest.expires_at < now and not _is_active_pin(manifest, now):
+    if manifest.expires_at < now:
         delete_snapshot_files(ctx, snapshot_id)
         raise HTTPException(404, "Queue stream expired")
 
@@ -489,7 +478,7 @@ def _remove_expired_queue_stream_snapshots(
     for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
         snapshot_id = manifest_path.stem
         manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is not None and (manifest.expires_at >= now or _is_active_pin(manifest, now)):
+        if manifest is not None and (manifest.expires_at >= now):
             live_snapshot_ids.add(snapshot_id)
             continue
         delete_snapshot_files(ctx, snapshot_id)
@@ -637,19 +626,13 @@ def _enforce_cache_quota(
     *,
     protected_snapshot_ids: set[str] | None = None,
 ) -> None:
-    now = datetime.now(timezone.utc)
-    pinned_ids = _pinned_snapshot_ids(stream_dir, now)
-    # Pinned snapshots are excluded from quota accounting and eviction entirely.
     # Just-built snapshots (protected_snapshot_ids) are counted but never evicted.
-    eviction_protected = (protected_snapshot_ids or set()) | pinned_ids
+    eviction_protected = protected_snapshot_ids or set()
 
     mp3_files = [path for path in stream_dir.glob("*.mp3") if path.is_file()]
     total_bytes = 0
     sized_files: list[tuple[float, int, Path]] = []
     for path in mp3_files:
-        snapshot_id = _snapshot_id_from_cache_file(path)
-        if snapshot_id in pinned_ids:
-            continue  # Pinned bytes do not count toward the general quota
         try:
             stat = path.stat()
         except OSError:
@@ -706,107 +689,6 @@ def _valid_snapshot_id(snapshot_id: str) -> bool:
 
 def _escape_concat_path(path: Path) -> str:
     return str(path).replace("'", r"'\''")
-
-
-def _is_active_pin(manifest: QueueStreamManifest, now: datetime) -> bool:
-    """Return True when the manifest is pinned and the pin has not been abandoned."""
-    if not manifest.pinned or manifest.pinned_at is None:
-        return False
-    return manifest.pinned_at >= now - QUEUE_STREAM_PIN_MAX_AGE
-
-
-def _pinned_snapshot_ids(stream_dir: Path, now: datetime) -> set[str]:
-    """Return the IDs of all snapshots that are currently pinned and not abandoned."""
-    pinned: set[str] = set()
-    for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
-        manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is None:
-            continue
-        if _is_active_pin(manifest, now):
-            pinned.add(manifest_path.stem)
-    return pinned
-
-
-def _sum_pinned_bytes(stream_dir: Path, now: datetime) -> int:
-    """Sum the audio bytes of all currently pinned, non-abandoned snapshots."""
-    total = 0
-    for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
-        manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is None:
-            continue
-        if not _is_active_pin(manifest, now):
-            continue
-        audio_path = stream_dir / f"{manifest_path.stem}.mp3"
-        try:
-            total += audio_path.stat().st_size
-        except OSError:
-            pass
-    return total
-
-
-def pin_snapshot(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
-    """Pin a snapshot, exempting it from TTL expiry and quota eviction.
-
-    Raises PinnedBytesExceededError when the pinned-bytes cap would be exceeded.
-    Idempotent: returns the current manifest state when already pinned.
-    """
-    if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-    stream_dir = _stream_dir(ctx)
-    manifest_path = stream_dir / f"{snapshot_id}.json"
-    if not manifest_path.exists():
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-    manifest = QueueStreamManifest.load(manifest_path)
-    if manifest is None:
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-
-    if manifest.pinned:
-        return manifest  # Already pinned — idempotent fast-path (no lock needed)
-
-    with _pin_lock:
-        # Re-read under the lock: another thread may have pinned between the check above and here
-        manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is None:
-            raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-
-        if manifest.pinned:
-            return manifest  # Already pinned — idempotent
-
-        audio_path = stream_dir / f"{snapshot_id}.mp3"
-        if not audio_path.exists():
-            raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL)
-        try:
-            new_bytes = audio_path.stat().st_size
-        except OSError as exc:
-            raise HTTPException(404, QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL) from exc
-
-        now = datetime.now(timezone.utc)
-        if _sum_pinned_bytes(stream_dir, now) + new_bytes > QUEUE_STREAM_PINNED_MAX_BYTES:
-            raise PinnedBytesExceededError()
-
-        manifest = manifest.model_copy(update={"pinned": True, "pinned_at": now})
-        manifest.save(manifest_path)
-    return manifest
-
-
-def unpin_snapshot(ctx: AppContext, snapshot_id: str) -> QueueStreamManifest:
-    """Remove a pin from a snapshot.
-
-    Idempotent: has no effect when the snapshot is already unpinned.
-    """
-    if not _valid_snapshot_id(snapshot_id):
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-    stream_dir = _stream_dir(ctx)
-    manifest_path = stream_dir / f"{snapshot_id}.json"
-    if not manifest_path.exists():
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-    manifest = QueueStreamManifest.load(manifest_path)
-    if manifest is None:
-        raise HTTPException(404, QUEUE_STREAM_NOT_FOUND_DETAIL)
-
-    manifest = manifest.model_copy(update={"pinned": False, "pinned_at": None})
-    manifest.save(manifest_path)
-    return manifest
 
 
 LIBRARY_QUEUE_STREAM_SCAN_LIMIT = 1_000
