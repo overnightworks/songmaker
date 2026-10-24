@@ -37,7 +37,7 @@ beforeEach(() => {
 	selectedSongId.set(`song-${(songSequence += 1)}`);
 });
 
-describe('groupTakes', () => {
+describe('groupTakes (rules 1, 2 and 5, cells 1/8/9)', () => {
 	it('puts the latest version first, the earlier ones newest first and Imported last', () => {
 		const groups = groupTakes(SONG_TAKES, 3);
 
@@ -66,7 +66,7 @@ describe('groupTakes', () => {
 	});
 });
 
-describe('the rendered takes', () => {
+describe('the rendered takes (rules 1 and 3, cells 3/5)', () => {
 	function renderedIds(groups = groupTakes(SONG_TAKES, 3)): string[] {
 		return renderedTakes(get(takeFolds), groups).map((gen) => gen.id);
 	}
@@ -102,7 +102,7 @@ describe('the rendered takes', () => {
 	});
 });
 
-describe('revealTakeGroup', () => {
+describe('revealTakeGroup (rule 10, cell 43)', () => {
 	it('opens a folded version', () => {
 		const groups = groupTakes(SONG_TAKES, 3);
 		settleTakeFolds(groups);
@@ -122,7 +122,7 @@ describe('revealTakeGroup', () => {
 	});
 });
 
-describe('Imported starts open by default', () => {
+describe('Imported starts open by default (rule 5, Q1 (a), cell 47)', () => {
 	const importedOnly = [takeOf('i1', null)];
 
 	it('when no version of the song holds a take', () => {
@@ -132,7 +132,7 @@ describe('Imported starts open by default', () => {
 		expect(isGroupOpen(get(takeFolds), groups, 'imported')).toBe(true);
 	});
 
-	it('only once: a fold by hand stays, and a later generated take does not fold it', () => {
+	it('only once: a fold by hand stays through a second settle', () => {
 		const groups = groupTakes(importedOnly, 1);
 		settleTakeFolds(groups);
 		toggleTakeGroup('imported', groups);
@@ -157,7 +157,7 @@ describe('Imported starts open by default', () => {
 	});
 });
 
-describe('folds belong to the song they were made on', () => {
+describe('folds belong to the song they were made on (rule 12, cells 36/39)', () => {
 	function unfoldV2(): void {
 		toggleTakeGroup('v2', groupTakes(SONG_TAKES, 3));
 	}

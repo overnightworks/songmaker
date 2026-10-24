@@ -137,7 +137,7 @@ describe('selection', () => {
 	});
 });
 
-describe('keepOnlySelected', () => {
+describe('keepOnlySelected (rule 6, cells 18/21/26/27)', () => {
 	it('removes every selected id outside the given ones and keeps select mode while some remain', () => {
 		toggleSelection('g1');
 		toggleSelection('g2');
@@ -158,9 +158,11 @@ describe('keepOnlySelected', () => {
 		expect(get(selectionMode)).toBe(false);
 	});
 
-	it('leaves an empty selection and select mode as they were', () => {
+	it('leaves select mode on when nothing was selected to remove', () => {
+		selectionMode.set(true);
+
 		keepOnlySelected(new Set(['g1']));
 
-		expect(get(selectionMode)).toBe(false);
+		expect(get(selectionMode)).toBe(true);
 	});
 });

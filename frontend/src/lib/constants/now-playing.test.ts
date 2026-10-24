@@ -26,7 +26,7 @@ describe('nowPlayingTakeLabel', () => {
 	});
 });
 
-describe('currentVersionHeadLabel', () => {
+describe('currentVersionHeadLabel (rule 1, cells 1/9)', () => {
 	it.each([
 		{ versionNumber: 6, count: 3, label: 'v6 current · 3 takes' },
 		{ versionNumber: 3, count: 1, label: 'v3 current · 1 take' },
@@ -36,7 +36,7 @@ describe('currentVersionHeadLabel', () => {
 	});
 });
 
-describe('foldedGroupLabel', () => {
+describe('foldedGroupLabel (rules 2 and 5, cells 1/8)', () => {
 	it.each([
 		{ versionNumber: 5, count: 5, archived: 2, label: 'v5 · 5 takes · 2 archived' },
 		{ versionNumber: 4, count: 3, archived: 3, label: 'v4 · 3 takes · all archived' },
