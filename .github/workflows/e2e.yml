@@ -54,6 +54,9 @@ jobs:
       - name: Reset stack
         run: docker compose $COMPOSE_FILES down -v
 
+      - name: Create the back-channel network the compose file declares external
+        run: docker network inspect hal_backchannel_songmaker >/dev/null 2>&1 || docker network create hal_backchannel_songmaker
+
       - name: Boot stack
         id: boot
         env:

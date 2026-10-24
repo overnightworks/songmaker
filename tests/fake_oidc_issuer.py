@@ -33,6 +33,7 @@ KEY_ID = "test-key"
 RSA_PUBLIC_EXPONENT = 65537
 RSA_KEY_BITS = 2048
 ID_TOKEN_LIFETIME_SECONDS = 300
+BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"  # NOSONAR(S5332)
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,34 @@ class FakeIssuer:
         if self.person.refresh_token is not None:
             answer["refresh_token"] = self.person.refresh_token
         return TokenEndpointAnswer(status=200, body=json.dumps(answer).encode())
+
+    def logout_token(self, subject: str, **overrides: object) -> str:
+        """A Logout Token the realm would send; ``overrides`` replace or (None) drop claims."""
+        claims: dict[str, object] = {
+            "iss": self.issuer,
+            "aud": self.client_id,
+            "sub": subject,
+            "iat": int(self.now),
+            "exp": int(self.now) + ID_TOKEN_LIFETIME_SECONDS,
+            "jti": "logout-token-id",
+            "events": {BACKCHANNEL_LOGOUT_EVENT: {}},
+        }
+        claims.update(overrides)
+        return self.sign({name: value for name, value in claims.items() if value is not None})
+
+    def sign(
+        self,
+        claims: dict[str, object],
+        *,
+        token_type: str = "logout+jwt",
+        key: rsa.RSAPrivateKey | None = None,
+    ) -> str:
+        return jwt.encode(
+            claims,
+            key or self._key,
+            algorithm="RS256",
+            headers={"kid": KEY_ID, "typ": token_type},
+        )
 
     def relying_party_for_app(self) -> OidcSignIn:
         client_config = build_oidc_client_config(get_settings())
