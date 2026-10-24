@@ -478,7 +478,7 @@ def _remove_expired_queue_stream_snapshots(
     for manifest_path in stream_dir.glob(QUEUE_STREAM_MANIFEST_GLOB):
         snapshot_id = manifest_path.stem
         manifest = QueueStreamManifest.load(manifest_path)
-        if manifest is not None and (manifest.expires_at >= now):
+        if manifest is not None and manifest.expires_at >= now:
             live_snapshot_ids.add(snapshot_id)
             continue
         delete_snapshot_files(ctx, snapshot_id)

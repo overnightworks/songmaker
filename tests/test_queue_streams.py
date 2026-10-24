@@ -17,6 +17,7 @@ from conftest import (
     web_client,
 )
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from songmaker_cli import audio_files
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
@@ -1670,7 +1671,7 @@ def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:
 
 def _expired_shared_snapshot_with_stored_pin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> tuple[object, str, Path]:
+) -> tuple[TestClient, str, Path]:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
