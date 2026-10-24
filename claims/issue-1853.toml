@@ -1,0 +1,8 @@
+claim_id = "5fe3c8b4e90546448abc805042b01dd6"
+agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
+role = "builder"
+base = "3f77c4db1a6e5c474310e7b3a6a75a6ba5d69f69"
+branch = "claude/issue-1853-allowlist-orphans"
+scope = ["scripts/check_dead_symbols.py", "scripts/check_test_only_exports.sh", "scripts/dead-exports.allow", "tests/test_check_dead_symbols.py"]
+opened_commit = "d20dbda16cba0eba9daafe9dae9c7f96b2d800de"
+whole_reason = "Both repository dead-code checks get the same orphan rule; each check, its allow file and its test move together."
