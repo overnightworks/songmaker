@@ -106,6 +106,7 @@ check_binary() {
         return
     fi
     echo "ok: $label CLI at $path -> $resolved"
+    return 0
 }
 
 check_codex_resources() {
