@@ -1,8 +1,0 @@
-claim_id = "ed658c155ed04a9c90157f572d727cd2"
-agent = "Codex 01a16e6e-b075-7e61-bee8-0b712b0d5fd9"
-role = "builder"
-base = "5f67bbd14144758e13d1aee6a6fd6010417f39fe"
-branch = "codex/issue-1873-h6h-wall-bottom-proof"
-scope = ["frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/e2e/library-phone-list.spec.ts", "frontend/e2e/library-wall-history.spec.ts", "frontend/e2e/wall-scroll.ts", "quality/baseline.toml"]
-opened_commit = "2e9b4f5e6b187212d6da9ba4e2171500679a6c7f"
-whole_reason = "Two independent test-only cards (#1873 wall restoration and #1877 auth expiry) share one final CI landing; the original wall-helper extraction needs eight paths and the auth arrangement adds one disjoint file."
