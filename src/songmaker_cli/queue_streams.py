@@ -200,11 +200,9 @@ def build_queue_stream_snapshot(
     scope: SnapshotScope,
     scope_id: str,
     stream_url: str,
-    force_windowed: bool = False,
-    admission: QueueStreamAdmission | None = None,
 ) -> QueueStreamManifestResponse:
-    admission = admission or prepare_queue_stream_admission(ctx, sources)
-    windowed_by_count = force_windowed or admission.windowed_by_count
+    admission = prepare_queue_stream_admission(ctx, sources)
+    windowed_by_count = admission.windowed_by_count
 
     stream_dir = _stream_dir(ctx)
     stream_dir.mkdir(parents=True, exist_ok=True)
@@ -693,8 +691,8 @@ def _escape_concat_path(path: Path) -> str:
 
 LIBRARY_QUEUE_STREAM_SCAN_LIMIT = 1_000
 
-# Authenticated queue-stream creation fails closed: an unenforced limit here
-# could let one user exhaust storage or worker capacity unbounded.
+# Library pool reads fail closed so an unavailable limiter cannot permit
+# unbounded database and audio-file scans.
 _QUEUE_STREAM_LIMITER_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
 
 

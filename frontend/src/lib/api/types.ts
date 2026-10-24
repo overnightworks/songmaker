@@ -480,12 +480,6 @@ export interface LibraryPoolTakeItem {
 	is_kept: boolean;
 }
 
-export interface LibraryQueueStreamRequest {
-	start_generation_id?: string | null;
-	shuffle: boolean;
-	pool: 'mix' | 'picks' | 'keeps' | 'all';
-}
-
 export interface LibrarySearchResponse {
 	items: (LibraryAlbumHit | LibrarySongHit)[];
 	next_cursor: string | null;
@@ -693,10 +687,6 @@ export interface QueueStreamSkipItem {
 	reason: 'missing_path' | 'missing_file' | 'unreadable_file';
 }
 
-export interface QueueStreamSnapshotRequest {
-	tracks: QueueStreamTrackRequest[];
-}
-
 export interface QueueStreamTrackItem {
 	key: string;
 	index: number;
@@ -715,11 +705,6 @@ export interface QueueStreamTrackItem {
 	duration: number;
 	start_offset: number;
 	end_offset: number;
-}
-
-export interface QueueStreamTrackRequest {
-	generation_id: string;
-	entry_id?: string | null;
 }
 
 export interface RateLimitItem {
