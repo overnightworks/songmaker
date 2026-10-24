@@ -164,3 +164,17 @@ def test_a_re_export_used_by_production_code_keeps_the_symbol_alive(run_gate):
         )[0]
         == 0
     )
+
+
+@pytest.mark.parametrize(
+    "entry",
+    ["used.py:used", "nowhere.py:nowhere"],
+    ids=["symbol with a production reference", "symbol that does not exist"],
+)
+def test_allow_entry_that_suppresses_nothing_fails_and_is_named(run_gate, entry):
+    status, output = run_gate(
+        {"used.py": "def used(): pass", "caller.py": "from used import used\nused()\n"},
+        f"{entry} # no longer needed\n",
+    )
+    assert status == 1
+    assert f"Allow entry suppresses nothing: {entry}" in output
