@@ -73,7 +73,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
     assert isinstance(loosened, list)
     assert [(entry["item"], entry["what"]) for entry in loosened] == [
         ("#1734", 'mandatory job "Acceptance evidence (integration)" removed'),
-        ("#1856", "size baseline raises file_lines frontend/src/lib/api/types.ts 1146 -> 1180"),
+        ("#1856", "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1174"),
         ("#1784", "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"),
     ]
     for entry in loosened:

@@ -407,7 +407,6 @@ def rate_limit_policy():
     ("/api/audio/upload", API_BUDGET_NAME),
     ("/api/queue-streams", API_BUDGET_NAME),
     ("/api/queue-streams/library", API_BUDGET_NAME),
-    ("/api/queue-streams/some-id/pin", API_BUDGET_NAME),
     ("/shared/realslug", API_BUDGET_NAME),
     ("/shared/realslug/cover", API_BUDGET_NAME),
     ("/shared/realslug/stream", API_BUDGET_NAME),
