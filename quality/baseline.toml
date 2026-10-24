@@ -23,8 +23,8 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1306
-"frontend/e2e/helpers.ts" = 861
+"frontend/e2e/back-closes-overlay.spec.ts" = 1280
+"frontend/e2e/helpers.ts" = 843
 "frontend/e2e/library.spec.ts" = 1305
 "frontend/e2e/offline.spec.ts" = 816
 "frontend/e2e/seed.ts" = 1205
