@@ -11,9 +11,13 @@ import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
+	openNowPlayingLabel,
+	SONG_MENU_LABEL,
+	SONG_MENU_SAVE_LABEL,
 	songEditorOpenLabel,
 	TAKE_DELETE_LABEL,
-	TAKE_OVERFLOW_LABEL
+	TAKE_OVERFLOW_LABEL,
+	TAKES_EMPTY
 } from '../src/lib/constants';
 import {
 	bulkDeleteLabel,
@@ -24,7 +28,7 @@ import {
 	selectedCountLabel,
 	TAKE_SELECT_ALL_UNKEPT_LABEL
 } from '../src/lib/constants/now-playing';
-import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import { appBar, csrfHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import {
 	archiveOwnedAlbum,
 	completeGenerationJobWithoutEvent,
@@ -144,11 +148,77 @@ async function holdSave(page: Page): Promise<() => Promise<void>> {
 	};
 }
 
-async function startSave(page: Page): Promise<void> {
+async function editLyrics(page: Page): Promise<void> {
 	await showTab(page, EDITOR_TAB_EDIT_LABEL);
 	await page.getByRole('textbox', { name: /^Lyrics/ }).fill(EDITED_LYRICS);
+}
+
+async function startSave(page: Page): Promise<void> {
+	await editLyrics(page);
 	await page.getByRole('button', { name: EDITOR_SAVE_ACCESSIBLE_LABEL }).click();
 	await showTab(page, EDITOR_TAB_TAKES_LABEL);
+}
+
+// The phone's Save lives in the app bar's song menu; it returns once the new version is stored.
+async function saveFromAppBarMenu(page: Page): Promise<void> {
+	const stored = page.waitForResponse(
+		(response) =>
+			SONG_PUT.test(new URL(response.url()).pathname) && response.request().method() === 'PUT'
+	);
+	await appBar(page).getByRole('button', { name: SONG_MENU_LABEL }).click();
+	await page
+		.getByRole('dialog', { name: SONG_MENU_LABEL })
+		.getByRole('button', { name: SONG_MENU_SAVE_LABEL })
+		.click();
+	await stored;
+}
+
+// What this page asks the server to delete, as "METHOD path body".
+function recordDeleteRequests(page: Page): string[] {
+	const sent: string[] = [];
+	page.on('request', (request) => {
+		const { pathname } = new URL(request.url());
+		if (/^\/api\/generations\//.test(pathname) && ['DELETE', 'POST'].includes(request.method()))
+			sent.push(`${request.method()} ${pathname} ${request.postData() ?? ''}`.trim());
+	});
+	return sent;
+}
+
+const singleDeleteRequest = (id: string) => `DELETE /api/generations/${id}`;
+const bulkDeleteRequest = (...ids: string[]) =>
+	`POST /api/generations/bulk-delete ${JSON.stringify({ generation_ids: ids })}`;
+
+// Another client removes a take; this page learns of it only through the next reload of the song.
+async function deleteAsAnotherClient(page: Page, id: string): Promise<void> {
+	const response = await page.request.delete(`/api/generations/${id}`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(response.ok()).toBe(true);
+}
+
+// Records whether the selection toolbar is ever in the document from now on.
+async function watchForToolbar(page: Page): Promise<() => Promise<boolean>> {
+	await page.evaluate(() => {
+		const seen = window as Window & { toolbarSeen?: boolean };
+		seen.toolbarSeen = false;
+		new MutationObserver(() => {
+			if (document.querySelector('.selection-toolbar')) seen.toolbarSeen = true;
+		}).observe(document.body, { childList: true, subtree: true });
+	});
+	return () =>
+		page.evaluate(() => Boolean((window as Window & { toolbarSeen?: boolean }).toolbarSeen));
+}
+
+async function openSongOf(page: Page, title: string): Promise<void> {
+	await workspace(page)
+		.getByRole('button', { name: songEditorOpenLabel(title) })
+		.click();
+}
+
+async function backToAlbumOnPhone(page: Page): Promise<void> {
+	await appBar(page)
+		.getByRole('button', { name: /^Back to / })
+		.click();
 }
 
 let albumId: string;
@@ -159,6 +229,31 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async ({ page }) => {
 	await archiveOwnedAlbum(page.request, albumId);
+});
+
+test.describe('deleting the takes', () => {
+	test('28/29 Delete sends only the rendered ticked takes and the folded ones survive', async ({
+		page
+	}) => {
+		const song = await seedFoldedSong(page, albumId, 'delete');
+		await openTakes(page, song);
+		const sent = recordDeleteRequests(page);
+		await tickTakes(page, song.v2[0]);
+		await v1Row(page).click();
+		await tickTakes(page, song.v1[0]);
+		await v1Row(page).click();
+		await expectSelected(page, 1);
+
+		await toolbar(page)
+			.getByRole('button', { name: bulkDeleteLabel(1) })
+			.click();
+		const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(1) });
+		await dialog.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+
+		await expect(takeRow(page, song.v2[0])).toHaveCount(0);
+		expect(sent).toEqual([bulkDeleteRequest(song.v2[0])]);
+		expect(await takeIdsOf(page, song.songId)).toEqual([...song.v1, song.v2[1]].sort());
+	});
 });
 
 test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
@@ -222,27 +317,6 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		);
 	});
 
-	test('28 Delete sends only the rendered ticked takes and the folded ones survive', async ({
-		page
-	}) => {
-		const song = await seedFoldedSong(page, albumId, 'delete');
-		await openTakes(page, song);
-		await tickTakes(page, song.v2[0]);
-		await v1Row(page).click();
-		await tickTakes(page, song.v1[0]);
-		await v1Row(page).click();
-		await expectSelected(page, 1);
-
-		await toolbar(page)
-			.getByRole('button', { name: bulkDeleteLabel(1) })
-			.click();
-		const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(1) });
-		await dialog.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
-
-		await expect(takeRow(page, song.v2[0])).toHaveCount(0);
-		expect(await takeIdsOf(page, song.songId)).toEqual([...song.v1, song.v2[1]].sort());
-	});
-
 	test('30 a Save that folds the version under an open dialog changes what Delete sends', async ({
 		page
 	}) => {
@@ -303,6 +377,111 @@ test.describe('folding the takes', { tag: ONLY_IN_SHELL.desktop }, () => {
 		expect(await takeIdsOf(page, song.songId)).toEqual([...song.v1, ...song.v2].sort());
 	});
 
+	test('14 an empty current version shows the running job and hides the empty text', async ({
+		page
+	}) => {
+		const title = `Folds empty ${Date.now()}`;
+		const songId = await seedSongPhoneSong(albumId, title, 1, 0);
+		await seedRunningGenerationJob(songId, {
+			progress: 0.5,
+			takeIndex: 1,
+			takeCount: 1,
+			phase: 'rendering',
+			generationStartedOffsetSeconds: 30
+		});
+		await page.goto(`/album/${albumId}`);
+		await openSongOf(page, title);
+
+		await expect(workspace(page).locator('.version-head')).toContainText(
+			currentVersionHeadLabel(1, 0)
+		);
+		await expect(workspace(page).locator('.status-slot')).toBeVisible();
+		await expect(workspace(page).getByText(TAKES_EMPTY)).toHaveCount(0);
+	});
+
+	test('26 a take another client deleted leaves the selection with the Save that drops it', async ({
+		page
+	}) => {
+		const song = await seedFoldedSong(page, albumId, 'dropped');
+		await openTakes(page, song);
+		const sent = recordDeleteRequests(page);
+		await v1Row(page).click();
+		await tickTakes(page, song.v1[0], song.v1[1]);
+		await expectSelected(page, 2);
+		await deleteAsAnotherClient(page, song.v1[0]);
+		sent.length = 0;
+
+		await startSave(page);
+
+		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
+		await expectSelected(page, 1);
+		await toolbar(page)
+			.getByRole('button', { name: bulkDeleteLabel(1) })
+			.click();
+		const dialog = page.getByRole('dialog', { name: bulkDeleteTitle(1) });
+		await dialog.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		await expect(takeRow(page, song.v1[1])).toHaveCount(0);
+		expect(sent).toEqual([bulkDeleteRequest(song.v1[1])]);
+		expect(await takeIdsOf(page, song.songId)).toEqual([song.v1[2], ...song.v2].sort());
+	});
+
+	test('27 a Save that creates a version folds the old current one and clears its ticks', async ({
+		page
+	}) => {
+		const song = await seedFoldedSong(page, albumId, 'newest');
+		await openTakes(page, song);
+		await v1Row(page).click();
+		await tickTakes(page, song.v2[0]);
+		await expectSelected(page, 1);
+
+		await startSave(page);
+
+		await expect(workspace(page).locator('.version-head')).toContainText(
+			currentVersionHeadLabel(3, 0)
+		);
+		await expect(workspace(page).locator('.version-empty')).toHaveText(TAKES_EMPTY);
+		await expect(v2Row(page)).toHaveAttribute('aria-expanded', 'false');
+		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'true');
+		await expect(toolbar(page)).toHaveCount(0);
+	});
+
+	test('34 a single Delete opened before the Save sends nothing once another client deleted the take', async ({
+		page
+	}) => {
+		const song = await seedFoldedSong(page, albumId, 'gone');
+		await openTakes(page, song);
+		await v1Row(page).click();
+		const sent = recordDeleteRequests(page);
+		const release = await holdSave(page);
+		await startSave(page);
+		await takeRow(page, song.v1[0]).getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
+		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		await deleteAsAnotherClient(page, song.v1[0]);
+		sent.length = 0;
+
+		await release();
+		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
+		await page.getByRole('dialog').getByRole('button', { name: TAKE_DELETE_LABEL }).click();
+
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		expect(sent).toEqual([]);
+	});
+
+	test('35 a single Delete of a rendered take sends that take', async ({ page }) => {
+		const song = await seedFoldedSong(page, albumId, 'single-sent');
+		await openTakes(page, song);
+		await v1Row(page).click();
+		const sent = recordDeleteRequests(page);
+
+		await takeRow(page, song.v1[0]).getByRole('button', { name: TAKE_OVERFLOW_LABEL }).click();
+		await page.getByRole('button', { name: TAKE_DELETE_LABEL, exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: TAKE_DELETE_LABEL }).click();
+
+		await expect(takeRow(page, song.v1[0])).toHaveCount(0);
+		expect(sent).toEqual([singleDeleteRequest(song.v1[0])]);
+		expect(await takeIdsOf(page, song.songId)).toEqual([...song.v1.slice(1), ...song.v2].sort());
+	});
+
 	test('36 folds and ticks reset on another song and survive a Back and Forward', async ({
 		page
 	}) => {
@@ -349,27 +528,116 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 		await v1Row(page).click();
 		await expectSelected(page, 1);
 	});
+	test('39 folds and ticks reset when another song came on screen while the Takes tab was away', async ({
+		page
+	}) => {
+		const song = await seedFoldedSong(page, albumId, 'phone-a');
+		const other = await seedFoldedSong(page, albumId, 'phone-b');
+		await openTakes(page, song);
+		await v1Row(page).click();
+		await tickTakes(page, song.v1[0]);
+		await expectSelected(page, 1);
+
+		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await backToAlbumOnPhone(page);
+		await openSongOf(page, other.title);
+		await backToAlbumOnPhone(page);
+		await openSongOf(page, song.title);
+		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+
+		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'false');
+		await expect(toolbar(page)).toHaveCount(0);
+	});
+
+	test('41 a take another client deleted never shows ticked when the Takes tab returns after a Save', async ({
+		page
+	}) => {
+		const song = await seedFoldedSong(page, albumId, 'phone-save');
+		await openTakes(page, song);
+		await v1Row(page).click();
+		await tickTakes(page, song.v1[0]);
+		await expectSelected(page, 1);
+		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await deleteAsAnotherClient(page, song.v1[0]);
+		await editLyrics(page);
+		await saveFromAppBarMenu(page);
+		const toolbarWasShown = await watchForToolbar(page);
+
+		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+
+		await expect(v1Row(page)).toHaveAttribute('aria-expanded', 'true');
+		await expect(workspace(page).locator('.take-row.selected')).toHaveCount(0);
+		await expect(toolbar(page)).toHaveCount(0);
+		expect(await toolbarWasShown()).toBe(false);
+	});
+
+	test('42 Now Playing opened over the list and closed leaves the selection as it was', async ({
+		page
+	}) => {
+		const song = await seedFoldedSong(page, albumId, 'phone-playing');
+		await openTakes(page, song);
+		await takeRow(page, song.v2[0]).locator('.play-btn').click();
+		await tickTakes(page, song.v2[1]);
+		await expectSelected(page, 1);
+
+		await page
+			.getByRole('contentinfo')
+			.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
+			.click();
+		await expect(page.getByRole('dialog')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+
+		await expectSelected(page, 1);
+	});
 });
 
 test.describe('Imported (Q1 a)', { tag: ONLY_IN_SHELL.desktop }, () => {
-	test('24/47 starts open when no version holds a take and stays folded once folded by hand', async ({
+	test('24 folding Imported clears the ticks on both its takes and ends select mode', async ({
 		page
 	}) => {
 		const songTitle = `Folds imported ${Date.now()}`;
 		await seedTakeStripSong(albumId, songTitle, 2);
 		await page.goto(`/album/${albumId}`);
-		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-			.click();
+		await openSongOf(page, songTitle);
+		await showTab(page, EDITOR_TAB_TAKES_LABEL);
 		const imported = workspace(page).getByRole('button', { name: foldedGroupLabel(null, 2, 0) });
 		await expect(workspace(page).locator('.take-row')).toHaveCount(2);
 
 		await tickTakes(page, ...(await takeIds(page)));
+		await expectSelected(page, 2);
 		await imported.click();
+
+		await expect(imported).toHaveAttribute('aria-expanded', 'false');
 		await expect(toolbar(page)).toHaveCount(0);
+	});
+});
+
+test.describe('Imported on the phone (Q1 a)', { tag: ONLY_IN_SHELL.mobile }, () => {
+	test('47 starts open, stays folded through the Edit tab and opens again after another song', async ({
+		page
+	}) => {
+		const songTitle = `Folds imported ${Date.now()}`;
+		const otherTitle = `Folds imported other ${Date.now()}`;
+		await seedTakeStripSong(albumId, songTitle, 2);
+		await seedTakeStripSong(albumId, otherTitle, 2);
+		await page.goto(`/album/${albumId}`);
+		await openSongOf(page, songTitle);
+		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		const imported = workspace(page).getByRole('button', { name: foldedGroupLabel(null, 2, 0) });
+		await expect(imported).toHaveAttribute('aria-expanded', 'true');
+
+		await imported.click();
 		await showTab(page, EDITOR_TAB_EDIT_LABEL);
 		await showTab(page, EDITOR_TAB_TAKES_LABEL);
 		await expect(imported).toHaveAttribute('aria-expanded', 'false');
+
+		await backToAlbumOnPhone(page);
+		await openSongOf(page, otherTitle);
+		await backToAlbumOnPhone(page);
+		await openSongOf(page, songTitle);
+		await showTab(page, EDITOR_TAB_TAKES_LABEL);
+		await expect(imported).toHaveAttribute('aria-expanded', 'true');
 	});
 });
 
