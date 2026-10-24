@@ -14,7 +14,7 @@ import {
 	toggleTakeGroup
 } from './takeFolds';
 
-function take(id: string, versionNumber: number | null, overrides: Partial<GenerationItem> = {}) {
+function takeOf(id: string, versionNumber: number | null, overrides: Partial<GenerationItem> = {}) {
 	return makeGeneration({
 		id,
 		version_id: versionNumber === null ? null : `ver-${versionNumber}`,
@@ -24,11 +24,11 @@ function take(id: string, versionNumber: number | null, overrides: Partial<Gener
 }
 
 const SONG_TAKES = [
-	take('c1', 3),
-	take('a1', 2, { is_picked: true }),
-	take('a2', 2, { is_archived: true }),
-	take('o1', 1, { is_archived: true }),
-	take('i1', null)
+	takeOf('c1', 3),
+	takeOf('a1', 2, { is_picked: true }),
+	takeOf('a2', 2, { is_archived: true }),
+	takeOf('o1', 1, { is_archived: true }),
+	takeOf('i1', null)
 ];
 
 let songSequence = 0;
@@ -55,14 +55,14 @@ describe('groupTakes', () => {
 	});
 
 	it('keeps the current version with no takes, and none at all for a song with no saved version', () => {
-		expect(groupTakes([take('a1', 2)], 3).current?.generations).toEqual([]);
-		expect(groupTakes([take('a1', 2)], null).current).toBeNull();
+		expect(groupTakes([takeOf('a1', 2)], 3).current?.generations).toEqual([]);
+		expect(groupTakes([takeOf('a1', 2)], null).current).toBeNull();
 	});
 
 	it('names the group of a take by its version, and Imported when it has none', () => {
-		expect(takeGroupKey(take('c1', 3))).toBe('v3');
-		expect(takeGroupKey(take('i1', null))).toBe('imported');
-		expect(takeGroupKey(take('i2', 3, { version_id: null }))).toBe('imported');
+		expect(takeGroupKey(takeOf('c1', 3))).toBe('v3');
+		expect(takeGroupKey(takeOf('i1', null))).toBe('imported');
+		expect(takeGroupKey(takeOf('i2', 3, { version_id: null }))).toBe('imported');
 	});
 });
 
@@ -123,7 +123,7 @@ describe('revealTakeGroup', () => {
 });
 
 describe('Imported starts open by default', () => {
-	const importedOnly = [take('i1', null)];
+	const importedOnly = [takeOf('i1', null)];
 
 	it('when no version of the song holds a take', () => {
 		const groups = groupTakes(importedOnly, 1);
@@ -142,7 +142,7 @@ describe('Imported starts open by default', () => {
 	});
 
 	it('not when a version holds a take', () => {
-		const groups = groupTakes([...importedOnly, take('c1', 1)], 1);
+		const groups = groupTakes([...importedOnly, takeOf('c1', 1)], 1);
 		settleTakeFolds(groups);
 
 		expect(isGroupOpen(get(takeFolds), groups, 'imported')).toBe(false);
@@ -150,7 +150,7 @@ describe('Imported starts open by default', () => {
 
 	it('keeps the default through a take arriving on a version', () => {
 		settleTakeFolds(groupTakes(importedOnly, 1));
-		const later = groupTakes([...importedOnly, take('c1', 1)], 1);
+		const later = groupTakes([...importedOnly, takeOf('c1', 1)], 1);
 		settleTakeFolds(later);
 
 		expect(isGroupOpen(get(takeFolds), later, 'imported')).toBe(true);

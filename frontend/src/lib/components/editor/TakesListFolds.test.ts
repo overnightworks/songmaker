@@ -39,7 +39,7 @@ import { bulkDeleteGenerations } from '$lib/api/client';
 const mounted: Array<ReturnType<typeof mount>> = [];
 let songCounter = 0;
 
-function take(
+function takeOn(
 	id: string,
 	versionNumber: number | null,
 	overrides: Partial<GenerationItem> = {}
@@ -56,16 +56,16 @@ function take(
 // v3 current (c1, c2 picked), v2 (a1, a2 kept, a3 archived), v1 (o1 archived).
 function storytime(): GenerationItem[] {
 	return [
-		take('c1', 3),
-		take('c2', 3, { is_picked: true }),
-		take('a1', 2),
-		take('a2', 2, { is_kept: true }),
-		take('a3', 2, { is_archived: true }),
-		take('o1', 1, { is_archived: true })
+		takeOn('c1', 3),
+		takeOn('c2', 3, { is_picked: true }),
+		takeOn('a1', 2),
+		takeOn('a2', 2, { is_kept: true }),
+		takeOn('a3', 2, { is_archived: true }),
+		takeOn('o1', 1, { is_archived: true })
 	];
 }
 
-function actions(): GenerationActions {
+function generationActionMocks(): GenerationActions {
 	return {
 		pick: vi.fn(),
 		keep: vi.fn(),
@@ -92,7 +92,7 @@ interface RenderOptions {
 async function render(options: RenderOptions = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
-	const generationActions = actions();
+	const generationActions = generationActionMocks();
 	const cell = new SvelteMap<'song', SongItem>([
 		[
 			'song',
@@ -148,12 +148,12 @@ function foldToggle(target: HTMLElement, label: string): HTMLButtonElement {
 const V2_ROW = foldedGroupLabel(2, 3, 1);
 const V1_ROW = foldedGroupLabel(1, 1, 1);
 
-async function click(element: HTMLElement): Promise<void> {
+async function clickThenTick(element: HTMLElement): Promise<void> {
 	element.click();
 	await tick();
 }
 
-async function tickTakes(...ids: string[]): Promise<void> {
+async function ctrlTickTakes(...ids: string[]): Promise<void> {
 	ids.forEach(toggleSelection);
 	await tick();
 }
@@ -162,11 +162,11 @@ function toolbarCount(target: HTMLElement): string | null {
 	return target.querySelector('.toolbar-count')?.textContent ?? null;
 }
 
-function dialog(): HTMLElement | null {
+function confirmDialog(): HTMLElement | null {
 	return document.querySelector<HTMLElement>('[role="dialog"]');
 }
 
-async function press(label: string): Promise<void> {
+async function pressInDialog(label: string): Promise<void> {
 	const button = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
 		(candidate) => candidate.textContent?.trim() === label
 	);
@@ -214,11 +214,11 @@ describe('TakesList folds the earlier versions (S3)', () => {
 	});
 
 	it('shows the album pick on the folded row and gives way to the Open link when unfolded', async () => {
-		const generations = [...storytime(), take('a4', 2, { is_picked: true })];
+		const generations = [...storytime(), takeOn('a4', 2, { is_picked: true })];
 		const { target, generationActions } = await render({ generations });
 
 		expect(foldToggle(target, foldedGroupLabel(2, 4, 1)).textContent).toContain('Take 4');
-		await click(foldToggle(target, foldedGroupLabel(2, 4, 1)));
+		await clickThenTick(foldToggle(target, foldedGroupLabel(2, 4, 1)));
 
 		const toggle = foldToggle(target, foldedGroupLabel(2, 4, 1));
 		expect(toggle.textContent).not.toContain('Take 4');
@@ -226,7 +226,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 			button.textContent?.includes(openVersionLabel(2))
 		);
 		expect(open?.closest('[aria-expanded]')).toBeNull();
-		await click(open as HTMLElement);
+		await clickThenTick(open as HTMLElement);
 		expect(generationActions.clickVersion).toHaveBeenCalledExactlyOnceWith('ver-2');
 	});
 
@@ -235,12 +235,12 @@ describe('TakesList folds the earlier versions (S3)', () => {
 		const toggle = foldToggle(target, V2_ROW);
 		toggle.focus();
 
-		await click(toggle);
+		await clickThenTick(toggle);
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(rowIds(target)).toEqual(['c1', 'c2', 'a1', 'a2', 'a3']);
 		expect(document.activeElement).toBe(toggle);
 
-		await click(toggle);
+		await clickThenTick(toggle);
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 		expect(rowIds(target)).toEqual(['c1', 'c2']);
 		expect(document.activeElement).toBe(toggle);
@@ -248,8 +248,8 @@ describe('TakesList folds the earlier versions (S3)', () => {
 
 	it('shows an archived take as a compact row with no play, pick, keep, score or origin', async () => {
 		const generations = [
-			take('c1', 3),
-			take('a3', 2, {
+			takeOn('c1', 3),
+			takeOn('a3', 2, {
 				is_archived: true,
 				audio_duration_sec: 61,
 				scores: { bpm_accuracy: 0.9 } as GenerationItem['scores'],
@@ -257,7 +257,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 			})
 		];
 		const { target } = await render({ generations });
-		await click(foldToggle(target, foldedGroupLabel(2, 1, 1)));
+		await clickThenTick(foldToggle(target, foldedGroupLabel(2, 1, 1)));
 
 		const row = target.querySelector<HTMLElement>('#take-a3');
 		expect(row?.textContent).toContain('archived');
@@ -268,7 +268,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 	});
 
 	it('shows the empty current version with its head, the empty text and the folded rows', async () => {
-		const generations = [take('a1', 2)];
+		const generations = [takeOn('a1', 2)];
 		const { target } = await render({ generations, latestVersionNumber: 3 });
 
 		expect(target.querySelector('.version-head')?.textContent).toContain(
@@ -281,7 +281,7 @@ describe('TakesList folds the earlier versions (S3)', () => {
 
 	it('keeps the draft banner above the head, with the empty text, for a dirty empty current version', async () => {
 		const { target } = await render({
-			generations: [take('a1', 2)],
+			generations: [takeOn('a1', 2)],
 			dirty: true,
 			draftVersionNumber: 3
 		});
@@ -309,13 +309,13 @@ describe('TakesList folds the earlier versions (S3)', () => {
 });
 
 describe('Imported (Q1 a)', () => {
-	const importedOnly = () => [take('i1', null), take('i2', null)];
+	const importedOnly = () => [takeOn('i1', null), takeOn('i2', null)];
 
 	it('starts unfolded when no version of the song holds a take, and stays folded once folded by hand', async () => {
 		const { target, component } = await render({ generations: importedOnly() });
 		expect(rowIds(target)).toEqual(['i1', 'i2']);
 
-		await click(foldToggle(target, foldedGroupLabel(null, 2, 0)));
+		await clickThenTick(foldToggle(target, foldedGroupLabel(null, 2, 0)));
 		expect(rowIds(target)).toEqual([]);
 
 		await unmount(component);
@@ -332,7 +332,7 @@ describe('Imported (Q1 a)', () => {
 		);
 		expect(labels.at(-1)).toContain(foldedGroupLabel(null, 2, 0));
 		expect(rowIds(target)).toEqual(['c1', 'c2']);
-		await click(foldToggle(target, foldedGroupLabel(null, 2, 0)));
+		await clickThenTick(foldToggle(target, foldedGroupLabel(null, 2, 0)));
 		expect(rowIds(target)).toEqual(['c1', 'c2', 'i1', 'i2']);
 		expect(target.textContent).not.toContain(openVersionLabel(0));
 	});
@@ -340,7 +340,7 @@ describe('Imported (Q1 a)', () => {
 	it('does not fold on its own when a generated take arrives later', async () => {
 		const { target, replaceTakes } = await render({ generations: importedOnly() });
 
-		await replaceTakes([...importedOnly(), take('c1', 3)]);
+		await replaceTakes([...importedOnly(), takeOn('c1', 3)]);
 
 		expect(rowIds(target)).toEqual(['c1', 'i1', 'i2']);
 	});
@@ -360,15 +360,15 @@ describe('the selection stays within the rendered takes', () => {
 
 	it('clears the ticks inside a version when it folds and shows them unticked on unfolding', async () => {
 		const { target } = await render();
-		await click(foldToggle(target, V2_ROW));
-		await tickTakes('a1');
-		await tickTakes('a2');
-		await tickTakes('c1');
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await ctrlTickTakes('a1');
+		await ctrlTickTakes('a2');
+		await ctrlTickTakes('c1');
 		expect(toolbarCount(target)).toBe(selectedCountLabel(3));
 
-		await click(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
 		expect(toolbarCount(target)).toBe(selectedCountLabel(1));
-		await click(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
 
 		expect([...get(selectedIds)]).toEqual(['c1']);
 		expect(target.querySelector('#take-a1.selected')).toBeNull();
@@ -376,10 +376,10 @@ describe('the selection stays within the rendered takes', () => {
 
 	it('ends select mode when folding clears the last tick', async () => {
 		const { target } = await render();
-		await click(foldToggle(target, V2_ROW));
-		await tickTakes('a1');
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await ctrlTickTakes('a1');
 
-		await click(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
 
 		expect(get(selectionMode)).toBe(false);
 		expect(target.querySelector('.selection-toolbar')).toBeNull();
@@ -387,11 +387,11 @@ describe('the selection stays within the rendered takes', () => {
 
 	it('selects all unkept among the rendered takes, archived ones included, never a folded version', async () => {
 		const { target } = await render();
-		await click(foldToggle(target, V2_ROW));
-		await tickTakes('c1');
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await ctrlTickTakes('c1');
 
 		const selectAll = target.querySelector<HTMLButtonElement>('.select-all');
-		await click(selectAll as HTMLElement);
+		await clickThenTick(selectAll as HTMLElement);
 
 		expect([...get(selectedIds)].sort()).toEqual(['a1', 'a3', 'c1']);
 	});
@@ -411,8 +411,8 @@ describe('the selection stays within the rendered takes', () => {
 
 	it('drops a ticked take that a reload of the song no longer holds', async () => {
 		const { target, replaceTakes } = await render();
-		await tickTakes('c1');
-		await tickTakes('c2');
+		await ctrlTickTakes('c1');
+		await ctrlTickTakes('c2');
 
 		await replaceTakes(storytime().filter((gen) => gen.id !== 'c1'));
 
@@ -421,7 +421,7 @@ describe('the selection stays within the rendered takes', () => {
 
 	it('clears the ticks of the old current version when a new version folds it', async () => {
 		const { target, saveNewVersion } = await render();
-		await tickTakes('c1');
+		await ctrlTickTakes('c1');
 
 		await saveNewVersion(4);
 
@@ -437,37 +437,37 @@ describe('Delete sends rendered takes only, checked at confirm time', () => {
 	it('sends only the rendered ticked takes when a version folds under an open dialog', async () => {
 		vi.mocked(bulkDeleteGenerations).mockResolvedValueOnce(undefined as never);
 		const { target } = await render();
-		await click(foldToggle(target, V2_ROW));
-		await tickTakes('a1');
-		await tickTakes('c1');
-		await click(target.querySelector('.selection-toolbar .destructive') as HTMLElement);
-		expect(dialog()?.textContent).toContain(bulkDeleteTitle(2));
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await ctrlTickTakes('a1');
+		await ctrlTickTakes('c1');
+		await clickThenTick(target.querySelector('.selection-toolbar .destructive') as HTMLElement);
+		expect(confirmDialog()?.textContent).toContain(bulkDeleteTitle(2));
 
 		toggleTakeGroup('v2', groupTakes(storytime(), 3));
 		await tick();
-		expect(dialog()?.textContent).toContain(bulkDeleteTitle(1));
-		await press(TAKE_DELETE_LABEL);
+		expect(confirmDialog()?.textContent).toContain(bulkDeleteTitle(1));
+		await pressInDialog(TAKE_DELETE_LABEL);
 
 		expect(bulkDeleteGenerations).toHaveBeenCalledExactlyOnceWith(['c1']);
 	});
 
 	it('closes the dialog and sends nothing when folding left nothing ticked', async () => {
 		const { target } = await render();
-		await click(foldToggle(target, V2_ROW));
-		await tickTakes('a1');
-		await click(target.querySelector('.selection-toolbar .destructive') as HTMLElement);
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await ctrlTickTakes('a1');
+		await clickThenTick(target.querySelector('.selection-toolbar .destructive') as HTMLElement);
 
-		await click(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
 
-		expect(dialog()).toBeNull();
+		expect(confirmDialog()).toBeNull();
 		expect(bulkDeleteGenerations).not.toHaveBeenCalled();
 	});
 
 	it('sends nothing and ends select mode when the fold lands in the instant of the confirm', async () => {
 		const { target } = await render();
-		await click(foldToggle(target, V2_ROW));
-		await tickTakes('a1');
-		await click(target.querySelector('.selection-toolbar .destructive') as HTMLElement);
+		await clickThenTick(foldToggle(target, V2_ROW));
+		await ctrlTickTakes('a1');
+		await clickThenTick(target.querySelector('.selection-toolbar .destructive') as HTMLElement);
 
 		toggleTakeGroup('v2', groupTakes(storytime(), 3));
 		const confirm = [
@@ -477,7 +477,7 @@ describe('Delete sends rendered takes only, checked at confirm time', () => {
 		await tick();
 
 		expect(bulkDeleteGenerations).not.toHaveBeenCalled();
-		expect(dialog()).toBeNull();
+		expect(confirmDialog()).toBeNull();
 		expect(get(selectionMode)).toBe(false);
 	});
 
@@ -485,33 +485,33 @@ describe('Delete sends rendered takes only, checked at confirm time', () => {
 		const trigger = target.querySelector<HTMLButtonElement>(
 			`#take-${id} [aria-label="${TAKE_OVERFLOW_LABEL}"]`
 		);
-		await click(trigger as HTMLElement);
+		await clickThenTick(trigger as HTMLElement);
 		const item = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
 			(button) => button.textContent?.trim() === TAKE_DELETE_LABEL
 		);
-		await click(item as HTMLElement);
+		await clickThenTick(item as HTMLElement);
 	}
 
 	it('sends a single take that is rendered', async () => {
 		const { target, generationActions } = await render();
 
 		await askToDelete(target, 'c1');
-		await press(TAKE_DELETE_LABEL);
+		await pressInDialog(TAKE_DELETE_LABEL);
 
 		expect(generationActions.del).toHaveBeenCalledExactlyOnceWith('c1');
 	});
 
 	it('sends nothing and closes the dialog when the single take folded away under it', async () => {
 		const { target, generationActions } = await render();
-		await click(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
 		await askToDelete(target, 'a1');
 
 		toggleTakeGroup('v2', groupTakes(storytime(), 3));
 		flushSync();
-		await press(TAKE_DELETE_LABEL);
+		await pressInDialog(TAKE_DELETE_LABEL);
 
 		expect(generationActions.del).not.toHaveBeenCalled();
-		expect(dialog()).toBeNull();
+		expect(confirmDialog()).toBeNull();
 	});
 
 	it('sends nothing when the single take left the loaded takes under the dialog', async () => {
@@ -519,10 +519,10 @@ describe('Delete sends rendered takes only, checked at confirm time', () => {
 		await askToDelete(target, 'c1');
 
 		await replaceTakes(storytime().filter((gen) => gen.id !== 'c1'));
-		await press(TAKE_DELETE_LABEL);
+		await pressInDialog(TAKE_DELETE_LABEL);
 
 		expect(generationActions.del).not.toHaveBeenCalled();
-		expect(dialog()).toBeNull();
+		expect(confirmDialog()).toBeNull();
 	});
 });
 
@@ -530,7 +530,7 @@ describe('folds belong to the song they were made on', () => {
 	it('keeps the open versions while no take list is mounted and no other song is shown', async () => {
 		selectedSongId.set('song-a');
 		const { target, component } = await render();
-		await click(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
 		await unmount(component);
 		mounted.pop();
 
@@ -544,7 +544,7 @@ describe('folds belong to the song they were made on', () => {
 	it('folds everything again on returning to the song after another song was shown', async () => {
 		selectedSongId.set('song-a');
 		const { target, component } = await render();
-		await click(foldToggle(target, V2_ROW));
+		await clickThenTick(foldToggle(target, V2_ROW));
 		await unmount(component);
 		mounted.pop();
 
@@ -558,7 +558,7 @@ describe('folds belong to the song they were made on', () => {
 
 describe('a link to a take inside a folded version', () => {
 	function repaintOf(sourceId: string): GenerationItem {
-		return take('c1', 3, {
+		return takeOn('c1', 3, {
 			generation_params: { task_type: 'repaint' },
 			src_generation_id: sourceId,
 			src_generation_number: 1,
@@ -583,7 +583,7 @@ describe('a link to a take inside a folded version', () => {
 		toggleSelection('c2');
 		await tick();
 
-		await click(
+		await clickThenTick(
 			target.querySelector<HTMLButtonElement>('#take-c1 button.take-origin') as HTMLElement
 		);
 

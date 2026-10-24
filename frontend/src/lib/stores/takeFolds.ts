@@ -3,7 +3,7 @@ import type { GenerationItem } from '$lib/api/types';
 import { takeVersion, type TakeVersion } from '$lib/constants/now-playing';
 import { selectedSongId } from '$lib/stores/player';
 
-export type TakeGroupKey = `v${number}` | 'imported';
+type TakeGroupKey = `v${number}` | 'imported';
 
 export interface TakeGroup {
 	key: TakeGroupKey;
@@ -15,7 +15,7 @@ export interface TakeGroup {
 	pick: GenerationItem | null;
 }
 
-export interface TakeGroups {
+interface TakeGroups {
 	// The latest saved version: always open, even with no takes.
 	current: TakeGroup | null;
 	// Newest first, Imported last.
