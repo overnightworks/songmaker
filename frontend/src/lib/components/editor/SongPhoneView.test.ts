@@ -143,15 +143,13 @@ describe('SongPhoneView', () => {
 		expect(target.querySelector('.selection-toolbar')).toBeNull();
 	});
 
-	it('drops a selection of takes that are not on screen when Delete is pressed', async () => {
+	it('never shows a selection toolbar for a tick on a take that is not on screen', async () => {
 		const target = await render({
 			song: makeSong({ id: 'song-a', generations: [makeGeneration()], generation_count: 1 })
 		});
 		showTab(target, 'takes');
 		selectedSongId.set('song-a');
 		toggleSelection('gone');
-		await tick();
-		target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
 		await tick();
 		expect(target.querySelector('.selection-toolbar')).toBeNull();
 	});
