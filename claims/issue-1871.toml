@@ -1,0 +1,8 @@
+claim_id = "797892a9a6b143de80e62bdb3fbde73f"
+agent = "Codex 01a16e6e-b075-7e61-bee8-0b712b0d5fd9"
+role = "builder"
+base = "fa3d65f46ecf8a877769fc2982f2dbd0ef834fb0"
+branch = "codex/issue-1871-remove-the-unused-authenticated-queue-st"
+scope = [".importlinter", "docs/architecture.md", "docs/security.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/services/audioPlayer.test.ts", "quality/baseline.toml", "scripts/dead-symbols.allow", "scripts/generate_types.py", "src/songmaker_cli/api.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/queue_streams.py", "src/songmaker_cli/queue_stream_api.py", "src/songmaker_cli/queue_streams.py", "src/songmaker_cli/request_policies.py", "tests/test_queue_streams.py", "tests/test_rate_limit.py", "tests/test_sharing.py"]
+opened_commit = "1aa04751474673afa036e756a85dfa3071ae56d4"
+whole_reason = "The removed HTTP contract connects registration, schemas, generator, policy exceptions and its pinned proofs; separating them leaves orphaned contracts or broken checks, while shared algorithms remain with their existing owners."
