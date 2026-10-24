@@ -1,5 +1,13 @@
 import { makeSong, makeVersion } from '$lib/test-utils/factories';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/api/client', () => ({
+	fetchVersions: vi.fn().mockResolvedValue([]),
+	updateSong: vi.fn(),
+	deleteVersion: vi.fn(),
+	fetchSong: vi.fn()
+}));
+
 import {
 	discardDraft,
 	followUnsavedDraftAtUnload,
@@ -19,10 +27,11 @@ function unloadIsAsked(): boolean {
 
 let stopFollowing: () => void;
 
-beforeEach(() => {
+beforeEach(async () => {
 	discardDraft();
 	versions.set([]);
 	loadSongData(makeSong({ id: 's1', lyrics: SAVED_LYRICS }));
+	await Promise.resolve();
 	stopFollowing = followUnsavedDraftAtUnload();
 });
 
