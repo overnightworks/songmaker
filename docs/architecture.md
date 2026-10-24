@@ -737,7 +737,10 @@ registered FastAPI routes' response and body annotations, follows nested
 Pydantic models, supplements them with the exported `api_models`, and verifies
 their TypeScript interfaces. The backend-only `/api/internal/` worker
 protocol is the sole excluded route role. When a routed model changes,
-regenerate `types.ts` and run the check.
+regenerate `types.ts` and run the check. The co-writer stream frames
+(`ChatTurnFinalFrame`, the two error frames and the provider events) are
+exported models, so `lib/api` declares no wire shape of its own: ESLint refuses
+a hand-written interface or object type there.
 
 `lib/api/` is the transport: it reports what the server answered. A 429 goes to
 the `rateLimited` reaction that `routes/+layout.svelte` installs through

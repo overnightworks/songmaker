@@ -13,6 +13,12 @@ date = 2026-10-22
 reason = "the operator ruled the requirement shelf machinery out on 20.10.2026"
 
 [[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1146 -> 1180"
+item = "#1856"
+date = 2026-10-24
+reason = "the co-writer stream frames become generated types (six interfaces, minus ChatTurnV2Result); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
 what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"
 item = "#1784"
 date = 2026-10-22
