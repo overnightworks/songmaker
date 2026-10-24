@@ -16,6 +16,7 @@ import {
 	replaceEntry,
 	resetHistoryControllerForTests,
 	showStandingPage,
+	standingHistoryState,
 	standingPageEntryId
 } from '$lib/history/historyController';
 import { fetchPlaylists } from '$lib/api/client';
@@ -392,12 +393,11 @@ export function currentLibraryHistoryState(): unknown {
 // What a history entry says about the library, whichever way it was written:
 // the router keeps it under its page state, and an entry written raw before
 // the router did (a tab kept open across the change) is that state itself.
-// Every read of an entry -- the current one or the one a popstate lands on --
+// Every read of an entry -- the standing one or the one a popstate lands on --
 // goes through here, and the address history stands on decides what it says
-// (`entryForAddress`). The entry read is always the one at that address: a
-// popstate reaches its handler after the address moved, and a handler that
-// attaches late hears the entry history stands on.
-export function libraryHistoryEntry(entry: unknown = history.state): unknown {
+// (`entryForAddress`): a popstate reaches its handler after the address moved,
+// and a handler that attaches late hears the entry history stands on.
+export function libraryHistoryEntry(entry: unknown = standingHistoryState()): unknown {
 	const pageState = pageStateOfHistoryState(entry);
 	const written = pageState === null ? entry : (pageState.library ?? null);
 	return entryForAddress(written, window.location.pathname);

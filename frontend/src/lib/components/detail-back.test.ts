@@ -42,22 +42,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchSong: vi.fn(),
 		fetchSongs: vi.fn(),
 		sharePlaylist: vi.fn(),
-		unsharePlaylist: vi.fn(),
-		createQueueStreamSnapshot: vi.fn()
+		unsharePlaylist: vi.fn()
 	};
 });
-vi.mock('$lib/api/queue-streams', () => ({
-	pinQueueStream: vi.fn(),
-	unpinQueueStream: vi.fn()
-}));
-vi.mock('$lib/services/offline', () => ({
-	saveStream: vi.fn(),
-	removeStream: vi.fn(),
-	offlineStreamUrl: vi.fn(() => '/offline/stream/test'),
-	rememberPlaylistOfflineStream: vi.fn(),
-	forgetPlaylistOfflineStream: vi.fn(),
-	loadSavedOfflinePlaylist: vi.fn().mockResolvedValue(null)
-}));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn(),
 	addUndoToast: vi.fn()

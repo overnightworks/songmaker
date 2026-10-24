@@ -38,6 +38,14 @@ def exported_names(source):
     return names
 
 
+def unneeded_allow_patterns(flagged, patterns):
+    return [
+        pattern
+        for pattern in patterns
+        if not any(fnmatchcase(entry, pattern) for entry in flagged)
+    ]
+
+
 def default_import_paths(filename, source):
     for specifier in default_import_pattern.findall(source):
         if specifier.startswith("$lib/"):
@@ -84,7 +92,20 @@ def self_test():
             sys.exit(f"Default import regression: {source!r}")
     if list(default_import_paths("frontend/src/caller.ts", "import { named } from './helper';")):
         sys.exit("A named import must not keep a default export alive")
-    print("Export form regressions passed (21 cases).")
+    flagged = ["a.ts:one", "a.ts:oneForTests", "b.ts:two"]
+    for patterns, expected in (
+        (["a.ts:one"], []),
+        (["*:*ForTests"], []),
+        (["a.ts:*"], []),
+        (["a.ts:gone"], ["a.ts:gone"]),
+        (["c.ts:*", "b.ts:two"], ["c.ts:*"]),
+    ):
+        actual = unneeded_allow_patterns(flagged, patterns)
+        if actual != expected:
+            sys.exit(f"Allow pattern regression: {patterns!r}: {actual!r} != {expected!r}")
+    if unneeded_allow_patterns([], ["a.ts:one"]) != ["a.ts:one"]:
+        sys.exit("Allow pattern regression: a pattern needs a flagged export")
+    print("Export form regressions passed (21 cases, 6 allow-pattern cases).")
 
 
 self_test()
@@ -118,7 +139,7 @@ for filename in sorted(set(paths)):
     for word in set(word_pattern.findall(source)):
         references[word].add(filename)
 
-allow = []
+allow = {}
 for number, line in enumerate(Path("scripts/dead-exports.allow").read_text().splitlines(), 1):
     pattern, _, reason = line.partition("#")
     pattern = pattern.strip()
@@ -126,9 +147,9 @@ for number, line in enumerate(Path("scripts/dead-exports.allow").read_text().spl
         continue
     if not reason.strip():
         sys.exit(f"scripts/dead-exports.allow:{number}: exception needs a reason")
-    allow.append(pattern)
+    allow[pattern] = number
 
-unexpected = [
+unreferenced = [
     f"{filename}:{name}"
     for filename, name in exports
     if not (
@@ -136,11 +157,21 @@ unexpected = [
         if name == "default"
         else references[name] - {filename}
     )
-    and not any(fnmatchcase(f"{filename}:{name}", pattern) for pattern in allow)
 ]
+unexpected = [
+    entry
+    for entry in unreferenced
+    if not any(fnmatchcase(entry, pattern) for pattern in allow)
+]
+unneeded = unneeded_allow_patterns(unreferenced, list(allow))
 for entry in unexpected:
     print(f"test-only-alive export: {entry}")
-if unexpected:
+for pattern in unneeded:
+    print(f"scripts/dead-exports.allow:{allow[pattern]}: allow pattern suppresses nothing: {pattern}")
+if unexpected or unneeded:
     sys.exit(1)
-print("No unapproved test-only-alive exports.")
+print(
+    f"No unapproved test-only-alive exports: {len(exports)} exports checked, "
+    f"{len(unreferenced)} test-only-alive and allowed by {len(allow)} patterns."
+)
 PY

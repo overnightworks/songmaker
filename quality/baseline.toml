@@ -40,12 +40,12 @@
 "frontend/src/lib/components/NowPlaying.test.ts" = 1094
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1121
 "frontend/src/lib/components/PlayerBar.test.ts" = 1642
-"frontend/src/lib/components/PlaylistDetailView.test.ts" = 860
+"frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
 "frontend/src/lib/components/SongDetailView.svelte" = 1104
 "frontend/src/lib/components/SongDetailView.test.ts" = 2312
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
-"frontend/src/lib/constants.ts" = 849
+"frontend/src/lib/constants.ts" = 846
 "frontend/src/lib/history/historyController.test.ts" = 1103
 "frontend/src/lib/history/historyController.ts" = 953
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
@@ -57,7 +57,7 @@
 "frontend/src/lib/stores/libraryContext.test.ts" = 2189
 "frontend/src/lib/stores/libraryContext.ts" = 1279
 "frontend/src/lib/stores/navigation.test.ts" = 3045
-"frontend/src/lib/stores/player.test.ts" = 5293
+"frontend/src/lib/stores/player.test.ts" = 5283
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2040
 "frontend/src/lib/stores/resourceSync.ts" = 1070
