@@ -1,0 +1,1466 @@
+#!/bin/bash
+# Pull-based auto-deploy for Songmaker (issue #298).
+#
+# A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
+# origin/main every couple of minutes (see songmaker-autodeploy.timer) and
+# fast-forwards + redeploys the local checkout when main has moved. Before it
+# pulls, it verifies through GitHub that every GitHub Actions check run for
+# the newest green commit in the fetched main history has completed
+# successfully, skipped, or neutral, with at least one success; check runs
+# from other apps are advisory. The script itself does not re-run tests.
+#
+# Safety rules below come from real incidents, not hypotheticals:
+#   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
+#     stream. `docker compose build` (image build only, no container
+#     recreate) is now separated from `docker compose up -d --wait`
+#     (container recreate). The active-jobs check runs once before the pull
+#     and again right before the recreate step, so the only window a job can
+#     start and still get killed is the few seconds between that second
+#     check and the recreate — not the 8-15 minutes a cold-cache build can
+#     take. A build-only tick that finds jobs active on the recheck defers
+#     to the next tick, which finds the image already built and is back at
+#     the recheck within seconds.
+#   - "Up to date" is judged against what actually got recreated, not just
+#     what got pulled. A `deployed.sha` file in the state directory is
+#     written ONLY by `record_success`, right after `compose up -d --wait`
+#     succeeds. Up-to-date means `HEAD == origin/$DEPLOY_BRANCH` AND
+#     `deployed.sha == HEAD` — not `HEAD == origin/$DEPLOY_BRANCH` alone.
+#     Without this, a tick that pulled and built but deferred the recreate
+#     (jobs still active, or a build/up failure) already sits on the new
+#     HEAD; every following tick then saw "local == remote" and treated the
+#     stale running containers as "nothing to deploy" forever, silently
+#     resetting the setback counter along the way. The first tick that ever
+#     finds no `deployed.sha` (fresh install) adopts the current HEAD as
+#     already-deployed instead of deploying — the operator chose that to
+#     keep `install-autodeploy.sh`'s `enable --now` harmless; the
+#     consequence is that a checkout installed while behind main stays on
+#     the stale stack until the operator deploys it once by hand (see
+#     docs/architecture.md).
+#   - Migrations occasionally abort loudly on lock_timeout (see the
+#     c9d4a2f18e37 unique-slug-index migration). That is not fatal — the
+#     next tick retries the same pull+deploy. A tick that could not deploy
+#     despite main having moved (a hard refusal, or a pull/build/up
+#     failure) increments a consecutive-FAILURE counter; only the tick
+#     that crosses N in a row escalates to a prio=err journal line worth
+#     paging on — and, since issue #333, is also the only tick that exits
+#     non-zero (fail_tick below), so `OnFailure=songmaker-alert@%n.service`
+#     on the systemd unit emails the operator at that exact same moment
+#     instead of on every transient blip. A streak that simply continues
+#     escalates again once every ALERT_REPEAT_SECONDS of wall-clock time,
+#     so an outage nobody reacts to stays visible without mailing every
+#     two minutes (see escalation_due). A tick that merely defers because
+#     jobs are active
+#     increments a separate consecutive-BUSY counter with a much higher
+#     threshold and a quieter prio=warning line, never fails the unit — a
+#     normal generation queue or an hours-long lora_training job
+#     legitimately keeps jobs active for a long time, and that is not the
+#     same emergency as a deploy that keeps failing outright (see
+#     record_failure / fail_tick / record_busy_deferral below). Both
+#     counters reset only after a deploy and its Docker cleanup both succeed,
+#     or on a genuine "nothing to deploy" tick.
+#   - This host's `.env` and checkout are also the operator's manual
+#     workspace. A dirty tree, a diverged local main, or HEAD sitting on a
+#     branch other than the deploy branch are left completely untouched —
+#     the script only ever fast-forwards a clean checkout of the deploy
+#     branch. The up-to-date shortcut (including the deployed.sha check)
+#     runs BEFORE this branch guard: an operator sitting on an experiment
+#     branch with nothing actually pending to deploy must not get a loud
+#     err line every ~2 minutes for no reason (see step ordering below).
+#   - The ACE-Step submodule pin (vendor/acestep) ships with the commit that
+#     moves it. A plain `git merge --ff-only` leaves the submodule on the old
+#     commit, which `git status --porcelain` then reports as dirty: the dirty
+#     guard would refuse every later tick. So before the fast-forward,
+#     fetch_acestep_pin makes the pinned commit available in the submodule
+#     (a network failure or an uninitialised submodule is a counted refusal
+#     that moves nothing), and right after it checkout_acestep_pin checks the
+#     pinned commit out locally. A pin change is also a base-image input
+#     (BASE_IMAGE_INPUT_PATHS). Both git fetches of a tick run under
+#     GIT_FETCH_TIMEOUT_SECONDS: a hung fetch would hold the flock forever and
+#     never reach the consecutive-failure ALERT. Each fetch runs in a process
+#     group of its own that is killed outright once git has exited, so a
+#     transport that ignores TERM cannot outlive the tick. A SIGKILLed fetch
+#     can leave a git lock file behind; clearing it is manual
+#     (docs/architecture.md).
+#
+# Per AGENTS.md: NEVER wrap `docker compose up --build --wait` in `timeout`.
+# A cold-cache rebuild can take 8-15 minutes; the systemd unit has no
+# TimeoutStartSec override for the same reason. That rule is about the
+# image BUILD, not about the DB round-trip the active-jobs check makes —
+# that one gets its own short `timeout` (see below) so a wedged DB
+# connection can't hang a tick indefinitely. `compose build` and
+# `compose up` both stream straight to this process's stdout/stderr (which
+# systemd journals under the unit) rather than being captured into a
+# variable — a failed build can print far more than a single logger
+# invocation can safely carry as one argument, so only a short log_err line
+# with the exit code goes through `logger`. `log()` itself additionally
+# truncates any payload to ~2000 chars as a second line of defense for
+# every other captured-output log line in this script (git status, pull,
+# fetch, the DB check).
+#
+# All journal lines are tagged "songmaker-autodeploy" (`journalctl -t
+# songmaker-autodeploy`). The steady-state "nothing to do" tick (the common
+# case, every ~2 minutes) logs at debug priority — an unfiltered `journalctl
+# -t songmaker-autodeploy` still shows it (journald keeps everything by
+# default), but any priority-restricted view (e.g. `journalctl -t
+# songmaker-autodeploy -p info`, or a dashboard/alerting rule that only
+# watches info-and-above) stays quiet, and only real events (deferred,
+# refused, deployed, failed) surface there. If a tick dies before it ever
+# reaches `logger` (e.g. the shell itself fails to start), the tag-filtered
+# view is empty by construction — `journalctl -u
+# songmaker-autodeploy.service -n 20` (unit-filtered, not tag-filtered)
+# still shows it.
+#
+# REPO_ROOT is derived from where this script itself lives (same pattern as
+# install-autostart.sh's SCRIPT_DIR/PROJECT_ROOT derivation), never hardcoded
+# here — running it from a worktree operates on that worktree. The installer
+# (scripts/install-autodeploy.sh) separately substitutes the matching
+# WorkingDirectory/User/ExecStart into the systemd unit, exactly like
+# install-autostart.sh does for songmaker.service.
+#
+# LOCK_FILE and all state files (the two counters, the two escalation
+# timestamps, DEPLOYED_SHA_FILE) live at a fixed path inside the git ADMIN
+# directory, resolved via `git rev-parse --absolute-git-dir` (GIT_ADMIN_DIR) —
+# not assumed to be $REPO_ROOT/.git. In a normal checkout that IS
+# $REPO_ROOT/.git; in a linked worktree (`git worktree add`), $REPO_ROOT/.git
+# is a FILE ("gitdir: /path/to/main/.git/worktrees/<name>"), and the real
+# admin dir lives at that other path — redirecting straight at
+# $REPO_ROOT/.git/songmaker-autodeploy.lock would fail before the first log
+# line and kill the shell every tick. There is deliberately no separate
+# systemd StateDirectory: that would be a second location, so a manual shell
+# run outside systemd and the unit's own tick would silently diverge onto
+# two different "deployed.sha"/failure histories instead of sharing one. The
+# resolved admin dir is the one thing every caller (systemd unit, manual
+# invocation, a second worktree pointed at a different checkout) already
+# agrees on for a given checkout, and it survives reboots exactly like the
+# rest of the repo. The SONGMAKER_AUTODEPLOY_* env vars remain the explicit
+# override for tests and unusual setups.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+LOG_TAG="songmaker-autodeploy"
+LOG_PAYLOAD_MAX_CHARS=2000
+DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
+PRUNE_RETENTION_HOURS=48
+PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
+PREVIOUS_IMAGE_TAG="previous"
+BASE_IMAGE_LABEL="songmaker.base-image=true"
+BASE_IMAGES=(
+    "songmaker/gpu-torch-base:latest"
+    "songmaker/acestep-base:latest"
+)
+ACESTEP_SUBMODULE_PATH="vendor/acestep"
+# What the local-only base images are built from: a difference in any of these
+# between the running revision and the selected candidate rebuilds them.
+BASE_IMAGE_INPUT_PATHS=(docker/base/ "$ACESTEP_SUBMODULE_PATH")
+PROMETHEUS_CONFIG_FILE="monitoring/prometheus.yml"
+PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
+PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
+PROMETHEUS_URL="http://127.0.0.1:9090"
+PROMETHEUS_READY_URL="${PROMETHEUS_URL}/-/ready"
+PROMETHEUS_METRICS_URL="${PROMETHEUS_URL}/metrics"
+PROMETHEUS_RULES_URL="${PROMETHEUS_URL}/api/v1/rules"
+PROMETHEUS_HTTP_TIMEOUT_SECONDS=30
+# This repository's workflows are the deploy gate. External integrations may
+# report check runs too, but their results are advisory rather than rollout
+# decisions.
+REQUIRED_CHECK_RUN_APP_SLUG="github-actions"
+# The one conclusion that proves a required Actions job ran and passed. A
+# deploy needs at least one such job.
+PASSED_CHECK_RUN_CONCLUSION="success"
+# Conclusions of a required Actions job that judged nothing, such as the
+# "Adjust Configuration" job that CodeQL default setup skips on every commit:
+# they neither block a deploy nor count as its passed job (#1377). Every other
+# conclusion blocks.
+UNJUDGED_CHECK_RUN_CONCLUSIONS=(skipped neutral)
+is_unjudged_check_run_conclusion() {
+    local conclusion="$1"
+    local unjudged_conclusion
+    for unjudged_conclusion in "${UNJUDGED_CHECK_RUN_CONCLUSIONS[@]}"; do
+        if [[ "$conclusion" == "$unjudged_conclusion" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# A non-whitespace separator preserves empty fields in Bash `read`; a tab
+# would collapse a missing app slug into the status field before validation.
+CHECK_RUN_FIELD_SEPARATOR=$'\x1f'
+
+log() {
+    local level="$1"
+    shift
+    local message="$*"
+    local original_length=${#message}
+    if ((original_length > LOG_PAYLOAD_MAX_CHARS)); then
+        message="${message:0:$LOG_PAYLOAD_MAX_CHARS}... (truncated from $original_length chars)"
+    fi
+    logger -t "$LOG_TAG" -p "user.$level" -- "$message"
+}
+log_debug() { log debug "$*"; }
+log_info() { log info "$*"; }
+log_warning() { log warning "$*"; }
+log_err() { log err "$*"; }
+
+# Every Git command in this tick goes through this narrow runner. The deploy
+# checkout is a privileged execution boundary: repository hooks and an
+# fsmonitor configured in its admin directory must not run from the timer.
+# Keep the environment equally narrow rather than inheriting arbitrary Git
+# configuration from the service or its caller.
+GIT_BINARY="/usr/bin/git"
+GIT_PATH="/usr/bin:/bin"
+SAFE_GIT_COMMAND=(
+    env -i
+    PATH="$GIT_PATH"
+    LANG="C.UTF-8"
+    LC_ALL="C.UTF-8"
+    GIT_CONFIG_NOSYSTEM="1"
+    GIT_CONFIG_GLOBAL="/dev/null"
+    GIT_NO_LAZY_FETCH="1"
+    GIT_NO_REPLACE_OBJECTS="1"
+    GIT_TERMINAL_PROMPT="0"
+    GIT_OPTIONAL_LOCKS="0"
+    "$GIT_BINARY"
+    -c core.hooksPath=/dev/null
+    -c core.fsmonitor=false
+)
+safe_git() {
+    "${SAFE_GIT_COMMAND[@]}" -C "$REPO_ROOT" "$@"
+}
+
+# Templates and the stale-file sweep share these names; keep existing prefixes
+# so an interrupted tick from an older revision is still cleaned up.
+declare -Ar TEMP_FILE_PREFIXES=(
+    [git-fetch]=songmaker-autodeploy.git-fetch.
+    [compose-stderr]=songmaker-autodeploy.compose-stderr.
+    [prometheus-ps-stderr]=songmaker-autodeploy.prometheus-ps-stderr.
+    [gh-stderr]=songmaker-autodeploy.gh-stderr.
+)
+
+sweep_stale_temp_files() {
+    local prefix path suffix failed=0 LC_ALL=C
+    for prefix in "${TEMP_FILE_PREFIXES[@]}"; do
+        for path in "$GIT_ADMIN_DIR/$prefix"*; do
+            suffix="${path#"$GIT_ADMIN_DIR/$prefix"}"
+            [[ "$suffix" =~ ^[A-Za-z0-9]{6}$ ]] || continue
+            if rm -f -- "$path"; then
+                log_info "removed stale temp file: $path"
+            else
+                log_err "stale temp file could not be removed: $path"
+                failed=1
+            fi
+        done
+    done
+    return "$failed"
+}
+
+# The only network-facing git commands of a tick, so the only ones with a
+# deadline. `timeout` cannot run the shell function above, but it can run the
+# same scrubbed command. It stops supervising once git itself has exited, so a
+# transport child that ignored the TERM would live on with nobody to KILL it,
+# holding git's output pipe and with it the whole tick. The fetch therefore
+# gets a process group of its own (setsid), its output goes to a file that no
+# survivor can keep a reader waiting on, and the group is killed outright as
+# soon as `timeout` returns. A background job of a non-interactive shell leads
+# no group, so setsid runs in place and $! is the id of the group it creates.
+# Prints git's combined output and returns its exit status. Builds stay
+# unbounded.
+# Usage: safe_git_fetch <repository> <git fetch arguments...>
+safe_git_fetch() {
+    local repository="$1"
+    shift
+    local output_file fetch_group fetch_exit_code
+    if ! output_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[git-fetch]}XXXXXX" 2>&1)"; then
+        printf 'cannot create a temporary file for the fetch output: %s' "$output_file"
+        return 1
+    fi
+    setsid timeout --kill-after="$GIT_FETCH_KILL_GRACE_SECONDS" "$GIT_FETCH_TIMEOUT_SECONDS" \
+        "${SAFE_GIT_COMMAND[@]}" -C "$repository" fetch --quiet "$@" >"$output_file" 2>&1 &
+    fetch_group=$!
+    if wait "$fetch_group"; then
+        fetch_exit_code=0
+    else
+        fetch_exit_code=$?
+    fi
+    # Nothing left to kill is the normal case, hence the ignored status.
+    kill -KILL -- "-$fetch_group" 2>/dev/null || true
+    cat "$output_file"
+    rm -f "$output_file"
+    return "$fetch_exit_code"
+}
+
+# Resolve the real git ADMIN directory instead of assuming $REPO_ROOT/.git
+# is one (see the LOCK_FILE/state-file comment above) — must run after log()
+# is defined, since a failure here has to log_err before it exits.
+if ! GIT_ADMIN_DIR="$(safe_git rev-parse --absolute-git-dir 2>&1)"; then
+    log_err "cannot resolve the git admin directory for $REPO_ROOT: $GIT_ADMIN_DIR"
+    exit 1
+fi
+STATE_DIR_FALLBACK="$GIT_ADMIN_DIR"
+LOCK_FILE="${SONGMAKER_AUTODEPLOY_LOCK_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.lock}"
+FAILURE_COUNT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_COUNT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.failcount}"
+BUSY_COUNT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_COUNT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busycount}"
+DEPLOYED_SHA_FILE="${SONGMAKER_AUTODEPLOY_DEPLOYED_SHA_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.deployed-sha}"
+FIRST_SEEN_COMMIT_FILE="${SONGMAKER_AUTODEPLOY_FIRST_SEEN_COMMIT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.first-seen-commit}"
+FAILURE_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.failure-escalated-at}"
+BUSY_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busy-escalated-at}"
+GUARD_REASON_FILE="${SONGMAKER_AUTODEPLOY_GUARD_REASON_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.guard-reason}"
+FAILURE_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_FAILURE_ALERT_THRESHOLD:-3}"
+BUSY_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_BUSY_ALERT_THRESHOLD:-30}"
+# Wall-clock time between one escalation of an unbroken streak and the
+# next — 1h, deliberately the same cadence Alertmanager's repeat_interval
+# gives the other half of this one alert channel
+# (monitoring/alertmanager.yml.template). See escalation_due.
+ALERT_REPEAT_SECONDS="${SONGMAKER_AUTODEPLOY_ALERT_REPEAT_SECONDS:-3600}"
+# A zero or garbage value here would make every escalation arithmetic
+# silently fail, i.e. turn the alarm off — the one failure mode this whole
+# issue exists to prevent.
+if ! [[ "$ALERT_REPEAT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_ALERT_REPEAT_SECONDS must be a positive integer, got '$ALERT_REPEAT_SECONDS'"
+    exit 1
+fi
+DB_CHECK_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_DB_CHECK_TIMEOUT_SECONDS:-30}"
+CHECK_RUN_LOOKUP_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS:-60}"
+# The deployable history window. A busy or failed HEAD must not keep an older,
+# fully verified main commit from reaching production indefinitely.
+CHECK_RUN_LOOKBACK_COMMITS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS:-10}"
+# Once TERM has had this long to be honoured, kill a wedged gh child so it
+# cannot keep the deploy lock forever.
+CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS:-5}"
+if ! [[ "$PRUNE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS must be a positive integer, got '$PRUNE_TIMEOUT_SECONDS'"
+    exit 1
+fi
+# GitHub normally creates the first check run shortly after a push. Do not
+# treat that ordinary propagation delay as a failed deploy, but do surface a
+# workflow that never starts instead of waiting forever on the same SHA.
+CHECK_RUN_APPEARANCE_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS:-1800}"
+if ! [[ "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS must be a positive integer, got '$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS'"
+    exit 1
+fi
+if ! [[ "$CHECK_RUN_LOOKBACK_COMMITS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS must be a positive integer, got '$CHECK_RUN_LOOKBACK_COMMITS'"
+    exit 1
+fi
+if ! [[ "$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS must be a positive integer, got '$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS'"
+    exit 1
+fi
+if ! [[ "$CHECK_RUN_APPEARANCE_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS must be a positive integer, got '$CHECK_RUN_APPEARANCE_GRACE_SECONDS'"
+    exit 1
+fi
+# A git fetch that never returns would hold the flock forever: no later tick
+# runs, so the consecutive-failure ALERT is never reached. Both fetches of a
+# tick (the superproject's and the ACE-Step pin's) get this deadline; a
+# timeout is a counted refusal like any other failed fetch. The default is
+# several times the longest healthy fetch measured on this host (about 12 s
+# for a pin over HTTPS). At the deadline the whole fetch process group gets
+# TERM; whatever is still running after the grace period, or once git has
+# exited, gets KILL (see safe_git_fetch).
+GIT_FETCH_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS:-120}"
+GIT_FETCH_KILL_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS:-5}"
+if ! [[ "$GIT_FETCH_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS must be a positive integer, got '$GIT_FETCH_TIMEOUT_SECONDS'"
+    exit 1
+fi
+if ! [[ "$GIT_FETCH_KILL_GRACE_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+    log_err "SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS must be a positive integer, got '$GIT_FETCH_KILL_GRACE_SECONDS'"
+    exit 1
+fi
+# The one place that reads what `timeout` leaves in $? when it cut a command
+# short. 124 is its own status for a deadline it enforced. 137 is a SIGKILL:
+# `timeout` sends one when TERM was not honoured within the grace period, but an
+# outside kill (the OOM killer) ends a command the same way, so 137 is named
+# as a kill and never claimed as a timeout. Prints nothing for any other status.
+# Usage: describe_timeout_status <exit status of the timed command>
+describe_timeout_status() {
+    case "$1" in
+        124) printf 'timed out' ;;
+        137) printf 'was killed by SIGKILL' ;;
+    esac
+}
+# Bounds the container-readiness wait of step 10 only; the image build in
+# step 9 stays deliberately unbounded, because a cold-cache build takes
+# 8-15 minutes by design. Without a bound, one service that can never
+# become healthy (issue #333's own alertmanager, if .env lacks the SMTP
+# values) makes `compose up --wait` wait forever — and since the tick holds
+# the flock the whole time, every later tick skips and nothing is ever
+# alerted. The default is generous enough for a cold ACE-Step model load
+# (ACESTEP_STARTUP_TIMEOUT_SECONDS, 900s) to still converge: this guards
+# against "never", not against "slow".
+COMPOSE_UP_WAIT_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_COMPOSE_UP_WAIT_TIMEOUT_SECONDS:-1200}"
+POSTGRES_USER="${POSTGRES_USER:-songmaker}"
+POSTGRES_DB="${POSTGRES_DB:-songmaker}"
+
+compose() {
+    (cd "$REPO_ROOT" && docker compose "$@")
+}
+
+preserve_running_images() {
+    command -v jq >/dev/null || {
+        log_err "jq is required for the pre-recreate rollback tagging but is not installed"
+        return 1
+    }
+
+    local compose_config
+    local compose_stderr_file
+    local compose_error
+    local compose_exit_code
+    local project_name
+    local build_services
+    local service
+    local containers
+    local container
+    local service_image
+    local current_image
+
+    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[compose-stderr]}XXXXXX" 2>/dev/null)"; then
+        log_err "cannot create temporary file for Compose config stderr before recreate"
+        return 1
+    fi
+
+    if compose_config="$(compose config --format json --no-interpolate 2>"$compose_stderr_file")"; then
+        rm -f "$compose_stderr_file"
+    else
+        compose_exit_code=$?
+        compose_error="$(<"$compose_stderr_file")"
+        rm -f "$compose_stderr_file"
+        log_err "cannot read Compose config before recreate (exit $compose_exit_code): $compose_error"
+        return 1
+    fi
+
+    if ! project_name="$(jq -er '.name | if type == "string" then . else error("missing Compose project name") end' <<<"$compose_config")"; then
+        log_err "cannot read the Compose project name before recreate"
+        return 1
+    fi
+    if ! [[ "$project_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        log_err "Compose project name '$project_name' contains unsupported characters"
+        return 1
+    fi
+
+    if ! build_services="$(jq -r 'if (.services | type) == "object" then [.services | to_entries[] | select((.value | type) == "object" and (.value.build != null)) | .key][]? else error("missing Compose services") end' <<<"$compose_config")"; then
+        log_err "cannot identify build services from Compose config before recreate"
+        return 1
+    fi
+    [[ -n "$build_services" ]] || return 0
+
+    while IFS= read -r service; do
+        if ! [[ "$service" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            log_err "Compose build service '$service' contains unsupported characters"
+            return 1
+        fi
+
+        if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[compose-stderr]}XXXXXX" 2>/dev/null)"; then
+            log_err "cannot create temporary file for Compose ps stderr before recreate"
+            return 1
+        fi
+
+        if containers="$(compose ps -q --status running "$service" 2>"$compose_stderr_file")"; then
+            rm -f "$compose_stderr_file"
+        else
+            compose_exit_code=$?
+            compose_error="$(<"$compose_stderr_file")"
+            rm -f "$compose_stderr_file"
+            log_err "cannot find the running container for $service before recreate (exit $compose_exit_code): $compose_error"
+            return 1
+        fi
+        [[ -n "$containers" ]] || continue
+
+        service_image=""
+        while IFS= read -r container; do
+            if ! [[ "$container" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                log_err "Compose container ID '$container' for $service contains unsupported characters"
+                return 1
+            fi
+            if ! current_image="$(docker inspect --format '{{.Image}}' "$container" 2>&1)"; then
+                log_err "cannot inspect the running image for $service before recreate: $current_image"
+                return 1
+            fi
+            if [[ -n "$service_image" && "$service_image" != "$current_image" ]]; then
+                log_err "running containers for $service use different images; refusing to replace its single previous image tag"
+                return 1
+            fi
+            service_image="$current_image"
+        done <<<"$containers"
+
+        if ! docker tag "$service_image" "${project_name}-${service}:${PREVIOUS_IMAGE_TAG}"; then
+            log_err "cannot preserve the running image for $service before recreate"
+            return 1
+        fi
+    done <<<"$build_services"
+}
+
+prune_docker_resources() {
+    local prune_filter="until=${PRUNE_RETENTION_HOURS}h"
+    local prune_failed=false
+    local prune_exit_code
+
+    # Docker accepts a negated label filter for image prune. Keep the base
+    # images even when they become unreferenced, because compose leaf builds
+    # need them locally and Docker Hub does not host them.
+    if timeout "$PRUNE_TIMEOUT_SECONDS" docker image prune --force --filter "$prune_filter" --filter "label!=${BASE_IMAGE_LABEL}"; then
+        :
+    else
+        prune_exit_code=$?
+        log_err "docker image prune --force --filter $prune_filter failed after deploy (exit $prune_exit_code); deploy remains successful"
+        prune_failed=true
+    fi
+
+    if timeout "$PRUNE_TIMEOUT_SECONDS" docker builder prune --all --force --filter "$prune_filter"; then
+        :
+    else
+        prune_exit_code=$?
+        log_err "docker builder prune --all --force --filter $prune_filter failed after deploy (exit $prune_exit_code); deploy remains successful"
+        prune_failed=true
+    fi
+
+    if [[ "$prune_failed" == false ]]; then
+        log_info "pruned unreferenced Docker images and build cache older than ${PRUNE_RETENTION_HOURS}h"
+    fi
+
+    return 0
+}
+
+# Returns 0 when the candidate needs its bases rebuilt, 1 when the existing
+# bases match the deployed revision, and 2 when the comparison cannot be made.
+base_images_need_build() {
+    local deployed_sha="$1"
+    local candidate_sha="$2"
+    local base_image
+    local changed_base_inputs
+
+    for base_image in "${BASE_IMAGES[@]}"; do
+        if ! docker image inspect "$base_image" >/dev/null 2>&1; then
+            log_info "base image $base_image is missing; rebuilding base images before compose build"
+            return 0
+        fi
+    done
+
+    if [[ -z "$deployed_sha" ]]; then
+        log_info "deployed revision is unknown; rebuilding base images before compose build"
+        return 0
+    fi
+
+    if ! changed_base_inputs="$(safe_git diff --ignore-submodules=none --name-only "$deployed_sha..$candidate_sha" -- "${BASE_IMAGE_INPUT_PATHS[@]}" 2>&1)"; then
+        log_err "cannot compare base image inputs between deployed $deployed_sha and candidate $candidate_sha: $changed_base_inputs"
+        return 2
+    fi
+
+    if [[ -n "$changed_base_inputs" ]]; then
+        log_info "base image inputs changed since deployed revision $deployed_sha (${changed_base_inputs//$'\n'/, }); rebuilding base images before compose build"
+        return 0
+    fi
+
+    return 1
+}
+
+reload_prometheus_rules() {
+    local previous_deployed_sha="$1"
+    local deployed_sha="$2"
+    local changed_files
+    local configured_rule_count
+    local loaded_rule_count
+    local rules_response
+    local prometheus_container
+    local compose_stderr_file
+    local compose_error
+    local compose_exit_code
+    local metrics_response
+    local reload_status_line
+
+    if [[ -z "$previous_deployed_sha" ]]; then
+        changed_files="$PROMETHEUS_CONFIG_FILE"
+    elif ! changed_files="$(safe_git diff --name-only "$previous_deployed_sha" "$deployed_sha" -- "$PROMETHEUS_CONFIG_FILE" "$PROMETHEUS_RULE_FILE" 2>&1)"; then
+        log_err "cannot determine whether Prometheus configuration changed after deploy: $changed_files; deploy remains successful"
+        return 0
+    fi
+    if ! grep -Fxq "$PROMETHEUS_CONFIG_FILE" <<<"$changed_files" \
+        && ! grep -Fxq "$PROMETHEUS_RULE_FILE" <<<"$changed_files"; then
+        return 0
+    fi
+
+    if ! compose_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[prometheus-ps-stderr]}XXXXXX" 2>/dev/null)"; then
+        log_err "cannot create temporary file for Prometheus Compose ps stderr after deploy; deploy remains successful"
+        return 0
+    fi
+    if prometheus_container="$(compose ps -q prometheus 2>"$compose_stderr_file")"; then
+        rm -f "$compose_stderr_file"
+    else
+        compose_exit_code=$?
+        compose_error="$(<"$compose_stderr_file")"
+        rm -f "$compose_stderr_file"
+        log_err "cannot find the Prometheus container to reload rules after deploy (exit $compose_exit_code): $compose_error; deploy remains successful"
+        return 0
+    fi
+    if [[ -z "$prometheus_container" ]]; then
+        log_err "cannot find the Prometheus container to reload rules after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! [[ "$prometheus_container" =~ ^[0-9a-f]{12,64}$ ]]; then
+        log_err "Prometheus container ID '$prometheus_container' contains unsupported characters after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! docker kill -s HUP "$prometheus_container" >/dev/null; then
+        log_err "Prometheus rule reload failed after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" --retry 5 --retry-connrefused --retry-delay 2 "$PROMETHEUS_READY_URL"; then
+        log_err "Prometheus did not become ready after rule reload; deploy remains successful"
+        return 0
+    fi
+    if ! metrics_response="$(curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" "$PROMETHEUS_METRICS_URL")"; then
+        log_err "cannot read Prometheus reload status after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! reload_status_line="$(grep -E '^prometheus_config_last_reload_successful([[:space:]]|$)' <<<"$metrics_response")"; then
+        log_err "cannot determine Prometheus reload status after deploy; deploy remains successful"
+        return 0
+    fi
+    if grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+0([.]0+)?([[:space:]]|$)' <<<"$reload_status_line"; then
+        log_err "Prometheus reload did not apply; deploy remains successful"
+        return 0
+    fi
+    if ! grep -Eq '^prometheus_config_last_reload_successful[[:space:]]+1([.]0+)?([[:space:]]|$)' <<<"$reload_status_line"; then
+        log_err "cannot determine Prometheus reload status after deploy; deploy remains successful"
+        return 0
+    fi
+    if ! rules_response="$(curl --fail --silent --show-error --max-time "$PROMETHEUS_HTTP_TIMEOUT_SECONDS" "$PROMETHEUS_RULES_URL")"; then
+        log_err "cannot read Prometheus rules after reload; deploy remains successful"
+        return 0
+    fi
+    if ! loaded_rule_count="$(jq -er --arg rule_file "$PROMETHEUS_LOADED_RULE_FILE" '[.data.groups[]? | select(.file == $rule_file) | .rules[]? | select(.type == "alerting")] | length' <<<"$rules_response")"; then
+        log_err "cannot read Prometheus rules after reload; deploy remains successful"
+        return 0
+    fi
+    if ! configured_rule_count="$(grep -cE '^[[:space:]]*-[[:space:]]*alert:' "$REPO_ROOT/$PROMETHEUS_RULE_FILE" || true)" || ! [[ "$configured_rule_count" =~ ^[0-9]+$ ]]; then
+        log_err "cannot count configured Prometheus alert rules after reload; deploy remains successful"
+        return 0
+    fi
+    if [[ "$loaded_rule_count" != "$configured_rule_count" ]]; then
+        log_err "Prometheus alert rule count mismatch after reload: configured $configured_rule_count, loaded $loaded_rule_count; deploy remains successful"
+    fi
+}
+
+# --- Active-jobs guard, called once before the pull and once again right
+# before the container recreate (see the header). Bounded by a short
+# `timeout` — a wedged DB connection must not hang a tick, unlike the image
+# build below, which is allowed to run as long as it needs.
+active_job_count() {
+    local output
+    if ! output="$(cd "$REPO_ROOT" && timeout "$DB_CHECK_TIMEOUT_SECONDS" docker compose exec -T postgres psql \
+        -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+        "SELECT count(*) FROM jobs WHERE status IN ('queued', 'running')" 2>&1)"; then
+        printf '%s' "$output"
+        return 1
+    fi
+    local count
+    count="$(printf '%s' "$output" | tr -d '[:space:]')"
+    if ! [[ "$count" =~ ^[0-9]+$ ]]; then
+        printf '%s' "$output"
+        return 1
+    fi
+    printf '%s' "$count"
+}
+
+# Shared reader for every whole-number state file this script keeps: the
+# two consecutive-tick counters and the two escalation timestamps. A
+# missing file reads 0, which is what both kinds want — no streak yet, and
+# no escalation yet. Guards `cat` itself against set -e (an unreadable
+# file, e.g. a permissions problem, must be treated like a corrupt one — 0
+# plus a loud line — rather than killing the tick before it can even
+# record anything).
+read_number() {
+    local file="$1"
+    if [[ ! -f "$file" ]]; then
+        printf '0'
+        return
+    fi
+    local value
+    if ! value="$(cat "$file" 2>&1)"; then
+        log_err "cannot read state file $file ($value) — treating as corrupt, using 0"
+        printf '0' >"$file"
+        printf '0'
+        return
+    fi
+    if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+        log_err "state file $file has corrupt content ('$value') — resetting to 0"
+        printf '0' >"$file"
+        printf '0'
+        return
+    fi
+    printf '%s' "$value"
+}
+
+reset_counters() {
+    printf '0' >"$FAILURE_COUNT_FILE"
+    printf '0' >"$BUSY_COUNT_FILE"
+    # The escalation timestamps belong to the streak that is now over. A
+    # new streak has to be able to escalate on the tick that crosses its
+    # threshold, even if that is minutes after the previous streak's last
+    # escalation — otherwise a recovery followed by a fresh outage would
+    # stay silent for the rest of the repeat window.
+    rm -f "$FAILURE_ESCALATED_AT_FILE" "$BUSY_ESCALATED_AT_FILE"
+    # The counters hitting 0 means the guard streak is over too — an
+    # up-to-date shortcut or a first-run adoption both reset the counters
+    # without ever reaching the branch check that would otherwise clear
+    # this file (see step 4 below), so it has to be cleared here as well or
+    # a stale reason from a previous episode could suppress the err line on
+    # a genuinely new one.
+    rm -f "$GUARD_REASON_FILE"
+}
+
+# Writes $DEPLOYED_SHA_FILE and reads it straight back before declaring
+# success — the reader elsewhere in this script rejects anything that isn't
+# a clean 40-char hex SHA (see step 3), so a write that silently didn't take
+# (full disk, permissions, a stale bind mount) would otherwise look like
+# nothing was ever deployed and every following tick would redeploy the
+# same commit forever with no ALERT. A mismatch counts as a failed tick, not
+# a successful one.
+record_success() {
+    local deployed_sha="$1"
+    printf '%s' "$deployed_sha" >"$DEPLOYED_SHA_FILE"
+    local written_sha
+    if ! written_sha="$(cat "$DEPLOYED_SHA_FILE" 2>&1)" || [[ "$written_sha" != "$deployed_sha" ]]; then
+        log_err "deployed-sha file $DEPLOYED_SHA_FILE reads back as '$written_sha' after writing '$deployed_sha' — treating this deploy as failed, not successful"
+        # This path pages immediately either way (the caller exits 1), so
+        # only record_failure's counting matters here, not its answer to
+        # "did this tick escalate".
+        record_failure "deployed-sha readback mismatch" || true
+        return 1
+    fi
+    reset_counters
+    log_info "deploy succeeded, now running $deployed_sha"
+}
+
+# What the clock reads. Its own function because the tests replace it —
+# a repetition promised in hours cannot be proven by a test that waits
+# hours.
+now_seconds() {
+    date +%s
+}
+
+first_seen_commit_timestamp() {
+    local commit_sha="$1"
+    local now recorded_sha recorded_timestamp
+    if ! now="$(now_seconds)" || ! [[ "$now" =~ ^[0-9]+$ ]]; then
+        printf '%s' 'cannot determine current time for check-run grace period'
+        return 1
+    fi
+    if [[ -e "$FIRST_SEEN_COMMIT_FILE" ]]; then
+        if ! read -r recorded_sha recorded_timestamp <"$FIRST_SEEN_COMMIT_FILE" \
+            || ! [[ "$recorded_timestamp" =~ ^[0-9]+$ ]]; then
+            printf 'invalid first-seen commit state in %s' "$FIRST_SEEN_COMMIT_FILE"
+            return 1
+        fi
+        if [[ "$recorded_sha" != "$commit_sha" ]]; then
+            recorded_timestamp="$now"
+            printf '%s %s\n' "$commit_sha" "$recorded_timestamp" >"$FIRST_SEEN_COMMIT_FILE"
+        fi
+    else
+        recorded_timestamp="$now"
+        printf '%s %s\n' "$commit_sha" "$recorded_timestamp" >"$FIRST_SEEN_COMMIT_FILE"
+    fi
+    # The commit timestamp is supplied by the repository and may be forged
+    # into the future.  The grace period must therefore always start at the
+    # first local observation, which is measured by the host clock above.
+    printf '%s' "$recorded_timestamp"
+}
+
+# The escalation rule both counters below share: escalate on the tick that
+# CROSSES the threshold, then at most once per ALERT_REPEAT_SECONDS for as
+# long as the streak lasts, recording in $timestamp_file when it did.
+# Escalating on every tick past the threshold would mail the operator
+# every two minutes through `OnFailure=` (issue #333) and bury the
+# journal; escalating only on the crossing tick would let a permanent
+# outage go quiet after a single missed message, which is the worse of the
+# two failures. Every tick is still counted and still logged at debug, so
+# the record of what happened is complete either way.
+#
+# The repetition is measured in TIME, not in ticks. A systemd timer starts
+# no second run while the previous one is still going, so a tick is not a
+# fixed two minutes: one that waits out COMPOSE_UP_WAIT_TIMEOUT_SECONDS
+# occupies twenty. Counting ticks turned "again in an hour" into "again in
+# ten hours" on exactly the slow, broken ticks this alarm exists for.
+# The THRESHOLD stays a tick count on
+# purpose: "three attempts in a row failed" is what separates a transient
+# blip (a migration lock_timeout the next tick retries) from an outage,
+# and elapsed time cannot tell those two apart.
+#
+# Called at most once per tick per counter — it writes the timestamp it
+# reads.
+escalation_due() {
+    local count="$1"
+    local threshold="$2"
+    local timestamp_file="$3"
+    ((count >= threshold)) || return 1
+    local now last_escalation
+    now="$(now_seconds)"
+    last_escalation="$(read_number "$timestamp_file")"
+    ((now - last_escalation >= ALERT_REPEAT_SECONDS)) || return 1
+    printf '%s' "$now" >"$timestamp_file"
+}
+
+# A tick that could not deploy at all despite $DEPLOY_BRANCH having moved —
+# a hard refusal (wrong branch, dirty tree, diverged), a fail-closed DB
+# check, or a pull/build/up failure. This is the "something is actually
+# broken" signal: N of these in a row (default 3) pages.
+#
+# Returns success on exactly the ticks that escalated, so fail_tick below
+# fails the systemd unit — and therefore sends the email — on those and
+# only those, without asking escalation_due a second question it would
+# answer differently (it records the time it escalated).
+record_failure() {
+    local reason="$1"
+    local count
+    count="$(read_number "$FAILURE_COUNT_FILE")"
+    count=$((count + 1))
+    printf '%s' "$count" >"$FAILURE_COUNT_FILE"
+    log_debug "failure count now $count (this tick: $reason)"
+    escalation_due "$count" "$FAILURE_ALERT_THRESHOLD" "$FAILURE_ESCALATED_AT_FILE" || return 1
+    log_err "ALERT: $count ticks in a row deferred/failed, reason: $reason — auto-deploy is stuck, needs human attention"
+}
+
+# Every guard/infra refusal below calls this instead of a bare `exit 1` —
+# it records the tick via record_failure() exactly as before, and fails the
+# systemd unit (exit 1) on exactly the ticks that also log the "ALERT: N
+# ticks in a row" line above: the tick that crosses
+# FAILURE_ALERT_THRESHOLD, and then the first tick at least
+# ALERT_REPEAT_SECONDS later while the streak holds. Every other tick in a
+# streak exits 0 despite having deferred.
+#
+# This is what makes `OnFailure=songmaker-alert@%n.service` (issue #333)
+# safe to attach to this unit: without it, the branch guard alone would
+# fire that unit-failure — and the alert email — on essentially every
+# 2-minute tick for as long as the operator works on a branch other than
+# $DEPLOY_BRANCH in this checkout (see step 4's own comment), which is a
+# routine, not an emergency, state.
+fail_tick() {
+    local reason="$1"
+    if record_failure "$reason"; then
+        exit 1
+    fi
+    exit 0
+}
+
+# A tick deferred only because jobs are active (before or after the build).
+# This is expected behavior under a busy queue or a long-running
+# lora_training job, not a fault — it gets its own, much higher threshold
+# (default 30 ticks) and a quieter prio=warning line instead of err.
+record_busy_deferral() {
+    local active_job_count="$1"
+    local count
+    count="$(read_number "$BUSY_COUNT_FILE")"
+    count=$((count + 1))
+    printf '%s' "$count" >"$BUSY_COUNT_FILE"
+    log_debug "busy-deferral count now $count ($active_job_count jobs active)"
+    if escalation_due "$count" "$BUSY_ALERT_THRESHOLD" "$BUSY_ESCALATED_AT_FILE"; then
+        log_warning "deploy deferred on $count ticks in a row, $active_job_count jobs still active"
+    fi
+}
+
+# Dedup for the branch guard's err line only (step 4 below). An operator who
+# stays on a work branch has step 3's up-to-date shortcut fail on
+# essentially every tick — their HEAD is essentially never ==
+# origin/$DEPLOY_BRANCH while they are away from it — so without this, the
+# branch guard would log the identical prio=err line every ~2 minutes for
+# hours. Only a CHANGED reason (a different branch, or detached vs named)
+# re-earns an err line; the same reason repeating logs at debug instead.
+# record_failure still counts every tick regardless of which level this
+# logs at, so the ALERT threshold is unaffected.
+log_guard_reason() {
+    local reason="$1"
+    local previous_reason=""
+    if [[ -f "$GUARD_REASON_FILE" ]]; then
+        previous_reason="$(cat "$GUARD_REASON_FILE" 2>/dev/null || true)"
+    fi
+    if [[ "$reason" == "$previous_reason" ]]; then
+        log_debug "$reason (unchanged since last tick, not repeating at err)"
+    else
+        log_err "$reason"
+        printf '%s' "$reason" >"$GUARD_REASON_FILE"
+    fi
+}
+
+# Compose owns the list of variables the stack cannot start without: every
+# `${VAR:?...}` in docker-compose.yml (GRAFANA_PASSWORD since #1357). The job
+# guard's `compose exec` does not notice a missing one, so without asking
+# first it would surface only at `compose build`, after the checkout has
+# already moved. The refusal quotes compose's own message and is an ordinary
+# counted refusal. `--quiet` is mandatory: without it compose prints the fully
+# interpolated configuration, every .env secret included, straight into the
+# journal.
+compose_config_refusal() {
+    local moment="$1"
+    local config_error
+    if config_error="$(compose config --quiet 2>&1)"; then
+        return 0
+    fi
+    log_err "docker compose refuses the stack configuration $moment — refusing to deploy, the running stack is untouched: $config_error"
+    fail_tick "compose configuration refused $moment"
+}
+
+# A fetch that failed or overran its deadline is a counted refusal like every
+# other tick that could not deploy. The deadline is enforced by safe_git_fetch.
+fail_tick_after_fetch_failure() {
+    local description="$1"
+    local fetch_exit_code="$2"
+    local fetch_output="$3"
+    local reason="$4"
+    local termination
+    termination="$(describe_timeout_status "$fetch_exit_code")"
+    if [[ -n "$termination" ]]; then
+        log_err "$description $termination (exit $fetch_exit_code, deadline ${GIT_FETCH_TIMEOUT_SECONDS}s): $fetch_output"
+        fail_tick "$reason ($termination)"
+    fi
+    log_err "$description failed (exit $fetch_exit_code): $fetch_output"
+    fail_tick "$reason"
+}
+
+# Prints the commit $1 pins vendor/acestep to, and nothing when $1 has no
+# gitlink there. On failure it prints git's complaint and returns non-zero.
+acestep_pin_of() {
+    local commit_sha="$1"
+    local tree_entry
+    if ! tree_entry="$(safe_git ls-tree "$commit_sha" -- "$ACESTEP_SUBMODULE_PATH" 2>&1)"; then
+        printf '%s' "$tree_entry"
+        return 1
+    fi
+    if [[ "$tree_entry" =~ ^160000\ commit\ ([0-9a-f]+) ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    fi
+}
+
+# Runs before the fast-forward, so a pin that cannot be had leaves the checkout
+# untouched and the next tick retries from step 2. Every submodule lookup is
+# anchored to $REPO_ROOT: this script never changes its working directory, and
+# a bare `git -C vendor/acestep` on an uninitialised submodule resolves to the
+# superproject.
+fetch_acestep_pin() {
+    local pinned_sha="$1"
+    local submodule_dir="$REPO_ROOT/$ACESTEP_SUBMODULE_PATH"
+    local fetch_output
+    local fetch_exit_code
+
+    # -e: a submodule checkout has a .git file, an embedded repository a directory.
+    if [[ ! -e "$submodule_dir/.git" ]]; then
+        log_err "$ACESTEP_SUBMODULE_PATH is not initialised in $REPO_ROOT — refusing to deploy, not touching the tree (run: git submodule update --init $ACESTEP_SUBMODULE_PATH)"
+        fail_tick "$ACESTEP_SUBMODULE_PATH is not initialised"
+    fi
+
+    # A bare `cat-file -e <sha>` would accept an object of any type.
+    if safe_git -C "$submodule_dir" cat-file -e "$pinned_sha^{commit}" 2>/dev/null; then
+        return 0
+    fi
+
+    log_info "fetching the $ACESTEP_SUBMODULE_PATH pin $pinned_sha"
+    if fetch_output="$(safe_git_fetch "$submodule_dir" origin "$pinned_sha" 2>&1)"; then
+        return 0
+    else
+        fetch_exit_code=$?
+    fi
+    fail_tick_after_fetch_failure \
+        "fetching the $ACESTEP_SUBMODULE_PATH pin $pinned_sha" \
+        "$fetch_exit_code" "$fetch_output" \
+        "cannot fetch the $ACESTEP_SUBMODULE_PATH pin $pinned_sha"
+}
+
+# Runs right after the fast-forward is verified, before the configuration guard
+# can refuse the tick: the fast-forward alone leaves the submodule on its old
+# commit, which the dirty guard would then refuse on every later tick. The
+# pin's objects are already local (fetch_acestep_pin), so nothing here touches
+# the network. A submodule status that starts with a space proves its HEAD
+# matches the index; worktree cleanliness stays with the dirty guard.
+checkout_acestep_pin() {
+    local pinned_sha="$1"
+    local update_output
+    local status_output
+
+    if ! update_output="$(safe_git submodule update --checkout --no-fetch -- "$ACESTEP_SUBMODULE_PATH" 2>&1)"; then
+        log_err "cannot check out $ACESTEP_SUBMODULE_PATH at $pinned_sha in $REPO_ROOT (recover with: git submodule update $ACESTEP_SUBMODULE_PATH): $update_output"
+        fail_tick "$ACESTEP_SUBMODULE_PATH checkout failed"
+    fi
+    if ! status_output="$(safe_git submodule status -- "$ACESTEP_SUBMODULE_PATH" 2>&1)"; then
+        log_err "cannot read the $ACESTEP_SUBMODULE_PATH status in $REPO_ROOT after its checkout: $status_output"
+        fail_tick "$ACESTEP_SUBMODULE_PATH status failed"
+    fi
+    if [[ "${status_output:0:1}" != " " ]]; then
+        log_err "$ACESTEP_SUBMODULE_PATH is not at its pinned commit $pinned_sha in $REPO_ROOT after its checkout (submodule status: '$status_output') — refusing to build"
+        fail_tick "$ACESTEP_SUBMODULE_PATH not at its pinned commit"
+    fi
+}
+
+# Prints exactly one of green, waiting, or failed. An API/CLI failure is a
+# named error return because it is not evidence that the fetched commit is
+# safe to deploy. The API's explicit zero-run envelope waits only until the
+# commit is old enough that a workflow which never started needs attention.
+# A missing/malformed envelope is never mistaken for zero runs.
+remote_check_status() {
+    local commit_sha="$1"
+    local commit_timestamp="$2"
+    local check_runs gh_error gh_stderr_file lookup_exit termination
+    if ! command -v gh >/dev/null 2>&1; then
+        printf '%s' "GitHub CLI (gh) is unavailable on PATH"
+        return 1
+    fi
+    if ! gh_stderr_file="$(mktemp "$GIT_ADMIN_DIR/${TEMP_FILE_PREFIXES[gh-stderr]}XXXXXX" 2>/dev/null)"; then
+        printf '%s' 'cannot create temporary file for check-run lookup stderr'
+        return 1
+    fi
+    if check_runs="$(timeout --kill-after="$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
+        "repos/FlexOr2/songmaker/commits/$commit_sha/check-runs?per_page=100" \
+        --jq 'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
+        rm -f "$gh_stderr_file"
+    else
+        lookup_exit=$?
+        gh_error="$(<"$gh_stderr_file")"
+        rm -f "$gh_stderr_file"
+        termination="$(describe_timeout_status "$lookup_exit")"
+        if [[ -n "$termination" ]]; then
+            printf 'check-run lookup %s' "$termination"
+        else
+            printf '%s' "$gh_error"
+        fi
+        return 1
+    fi
+
+    local record app_slug name status conclusion
+    local expected_check_count=""
+    local observed_check_count=0
+    local observed_required_check_count=0
+    local has_envelope=false
+    local has_running_check=false
+    local has_failed_check=false
+    local has_passed_check=false
+    while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug name status conclusion; do
+        case "$record" in
+            envelope)
+                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$name" || -n "$status" || -n "$conclusion" ]]; then
+                    printf 'GitHub returned a malformed check-runs envelope'
+                    return 1
+                fi
+                if [[ -n "$expected_check_count" && "$expected_check_count" != "$app_slug" ]]; then
+                    printf 'GitHub returned inconsistent paginated check-run counts'
+                    return 1
+                fi
+                expected_check_count="$app_slug"
+                has_envelope=true
+                ;;
+            check)
+                ((observed_check_count += 1))
+                if [[ -z "$app_slug" || -z "$name" || -z "$status" ]]; then
+                    printf 'GitHub returned an incomplete check-run status'
+                    return 1
+                fi
+                if [[ "$app_slug" != "$REQUIRED_CHECK_RUN_APP_SLUG" ]]; then
+                    log_info "GitHub check run from app '$app_slug' is advisory, ignored"
+                    continue
+                fi
+                ((observed_required_check_count += 1))
+                case "$status" in
+                    queued|in_progress|pending|requested|waiting)
+                        has_running_check=true
+                        ;;
+                    completed)
+                        if [[ -z "$conclusion" ]]; then
+                            printf 'GitHub returned an incomplete check-run status'
+                            return 1
+                        fi
+                        if [[ "$conclusion" == "$PASSED_CHECK_RUN_CONCLUSION" ]]; then
+                            has_passed_check=true
+                        elif ! is_unjudged_check_run_conclusion "$conclusion"; then
+                            has_failed_check=true
+                        fi
+                        ;;
+                    *)
+                        printf 'GitHub returned an unknown check-run status'
+                        return 1
+                        ;;
+                esac
+                ;;
+            *)
+                printf 'GitHub returned a malformed check-runs response'
+                return 1
+                ;;
+        esac
+    done <<<"$check_runs"
+
+    if [[ "$has_envelope" != true || "$observed_check_count" != "$expected_check_count" ]]; then
+        printf 'GitHub returned an incomplete check-runs response'
+        return 1
+    fi
+    if ((observed_required_check_count == 0)); then
+        local now
+        if ! now="$(now_seconds)" || ! [[ "$now" =~ ^[0-9]+$ ]]; then
+            printf 'cannot determine current time for check-run grace period'
+            return 1
+        fi
+        if ((now - commit_timestamp >= CHECK_RUN_APPEARANCE_GRACE_SECONDS)); then
+            printf 'failed (GitHub Actions has not reported a check run within %ss of its commit)' "$CHECK_RUN_APPEARANCE_GRACE_SECONDS"
+        else
+            printf 'waiting (GitHub Actions has not reported a check run yet)'
+        fi
+        return
+    fi
+
+    # A run that GitHub still considers active means this SHA is not green
+    # yet, even if another completed run has already failed. Waiting avoids
+    # escalating while CI is still producing its final verdict.
+    if [[ "$has_running_check" == true ]]; then
+        printf 'waiting (one or more GitHub Actions check runs are still running)'
+    elif [[ "$has_failed_check" == true ]]; then
+        printf 'failed (one or more GitHub Actions check runs did not succeed)'
+    elif [[ "$has_passed_check" != true ]]; then
+        printf 'failed (no required GitHub Actions check run succeeded)'
+    else
+        printf 'green'
+    fi
+}
+
+# --- 1. Refuse to overlap with another run in flight (a slow cold-cache
+# build can outlive one 2-minute tick). Busy is the expected steady state
+# under a running build, not an error — logged at debug so an unfiltered
+# journal still shows it, but no info/err noise.
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    log_debug "another run is already in flight, skipping this tick"
+    exit 0
+fi
+
+sweep_stale_temp_files || fail_tick "stale temp file could not be removed"
+
+# --- 2. Cheap reads: local HEAD, then fetch, then remote HEAD. Neither
+# depends on which branch is currently checked out (rev-parse HEAD works
+# detached too), so these run before the branch guard. A persistently
+# broken `git fetch` (e.g. a dead SSH key on the host) is the single most
+# likely way this whole mechanism goes silently stale, so all three record a
+# failure tick like every other refusal below, instead of only logging and
+# exiting — without this a stuck fetch would never reach the consecutive-
+# failure ALERT.
+if ! LOCAL_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
+    log_err "cannot determine local HEAD in $REPO_ROOT: $LOCAL_HEAD"
+    fail_tick "cannot determine local HEAD"
+fi
+
+# --no-recurse-submodules: the pin gate before the fast-forward is the one
+# owner of the ACE-Step fetch, so a bad pin in a newer, unselected commit
+# cannot block an older green candidate here.
+if FETCH_OUTPUT="$(safe_git_fetch "$REPO_ROOT" --no-recurse-submodules origin "$DEPLOY_BRANCH" 2>&1)"; then
+    :
+else
+    FETCH_EXIT_CODE=$?
+    fail_tick_after_fetch_failure \
+        "git fetch origin $DEPLOY_BRANCH in $REPO_ROOT" \
+        "$FETCH_EXIT_CODE" "$FETCH_OUTPUT" "git fetch failed"
+fi
+
+if ! REMOTE_HEAD="$(safe_git rev-parse "origin/$DEPLOY_BRANCH" 2>&1)"; then
+    log_err "cannot resolve origin/$DEPLOY_BRANCH in $REPO_ROOT: $REMOTE_HEAD"
+    fail_tick "cannot resolve origin/$DEPLOY_BRANCH"
+fi
+
+# --- 3. Up-to-date shortcut — the common case, and must stay silent. Judged
+# against what is actually RUNNING ($DEPLOYED_SHA_FILE, written only by
+# record_success), not just what is checked out: a tick that pulled/built
+# but deferred the recreate already sits on the new HEAD, so "local ==
+# remote" alone would call that "nothing to deploy" forever. Runs before the
+# branch guard: an operator sitting on an unrelated branch with nothing
+# pending to deploy must not get a loud line every ~2 minutes.
+if [[ ! -f "$DEPLOYED_SHA_FILE" ]]; then
+    printf '%s' "$LOCAL_HEAD" >"$DEPLOYED_SHA_FILE"
+    reset_counters
+    log_info "adopted running state $LOCAL_HEAD (no prior $DEPLOYED_SHA_FILE — first run after install; if the live stack is not actually running this commit, deploy manually once)"
+    exit 0
+fi
+
+if ! DEPLOYED_SHA="$(cat "$DEPLOYED_SHA_FILE" 2>&1)"; then
+    log_err "cannot read $DEPLOYED_SHA_FILE ($DEPLOYED_SHA) — treating deploy state as unknown, will re-verify by deploying"
+    DEPLOYED_SHA=""
+elif ! [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+    log_err "deployed-sha file $DEPLOYED_SHA_FILE has unexpected content ('$DEPLOYED_SHA') — treating deploy state as unknown, will re-verify by deploying"
+    DEPLOYED_SHA=""
+fi
+
+if [[ "$LOCAL_HEAD" == "$REMOTE_HEAD" && "$DEPLOYED_SHA" == "$LOCAL_HEAD" ]]; then
+    reset_counters
+    log_debug "already at origin/$DEPLOY_BRANCH ($LOCAL_HEAD) and deployed — nothing to deploy"
+    exit 0
+fi
+
+# --- 4. On the deploy branch? Reached only once step 3 has established that
+# something is actually pending — but on a work branch that is essentially
+# every tick: HEAD there is essentially never == origin/$DEPLOY_BRANCH, so
+# this guard fires continuously for as long as the operator stays away from
+# it, not as some rare edge case. A detached HEAD or a non-deploy branch
+# therefore only re-logs at prio=err when the reason actually changes
+# (log_guard_reason); record_failure still counts every tick regardless, so
+# the ALERT threshold is unaffected by the log-level damping.
+if ! CURRENT_BRANCH="$(safe_git symbolic-ref --quiet --short HEAD 2>&1)"; then
+    log_guard_reason "HEAD at $REPO_ROOT is not on a branch (detached?) — refusing to deploy, not touching the tree: $CURRENT_BRANCH"
+    fail_tick "HEAD not on a branch"
+fi
+
+if [[ "$CURRENT_BRANCH" != "$DEPLOY_BRANCH" ]]; then
+    log_guard_reason "HEAD at $REPO_ROOT is on branch '$CURRENT_BRANCH', not the deploy branch '$DEPLOY_BRANCH' — refusing to deploy, not touching the tree"
+    fail_tick "HEAD on branch $CURRENT_BRANCH instead of $DEPLOY_BRANCH"
+fi
+
+# Branch guard passed — clear any stale reason so a future recurrence (after
+# a branch change or a successful deploy in between) logs at err again
+# instead of being suppressed by a reason left over from before.
+rm -f "$GUARD_REASON_FILE"
+
+# --- 5. Safe to touch? A dirty working tree or a diverged (non-fast-
+# forwardable) local main stops here — the host's checkout is also the
+# operator's manual workspace.
+if ! STATUS_OUTPUT="$(safe_git status --porcelain 2>&1)"; then
+    log_err "cannot determine working tree status in $REPO_ROOT: $STATUS_OUTPUT"
+    fail_tick "git status failed"
+fi
+
+if [[ -n "$STATUS_OUTPUT" ]]; then
+    log_err "working tree at $REPO_ROOT is dirty — refusing to deploy, not touching it (the operator may be working here)"
+    fail_tick "working tree dirty"
+fi
+
+if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_HEAD"; then
+    log_err "local HEAD ($LOCAL_HEAD) has diverged from origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — not fast-forwardable, refusing to deploy, not touching the tree"
+    fail_tick "local HEAD diverged from origin/$DEPLOY_BRANCH"
+fi
+
+# The checked-out stack configuration must be complete before anything
+# below runs; see compose_config_refusal.
+compose_config_refusal "before pull"
+
+# --- 6. Job guard, ahead of the first step that touches the checkout. An
+# unreachable DB fails closed: unknown job state is treated as "do not
+# deploy", not as "assume idle".
+if ! ACTIVE_JOB_COUNT="$(active_job_count)"; then
+    log_err "cannot reach the database to check for active jobs — refusing to deploy (fail closed): $ACTIVE_JOB_COUNT"
+    fail_tick "database unreachable before pull"
+fi
+
+if [[ "$ACTIVE_JOB_COUNT" -gt 0 ]]; then
+    log_info "deploy deferred, $ACTIVE_JOB_COUNT jobs active"
+    record_busy_deferral "$ACTIVE_JOB_COUNT"
+    exit 0
+fi
+
+# --- 7. Alert-channel guard.
+# The stack's alertmanager refuses to start without the five .env values
+# (issue #333), so a checkout that reaches this commit without them cannot
+# be deployed at all — `compose up --wait` would only discover that after
+# the whole build, minutes later, from an "unhealthy container" message
+# that names no cause. Refusing here instead names the missing keys on the
+# very first tick. The same helper scripts/alert.sh uses owns the list, so
+# there is one answer to "what configures the alert channel".
+if ! ALERT_CONFIG_ERROR="$( (
+    # shellcheck source=scripts/alert-config.sh
+    source "$SCRIPT_DIR/alert-config.sh"
+    load_alert_config "$REPO_ROOT/.env"
+) 2>&1 )"; then
+    log_err "alert channel not configured — refusing to deploy a stack whose alertmanager cannot start: $ALERT_CONFIG_ERROR"
+    fail_tick "alert channel not configured"
+fi
+
+# --- 8. Agent-CLI mount preflight, the last check before anything is
+# changed. When the verifier from issue #350 is present, make its named
+# failure a regular deploy refusal before a pull or an expensive image build.
+# Until that change lands, absence is explicit rather than a silent fallback:
+# this tick names the missing preflight and continues with the guards already
+# available in this checkout.
+MOUNT_PREFLIGHT_SCRIPT="$SCRIPT_DIR/check_agent_cli_mounts.sh"
+if [[ ! -e "$MOUNT_PREFLIGHT_SCRIPT" && ! -L "$MOUNT_PREFLIGHT_SCRIPT" ]]; then
+    log_info "mount preflight not installed, skipping"
+elif ! MOUNT_PREFLIGHT_ERROR="$(bash "$MOUNT_PREFLIGHT_SCRIPT" 2>&1)"; then
+    log_err "agent CLI mount preflight failed — refusing to deploy: $MOUNT_PREFLIGHT_ERROR"
+    fail_tick "agent CLI mount preflight failed"
+fi
+
+# --- 9. Select the newest fully green commit in the recent main history.
+# A newer running or failed commit is skipped rather than becoming a reason to
+# hold an already-verified predecessor back. An unavailable or malformed
+# GitHub answer is still fail-closed: without its result we cannot prove that
+# a predecessor is the newest green candidate.
+if ! DEPLOY_CANDIDATES="$(safe_git rev-list --first-parent --max-count="$CHECK_RUN_LOOKBACK_COMMITS" "origin/$DEPLOY_BRANCH" 2>&1)"; then
+    log_err "cannot list the newest $CHECK_RUN_LOOKBACK_COMMITS commits for origin/$DEPLOY_BRANCH: $DEPLOY_CANDIDATES"
+    fail_tick "cannot list deploy candidates"
+fi
+if [[ -z "$DEPLOY_CANDIDATES" ]]; then
+    log_err "origin/$DEPLOY_BRANCH has no commits to evaluate for deployment"
+    fail_tick "no deploy candidates"
+fi
+
+DEPLOY_COMMIT=""
+while IFS= read -r CANDIDATE_COMMIT; do
+    if [[ "$CANDIDATE_COMMIT" == "$REMOTE_HEAD" ]]; then
+        if ! CHECK_RUN_AGE_START="$(first_seen_commit_timestamp "$CANDIDATE_COMMIT")"; then
+            log_err "cannot determine when origin/$DEPLOY_BRANCH commit $CANDIDATE_COMMIT was first seen — refusing to deploy: $CHECK_RUN_AGE_START"
+            fail_tick "cannot determine commit first-seen time"
+        fi
+    else
+        if ! CHECK_RUN_AGE_START="$(safe_git show -s --format=%ct "$CANDIDATE_COMMIT" 2>&1)"; then
+            log_err "cannot determine commit time for deploy candidate $CANDIDATE_COMMIT: $CHECK_RUN_AGE_START"
+            fail_tick "cannot determine candidate commit time"
+        fi
+        if ! [[ "$CHECK_RUN_AGE_START" =~ ^[0-9]+$ ]]; then
+            log_err "deploy candidate $CANDIDATE_COMMIT has an invalid commit time '$CHECK_RUN_AGE_START'"
+            fail_tick "invalid candidate commit time"
+        fi
+    fi
+
+    if ! CANDIDATE_CHECK_STATUS="$(remote_check_status "$CANDIDATE_COMMIT" "$CHECK_RUN_AGE_START")"; then
+        log_err "cannot determine GitHub check status for deploy candidate $CANDIDATE_COMMIT — refusing to deploy: $CANDIDATE_CHECK_STATUS"
+        fail_tick "GitHub check status undetermined"
+    fi
+
+    case "$CANDIDATE_CHECK_STATUS" in
+        green)
+            DEPLOY_COMMIT="$CANDIDATE_COMMIT"
+            log_info "selected newest fully green deploy candidate $DEPLOY_COMMIT from origin/$DEPLOY_BRANCH"
+            break
+            ;;
+        waiting\ *|failed\ *)
+            log_info "skipping deploy candidate $CANDIDATE_COMMIT: $CANDIDATE_CHECK_STATUS"
+            ;;
+        *)
+            log_err "cannot determine GitHub check status for deploy candidate $CANDIDATE_COMMIT — refusing to deploy: unexpected result '$CANDIDATE_CHECK_STATUS'"
+            fail_tick "GitHub check status undetermined"
+            ;;
+    esac
+done <<<"$DEPLOY_CANDIDATES"
+
+if [[ -z "$DEPLOY_COMMIT" ]]; then
+    log_info "no fully green deploy candidate among the newest $CHECK_RUN_LOOKBACK_COMMITS commits of origin/$DEPLOY_BRANCH; waiting"
+    exit 0
+fi
+
+if [[ "$LOCAL_HEAD" == "$DEPLOY_COMMIT" && "$DEPLOYED_SHA" == "$DEPLOY_COMMIT" ]]; then
+    reset_counters
+    log_debug "newest fully green deploy candidate $DEPLOY_COMMIT is already running; waiting for a newer green commit"
+    exit 0
+fi
+
+if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$DEPLOY_COMMIT"; then
+    log_err "newest fully green deploy candidate $DEPLOY_COMMIT is behind local HEAD $LOCAL_HEAD — refusing to roll the checkout backwards"
+    fail_tick "deploy candidate is behind local HEAD"
+fi
+
+# --- 10. Fast-forward exactly the selected green commit, then build.
+# Do not use `git pull` here: it would fetch a second time and could move the
+# checkout past $DEPLOY_COMMIT after its checks were accepted. No timeout around
+# the build (AGENTS.md) — a
+# cold-cache rebuild legitimately takes 8-15 minutes. Building does not
+# recreate any running container, so it cannot kill an in-flight job by
+# itself — the recheck in step 11 is what guards the actual recreate. Both
+# the fast-forward and `compose build` stream straight to this process's own
+# stdout/stderr rather than being captured — a failed build's full output
+# can easily exceed what a single logger argument can carry (see header) —
+# only a short log_err line with the exit code goes through `logger`.
+if ! ACESTEP_PIN="$(acestep_pin_of "$DEPLOY_COMMIT")"; then
+    log_err "cannot read the $ACESTEP_SUBMODULE_PATH pin of $DEPLOY_COMMIT in $REPO_ROOT: $ACESTEP_PIN"
+    fail_tick "cannot read the $ACESTEP_SUBMODULE_PATH pin"
+fi
+if [[ -n "$ACESTEP_PIN" ]]; then
+    fetch_acestep_pin "$ACESTEP_PIN"
+fi
+
+if ! MERGE_OUTPUT="$(safe_git merge --ff-only "$DEPLOY_COMMIT" 2>&1)"; then
+    log_err "git merge --ff-only to selected deploy candidate ($DEPLOY_COMMIT) failed in $REPO_ROOT: $MERGE_OUTPUT"
+    fail_tick "git fast-forward failed"
+fi
+
+if ! CHECKED_OUT_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
+    log_err "cannot determine HEAD in $REPO_ROOT after fast-forward: $CHECKED_OUT_HEAD"
+    fail_tick "cannot determine HEAD after fast-forward"
+fi
+
+if [[ "$CHECKED_OUT_HEAD" != "$DEPLOY_COMMIT" ]]; then
+    log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the selected deploy candidate $DEPLOY_COMMIT — refusing to build"
+    fail_tick "checked out commit differs from verified commit"
+fi
+
+if [[ -n "$ACESTEP_PIN" ]]; then
+    checkout_acestep_pin "$ACESTEP_PIN"
+fi
+
+# The selected commit may require a variable the previous one did not; name
+# it before the base-image and compose builds rather than after them.
+compose_config_refusal "after fast-forward to $DEPLOY_COMMIT"
+
+# Base images are local-only. Check the selected candidate against the revision
+# that is actually running, rather than against the checkout's previous HEAD:
+# a prior build-only deferral may already have advanced this checkout.
+if base_images_need_build "$DEPLOYED_SHA" "$DEPLOY_COMMIT"; then
+    if "$SCRIPT_DIR/build_images.sh" bases; then
+        :
+    else
+        BASE_BUILD_EXIT_CODE=$?
+        log_err "base image build failed in $REPO_ROOT (exit $BASE_BUILD_EXIT_CODE)"
+        fail_tick "base image build failed"
+    fi
+else
+    BASE_IMAGE_CHECK_EXIT_CODE=$?
+    if ((BASE_IMAGE_CHECK_EXIT_CODE != 1)); then
+        fail_tick "cannot determine whether base images need rebuilding"
+    fi
+fi
+
+if compose build; then
+    :
+else
+    BUILD_EXIT_CODE=$?
+    log_err "docker compose build failed in $REPO_ROOT (exit $BUILD_EXIT_CODE)"
+    fail_tick "compose build failed"
+fi
+
+# --- 11. Recheck immediately before the recreate — the only step that can
+# kill an in-flight job. This shrinks the unsafe window from the build's
+# 8-15 minutes down to the seconds between this check and `compose up`. A
+# deferral here finds the image already built on the next tick, so the
+# recheck lands within seconds rather than after another full build.
+if ! ACTIVE_JOB_COUNT="$(active_job_count)"; then
+    log_err "cannot reach the database to recheck for active jobs after build — refusing to recreate containers (fail closed): $ACTIVE_JOB_COUNT"
+    fail_tick "database unreachable after build"
+fi
+
+if [[ "$ACTIVE_JOB_COUNT" -gt 0 ]]; then
+    log_info "deploy deferred after build, $ACTIVE_JOB_COUNT jobs active"
+    record_busy_deferral "$ACTIVE_JOB_COUNT"
+    exit 0
+fi
+
+# Resolved once, right before the recreate — not after `compose up`
+# succeeds — so a broken `rev-parse` here fails the tick outright instead of
+# leaving a just-recreated stack with no way to record what it is running.
+if ! DEPLOYED_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
+    log_err "cannot determine HEAD in $REPO_ROOT right before recreate: $DEPLOYED_HEAD"
+    fail_tick "cannot determine HEAD before recreate"
+fi
+
+if ! preserve_running_images; then
+    fail_tick "cannot preserve running images before recreate"
+fi
+
+if compose up -d --wait --wait-timeout "$COMPOSE_UP_WAIT_TIMEOUT_SECONDS"; then
+    if record_success "$DEPLOYED_HEAD"; then
+        reload_prometheus_rules "$DEPLOYED_SHA" "$DEPLOYED_HEAD"
+        prune_docker_resources
+        exit 0
+    fi
+    # record_success's own failure path (deployed-sha readback mismatch)
+    # already called record_failure — but a deploy that succeeded and then
+    # immediately corrupted its own bookkeeping is a different, rarer, and
+    # more urgent kind of broken than a routine guard refusal, so this one
+    # pages immediately (exit 1) rather than waiting for fail_tick's
+    # threshold.
+    exit 1
+else
+    UP_EXIT_CODE=$?
+    log_err "docker compose up -d --wait failed or timed out after ${COMPOSE_UP_WAIT_TIMEOUT_SECONDS}s in $REPO_ROOT (exit $UP_EXIT_CODE)"
+    fail_tick "compose up failed"
+fi
