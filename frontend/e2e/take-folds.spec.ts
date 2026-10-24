@@ -588,9 +588,10 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 			.getByRole('contentinfo')
 			.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
 			.click();
-		await expect(page.getByRole('dialog')).toBeVisible();
+		const nowPlaying = page.getByRole('dialog', { name: song.title });
+		await expect(nowPlaying).toBeVisible();
 		await page.keyboard.press('Escape');
-		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(nowPlaying).toHaveCount(0);
 
 		await expectSelected(page, 1);
 	});
