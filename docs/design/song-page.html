@@ -174,11 +174,11 @@ table.map td b{font-weight:600;color:var(--violet)}
 .vhead{display:flex;align-items:center;gap:8px;min-height:30px;font-size:.8rem;color:var(--muted);margin-top:8px}
 .vhead .vn{font-family:var(--fd);font-size:.95rem;color:var(--text)}
 .vhead .open{margin-left:auto;color:var(--action);display:inline-flex;align-items:center;gap:2px;font-size:.82rem}
-.vfold{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 6px 0 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:.86rem}
+.vfold{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 6px 0 12px;border:1px solid transparent;border-radius:6px;background:none;font-size:.86rem}
 .ph .vfold{min-height:46px}
-.vfold .vn{font-family:var(--fd);font-size:.95rem;min-width:24px}
+.vfold .vn{font-family:var(--fd);font-size:.95rem;font-weight:400;min-width:24px}
 .vfold .meta{color:var(--muted);font-size:.8rem;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vfold .open{color:var(--disabled);display:inline-flex}
+.vfold .open{color:var(--disabled);display:inline-flex;order:-1}
 .trow{display:flex;align-items:center;gap:6px;min-height:50px;padding:0 4px 0 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;position:relative}
 .ph .trow{min-height:60px}
 .trow.playing{background:#f6effb;border-color:#cfb3e6}
@@ -302,22 +302,16 @@ table.map td b{font-weight:600;color:var(--violet)}
 .ph .face.tick.sm{width:32px;height:32px}
 .trow.ticked{border-color:var(--action);background:color-mix(in srgb,var(--action) 5%,var(--surface))}
 /* archived: a compact row, only inside an unfolded version */
-.trow.arch{min-height:36px;background:var(--bg);gap:8px;padding-left:12px}
+.trow.arch{min-height:53px;background:var(--bg);gap:8px;padding-left:12px}
 .trow.arch:has(.face){padding-left:6px}
-.ph .trow.arch{min-height:44px}
+.ph .trow.arch{min-height:72px}
 .trow.arch .name{flex:1;align-items:flex-start;font-family:var(--fb);font-size:.84rem;color:var(--disabled)}
 .trow.arch .dur{color:var(--disabled)}
 .unfold .trow .name{white-space:nowrap}
 .trow.arch .menu-anchor{margin-left:auto}
 /* folded row: version, take count, what is archived, and the album pick when this version holds it */
-/* as built: a folded row is flat, its chevron leads and the version number is not bold */
-.vfold{border-color:transparent;background:none}
-.vfold .vn{font-weight:400}
-.vfold .open{order:-1}
 .vfold .pk{display:inline-flex;align-items:center;gap:4px;flex:none;font-size:.8rem;color:var(--action);white-space:nowrap}
 .vfold .pk .ic{color:var(--action)}
-.vfold.on{border-color:var(--line);background:var(--tint2)}
-.vfold.on .open{color:var(--action)}
 .vfold .openv{display:inline-flex;align-items:center;gap:2px;flex:none;font-size:.82rem;color:var(--action);margin-right:6px;white-space:nowrap}
 .vgroup{display:flex;flex-direction:column;gap:6px}
 .vtakes{display:flex;flex-direction:column;gap:6px;margin-left:8px;padding-left:10px;border-left:2px solid var(--line)}
