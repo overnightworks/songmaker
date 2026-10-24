@@ -86,7 +86,7 @@ export {
 	startNewConversation,
 	deleteConversation
 } from './conversations';
-export type { CoWriterStreamEvent, CoWriterTurnRequest } from './conversations';
+export type { CoWriterStreamEvent } from './conversations';
 export { fetchMemory, saveUserMemory, saveSongMemory, saveAlbumMemory } from './memory';
 export {
 	fetchCapabilities,
