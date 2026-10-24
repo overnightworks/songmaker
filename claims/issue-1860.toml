@@ -1,8 +1,0 @@
-claim_id = "f66e6cc2474342f3882f18205a3f6687"
-agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
-role = "builder"
-base = "3f77c4db1a6e5c474310e7b3a6a75a6ba5d69f69"
-branch = "claude/issue-1860-save-offline-frontend"
-scope = ["docs/architecture.md", "docs/testing.md", "frontend/e2e/README.md", "frontend/e2e/album-menu.spec.ts", "frontend/e2e/offline-boot.spec.ts", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/api/queue-streams.test.ts", "frontend/src/lib/api/queue-streams.ts", "frontend/src/lib/api/shared.ts", "frontend/src/lib/api/userFacingError.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/PlaylistDetailView.svelte", "frontend/src/lib/components/PlaylistDetailView.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/services/httpRange.test.ts", "frontend/src/lib/services/httpRange.ts", "frontend/src/lib/services/offline.test.ts", "frontend/src/lib/services/offline.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/service-worker.ts", "quality/baseline.toml"]
-opened_commit = "112d1298beb0828cf7f24eabce6dc83afabc3a7b"
-whole_reason = "Slice 1 removes one connected frontend feature: any piece left behind stays alive only through tests, which the test-only-export gate turns red, and the service worker cannot compile without the module it imports."
