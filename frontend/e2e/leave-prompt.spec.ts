@@ -4,15 +4,31 @@
 // Playwright dismisses a dialog nobody listens for, which would cancel the
 // leave.
 
-import { expect, test, type Dialog, type Locator, type Page } from '@playwright/test';
+import { expect, test as base, type Dialog, type Locator, type Page } from '@playwright/test';
 import {
 	EDITOR_UNSAVED_TITLE,
 	SONG_MENU_LABEL,
 	SONG_MENU_SAVE_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { workspace } from './helpers';
-import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
+import { csrfHeaders, workspace } from './helpers';
+import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
+
+const test = base.extend<{ ownedAlbumId: string }>({
+	ownedAlbumId: async ({ page }, use) => {
+		const response = await page.request.post('/api/albums', {
+			headers: await csrfHeaders(page),
+			data: { title: `E2E Leave Prompt ${runMarker()}` }
+		});
+		expect(response.ok()).toBe(true);
+		const album: { id: string } = await response.json();
+		try {
+			await use(album.id);
+		} finally {
+			await archiveOwnedAlbum(page.request, album.id);
+		}
+	}
+});
 
 const TYPED_LINE = 'a line nobody saved';
 
@@ -23,12 +39,11 @@ interface OpenSong {
 
 // Opened cold at its own address, then focused by a click: a person's focus,
 // and the user activation Chromium wants before it shows a leave prompt.
-async function openSongCold(page: Page): Promise<OpenSong> {
-	const { songPhoneAlbumId } = readSeededLibrary();
+async function openSongCold(page: Page, ownedAlbumId: string): Promise<OpenSong> {
 	const title = `Leave Prompt ${runMarker()}`;
-	await seedSongPhoneSong(songPhoneAlbumId, title, 1, 1);
+	await seedSongPhoneSong(ownedAlbumId, title, 1, 1);
 	const discovery = await page.context().newPage();
-	await discovery.goto(`/album/${songPhoneAlbumId}`);
+	await discovery.goto(`/album/${ownedAlbumId}`);
 	await workspace(discovery)
 		.getByRole('button', { name: songEditorOpenLabel(title) })
 		.click();
@@ -71,9 +86,10 @@ async function dismissedNavigation(navigation: Promise<unknown>): Promise<void> 
 
 test.describe('leave prompt', () => {
 	test('reload with unsaved typing asks, Stay keeps the text, Leave drops it', async ({
-		page
+		page,
+		ownedAlbumId
 	}, testInfo) => {
-		const song = await openSongCold(page);
+		const song = await openSongCold(page, ownedAlbumId);
 		await typeUnsavedLine(song);
 
 		const asked = nextDialog(page);
@@ -92,9 +108,10 @@ test.describe('leave prompt', () => {
 	});
 
 	test('reload of a draft retyped to the saved text, or never touched, asks nothing', async ({
-		page
+		page,
+		ownedAlbumId
 	}) => {
-		const song = await openSongCold(page);
+		const song = await openSongCold(page, ownedAlbumId);
 		const dialogs = dialogsOf(page);
 		await page.reload();
 		await song.lyrics.click();
@@ -108,9 +125,10 @@ test.describe('leave prompt', () => {
 	});
 
 	test('closing the tab with unsaved typing asks, and Stay keeps the page open', async ({
-		page
+		page,
+		ownedAlbumId
 	}) => {
-		const song = await openSongCold(page);
+		const song = await openSongCold(page, ownedAlbumId);
 		await typeUnsavedLine(song);
 
 		const asked = nextDialog(page);
@@ -120,10 +138,13 @@ test.describe('leave prompt', () => {
 		expect(page.isClosed()).toBe(false);
 	});
 
-	test('Back out of the first app entry with unsaved typing asks', async ({ page }) => {
+	test('Back out of the first app entry with unsaved typing asks', async ({
+		page,
+		ownedAlbumId
+	}) => {
 		const outside = 'data:text/html,<title>Outside Songmaker</title>Outside Songmaker';
 		await page.goto(outside);
-		const song = await openSongCold(page);
+		const song = await openSongCold(page, ownedAlbumId);
 		await typeUnsavedLine(song);
 
 		const asked = nextDialog(page);
@@ -137,8 +158,11 @@ test.describe('leave prompt', () => {
 		await expect(song.lyrics).toHaveValue(`${song.savedLyrics}\n${TYPED_LINE}`);
 	});
 
-	test('leaving the app for another document asks and Stay keeps the draft', async ({ page }) => {
-		const song = await openSongCold(page);
+	test('leaving the app for another document asks and Stay keeps the draft', async ({
+		page,
+		ownedAlbumId
+	}) => {
+		const song = await openSongCold(page, ownedAlbumId);
 		await typeUnsavedLine(song);
 		const outside = 'data:text/html,<title>Outside Songmaker</title>Outside Songmaker';
 		const asked = nextDialog(page);
@@ -153,8 +177,8 @@ test.describe('leave prompt', () => {
 		await expect(page).toHaveTitle('Outside Songmaker');
 	});
 
-	test('saving the edited version clears the browser prompt', async ({ page }) => {
-		const song = await openSongCold(page);
+	test('saving the edited version clears the browser prompt', async ({ page, ownedAlbumId }) => {
+		const song = await openSongCold(page, ownedAlbumId);
 		await typeUnsavedLine(song);
 		await page.getByRole('button', { name: SONG_MENU_LABEL, exact: true }).click();
 		const saved = page.waitForResponse(
@@ -173,9 +197,10 @@ test.describe('leave prompt', () => {
 	});
 
 	test('leaving the song inside the app asks with the Unsaved changes dialog only', async ({
-		page
+		page,
+		ownedAlbumId
 	}) => {
-		const song = await openSongCold(page);
+		const song = await openSongCold(page, ownedAlbumId);
 		const dialogs = dialogsOf(page);
 		await typeUnsavedLine(song);
 		await song.lyrics.blur();
