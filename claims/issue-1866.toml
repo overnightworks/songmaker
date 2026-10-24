@@ -1,0 +1,8 @@
+claim_id = "2b6272c0b6044f51983e3a26b157793a"
+agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
+role = "builder"
+base = "4804e6209d01be4c77b1a8e5e5f165bd3a8b090b"
+branch = "claude/issue-1866-save-offline-pins"
+scope = ["frontend/src/lib/api/types.ts", "quality/baseline.toml", "scripts/dead-symbols.allow", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/queue_streams.py", "src/songmaker_cli/queue_stream_api.py", "src/songmaker_cli/queue_streams.py", "tests/test_queue_streams.py", "tests/test_rate_limit.py"]
+opened_commit = "a1adca85b6b8b6ecb8ec28e92809076763b0e733"
+whole_reason = "Slice 2 removes one connected backend feature: a pin route without its pin state, or the state without its route, stays alive only through tests, which the test-only-export gate turns red."
