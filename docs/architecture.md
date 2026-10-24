@@ -516,8 +516,8 @@ discards them). It reads the server's state when the album page opens, when the
 page returns to the foreground, when the editor opens or closes, when a run ends
 and after a discard, never
 by polling, so a second tab or device sees the same run and its time. Playlist entries are
-Share playlist · Upload… · Remove cover (only when a cover is set) · Save
-offline · Rename · Delete playlist. The Share row is a 44 px menu row that
+Share playlist · Upload… · Remove cover (only when a cover is set) ·
+Rename · Delete playlist. The Share row is a 44 px menu row that
 shows its state ("on"/"off", a link or share icon, `aria-pressed`); it and
 `ShareButton` both call the one toggle, `createShareToggle` in
 `stores/shareToggle.svelte.ts` (unshare, share and copy the link, toasts, the
@@ -1429,8 +1429,7 @@ Playing, and goes by itself once back online; the root layout marks
 `html[data-offline]` so `app.css` adds the strip's height to `--player-height`
 and the page (the phone's Generate bar included) stays above it; and Generate is
 disabled with no reason text of its own. A failure becomes text in one place,
-`describeFailure` in `api/fetch.ts`: the server's own reason, a module's
-`UserFacingError` (the service worker's "not active" message), otherwise the
+`describeFailure` in `api/fetch.ts`: the server's own reason, otherwise the
 caller's named fallback — never a browser error's text. While the strip shows,
 a list the network swallowed (the rail's albums and playlists, rail search, Now
 Playing's take details) shows nothing of its own, keeps what it listed and loads

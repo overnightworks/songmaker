@@ -34,3 +34,36 @@ test('1160-F42-boot: an online health navigation still shows the server response
 		status: expect.stringMatching(/^(ok|degraded)$/)
 	});
 });
+
+test('a browser holding offline copies from the old build loses them when the service worker takes over, and still boots offline', async ({
+	page,
+	context
+}) => {
+	const retiredCacheName = 'offline-streams';
+	const snapshotId = 'old-build-snapshot';
+	await page.goto('/health');
+	await page.evaluate(
+		async ({ cacheName, id }) => {
+			const cache = await caches.open(cacheName);
+			for (const path of [
+				`/offline/stream/${id}`,
+				`/offline/manifest/${id}`,
+				`/offline/meta/playlist/${id}`
+			]) {
+				await cache.put(path, new Response('old copy'));
+			}
+		},
+		{ cacheName: retiredCacheName, id: snapshotId }
+	);
+
+	await page.goto(HOME_PATH);
+	await waitForServiceWorkerControl(page);
+
+	await expect
+		.poll(() => page.evaluate(async () => (await caches.keys()).sort()))
+		.toEqual([expect.stringMatching(/^app-shell-/)]);
+	await context.setOffline(true);
+	const response = await page.reload();
+	expect(response?.ok()).toBe(true);
+	await expect(offlineStrip(page)).toBeVisible();
+});
