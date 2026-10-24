@@ -11,6 +11,7 @@ import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
+	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
 	SONG_MENU_LABEL,
 	SONG_MENU_SAVE_LABEL,
@@ -590,7 +591,7 @@ test.describe('folding the takes on the phone', { tag: ONLY_IN_SHELL.mobile }, (
 			.click();
 		const nowPlaying = page.getByRole('dialog', { name: song.title });
 		await expect(nowPlaying).toBeVisible();
-		await page.keyboard.press('Escape');
+		await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
 		await expect(nowPlaying).toHaveCount(0);
 
 		await expectSelected(page, 1);
