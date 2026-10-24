@@ -1,0 +1,7 @@
+claim_id = "5251bcd51df1404e8cbecbbd32c54635"
+agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
+role = "builder"
+base = "3f77c4db1a6e5c474310e7b3a6a75a6ba5d69f69"
+branch = "fix/dependabot-uv"
+scope = [".aco/board.toml", ".github/dependabot.yml"]
+opened_commit = "ff7d49f073e6db4d41f2f69140ffb690084d6200"
