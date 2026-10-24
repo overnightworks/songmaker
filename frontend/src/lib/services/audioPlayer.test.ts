@@ -186,7 +186,7 @@ function recoveryUrlOf(url: string): RegExp {
 function makeStreamManifest(): QueueStreamManifest {
 	return {
 		snapshot_id: 'snap',
-		stream_url: '/api/queue-streams/snap/audio',
+		stream_url: '/shared/queue-streams/snap/audio',
 		expires_at: '2026-01-01T00:00:00Z',
 		total_duration: 30,
 		tracks: [
@@ -911,7 +911,7 @@ describe('frozen-clock watchdog', () => {
 		await vi.advanceTimersByTimeAsync(5 * SECOND);
 
 		expect(audioPlayer.mode).toBe('stream');
-		expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'));
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/shared/queue-streams/snap/audio'));
 	});
 
 	it.each([
@@ -1028,8 +1028,8 @@ describe('patient recovery while the screen is off', () => {
 		await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT);
 
 		expect({ whileProbing, afterTheTimeout: fakeAudio.src }).toEqual({
-			whileProbing: { status: 'loading', src: '/api/queue-streams/snap/audio' },
-			afterTheTimeout: expect.stringMatching(recoveryUrlOf('/api/queue-streams/snap/audio'))
+			whileProbing: { status: 'loading', src: '/shared/queue-streams/snap/audio' },
+			afterTheTimeout: expect.stringMatching(recoveryUrlOf('/shared/queue-streams/snap/audio'))
 		});
 	});
 
@@ -1475,7 +1475,7 @@ describe('stream playback', () => {
 		fakeAudio.fire('canplay');
 
 		expect(audioPlayer.mode).toBe('stream');
-		expect(fakeAudio.src).toBe('/api/queue-streams/snap/audio');
+		expect(fakeAudio.src).toBe('/shared/queue-streams/snap/audio');
 		expect(fakeAudio.currentTime).toBe(10);
 		expect(audioPlayer.current?.songTitle).toBe('Second');
 		expect(audioPlayer.duration).toBe(20);
@@ -1624,7 +1624,7 @@ describe('stream playback', () => {
 		await Promise.resolve();
 
 		expect(audioPlayer.mode).toBe('stream');
-		expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'));
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/shared/queue-streams/snap/audio'));
 		fakeAudio.fire('loadedmetadata');
 		// Resumes just behind the stalled position (seek-back margin).
 		expect(fakeAudio.currentTime).toBeCloseTo(12 - 0.75, 2);
@@ -1677,7 +1677,7 @@ describe('stream playback', () => {
 			signInAsked: true,
 			status: 'error',
 			error: 'Playback failed. Press Retry.',
-			src: '/api/queue-streams/snap/audio'
+			src: '/shared/queue-streams/snap/audio'
 		});
 	});
 
@@ -1733,7 +1733,7 @@ describe('stream playback', () => {
 		const rotated: QueueStreamManifest = {
 			...makeStreamManifest(),
 			snapshot_id: 'snap-rotated',
-			stream_url: '/api/queue-streams/snap-rotated/audio',
+			stream_url: '/shared/queue-streams/snap-rotated/audio',
 			tracks: [
 				{
 					...original.tracks[1],
@@ -2148,12 +2148,12 @@ describe('toggle / play / pause', () => {
 
 		audioPlayer.play();
 		await vi.waitFor(() =>
-			expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'))
+			expect(fakeAudio.src).toMatch(recoveryUrlOf('/shared/queue-streams/snap/audio'))
 		);
 
 		expect(audioPlayer.mode).toBe('stream');
 		expect(audioPlayer.status).toBe('loading');
-		expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'));
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/shared/queue-streams/snap/audio'));
 	});
 
 	it('toggle with no current does nothing', () => {
