@@ -48,11 +48,10 @@ const TRANSPORT_SYNTAX = [
 const NO_HAND_WRITTEN_WIRE_SHAPE =
 	'lib/api declares no wire shape: import the generated type from ./types, ' +
 	'or add the model to api_models.';
-const WIRE_SHAPE_SYNTAX = [
-	'TSInterfaceDeclaration',
-	'TSTypeAliasDeclaration TSTypeLiteral',
-	'TSTypeParameterInstantiation TSTypeLiteral'
-].map((selector) => ({ selector, message: NO_HAND_WRITTEN_WIRE_SHAPE }));
+const WIRE_SHAPE_SYNTAX = ['TSInterfaceDeclaration', 'TSTypeLiteral'].map((selector) => ({
+	selector,
+	message: NO_HAND_WRITTEN_WIRE_SHAPE
+}));
 
 // #925 G3. Only the transport calls fetch; the named media owners and service worker
 // retain their direct reads. Tests stub the boundary.
@@ -147,7 +146,8 @@ export default ts.config(
 			'src/lib/api/queue-streams.ts', // twin of a generated model
 			'src/lib/api/loras.ts', // twin of a generated model
 			'src/lib/api/shared.ts', // map of generated names
-			'src/lib/api/albums.ts', // frontend-only call shape
+			'src/lib/api/songs.ts', // twins of generated request models
+			'src/lib/api/albums.ts', // twin of a generated model
 			'src/lib/api/library.ts', // frontend-only call shape
 			'src/lib/api/fetch.ts' // transport internals
 		],

@@ -3,6 +3,7 @@
 Split by domain, re-exported here for backwards compatibility.
 
 The value objects shared with persistence (generation params, Whisper cues)
+and the provider wheel's stream events (assistant text, tool call, tool result)
 live beneath both layers and are re-exported here because
 ``scripts/generate_types.py`` reads this module's ``__all__`` to find the
 models that reach ``types.ts``.

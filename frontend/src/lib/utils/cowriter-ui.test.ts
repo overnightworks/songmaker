@@ -52,7 +52,7 @@ describe('co-writer provider copy', () => {
 		}
 	);
 
-	it('names no failure for a frame that carries an empty message', () => {
+	it('defect:#1856: names no failure for a frame that carries an empty message', () => {
 		expect(
 			cowriterTurnFailureLabel({ type: 'error', status: 500, message: '' }, 'claude')
 		).toBeNull();
