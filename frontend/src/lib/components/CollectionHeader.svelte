@@ -38,10 +38,6 @@
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		oncurate?: () => void;
-		onsaveoffline?: () => void;
-		offlineSaved?: boolean;
-		offlineSaving?: boolean;
-		offlineProgressLabel?: string | null;
 		playlistCovers?: AlbumCoverUrls[];
 		playlistCover?: AlbumCoverUrls | null;
 		/** Album-only: the subtitle and year line read under the title, empty when neither is set. */
@@ -82,10 +78,6 @@
 		onremovecover,
 		onaddtoplaylist,
 		oncurate,
-		onsaveoffline,
-		offlineSaved = false,
-		offlineSaving = false,
-		offlineProgressLabel = null,
 		playlistCovers,
 		playlistCover,
 		meta = '',
@@ -203,10 +195,6 @@
 		{onremovecover}
 		{onaddtoplaylist}
 		{oncurate}
-		{onsaveoffline}
-		{offlineSaved}
-		{offlineSaving}
-		{offlineProgressLabel}
 		oneditdetails={detailsEditor ? openDetailsEditing : undefined}
 		onrename={onrename ? triggerRename : undefined}
 	/>

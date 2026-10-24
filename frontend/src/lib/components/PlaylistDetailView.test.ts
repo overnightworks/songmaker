@@ -43,22 +43,9 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		unsharePlaylist: vi.fn(),
 		uploadPlaylistCover: vi.fn(),
 		deletePlaylistCover: vi.fn(),
-		createQueueStreamSnapshot: vi.fn(),
 		fetchPlaylist: vi.fn()
 	};
 });
-vi.mock('$lib/api/queue-streams', () => ({
-	pinQueueStream: vi.fn(),
-	unpinQueueStream: vi.fn()
-}));
-vi.mock('$lib/services/offline', () => ({
-	saveStream: vi.fn(),
-	removeStream: vi.fn(),
-	offlineStreamUrl: vi.fn(() => '/offline/stream/test'),
-	rememberPlaylistOfflineStream: vi.fn(),
-	forgetPlaylistOfflineStream: vi.fn(),
-	loadSavedOfflinePlaylist: vi.fn().mockResolvedValue(null)
-}));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
@@ -74,12 +61,7 @@ import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
-import {
-	createQueueStreamSnapshot,
-	deletePlaylistCover,
-	fetchPlaylist,
-	uploadPlaylistCover
-} from '$lib/api/client';
+import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
 import { addToast } from '$lib/stores/toast';
 
 function populatedPlaylistDefaults(): Partial<PlaylistDetailItem> {
@@ -233,18 +215,10 @@ describe('PlaylistDetailView header', () => {
 			picksFile: true,
 			failure: new ApiError(413, 'Cover is too large', '/api/playlists/p1/cover'),
 			toast: 'Cover is too large'
-		},
-		{
-			action: 'saving for offline',
-			menuItem: 'Save offline',
-			picksFile: false,
-			failure: new NetworkError('/api/queue-streams', new TypeError('Failed to fetch')),
-			toast: 'Offline save failed'
 		}
 	])('toasts $toast when $action fails', async ({ menuItem, picksFile, failure, toast }) => {
 		vi.mocked(addToast).mockReset();
 		vi.mocked(uploadPlaylistCover).mockRejectedValue(failure);
-		vi.mocked(createQueueStreamSnapshot).mockRejectedValue(failure);
 		const target = document.createElement('div');
 		document.body.append(target);
 		mounted.push(mount(PlaylistDetailView, { target }));
@@ -285,7 +259,7 @@ describe('PlaylistDetailView header', () => {
 		expect(header.querySelector('.playlist-cover-initials')?.textContent).toBe('ND');
 	});
 
-	it('lists Share playlist, Save offline, Rename, and Delete playlist in the menu', async () => {
+	it('1859_R1: lists Share playlist, Upload…, Rename and Delete playlist in the menu, with no Save offline', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);
 		mounted.push(mount(PlaylistDetailView, { target }));
@@ -294,13 +268,7 @@ describe('PlaylistDetailView header', () => {
 		await tick();
 		const menu = requireElement<HTMLElement>(document.body, '.menu-panel');
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Playlist · Night Drive');
-		expect(menuRowLabels(menu)).toEqual([
-			'Share playlist',
-			'Upload…',
-			'Save offline',
-			'Rename',
-			'Delete playlist'
-		]);
+		expect(menuRowLabels(menu)).toEqual(['Share playlist', 'Upload…', 'Rename', 'Delete playlist']);
 	});
 });
 

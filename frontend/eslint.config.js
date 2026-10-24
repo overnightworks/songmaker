@@ -57,10 +57,20 @@ const WIRE_SHAPE_SYNTAX = [
 // #925 G3. Only the transport calls fetch; the named media owners and service worker
 // retain their direct reads. Tests stub the boundary.
 // checkGlobalObject also refuses window.fetch, globalThis.fetch and self.fetch.
-// Keep this the last block setting no-restricted-globals for these files:
-// a later block replaces its options.
+// #1006 H6d. Only lib/history/historyController.ts writes or traverses history; tests
+// drive and fake the browser's history. checkGlobalObject also refuses window.history.
+// goto(..., { replaceState }) stays allowed. The import rule below sits before the
+// lib/api block, which stays the last to set no-restricted-imports.
+// Keep these the last blocks setting no-restricted-globals for these files: a later
+// block replaces its options, so each file set lists every global it refuses.
 const RAW_FETCH_MESSAGE =
 	'Only lib/api/fetch.ts calls fetch (#925 G3): call a lib/api function, or add one there.';
+const RAW_HISTORY_MESSAGE =
+	'Only lib/history/historyController.ts writes or traverses history (#1006): ' +
+	'call a controller function, or add one there.';
+const RAW_FETCH = { name: 'fetch', message: RAW_FETCH_MESSAGE };
+const RAW_HISTORY = { name: 'history', message: RAW_HISTORY_MESSAGE };
+const refusedGlobals = (...globals) => ['error', { globals, checkGlobalObject: true }];
 
 export default ts.config(
 	eslint.configs.recommended,
@@ -89,6 +99,24 @@ export default ts.config(
 			'@typescript-eslint/no-unused-vars': [
 				'error',
 				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
+			]
+		}
+	},
+	{
+		files: ['src/**'],
+		ignores: ['src/lib/history/historyController.ts', 'src/**/*.test.ts', 'src/lib/test-utils/**'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: '$app/navigation',
+							importNames: ['pushState', 'replaceState'],
+							message: RAW_HISTORY_MESSAGE
+						}
+					]
+				}
 			]
 		}
 	},
@@ -131,14 +159,25 @@ export default ts.config(
 			'src/lib/api/fetch.ts',
 			'src/lib/services/audioPlayer.svelte.ts',
 			'src/service-worker.ts',
-			'src/**/*.test.ts'
+			'src/lib/history/historyController.ts',
+			'src/**/*.test.ts',
+			'src/lib/test-utils/**'
 		],
-		rules: {
-			'no-restricted-globals': [
-				'error',
-				{ globals: [{ name: 'fetch', message: RAW_FETCH_MESSAGE }], checkGlobalObject: true }
-			]
-		}
+		rules: { 'no-restricted-globals': refusedGlobals(RAW_FETCH, RAW_HISTORY) }
+	},
+	{
+		files: [
+			'src/lib/api/fetch.ts',
+			'src/lib/services/audioPlayer.svelte.ts',
+			'src/service-worker.ts'
+		],
+		ignores: ['src/**/*.test.ts'],
+		rules: { 'no-restricted-globals': refusedGlobals(RAW_HISTORY) }
+	},
+	{
+		files: ['src/lib/history/historyController.ts', 'src/lib/test-utils/**'],
+		ignores: ['src/**/*.test.ts'],
+		rules: { 'no-restricted-globals': refusedGlobals(RAW_FETCH) }
 	},
 	{
 		ignores: [

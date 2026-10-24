@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
+	import { sharePlaylist, unsharePlaylist } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
 	import {
 		isPlaylistEntryCurrent,
@@ -22,16 +22,6 @@
 		deletePlaylistCover
 	} from '$lib/stores/playlists';
 	import { addToast } from '$lib/stores/toast';
-	import { pinQueueStream, unpinQueueStream } from '$lib/api/queue-streams';
-	import {
-		saveStream,
-		removeStream,
-		offlineStreamUrl,
-		rememberPlaylistOfflineStream,
-		forgetPlaylistOfflineStream,
-		loadSavedOfflinePlaylist,
-		type StreamProgress
-	} from '$lib/services/offline';
 	import { selectSong } from '$lib/stores/navigation';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
@@ -141,22 +131,11 @@
 	async function onPlaylistDelete(): Promise<void> {
 		if (!playlistMeta) return;
 		const playlistId = playlistMeta.id;
-		const saved = await loadSavedOfflinePlaylist(playlistId).catch(() => null);
 		try {
 			await deletePlaylist(playlistId);
 		} catch {
 			addToast('Delete failed', 'error');
 			return;
-		}
-		if (saved) {
-			try {
-				await unpinQueueStream(saved.snapshot_id).catch(() => undefined);
-				await removeStream(saved.stream_url, saved.snapshot_id);
-				await forgetPlaylistOfflineStream(playlistId);
-			} catch {
-				addToast('Playlist deleted; offline cleanup failed', 'error');
-				return;
-			}
 		}
 		addToast('Playlist deleted', 'success');
 	}
@@ -239,90 +218,6 @@
 		if (!playlistDetail) return;
 		void playPlaylistEntry(playlistDetail, index);
 	}
-
-	// ── Offline / Save for offline ──────────────────────────────────────────
-
-	let offlineSaving = $state(false);
-	let offlineProgress = $state<StreamProgress | null>(null);
-	let offlineSavedStreamUrl = $state<string | null>(null);
-	let offlineSavedSnapshotId = $state<string | null>(null);
-
-	$effect(() => {
-		let cancelled = false;
-		offlineSavedStreamUrl = null;
-		offlineSavedSnapshotId = null;
-		const id = playlistMeta?.id;
-		if (!id) {
-			offlineProgress = null;
-			return () => {
-				cancelled = true;
-			};
-		}
-		void loadSavedOfflinePlaylist(id).then((meta) => {
-			if (cancelled || !meta) return;
-			offlineSavedStreamUrl = meta.stream_url;
-			offlineSavedSnapshotId = meta.snapshot_id;
-		});
-		return () => {
-			cancelled = true;
-		};
-	});
-
-	const offlineProgressLabel = $derived(
-		offlineSaving && offlineProgress && offlineProgress.total
-			? `Saving… ${Math.round((offlineProgress.downloaded / offlineProgress.total) * 100)}%`
-			: null
-	);
-
-	async function onSaveForOffline(): Promise<void> {
-		if (!playlistDetail || offlineSaving) return;
-		offlineSaving = true;
-		offlineProgress = null;
-		try {
-			const tracks = playlistDetail.entries.map((e) => ({
-				generation_id: e.generation_id,
-				entry_id: e.id
-			}));
-			const manifest = await createQueueStreamSnapshot(tracks);
-			await saveStream(
-				manifest,
-				(progress) => {
-					offlineProgress = progress;
-				},
-				(snapshotId) => pinQueueStream(snapshotId).then(() => undefined)
-			);
-			offlineSavedStreamUrl = offlineStreamUrl(manifest.snapshot_id);
-			offlineSavedSnapshotId = manifest.snapshot_id;
-			await rememberPlaylistOfflineStream(playlistDetail.id, manifest.snapshot_id);
-			addToast('Saved for offline', 'success');
-		} catch (err) {
-			addToast(describeFailure(err, 'Offline save failed'), 'error');
-		} finally {
-			offlineSaving = false;
-			offlineProgress = null;
-		}
-	}
-
-	async function onRemoveOffline(): Promise<void> {
-		if (!playlistMeta || !offlineSavedStreamUrl || !offlineSavedSnapshotId) return;
-		try {
-			await unpinQueueStream(offlineSavedSnapshotId).catch(() => {
-				addToast('Server unpin failed — the download is removed locally.', 'info');
-			});
-			await removeStream(offlineSavedStreamUrl, offlineSavedSnapshotId);
-			await forgetPlaylistOfflineStream(playlistMeta.id);
-			offlineSavedStreamUrl = null;
-			offlineSavedSnapshotId = null;
-			addToast('Offline copy removed', 'info');
-		} catch {
-			addToast('Remove failed', 'error');
-		}
-	}
-
-	function onSaveOfflineToggle(): void {
-		if (offlineSavedStreamUrl) void onRemoveOffline();
-		else void onSaveForOffline();
-	}
 </script>
 
 {#if $selectedPlaylistId}
@@ -348,10 +243,6 @@
 				ondelete={() => (showDeleteConfirm = true)}
 				oncover={onCoverAction}
 				onremovecover={onCoverRemove}
-				onsaveoffline={onSaveOfflineToggle}
-				offlineSaved={Boolean(offlineSavedStreamUrl)}
-				{offlineSaving}
-				{offlineProgressLabel}
 			/>
 			<input
 				bind:this={coverInput}
