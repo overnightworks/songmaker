@@ -1,0 +1,8 @@
+claim_id = "ee0f81672fd34b2da5d7594de17f2275"
+agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
+role = "builder"
+base = "3f77c4db1a6e5c474310e7b3a6a75a6ba5d69f69"
+branch = "claude/issue-1850-h6d-history-lint"
+scope = ["docs/architecture.md", "frontend/eslint.config.js", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/libraryContext.ts"]
+opened_commit = "c95e3ec7708a9d7d2cabcbba35bb0f5fa975a1a2"
+whole_reason = "The lint rule, the one read it flags and the sentence that states it are one change: the rule cannot land clean without the read moving."
