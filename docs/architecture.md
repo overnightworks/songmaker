@@ -686,14 +686,12 @@ that no longer serves it, or a server out of reach restores nothing and says
 nothing: no toast, no notice, no Retry.
 `e2e/playback-restore.spec.ts` drives the reload on both shells.
 
-Queue-stream admission is owned by `queue_stream_api.py`: both authenticated
-snapshot endpoints prepare the count-windowed sources after releasing the
-request session and before their build can reach ffmpeg. The product cap is six
-hours of measured audio; a longer queue receives 422 rather than a shortened
-stream. `queue_streams.py` derives its 336-second ffmpeg timeout from that cap,
-the measured-rate policy, and its reserve; `tests/test_queue_streams.py` pins
-the formula and proves that both endpoints reject an overlong queue before
-ffmpeg runs.
+Shared album and playlist streams release the request session before building
+count-windowed snapshots. Admission in `queue_streams.py` caps measured audio
+at six hours; a longer queue receives 422 rather than a shortened stream.
+The ffmpeg timeout is 336 seconds, derived from that cap, the measured-rate
+policy and its reserve. `tests/test_queue_streams.py` proves admission before
+ffmpeg and request-session release through the shared builders.
 
 Escape and Back close the same thing (#1182): the topmost open layer — a
 menu, picker, sheet, dialog, full Now Playing, the album
@@ -1488,7 +1486,7 @@ close the stream.
 | GET | `/api/library/search` | user | Keyset search of the caller's album and song titles (an admin: every album they can open). `q` required; `next_cursor` is null iff `has_more` is false. Invalid or mismatched cursors are 422. |
 | GET | `/api/library/listen` | user | Home's Listen: up to `limit` of the albums and playlists the caller listened in, after the first `offset` (default three from the start, at most 200 per read, `offset` at most 100000; out of range answers 422; the Library wall's Last played order reads every place in pages of 200), most recent listen first, ties album before playlist, then id. Only the caller's own listens count, so nobody else's listening, and no edit, take or creation, ever moves it. An album is dated by the caller's newest `UserSongWork.album_played_at` (a listen outside a playlist) on one of its live songs and names that song; legacy `played_at` rows are ignored. Albums are live, unarchived and ones `owner_filter` lets the caller open (an admin listens in other people's albums too). A playlist is the caller's own, dated by its `last_played_at`, and names its last-played song while one of its live entries holds it, else no song, so it resumes from its start; an entry is live while its take is not archived and its song is live on a live, unarchived album `owner_filter` lets the caller open, and only live entries are numbered. Each item carries `type`, `id`, `title`, `cover`/`album_covers` as `PlaylistResponse` has them, `song_id`, `song_title`, `song_number` (the song's 1-based place in the album's live songs in track order, or its first place among the playlist's live entries), `entry_id` (the ID of that same first live playlist occurrence; null for albums or absent live playlist targets) and `played_at` in UTC. Owner: `db/queries/activity.py#list_place_listens`, three statements independent of the number of places. |
 | GET | `/api/library/write` | user | Home's Write: the three songs the caller worked on last, most recent work first, ties by song id. A song's work is the newest of the caller's own saved edit (`UserSongWork.edited_at` with its `edit_kind`; an edit saved before kinds existed reads as `edited`), the caller's own take that is not archived (`created_by`; a take without a recorded maker counts for no one), and the caller's own co-writer message about it (`role` `user`; replies never count). Listening never counts, and nobody else's work does. Songs are live, on live, unarchived albums `owner_filter` lets the caller open. Each item carries `song_id`, `song_title`, `album_id`, `album_title`, `cover` (the song's), `album_cover`, `work` (`SongWorkKind`: `created`, `lyrics`, `style`, `renamed`, `take`, `cowriter`, `edited`) and `worked_at` in UTC. Owner: `db/queries/activity.py#list_worked_songs`, one statement. |
-| GET | `/api/library/pool-queue` | user | Ordered playable Mix/Picks/Keeps/All takes (`pool`, `shuffle`, `start_generation_id`) without ffmpeg concat. Same membership as `POST /api/queue-streams/library`. Shares the queue-stream per-user rate limit (429; 503 if Redis is down). Empty pool 422; foreign start 404. |
+| GET | `/api/library/pool-queue` | user | Ordered playable Mix/Picks/Keeps/All takes (`pool`, `shuffle`, `start_generation_id`) without ffmpeg concat. Uses a per-user rate limit (429; 503 if Redis is down). Empty pool 422; foreign start 404. |
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay after a `Last-Event-ID` header or `last_event_id` query cursor (the header wins when both are sent), gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/PUT/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, select a private suggestion, or remove the album cover (JPEG/PNG; ownership 404) |

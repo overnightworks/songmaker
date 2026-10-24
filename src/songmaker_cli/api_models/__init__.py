@@ -65,11 +65,8 @@ from songmaker_cli.api_models.queue_streams import (
     LibraryPoolQueueResponse,
     LibraryPoolTakeResponse,
     LibraryTakePool,
-    QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
     QueueStreamSkipResponse,
-    QueueStreamSnapshotRequest,
-    QueueStreamTrackRequest,
     QueueStreamTrackResponse,
 )
 from songmaker_cli.api_models.resource_events import (
@@ -288,11 +285,8 @@ __all__ = [
     "PresetResponse",
     "PresetUpdateRequest",
     "ProviderStatusResponse",
-    "QueueStreamLibraryRequest",
     "QueueStreamManifestResponse",
-    "QueueStreamSnapshotRequest",
     "QueueStreamSkipResponse",
-    "QueueStreamTrackRequest",
     "QueueStreamTrackResponse",
     "RateLimitItem",
     "RateLimitUpdateRequest",

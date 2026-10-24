@@ -54,7 +54,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "AdminUserLoraResponse": "AdminUserLoraItem",
     "BaseGenerationParams": "VersionGenerationParams",
     "GenerationCreatedResourceEvent": "GenerationCreatedResourceEvent",
-    "QueueStreamLibraryRequest": "LibraryQueueStreamRequest",
     "QueueStreamManifestResponse": "QueueStreamManifest",
     "QueueStreamSkipResponse": "QueueStreamSkipItem",
     "QueueStreamTrackResponse": "QueueStreamTrackItem",
