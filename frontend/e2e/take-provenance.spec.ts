@@ -37,6 +37,10 @@ interface JumpSong extends FoldedSong {
 	source: string;
 }
 
+// A song, or the list of songs: the JSON responses that carry takes. A stream
+// never matches, because fetching it would never end.
+const SONG_RESPONSES = (url: URL) => /^\/api\/songs(\/[^/]+)?$/.test(url.pathname);
+
 let albumId: string;
 
 test.beforeEach(async ({ page }) => {
@@ -76,13 +80,13 @@ async function seedJumpSong(page: Page, label: string): Promise<JumpSong> {
 		src_generation_number: sourceTake?.generation_number,
 		src_generation_version_number: 1
 	};
-	await page.route('**/api/**', async (route: Route) => {
+	await page.route(SONG_RESPONSES, async (route: Route) => {
 		if (route.request().method() !== 'GET') return route.continue();
 		const response = await route.fetch();
-		const type = response.headers()['content-type'] ?? '';
-		if (!type.includes('application/json')) return route.fulfill({ response });
-		const body = withRepaintRelation(await response.json(), relation, repaint);
-		return route.fulfill({ response, json: body });
+		await route.fulfill({
+			response,
+			json: withRepaintRelation(await response.json(), relation, repaint)
+		});
 	});
 	return { ...song, repaint, source };
 }
