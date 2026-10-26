@@ -67,6 +67,7 @@ from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import build_oidc_sign_in
 from songmaker_cli.request_policies import (
+    SPA_SHELL_HEADERS,
     build_body_size_policy,
     build_csrf_origin_policy,
     build_csrf_token_policy,
@@ -381,7 +382,7 @@ def create_app(
             and request.url.path not in _pwa_exact_paths
             and sk_index.exists()
         ):
-            return FileResponse(sk_index, media_type="text/html")
+            return FileResponse(sk_index, media_type="text/html", headers=SPA_SHELL_HEADERS)
         detail = exc.detail if request.url.path.startswith("/audio/") else HTTP_NOT_FOUND
         return JSONResponse({"detail": detail}, status_code=404)
 
@@ -455,6 +456,10 @@ def run_server(
             d.mkdir(parents=True)
 
     app = create_app(audio_dir, data_dir, project_root)
+    # Imported here: create_app and the CI jobs without the agent-service extra import nothing new.
+    from songmaker_cli.cowriter.mcp_endpoint import compose_mcp_endpoint
+
+    served_app, _ = compose_mcp_endpoint(app, settings)
     log.info("Songmaker server: http://localhost:%d", port)
     log.info("Auth enabled (session-based)")
 
@@ -469,7 +474,7 @@ def run_server(
     # TRUSTED_PROXIES. TrustedProxies is the single owner of that decision (see
     # auth.resolve_client_ip), so uvicorn must hand over the connection as it is.
     uvicorn.run(
-        app,
+        served_app,
         host=settings.host,
         port=port,
         log_level="info",

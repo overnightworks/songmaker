@@ -62,7 +62,9 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   und der Recipe-Karte (geschlossen als eine Zeile „Recipe ›“, geöffnet mit
   den Tabs Song · Generate · Engine) sowie von Repaint und Cover als
   Aufgabenkarte am Take. Seit 23.10.2026 (#1825) auch der Takes pro Version
-  gefaltet in der Listen-Spalte samt Bestätigung „Delete N“.
+  gefaltet in der Listen-Spalte samt Bestätigung „Delete N“; „Takes per
+  version“ überschreibt die flachen Take-Gruppen in `song-versions.html` und
+  den Takes-Kopf in `song-page-phone.html`.
 - `now-playing.html` — Now Playing öffnet auf dem, was zählt (#1816, #1826).
   Freigegeben am 23.10.2026 (Operator: „ok bilder passen“). Besitzer des Tabs,
   auf dem Now Playing öffnet (ein Take in der Schlange: This take, mehrere:

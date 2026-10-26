@@ -14,6 +14,11 @@ from pydantic import BaseModel, Field
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import generate_types  # noqa: E402
+from agent_providers.events import AssistantTextEvent  # noqa: E402
+
+from songmaker_cli.api_models import BulkDeleteResponse  # noqa: E402
+from songmaker_cli.generation_params import BaseGenerationParams  # noqa: E402
+from songmaker_cli.whisper_cues import WhisperCue  # noqa: E402
 
 
 class SeededChild(BaseModel):
@@ -252,3 +257,37 @@ def test_non_route_import_errors_keep_their_original_failure(
 
     assert output_path.read_text() == "existing types"
     assert "route introspection unavailable" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("arguments", (["generate_types.py", "--check"], ["generate_types.py"]))
+def test_routed_model_outside_api_models_fails_without_writing_types(
+    arguments: list[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output_path = tmp_path / "types.ts"
+    router = APIRouter()
+
+    @router.get("/api/seeded", response_model=SeededResponse)
+    async def read_seeded() -> None:
+        return None
+
+    monkeypatch.setattr(generate_types, "OUTPUT_PATH", output_path)
+    monkeypatch.setattr(generate_types, "_route_routers", lambda: (router,))
+    monkeypatch.setattr(sys, "argv", arguments)
+
+    with pytest.raises(SystemExit) as error:
+        generate_types.main()
+
+    assert error.value.code == 1
+    assert not output_path.exists()
+    assert "SeededResponse" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "model",
+    (BulkDeleteResponse, BaseGenerationParams, WhisperCue, AssistantTextEvent),
+)
+def test_model_homes_are_api_models_or_a_named_exemption(model: type[BaseModel]) -> None:
+    assert generate_types.models_outside_api_models((model,)) == ()

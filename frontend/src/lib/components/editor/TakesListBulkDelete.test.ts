@@ -205,17 +205,13 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		expect(bulkDeleteGenerations).not.toHaveBeenCalled();
 	});
 
-	it('opens no dialog and sends nothing on Delete after a removal left no ticked take', async () => {
+	it('ends select mode when a removal left no ticked take, so no Delete is left to press', async () => {
 		const { target, removeTakes } = await render(4);
 		await tickTakes('g1', 'g2');
-		deleteButton(target).click();
-		await tick();
+
 		await removeTakes('g1', 'g2');
 
-		deleteButton(target).click();
-		await tick();
-
-		expect(dialog()).toBeNull();
+		expect(target.querySelector('.selection-toolbar')).toBeNull();
 		expect(bulkDeleteGenerations).not.toHaveBeenCalled();
 	});
 
@@ -233,5 +229,6 @@ describe('TakesList bulk delete asks first (S11)', () => {
 		expect(addToast).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'error');
 		expect([...get(selectedIds)]).toEqual(['g1', 'g2']);
 		expect(target.querySelector('.selection-toolbar')).not.toBeNull();
+		expect(target.querySelectorAll('.take-row')).toHaveLength(4);
 	});
 });
