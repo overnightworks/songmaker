@@ -728,6 +728,9 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 @media (max-width: 460px) { body { padding-left: 0; padding-right: 0; } .board-head, .freeze-note, figcaption, .frame-note { padding-left: 16px; padding-right: 16px; } }
 .board-head { font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: .95rem; color: #1b1a20; max-width: 68ch; margin: 48px 0 0; }
 .board-head b { font-weight: 600; }
+.ai-note { flex: none; display: flex; align-items: flex-start; gap: .4rem; padding: .45rem .75rem; font-size: .78rem; line-height: 1.35; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+.ai-note .ic { width: 14px; height: 14px; margin-top: .1rem; color: var(--action); flex: none; }
+.draft { display: inline-block; padding: 1px 9px; border-radius: 999px; background: #e0457b; color: #fff; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
 .new { outline: 2px dashed var(--action); outline-offset: -2px; border-radius: 3px; }
 .option { display: inline-block; margin-left: .35rem; padding: 0 .4rem; border-radius: 3px; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; background: #e8e2ef; color: #4a4552; }
 .option.rec { background: var(--score-good-bg); color: var(--score-good); }
@@ -1785,6 +1788,43 @@ the morning gives away</span></div>
 	<div class="frame-note">
 		<p><b>Four words, four shapes.</b> ▲ red: you must act (sign in). ◷ amber: it frees itself, wait. ⊘ grey: not for this account. ! amber: the service is gone for now, try again. With colour removed, each still reads by its glyph.</p>
 		<p><b>Rejected.</b> Q5 b (not drawn): the songmaker session ends too, and the whole app asks to sign in. The rest of songmaker keeps working instead.</p>
+	</div>
+</figure>
+
+
+<figure>
+	<figcaption><b>7f · Notice under the header, 390</b> — “Du schreibst mit einer KI”, ruled words (E3, operator 19.10.2026), always on, no switch. <span class="draft">Draft · #1906 · not blessed</span></figcaption>
+	<div class="split">
+	<div class="device" id="f7f-b">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button class="active" aria-current="page">Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="convo">
+			<span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</div>
+				<p class="ai-note new" lang="de"><svg class="ic ai-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>Du schreibst mit einer KI</p>
+		<div class="chat">
+			<div class="msg me">the chorus feels long. tighten it?</div>
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice and the last line keeps the turn.<span class="lines">All mine if I follow
+all mine if I stay
+the morning gives away</span></div>
+		</div>
+	</div>
+	</div>
+	<div class="frame-note">
+		<p><b>Recommended.</b> A quiet line on its own row under the conversation line. The header row (“Co-writer · Claude opus · conversation since Tue” and ⋯) is untouched and does not crowd; the line wraps to two lines on a long translation and never truncates, because it is the notice. The spark is the app's own.</p>
+		<p><b>Alternative, not drawn.</b> The notice inside the header row. At 390 it would push “conversation since Tue” into an ellipsis, so the header would lose its own information; rejected.</p>
+		<p><b>Screen reader.</b> Plain text in reading order right after the header, not a live region, with <code>lang="de"</code> for German speech. The icon is hidden. The English UI around the German words is an open point for the operator.</p>
 	</div>
 </figure>
 
