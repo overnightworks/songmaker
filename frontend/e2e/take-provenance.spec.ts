@@ -1,0 +1,164 @@
+// The provenance link of a take that was made from another take (#1843, rule 10):
+// a plain click unfolds the folded version holding the source and writes one
+// entry of the song at the take's anchor, so the song stays open and Back and
+// Forward step through the jump. Nothing in the seed writes a repaint take, so
+// the relation is added to the song's responses; history, the draft, the folds
+// and scrolling stay real. A cell that leaves a dirty draft reverts it before
+// teardown, because a dirty page raises the browser's unload prompt.
+
+import { expect, test, type Page, type Route } from '@playwright/test';
+import { TAKE_PROVENANCE_REPAINT_PREFIX } from '../src/lib/constants';
+import { foldedGroupLabel } from '../src/lib/constants/now-playing';
+import {
+	createAlbum,
+	FIRST_VERSION_TAKE_COUNT,
+	openTakes,
+	readSong,
+	seedFoldedSong,
+	type FoldedSong
+} from './foldedSong';
+import { workspace } from './helpers';
+import { archiveOwnedAlbum } from './seed';
+
+interface JumpSong extends FoldedSong {
+	// The v2 take that reads "Repaint from v1 · take N", and the v1 take it names.
+	repaint: string;
+	source: string;
+}
+
+let albumId: string;
+
+test.beforeEach(async ({ page }) => {
+	albumId = await createAlbum(page);
+});
+
+test.afterEach(async ({ page }) => {
+	await archiveOwnedAlbum(page.request, albumId);
+});
+
+function withRepaintRelation(
+	body: unknown,
+	relation: Record<string, unknown>,
+	id: string
+): unknown {
+	if (Array.isArray(body)) return body.map((item) => withRepaintRelation(item, relation, id));
+	if (body === null || typeof body !== 'object') return body;
+	const entries = Object.entries(body).map(([key, value]) => [
+		key,
+		withRepaintRelation(value, relation, id)
+	]);
+	const copy: Record<string, unknown> = Object.fromEntries(entries);
+	if (copy.id !== id) return copy;
+	const params = (copy.generation_params ?? {}) as Record<string, unknown>;
+	return { ...copy, ...relation, generation_params: { ...params, task_type: 'repaint' } };
+}
+
+async function seedJumpSong(page: Page, label: string): Promise<JumpSong> {
+	const song = await seedFoldedSong(page, albumId, label);
+	const [repaint] = song.v2;
+	const [source] = song.v1;
+	const sourceTake = (await readSong(page, song.songId)).generations.find(
+		(take) => take.id === source
+	);
+	const relation = {
+		src_generation_id: source,
+		src_generation_number: sourceTake?.generation_number,
+		src_generation_version_number: 1
+	};
+	await page.route('**/api/**', async (route: Route) => {
+		if (route.request().method() !== 'GET') return route.continue();
+		const response = await route.fetch();
+		const type = response.headers()['content-type'] ?? '';
+		if (!type.includes('application/json')) return route.fulfill({ response });
+		const body = withRepaintRelation(await response.json(), relation, repaint);
+		return route.fulfill({ response, json: body });
+	});
+	return { ...song, repaint, source };
+}
+
+const folded = (page: Page) =>
+	workspace(page).getByRole('button', {
+		name: foldedGroupLabel(1, FIRST_VERSION_TAKE_COUNT, 0),
+		exact: false
+	});
+const takeRow = (page: Page, id: string) => workspace(page).locator(`#take-${id}`);
+const provenanceLink = (page: Page, song: JumpSong) =>
+	takeRow(page, song.repaint).getByRole('link', {
+		name: new RegExp(TAKE_PROVENANCE_REPAINT_PREFIX)
+	});
+const entriesOf = (page: Page) => page.evaluate(() => history.length);
+
+async function expectOnTheSong(page: Page, song: JumpSong, hash: string): Promise<void> {
+	await expect
+		.poll(() => {
+			const address = new URL(page.url());
+			return address.pathname.startsWith(`/album/${song.albumId}/`) ? address.hash : null;
+		})
+		.toBe(hash);
+}
+
+const anchorOf = (id: string) => `#take-${id}`;
+
+test.describe('a link to a take inside a folded version', () => {
+	test('J1 a click unfolds the version, scrolls to the take and writes one entry of the song', async ({
+		page
+	}) => {
+		const song = await seedJumpSong(page, 'jump');
+		await openTakes(page, song);
+		const entries = await entriesOf(page);
+		await expect(takeRow(page, song.source)).toHaveCount(0);
+
+		await provenanceLink(page, song).click();
+
+		await expect(folded(page)).toHaveAttribute('aria-expanded', 'true');
+		await expect(takeRow(page, song.source)).toBeInViewport();
+		await expectOnTheSong(page, song, anchorOf(song.source));
+		expect(await entriesOf(page)).toBe(entries + 1);
+		await expect(takeRow(page, song.repaint)).toBeVisible();
+	});
+
+	test('J2 Enter on the focused link does the same', async ({ page }) => {
+		const song = await seedJumpSong(page, 'enter');
+		await openTakes(page, song);
+		const entries = await entriesOf(page);
+
+		await provenanceLink(page, song).focus();
+		await page.keyboard.press('Enter');
+
+		await expect(folded(page)).toHaveAttribute('aria-expanded', 'true');
+		await expect(takeRow(page, song.source)).toBeInViewport();
+		await expectOnTheSong(page, song, anchorOf(song.source));
+		expect(await entriesOf(page)).toBe(entries + 1);
+	});
+
+	test('J3 the same link again writes no further entry and scrolls to the take', async ({
+		page
+	}) => {
+		const song = await seedJumpSong(page, 'again');
+		await openTakes(page, song);
+		await provenanceLink(page, song).click();
+		await expect(takeRow(page, song.source)).toBeInViewport();
+		const entries = await entriesOf(page);
+		await takeRow(page, song.repaint).scrollIntoViewIfNeeded();
+
+		await provenanceLink(page, song).click();
+
+		await expect(takeRow(page, song.source)).toBeInViewport();
+		expect(await entriesOf(page)).toBe(entries);
+	});
+
+	test('J4 a Ctrl or middle click leaves this tab as it was', async ({ page }) => {
+		const song = await seedJumpSong(page, 'modified');
+		await openTakes(page, song);
+		const entries = await entriesOf(page);
+		const address = page.url();
+
+		await provenanceLink(page, song).click({ modifiers: ['ControlOrMeta'] });
+		await provenanceLink(page, song).click({ button: 'middle' });
+
+		await expect(folded(page)).toHaveAttribute('aria-expanded', 'false');
+		expect(await entriesOf(page)).toBe(entries);
+		expect(page.url()).toBe(address);
+		for (const other of page.context().pages()) if (other !== page) await other.close();
+	});
+});

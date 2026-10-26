@@ -1,4 +1,5 @@
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
+import { modifiedClicks } from '$lib/test-utils/modified-clicks';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,10 +32,11 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 vi.mock('$lib/stores/navigation', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
-	return { ...actual, persistLibraryHistory: vi.fn() };
+	return { ...actual, persistLibraryHistory: vi.fn(), jumpToTake: vi.fn() };
 });
 
 import { bulkDeleteGenerations } from '$lib/api/client';
+import { jumpToTake } from '$lib/stores/navigation';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 let songCounter = 0;
@@ -181,6 +183,7 @@ async function pressInDialog(label: string): Promise<void> {
 
 beforeEach(() => {
 	vi.mocked(bulkDeleteGenerations).mockReset();
+	vi.mocked(jumpToTake).mockReset();
 	vi.stubGlobal(
 		'matchMedia',
 		vi.fn((query: string) => ({
@@ -585,16 +588,45 @@ describe('a link to a take inside a folded version (rule 10, cells 43/44)', () =
 		});
 	}
 
-	it('unfolds that version before the browser follows the link', async () => {
+	const scrollIntoView = vi.fn(function (this: Element) {
+		return this.id;
+	});
+
+	beforeEach(() => {
+		scrollIntoView.mockClear();
+		Element.prototype.scrollIntoView = scrollIntoView;
+	});
+
+	it('unfolds that version and hands the take to the navigation owner on a plain click', async () => {
 		const generations = [repaintOf('a1'), ...storytime().slice(1)];
 		const { target } = await render({ generations });
 		const link = target.querySelector<HTMLAnchorElement>('#take-c1 .take-origin a');
+		const click = new MouseEvent('click', { bubbles: true, cancelable: true });
 
-		link?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+		link?.dispatchEvent(click);
 
+		expect(click.defaultPrevented).toBe(true);
 		expect(target.querySelector('#take-a1')).not.toBeNull();
 		expect(foldToggle(target, V2_ROW).getAttribute('aria-expanded')).toBe('true');
+		expect(jumpToTake).toHaveBeenCalledWith('a1');
+		expect(scrollIntoView.mock.results.map((result) => result.value)).toEqual(['take-a1']);
 	});
+
+	it.each(modifiedClicks)(
+		'leaves the click to the browser, unfolds nothing and writes nothing for %o',
+		async (modifier) => {
+			const generations = [repaintOf('a1'), ...storytime().slice(1)];
+			const { target } = await render({ generations });
+			const link = target.querySelector<HTMLAnchorElement>('#take-c1 .take-origin a');
+			const click = new MouseEvent('click', { bubbles: true, cancelable: true, ...modifier });
+
+			link?.dispatchEvent(click);
+
+			expect(click.defaultPrevented).toBe(false);
+			expect(target.querySelector('#take-a1')).toBeNull();
+			expect(jumpToTake).not.toHaveBeenCalled();
+		}
+	);
 
 	it('toggles the tick instead in select mode and leaves the version folded', async () => {
 		const generations = [repaintOf('a1'), ...storytime().slice(1)];
@@ -608,5 +640,6 @@ describe('a link to a take inside a folded version (rule 10, cells 43/44)', () =
 
 		expect(get(selectedIds).has('c1')).toBe(true);
 		expect(target.querySelector('#take-a1')).toBeNull();
+		expect(jumpToTake).not.toHaveBeenCalled();
 	});
 });

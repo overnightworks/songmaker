@@ -102,6 +102,20 @@ function pushLibraryHistory(enterPage: () => void = () => {}): Promise<void> {
 	return writeLibraryHistory(next, libraryHistoryUrl(next), 'push');
 }
 
+// A link to a take of the song on screen: one entry of the song at the take's
+// anchor, so Back returns to the place the person clicked from. The browser's
+// own hash jump would write an entry without the library state, and the
+// library would read none. It does not leave the song, so it is not guarded,
+// and it keeps no page as left: that replace would strip the anchor from a
+// standing anchor entry.
+export function jumpToTake(takeId: string): Promise<void> {
+	const anchor = `#take-${takeId}`;
+	if (location.hash === anchor) return Promise.resolve();
+	cancelLibraryHistoryApply();
+	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
+	return writeLibraryHistory(next, libraryHistoryUrl(next) + anchor, 'push');
+}
+
 export function persistLibraryHistory(): void {
 	void replaceLibraryHistory();
 }

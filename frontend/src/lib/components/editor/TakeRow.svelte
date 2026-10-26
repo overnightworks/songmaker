@@ -31,6 +31,7 @@
 	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
 	import { selectionMode, selectedIds, toggleSelection } from '$lib/stores/selection';
 	import { revealTakeGroup, takeGroupKey } from '$lib/stores/takeFolds';
+	import { followPlainClick, jumpToTake } from '$lib/stores/navigation';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 	import TransportButtonIcon from '../TransportButtonIcon.svelte';
@@ -183,11 +184,16 @@
 	const flag = $derived(compact ? null : qualityFlag(gen.scores));
 	const batchNotice = $derived(compact ? null : takeBatchReductionLabel(gen.generation_params));
 	const voice = $derived(compact ? undefined : voiceForGeneration(gen));
-	// A link into a folded version unfolds it first; the browser then follows the
-	// hash to the take, which exists by the time it looks.
-	function revealSource(source: GenerationItem): void {
-		revealTakeGroup(takeGroupKey(source));
-		flushSync();
+	// A plain click on a link to another take unfolds the version holding it,
+	// then the navigation owner writes the song's entry at the take's anchor and
+	// the row scrolls into view. A modified click stays the browser's.
+	function followSource(event: MouseEvent, source: GenerationItem): void {
+		followPlainClick(event, () => {
+			revealTakeGroup(takeGroupKey(source));
+			flushSync();
+			void jumpToTake(source.id);
+			document.getElementById(`take-${source.id}`)?.scrollIntoView();
+		});
 	}
 
 	const takeName = $derived(nowPlayingTakeLabel(gen.version_number, gen.generation_number));
@@ -295,7 +301,7 @@
 				<span class="take-origin">
 					{#if provenance.source}
 						{@const source = provenance.source}
-						<a href={`#take-${source.id}`} onclick={() => revealSource(source)}
+						<a href={`#take-${source.id}`} onclick={(event) => followSource(event, source)}
 							>{provenance.label}</a
 						>
 					{:else}

@@ -6,7 +6,6 @@
 // makes v3, which folds v2.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
-import type { SongItem } from '../src/lib/api/types';
 import {
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
@@ -29,85 +28,28 @@ import {
 	selectedCountLabel,
 	TAKE_SELECT_ALL_UNKEPT_LABEL
 } from '../src/lib/constants/now-playing';
-import { appBar, csrfHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import { appBar, csrfHeaders, ONLY_IN_SHELL, workspace } from './helpers';
+import {
+	createAlbum,
+	FIRST_VERSION_TAKE_COUNT,
+	openTakes,
+	readSong,
+	SECOND_VERSION_TAKE_COUNT,
+	seedFoldedSong,
+	showTab
+} from './foldedSong';
 import {
 	archiveOwnedAlbum,
-	completeGenerationJobWithoutEvent,
 	seedRunningGenerationJob,
 	seedSongPhoneSong,
 	seedTakeStripSong
 } from './seed';
 
-const FIRST_VERSION_TAKE_COUNT = 3;
-const SECOND_VERSION_TAKE_COUNT = 2;
-const SECOND_VERSION_LYRICS = 'Second version lyrics';
 const EDITED_LYRICS = 'Third version lyrics';
 const SONG_PUT = /\/api\/songs\/[^/]+$/;
 
-interface FoldedSong {
-	albumId: string;
-	songId: string;
-	title: string;
-	// Take ids, by the version they sit on.
-	v1: string[];
-	v2: string[];
-}
-
-async function readSong(page: Page, songId: string): Promise<SongItem> {
-	const response = await page.request.get(`/api/songs/${songId}`);
-	expect(response.ok()).toBe(true);
-	return (await response.json()) as SongItem;
-}
-
 async function takeIdsOf(page: Page, songId: string): Promise<string[]> {
 	return (await readSong(page, songId)).generations.map((take) => take.id).sort();
-}
-
-async function createAlbum(page: Page): Promise<string> {
-	const album = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
-		data: { title: `E2E Take folds ${Date.now()}`, artist: '' }
-	});
-	expect(album.ok()).toBe(true);
-	return ((await album.json()) as { id: string }).id;
-}
-
-async function seedFoldedSong(page: Page, albumId: string, label: string): Promise<FoldedSong> {
-	const title = `Folds ${label} ${Date.now()}`;
-	const songId = await seedSongPhoneSong(albumId, title, 1, FIRST_VERSION_TAKE_COUNT);
-	const saved = await page.request.put(`/api/songs/${songId}`, {
-		headers: await csrfHeaders(page),
-		data: { lyrics: SECOND_VERSION_LYRICS }
-	});
-	expect(saved.ok()).toBe(true);
-	const jobId = await seedRunningGenerationJob(songId, {
-		progress: 0.5,
-		takeIndex: 1,
-		takeCount: SECOND_VERSION_TAKE_COUNT,
-		phase: 'loading_model'
-	});
-	await completeGenerationJobWithoutEvent(jobId);
-	const { generations } = await readSong(page, songId);
-	const idsOf = (version: number) =>
-		generations.filter((take) => take.version_number === version).map((take) => take.id);
-	expect(idsOf(1)).toHaveLength(FIRST_VERSION_TAKE_COUNT);
-	expect(idsOf(2)).toHaveLength(SECOND_VERSION_TAKE_COUNT);
-	return { albumId, songId, title, v1: idsOf(1), v2: idsOf(2) };
-}
-
-async function openTakes(page: Page, song: FoldedSong): Promise<void> {
-	await page.goto(`/album/${song.albumId}`);
-	await workspace(page)
-		.getByRole('button', { name: songEditorOpenLabel(song.title) })
-		.click();
-	await showTab(page, EDITOR_TAB_TAKES_LABEL);
-	await expect(workspace(page).locator('.take-row')).toHaveCount(SECOND_VERSION_TAKE_COUNT);
-}
-
-// The phone has the tabs, the desktop shows both columns at once.
-async function showTab(page: Page, label: string): Promise<void> {
-	const tab = page.getByRole('tab', { name: nameStartingWith(label) });
-	if (await tab.isVisible()) await tab.click();
 }
 
 const v1Row = (page: Page, takeCount = FIRST_VERSION_TAKE_COUNT) =>
