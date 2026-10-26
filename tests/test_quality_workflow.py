@@ -67,7 +67,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
                 name = name.replace("${{ matrix." + axis + " }}", str(value))
             rendered_names.add(name)
     config = tomllib.loads((ROOT / "quality/config.toml").read_text())
-    assert set(config) == {"gate"}
+    assert set(config) == {"gate", "secrets"}
     assert set(config["gate"]) == {"mandatory_jobs", "loosened"}
     loosened = config["gate"]["loosened"]
     assert isinstance(loosened, list)
