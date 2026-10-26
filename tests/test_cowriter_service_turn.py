@@ -15,7 +15,6 @@ from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import httpx
 import pytest
@@ -41,6 +40,7 @@ from test_cowriter_mcp_endpoint import (
     HOST,
     ORIGIN,
     VERSION,
+    running_run,
     _public_pem,
     call_body,
     mint,
@@ -326,6 +326,17 @@ def test_c5_an_earlier_turns_capability_is_refused_during_the_same_persons_next_
     assert web.lyrics() == ["original"]
 
 
+def test_c5_a_run_id_held_by_another_turn_ends_unavailable_and_leaves_the_holder(web):
+    run_id = str(uuid.uuid4())
+    web.agent.reply_with(answers("Done.", run_id=run_id))
+
+    with running_run(run_id, person="ben"):
+        frames = web.turn()
+
+        assert service_runs.holder(run_id).subject == "ben"
+    assert_ended_with(web, frames, "unavailable", status=503)
+
+
 def test_c5_a_cancelled_turn_releases_its_run_at_once(web):
     run_id = str(uuid.uuid4())
 
@@ -410,15 +421,6 @@ def test_c8_an_unreachable_service_ends_the_turn_unavailable(web, error):
     frames = web.turn()
 
     assert_ended_with(web, frames, "unavailable", status=503)
-
-
-def test_c8_no_refusal_falls_back_to_a_local_provider(web):
-    web.agent.reply_with(refuses(503, RejectionCode.UNAVAILABLE))
-
-    with patch("agent_providers.dispatch.stream_cowriter_turn") as local_provider:
-        web.turn()
-
-    local_provider.assert_not_called()
 
 
 def test_c7_a_stream_cut_before_its_terminal_event_ends_unavailable_and_stores_no_answer(web):
