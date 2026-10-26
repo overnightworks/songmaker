@@ -323,6 +323,7 @@ FAILURE_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_ESCALATED_AT_FILE:-$ST
 BUSY_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busy-escalated-at}"
 GUARD_REASON_FILE="${SONGMAKER_AUTODEPLOY_GUARD_REASON_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.guard-reason}"
 SKIPPED_TAGS_FILE="$STATE_DIR_FALLBACK/songmaker-autodeploy.skipped-tags"
+SKIPPED_CANDIDATES_FILE="$STATE_DIR_FALLBACK/songmaker-autodeploy.skipped-candidates"
 FAILURE_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_FAILURE_ALERT_THRESHOLD:-3}"
 BUSY_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_BUSY_ALERT_THRESHOLD:-30}"
 # Wall-clock time between one escalation of an unbroken streak and the
@@ -1226,21 +1227,27 @@ note_skipped_tag() {
     CURRENT_SKIPPED_TAGS+=("$1: $2")
 }
 
-# Names each skipped tag the first tick it is seen, then remembers exactly the
-# tags skipped now, so a tag that is deleted or becomes eligible is forgotten.
-report_skipped_tags() {
-    local entry
+# Names each entry the first tick it is seen, then remembers exactly the
+# entries of this tick in the given file, so one that is deleted or becomes
+# eligible is forgotten. Arguments: memory file, log prefix, entries...
+name_entries_once() {
+    local memory_file="$1" prefix="$2" entry
+    shift 2
     local -A already_named=()
-    if [[ -f "$SKIPPED_TAGS_FILE" ]]; then
+    if [[ -f "$memory_file" ]]; then
         while IFS= read -r entry; do
             already_named[$entry]=1
-        done <"$SKIPPED_TAGS_FILE"
+        done <"$memory_file"
     fi
-    : >"$SKIPPED_TAGS_FILE"
-    for entry in "${CURRENT_SKIPPED_TAGS[@]}"; do
-        [[ -n "${already_named[$entry]:-}" ]] || log_info "skipping tag $entry"
-        printf '%s\n' "$entry" >>"$SKIPPED_TAGS_FILE"
+    : >"$memory_file"
+    for entry in "$@"; do
+        [[ -n "${already_named[$entry]:-}" ]] || log_info "$prefix $entry"
+        printf '%s\n' "$entry" >>"$memory_file"
     done
+}
+
+report_skipped_tags() {
+    name_entries_once "$SKIPPED_TAGS_FILE" "skipping tag" "${CURRENT_SKIPPED_TAGS[@]}"
 }
 
 # Sets DEPLOY_CANDIDATES (commit per line, newest release first, at most
@@ -1458,6 +1465,7 @@ fi
 # GitHub answer is still fail-closed: without its result we cannot prove that
 # a predecessor is the newest green candidate.
 DEPLOY_COMMIT=""
+declare -a SKIPPED_CANDIDATES=()
 while IFS= read -r CANDIDATE_COMMIT; do
     if [[ "$CANDIDATE_COMMIT" == "$REMOTE_HEAD" ]]; then
         if ! CHECK_RUN_AGE_START="$(first_seen_commit_timestamp "$CANDIDATE_COMMIT")"; then
@@ -1483,11 +1491,10 @@ while IFS= read -r CANDIDATE_COMMIT; do
     case "$CANDIDATE_CHECK_STATUS" in
         green)
             DEPLOY_COMMIT="$CANDIDATE_COMMIT"
-            log_info "selected newest fully green release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT)"
             break
             ;;
         waiting\ *|failed\ *)
-            log_info "skipping deploy candidate $CANDIDATE_COMMIT: $CANDIDATE_CHECK_STATUS"
+            SKIPPED_CANDIDATES+=("$CANDIDATE_COMMIT: $CANDIDATE_CHECK_STATUS")
             ;;
         *)
             log_err "cannot determine GitHub check status for deploy candidate $CANDIDATE_COMMIT — refusing to deploy: unexpected result '$CANDIDATE_CHECK_STATUS'"
@@ -1495,6 +1502,7 @@ while IFS= read -r CANDIDATE_COMMIT; do
             ;;
     esac
 done <<<"$DEPLOY_CANDIDATES"
+name_entries_once "$SKIPPED_CANDIDATES_FILE" "skipping deploy candidate" "${SKIPPED_CANDIDATES[@]}"
 
 if [[ -z "$DEPLOY_COMMIT" ]]; then
     log_info "no fully green release among the newest $CHECK_RUN_LOOKBACK_COMMITS; waiting"
@@ -1511,6 +1519,8 @@ if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$DEPLOY_COMMIT"; then
     log_err "newest fully green release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT) does not contain local HEAD $LOCAL_HEAD — refusing to move the checkout backwards"
     fail_tick "release does not contain local HEAD"
 fi
+
+log_info "selected newest fully green release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT)"
 
 # --- 10. Check out exactly the selected green release commit, detached, then
 # build. The tag was resolved to its commit before the check-run lookup, so a

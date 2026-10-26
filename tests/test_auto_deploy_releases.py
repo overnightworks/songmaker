@@ -113,6 +113,22 @@ def test_a_tag_on_a_side_branch_is_skipped_and_named_and_the_older_release_deplo
     assert len(skipped) == 1
 
 
+def test_a_skipped_red_release_is_named_once_across_ticks(checkout: Checkout) -> None:
+    checkout.move_main_forward()
+    green_release = checkout.remote_main_sha()
+    checkout.move_main_forward()
+    checkout.set_check_runs_for_commit(checkout.remote_main_sha(), ("completed", "failure"))
+    checkout.set_check_runs_for_commit(green_release, ("completed", "success"))
+    assert checkout.tick().returncode == 0
+    journal_after_deploy = checkout.journal
+
+    assert checkout.tick().returncode == 0
+
+    second_tick = checkout.journal[len(journal_after_deploy) :]
+    assert "skipping deploy candidate" not in second_tick
+    assert "selected newest" not in second_tick
+
+
 def test_only_grammatical_tags_count_and_the_newest_is_ordered_by_date_then_number(
     checkout: Checkout,
 ) -> None:
