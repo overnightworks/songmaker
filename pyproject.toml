@@ -12,14 +12,14 @@ dependencies = [
     "scipy>=1.12,<2",
     "pydantic>=2.0,<3",
     "pydantic-settings>=2.0,<3",
-    "cyclopts>=4.0,<5",
+    "cyclopts>=4.0,<6",
     "pyloudnorm>=0.1,<1",
     "httpx>=0.27,<1",
-    "python-slugify>=8.0,<9",
+    "python-slugify>=8.0,<10",
 ]
 
 [project.optional-dependencies]
-similarity = ["sentence-transformers>=3,<6"]
+similarity = ["sentence-transformers>=3,<7"]
 scoring = [
     "librosa>=0.10,<2",
     "soundfile",
@@ -70,11 +70,17 @@ image = [
 mcp = [
     "mcp>=2.2,<3",
 ]
+# The co-writer's MCP endpoint: the agent service calls the
+# tools back over it. The release wheel of an immutable tag, like the other
+# release wheels.
+agent-service = [
+    "overnightworks-agent-runtime-client[mcp-server] @ https://github.com/overnightworks/agent-runtime/releases/download/v0.7.0/overnightworks_agent_runtime_client-0.7.0-py3-none-any.whl#sha256=c404bf89e1eb25ad154143e944b48ab9dadf6b7ebd6bbabf1d329df19e513dbe",
+]
 acestep-worker = [
     "fastapi>=0.100,<1",
     "uvicorn>=0.20,<1",
     "redis[hiredis]>=5.0,<9",
-    "huggingface_hub>=0.20,<2",
+    "huggingface_hub>=0.20,<3",
     "nvidia-ml-py3>=7.352,<8",
 ]
 dev = [

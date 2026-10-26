@@ -6,6 +6,8 @@
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
 	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '$lib/constants';
+	import { albumCoverMarkedLabel } from '$lib/constants/album-cover-mark';
+	import type { CoverMark } from './CoverActivityMark.svelte';
 	import { songCountLabel } from '$lib/utils/format';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { collectionTransport, toggleOrStartCollection, setShuffle } from '$lib/stores/player';
@@ -36,10 +38,6 @@
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		oncurate?: () => void;
-		onsaveoffline?: () => void;
-		offlineSaved?: boolean;
-		offlineSaving?: boolean;
-		offlineProgressLabel?: string | null;
 		playlistCovers?: AlbumCoverUrls[];
 		playlistCover?: AlbumCoverUrls | null;
 		/** Album-only: the subtitle and year line read under the title, empty when neither is set. */
@@ -55,6 +53,8 @@
 		 * editing through the close it is handed.
 		 */
 		coverEditor?: Snippet<[close: () => void]>;
+		/** Album-only: what the closed cover carries, a running suggestion or waiting ones. */
+		coverMark?: CoverMark;
 	}
 
 	let {
@@ -78,15 +78,12 @@
 		onremovecover,
 		onaddtoplaylist,
 		oncurate,
-		onsaveoffline,
-		offlineSaved = false,
-		offlineSaving = false,
-		offlineProgressLabel = null,
 		playlistCovers,
 		playlistCover,
 		meta = '',
 		detailsEditor,
-		coverEditor
+		coverEditor,
+		coverMark
 	}: Props = $props();
 
 	let editableTitle: EditableTitle | undefined = $state();
@@ -109,10 +106,12 @@
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
+	const coverLabel = $derived(showCover ? ALBUM_COVER_EDIT_LABEL : ALBUM_COVER_ADD_LABEL);
 	const coverOpening = $derived(
 		coverEditor
 			? {
-					label: showCover ? ALBUM_COVER_EDIT_LABEL : ALBUM_COVER_ADD_LABEL,
+					label: coverLabel,
+					name: albumCoverMarkedLabel(coverLabel, coverMark),
 					onopen: openCoverEditing
 				}
 			: undefined
@@ -196,10 +195,6 @@
 		{onremovecover}
 		{onaddtoplaylist}
 		{oncurate}
-		{onsaveoffline}
-		{offlineSaved}
-		{offlineSaving}
-		{offlineProgressLabel}
 		oneditdetails={detailsEditor ? openDetailsEditing : undefined}
 		onrename={onrename ? triggerRename : undefined}
 	/>
@@ -229,6 +224,7 @@
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}
 	{coverOpening}
+	{coverMark}
 	coverEditing={$editingCover ? coverEditing : undefined}
 />
 

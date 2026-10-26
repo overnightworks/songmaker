@@ -88,7 +88,7 @@ from songmaker_cli.db.queries.albums import (
 )
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.cover_suggestions import (
-    delete_album_cover_suggestions,
+    delete_named_cover_suggestions,
     get_album_cover_suggestion,
     list_album_cover_suggestions,
 )
@@ -535,7 +535,9 @@ def api_select_album_cover_suggestion(
         payload = resolve_suggestion_png(
             ctx.audio_dir, album.id, suggestion.id, suggestion.png_path,
         ).read_bytes()
-        cover_key = write_album_cover(ctx.audio_dir, album.id, payload)
+        cover_key = write_album_cover(
+            ctx.audio_dir, album.id, payload, ai_generated=True,
+        )
     except (FileNotFoundError, AudioPathRejectedError):
         raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND) from None
     except CoverRejectedError as exc:
@@ -546,16 +548,25 @@ def api_select_album_cover_suggestion(
     return _single_album_response(session, album)
 
 
-@router.delete("/albums/{album_id}/cover-suggestions")
+@router.delete(
+    "/albums/{album_id}/cover-suggestions",
+    responses={422: {"description": "Nothing named to discard"}},
+)
 def api_delete_cover_suggestions(
     album_id: str,
+    suggestion_id: list[str] = Query(default_factory=list),
+    job_id: list[str] = Query(default_factory=list),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
     album = get_album(session, album_id)
     check_album_access(album, user)
-    paths = delete_album_cover_suggestions(session, album.id)
+    # A discard names what it releases, so a suggestion asked for after it --
+    # on this device or another -- is never deleted with it.
+    if not suggestion_id and not job_id:
+        raise HTTPException(422, "Name the suggestions or runs to discard")
+    paths = delete_named_cover_suggestions(session, album.id, suggestion_id, job_id)
     session.commit()
     remove_cover_suggestion_files(ctx.audio_dir, paths)
     return StatusResponse()

@@ -1,5 +1,6 @@
 # The application may build on the independent packages; none of them may
-# depend on the application. CI runs `lint-imports` over the in-tree import
+# depend on the application. quality's `import-contract` rule runs these
+# contracts over the in-tree import
 # graph, so a chain through another in-tree module is caught as well as a
 # direct import. include_external_packages records an import of an installed
 # package (agent_providers, webauth) as one opaque node and never scans that
@@ -61,7 +62,7 @@ layers =
     main
     server | music_worker | scoring_worker
     api | worker_base
-    (admin_api) | (album_api) | (auth_api) | (conversation_api) | (generation_api) | (health_api) | (internal_api) | (jobs_api) | (library_api) | (lora_api) | (playlist_api) | (queue_stream_api) | (reimport_api) | (resource_event_api) | (settings_api) | (sharing_api) | (song_api)
+    (admin_api) | (album_api) | (auth_api) | (conversation_api) | (generation_api) | (health_api) | (internal_api) | (jobs_api) | (library_api) | (lora_api) | (playlist_api) | (reimport_api) | (resource_event_api) | (settings_api) | (sharing_api) | (song_api)
     lifecycle
     (cover_runner)
     jobs

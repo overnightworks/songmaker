@@ -17,12 +17,14 @@ export type { LibrarySearchResponse } from './types';
 export type LibrarySearchHit = LibrarySearchResponse['items'][number];
 export type LibraryListenItem = LibraryListenResponse['items'][number];
 
+// eslint-disable-next-line no-restricted-syntax -- query arguments of one call, not a body
 export interface LibraryListOptions {
 	q?: string;
 	sort?: LibrarySort;
 	archived?: boolean;
 }
 
+// eslint-disable-next-line no-restricted-syntax -- query arguments of one call, not a body
 export async function searchLibrary(options: {
 	q: string;
 	sort: LibrarySort;
@@ -42,6 +44,7 @@ export async function searchLibrary(options: {
 	return apiFetch<LibrarySearchResponse>(`/api/library/search?${params}`);
 }
 
+// eslint-disable-next-line no-restricted-syntax -- query arguments of one call, not a body
 export async function fetchLibraryListen(page: {
 	offset: number;
 	limit: number;
@@ -50,6 +53,7 @@ export async function fetchLibraryListen(page: {
 	return apiFetch<LibraryListenResponse>(`/api/library/listen?${query}`);
 }
 
+// eslint-disable-next-line no-restricted-syntax -- query arguments of one call, not a body
 export async function fetchLibraryPoolQueue(options?: {
 	startGenerationId?: string | null;
 	shuffle?: boolean;

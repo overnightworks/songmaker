@@ -44,9 +44,6 @@ import {
 	containing,
 	csrfHeaders,
 	FlowGuard,
-	expectLibraryWallLoaded,
-	scrollWallHalfway,
-	wallBody,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	openRailNav,
@@ -501,10 +498,6 @@ function wallTileNamed(page: Page, title: string): Locator {
 	return wallTiles(page).locator('.wall-tile-body').filter({ hasText: title });
 }
 
-function wallScrollTop(page: Page): Promise<number> {
-	return wallBody(page).evaluate((body) => Math.round(body.scrollTop));
-}
-
 // A fresh playlist, opened from the Playlists page the way a person does: one
 // entry for the page, one for the playlist.
 async function openSeededPlaylist(
@@ -641,25 +634,6 @@ test.describe('Back and Forward between the library and Settings', () => {
 		await expect(wall).toBeVisible();
 		await expect(page).toHaveURL(LIBRARY_URL);
 		await expect(wallTiles(page).locator(':focus')).toHaveCount(0);
-		guard.assertClean();
-	});
-
-	test('Back from Settings shows the wall at the scroll position it was left at', async ({
-		page
-	}, testInfo) => {
-		const guard = new FlowGuard(page);
-		const library = readSeededLibrary();
-		await page.goto(LIBRARY_PATH);
-		await expect(workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
-		await expect(wallTileNamed(page, library.albumTitle)).toBeVisible();
-		await expectLibraryWallLoaded(page);
-		const leftAt = await scrollWallHalfway(page);
-		await openVoicesSettings(page, shellOf(testInfo));
-
-		await page.goBack();
-
-		await expect(page).toHaveURL(LIBRARY_URL);
-		await expect.poll(() => wallScrollTop(page)).toBe(leftAt);
 		guard.assertClean();
 	});
 

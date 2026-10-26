@@ -168,3 +168,82 @@ def test_queued_command_prints_a_real_owned_job_with_a_computed_position(seeded_
     )
     assert get_queue_position(session, ahead) == 1
     assert get_queue_position(session, job) == 2
+
+
+@pytest.fixture
+def cover_album(tmp_path):
+    factory = init_test_db(tmp_path / "cover.db")
+    with factory() as session:
+        session.add(User(id=_OWNER_ID, username=_OWNER_ID))
+        session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
+        session.commit()
+        yield session, tmp_path / "audio"
+
+
+def test_cover_running_command_prints_an_owned_job_started_in_the_past(cover_album, capsys):
+    import argparse
+    from datetime import datetime, timedelta, timezone
+
+    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.db.queries.jobs import get_job
+
+    session, _ = cover_album
+    seed_e2e_job_states.cmd_set_cover_running(
+        session,
+        argparse.Namespace(album_id=_ALBUM_ID, owner_username=_OWNER_ID, started_offset=90),
+    )
+    job = get_job(session, capsys.readouterr().out.strip())
+
+    assert job is not None
+    assert (job.user_id, job.album_id, job.type, job.status) == (
+        _OWNER_ID, _ALBUM_ID, JobType.COVER, JobStatus.RUNNING,
+    )
+    # SQLite returns the stored UTC instant without its zone.
+    started_at = job.started_at.replace(tzinfo=timezone.utc)
+    assert datetime.now(timezone.utc) - started_at >= timedelta(seconds=90)
+    assert job.heartbeat_at is not None
+
+
+def test_publishing_a_cover_suggestion_completes_the_run_and_waits_for_the_album(cover_album):
+    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.cover_suggestions import resolve_suggestion_png
+    from songmaker_cli.db.queries.cover_suggestions import list_album_cover_suggestions
+    from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
+
+    session, audio_dir = cover_album
+    job = create_job(session, JobType.COVER, user_id=_OWNER_ID, album_id=_ALBUM_ID)
+    update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
+    session.commit()
+
+    seed_e2e_job_states.publish_cover_suggestion(session, audio_dir, b"png", job_id=job.id)
+    session.expire_all()
+
+    (suggestion,) = list_album_cover_suggestions(session, _ALBUM_ID)
+    assert suggestion.job_id == job.id
+    stored = resolve_suggestion_png(audio_dir, _ALBUM_ID, suggestion.id, suggestion.png_path)
+    assert stored.read_bytes() == b"png"
+    assert job.status == JobStatus.COMPLETED
+
+
+@pytest.mark.parametrize("status,job_type,png", [
+    ("completed", "cover", b"png"), ("failed", "cover", b"png"), ("queued", "cover", b"png"),
+    ("running", "generate", b"png"), ("running", "cover", b""),
+])
+def test_invalid_cover_publication_writes_neither_suggestion_nor_file(
+    cover_album, status, job_type, png,
+):
+    from songmaker_cli.constants import JobType
+    from songmaker_cli.db.queries.cover_suggestions import list_album_cover_suggestions
+    from songmaker_cli.db.queries.jobs import create_job
+
+    session, audio_dir = cover_album
+    job = create_job(session, JobType.COVER, user_id=_OWNER_ID, album_id=_ALBUM_ID)
+    job.status, job.type = status, job_type
+    session.commit()
+
+    with pytest.raises(SystemExit):
+        seed_e2e_job_states.publish_cover_suggestion(session, audio_dir, png, job_id=job.id)
+
+    assert list_album_cover_suggestions(session, _ALBUM_ID) == []
+    assert not list(audio_dir.rglob("*.png"))
+    assert job.status == status

@@ -66,7 +66,7 @@ export async function loadActiveModels(): Promise<void> {
 export async function loadDefaultConfig(): Promise<void> {
 	try {
 		const res = await fetchDefaultConfig();
-		defaultConfig.set(res.config);
+		defaultConfig.set(res.config ?? null);
 	} catch {
 		/* default config unavailable */
 	}
@@ -74,7 +74,7 @@ export async function loadDefaultConfig(): Promise<void> {
 
 export async function saveDefaultConfig(config: string | null): Promise<void> {
 	const res = await updateDefaultConfigApi(config);
-	defaultConfig.set(res.config);
+	defaultConfig.set(res.config ?? null);
 }
 
 export async function savePreset(

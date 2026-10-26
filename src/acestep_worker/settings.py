@@ -66,7 +66,7 @@ class WorkerSettings(BaseSettings):
     pytorch_cuda_alloc_conf: str = "expandable_segments:True"
 
     # Subprocess timeouts
-    acestep_startup_timeout_seconds: int = 900
+    acestep_startup_timeout_seconds: int = 540
     acestep_shutdown_grace_seconds: int = 15
     acestep_shutdown_kill_seconds: int = 5
     acestep_health_poll_seconds: float = 2.0

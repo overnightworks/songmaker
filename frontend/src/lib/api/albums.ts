@@ -1,5 +1,6 @@
 import type {
 	AlbumItem,
+	AlbumUpdateRequest,
 	CoverSuggestionSelectionRequest,
 	CoverSuggestionsResponse,
 	JobItem,
@@ -38,10 +39,7 @@ export async function createAlbum(title: string, artist: string = ''): Promise<A
  * out of `fields` is left unchanged server-side; passing `null` for year
  * clears it, and an empty string clears the subtitle.
  */
-export async function updateAlbum(
-	albumId: string,
-	fields: { title?: string; subtitle?: string; year?: number | null }
-): Promise<AlbumItem> {
+export async function updateAlbum(albumId: string, fields: AlbumUpdateRequest): Promise<AlbumItem> {
 	return apiFetch<AlbumItem>(`/api/albums/${albumId}`, {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
@@ -94,6 +92,19 @@ export async function selectAlbumCoverSuggestion(
 	});
 }
 
-export async function discardAlbumCoverSuggestions(albumId: string): Promise<void> {
-	await apiFetch(`/api/albums/${albumId}/cover-suggestions`, { method: 'DELETE' });
+/** What a discard deletes: the suggestions it names and those the named runs made. */
+// eslint-disable-next-line no-restricted-syntax -- camelCase call arguments, not a wire body
+export interface CoverSuggestionDiscard {
+	suggestionIds: readonly string[];
+	jobIds: readonly string[];
+}
+
+export async function discardAlbumCoverSuggestions(
+	albumId: string,
+	discard: CoverSuggestionDiscard
+): Promise<void> {
+	const params = new URLSearchParams();
+	for (const suggestionId of discard.suggestionIds) params.append('suggestion_id', suggestionId);
+	for (const jobId of discard.jobIds) params.append('job_id', jobId);
+	await apiFetch(`/api/albums/${albumId}/cover-suggestions?${params}`, { method: 'DELETE' });
 }

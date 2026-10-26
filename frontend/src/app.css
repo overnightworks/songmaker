@@ -173,6 +173,7 @@
 	--input-radius: 4px;
 	--input-padding: 0.6rem 0.8rem;
 	--input-font-size: 1rem;
+	--input-focus-glow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent);
 
 	/* Card tokens */
 	--card-radius: 6px;

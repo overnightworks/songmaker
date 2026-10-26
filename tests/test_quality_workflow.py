@@ -50,7 +50,7 @@ def test_g1_caller_identity_and_pin():
         reference,
     )
     assert re.search(
-        rf"^\s+uses: {re.escape(reference)} # v0\.4\.0$",
+        rf"^\s+uses: {re.escape(reference)} # v0\.5\.0$",
         WORKFLOW_TEXT,
         re.MULTILINE,
     )
@@ -73,6 +73,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
     assert isinstance(loosened, list)
     assert [(entry["item"], entry["what"]) for entry in loosened] == [
         ("#1734", 'mandatory job "Acceptance evidence (integration)" removed'),
+        ("#1856", "size baseline raises file_lines frontend/src/lib/api/types.ts 1125 -> 1159"),
         ("#1784", "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"),
     ]
     for entry in loosened:

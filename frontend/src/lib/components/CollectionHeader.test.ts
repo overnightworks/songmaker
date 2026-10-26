@@ -327,7 +327,7 @@ describe('CollectionHeader', () => {
 		expect(menuRowLabels(menu)).toEqual([
 			'Edit details',
 			'Cover',
-			'Curate',
+			'Pick album takes',
 			'Add to playlist',
 			'Share',
 			'Archive',
@@ -348,6 +348,47 @@ describe('CollectionHeader', () => {
 		]);
 		menuRow(menu, 'Remove cover').click();
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		{
+			state: 'a running suggestion',
+			coverMark: { running: true, startedAt: '2026-10-22T10:00:00Z', waiting: 0 },
+			name: 'Edit cover · making a suggestion'
+		},
+		{
+			state: 'waiting suggestions',
+			coverMark: { running: false, startedAt: null, waiting: 2 },
+			name: 'Edit cover · 2 waiting'
+		}
+	])('carries $state on the closed cover, named without the ticking time', async (arrange) => {
+		const target = await render({
+			...baseProps(),
+			coverUrl: 'https://x/cover.jpg',
+			coverEditor: fakeCoverEditor(),
+			coverMark: arrange.coverMark
+		});
+
+		const cover = getByRoleButton(target, arrange.name);
+		expect(cover.querySelector('.cover-mark')).not.toBeNull();
+
+		cover.click();
+		await tick();
+
+		expect(target.querySelector('.cover-mark')).toBeNull();
+	});
+
+	it('keeps the empty cover place reading Add cover while its name carries the mark', async () => {
+		const target = await render({
+			...baseProps(),
+			coverEditor: fakeCoverEditor(),
+			coverMark: { running: false, startedAt: null, waiting: 2 }
+		});
+
+		const place = requireElement(target, '.header-cover-add');
+
+		expect(place.textContent).toBe('Add cover');
+		expect(getByRoleButton(target, 'Add cover · 2 waiting')).not.toBeNull();
 	});
 
 	it.each([
@@ -399,16 +440,10 @@ describe('CollectionHeader', () => {
 	);
 
 	it('lists playlist cover actions alongside its existing actions', async () => {
-		const props = { ...baseProps(), kind: 'playlist' as const, onsaveoffline: vi.fn() };
+		const props = { ...baseProps(), kind: 'playlist' as const };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		expect(menuRowLabels(menu)).toEqual([
-			'Share playlist',
-			'Upload…',
-			'Save offline',
-			'Rename',
-			'Delete playlist'
-		]);
+		expect(menuRowLabels(menu)).toEqual(['Share playlist', 'Upload…', 'Rename', 'Delete playlist']);
 	});
 
 	it('shares from the Share row and copies the link, without duplicating the logic', async () => {

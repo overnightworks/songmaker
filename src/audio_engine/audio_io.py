@@ -13,7 +13,12 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.io import wavfile as scipy_wavfile
 
-from audio_engine.constants import FALLBACK_SAMPLE_RATE, INT16_MAX
+from audio_engine.constants import (
+    AI_MARK_ID3_DESCRIPTION,
+    FALLBACK_SAMPLE_RATE,
+    INT16_MAX,
+    IPTC_TRAINED_ALGORITHMIC_MEDIA,
+)
 from audio_engine.errors import MasteringError
 from audio_engine.mastering import master_stereo
 
@@ -167,6 +172,7 @@ def build_ffmpeg_cmd(
         for key in ("title", "artist", "album", "track", "genre", "date", "comment", "lyrics"):
             if metadata.get(key):
                 cmd.extend(["-metadata", f"{key}={sanitize_metadata(metadata[key])}"])
+    cmd.extend(["-metadata", f"{AI_MARK_ID3_DESCRIPTION}={IPTC_TRAINED_ALGORITHMIC_MEDIA}"])
     cmd.append(output_path)
     return cmd
 
@@ -219,6 +225,15 @@ def read_wav_bytes(
     return left, right, sample_rate
 
 
+def _with_ai_mark_info_chunk(wav_bytes: bytes) -> bytes:
+    """Append a RIFF LIST/INFO chunk with an ICMT comment naming the AI mark."""
+    comment = f"{AI_MARK_ID3_DESCRIPTION}={IPTC_TRAINED_ALGORITHMIC_MEDIA}".encode("ascii") + b"\0"
+    comment_chunk = b"ICMT" + struct.pack("<I", len(comment)) + comment + b"\0" * (len(comment) % 2)
+    info_chunk = b"LIST" + struct.pack("<I", 4 + len(comment_chunk)) + b"INFO" + comment_chunk
+    riff_size = struct.unpack_from("<I", wav_bytes, 4)[0] + len(info_chunk)
+    return wav_bytes[:4] + struct.pack("<I", riff_size) + wav_bytes[8:] + info_chunk
+
+
 def write_stereo_wav(
     filename: str,
     left: NDArray[np.float64],
@@ -233,16 +248,13 @@ def write_stereo_wav(
     import os
     import tempfile
 
-    interleaved = _interleave_to_int16(left, right)
+    wav_bytes = _with_ai_mark_info_chunk(_stereo_to_wav_bytes(left, right, sample_rate))
     dest_dir = os.path.dirname(filename) or "."
     fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=dest_dir)
     os.close(fd)
     try:
-        with wave.open(tmp_path, "w") as wf:
-            wf.setnchannels(2)
-            wf.setsampwidth(2)
-            wf.setframerate(sample_rate)
-            wf.writeframes(interleaved.tobytes())
+        with open(tmp_path, "wb") as wav_file:
+            wav_file.write(wav_bytes)
         os.replace(tmp_path, filename)
     except BaseException:
         try:

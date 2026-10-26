@@ -213,7 +213,7 @@ interface ShareLink {
 
 type MultipartFile = { name: string; mimeType: string; buffer: Buffer };
 
-function requiredEnv(name: string): string {
+export function requiredEnv(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error(`${name} must be set to the e2e admin's username`);
 	return value;
@@ -733,7 +733,7 @@ export async function seedTakeStripSong(
 	}
 }
 
-async function seedJobState(command: string, args: string[], audio?: Buffer): Promise<string> {
+export async function seedJobState(verb: string, args: string[], audio?: Buffer): Promise<string> {
 	const commandArgs = [
 		...COMPOSE_ARGS,
 		'exec',
@@ -741,7 +741,7 @@ async function seedJobState(command: string, args: string[], audio?: Buffer): Pr
 		'songmaker-web',
 		'/app/.venv/bin/python',
 		'scripts/seed_e2e_job_states.py',
-		command,
+		verb,
 		...args
 	];
 	try {
@@ -752,11 +752,11 @@ async function seedJobState(command: string, args: string[], audio?: Buffer): Pr
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		const stderr = (err as { stderr?: string }).stderr ?? '';
-		throw new Error(`Seeding job state ${command} failed: ${detail}\n${stderr}`, { cause: err });
+		throw new Error(`Seeding job state ${verb} failed: ${detail}\n${stderr}`, { cause: err });
 	}
 }
 
-function requiredSeedId(id: string): string {
+export function requiredSeedId(id: string): string {
 	if (!id) throw new Error('seed_e2e_job_states.py printed no id on stdout');
 	return id;
 }
@@ -905,17 +905,17 @@ export async function completeGenerationJobWithoutEvent(jobId: string): Promise<
 }
 
 /**
- * A fresh playlist for one test attempt. The flow adds, reorders and removes
- * entries, so a retry must not inherit the previous attempt's order.
+ * A fresh playlist per test attempt; `takeCount` starts it with fewer takes.
  */
 export async function seedPlaylist(
 	api: APIRequestContext,
-	library: SeededLibrary
+	library: SeededLibrary,
+	takeCount = library.playlistTakes.length
 ): Promise<SeededPlaylist> {
 	const seed = await SeedApi.fromSession(api);
 	const title = `${PLAYLIST_TITLE_PREFIX} ${runMarker()}`;
 	const playlist = await seed.postJson<CreatedPlaylist>('/api/playlists', { title });
-	for (const take of library.playlistTakes) {
+	for (const take of library.playlistTakes.slice(0, takeCount)) {
 		await seed.postJson(`/api/playlists/${playlist.id}/entries/generation`, {
 			generation_id: take.takeId
 		});
@@ -923,7 +923,7 @@ export async function seedPlaylist(
 	return {
 		title,
 		slug: playlist.slug,
-		songTitles: library.playlistTakes.map((take) => take.songTitle)
+		songTitles: library.playlistTakes.slice(0, takeCount).map((take) => take.songTitle)
 	};
 }
 

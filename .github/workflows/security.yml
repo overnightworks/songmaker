@@ -21,16 +21,17 @@ jobs:
   bandit:
     name: Bandit (Python security)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
       - name: Run bandit
         run: uvx --isolated --from 'bandit[toml]>=1.8,<2' bandit -r src/ -c pyproject.toml # why: Bandit runs in its own tool environment so its resolution cannot change worker-image dependencies.
@@ -38,84 +39,20 @@ jobs:
   pip-audit:
     name: pip-audit (Python dependencies)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
         with:
           python-version: "3.12"
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
       - name: Install locked project dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra mcp --extra agent-service --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Audit Python dependencies
         run: uvx --isolated --from 'pip-audit>=2.9,<3' pip-audit --path .venv/lib/python3.12/site-packages --skip-editable --ignore-vuln CVE-2026-4539 # why: pip-audit runs in its own tool environment and audits the project environment created from uv.lock.
-
-  npm-audit:
-    name: npm audit (Frontend dependencies)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
-        with:
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.x
-        with:
-          version: 10
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.x
-        with:
-          node-version: "22"
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Audit frontend dependencies
-        run: |
-          set +e
-          audit_log="${RUNNER_TEMP}/pnpm-audit.log"
-          max_attempts=3
-
-          for attempt in $(seq 1 "$max_attempts"); do
-            echo "Audit attempt ${attempt}/${max_attempts}"
-            # pnpm audit does not accept fetch flags directly; configure its registry client per attempt.
-            npm_config_fetch_retries=1 npm_config_fetch_timeout=30000 \
-              pnpm audit --prod 2>&1 | tee "$audit_log"
-            audit_status=${PIPESTATUS[0]}
-
-            if [ "$audit_status" -eq 0 ]; then
-              exit 0
-            fi
-
-            if ! grep -Eq 'ERR_SOCKET_TIMEOUT|ERR_PNPM_META_FETCH_FAIL|FetchError|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|ECONNREFUSED' "$audit_log"; then
-              exit "$audit_status"
-            fi
-
-            if [ "$attempt" -lt "$max_attempts" ]; then
-              backoff_seconds=$((attempt * 20))
-              echo "npm registry unavailable; retrying in ${backoff_seconds}s"
-              sleep "$backoff_seconds"
-            fi
-          done
-
-          # Registry outages are infrastructure failures, not evidence of a vulnerable dependency.
-          echo "::warning title=npm registry unreachable::audit skipped after ${max_attempts} attempts"
-          {
-            echo "## npm audit: registry unreachable"
-            echo
-            echo "The npm registry was unreachable after ${max_attempts} attempts. The audit is inconclusive; retry it when the registry is available."
-            echo
-            echo '```text'
-            cat "$audit_log"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit 0

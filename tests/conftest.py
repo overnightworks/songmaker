@@ -6,10 +6,9 @@ import asyncio
 import logging
 import os
 
-# Required env vars for Settings construction at module-import time.
-# Real values from the environment win — these are only safe defaults
-# so importing songmaker_cli.music_worker (which constructs Settings at
-# class-definition time) does not fail in unit tests.
+# Required env vars for Settings construction at module-import time. Real values from the
+# environment win — these are only safe defaults so importing songmaker_cli.music_worker
+# (which constructs Settings at class-definition time) does not fail in unit tests.
 os.environ["SONGMAKER_SKIP_ENV_FILE"] = "1"
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
@@ -17,7 +16,8 @@ os.environ.setdefault("SESSION_SECRET", "x" * 64)
 os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
 os.environ.setdefault("WORKER_ID", "test-worker")
 os.environ.setdefault("PUBLIC_BASE_URL", "https://songmaker.test")
-os.environ.setdefault("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1")
+os.environ.setdefault(
+    "ALLOWED_HOSTS", "testserver,localhost,127.0.0.1,songmaker-web,songmaker.test")
 os.environ.setdefault("OIDC_ISSUER", "https://issuer.test/realms/test")
 os.environ.setdefault("OIDC_CLIENT_ID", "songmaker-test")
 
@@ -36,6 +36,7 @@ from typing import Final  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402
 
 import fakeredis  # noqa: E402
+import httpx  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import structlog  # noqa: E402
@@ -55,7 +56,7 @@ from songmaker_cli.scheduler import (  # noqa: E402
     WorkerGpuOutOfMemory,
 )
 
-pytest_plugins = ["redis_server"]
+pytest_plugins = ["redis_server", "oidc_world"]
 
 TEST_CLIENT_SECRET = "test-client-secret"
 
@@ -95,61 +96,46 @@ OTHER_GENERATION_ERROR_TYPES = [
 SONGMAKER_FAILURE_CASES = [
     pytest.param(
         (
-            TimeoutError,
-            "private timeout",
-            "Generation timed out",
-            "Generation timed out",
-            "generation_error",
+            TimeoutError, "private timeout",
+            "Generation timed out", "Generation timed out", "generation_error",
         ),
         id="S5-B-D-timeout",
     ),
     pytest.param(
         (
-            AudioDownloadError,
-            "private download",
-            "Failed to download generated audio",
-            "Failed to download generated audio",
+            AudioDownloadError, "private download",
+            "Failed to download generated audio", "Failed to download generated audio",
             "generation_error",
         ),
         id="S5-B-D-download",
     ),
     pytest.param(
         (
-            ConnectionError,
-            "private connection",
-            "ACE-Step server not reachable",
-            "ACE-Step server not reachable",
-            "generation_error",
+            ConnectionError, "private connection",
+            "ACE-Step server not reachable", "ACE-Step server not reachable", "generation_error",
         ),
         id="S5-B-D-connection",
     ),
     pytest.param(
         (
-            NoCapacityError,
-            "private capacity",
-            "No ACE-Step workers available",
-            "Generating isn't available right now.",
+            NoCapacityError, "private capacity",
+            "No ACE-Step workers available", "Generating isn't available right now.",
             "generation_unavailable",
         ),
         id="S5-B-L10-capacity",
     ),
     pytest.param(
         (
-            RuntimeError,
-            "private runtime",
-            "Internal error during processing",
-            "Internal error during processing",
+            RuntimeError, "private runtime",
+            "Internal error during processing", "Internal error during processing",
             "generation_error",
         ),
         id="S5-B-D-runtime",
     ),
     pytest.param(
         (
-            ValueError,
-            "private unknown",
-            "An unexpected error occurred",
-            "An unexpected error occurred",
-            "generation_error",
+            ValueError, "private unknown",
+            "An unexpected error occurred", "An unexpected error occurred", "generation_error",
         ),
         id="S5-B-D-unknown",
     ),
@@ -211,8 +197,18 @@ def queries_without_session_auth(statements: Sequence[str]) -> list[str]:
 
 
 def web_client(app, **kwargs) -> TestClient:
-    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin."""
-    return TestClient(app, base_url=TEST_ORIGIN, **kwargs)
+    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin.
+
+    A request naming neither `Origin` nor `Sec-Fetch-Site` carries what a same-origin
+    browser sends; one naming either goes out as written."""
+    client = TestClient(app, base_url=TEST_ORIGIN, **kwargs)
+    client.event_hooks = {"request": [_add_same_origin_fetch_metadata]}
+    return client
+
+
+def _add_same_origin_fetch_metadata(request: httpx.Request) -> None:
+    if "origin" not in request.headers and "sec-fetch-site" not in request.headers:
+        request.headers["Sec-Fetch-Site"] = "same-origin"
 
 
 _fake_cli_processes: list[MagicMock] = []
@@ -748,13 +744,13 @@ def make_test_app(
     tmp_path: Path,
     seed_db: Callable | None = None,
     index_html: str = "<html>Songmaker</html>",
+    factory: sessionmaker[Session] | None = None,
 ) -> tuple:
-    """Create a full test app with real middleware.
+    """Create a full test app with real middleware on ``factory`` or a fresh SQLite file.
 
     Returns (TestClient, sessionmaker) so callers can seed data or log in.
-    The optional ``seed_db`` callback receives a SQLAlchemy Session and can
-    add models before the app starts; ``index_html`` is the built page whose
-    inline scripts the policy hashes.
+    ``seed_db`` receives a Session to add models before the app starts;
+    ``index_html`` is the built page whose inline scripts the policy hashes.
     """
     from songmaker_cli.app_context import AppContext
     from songmaker_cli.db.engine import init_test_db as init_db
@@ -770,7 +766,7 @@ def make_test_app(
     sk_dir.mkdir(parents=True, exist_ok=True)
     (sk_dir / "index.html").write_text(index_html)
 
-    factory = init_db(data_dir / "songmaker.db")
+    factory = factory or init_db(data_dir / "songmaker.db")
     with factory() as session:
         seed_judge_route(session)
         if seed_db is not None:

@@ -52,9 +52,10 @@ export interface PaginatedResponse<T> {
 TS_MODEL_NAMES: dict[str, str] = {
     "AddAlbumToPlaylistResponse": "AddAlbumToPlaylistResult",
     "AdminUserLoraResponse": "AdminUserLoraItem",
+    "AvailableModelResponse": "AvailableModel",
     "BaseGenerationParams": "VersionGenerationParams",
     "GenerationCreatedResourceEvent": "GenerationCreatedResourceEvent",
-    "QueueStreamLibraryRequest": "LibraryQueueStreamRequest",
+    "GenerationRetentionReportResponse": "GenerationRetentionReport",
     "QueueStreamManifestResponse": "QueueStreamManifest",
     "QueueStreamSkipResponse": "QueueStreamSkipItem",
     "QueueStreamTrackResponse": "QueueStreamTrackItem",
@@ -64,7 +65,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "AuthMeResponse": "AuthUser",
     "CapabilitiesResponse": "Capabilities",
     "ChatMessageResponse": "ChatMessageItem",
-    "ChatTurnV2Response": "ChatTurnV2Result",
     "CleanupResponse": "CleanupResult",
     "ConversationResponse": "ConversationItem",
     "CowriterSettingsResponse": "CowriterSettings",
@@ -465,6 +465,8 @@ def _model_to_interface(model: type[BaseModel]) -> str:
     ts_name = _ts_name(model)
     lines = [f"export interface {ts_name} {{"]
     for field_name, field_info in model.model_fields.items():
+        if field_info.exclude:
+            continue
         ts_type = FIELD_TYPE_OVERRIDES.get(
             (ts_name, field_name),
             _py_type_to_ts(field_info.annotation),

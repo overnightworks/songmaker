@@ -6,10 +6,10 @@ import {
 	SIGN_IN_NEXT_PARAM
 } from '$lib/constants';
 import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
-import { UserFacingError } from './userFacingError';
 
 const API_TIMEOUT_MS = 30_000;
 
+// eslint-disable-next-line no-restricted-syntax -- transport internals
 interface RefusalReactions {
 	/**
 	 * A 401 outside the sign-in forms and the public share reads; the request
@@ -77,6 +77,7 @@ export class NetworkError extends Error {
 }
 
 /** How a caller's own rulings shape the words `describeFailure` chooses. */
+// eslint-disable-next-line no-restricted-syntax -- transport internals
 interface FailureWording {
 	/** Said instead of the fallback when the request got no answer at all. */
 	offline?: string;
@@ -98,7 +99,6 @@ export function describeFailure(
 ): string {
 	if (err instanceof NetworkError && wording.offline) return wording.offline;
 	if (err instanceof ApiError && err.detail && !wording.withholdServerDetail) return err.detail;
-	if (err instanceof UserFacingError) return err.message;
 	return fallback;
 }
 
@@ -114,6 +114,7 @@ export function isTransientApiFailure(err: unknown): boolean {
 	);
 }
 
+// eslint-disable-next-line no-restricted-syntax -- transport internals
 interface ErrorBody {
 	detail: string;
 	responseDetail: unknown;
@@ -155,9 +156,7 @@ export function isNotFound(err: unknown): boolean {
 	return err instanceof ApiError && err.status === 404;
 }
 
-function parseRetryAfterSeconds(resp: {
-	headers?: { get: (name: string) => string | null };
-}): number | null {
+function parseRetryAfterSeconds(resp: Pick<Response, 'headers'>): number | null {
 	const header = resp.headers?.get?.('Retry-After') ?? null;
 	if (!header) return null;
 	const seconds = Number(header);

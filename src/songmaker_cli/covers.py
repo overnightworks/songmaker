@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Final
 
 from PIL import Image, ImageOps
+from PIL.PngImagePlugin import PngInfo
 
+from audio_engine.constants import IPTC_TRAINED_ALGORITHMIC_MEDIA
 from songmaker_cli.constants import (
     COVER_CACHE_CONTROL,
     COVER_CARD_MAX_EDGE,
@@ -48,6 +50,23 @@ from songmaker_cli.constants import (
     PLAYLIST_COVER_DIRNAME,
     SONG_COVER_DIRNAME,
 )
+
+# The iTXt keyword under which PNG carries an XMP packet (XMP spec, part 3).
+XMP_PNG_KEYWORD: Final = "XML:com.adobe.xmp"
+AI_MARK_XMP_PACKET: Final = (
+    '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+    '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+    '<rdf:Description rdf:about="" '
+    'xmlns:Iptc4xmpExt="http://iptc.org/std/Iptc4xmpExt/2008-02-29/" '
+    f'Iptc4xmpExt:DigitalSourceType="{IPTC_TRAINED_ALGORITHMIC_MEDIA}"/>'
+    "</rdf:RDF></x:xmpmeta>"
+)
+
+
+def ai_mark_png_info() -> PngInfo:
+    metadata = PngInfo()
+    metadata.add_itxt(XMP_PNG_KEYWORD, AI_MARK_XMP_PACKET)
+    return metadata
 
 log = logging.getLogger(__name__)
 
@@ -168,10 +187,12 @@ def decode_cover_image(payload: bytes) -> tuple[Image.Image, str]:
         Image.MAX_IMAGE_PIXELS = previous_limit
 
 
-def write_album_cover(audio_dir: Path, album_id: str, payload: bytes) -> str:
+def write_album_cover(
+    audio_dir: Path, album_id: str, payload: bytes, *, ai_generated: bool = False,
+) -> str:
     return write_cover(
         audio_dir, COVER_DIRNAME, album_id, payload,
-        invalid_id_message=COVER_INVALID_ALBUM_ID,
+        invalid_id_message=COVER_INVALID_ALBUM_ID, ai_generated=ai_generated,
     )
 
 
@@ -196,6 +217,7 @@ def write_cover(
     payload: bytes,
     *,
     invalid_id_message: str,
+    ai_generated: bool = False,
 ) -> str:
     final_raw = _cover_entity_dir(audio_dir, dirname, entity_id, invalid_id_message)
     image, fmt = decode_cover_image(payload)
@@ -213,7 +235,7 @@ def write_cover(
     _restore_cover_if_orphaned(final, old, covers_root, invalid_id_message)
     staging.mkdir()
     try:
-        _save_variants(staging, image, fmt)
+        _save_variants(staging, image, fmt, ai_generated=ai_generated)
         if final.exists():
             _discard_leftover_cover_old(final, old, covers_root)
             _rename_confined(final, old, covers_root, invalid_id_message)
@@ -364,29 +386,28 @@ def _square_derivative(image: Image.Image, edge: int) -> Image.Image:
     return ImageOps.fit(rgb, (size, size), method=Image.Resampling.LANCZOS)
 
 
-def _save_variants(dest: Path, image: Image.Image, fmt: str) -> None:
+def _save_variants(dest: Path, image: Image.Image, fmt: str, *, ai_generated: bool) -> None:
     original_name = (
         f"{COVER_VARIANT_ORIGINAL}{COVER_JPEG_EXTENSION}"
         if fmt == COVER_FORMAT_JPEG
         else f"{COVER_VARIANT_ORIGINAL}{COVER_PNG_EXTENSION}"
     )
+    jpeg_options: dict[str, object] = {
+        "format": "JPEG", "quality": COVER_JPEG_QUALITY, "optimize": True,
+    }
+    if ai_generated:
+        jpeg_options["xmp"] = AI_MARK_XMP_PACKET.encode()
     original_path = dest / original_name
     if fmt == COVER_FORMAT_JPEG:
-        image.save(
-            original_path, format="JPEG", quality=COVER_JPEG_QUALITY, optimize=True,
-        )
+        image.save(original_path, **jpeg_options)
+    elif ai_generated:
+        image.save(original_path, format="PNG", optimize=True, pnginfo=ai_mark_png_info())
     else:
         image.save(original_path, format="PNG", optimize=True)
     card = _square_derivative(image, COVER_CARD_MAX_EDGE)
     detail = _square_derivative(image, COVER_DETAIL_MAX_EDGE)
-    card.save(
-        dest / f"{COVER_VARIANT_CARD}{COVER_JPEG_EXTENSION}",
-        format="JPEG", quality=COVER_JPEG_QUALITY, optimize=True,
-    )
-    detail.save(
-        dest / f"{COVER_VARIANT_DETAIL}{COVER_JPEG_EXTENSION}",
-        format="JPEG", quality=COVER_JPEG_QUALITY, optimize=True,
-    )
+    card.save(dest / f"{COVER_VARIANT_CARD}{COVER_JPEG_EXTENSION}", **jpeg_options)
+    detail.save(dest / f"{COVER_VARIANT_DETAIL}{COVER_JPEG_EXTENSION}", **jpeg_options)
 
 
 def _require_safe_cover_id(entity_id: str, invalid_id_message: str) -> None:

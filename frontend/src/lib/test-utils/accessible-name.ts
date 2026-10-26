@@ -22,3 +22,11 @@ export function getByRoleButton(root: ParentNode, name: string): HTMLButtonEleme
 	if (!button) throw new Error(`Expected a button named "${name}"`);
 	return button;
 }
+
+// What a screen reader reads out of an element: its text without the parts
+// marked aria-hidden.
+export function announcedText(element: Element): string {
+	const announced = element.cloneNode(true) as Element;
+	announced.querySelectorAll('[aria-hidden="true"]').forEach((hidden) => hidden.remove());
+	return (announced.textContent ?? '').trim();
+}

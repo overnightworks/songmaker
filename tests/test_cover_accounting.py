@@ -8,12 +8,14 @@ import shutil
 import threading
 import uuid
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 from agent_providers.catalog import ProviderRoute
 from alembic import command
 from alembic.config import Config
+from PIL import Image
 from sqlalchemy import create_engine, delete, event, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
@@ -27,8 +29,15 @@ from songmaker_cli.db.queries.jobs import JobStatusUpdate, count_cover_jobs_sinc
 from songmaker_cli.settings import CoverExecutor, Settings
 
 STARTED = datetime(2026, 10, 18, tzinfo=timezone.utc)
+GENERATED_PIXEL = (20, 80, 160)
 PREVIOUS_REVISION = "5f4912bc4a31"
 ACCOUNTING_REVISION = "1968214a67b1"
+
+
+def _png_bytes() -> bytes:
+    output = BytesIO()
+    Image.new("RGB", (4, 4), GENERATED_PIXEL).save(output, format="PNG")
+    return output.getvalue()
 
 
 @pytest.fixture
@@ -76,7 +85,7 @@ def running_cover(accounting_factory, tmp_path, monkeypatch):
         cover_runner, "cover_image_provider_method",
         lambda session: CoverImageDispatch(provider="codex", route=ProviderRoute.CLI, model=""),
     )
-    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", lambda *a, **kw: b"image")
+    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", lambda *a, **kw: _png_bytes())
     return {
         "job_id": "cover", "db_factory": accounting_factory, "audio_dir": tmp_path / "audio",
         "settings": Settings(
@@ -99,7 +108,9 @@ def _assert_cover_accounting(factory, audio_dir, status):
         assert len(suggestions) == int(produced)
         assert len(list(audio_dir.rglob("*.png"))) == int(produced)
         for suggestion in suggestions:
-            assert (audio_dir / suggestion.png_path).read_bytes() == b"image"
+            with Image.open(audio_dir / suggestion.png_path) as published:
+                assert published.format == "PNG"
+                assert published.getpixel((0, 0)) == GENERATED_PIXEL
         if produced:
             assert job.completed_at is not None
             assert job.progress == 1.0
@@ -228,7 +239,7 @@ def test_postgresql_serializes_publication_and_cancellation(
         image_started.set()
         assert allow_image.wait(10)
         image_returned.set()
-        return b"image"
+        return _png_bytes()
 
     if winner == "cancellation":
         monkeypatch.setattr(cover_runner, "generate_codex_cover_image", generate_after_cancellation)

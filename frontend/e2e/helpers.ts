@@ -342,24 +342,6 @@ export function wallBody(page: Page): Locator {
 	return workspace(page).locator('.library-wall .wall-body');
 }
 
-// Scrolls the wall halfway down and answers where it then stands, once the
-// wall has reported that scroll: the app keeps it from that report.
-export async function scrollWallHalfway(page: Page): Promise<number> {
-	const target = await wallBody(page).evaluate(
-		(body) =>
-			new Promise<number>((resolve) => {
-				const halfway = Math.round((body.scrollHeight - body.clientHeight) / 2);
-				if (halfway <= 0) return resolve(0);
-				body.addEventListener('scroll', () => resolve(Math.round(body.scrollTop)), {
-					once: true
-				});
-				body.scrollTop = halfway;
-			})
-	);
-	expect(target, 'the seeded wall scrolls').toBeGreaterThan(0);
-	return target;
-}
-
 /** Back to the wall through the word LIBRARY, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	await openPlace(page, shell, LIBRARY_PAGE_LABEL);

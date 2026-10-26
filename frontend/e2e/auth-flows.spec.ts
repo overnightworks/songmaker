@@ -257,11 +257,38 @@ test('an open page whose session ended on the server leaves for the sign-in star
 	const account = await seedAccount(`e2e-ended-${info.project.name}-${runMarker()}`);
 	const guard = new FlowGuard(page, { refusalsExpectedOn: [{ path: '/api/', statuses: [401] }] });
 	await signInAs(page, account);
+	// Finish this empty account's initial requests before revoking the session they use.
+	const initialPaths = ['/api/capabilities'];
+	if (shell === 'desktop') {
+		initialPaths.push(
+			'/api/albums',
+			'/api/playlists',
+			'/api/settings/generation-builtins',
+			'/api/settings/presets',
+			'/api/settings/models',
+			'/api/settings/default-config',
+			'/api/settings/generation-defaults'
+		);
+	}
+	const initialResponses = initialPaths.map((path) =>
+		page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return (
+				url.origin === new URL(BASE_URL).origin &&
+				url.pathname === path &&
+				response.request().method() === 'GET'
+			);
+		})
+	);
 	await page.goto('/settings');
 	const voices = settingsSections(page).getByRole('link', { name: nameStartingWith('Voices') });
 	await expect(voices).toBeVisible();
 	// The desktop Settings index forwards to its first section; the rail's link is the same one after it.
 	if (shell === 'desktop') await expect(page).toHaveURL(/\/settings\/generation$/);
+	for (const response of await Promise.all(initialResponses)) {
+		expect(response.status(), response.url()).toBe(200);
+		expect(await response.finished(), response.url()).toBeNull();
+	}
 
 	const server = await signedInApi(account);
 	try {

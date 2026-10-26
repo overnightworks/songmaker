@@ -309,13 +309,6 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 }
 .card-head .grow { display: flex; flex-direction: column; gap: .05rem; flex: 1; min-width: 0; }
 .card-head .lbl { font-size: .72rem; color: var(--text-subtle); }
-.summary-line {
-	font-size: .85rem;
-	color: var(--text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
 
 /* recipe fields — RecipePanel's groups as label/value rows */
 .group-title {
@@ -361,6 +354,19 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	letter-spacing: .5px;
 	padding: .15rem 0 0;
 }
+.version-header { display: flex; align-items: center; gap: .5rem; min-height: 30px; }
+.version-header .open { margin-left: auto; color: var(--action); font-family: var(--font-body); letter-spacing: 0; font-size: .82rem; display: inline-flex; align-items: center; gap: 2px; }
+.earlier-label { font-size: var(--label-font-size); color: var(--text-subtle); font-family: var(--font-display); letter-spacing: .5px; padding: .35rem 0 0; }
+.vfold { display: flex; align-items: center; gap: .6rem; min-height: 44px; padding: 0 .4rem 0 .75rem; border: 1px solid var(--border); border-radius: var(--card-radius); background: var(--surface); font-size: .86rem; }
+.vfold .vn { font-family: var(--font-display); font-size: .95rem; min-width: 24px; }
+.vfold .meta { color: var(--text-subtle); font-size: .8rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vfold .fold { color: var(--text-subtle); display: inline-flex; }
+.vgroup { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--card-radius); background: var(--surface); overflow: hidden; }
+.vgroup .vfold { border: none; border-radius: 0; border-bottom: 1px solid var(--border); }
+.arch-row { display: flex; align-items: center; gap: .5rem; min-height: 40px; padding: 0 .4rem 0 .75rem; font-size: .84rem; color: var(--text-muted); }
+.arch-row + .arch-row { border-top: 1px solid var(--border); }
+.arch-row .take-label { font-size: 14px; }
+.arch-row .badge { font-size: .72rem; color: var(--text-subtle); border: 1px solid var(--border); border-radius: 999px; padding: 0 .45rem; }
 .takes {
 	display: flex;
 	flex-direction: column;
@@ -724,7 +730,12 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	<code>#914</code> und <code>#924</code>). Besitzer der Telefon-Songseite (#914); sie hebt
 	Zustand (f) in <code>navigation.html</code> für die Songseite auf — keine Albumzeile mit
 	Prev/Next — sowie die Take-Zeile in <code>song-editor-take.html</code> auf beiden Breiten:
-	sechs-zeiliges Menü statt beschrifteter Zeilenaktionen.
+	sechs-zeiliges Menü statt beschrifteter Zeilenaktionen. Seit 22.10.2026 (#1804, #1815)
+	gilt für die geschlossene und geöffnete Recipe-Karte sowie Repaint und Cover am Take
+	<a href="song-page.html"><code>song-page.html</code></a>; die Recipe-Karte steht hier nur noch als
+	geschlossene Zeile „Recipe ›“. Ebenso gilt für den Takes-Tab (Frames 4, 5, 8, 8c) die Ordnung
+	von <code>song-page.html</code>: die aktuelle Version offen, jede frühere Version eine gefaltete Zeile, die sich
+	an Ort und Stelle aufklappt; archivierte Takes erscheinen nur in einer aufgeklappten Version, als kompakte Zeilen.
 </p>
 <p class="freeze-note">
 	Drei Tabs freigegeben 26.09.2026 (Operator: „logo", aus <code>~/songmaker-mockups/v7-tabs/</code>,
@@ -765,9 +776,8 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -855,78 +865,11 @@ I don't take the<span class="type-caret" aria-hidden="true"></span></div>
 	<div class="frame-note">
 		<p><b>Rule (phone, every screen).</b> While a text field has focus and the on-screen keyboard is open, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back as soon as the keyboard closes — leaving the field, or closing the keyboard with Back while the field keeps focus (#1017). A hardware keyboard opens no on-screen keyboard, so the bars stay. Only what belongs to the field stays — on the Co-writer tab that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
 		<p><b>Rejected.</b> Shrinking the bars to a slim strip instead of hiding them: a compressed Generate and a compressed player still take two lines from the text, and a Generate you cannot read or hit properly is worse than one that comes back the moment you are done.</p>
-		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Edit; Send the only primary on Co-writer; none on Takes; the offline strip only on the mini-player's top edge, stepping aside with it (frame 8).</p>
+		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Edit; Send the only primary on Co-writer; none on Takes; the offline strip only on the mini-player's top edge, stepping aside with it (frame 8). Which tab full Now Playing opens on, and the name “Use seed”, belong to <code>now-playing.html</code>.</p>
 	</div>
 </figure>
 
-<figure>
-	<figcaption><b>2 · Edit</b> — recipe expanded in place, the page scrolls on</figcaption>
-	<div class="device" id="f2">
-		<header class="appbar">
-			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-			<h1>AMIF</h1>
-			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
-			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-		</header>
-		<nav class="tabs" aria-label="Song tabs">
-			<button class="active" aria-current="page">Edit</button>
-			<button>Co-writer</button>
-			<button>Takes <span class="count">(4)</span></button>
-		</nav>
-		<div class="body">
-			<div class="card">
-			<button class="card-head">
-					<span class="grow">
-						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span>
-					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg></span>
-				</button>
-				<div class="group-title">Sound</div>
-				<div class="kv"><span class="k">Model</span><span class="v">XL-TURBO <span class="state ok"><span class="shape" aria-hidden="true"></span>loaded</span> <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Duration</span><span class="v">3:00 <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">BPM</span><span class="v">96 <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Key</span><span class="v">A minor <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Takes per Generate</span><span class="v">×1 <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="kv"><span class="k">Voice</span><span class="v">Mara <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="group-title">Reproduce</div>
-				<div class="kv"><span class="k">Seed</span><span class="v">Random <span class="caret" aria-hidden="true"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></span></div>
-				<div class="card-foot">Generate uses this recipe</div>
-			</div>
-			<div class="field">
-				<span class="label">Style</span>
-				<div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div>
-			</div>
-			<div class="field">
-				<span class="label">Lyrics <span class="field-stamp">v7 · draft</span></span>
-				<div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
-Headlights cut the rain in two
-Every mile is a mile of you
-I keep the radio low and warm
-so the quiet never turns to storm
-
-<span class="mark">[Chorus]</span>
-All mine if I follow
-all mine if I stay
-the road keeps the promise
-the morning gives away</div>
-			</div>
-		</div>
-		<div class="actionbar">
-			<button class="btn-primary">Generate</button>
-		</div>
-		<div class="player">
-			<span class="cover" aria-hidden="true"></span>
-			<span class="track">
-				<span class="track-title">AMIF</span>
-				<span class="track-detail">v7 · take 2</span>
-			</span>
-			<button class="icon-btn ink" aria-label="Pause" title="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
-			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
-			<span class="line"><span></span></span>
-		</div>
-	</div>
-</figure>
+<p class="frame-note" style="width:390px;flex:none"><b>2 · Edit — recipe expanded</b> — entfallen am 22.10.2026 (#1815): die geöffnete Recipe-Karte zeigt <a href="song-page.html"><code>song-page.html</code></a> (At the Take, P4).</p>
 
 <figure>
 	<figcaption><b>3 · Edit</b> — generating: the action carries the progress, × cancels, the same 56 px bar. Blessed 26.09.2026, #1011 (frame A4).</figcaption>
@@ -947,9 +890,8 @@ the morning gives away</div>
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -1010,9 +952,8 @@ the morning gives away</div>
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -1070,9 +1011,8 @@ the morning gives away</div>
 			<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×2</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -1135,7 +1075,7 @@ the morning gives away</div>
 				<div class="status-line">Take 1 of 2 · 36% · ~1:40</div>
 				<div class="status-line reason">Waiting for LoRA training on this GPU.</div>
 			</div>
-			<div class="version-header">v7 · 4 takes</div>
+			<div class="version-header"><span>v7 · current · 4 takes</span><span class="open">Open v7 <svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 			<div class="takes">
 				<div class="take-row row">
 					<button class="icon-btn" aria-label="Play take 4" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
@@ -1185,6 +1125,9 @@ the morning gives away</div>
 					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 			</div>
+			<div class="earlier-label">Earlier versions</div>
+			<div class="vfold"><span class="vn">v6</span><span class="meta">2 takes · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+			<div class="vfold"><span class="vn">v5</span><span class="meta">1 take · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 		</div>
 		<div class="player">
 			<span class="cover" aria-hidden="true"></span>
@@ -1200,7 +1143,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>5 · Takes</b> — no run: just takes. ★ picks and ♥ keeps in one tap, the same 44 px toggle each (#1019, 26.09.2026); everything else the row does not show lives in its <span style="letter-spacing:1px">…</span> The take menu drawn over Take 4 is superseded by #915 C3; form = album-browsing I1.</figcaption>
+	<figcaption><b>5 · Takes</b> — no run: the current version's takes, earlier versions folded (v6 unfolded in place, its archived takes as compact rows). ★ picks and ♥ keeps in one tap, the same 44 px toggle each (#1019, 26.09.2026); everything else the row does not show lives in its <span style="letter-spacing:1px">…</span> The take menu drawn over Take 4 is superseded by #915 C3; form = album-browsing I1.</figcaption>
 	<div class="device" id="f5">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -1214,7 +1157,7 @@ the morning gives away</div>
 			<button class="active" aria-current="page">Takes <span class="count">(4)</span></button>
 		</nav>
 		<div class="body">
-			<div class="version-header">v7 · 4 takes</div>
+			<div class="version-header"><span>v7 · current · 4 takes</span><span class="open">Open v7 <svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 			<div class="takes">
 				<div class="take-row row">
 					<button class="icon-btn" aria-label="Play take 4" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
@@ -1264,6 +1207,13 @@ the morning gives away</div>
 					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 			</div>
+			<div class="earlier-label">Earlier versions</div>
+			<div class="vgroup">
+				<div class="vfold"><span class="vn">v6</span><span class="meta">2 takes · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></div>
+				<div class="arch-row"><span class="take-label">Take 2</span><span class="take-duration">3:09</span><span class="score ok" aria-label="Score 47"><span class="shape" aria-hidden="true"></span>47</span><span class="badge">archived</span><button class="icon-btn" aria-label="Take 2 menu" title="Take 2 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div>
+				<div class="arch-row"><span class="take-label">Take 1</span><span class="take-duration">2:51</span><span class="score bad" aria-label="Score 29"><span class="shape" aria-hidden="true"></span>29</span><span class="badge">archived</span><button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div>
+			</div>
+			<div class="vfold"><span class="vn">v5</span><span class="meta">1 take · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 		</div>
 		<div class="player">
 			<span class="cover" aria-hidden="true"></span>
@@ -1439,7 +1389,7 @@ can wait a mile for me</span></div>
 				<div class="bar" role="progressbar" aria-valuenow="40" aria-label="Last known progress"><span style="width:40%"></span></div>
 				<div class="status-line">Take 1 of 1 · last seen at 40%</div>
 			</div>
-			<div class="version-header">v7 · 4 takes</div>
+			<div class="version-header"><span>v7 · current · 4 takes</span><span class="open">Open v7 <svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 			<div class="takes">
 				<div class="take-row row">
 					<button class="icon-btn" aria-label="Play take 4" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
@@ -1489,6 +1439,9 @@ can wait a mile for me</span></div>
 					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 			</div>
+			<div class="earlier-label">Earlier versions</div>
+			<div class="vfold"><span class="vn">v6</span><span class="meta">2 takes · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+			<div class="vfold"><span class="vn">v5</span><span class="meta">1 take · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 		</div>
 		<div class="offline-strip" role="status" aria-live="polite"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9.2 6.3A5.5 5.5 0 0 1 17.3 10a4 4 0 0 1 3 5.7M17 18H7a4 4 0 0 1-.9-7.9 5.4 5.4 0 0 1 .6-1.4"/></svg><span>You're offline — retrying</span></div>
 		<div class="player">
@@ -1527,9 +1480,8 @@ can wait a mile for me</span></div>
 				<button class="card-head">
 					<span class="grow">
 						<span class="lbl">Recipe</span>
-						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span>
 					</span>
-					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
 				</button>
 			</div>
 			<div class="field">
@@ -1583,7 +1535,7 @@ the morning gives away</div>
 			<button class="active" aria-current="page">Takes <span class="count">(5)</span></button>
 		</nav>
 		<div class="body">
-			<div class="version-header">v8 · 1 take</div>
+			<div class="version-header"><span>v8 · current · 1 take</span><span class="open">Open v8 <svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 			<div class="takes">
 				<div class="take-row row arrived">
 					<button class="icon-btn" aria-label="Play take 1" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
@@ -1597,56 +1549,10 @@ the morning gives away</div>
 					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 			</div>
-			<div class="version-header">v7 · 4 takes</div>
-			<div class="takes">
-				<div class="take-row row">
-					<button class="icon-btn" aria-label="Play take 4" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
-					<span class="take-label">Take 4</span>
-					<span class="take-meta">
-						<span class="take-duration">2:58</span>
-						<span class="score bad" aria-label="Score 34"><span class="shape" aria-hidden="true"></span>34</span>
-						
-					</span>
-					<button class="icon-btn star" aria-label="Pick take 4" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
-					<button class="icon-btn heart" aria-label="Keep take 4" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
-					<button class="icon-btn" aria-label="Take 4 menu" title="Take 4 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-				</div>
-				<div class="take-row row">
-					<button class="icon-btn" aria-label="Play take 3" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
-					<span class="take-label">Take 3</span>
-					<span class="take-meta">
-						<span class="take-duration">3:02</span>
-						<span class="score ok" aria-label="Score 58"><span class="shape" aria-hidden="true"></span>58</span>
-						
-					</span>
-					<button class="icon-btn star" aria-label="Pick take 3" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
-					<button class="icon-btn heart" aria-label="Keep take 3" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
-					<button class="icon-btn" aria-label="Take 3 menu" title="Take 3 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-				</div>
-				<div class="take-row row playing">
-					<button class="icon-btn on" aria-label="Pause take 2" title="Pause"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button>
-					<span class="take-label">Take 2</span>
-					<span class="take-meta">
-						<span class="take-duration">3:05</span>
-						<span class="score good" aria-label="Score 82"><span class="shape" aria-hidden="true"></span>82</span>
-						
-					</span>
-					<button class="icon-btn star on" aria-label="Picked take 2" title="Picked" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
-					<button class="icon-btn heart" aria-label="Keep take 2" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
-					<button class="icon-btn" aria-label="Take 2 menu" title="Take 2 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-				</div>
-				<div class="take-row row">
-					<button class="icon-btn" aria-label="Play take 1" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
-					<span class="take-label">Take 1</span>
-					<span class="take-meta">
-						<span class="take-duration">3:04</span>
-						<span class="score ok" aria-label="Score 61"><span class="shape" aria-hidden="true"></span>61</span>
-					</span>
-					<button class="icon-btn star" aria-label="Pick take 1" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
-					<button class="icon-btn heart on" aria-label="Unkeep take 1" title="Unkeep" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
-					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
-				</div>
-			</div>
+			<div class="earlier-label">Earlier versions</div>
+			<div class="vfold"><span class="vn">v7</span><span class="meta">4 takes · ★ pick</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+			<div class="vfold"><span class="vn">v6</span><span class="meta">2 takes · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
+			<div class="vfold"><span class="vn">v5</span><span class="meta">1 take · archived</span><span class="fold"><svg class="ic sm" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></div>
 		</div>
 		<div class="player">
 			<span class="cover" aria-hidden="true"></span>

@@ -41,7 +41,7 @@ describe('album cover suggestions API', () => {
 		);
 	});
 
-	it('selects by suggestion id and discards every suggestion through the public endpoints', async () => {
+	it('selects by suggestion id and discards the named suggestions and runs through the public endpoints', async () => {
 		mockOk({ id: 'night-drive' });
 		await selectAlbumCoverSuggestion('night-drive', { suggestion_id: 'suggestion-1' });
 		const [selectionPath, selectionInit] = mockFetch.mock.calls[0];
@@ -51,9 +51,12 @@ describe('album cover suggestions API', () => {
 		expect(JSON.parse(selectionInit.body)).toEqual({ suggestion_id: 'suggestion-1' });
 
 		mockOk({ status: 'ok' });
-		await discardAlbumCoverSuggestions('night-drive');
+		await discardAlbumCoverSuggestions('night-drive', {
+			suggestionIds: ['suggestion-1', 'suggestion-2'],
+			jobIds: ['cover-job']
+		});
 		expect(mockFetch).toHaveBeenLastCalledWith(
-			'/api/albums/night-drive/cover-suggestions',
+			'/api/albums/night-drive/cover-suggestions?suggestion_id=suggestion-1&suggestion_id=suggestion-2&job_id=cover-job',
 			expect.objectContaining({ method: 'DELETE', credentials: 'include' })
 		);
 	});

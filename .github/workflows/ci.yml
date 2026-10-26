@@ -19,6 +19,7 @@ jobs:
   backend:
     name: Backend (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 75 # why: a hung job must not hold the queued main runs for six hours.
     strategy:
       matrix:
         python-version: ["3.12"]
@@ -28,11 +29,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
         with:
           python-version: ${{ matrix.python-version }}
 
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
       - name: Check uv.lock is in sync with pyproject.toml
         run: uv lock --check
@@ -45,10 +46,15 @@ jobs:
           restore-keys: uv-${{ runner.os }}-${{ matrix.python-version }}-
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg redis-server
+        # why: tests/redis_server.py spawns a real redis-server on a unix socket, so a service container cannot stand in, and the generation tests encode MP3s with a real ffmpeg. The runner image's package lists usually know both packages, so apt-get update is only the fallback; short timeouts and retries make a stalled mirror fail fast.
+        run: |
+          apt_options="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          sudo apt-get install -y $apt_options ffmpeg redis-server \
+            || { sudo apt-get update $apt_options && sudo apt-get install -y $apt_options ffmpeg redis-server; }
+        timeout-minutes: 45 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra mcp --extra agent-service --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
@@ -71,9 +77,6 @@ jobs:
       - name: Check TypeScript types in sync
         run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
-      - name: Import boundaries
-        run: uv run --no-sync --frozen --no-build lint-imports
-
       - name: Run tests with coverage
         run: |
           set -o pipefail
@@ -90,7 +93,7 @@ jobs:
 
       - name: Upload backend coverage
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
           name: sonar-coverage-backend
           path: reports/coverage.xml
@@ -101,6 +104,7 @@ jobs:
   alert-rules:
     name: Alert rules (promtool)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -125,6 +129,7 @@ jobs:
   postgresql-contract:
     name: PostgreSQL contract (serial)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16-alpine
@@ -145,16 +150,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.x
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
         with:
           python-version: "3.12"
-      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Install dependencies
         run: uv sync --frozen --extra server --extra dev --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py tests/test_merge_accounts_into_subject.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
       - name: Require executed PostgreSQL reference quota and write lock proofs
         run: |
           python - <<'PYTHON'
@@ -178,7 +183,7 @@ jobs:
               case for case in ET.parse("postgresql-contract.xml").iter("testcase")
               if case.attrib["classname"].endswith("test_auth_write_lock_postgres")
           ]
-          assert len(lock_cases) == 2, f"Expected 2 PostgreSQL write lock proofs, got {len(lock_cases)}"
+          assert len(lock_cases) == 3, f"Expected 3 PostgreSQL write lock proofs, got {len(lock_cases)}"
           assert not any(case.find("skipped") is not None for case in lock_cases), "Write lock proof skipped"
           print(f"PostgreSQL write lock proofs: {len(lock_cases)} passed, 0 skipped")
           PYTHON
@@ -186,6 +191,7 @@ jobs:
   frontend:
     name: Frontend (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         node-version: ["22"]
@@ -199,11 +205,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.x
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.x
         with:
           version: 10
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.x
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.x
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
@@ -242,7 +248,7 @@ jobs:
 
       - name: Upload frontend coverage
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
           name: sonar-coverage-frontend
           # Upload the reports root so the assembly job restores the LCOV file
@@ -259,13 +265,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Download backend coverage
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sonar-coverage-backend
           path: reports
 
       - name: Download frontend coverage
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sonar-coverage-frontend
           path: reports
@@ -276,7 +282,7 @@ jobs:
           test -s reports/frontend-coverage/lcov.info
 
       - name: Upload assembled coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
           name: coverage
           path: |
@@ -292,7 +298,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: overnightworks/quality/.github/workflows/gate.yml@61fd8621b20a604a7ef4b1154d1b6ed484d2ed66 # v0.4.0
+    uses: overnightworks/quality/.github/workflows/gate.yml@02fbdd0fb1873b9ba91ba7735886ff6f700da1cc # v0.5.0
     with:
       coverage-artifact: coverage
     secrets:

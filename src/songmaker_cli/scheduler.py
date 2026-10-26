@@ -40,7 +40,6 @@ from songmaker_cli.acestep_state import (
     admit_generation as admit_generation_occupancy,
 )
 from songmaker_cli.acestep_state import (
-    decr_queue_depth,
     gpu_hold_key,
     read_queue_depth,
     read_worker_state,
@@ -608,34 +607,6 @@ async def consume_download_task_stream(
         on_heartbeat=on_heartbeat,
         options=options,
     )
-
-
-async def dispatch_generation(
-    *,
-    ace_config: AceStepConfig,
-    target_mode: str,
-    on_progress: GenerationProgressCallback | None = None,
-    on_heartbeat: HeartbeatCallback | None = None,
-    redis: Redis,
-    db_factory: sessionmaker[Session],
-    options: DispatchOptions = DispatchOptions(),
-) -> GenerationTaskResultDTO:
-    worker = await admit_generation_worker(
-        target_mode=target_mode,
-        redis=redis,
-        db_factory=db_factory,
-    )
-    try:
-        return await dispatch_generation_on_worker(
-            worker=worker,
-            ace_config=ace_config,
-            target_mode=target_mode,
-            on_progress=on_progress,
-            on_heartbeat=on_heartbeat,
-            options=options,
-        )
-    finally:
-        await decr_queue_depth(redis, worker.id)
 
 
 async def admit_generation_worker(

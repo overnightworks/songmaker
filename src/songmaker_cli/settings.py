@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,6 +43,9 @@ from songmaker_cli.constants import (
     acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )
+
+# The web server's port: the CLI and server default, and the port of the back-channel Host.
+DEFAULT_SERVER_PORT: Final = 8080
 
 
 @dataclass(frozen=True)
@@ -213,6 +216,13 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_client_id: str | None = None
     oidc_client_secret_file: Path | None = None
+    # The co-writer's MCP endpoint for the agent service: the origin the service
+    # names in each capability and the file holding the service's public signing
+    # key. Both are checked where the endpoint is composed, so workers and the
+    # migrate step start without them, and a missing one leaves only /mcp
+    # unavailable.
+    agent_service_mcp_origin: str | None = None
+    agent_service_capability_key_file: Path | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30

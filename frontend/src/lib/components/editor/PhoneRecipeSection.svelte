@@ -20,6 +20,7 @@
 		takesPerGenerate,
 		sourceGeneration,
 		sourceMode,
+		sourceTakeDurationSeconds,
 		repaintStart,
 		repaintEnd,
 		repaintMode,
@@ -74,8 +75,7 @@
 		RECIPE_BPM_MAX,
 		RECIPE_DURATION_MAX_SECONDS,
 		RECIPE_TAKES_PER_GENERATE_OPTIONS,
-		RECIPE_MAX_INFERENCE_STEPS_DEFAULT,
-		RECIPE_SOURCE_DURATION_DEFAULT_SECONDS
+		RECIPE_MAX_INFERENCE_STEPS_DEFAULT
 	} from '$lib/constants';
 	import VoicePicker from '../VoicePicker.svelte';
 	import ParamControls from '../ParamControls.svelte';
@@ -353,8 +353,7 @@
 										>
 										<WaveformRangePicker
 											audioUrl={`/audio/${$sourceGeneration.mp3_path}`}
-											duration={$sourceGeneration.generation_params?.audio_duration ??
-												RECIPE_SOURCE_DURATION_DEFAULT_SECONDS}
+											duration={sourceTakeDurationSeconds($sourceGeneration)}
 											startPercent={$repaintStart}
 											endPercent={$repaintEnd}
 											onchange={(start, end) => {

@@ -7,6 +7,16 @@ from typing import Final
 FALLBACK_SAMPLE_RATE: Final[int] = 48000
 INT16_MAX: Final[float] = 32768.0
 
+# ── AI mark (Art. 50(2) AI Act) ──────────────────────────────────────
+# The IPTC Digital Source Type term for fully AI-generated media. Every file
+# the platform generates carries it: MP3 as a TXXX frame, WAV as an INFO
+# comment, cover PNG as XMP (Iptc4xmpExt:DigitalSourceType).
+
+IPTC_TRAINED_ALGORITHMIC_MEDIA: Final[str] = (
+    "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia"  # NOSONAR(S5332) IPTC term id, never fetched.  # noqa: E501
+)
+AI_MARK_ID3_DESCRIPTION: Final[str] = "DigitalSourceType"
+
 # ── Mastering chain tuning parameters ────────────────────────────────
 
 DEFAULT_TARGET_LUFS: Final[float] = -14.0

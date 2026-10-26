@@ -89,7 +89,8 @@ vi.mock('$lib/api/songs', () => ({
 }));
 vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
-	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args)
+	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
+	discardAlbumCoverSuggestions: async () => undefined
 }));
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn(),
@@ -105,10 +106,7 @@ vi.mock('$lib/stores/playlists', async (importOriginal) => {
 });
 vi.mock('$lib/stores/navigation', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
-	return {
-		...actual,
-		selectSong: vi.fn()
-	};
+	return { ...actual, selectSong: vi.fn() };
 });
 vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
@@ -550,14 +548,14 @@ describe('AlbumDetailView header', () => {
 		expect(minHeightPx(button, label)).toBe(HITBOX_FREQUENT_PX);
 	});
 
-	it('915_C3: names the album and lists Edit details, Cover, Curate, Add to playlist, Share, Archive, Delete in the menu', async () => {
+	it('915_C3: names the album and lists Edit details, Cover, Pick album takes, Add to playlist, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
 		expect(menuRowLabels(menu)).toEqual([
 			'Edit details',
 			'Cover',
-			'Curate',
+			'Pick album takes',
 			'Add to playlist',
 			'Share',
 			'Archive',
@@ -578,7 +576,7 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const curateItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Curate'
+			(el) => el.textContent?.trim() === 'Pick album takes'
 		);
 		curateItem?.click();
 		await tick();

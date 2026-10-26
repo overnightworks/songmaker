@@ -163,6 +163,23 @@ export const draftHasUnversionedChanges = derived(
 	([s, all]) => s !== null && holdsUnversionedChanges(s, all)
 );
 
+/**
+ * Makes the browser ask before the document unloads (reload, tab close, a
+ * history leave out of the app) while the draft holds unversioned changes. The
+ * listener exists only then so clean pages need no unload handling.
+ */
+export function followUnsavedDraftAtUnload(): () => void {
+	const askBeforeUnload = (unload: BeforeUnloadEvent) => unload.preventDefault();
+	const stopFollowing = draftHasUnversionedChanges.subscribe((unversioned) => {
+		if (unversioned) window.addEventListener('beforeunload', askBeforeUnload);
+		else window.removeEventListener('beforeunload', askBeforeUnload);
+	});
+	return () => {
+		stopFollowing();
+		window.removeEventListener('beforeunload', askBeforeUnload);
+	};
+}
+
 /** A version to load into a song's draft once that song's page shows it (Open vN in Now Playing). */
 interface PendingVersionLoad {
 	songId: string;

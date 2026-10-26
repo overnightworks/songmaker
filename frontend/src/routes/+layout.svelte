@@ -42,6 +42,7 @@
 		openHome,
 		openRailSearchTarget
 	} from '$lib/stores/navigation';
+	import { followUnsavedDraftAtUnload } from '$lib/stores/editor';
 	import { closeTopLayer } from '$lib/stores/layers';
 	import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
@@ -193,6 +194,8 @@
 	});
 
 	$effect(() => followShellLayers());
+
+	$effect(() => followUnsavedDraftAtUnload());
 
 	// The history controller runs on every page, so Back closes the topmost
 	// overlay before it leaves the page, signed in or not.

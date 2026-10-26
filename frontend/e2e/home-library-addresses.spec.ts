@@ -1,3 +1,4 @@
+import { scrollWallTo } from './wall-scroll';
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
 // Home at `/` and the Library at `/library` (#1506, #1354 rules 25, 31 and 40),
 // driven the way a person reaches them: a pasted address, the brand, the word
@@ -45,7 +46,6 @@ import {
 	openSettingsFromAccountMenu,
 	openSettingsSection,
 	regainNetwork,
-	scrollWallHalfway,
 	shellOf,
 	stubIdentityProvider,
 	waitForServiceWorkerControl,
@@ -297,7 +297,7 @@ for (const retainCollection of [false, true]) {
 				await expect(album.locator('..')).toHaveClass(/selected/);
 			}
 			await expectLibraryWallLoaded(page);
-			const scrolled = await scrollWallHalfway(page);
+			const scrolled = await scrollWallTo(page, 'halfway');
 			const tiles = wall(page).locator('.tile-grid .wall-tile-body');
 			const bounds = await body.evaluate((element) => {
 				const { top, bottom } = element.getBoundingClientRect();
@@ -521,7 +521,7 @@ test('1354_rule_31 1354_rule_25 row 6 (H2/H3): Home, Library, album, then Back, 
 	await expectHomeShown(page);
 	await openLibraryWall(page, shell);
 	await expectWallShown(page);
-	const scrolled = await scrollWallHalfway(page);
+	const scrolled = await scrollWallTo(page, 'halfway');
 	await workspace(page)
 		.getByRole('button', { name: `Open album ${library.albumTitle}`, exact: true })
 		.click();

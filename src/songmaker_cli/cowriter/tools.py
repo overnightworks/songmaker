@@ -1,8 +1,8 @@
 """Canonical songmaker tool catalog for every co-writer provider.
 
-Claude reaches these functions through the MCP server. Grok and Codex
-call ``execute_cowriter_tool`` in-process. Query logic and ownership
-checks stay in ``mcp_server.tools``.
+Claude reaches these functions through the MCP server and the agent
+service through ``/mcp``. Grok and Codex call ``execute_cowriter_tool``
+in-process. Query logic and ownership checks stay in ``mcp_server.tools``.
 
 ``execute_cowriter_tool``'s ``arguments: dict[str, Any]`` is exempt from
 ``scripts/check_no_silent_fallbacks.py``'s dict-any-in-signature rule:
@@ -44,6 +44,12 @@ from songmaker_cli.mcp_server.tools import (
 _STRING = {"type": "string"}
 _INT = {"type": "integer"}
 
+_JSON_TYPE_CHECKS: Mapping[str, Callable[[object], bool]] = {
+    "string": lambda value: isinstance(value, str),
+    "integer": lambda value: isinstance(value, int) and not isinstance(value, bool),
+}
+_OBJECT_KEYWORDS = frozenset({"type", "properties", "additionalProperties", "required"})
+
 
 @dataclass(frozen=True)
 class CowriterTool:
@@ -52,6 +58,9 @@ class CowriterTool:
     parameters: dict[str, Any]
     write: bool
     handler: Callable[..., Any]
+
+    def __post_init__(self) -> None:
+        require_supported_declaration(self.parameters)
 
 
 def _object(
@@ -65,6 +74,23 @@ def _object(
     if required:
         schema["required"] = required
     return schema
+
+
+def require_supported_declaration(parameters: Mapping[str, Any]) -> None:
+    """Refuse a declaration beyond the subset ``_object`` emits and the validator reads."""
+    unsupported = parameters.keys() - _OBJECT_KEYWORDS
+    properties = parameters.get("properties", {})
+    if (
+        unsupported
+        or parameters.get("type") != "object"
+        or parameters.get("additionalProperties") is not False
+        or any(
+            len(schema) != 1 or schema.get("type") not in _JSON_TYPE_CHECKS
+            for schema in properties.values()
+        )
+        or not set(parameters.get("required", ())) <= properties.keys()
+    ):
+        raise ValueError(f"unsupported tool declaration: {sorted(unsupported)}")
 
 
 COWRITER_TOOLS: tuple[CowriterTool, ...] = (
@@ -199,6 +225,22 @@ def _serialize(result: Any) -> str:
     return json.dumps(result, default=str)
 
 
+def _refusal_of(tool: CowriterTool, arguments: Mapping[str, Any]) -> str | None:
+    """The first way ``arguments`` break the tool's declaration, naming the field."""
+    properties = tool.parameters["properties"]
+    for key in arguments:
+        if key not in properties:
+            return f"Unknown argument: {key}"
+    for key in tool.parameters.get("required", ()):
+        if key not in arguments:
+            return f"Missing required argument: {key}"
+    for key, value in arguments.items():
+        expected = properties[key]["type"]
+        if not _JSON_TYPE_CHECKS[expected](value):
+            return f"Argument {key} must be of type {expected}"
+    return None
+
+
 def execute_cowriter_tool(
     session: Session,
     user: AuthenticatedUser,
@@ -208,10 +250,11 @@ def execute_cowriter_tool(
     tool = _TOOLS_BY_NAME.get(name)
     if tool is None:
         return ToolOutcome(f"Unknown tool: {name}", True)
-    allowed = set(tool.parameters.get("properties", {}))
-    filtered = {key: value for key, value in arguments.items() if key in allowed}
+    refusal = _refusal_of(tool, arguments)
+    if refusal is not None:
+        return ToolOutcome(refusal, True)
     try:
-        result = tool.handler(session, user, **filtered)
+        result = tool.handler(session, user, **arguments)
         if tool.write:
             session.commit()
         return ToolOutcome(_serialize(result), False)

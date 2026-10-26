@@ -3,7 +3,8 @@ import type {
 	OwnPlayableTakeResponse,
 	UserLoraItem,
 	UserLoraListResponse,
-	UserLoraSampleItem
+	UserLoraSampleItem,
+	UserLoraSamplePatchRequest
 } from './types';
 import { apiFetch } from './fetch';
 
@@ -75,16 +76,10 @@ export async function addLoraSampleFromGeneration(
 	});
 }
 
-export interface LoraSamplePatch {
-	caption?: string;
-	lyrics?: string;
-	position?: number;
-}
-
 export async function patchLoraSample(
 	loraId: string,
 	sampleId: string,
-	patch: LoraSamplePatch
+	patch: UserLoraSamplePatchRequest
 ): Promise<UserLoraSampleItem> {
 	return apiFetch<UserLoraSampleItem>(`/api/loras/${loraId}/samples/${sampleId}`, {
 		method: 'PATCH',

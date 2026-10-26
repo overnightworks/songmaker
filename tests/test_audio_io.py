@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import struct
 import subprocess
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
 import pytest
+from mutagen.id3 import ID3
 
 from audio_engine.audio_io import (
     build_ffmpeg_cmd,
@@ -16,7 +19,9 @@ from audio_engine.audio_io import (
     master_to_mp3,
     read_wav_bytes,
     sanitize_metadata,
+    write_stereo_wav,
 )
+from audio_engine.constants import AI_MARK_ID3_DESCRIPTION, IPTC_TRAINED_ALGORITHMIC_MEDIA
 from audio_engine.errors import MasteringError
 
 
@@ -282,3 +287,33 @@ def test_read_wav_bytes_2d_single_column() -> None:
         assert rate == 44100
         assert len(left) == 3
         assert np.array_equal(left, right)
+
+
+def _one_second_of_tone() -> tuple[np.ndarray, np.ndarray]:
+    time = np.arange(8000) / 8000
+    tone = 0.3 * np.sin(2 * np.pi * 440 * time)
+    return tone, tone
+
+
+def test_encoded_mp3_carries_the_ai_mark_with_and_without_other_metadata(tmp_path: Path) -> None:
+    left, right = _one_second_of_tone()
+    for name, metadata in (("tagged.mp3", {"title": "Song"}), ("bare.mp3", None)):
+        path = tmp_path / name
+        encode_mp3(left, right, str(path), sample_rate=8000, metadata=metadata)
+
+        frames = ID3(str(path)).getall(f"TXXX:{AI_MARK_ID3_DESCRIPTION}")
+        assert [frame.text for frame in frames] == [[IPTC_TRAINED_ALGORITHMIC_MEDIA]]
+
+
+def test_written_wav_carries_the_ai_mark_in_its_info_chunk(tmp_path: Path) -> None:
+    left, right = _one_second_of_tone()
+    path = tmp_path / "take.wav"
+    write_stereo_wav(str(path), left, right, 8000)
+
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_format", "-of", "json", str(path)],
+        check=True, capture_output=True, text=True,
+    )
+    assert IPTC_TRAINED_ALGORITHMIC_MEDIA in json.loads(probe.stdout)["format"]["tags"]["comment"]
+    samples, _right, sample_rate = read_wav_bytes(path.read_bytes())
+    assert (sample_rate, len(samples)) == (8000, 8000)

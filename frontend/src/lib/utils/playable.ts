@@ -68,3 +68,16 @@ export function albumRowOffersPlay(
 		songsComplete: albumSongsSettled(songLoads[album.id])
 	});
 }
+
+// Whether Now Playing opens on This take: one queued take outside an album, or
+// an album whose settled songs offer one take. An album starts with a one-take
+// queue the rest joins a moment later, and its songs may still be loading, so
+// an unsettled album is in doubt and opens Queue.
+export function queueHoldsOneTake(
+	queuedCount: number,
+	album: { songs: SongItem[]; load: AlbumSongsLoadStatus | undefined } | null
+): boolean {
+	if (queuedCount !== 1) return false;
+	if (album === null) return true;
+	return albumSongsSettled(album.load) && album.songs.filter(songHasPlayableTake).length <= 1;
+}
