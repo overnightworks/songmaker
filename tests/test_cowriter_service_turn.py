@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import httpx
 import pytest
