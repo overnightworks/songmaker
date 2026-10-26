@@ -968,7 +968,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
 | Co-writer | Binds the musician's session and tools to the provider route the library then runs; the judge is configured separately | `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
-| MCP | Claude's stdio tool server plus shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/tools.py` |
+| MCP | Claude's stdio tool server, the `/mcp` endpoint for the agent service, and shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/mcp_endpoint.py`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
 
 ### Agent routes
@@ -1182,6 +1182,8 @@ declares its own in `songmaker_cli/cowriter/mcp_spec.py` — deliberately outsid
 `mcp_server/`, whose package import pulls in the `mcp` extra the scoring worker
 does not install. `None` is a valid value: a deployment without an MCP server
 runs its co-writer turns on the tool-free command line and gate.
+
+The same tools are also served over HTTP at `/mcp` for the agent service: `compose_mcp_endpoint` (`cowriter/mcp_endpoint.py`) puts agent-runtime-client's `McpServer` in front of the application in `run_server`, one tool per `COWRITER_TOOLS` entry, and accepts a call only for a run in `cowriter/service_runs.py` registered for that person's running turn. Trust, bypassed middleware and the named gaps: [Co-writer MCP endpoint](security.md#co-writer-mcp-endpoint).
 
 #### Provider constants: Go and Stay
 

@@ -50,7 +50,7 @@ CONTAINERS = {
     "web": ContainerSpec(
         "songmaker-web",
         Path("Dockerfile"),
-        frozenset({"server", "mcp", "api", "image"}),
+        frozenset({"server", "mcp", "agent-service", "api", "image"}),
         "songmaker_cli.main",
         ("songmaker_cli.main", "songmaker_cli.server"),
         None,
@@ -90,6 +90,7 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "numba": frozenset({"numba"}),
     "nvidia-ml-py3": frozenset({"nvidia_smi", "pynvml"}),
     "overnightworks-agent-providers": frozenset({"agent_providers"}),
+    "overnightworks-agent-runtime-client": frozenset({"agent_runtime_client"}),
     "overnightworks-webauth": frozenset({"webauth"}),
     "pillow": frozenset({"PIL"}),
     "psycopg2-binary": frozenset({"psycopg2"}),
