@@ -340,6 +340,7 @@ def test_m5_a_registered_run_held_by_another_person_is_refused(endpoint, capabil
 def test_a_trailing_slash_on_the_configured_issuer_still_lets_the_tool_call_through(
     web, mcp_environment, monkeypatch, capability, run_id,
 ):
+    """defect:#1896: the issuer is compared without its trailing slash."""
     monkeypatch.setenv("OIDC_ISSUER", f"{ISSUER}/")
     app, factory = web
     wrapped, verdict = compose_mcp_endpoint(app, settings_now())
