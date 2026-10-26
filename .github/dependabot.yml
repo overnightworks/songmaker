@@ -32,12 +32,9 @@ updates:
     # Not a dependabot ignore: the pin lives in package.json, and a kit major
     # now arrives as its own PR because the groups carry only minor and patch.
     ignore:
-      # jsdom stays exact at 30.0.1 in package.json: 30.1.x returns a transparent
-      # getComputedStyle(...).background for shorthands declared with
-      # var()/color-mix() (breaks CollectionHeader, NowPlaying, SeekSlider,
-      # TransportBarFrame, GenerateButton and GenerationStatusSlot tests).
+      # jsdom 30.1.x breaks getComputedStyle on var()/color-mix() shorthands; the pin stays 30.0.1.
       - dependency-name: "jsdom"
-        versions: [">=30.1.0 <30.2"]
+        versions: [">=30.1.0, <30.2"]
       # TypeScript 7 needs svelte-check's dual TS6+TS7 --tsgo setup
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
