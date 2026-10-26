@@ -133,18 +133,21 @@ def check(source: Path, baseline: Path, *, update: bool) -> int:
     return 0
 
 
-def main() -> int:
-    repository = Path(__file__).resolve().parent.parent
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=repository / "frontend/src")
-    parser.add_argument("--baseline", type=Path, default=repository / "scripts/style-literals.txt")
-    parser.add_argument("--update", action="store_true")
-    args = parser.parse_args()
+def run(source: Path, baseline: Path, *, update: bool) -> int:
     try:
-        return check(args.source, args.baseline, update=args.update)
+        return check(source, baseline, update=update)
     except (OSError, ValueError) as error:
         print(error)
         return 1
+
+
+def main() -> int:
+    repository = Path(__file__).resolve().parent.parent
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--update", action="store_true")
+    args = parser.parse_args()
+    return run(repository / "frontend/src", repository / "scripts/style-literals.txt",
+               update=args.update)
 
 
 if __name__ == "__main__":
