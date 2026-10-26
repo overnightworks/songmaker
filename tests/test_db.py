@@ -2888,6 +2888,54 @@ def test_last_played_at_migration_adds_and_removes_nullable_column(tmp_path: Pat
     assert "last_played_at" not in columns
 
 
+def test_id_token_migration_keeps_session_rows_in_both_directions(tmp_path: Path) -> None:
+    import importlib
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect, text
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.a1d7c5e93b60_session_row_keeps_the_id_token",
+    )
+    db_path = tmp_path / "session-id-token.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    engine = create_engine(f"sqlite:///{db_path}")
+
+    command.upgrade(config, migration.down_revision)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO users (id, username, role, created_at, updated_at)"
+                " VALUES ('migration-user', 'migration-user', 'user', '2026-01-01', '2026-01-01')",
+            ),
+        )
+        connection.execute(
+            text(
+                "INSERT INTO user_sessions (id, user_id, created_at, expires_at)"
+                " VALUES ('existing-session', 'migration-user', '2026-01-01', '2026-01-02')",
+            ),
+        )
+
+    command.upgrade(config, migration.revision)
+    with engine.connect() as connection:
+        columns = {column["name"] for column in inspect(connection).get_columns("user_sessions")}
+        kept = connection.execute(
+            text("SELECT id_token FROM user_sessions WHERE id = 'existing-session'"),
+        ).all()
+    assert "id_token" in columns
+    assert kept == [(None,)]
+
+    command.downgrade(config, migration.down_revision)
+    with engine.connect() as connection:
+        columns = {column["name"] for column in inspect(connection).get_columns("user_sessions")}
+        kept = connection.execute(text("SELECT id FROM user_sessions")).all()
+    engine.dispose()
+    assert "id_token" not in columns
+    assert kept == [("existing-session",)]
+
+
 def test_playlist_cover_key_migration_adds_and_removes_nullable_column(tmp_path: Path) -> None:
     import importlib
 
