@@ -1,0 +1,8 @@
+claim_id = "1c89799cc1464a8f8fe51d776f8ffc7a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "97b21e1373d1904f93ca16773016a7f269991eee"
+branch = "claude/issue-1899-html-shell-revalidated"
+scope = ["docs/security.md", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/server.py", "tests/test_server.py"]
+opened_commit = "85fb89658e8c179f095bf0e2c3c797f255d2697e"
+whole_reason = "One response header: its owner, its test and the one doc sentence that lists the app's cache headers."
