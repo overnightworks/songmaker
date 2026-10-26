@@ -1,4 +1,9 @@
-import type { ConversationItem, SongItem } from '$lib/api/types';
+import type {
+	ChatTurnFailureFrame,
+	ChatTurnRouteErrorFrame,
+	ConversationItem,
+	SongItem
+} from '$lib/api/types';
 import {
 	COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
@@ -66,25 +71,19 @@ export function cowriterUnavailableLabel(provider: string): string {
 	return `${providerDisplayName(provider)} is currently unavailable`;
 }
 
-interface CowriterTurnFailureFrame {
-	provider?: string;
-	message?: string;
-	reason?: { message?: string };
-}
-
 /**
  * The reason text comes from the provider library or the endpoint; the panel
  * only says whose it is — the provider the frame names, else its own.
  */
 export function cowriterTurnFailureLabel(
-	frame: CowriterTurnFailureFrame,
+	frame: ChatTurnRouteErrorFrame | ChatTurnFailureFrame,
 	panelProvider: string
 ): string | null {
-	const reason = frame.reason?.message ?? frame.message;
+	const reason = 'reason' in frame ? frame.reason.message : frame.message;
 	if (!reason) return null;
 	return COWRITER_TURN_FAILURE_TEMPLATE.replace(
 		'{provider}',
-		providerDisplayName(frame.provider ?? panelProvider)
+		providerDisplayName('provider' in frame ? frame.provider : panelProvider)
 	).replace('{reason}', reason);
 }
 

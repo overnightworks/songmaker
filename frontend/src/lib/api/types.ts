@@ -95,6 +95,11 @@ export interface AlbumUpdateRequest {
 	year?: number | null;
 }
 
+export interface AssistantTextEvent {
+	type: 'assistant_text';
+	text: string;
+}
+
 export interface AuthUser {
 	id: string;
 	username: string;
@@ -138,6 +143,27 @@ export interface ChatMessageItem {
 	created_at: string;
 }
 
+export interface ChatTurnFailureFrame {
+	type: 'error';
+	status: number;
+	message: string;
+}
+
+export interface ChatTurnFinalFrame {
+	type: 'final';
+	conversation_id: string;
+	user_message: ChatMessageItem;
+	assistant_message: ChatMessageItem;
+}
+
+export interface ChatTurnRouteErrorFrame {
+	type: 'error';
+	status: number;
+	provider: string;
+	route: string | null;
+	reason: SafeRouteReason;
+}
+
 export interface ChatTurnV2Request {
 	message: string;
 	current_song_id?: string | null;
@@ -145,12 +171,6 @@ export interface ChatTurnV2Request {
 	mentioned_version_ids: string[];
 	mentioned_album_id?: string | null;
 	current_generation_id?: string | null;
-}
-
-export interface ChatTurnV2Result {
-	conversation_id: string;
-	user_message: ChatMessageItem;
-	assistant_message: ChatMessageItem;
 }
 
 export interface CleanupResult {
@@ -973,6 +993,20 @@ export interface StatusResponse {
 
 export interface TitleUpdateRequest {
 	title: string;
+}
+
+export interface ToolCallEvent {
+	type: 'tool_call';
+	tool_use_id: string;
+	name: string;
+	input: Record<string, unknown>;
+}
+
+export interface ToolResultEvent {
+	type: 'tool_result';
+	tool_use_id: string;
+	content: string;
+	is_error: boolean;
 }
 
 export interface UnpinModelOnWorkerRequest {

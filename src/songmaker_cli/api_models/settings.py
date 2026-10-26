@@ -261,10 +261,31 @@ class ChatTurnV2Request(BaseModel):
     current_generation_id: str | None = Field(default=None, max_length=36)
 
 
-class ChatTurnV2Response(BaseModel):
+class ChatTurnFinalFrame(BaseModel):
+    """The frame a turn ends with when the assistant's answer is stored."""
+
+    type: Literal["final"] = "final"
     conversation_id: str
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
+
+
+class ChatTurnRouteErrorFrame(BaseModel):
+    """The frame a turn ends with when its provider route is unavailable."""
+
+    type: Literal["error"] = "error"
+    status: int
+    provider: str
+    route: str | None
+    reason: SafeRouteReason
+
+
+class ChatTurnFailureFrame(BaseModel):
+    """The frame a turn ends with when the endpoint itself could not finish."""
+
+    type: Literal["error"] = "error"
+    status: int
+    message: str
 
 
 class MemoryScopeResponse(BaseModel):
