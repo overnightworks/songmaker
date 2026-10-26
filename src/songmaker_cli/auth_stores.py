@@ -102,8 +102,9 @@ class DatabaseSessionRecordStore:
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
+        id_token: SecretStr | None = None,
     ) -> UserSession:
-        record = create_session(self.session, user_id, expires_at, refresh_token)
+        record = create_session(self.session, user_id, expires_at, refresh_token, id_token)
         record.created_at = now
         self.session.flush()
         return record

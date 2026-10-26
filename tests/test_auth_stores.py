@@ -221,6 +221,65 @@ def test_replacing_a_refresh_token_updates_only_an_existing_session(accounts, se
     assert sessions.load(record.id) is None
 
 
+def test_a_session_without_an_id_token_answers_none(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(_SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None)
+
+    assert sessions.load(record.id).id_token is None
+
+
+@pytest.mark.parametrize("length", [20, 8192])
+def test_a_stored_id_token_is_returned_whole_secret_and_kept_out_of_the_repr(
+    accounts, sessions, session, length: int,
+) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    fake_token = "fake-id-token-" + "x" * (length - 14)
+    record = sessions.create(
+        _SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None,
+        id_token=SecretStr(fake_token),
+    )
+    session.commit()
+    session.expire_all()
+
+    loaded = sessions.load(record.id)
+
+    assert loaded.id_token.get_secret_value() == fake_token
+    assert "fake-id-token" not in repr(loaded.id_token)
+
+
+def test_renewal_and_refresh_rotation_leave_the_id_token_unchanged(accounts, sessions) -> None:
+    accounts.create_for_subject(_SUBJECT, "nina", "user")
+    record = sessions.create(
+        _SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=SecretStr("rt-one"),
+        id_token=SecretStr("fake-id-token"),
+    )
+
+    sessions.touch(record.id, expires_at=_later(5))
+    sessions.replace_refresh_token(record.id, refresh_token=SecretStr("rt-two"))
+
+    assert sessions.load(record.id).id_token.get_secret_value() == "fake-id-token"
+
+
+def test_a_failed_session_insert_raises_without_the_id_token_in_the_traceback(
+    tmp_path: Path,
+) -> None:
+    factory = connect_db(f"sqlite:///{tmp_path / 'production-engine.db'}")
+    with factory() as database_session:
+        Base.metadata.create_all(database_session.get_bind())
+        database_session.execute(text("PRAGMA foreign_keys=ON"))
+        sessions = DatabaseSessionRecordStore(database_session)
+
+        with pytest.raises(IntegrityError) as failure:
+            sessions.create(
+                "no-such-account", now=_later(0), expires_at=_later(), refresh_token=None,
+                id_token=SecretStr("fake-id-token-in-a-failed-insert"),
+            )
+
+    assert "fake-id-token-in-a-failed-insert" not in "".join(
+        traceback.format_exception(failure.value),
+    )
+
+
 def test_an_unknown_session_is_absent(sessions) -> None:
     assert sessions.load("missing") is None
 
@@ -368,3 +427,51 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
     assert _StoredRows.of(session) != before
     session.rollback()
     assert _StoredRows.of(session) == before
+
+
+def test_id_token_migration_adds_and_removes_nullable_column_keeping_sessions(
+    tmp_path: Path,
+) -> None:
+    import importlib
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import create_engine, inspect
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.a1d7c5e93b60_session_row_keeps_the_id_token",
+    )
+    db_path = tmp_path / "id-token.db"
+    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
+    def session_state() -> tuple[dict, list]:
+        engine = create_engine(f"sqlite:///{db_path}")
+        with engine.connect() as connection:
+            columns = {c["name"]: c for c in inspect(connection).get_columns("user_sessions")}
+            ids = [row[0] for row in connection.execute(text("SELECT id FROM user_sessions"))]
+        engine.dispose()
+        return columns, ids
+
+    command.upgrade(config, migration.down_revision)
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO users (id, username, role, created_at, updated_at) "
+            "VALUES ('u1', 'nina', 'user', '2026-10-01 00:00:00', '2026-10-01 00:00:00')",
+        ))
+        connection.execute(text(
+            "INSERT INTO user_sessions (id, user_id, created_at, expires_at) "
+            "VALUES ('s1', 'u1', '2026-10-01 00:00:00', '2026-10-08 00:00:00')",
+        ))
+    engine.dispose()
+
+    command.upgrade(config, migration.revision)
+    columns, ids = session_state()
+    assert columns["id_token"]["nullable"] is True
+    assert ids == ["s1"]
+
+    command.downgrade(config, migration.down_revision)
+    columns, ids = session_state()
+    assert "id_token" not in columns
+    assert ids == ["s1"]
