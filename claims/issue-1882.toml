@@ -1,0 +1,8 @@
+claim_id = "b501318fd91046259ee524219e6d4b34"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "863977426a24d96e55f40abf1ac8bd49c37d6425"
+branch = "claude/issue-1882-lib-api-no-wire-shape"
+scope = ["docs/architecture.md", "frontend/eslint.config.js", "frontend/src/lib/api/admin.ts", "frontend/src/lib/api/albums.ts", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/api/generations.ts", "frontend/src/lib/api/library.ts", "frontend/src/lib/api/loras.ts", "frontend/src/lib/api/settings.ts", "frontend/src/lib/api/shared.ts", "frontend/src/lib/api/songs.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/stores/presets.ts", "scripts/generate_types.py"]
+opened_commit = "b74015182c62c3d28de9afe89c5c15aef1272299"
+whole_reason = "One check and the twins it refuses are one change: the stopgap list can leave only when its last file has, and every file is one mechanical deletion or marker."
