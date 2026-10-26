@@ -1173,13 +1173,16 @@ alembic_head_of() {
     printf '%s' "${heads[0]:-}"
 }
 
-# Prints the schema the release brings: the `schema:` line of its tag message
-# when it has one, else the alembic head of its commit.
+# Prints the schema the release brings: the `schema:` line of its annotated tag's
+# message when it has one, else the alembic head of its commit. A lightweight
+# tag has no message of its own (git would hand back its commit's), so it never
+# counts.
 release_schema_of() {
     local release_tag="$1"
     local commit_sha="$2"
     local tag_message
-    if tag_message="$(safe_git for-each-ref --format='%(contents)' "$RELEASE_REF_PREFIX$release_tag" 2>/dev/null)" \
+    if [[ "$(safe_git for-each-ref --format='%(objecttype)' "$RELEASE_REF_PREFIX$release_tag" 2>/dev/null)" == tag ]] \
+        && tag_message="$(safe_git for-each-ref --format='%(contents)' "$RELEASE_REF_PREFIX$release_tag" 2>/dev/null)" \
         && [[ "$tag_message" =~ (^|$'\n')schema:[[:space:]]*([0-9A-Za-z_]+)[[:space:]]*($|$'\n') ]]; then
         printf '%s' "${BASH_REMATCH[2]}"
         return
@@ -1494,7 +1497,7 @@ while IFS= read -r CANDIDATE_COMMIT; do
             break
             ;;
         waiting\ *|failed\ *)
-            SKIPPED_CANDIDATES+=("$CANDIDATE_COMMIT: $CANDIDATE_CHECK_STATUS")
+            SKIPPED_CANDIDATES+=("${RELEASE_TAG_OF[$CANDIDATE_COMMIT]} ($CANDIDATE_COMMIT)")
             ;;
         *)
             log_err "cannot determine GitHub check status for deploy candidate $CANDIDATE_COMMIT — refusing to deploy: unexpected result '$CANDIDATE_CHECK_STATUS'"

@@ -45,6 +45,8 @@ def _is_detached(checkout: Checkout) -> bool:
 
 
 def test_a_landing_on_main_without_a_tag_deploys_nothing(checkout: Checkout) -> None:
+    """defect:#1880 cell T1 -- main moves without a tag, nothing deploys."""
+
     before = checkout.head
     checkout.move_main_forward(release=False)
 
@@ -60,6 +62,8 @@ def test_a_landing_on_main_without_a_tag_deploys_nothing(checkout: Checkout) -> 
 def test_a_release_tag_deploys_its_commit_detached_and_the_journal_names_the_tag(
     checkout: Checkout,
 ) -> None:
+    """defect:#1880 cell T2 -- a tag deploys its commit detached and the journal names the tag."""
+
     checkout.move_main_forward()
     tag = "v2026.10.25.1"
     commit = checkout.commit_of(tag)
@@ -77,6 +81,8 @@ def test_a_release_tag_deploys_its_commit_detached_and_the_journal_names_the_tag
 
 
 def test_untagged_commits_after_a_release_do_not_deploy(checkout: Checkout) -> None:
+    """defect:#1880 cell T3 -- the tag's commit deploys, not the tip of main."""
+
     checkout.move_main_forward()
     released = checkout.commit_of("v2026.10.25.1")
     checkout.move_main_forward(release=False)
@@ -92,6 +98,8 @@ def test_untagged_commits_after_a_release_do_not_deploy(checkout: Checkout) -> N
 def test_a_tag_on_a_side_branch_is_skipped_and_named_and_the_older_release_deploys(
     checkout: Checkout,
 ) -> None:
+    """defect:#1880 cell T4 -- a side-branch tag is skipped and named once."""
+
     checkout.move_main_forward()
     released = checkout.commit_of("v2026.10.25.1")
     pusher = checkout.root.parent / "pusher"
@@ -114,6 +122,8 @@ def test_a_tag_on_a_side_branch_is_skipped_and_named_and_the_older_release_deplo
 
 
 def test_a_skipped_red_release_is_named_once_across_ticks(checkout: Checkout) -> None:
+    """defect:#1880 cell T7 -- a skipped release is named once across ticks."""
+
     checkout.move_main_forward()
     green_release = checkout.remote_main_sha()
     checkout.move_main_forward()
@@ -132,6 +142,8 @@ def test_a_skipped_red_release_is_named_once_across_ticks(checkout: Checkout) ->
 def test_only_grammatical_tags_count_and_the_newest_is_ordered_by_date_then_number(
     checkout: Checkout,
 ) -> None:
+    """defect:#1880 cell T5 -- off-grammar tags are named once; .10 is newer than .9."""
+
     checkout.move_main_forward(release=False)
     older = checkout.cut_release(name="v2026.10.25.9")
     checkout.move_main_forward(release=False)
@@ -152,6 +164,8 @@ def test_only_grammatical_tags_count_and_the_newest_is_ordered_by_date_then_numb
 
 
 def test_local_only_tags_and_a_shadowing_local_tag_are_ignored(checkout: Checkout) -> None:
+    """defect:#1880 cell T6 -- local-only and shadowing local tags are ignored."""
+
     checkout.move_main_forward()
     released = checkout.commit_of("v2026.10.25.1")
     checkout.move_main_forward(release=False)
@@ -174,6 +188,8 @@ def test_local_only_tags_and_a_shadowing_local_tag_are_ignored(checkout: Checkou
 def test_a_red_newest_release_is_skipped_for_an_older_green_one_that_is_pending(
     checkout: Checkout, older_is_running: bool, expected_builds: int,
 ) -> None:
+    """defect:#1880 cell T7 -- a red newest release gives way to an older pending green one."""
+
     checkout.move_main_forward()
     older = checkout.commit_of("v2026.10.25.1")
     if older_is_running:
@@ -195,6 +211,8 @@ def test_a_red_newest_release_is_skipped_for_an_older_green_one_that_is_pending(
 def test_a_release_older_than_the_running_commit_never_moves_the_checkout_backwards(
     checkout: Checkout,
 ) -> None:
+    """defect:#1880 cell T8 -- never backwards."""
+
     checkout.move_main_forward()
     assert checkout.tick().returncode == 0
     checkout.move_main_forward(release=False)
@@ -216,6 +234,8 @@ def test_a_release_older_than_the_running_commit_never_moves_the_checkout_backwa
 def test_a_checkout_on_a_branch_with_a_pending_release_is_a_counted_refusal_that_alerts(
     checkout: Checkout,
 ) -> None:
+    """defect:#1880 cell T9 -- a branch checkout with a pending release is a counted refusal."""
+
     checkout.move_main_forward()
     checkout.switch_to_work_branch()
     before = checkout.head
@@ -230,6 +250,8 @@ def test_a_checkout_on_a_branch_with_a_pending_release_is_a_counted_refusal_that
 
 
 def test_a_dirty_checkout_with_a_pending_release_is_refused(checkout: Checkout) -> None:
+    """defect:#1880 cell T10 -- a dirty checkout is refused."""
+
     checkout.move_main_forward()
     before = checkout.head
     (checkout.root / "README.md").write_text("operator edit\n")
@@ -247,6 +269,8 @@ def test_a_dirty_checkout_with_a_pending_release_is_refused(checkout: Checkout) 
 def test_an_unreadable_running_commit_counts_every_release_as_pending(
     checkout: Checkout, state: str,
 ) -> None:
+    """defect:#1880 cell T13 -- an unreadable running commit counts every release as pending."""
+
     checkout.install_backup_command(exit_code=0)
     checkout.cut_release()
     commit = checkout.head
@@ -262,6 +286,8 @@ def test_an_unreadable_running_commit_counts_every_release_as_pending(
 def test_a_first_run_without_a_running_commit_adopts_head_and_deploys_nothing(
     tmp_path: Path,
 ) -> None:
+    """defect:#1880 cell T13 -- a first run adopts HEAD and deploys nothing."""
+
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.move_main_forward()
@@ -272,6 +298,30 @@ def test_a_first_run_without_a_running_commit_adopts_head_and_deploys_nothing(
     assert result.returncode == 0
     assert _deployed_sha(checkout) == before
     assert checkout.build_and_recreate_calls == []
+
+
+def test_a_pending_release_that_then_fails_is_not_named_again_and_is_named_by_tag(
+    checkout: Checkout,
+) -> None:
+    """defect:#1880 cell T7 -- a skipped release is named once by tag, whatever its status."""
+    checkout.move_main_forward()
+    green_release = checkout.remote_main_sha()
+    checkout.move_main_forward()
+    red_release = checkout.remote_main_sha()
+    checkout.set_check_runs_for_commit(green_release, ("completed", "success"))
+    checkout.set_check_runs_for_commit(red_release, ("in_progress", ""))
+    assert checkout.tick().returncode == 0
+    checkout.set_check_runs_for_commit(red_release, ("completed", "failure"))
+    journal_before = checkout.journal
+
+    assert checkout.tick().returncode == 0
+
+    named = [
+        line for line in journal_before.splitlines() if "skipping deploy candidate" in line
+    ]
+    assert len(named) == 1
+    assert "v2026.10.25.2" in named[0]
+    assert "skipping deploy candidate" not in checkout.journal[len(journal_before) :]
 
 
 def _checkout_on_main_with_main_moved_on(checkout: Checkout) -> str:
@@ -289,6 +339,8 @@ def _checkout_on_main_with_main_moved_on(checkout: Checkout) -> str:
 def test_a_work_clone_on_main_with_nothing_pending_stays_untouched_and_silent(
     tmp_path: Path, release_at_running_commit: bool,
 ) -> None:
+    """defect:#1880 cells T14/T15 -- a work clone on main stays untouched and silent."""
+
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     if release_at_running_commit:
@@ -316,6 +368,8 @@ def _backup_precedes_recreate(checkout: Checkout) -> bool:
 def test_a_release_that_changes_the_schema_is_backed_up_once_before_the_recreate(
     checkout: Checkout,
 ) -> None:
+    """defect:#1880 cell D8/T16 -- a changed schema is backed up once before up."""
+
     checkout.install_backup_command(exit_code=0)
     checkout.move_main_forward_with_migration("aaa111")
     assert checkout.tick().returncode == 0
@@ -333,6 +387,8 @@ def test_a_release_that_changes_the_schema_is_backed_up_once_before_the_recreate
 def test_a_release_whose_tag_names_another_schema_than_the_running_one_is_backed_up(
     checkout: Checkout,
 ) -> None:
+    """defect:#1880 cell D8/T16 -- the tag's schema line decides the backup."""
+
     checkout.install_backup_command(exit_code=0)
     checkout.move_main_forward_with_migration("aaa111")
     assert checkout.tick().returncode == 0
@@ -350,6 +406,8 @@ def test_a_release_whose_tag_names_another_schema_than_the_running_one_is_backed
 def test_a_failed_backup_stops_the_tick_before_anything_is_built_or_recreated(
     checkout: Checkout, backup: str,
 ) -> None:
+    """defect:#1880 cell D8/T17 -- a failed or missing backup stops the tick."""
+
     if backup == "exits non-zero":
         checkout.install_backup_command(exit_code=3)
     checkout.move_main_forward_with_migration("aaa111")
@@ -364,7 +422,30 @@ def test_a_failed_backup_stops_the_tick_before_anything_is_built_or_recreated(
     assert _deployed_sha(checkout) == running
 
 
+def test_a_lightweight_tag_never_overrides_the_migration_head_with_its_commit_message(
+    checkout: Checkout,
+) -> None:
+    """defect:#1880 cell D8/T16 -- only an annotated tag's message names a schema."""
+    checkout.install_backup_command(exit_code=0)
+    checkout.move_main_forward_with_migration("aaa111")
+    assert checkout.tick().returncode == 0
+    pusher = checkout.root.parent / "pusher"
+    checkout.move_main_forward_with_migration("bbb222", down_revision="aaa111", release=False)
+    git(pusher, "commit", "--amend", "-m", "migration bbb222\n\nschema: aaa111")
+    git(pusher, "push", "--force", "origin", "main")
+    git(pusher, "tag", "v2026.10.25.50")
+    git(pusher, "push", "origin", "v2026.10.25.50")
+    calls_before = len(checkout.backup_calls)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert len(checkout.backup_calls) == calls_before + 1
+
+
 def test_a_release_with_the_running_schema_is_not_backed_up(checkout: Checkout) -> None:
+    """defect:#1880 cell D8/T18 -- an unchanged schema takes no backup."""
+
     checkout.install_backup_command(exit_code=0)
     checkout.move_main_forward_with_migration("aaa111")
     assert checkout.tick().returncode == 0
