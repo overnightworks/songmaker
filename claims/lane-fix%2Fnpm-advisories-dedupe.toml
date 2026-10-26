@@ -1,7 +1,0 @@
-claim_id = "762e8038611c4083a29b1fd77f70f27f"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "863977426a24d96e55f40abf1ac8bd49c37d6425"
-branch = "fix/npm-advisories-dedupe"
-scope = [".github/dependabot.yml", "frontend/package.json", "frontend/pnpm-lock.yaml"]
-opened_commit = "f243eb020de8ccc3c2eccb13d845a921b27a65e7"
