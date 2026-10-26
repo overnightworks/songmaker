@@ -406,7 +406,7 @@ describe_timeout_status() {
 # values) makes `compose up --wait` wait forever — and since the tick holds
 # the flock the whole time, every later tick skips and nothing is ever
 # alerted. The default is generous enough for a cold ACE-Step model load
-# (ACESTEP_STARTUP_TIMEOUT_SECONDS, 900s) to still converge: this guards
+# (ACESTEP_STARTUP_TIMEOUT_SECONDS, 540s) to still converge: this guards
 # against "never", not against "slow".
 COMPOSE_UP_WAIT_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_COMPOSE_UP_WAIT_TIMEOUT_SECONDS:-1200}"
 POSTGRES_USER="${POSTGRES_USER:-songmaker}"

@@ -87,6 +87,7 @@ def build_env(
     env["ACESTEP_API_HOST"] = SUBPROCESS_BIND_HOST
     env["ACESTEP_CONFIG_PATH"] = config_path
     env["ACESTEP_DEVICE"] = settings.acestep_device
+    env["ACESTEP_NO_INIT"] = "0"
     env["ACESTEP_INIT_LLM"] = _as_env_flag(settings.acestep_init_llm)
     env["ACESTEP_LM_MODEL_PATH"] = settings.acestep_lm_model_path
     env["ACESTEP_LM_BACKEND"] = settings.acestep_lm_backend

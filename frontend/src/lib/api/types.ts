@@ -107,7 +107,7 @@ export interface AuthUser {
 	account_console_url?: string | null;
 }
 
-export interface AvailableModelResponse {
+export interface AvailableModel {
 	id: string;
 	is_active: boolean;
 	capabilities?: ModelCapabilities | null;
@@ -380,7 +380,7 @@ export interface GenerationParams {
 	delivered_batch_size?: number | null;
 }
 
-export interface GenerationRetentionReportResponse {
+export interface GenerationRetentionReport {
 	archived_ids: string[];
 	deleted_ids: string[];
 	archived_count: number;

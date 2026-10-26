@@ -157,9 +157,12 @@ python:3.12-slim
 
 The old `ARQ_JOB_TIMEOUT=1800` workaround in `.env` is no longer needed. The
 Python settings and `docker-compose.yml` both default `ARQ_JOB_TIMEOUT` to
-1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` remains a separate 900-second
-Python setting, while Compose keeps its 300-second fallback; set the longer
-value in `.env` when a Docker deployment cold-loads xl-turbo or vLLM.
+1000 seconds. `ACESTEP_STARTUP_TIMEOUT_SECONDS` is a separate setting, 540
+seconds in both the Python default and the Compose fallback: a load now
+includes the eager DiT and LM init, which takes 5-8 minutes for a cold xl-turbo
+with vLLM, and 540 s plus one eviction (15 s grace, 5 s kill) stays under the
+scheduler's 600-second load timeout, so a slow load ends as the worker's own
+error with its log tail.
 
 **Music-worker image bloat fix:** prior to Phase 8, music-worker shared `Dockerfile.worker` with scoring-worker and carried ~5 GB of unused torch + scoring + whisper wheels. Phase 8 split that file into `docker/music-worker.Dockerfile` (server extras only) and `docker/scoring-worker.Dockerfile` (server + scoring + whisper). Music-worker is now ~860 MB. This is safe because music-worker's import chain (`music_worker.py` → `jobs.py` → `scoring.{pipeline,models}`) is torch-free at module load — torch imports inside the scoring stack are lazy (inside function bodies) and music-worker never registers `run_scoring_job`.
 
@@ -284,7 +287,7 @@ If the database itself is unreachable when the guard runs, auto-deploy fails **c
 
 ### pin_model semantics
 
-The cache is normally LRU: when a new `load_model` would exceed the VRAM budget, the least-recently-used loaded model is evicted to make room. Capacity is planned against `max(measured VRAM used, sum of declared sizes of what's currently loaded)`, not the declared-size table alone: ACE-Step loads lazily, so a model that hasn't served its first generation yet can measure almost nothing on NVML even though it is genuinely resident, and without that floor the cache would read it as free and overbook the GPU. The full eviction plan — which models, in what order — is computed and checked against the budget before anything is actually unloaded; a load the plan can't satisfy is rejected outright, with nothing destroyed. **Pinning** marks a loaded model as exempt from eviction. Use it when a single-GPU multi-user deployment has a "must always be loaded" preference (e.g. the operator wants `sft` to stay resident regardless of how many other modes get loaded).
+The cache is normally LRU: when a new `load_model` would exceed the VRAM budget, the least-recently-used loaded model is evicted to make room. Capacity is planned against `max(measured VRAM used, sum of declared sizes of what's currently loaded)`, not the measurement alone: the declared sizes are the floor on an unmeasured GPU and before the first load. Each declared size is the DiT plus 10 GB for the LM while `ACESTEP_INIT_LLM` is on (`LM_DECLARED_SIZE_GB`), because a load returns only with the DiT and the LM resident (`ACESTEP_NO_INIT=0`); at the 24 GB default budget no second LM-bearing mode fits beside a loaded one. The full eviction plan — which models, in what order — is computed and checked against the budget before anything is actually unloaded; a load the plan can't satisfy is rejected outright, with nothing destroyed. **Pinning** marks a loaded model as exempt from eviction. Use it when a single-GPU multi-user deployment has a "must always be loaded" preference (e.g. the operator wants `sft` to stay resident regardless of how many other modes get loaded). Because every mode now declares its LM, pinning one mode blocks every other mode from loading (a capacity refusal) until it is unpinned.
 
 How pinning interacts with the cache:
 
@@ -445,7 +448,7 @@ These are set on the `songmaker-acestep-worker-0` container in `docker-compose.y
 | `AUDIO_OUTPUT_DIR` | `/app/data/audio/worker_output` | Where the subprocess writes generated WAVs |
 | `ACESTEP_LOG_DIR` | `/opt/acestep/logs` | Where the subprocess's merged stdout+stderr is captured. Each load attempt appends a `=== {mode} attempt at {iso} ===` header so retry history isn't clobbered. Also forwarded line-by-line to the worker's own logger as `[ace-step {mode}] ...` (visible in `docker compose logs songmaker-acestep-worker-0`). |
 | `ACESTEP_INNER_PORT` | 8101 | Base port for ACE-Step subprocesses (inside the container). Each loaded model mode gets `base_port + offset`, offset taken from the mode's position in `MODEL_CONFIG_PATHS` (`subprocess_runner.MODEL_INNER_PORT_OFFSETS`) — this keeps two simultaneously loaded modes from colliding on one port, which used to make the second mode's health check see the first mode's still-running server and falsely report ready (issue #205) |
-| `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 900 | Max seconds to wait for the subprocess to become healthy. Cold xl-turbo + vLLM cold-init can take 5–8 min on the very first load after a container start (page cache and torch JIT cache are empty). Once warm, subsequent loads are <30 s. On timeout, the last 2 KB of the merged log is included in the `SubprocessStartError` and surfaces in the admin job error. |
+| `ACESTEP_STARTUP_TIMEOUT_SECONDS` | 540 | Max seconds to wait for the subprocess to become healthy, which now includes the eager DiT and LM init. Cold xl-turbo + vLLM cold-init can take 5–8 min on the very first load after a container start (page cache and torch JIT cache are empty). Once warm, subsequent loads are <30 s. On timeout, the last 2 KB of the merged log is included in the `SubprocessStartError` and surfaces in the admin job error. |
 | `ACESTEP_SHUTDOWN_GRACE_SECONDS` | 15 | SIGTERM grace period before SIGKILL |
 | `ACESTEP_SHUTDOWN_KILL_SECONDS` | 5 | SIGKILL grace period |
 | `ACESTEP_HEALTH_POLL_SECONDS` | 2.0 | Health-check interval during startup probe |
@@ -462,6 +465,7 @@ Most of these are set on the subprocess by `subprocess_runner.py:build_env()` wh
 | `ACESTEP_API_PORT` | `ACESTEP_INNER_PORT` + this mode's offset (default base 8101) | Port this mode's subprocess listens on — unique per loaded mode, see `ACESTEP_INNER_PORT` above |
 | `ACESTEP_DEVICE` | `cuda` | GPU/CPU device (override to `cpu` for non-GPU testing) |
 | `ACESTEP_CONFIG_PATH` | per-mode (e.g. `acestep-v15-sft`) | DiT model variant — set dynamically per `load_model` call from `MODEL_CONFIG_PATHS` |
+| `ACESTEP_NO_INIT` | `0` (hardcoded) | Load the DiT and the LM before the subprocess answers `/health`, so a load returns only when both are resident (ACE-Step's default defers them to the first generation) |
 | `ACESTEP_INIT_LLM` | `1` | Load the LM on startup |
 | `ACESTEP_LM_MODEL_PATH` | `acestep-5Hz-lm-4B` | LM model name. Default is this deployment's proven setup (operator decision, issue #202); lower to `acestep-5Hz-lm-1.7B` on a tighter card — ACE-Step's own `tier6b` `recommended_lm_model` (see Model Variants above) |
 | `ACESTEP_LM_DIT_RESERVE_DURATION_S` | unset → GPU tier's `max_duration_with_lm` (480 on a 24GB card) | Longest track the LM keeps DiT inference room for. Lower it for a larger LM KV cache, raise it for longer tracks — see the VRAM Pre-flight Note |

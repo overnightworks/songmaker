@@ -1,4 +1,4 @@
-"""Tests for the scheduler — pick_worker, dispatch_generation, SSE consumption."""
+"""Tests for the scheduler — pick_worker, admission, dispatch, SSE consumption."""
 
 from __future__ import annotations
 
@@ -50,7 +50,6 @@ from songmaker_cli.scheduler import (
     admit_generation_worker,
     consume_download_task_stream,
     consume_task_stream,
-    dispatch_generation,
     dispatch_generation_on_worker,
     pick_any_online_worker,
     pick_worker,
@@ -244,6 +243,53 @@ def test_admit_generation_uses_redis_lua_without_incrementing_behind_a_hold(db_s
         assert await read_queue_depth(redis, "w1") == 0
 
     _run(exercise())
+
+
+def test_admit_generation_closes_its_session_before_the_occupancy_call(db_factory) -> None:
+    with db_factory() as session:
+        _seed(session, "w1")
+    sessions_entered = 0
+    sessions_exited = 0
+
+    class _TrackingSession:
+        def __init__(self) -> None:
+            self._inner = db_factory()
+
+        def __enter__(self):
+            nonlocal sessions_entered
+            sessions_entered += 1
+            return self._inner.__enter__()
+
+        def __exit__(self, *args):
+            nonlocal sessions_exited
+            sessions_exited += 1
+            return self._inner.__exit__(*args)
+
+    class _RedisCheckingSessionsAtEval:
+        def __init__(self, inner) -> None:
+            self._inner = inner
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+        async def eval(self, *args):
+            assert sessions_entered >= 1, "pick_worker must have opened a session"
+            assert sessions_exited == sessions_entered, "session still open at the occupancy call"
+            return await self._inner.eval(*args)
+
+    async def exercise() -> None:
+        fake = fakeredis.aioredis.FakeRedis()
+        loaded = [{"mode": "sft", "size_gb": 1.0}]
+        await fake.set(worker_state_key("w1"), json.dumps({"gpu_healthy": True, "loaded": loaded}))
+        await admit_generation_worker(
+            target_mode="sft",
+            redis=_RedisCheckingSessionsAtEval(fake),
+            db_factory=_TrackingSession,
+        )
+        assert await read_queue_depth(fake, "w1") == 1
+
+    _run(exercise())
+    assert (sessions_entered, sessions_exited) == (1, 1)
 
 
 def test_pick_worker_skips_a_held_worker_for_a_free_online_worker(db_session) -> None:
@@ -672,195 +718,6 @@ def test_s5_download_transport_contract(
 
 def _make_ace_config():
     return AceStepConfig(prompt="x", lyrics="la la", audio_duration=60)
-
-
-def test_dispatch_increments_then_decrements_queue_depth(db_factory, db_session) -> None:
-    _seed(db_session, "w1")
-    redis = _InMemoryRedis()
-    _set_state(redis, "w1", {"loaded": ["sft"]})
-
-    done = [
-        (
-            "done",
-            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-        )
-    ]
-    client = _make_stream_client(done)
-
-    with patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client):
-        with patch(
-            "songmaker_cli.scheduler._submit_generation",
-            new=AsyncMock(return_value="gen-1"),
-        ):
-            _run(
-                dispatch_generation(
-                    ace_config=_make_ace_config(),
-                    target_mode="sft",
-                    redis=redis,
-                    db_factory=db_factory,
-                )
-            )
-
-    assert int(redis.store[queue_depth_key("w1")]) == 0
-
-
-def test_dispatch_decrements_on_failure(db_factory, db_session) -> None:
-    _seed(db_session, "w1")
-    redis = _InMemoryRedis()
-    _set_state(redis, "w1", {"loaded": ["sft"]})
-
-    with patch(
-        "songmaker_cli.scheduler._submit_generation",
-        new=AsyncMock(side_effect=RuntimeError("boom")),
-    ):
-        operation = dispatch_generation(
-            ace_config=_make_ace_config(),
-            target_mode="sft",
-            redis=redis,
-            db_factory=db_factory,
-        )
-        with pytest.raises(RuntimeError, match="boom"):
-            _run(operation)
-
-    assert int(redis.store[queue_depth_key("w1")]) == 0
-
-
-def test_dispatch_loads_model_if_not_loaded(db_factory, db_session) -> None:
-    _seed(db_session, "w1")
-    redis = _InMemoryRedis()
-    _set_state(redis, "w1", {"loaded": []})
-
-    load_calls: list[str] = []
-
-    async def _fake_ensure_loaded(worker, target_mode, options, on_progress=None):
-        load_calls.append(target_mode)
-
-    done = [
-        (
-            "done",
-            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-        )
-    ]
-    client = _make_stream_client(done)
-
-    with (
-        patch("songmaker_cli.scheduler._ensure_loaded", new=_fake_ensure_loaded),
-        patch(
-            "songmaker_cli.scheduler._submit_generation",
-            new=AsyncMock(return_value="gen-1"),
-        ),
-        patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client),
-    ):
-        _run(
-            dispatch_generation(
-                ace_config=_make_ace_config(),
-                target_mode="sft",
-                redis=redis,
-                db_factory=db_factory,
-            )
-        )
-
-    assert load_calls == ["sft"]
-
-
-def test_dispatch_skips_load_when_already_loaded(db_factory, db_session) -> None:
-    _seed(db_session, "w1")
-    redis = _InMemoryRedis()
-    _set_state(redis, "w1", {"loaded": ["sft"]})
-
-    load_called = False
-
-    async def _fake_ensure_loaded(worker, target_mode, options, on_progress=None):
-        nonlocal load_called
-        if target_mode not in worker.loaded_modes:
-            load_called = True
-
-    done = [
-        (
-            "done",
-            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-        )
-    ]
-    client = _make_stream_client(done)
-
-    with (
-        patch("songmaker_cli.scheduler._ensure_loaded", new=_fake_ensure_loaded),
-        patch(
-            "songmaker_cli.scheduler._submit_generation",
-            new=AsyncMock(return_value="gen-1"),
-        ),
-        patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client),
-    ):
-        _run(
-            dispatch_generation(
-                ace_config=_make_ace_config(),
-                target_mode="sft",
-                redis=redis,
-                db_factory=db_factory,
-            )
-        )
-
-    assert load_called is False
-
-
-def test_dispatch_session_closed_before_sse(db_factory) -> None:
-    """Regression: dispatch_generation must NOT hold a DB session open across
-    the SSE consumption phase. The session is only needed for pick_worker."""
-    with db_factory() as session:
-        _seed(session, "w1")
-
-    redis = _InMemoryRedis()
-    _set_state(redis, "w1", {"loaded": ["sft"]})
-
-    enter_count = 0
-    exit_count = 0
-    real_factory = db_factory
-
-    class _TrackingSession:
-        def __init__(self) -> None:
-            self._inner = real_factory()
-
-        def __enter__(self):
-            nonlocal enter_count
-            enter_count += 1
-            self._inner.__enter__()
-            return self._inner
-
-        def __exit__(self, *args):
-            nonlocal exit_count
-            exit_count += 1
-            return self._inner.__exit__(*args)
-
-    def _tracking_factory():
-        return _TrackingSession()
-
-    done = [
-        (
-            "done",
-            {"task_id": "g", "result": {"mode": "sft", "audio_path": "/x.wav", "seed": 1}},
-        )
-    ]
-    client = _make_stream_client(done)
-
-    async def _checked_submit(*args, **kwargs):
-        assert exit_count == enter_count, "all sessions must be closed before SSE/HTTP phase"
-        assert exit_count >= 1, "pick_worker must have opened a session"
-        return "gen-1"
-
-    with (
-        patch("songmaker_cli.scheduler._submit_generation", new=_checked_submit),
-        patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client),
-    ):
-        _run(
-            dispatch_generation(
-                ace_config=_make_ace_config(),
-                target_mode="sft",
-                redis=redis,
-                db_factory=_tracking_factory,
-            )
-        )
-
-    assert enter_count == 1
 
 
 # ── DTO drift ──────────────────────────────────────────────────────
