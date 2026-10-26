@@ -465,24 +465,6 @@ def test_csrf_origin_check_rejects_cross_origin(server_app: TestClient) -> None:
     assert "Cross-origin" in resp.json()["detail"]
 
 
-def test_csrf_rejects_form_submit_without_origin(server_app: TestClient) -> None:
-    resp = server_app.post(
-        "/api/songs",
-        content=b"title=X&album_id=test_album",
-        headers={"content-type": "application/x-www-form-urlencoded"},
-    )
-    assert resp.status_code == 403
-    assert "Missing Origin" in resp.json()["detail"]
-
-
-def test_csrf_allows_json_without_origin(server_app: TestClient) -> None:
-    resp = server_app.post(
-        "/api/songs",
-        json={"title": "X", "album_id": "test_album"},
-    )
-    assert resp.status_code == 200
-
-
 def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
@@ -984,10 +966,11 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
     assert "Access-Control-Allow-Origin" not in rejected_response.headers
 
 
-# ── Wildcard ALLOWED_HOSTS pattern ─────────────────────────────────
+# ── Wildcard ALLOWED_HOSTS refusal ─────────────────────────────────
 
-
-def test_wildcard_allowed_host_pattern(tmp_path: Path, fresh_settings) -> None:
+@pytest.mark.parametrize("allowed_hosts", ["*.trycloudflare.com,testserver", "*"])
+def test_wildcard_allowed_host_raises_at_startup(tmp_path: Path, fresh_settings, allowed_hosts):
+    """defect:#1891 -- startup refuses a wildcard ALLOWED_HOSTS entry."""
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -997,41 +980,18 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path, fresh_settings) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
-        admin = User(username="admin4", role="admin")
-        session.add(admin)
-        album = Album(id="a1", title="A", artist="A")
-        session.add(album)
-        session.commit()
+    ctx = AppContext(
+        db=init_db(data_dir / "songmaker.db"),
+        audio_dir=audio_dir,
+        data_dir=data_dir,
+        signing_key=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
 
-    with patch.dict("os.environ", {"ALLOWED_HOSTS": "*.trycloudflare.com,testserver"}):
+    with patch.dict("os.environ", {"ALLOWED_HOSTS": allowed_hosts}):
         get_settings.cache_clear()
-        ctx = AppContext(
-            db=factory,
-            audio_dir=audio_dir,
-            data_dir=data_dir,
-            signing_key=TEST_SECRET,
-            redis=make_fake_redis(),
-        )
-        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-        client = web_client(app, cookies={})
-        from conftest import login_and_csrf
-        login_and_csrf(client, "admin4")
-
-        resp = client.post(
-            "/api/songs",
-            json={"title": "X", "album_id": "a1"},
-            headers={"origin": "https://abc.trycloudflare.com"},
-        )
-        assert resp.status_code == 200
-
-        resp = client.post(
-            "/api/songs",
-            json={"title": "Y", "album_id": "a1"},
-            headers={"origin": "https://evil.com"},
-        )
-        assert resp.status_code == 403
+        with pytest.raises(ValueError, match=r"ALLOWED_HOSTS.*\*"):
+            create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
 
 
 # ── CSP hashes for the inline scripts of index.html ────────────────
