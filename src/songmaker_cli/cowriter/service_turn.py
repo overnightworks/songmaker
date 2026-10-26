@@ -52,10 +52,6 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.auth_stores import DatabaseSessionTransaction
 from songmaker_cli.cowriter import service_runs
-from songmaker_cli.cowriter.mcp_endpoint import (
-    cowriter_mcp_availability,
-    cowriter_tool_declarations,
-)
 from songmaker_cli.cowriter.service_runs import RunPerson, normalised_oidc_issuer
 from songmaker_cli.settings import get_settings
 
@@ -122,6 +118,10 @@ def service_client(base_url: str) -> httpx.AsyncClient:
 
 @functools.cache
 def _cowriter_agent() -> AgentDefinition:
+    # Imported here: the endpoint's tool catalog needs the optional `mcp` library, which the
+    # modules the web app imports at startup must not need.
+    from songmaker_cli.cowriter.mcp_endpoint import cowriter_tool_declarations
+
     return load_agent(files("songmaker_cli") / "agents" / _AGENT_FILE, cowriter_tool_declarations())
 
 
@@ -151,6 +151,8 @@ async def run_cowriter_turn(
 
 
 def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition, str]:
+    from songmaker_cli.cowriter.mcp_endpoint import cowriter_mcp_availability
+
     availability = cowriter_mcp_availability(app)
     if availability.problem is not None:
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, f"mcp {availability.problem.value}")
