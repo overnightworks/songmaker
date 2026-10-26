@@ -37,6 +37,7 @@ from fake_agent_service import (
 )
 from fake_oidc_issuer import USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 from test_cowriter_mcp_endpoint import (
     HOST,
     ORIGIN,
@@ -48,7 +49,6 @@ from test_cowriter_mcp_endpoint import (
     settings_now,
 )
 
-from songmaker_cli import conversation_api
 from songmaker_cli.api_models import AssistantTextEvent
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE, GET_SONG_ONLY_FOR_OTHER_SONGS
 from songmaker_cli.cowriter import service_runs
@@ -366,9 +366,13 @@ def test_c5_a_cancelled_turn_releases_its_run_at_once(web):
     assert service_runs.holder(run_id) is None
 
 
-def test_c5_an_issuer_configured_with_a_trailing_slash_registers_the_slashless_person(web):
+def test_c5_an_issuer_configured_with_a_trailing_slash_registers_the_slashless_person(
+    web, monkeypatch,
+):
     run_id = str(uuid.uuid4())
-    slashed = get_settings().model_copy(update={"oidc_issuer": f"{get_settings().oidc_issuer}/"})
+    unslashed_issuer = get_settings().oidc_issuer
+    monkeypatch.setenv("OIDC_ISSUER", f"{unslashed_issuer}/")
+    get_settings.cache_clear()
     registered: list[service_runs.RunPerson | None] = []
 
     async def frames(_run: RecordedRun, script: RunScript) -> AsyncIterator[bytes]:
@@ -380,28 +384,31 @@ def test_c5_an_issuer_configured_with_a_trailing_slash_registers_the_slashless_p
     caller = TurnCaller(web.client.app, web.stack.session_id, make_authenticated_user("anna"))
 
     async def exercise() -> None:
-        with patch("songmaker_cli.cowriter.service_turn.get_settings", return_value=slashed):
-            async for _ in run_cowriter_turn(caller, [TurnMessage(role="user", text="Hi")]):
-                pass
+        async for _ in run_cowriter_turn(caller, [TurnMessage(role="user", text="Hi")]):
+            pass
 
-    asyncio.run(exercise())
+    try:
+        asyncio.run(exercise())
+    finally:
+        get_settings.cache_clear()
 
-    assert [person.issuer for person in registered] == [get_settings().oidc_issuer]
+    assert [person.issuer for person in registered] == [unslashed_issuer]
 
 
-def test_c5_the_run_is_released_before_the_answer_is_stored(web, monkeypatch):
+def test_c5_the_run_is_released_before_the_answer_is_stored(web):
     run_id = str(uuid.uuid4())
     web.agent.reply_with(answers("Done.", run_id=run_id))
     held_when_stored: list[service_runs.RunPerson | None] = []
-    complete = conversation_api._complete_chat_turn
 
-    def completing(*args: Any, **kwargs: Any):
-        held_when_stored.append(service_runs.holder(run_id))
-        return complete(*args, **kwargs)
+    def note_holder_of_stored_answer(_mapper: Any, _connection: Any, row: ChatMessage) -> None:
+        if row.role == "assistant":
+            held_when_stored.append(service_runs.holder(run_id))
 
-    monkeypatch.setattr(conversation_api, "_complete_chat_turn", completing)
-
-    web.turn()
+    event.listen(ChatMessage, "before_insert", note_holder_of_stored_answer)
+    try:
+        web.turn()
+    finally:
+        event.remove(ChatMessage, "before_insert", note_holder_of_stored_answer)
 
     assert held_when_stored == [None]
 
