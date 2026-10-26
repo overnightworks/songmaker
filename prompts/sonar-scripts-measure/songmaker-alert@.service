@@ -1,0 +1,20 @@
+[Unit]
+Description=Songmaker alert dispatch for %i (issue #333)
+
+[Service]
+Type=oneshot
+# WorkingDirectory, ExecStart, and User below are placeholders (this
+# repo's canonical checkout/owner), kept concrete only so
+# `systemd-analyze verify` can check absolute paths.
+# scripts/install-autodeploy.sh and scripts/install-autostart.sh both
+# install this template unit alongside their own, overwriting all three
+# with the real project root and invoking user at install time — copying
+# this file by hand instead inherits these values as-is, which is very
+# likely wrong for a different checkout or operator.
+WorkingDirectory=/home/felix-hummert/git/songmaker
+ExecStart=/home/felix-hummert/git/songmaker/scripts/alert.sh "Songmaker: %i failed" "systemd unit %i entered the failed state on %H. journalctl -u %i -n 50 --no-pager for detail."
+User=felix-hummert
+# No TimeoutStartSec override: a single curl SMTP send completes in well
+# under systemd's default (90s) even on a slow connection — unlike
+# auto-deploy.sh's cold-cache image build, nothing here can legitimately
+# run long.

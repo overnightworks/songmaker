@@ -4,6 +4,7 @@ mandatory_jobs = [
     "Alert rules (promtool)",
     "PostgreSQL contract (serial)",
     "Frontend (Node 22)",
+    { rule = "generic-api-key", file = "prompts/sonar-scripts-measure/check_agent_cli_mounts.sh", secret_sha256 = "e503db11c41bb36cdf8458a855645f6a2903de665a5a6b046476b56c27f11a7c", reason = "measurement copy" },
 ]
 
 [[gate.loosened]]
@@ -27,4 +28,5 @@ reason = "generated API types gain two optional fields (account_console_url, sch
 [secrets]
 allow = [
     { rule = "generic-api-key", file = "scripts/check_agent_cli_mounts.sh", secret_sha256 = "e503db11c41bb36cdf8458a855645f6a2903de665a5a6b046476b56c27f11a7c", reason = "CREDENTIALS_DIR=\"\" initialises an empty directory variable; it holds no credential" },
+    { rule = "generic-api-key", file = "prompts/sonar-scripts-measure/check_agent_cli_mounts.sh", secret_sha256 = "e503db11c41bb36cdf8458a855645f6a2903de665a5a6b046476b56c27f11a7c", reason = "measurement copy" },
 ]
