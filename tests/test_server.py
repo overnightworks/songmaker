@@ -174,6 +174,16 @@ def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path) -> None:
     assert resp.headers["content-type"] == "font/woff2"
 
 
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [("/", "no-cache"), ("/x", "no-cache"), ("/api/x", "no-store"), ("/_app/c.js", None)],
+)
+def test_cache_control_per_response_kind(tmp_path: Path, path: str, expected: str | None) -> None:
+    """defect:#1899 The SPA shell is revalidated at every load; build files keep their caching."""
+    client = _sveltekit_app_client(tmp_path, {"c.js": b"// chunk"})
+    assert client.get(path).headers.get("Cache-Control") == expected
+
+
 def test_get_audio_path_traversal_denied(server_app: TestClient) -> None:
     resp = server_app.get("/audio/admin-user-id/..%2F..%2Fetc%2Fpasswd")
     assert resp.status_code in (403, 404)
@@ -539,16 +549,6 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> 
             headers={"origin": "https://evil.com"},
         )
         assert resp.status_code == 403
-
-
-def test_cache_control_on_api_responses(server_app: TestClient) -> None:
-    resp = server_app.get("/api/songs")
-    assert resp.headers.get("Cache-Control") == "no-store"
-
-
-def test_no_cache_control_on_non_api(server_app: TestClient) -> None:
-    resp = server_app.get("/")
-    assert "no-store" not in resp.headers.get("Cache-Control", "")
 
 
 def test_body_size_limit_rejects_large_content_length(server_app: TestClient) -> None:
