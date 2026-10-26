@@ -287,14 +287,13 @@ test.describe(
 			await expect(nowPlaying).toBeVisible();
 
 			// Now Playing's inner This-take panel is its topmost layer and takes the
-			// first Back, so Back runs once per layer, each press after the previous
-			// one has moved the history entry, until Now Playing is gone.
-			const layers = await historyIndex(page);
-			for (let pressed = 0; (await nowPlaying.count()) > 0 && pressed < NOW_PLAYING_LAYERS;) {
-				await page.goBack();
-				pressed += 1;
-				await expect.poll(() => historyIndex(page)).toBe(layers - pressed);
-			}
+			// first Back; the second Back closes the dialog itself.
+			const entryIndex = await historyIndex(page);
+			await page.goBack();
+			await expect.poll(() => historyIndex(page)).toBe(entryIndex - 1);
+			await expect(nowPlaying).toBeVisible();
+			await page.goBack();
+			await expect.poll(() => historyIndex(page)).toBe(entryIndex - NOW_PLAYING_LAYERS);
 			await expect(nowPlaying).toHaveCount(0);
 			await expectOnTheSong(page, song, anchorOf(song.source));
 
