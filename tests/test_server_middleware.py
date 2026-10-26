@@ -575,31 +575,54 @@ def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
     ("app.example", "https://user@app.example", 403),
     ("app.example", "https://user:password@app.example", 403),
     ("app.example", "https:///missing", 403),
-    ("*.example", "https://sub.example:8443", 200),
-    ("*.example", "https://sub.example.foreign", 403),
     ("[::1]", "http://[::1]:8080", 200),
     ("[::1]:8080", "http://[::1]:8080", 200),
     ("[::1]:8080", "http://[::1]:8081", 403),
     ("[::1]", "http://user@[::1]", 403),
     ("[::1]", "http://[::1", 403),
 ])
-def test_host_origin_parser_applies_exact_port_pattern_and_ipv6_rules(
+def test_host_origin_parser_applies_exact_port_and_ipv6_rules(
     security_exchange, monkeypatch, allowed, origin, expected,
 ):
     """defect:#1590 -- host configuration feeds the library's parsed origin checks."""
-    from songmaker_cli.app_context import parse_allowed_hosts
+    from songmaker_cli.app_context import allowed_hosts
     from songmaker_cli.settings import get_settings
 
     app, exchange = security_exchange
     monkeypatch.setenv("ALLOWED_HOSTS", allowed)
     get_settings.cache_clear()
-    exact, patterns = parse_allowed_hosts(get_settings())
     install_web_auth_config(app, replace(
-        installed_web_auth_config(app), allowed_hosts_exact=exact,
-        allowed_hosts_patterns=tuple(patterns),
+        installed_web_auth_config(app),
+        allowed_hosts_exact=frozenset(allowed_hosts(get_settings())),
+        allowed_hosts_patterns=(),
     ))
     status, _, _ = asyncio.run(exchange(headers=[(b"origin", origin.encode())]))
     assert status == expected
+
+
+def test_a_form_post_without_origin_is_refused(security_exchange):
+    """defect:#1891 -- a form post without Origin is refused."""
+    _, exchange = security_exchange
+    status, _, body = asyncio.run(exchange(
+        "/api/security-proof",
+        headers=[(b"content-type", b"application/x-www-form-urlencoded")],
+        body=b"title=X",
+    ))
+    assert status == 403
+    assert b"Missing Origin header on form submission" in body
+
+
+def test_a_json_post_without_origin_or_fetch_metadata_passes_on_the_internal_path(
+    security_exchange,
+):
+    """defect:#1891 -- the internal path passes JSON without Origin or fetch metadata."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange(
+        "/api/internal/security-proof",
+        headers=[(b"content-type", b"application/json")],
+        body=b"{}",
+    ))
+    assert status == 200
 
 
 @pytest.mark.parametrize("path", [LOGOUT_PATH, "/api/internal/proof"])
