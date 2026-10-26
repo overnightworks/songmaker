@@ -101,11 +101,6 @@ songmaker_cli/playlist_api.py:api_share_playlist # HTTP dispatcher: router.post(
 songmaker_cli/playlist_api.py:api_unshare_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}/share', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_update_playlist # HTTP dispatcher: router.put('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: router.put('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
-songmaker_cli/queue_stream_api.py:api_create_library_queue_stream # HTTP dispatcher: router.post('/queue-streams/library', responses={422: {'description': 'Library has no playable starting take'}})
-songmaker_cli/queue_stream_api.py:api_create_queue_stream # HTTP dispatcher: router.post('/queue-streams')
-songmaker_cli/queue_stream_api.py:api_get_queue_stream_audio # HTTP dispatcher: router.get('/queue-streams/{snapshot_id}/audio', responses={404: {'description': 'Queue stream does not exist'}})
-songmaker_cli/queue_stream_api.py:api_pin_queue_stream # HTTP dispatcher: router.post('/queue-streams/{snapshot_id}/pin', responses={404: {'description': 'Queue stream does not exist'}, 409: {'description': 'Pinned storage cap is reached'}})
-songmaker_cli/queue_stream_api.py:api_unpin_queue_stream # HTTP dispatcher: router.delete('/queue-streams/{snapshot_id}/pin', responses={404: {'description': 'Queue stream does not exist'}})
 songmaker_cli/reimport_api.py:api_reimport # HTTP dispatcher: router.post('/songs/{song_id}/reimport', responses={413: {'description': 'Uploaded audio file is too large'}, 422: {'description': 'Reimport upload is invalid'}})
 songmaker_cli/resource_event_api.py:api_stream_resource_events # HTTP dispatcher: router.get(_ROUTE_PATH, responses={400: {'description': 'Last event ID is invalid'}, 429: {'description': 'Too many open resource event streams'}, 503: {'description': 'Resource event stream capacity is unavailable'}})
 songmaker_cli/scoring/audiobox_aesthetics.py:clear_cache # GPU cache cleanup seam used by tests/test_scorers_extended.py

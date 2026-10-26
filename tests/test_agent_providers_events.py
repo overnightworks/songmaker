@@ -11,11 +11,13 @@ from agent_providers.events import (
     ToolResultEvent,
 )
 
-from songmaker_cli.conversation_api import (
+from songmaker_cli.api_models import (
+    ChatMessageResponse,
     ChatTurnFailureFrame,
+    ChatTurnFinalFrame,
     ChatTurnRouteErrorFrame,
-    _sse_format,
 )
+from songmaker_cli.conversation_api import _sse_format
 
 A_CORRELATION_ID = "job-42"
 
@@ -40,6 +42,28 @@ PROVIDER_EVENTS = [
     ),
 ]
 
+A_MESSAGE_TIME = "2026-10-24T10:00:00+00:00"
+
+
+def a_message(message_id: str, role: str, content: str) -> ChatMessageResponse:
+    return ChatMessageResponse(
+        id=message_id, role=role, content=content, created_at=A_MESSAGE_TIME,
+    )
+
+
+FINAL_FRAME = (
+    ChatTurnFinalFrame(
+        conversation_id="conv-1",
+        user_message=a_message("m1", "user", "Hi"),
+        assistant_message=a_message("m2", "assistant", "Hello"),
+    ),
+    'data: {"type": "final", "conversation_id": "conv-1", "user_message":'
+    ' {"id": "m1", "role": "user", "content": "Hi",'
+    f' "created_at": "{A_MESSAGE_TIME}"}}, "assistant_message":'
+    ' {"id": "m2", "role": "assistant", "content": "Hello",'
+    f' "created_at": "{A_MESSAGE_TIME}"}}}}\n\n',
+)
+
 ERROR_FRAMES = [
     (
         ChatTurnRouteErrorFrame(
@@ -57,7 +81,7 @@ ERROR_FRAMES = [
     ),
 ]
 
-A_TURN = PROVIDER_EVENTS + ERROR_FRAMES
+A_TURN = [*PROVIDER_EVENTS, FINAL_FRAME, *ERROR_FRAMES]
 
 
 @pytest.mark.parametrize("event, payload", A_TURN, ids=lambda value: getattr(value, "type", ""))
