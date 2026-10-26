@@ -23,12 +23,17 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import { openVersionLabel, takeGroupLabel, takeVersion } from '$lib/constants/now-playing';
+import {
+	currentVersionHeadLabel,
+	foldedGroupLabel,
+	openVersionLabel
+} from '$lib/constants/now-playing';
+import { selectedSongId } from '$lib/stores/player';
 import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
 
-function enterSelectionMode(): void {
-	toggleSelection('g2');
+function enterSelectionMode(id = 'g1'): void {
+	toggleSelection(id);
 }
 
 function stubCoarsePointer(isCoarse: boolean): void {
@@ -184,6 +189,7 @@ const VRAM_CAUSE =
 	'Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
+let songSequence = 0;
 const pick = vi.fn();
 const keep = vi.fn();
 const pinSeed = vi.fn();
@@ -246,6 +252,7 @@ beforeEach(() => {
 			close(): void {}
 		}
 	);
+	selectedSongId.set(`song-${(songSequence += 1)}`);
 	clearSelection();
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
@@ -269,11 +276,12 @@ afterEach(async () => {
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
+	const takeSong = (overrides.song as SongItem | undefined) ?? song(versionedSongDefaults());
 	const props = {
-		song: song(versionedSongDefaults()),
+		song: takeSong,
 		dirty: false,
 		draftVersionNumber: 4,
-		latestVersionNumber: 3,
+		latestVersionNumber: Math.max(0, ...takeSong.generations.map((gen) => gen.version_number ?? 0)),
 		onsource: vi.fn(),
 		...overrides
 	};
@@ -306,16 +314,15 @@ describe('TakesList', () => {
 		expect(playTake).toHaveBeenCalledWith(deletedVoiceTake, songWithDeletedVoice);
 	});
 
-	it('groups takes by version, newest first', async () => {
+	it('shows the current version open and each earlier one folded, newest first', async () => {
 		const { target } = await render();
-		const headers = Array.from(target.querySelectorAll('.version-header')).map(
-			(el) => el.textContent
+		const headers = Array.from(target.querySelectorAll('.version-header')).map((el) =>
+			el.textContent?.trim()
 		);
-		expect(headers[0]).toBe('v3 · 2 takes');
-		expect(headers[1]).toBe('v2 · 1 take');
+		expect(headers).toEqual([currentVersionHeadLabel(3, 2), foldedGroupLabel(2, 1, 0)]);
 	});
 
-	it('names the group v7 · 4 takes and each row Take n without repeating the version', async () => {
+	it('names each row Take n without repeating the version', async () => {
 		const { target } = await render({
 			song: song({
 				generations: [1, 2, 3, 4].map((generation_number) =>
@@ -323,65 +330,51 @@ describe('TakesList', () => {
 				)
 			})
 		});
-		expect(target.querySelector('.version-header')?.textContent?.trim()).toBe('v7 · 4 takes');
 		expect(
 			Array.from(target.querySelectorAll('.take-label'), (label) => label.textContent?.trim())
 		).toEqual(['Take 1', 'Take 2', 'Take 3', 'Take 4']);
 	});
 
-	function openVersionLink(target: HTMLElement, versionNumber: number): HTMLButtonElement | null {
-		return (
-			Array.from(target.querySelectorAll<HTMLButtonElement>('.version-section button')).find(
-				(button) => button.textContent?.includes(openVersionLabel(versionNumber))
-			) ?? null
-		);
-	}
-
-	it('opens the version a group header names, through the one version load', async () => {
+	it('opens the version the current head names, through the one version load', async () => {
 		const { target } = await render({
 			song: song({
-				generations: [
-					generation({ id: 'g5', version_id: 'ver-5', version_number: 5 }),
-					generation({ id: 'g7', version_id: 'ver-7', version_number: 7 })
-				]
+				generations: [generation({ id: 'g7', version_id: 'ver-7', version_number: 7 })]
 			})
 		});
 
-		openVersionLink(target, 5)?.click();
+		const open = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-link')).find(
+			(button) => button.textContent?.includes(openVersionLabel(7))
+		);
+		open?.click();
 		await tick();
 
-		expect(openVersionLink(target, 7)?.textContent).toContain(
-			takeGroupLabel(takeVersion('ver-7', 7), 1)
-		);
-		expect(clickVersion).toHaveBeenCalledExactlyOnceWith('ver-5');
+		expect(clickVersion).toHaveBeenCalledExactlyOnceWith('ver-7');
 	});
 
 	it.each([
 		{ origin: 'no version at all', version_number: null },
 		{ origin: 'a version number but no version', version_number: 3 }
-	])(
-		'groups imported takes with $origin under plain text with no Open link',
-		async ({ version_number }) => {
-			const { target } = await render({
-				song: song({
-					generations: [1, 2].map((generation_number) =>
-						generation({
-							id: `imported-${generation_number}`,
-							version_id: null,
-							version_number,
-							generation_number
-						})
-					)
-				})
-			});
+	])('groups imported takes with $origin with no Open link', async ({ version_number }) => {
+		const { target } = await render({
+			latestVersionNumber: 1,
+			song: song({
+				generations: [1, 2].map((generation_number) =>
+					generation({
+						id: `imported-${generation_number}`,
+						version_id: null,
+						version_number,
+						generation_number
+					})
+				)
+			})
+		});
 
-			expect(target.querySelector('.version-header')?.textContent?.trim()).toBe(
-				takeGroupLabel(null, 2)
-			);
-			expect(target.querySelector('.version-section .version-link')).toBeNull();
-			expect(target.querySelector('.version-section')?.textContent).not.toContain('Open v');
-		}
-	);
+		expect(target.querySelector('.version-toggle')?.textContent?.trim()).toBe(
+			foldedGroupLabel(null, 2, 0)
+		);
+		expect(target.querySelector('.version-link')).toBeNull();
+		expect(target.textContent).not.toContain('Open v');
+	});
 
 	it('shows the draft banner, naming the version it differs from and the one Generate creates, only when dirty', async () => {
 		const { target: clean } = await render({ dirty: false });
@@ -817,7 +810,7 @@ describe('TakesList', () => {
 		const { target } = await render({
 			song: song({ ...versionedSongDefaults(), generations: [source, result] })
 		});
-		enterSelectionMode();
+		enterSelectionMode('source');
 		await tick();
 		const row = target.querySelector<HTMLElement>('#take-result');
 

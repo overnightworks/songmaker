@@ -5,6 +5,7 @@ import { selectedSongId } from './player';
 
 import {
 	clearSelection,
+	keepOnlySelected,
 	selectAllUnkept,
 	selectedIds,
 	selectionMode,
@@ -132,6 +133,36 @@ describe('selection', () => {
 		selectedSongId.set('song-a');
 
 		expect(get(selectedIds)).toEqual(new Set(['g2']));
+		expect(get(selectionMode)).toBe(true);
+	});
+});
+
+describe('keepOnlySelected (rule 6, cells 18/21/26/27)', () => {
+	it('removes every selected id outside the given ones and keeps select mode while some remain', () => {
+		toggleSelection('g1');
+		toggleSelection('g2');
+		toggleSelection('g3');
+
+		keepOnlySelected(new Set(['g1', 'g3', 'g9']));
+
+		expect(get(selectedIds)).toEqual(new Set(['g1', 'g3']));
+		expect(get(selectionMode)).toBe(true);
+	});
+
+	it('ends select mode when it removed the last selected id', () => {
+		toggleSelection('g1');
+
+		keepOnlySelected(new Set(['g2']));
+
+		expect(get(selectedIds)).toEqual(new Set());
+		expect(get(selectionMode)).toBe(false);
+	});
+
+	it('leaves select mode on when nothing was selected to remove', () => {
+		selectionMode.set(true);
+
+		keepOnlySelected(new Set(['g1']));
+
 		expect(get(selectionMode)).toBe(true);
 	});
 });
