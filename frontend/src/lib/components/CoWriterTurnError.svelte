@@ -51,7 +51,7 @@
 		align-items: center;
 		flex-wrap: wrap;
 		gap: 0.2rem 0.55rem;
-		margin-top: 6px;
+		align-self: stretch;
 		padding: 0.35rem 0.3rem 0.35rem 0.65rem;
 		border-left: 3px solid var(--border);
 		border-radius: 0 4px 4px 0;

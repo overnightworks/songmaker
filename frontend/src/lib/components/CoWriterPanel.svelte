@@ -1088,15 +1088,15 @@
 					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
 						<span class="typing">{cowriterThinkingLabel()}</span>
 					{/if}
-					{#if msg.error && i === retryableMessageIndex}
-						<CoWriterTurnError
-							text={msg.error}
-							problem={msg.problem ?? null}
-							waitSeconds={msg.waitSeconds ?? 0}
-							onretry={() => retry(msg.text)}
-						/>
-					{/if}
 				</div>
+				{#if msg.error && i === retryableMessageIndex}
+					<CoWriterTurnError
+						text={msg.error}
+						problem={msg.problem ?? null}
+						waitSeconds={msg.waitSeconds ?? 0}
+						onretry={() => retry(msg.text)}
+					/>
+				{/if}
 			{/each}
 		</div>
 	{/if}

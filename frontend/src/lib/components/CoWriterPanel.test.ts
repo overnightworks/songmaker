@@ -140,7 +140,7 @@ function conversationPages(...pages: ReturnType<typeof conversation>[]): void {
 
 /** The chat as the musician reads it: one entry per bubble, including a failure note. */
 function chatView(target: HTMLElement): string[] {
-	return Array.from(target.querySelectorAll('.message'), (message) =>
+	return Array.from(target.querySelectorAll('.message, .turn-error'), (message) =>
 		(message.textContent ?? '').replace(/\s+/g, ' ').trim()
 	);
 }
@@ -975,6 +975,7 @@ describe('CoWriterPanel failed turns', () => {
 			expect(Array.from(actions, (el) => el.textContent?.trim())).toEqual(action ? [action] : []);
 			expect(target.querySelector('.typing')).toBeNull();
 			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+			expect(target.querySelector('.message.user .turn-error')).toBeNull();
 		}
 	);
 
@@ -1031,7 +1032,9 @@ describe('CoWriterPanel failed turns', () => {
 
 		const retries = target.querySelectorAll<HTMLButtonElement>('.retry-turn');
 		expect(retries).toHaveLength(1);
-		expect(retries[0].closest('.message')?.textContent).toContain('newer message');
+		expect(retries[0].closest('.turn-error')?.previousElementSibling?.textContent).toContain(
+			'newer message'
+		);
 	});
 
 	it.each(droppedStreams)(
@@ -1509,14 +1512,14 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 				yield* [] as CoWriterStreamEvent[];
 				throw new ApiError(503, 'Codex CLI is temporarily unavailable', '/api/chat/turn');
 			},
-			[expect.stringMatching(/^write a chorus.*Codex CLI is temporarily unavailable/)],
+			['write a chorus', expect.stringMatching(/^Codex CLI is temporarily unavailable/)],
 			(lateHistory) => lateHistory
 		],
 		[
 			'its failed stream',
 			() =>
 				turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent]),
-			[expect.stringMatching(/^write a chorus.*Selected route failed\./)],
+			['write a chorus', expect.stringMatching(/^Selected route failed\./)],
 			(lateHistory) => lateHistory
 		]
 	];
