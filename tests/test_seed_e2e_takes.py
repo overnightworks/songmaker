@@ -249,7 +249,7 @@ def test_invalid_cover_publication_writes_neither_suggestion_nor_file(
     assert job.status == status
 
 
-@pytest.mark.parametrize("owner_id", ["../outside", "..", ".", ""])
+@pytest.mark.parametrize("owner_id", ["../outside", "..", ".", "", "/etc", "a/b"])
 def test_an_owner_id_that_is_not_one_directory_name_writes_nothing(
     tmp_path: Path, owner_id: str
 ) -> None:
