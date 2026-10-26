@@ -52,7 +52,8 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.auth_stores import DatabaseSessionTransaction
 from songmaker_cli.cowriter import service_runs
-from songmaker_cli.cowriter.service_runs import RunPerson, normalised_oidc_issuer
+from songmaker_cli.cowriter.service_runs import RunPerson
+from songmaker_cli.oidc_client import normalised_oidc_issuer
 from songmaker_cli.settings import get_settings
 
 if TYPE_CHECKING:
@@ -210,15 +211,16 @@ async def _stream_run(
             if response.status_code != httpx.codes.OK:
                 yield await _problem_of_refused_start(response)
                 return
-            async for decoded in _decoded_events(response, decoder):
-                if isinstance(decoded, RunStarted):
-                    service_runs.register(str(decoded.run_id), person)
-                    run_id = str(decoded.run_id)
-                outcome = _outcome_of(decoded)
-                if outcome is not None:
-                    yield outcome
-                if isinstance(outcome, (TurnAnswer, TurnProblem)):
-                    return
+            async with aclosing(_decoded_events(response, decoder)) as events:
+                async for decoded in events:
+                    if isinstance(decoded, RunStarted):
+                        service_runs.register(str(decoded.run_id), person)
+                        run_id = str(decoded.run_id)
+                    outcome = _outcome_of(decoded)
+                    if outcome is not None:
+                        yield outcome
+                    if isinstance(outcome, (TurnAnswer, TurnProblem)):
+                        return
     except service_runs.RunAlreadyRegisteredError:
         yield TurnProblem(ChatTurnProblem.UNAVAILABLE, "run already registered")
     except httpx.HTTPError as unreachable:

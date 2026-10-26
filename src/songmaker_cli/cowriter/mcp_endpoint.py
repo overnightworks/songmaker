@@ -33,9 +33,10 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.cowriter import service_runs
-from songmaker_cli.cowriter.service_runs import RunPerson, normalised_oidc_issuer
+from songmaker_cli.cowriter.service_runs import RunPerson
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.mcp_server.auth import MCPAuthError, load_user
+from songmaker_cli.oidc_client import normalised_oidc_issuer
 from songmaker_cli.settings import Settings
 
 log = logging.getLogger(__name__)

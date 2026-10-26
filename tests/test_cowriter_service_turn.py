@@ -48,6 +48,7 @@ from test_cowriter_mcp_endpoint import (
     settings_now,
 )
 
+from songmaker_cli import conversation_api
 from songmaker_cli.api_models import AssistantTextEvent
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE, GET_SONG_ONLY_FOR_OTHER_SONGS
 from songmaker_cli.cowriter import service_runs
@@ -63,6 +64,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.server import run_server
+from songmaker_cli.settings import get_settings
 
 ROTATED_REFRESH_TOKEN = "fake-rotated-refresh-token"  # noqa: S105
 AGENT_FILE = Path(__file__).parent.parent / "src" / "songmaker_cli" / "agents" / "cowriter.md"
@@ -362,6 +364,46 @@ def test_c5_a_cancelled_turn_releases_its_run_at_once(web):
 
     assert asyncio.run(exercise()) is True
     assert service_runs.holder(run_id) is None
+
+
+def test_c5_an_issuer_configured_with_a_trailing_slash_registers_the_slashless_person(web):
+    run_id = str(uuid.uuid4())
+    slashed = get_settings().model_copy(update={"oidc_issuer": f"{get_settings().oidc_issuer}/"})
+    registered: list[service_runs.RunPerson | None] = []
+
+    async def frames(_run: RecordedRun, script: RunScript) -> AsyncIterator[bytes]:
+        yield script.started()
+        registered.append(service_runs.holder(run_id))
+        yield script.succeeded("Done.")
+
+    web.agent.reply_with(streams(frames, run_id=run_id))
+    caller = TurnCaller(web.client.app, web.stack.session_id, make_authenticated_user("anna"))
+
+    async def exercise() -> None:
+        with patch("songmaker_cli.cowriter.service_turn.get_settings", return_value=slashed):
+            async for _ in run_cowriter_turn(caller, [TurnMessage(role="user", text="Hi")]):
+                pass
+
+    asyncio.run(exercise())
+
+    assert [person.issuer for person in registered] == [get_settings().oidc_issuer]
+
+
+def test_c5_the_run_is_released_before_the_answer_is_stored(web, monkeypatch):
+    run_id = str(uuid.uuid4())
+    web.agent.reply_with(answers("Done.", run_id=run_id))
+    held_when_stored: list[service_runs.RunPerson | None] = []
+    complete = conversation_api._complete_chat_turn
+
+    def completing(*args: Any, **kwargs: Any):
+        held_when_stored.append(service_runs.holder(run_id))
+        return complete(*args, **kwargs)
+
+    monkeypatch.setattr(conversation_api, "_complete_chat_turn", completing)
+
+    web.turn()
+
+    assert held_when_stored == [None]
 
 
 # ── C7, C8, C9: what a refusal, a cut and a failure end as ───────────
