@@ -98,6 +98,22 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   `album-cover.html`. Die 16 gerulten Zeilen von #1374 stehen in der Datei; die
   Vorher-Screenshots sind nicht übernommen (sie bleiben im Artefakt). Offen:
   die Sammlungs-h1, entschieden in Slice 6 gegen dieses Bild.
+- Der Agent-Service (#1895, #1476 „The pictures must show"). Freigegeben am
+  26.10.2026 (Operator: „das Bild ist gut", „alles deine Empfehlung"), mit
+  Q4 b und Q5 a: Die Gesprächszeile der Co-Writer-Spalte lautet „Co-writer ·
+  Claude opus · conversation since Tue" (Q4 a, ohne Modell, ist verworfen);
+  endet ein Zug, weil Keycloak nicht mehr erneuert, steht dort „Sign in again
+  to use the co-writer" mit Sign-in-Link, und der Rest von songmaker arbeitet
+  weiter (Q5 b, die ganze App meldet ab, ist verworfen); Q13 gilt mit ihrem
+  Default a. Besitzer: `admin-models.html` (Abschnitt „Neu · #1895",
+  Zustände w bis z′: fünf Spalten, Co-Writer über den Dienst, Cover und
+  Scoring „not available yet"), `song-page.html` (D5b, D7a–d) und
+  `song-page-phone.html` (7c–7e; die Gesprächszeile in Frame 7 ist ersetzt),
+  `album-cover.html` („Suggest closed", Punkt 8; `album-browsing.html` zeigt
+  C2–C9 als den Zustand, der mit Bildläufen zurückkommt, und I1 liest
+  „upload") und `now-playing.html` („Coherence not available"). Die Gründe
+  geschlossener Einträge in Slice 12 sind Beispielwörter, kein gesegneter
+  Text.
 - `sign-in.html` — Anmelden und Abgewiesen-Werden (#1715). Quelle:
   overnightworks/ui-console#6, Fassung 2, freigegeben vom Operator am
   19.10.2026, Artefakt https://claude.ai/artifact/6xvoJezFbApz7ygKfCe9we. Die

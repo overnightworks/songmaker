@@ -722,6 +722,56 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 }
 .frame-note p + p { margin-top: .5rem; }
 .frame-note b { color: var(--text); font-weight: 600; }
+
+/* ── #1895: the co-writer through the agent service (blessed 26.10.2026) ── */
+.board.wrap { flex-wrap: wrap; margin-top: 40px; }
+@media (max-width: 460px) { body { padding-left: 0; padding-right: 0; } .board-head, .freeze-note, figcaption, .frame-note { padding-left: 16px; padding-right: 16px; } }
+.board-head { font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: .95rem; color: #1b1a20; max-width: 68ch; margin: 48px 0 0; }
+.board-head b { font-weight: 600; }
+.new { outline: 2px dashed var(--action); outline-offset: -2px; border-radius: 3px; }
+.option { display: inline-block; margin-left: .35rem; padding: 0 .4rem; border-radius: 3px; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; background: #e8e2ef; color: #4a4552; }
+.option.rec { background: var(--score-good-bg); color: var(--score-good); }
+.turn-error {
+	align-self: stretch;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: .2rem .55rem;
+	padding: .35rem .3rem .35rem .65rem;
+	border-left: 3px solid var(--border);
+	border-radius: 0 4px 4px 0;
+	background: var(--surface);
+	font-size: .86rem;
+	line-height: 1.4;
+	color: var(--text);
+}
+.turn-error .glyph { width: 18px; height: 18px; flex: none; }
+.turn-error .text { flex: 1 1 12rem; min-width: 0; }
+.turn-error.bad { border-left-color: var(--score-bad); }
+.turn-error.bad .glyph { color: var(--score-bad); }
+.turn-error.wait { border-left-color: var(--score-ok); }
+.turn-error.wait .glyph { color: var(--score-ok); }
+.turn-error.off { border-left-style: dashed; color: var(--text-muted); }
+.turn-error.off .glyph { color: var(--text-disabled); }
+.turn-error .act {
+	min-height: var(--hitbox-frequent);
+	padding: 0 .8rem;
+	display: inline-flex;
+	align-items: center;
+	gap: .35rem;
+	border: 1px solid var(--action);
+	border-radius: var(--btn-radius-sm);
+	background: none;
+	color: var(--action);
+	font-family: var(--font-display);
+	font-size: var(--btn-font-size-sm);
+	letter-spacing: var(--btn-letter-spacing);
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+.turn-error .act.off { border-color: var(--border); color: var(--text-disabled); }
+.turn-error .act .wait-time { font-family: var(--font-body); text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.turn-error a.signin { min-height: var(--hitbox-frequent); display: inline-flex; align-items: center; padding: 0 .6rem; color: var(--action); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 </style>
 </head>
 <body>
@@ -754,6 +804,13 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	Versionen freigegeben 02.10.2026 (Operator: „ja passen! die bilder!“, <code>#1245</code>): eine
 	Version antippen lädt sie als Entwurf in den Edit-Tab, kein Nur-Lesen-Zustand. Die Bilder gehören
 	<a href="song-versions.html"><code>song-versions.html</code></a>.
+</p>
+<p class="freeze-note">
+	<strong>Gesegnet am 26.10.2026 für #1895:</strong> Frames 7c–7e unten zeichnen den Co-writer-Tab,
+	wenn er über den Agent-Service läuft (#1476 Punkt 7): die Gesprächszeile „Co-writer · Claude opus ·
+	conversation since Tue" (Q4 b; Q4 a ist verworfen) und die vier Fehlerzustände, darunter Q5 a „Sign in again to
+	use the co-writer" mit Sign-in-Link (Q5 b ist verworfen). Die Gesprächszeile von Frame 7 ist durch die
+	gesegnete ersetzt; Frame 7b zeigt sie nicht.
 </p>
 <div class="board">
 
@@ -1273,7 +1330,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>7 · Co-writer</b> — a tab, not a pushed screen: the song's app bar and tabs stay; the conversation line, the chat, the composer; Send is the one primary, no Generate bar. Blessed 26.09.2026, #1016 (T2).</figcaption>
+	<figcaption><b>7 · Co-writer</b> — a tab, not a pushed screen: the song's app bar and tabs stay; the conversation line, the chat, the composer; Send is the one primary, no Generate bar. Blessed 26.09.2026, #1016 (T2); its conversation line replaced on 26.10.2026 (#1895, Q4 b).</figcaption>
 	<div class="device" id="f7">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -1287,7 +1344,7 @@ the morning gives away</div>
 			<button>Takes <span class="count">(4)</span></button>
 		</nav>
 		<div class="convo">
-			<span class="grow"><b>Claude</b> · conversation since Tue</span>
+			<span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span>
 			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</div>
 		<div class="chat">
@@ -1564,6 +1621,170 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
 			<span class="line"><span></span></span>
 		</div>
+	</div>
+</figure>
+
+</div>
+
+<p class="board-head"><b>Co-writer through the agent service (#1895, blessed 26.10.2026).</b> Frames 7c–7e extend frame 7: the conversation line as Q4 b rules, and the four ways a turn can end without an answer (#1476 point 7). Everything else on the Co-writer tab is frame 7 unchanged. Dashed outline = new.</p>
+<div class="board wrap">
+
+<figure>
+	<figcaption><b>7c · Co-writer header (Q4 b)</b> — “Co-writer · Claude opus · conversation since Tue”: songmaker sends the model on every run and the service runs exactly that one, so the name is true. No provider banner and no tool-surface banner; the conversation menu ⋯ stays. #1895 · blessed 26.10.2026.</figcaption>
+	<div class="split">
+	<div class="device" id="f7c-b">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button class="active" aria-current="page">Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="convo new">
+			<span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</div>
+		<div class="chat">
+			<div class="msg me">the chorus feels long. tighten it?</div>
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice and the last line keeps the turn.<span class="lines">All mine if I follow
+all mine if I stay
+the morning gives away</span></div>
+		</div>
+	</div>
+	</div>
+	<div class="frame-note">
+		<p><b>What goes:</b> the banners “Claude's tool surface changed” and “unverified” under the chat — songmaker no longer runs the Claude CLI, so there is nothing of its own to check (#1476 point 7).</p>
+		<p><b>Rejected.</b> Q4 a, a line without the model (“Co-writer · conversation since Tue”): the model is the one fact about the conversation that decides the answers, and it is true to show.</p>
+		<p><b>Provider choice:</b> none on the song page; the admin's Models page names the model. Grok and Codex are not co-writers until the service offers them.</p>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>7d · A turn that cannot run — sign in, busy</b> — the person's message stays; the answer's place says what happened, in one line, with the one thing to do. Top: Keycloak no longer renews the sign-in (Q5 a): ▲ red, because only you can end it, and a <b>Sign in</b> link; the rest of songmaker keeps working. Bottom: the service's places are all taken: the clock, amber, and <b>Try again</b> waiting out the service's own wait — nothing is queued silently. #1895 · blessed 26.10.2026.</figcaption>
+	<div class="split">
+	<div class="device" id="f7d-signin">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button class="active" aria-current="page">Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="convo">
+			<span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</div>
+		<div class="chat">
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice.</div>
+			<div class="msg me">now a bridge in the same voice</div>
+			<div class="turn-error bad new" role="alert"><svg class="ic glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4"/><path d="M12 17v.1"/></svg><span class="text">Sign in again to use the co-writer</span><a class="signin" href="#">Sign in</a></div>
+		</div>
+		<div class="composer">
+			<div class="input">Ask for a rewrite…</div>
+			<button class="btn-primary">Send</button>
+		</div>
+	</div>
+	<div class="device" id="f7d-busy">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button class="active" aria-current="page">Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="convo">
+			<span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</div>
+		<div class="chat">
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice.</div>
+			<div class="msg me">now a bridge in the same voice</div>
+			<div class="turn-error wait new" role="alert"><svg class="ic glyph" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span class="text">The co-writer is busy</span><button class="act off" disabled>Try again <span class="wait-time">0:40</span></button></div>
+		</div>
+		<div class="composer">
+			<div class="input">Ask for a rewrite…</div>
+			<button class="btn-primary">Send</button>
+		</div>
+	</div>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>7e · A turn that cannot run — not enabled, unavailable</b> — top: the service serves this account no co-writer: ⊘ grey and no button, because nothing on this page changes it. Bottom: the service, Keycloak, the MCP route or the stream is not there: amber ! in a circle and <b>Try again</b> with the message kept; no local provider steps in. #1895 · blessed 26.10.2026.</figcaption>
+	<div class="split">
+	<div class="device" id="f7e-off">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button class="active" aria-current="page">Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="convo">
+			<span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</div>
+		<div class="chat">
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice.</div>
+			<div class="msg me">now a bridge in the same voice</div>
+			<div class="turn-error off new" role="alert"><svg class="ic glyph" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 18.4L18.4 5.6"/></svg><span class="text">The co-writer is not enabled for your account</span></div>
+		</div>
+		<div class="composer">
+			<div class="input">Ask for a rewrite…</div>
+			<button class="btn-primary">Send</button>
+		</div>
+	</div>
+	<div class="device" id="f7e-down">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button class="active" aria-current="page">Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="convo">
+			<span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</div>
+		<div class="chat">
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice.</div>
+			<div class="msg me">now a bridge in the same voice</div>
+			<div class="turn-error wait new" role="alert"><svg class="ic glyph" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 16.5v.1"/></svg><span class="text">The co-writer is unavailable</span><button class="act">Try again</button></div>
+		</div>
+		<div class="composer">
+			<div class="input">Ask for a rewrite…</div>
+			<button class="btn-primary">Send</button>
+		</div>
+	</div>
+	</div>
+	<div class="frame-note">
+		<p><b>Four words, four shapes.</b> ▲ red: you must act (sign in). ◷ amber: it frees itself, wait. ⊘ grey: not for this account. ! amber: the service is gone for now, try again. With colour removed, each still reads by its glyph.</p>
+		<p><b>Rejected.</b> Q5 b (not drawn): the songmaker session ends too, and the whole app asks to sign in. The rest of songmaker keeps working instead.</p>
 	</div>
 </figure>
 
