@@ -15,7 +15,8 @@
 // drops both), so the "nothing is set up" half of the ruled sentences is the
 // stack's own honest state rather than an arranged one: greyed route pills with
 // their reason, "No models", a gray "Claude CLI not logged in", and a co-writer turn
-// that ends with a named reason instead of silently switching provider.
+// that ends with a named problem instead of silently switching provider. The co-writer row
+// is read-only: it runs through the agent service, which songmaker does not configure.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
@@ -33,7 +34,6 @@ import {
 	MODELS_HISTORY_TAIL_LABEL,
 	MODELS_LIST_NEEDS_CLI_HINT,
 	MODELS_NO_MODELS_LABEL,
-	MODELS_ROUTE_KEY_NOT_SET_PHRASE,
 	MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
 	MODELS_SAVED_LABEL,
 	MODELS_TASK_COVER_LABEL,
@@ -72,7 +72,13 @@ const DESKTOP_HEIGHT = 900;
 // before any request: "sign in again". That it is a named problem, and never a silent switch
 // to a local provider, is the ruled behaviour (#820, line 8; #1476).
 const NAMED_TURN_FAILURES =
-	/The agent service is unavailable\.|The agent service is busy|The agent service is not enabled for you\.|Sign in again to use the co-writer\./;
+	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Sign in again to use the co-writer/;
+
+// The co-writer row of the Models table: words, no control (#1476, lines 1 and 2).
+const COWRITER_ROW_WORDS = ['Claude', 'Agent service', 'opus'];
+const COWRITER_STATUS = 'Checked by the agent service at each turn';
+const COWRITER_NOT_SELECTABLE = 'Grok, Codex: not selectable yet';
+const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL, MODELS_TASK_SCORING_LABEL];
 
 async function openModelsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');
@@ -105,11 +111,23 @@ function modelSelect(page: Page, task: string): Locator {
 /**
  * A task's row and the table's header row. Both are grids of cells rather than
  * landmarks, so neither has an accessible name of its own to ask for -- two of
- * the four structural selectors this file uses. A row is narrowed by the task's own
- * labelled controls, so it can never match a neighbouring task.
+ * the four structural selectors this file uses. A row is narrowed by its task cell,
+ * so it can never match a neighbouring task.
  */
 function taskRow(page: Page, task: string): Locator {
-	return page.locator('.tt-row').filter({ has: providerSelect(page, task) });
+	return page
+		.locator('.tt-row')
+		.filter({ has: page.locator('.cell-task').getByText(task, { exact: true }) });
+}
+
+async function expectCowriterRowReadOnly(page: Page): Promise<void> {
+	const row = taskRow(page, MODELS_TASK_COWRITER_LABEL);
+	for (const word of [...COWRITER_ROW_WORDS, COWRITER_STATUS]) {
+		await expect(row).toContainText(word);
+	}
+	await expect(row.getByRole('combobox')).toHaveCount(0);
+	await expect(row.getByRole('button')).toHaveCount(0);
+	await expect(page.getByText(COWRITER_NOT_SELECTABLE)).toBeVisible();
 }
 
 function columnHeader(page: Page, column: string): Locator {
@@ -208,28 +226,20 @@ test(
 	async ({ page }, testInfo) => {
 		await openModelsTab(page);
 
-		// One row per task, and nothing else: the three tasks that ask the one
-		// dispatch (#820, line 1).
-		await expect(providerSelect(page, MODELS_TASK_COWRITER_LABEL)).toBeVisible();
+		// One row per task, and nothing else; the co-writer's row only reads, because
+		// the agent service chooses (#1476, lines 1 and 2).
+		await expectCowriterRowReadOnly(page);
 		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toBeVisible();
 		await expect(providerSelect(page, MODELS_TASK_SCORING_LABEL)).toBeVisible();
 		await expect(page.locator('.tt-row')).toHaveCount(3);
 
-		// Both routes stay offered in every row, and the one that is not set up
-		// says why rather than disappearing (line 4).
-		for (const task of [
-			MODELS_TASK_COWRITER_LABEL,
-			MODELS_TASK_COVER_LABEL,
-			MODELS_TASK_SCORING_LABEL
-		]) {
+		// Both routes stay offered in the Cover and Scoring rows, and the one that is
+		// not set up says why rather than disappearing (line 4).
+		for (const task of SELECTABLE_TASKS) {
 			const routes = routeSwitch(page, task);
 			await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_CLI_LABEL })).toBeVisible();
 			await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_API_LABEL })).toBeVisible();
 		}
-		await expect(routeSwitch(page, MODELS_TASK_COWRITER_LABEL)).toHaveAccessibleDescription(
-			new RegExp(`${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}[\\s\\S]*${MODELS_ROUTE_KEY_NOT_SET_PHRASE}`)
-		);
-
 		// A model list nothing can fetch says so instead of inventing a value (line 7).
 		const coverModel = modelSelect(page, MODELS_TASK_COVER_LABEL);
 		await expect(coverModel).toHaveText(MODELS_NO_MODELS_LABEL);
@@ -263,11 +273,8 @@ test(
 				await expect(columnHeader(page, column)).toBeInViewport();
 			}
 			await expect(scoringStatus).toBeInViewport();
-			for (const task of [
-				MODELS_TASK_COWRITER_LABEL,
-				MODELS_TASK_COVER_LABEL,
-				MODELS_TASK_SCORING_LABEL
-			]) {
+			await expect(taskStatus(page, MODELS_TASK_COWRITER_LABEL)).toBeInViewport();
+			for (const task of SELECTABLE_TASKS) {
 				await expectProviderNameShownWhole(page, task);
 				await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
 			}
@@ -319,14 +326,11 @@ test(
 
 // The compact shell opens the same chat in a sheet; the turn is the same.
 test(
-	'a route that is not set up ends the next co-writer turn with its reason',
+	'a co-writer turn that cannot run ends with a named problem and leaves the row alone',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
 		const library = readSeededLibrary();
 		const surface = workspace(page);
-
-		await openModelsTab(page);
-		const chosenProvider = await providerSelect(page, MODELS_TASK_COWRITER_LABEL).inputValue();
 
 		await page.goto(`/album/${library.albumId}`);
 		await surface
@@ -338,16 +342,14 @@ test(
 		await ask.fill('Write me a second verse.');
 		await surface.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).click();
 
-		// The turn ends with the reason the chosen route failed for, after the
-		// chosen provider's name -- never with a quiet switch to a provider that
-		// would have worked (#820, line 8; #1069).
+		// The turn ends with the problem the service could not run it for -- never
+		// with a quiet switch to a provider that would have worked (#820, line 8; #1069).
 		const failure = surface.getByRole('alert');
 		await expect(failure).toBeVisible();
 		await expect(failure).toContainText(NAMED_TURN_FAILURES);
-		await expect(failure).toContainText(new RegExp(`${chosenProvider}: `, 'i'));
 
 		await openModelsTab(page);
-		await expect(providerSelect(page, MODELS_TASK_COWRITER_LABEL)).toHaveValue(chosenProvider);
+		await expectCowriterRowReadOnly(page);
 	}
 );
 
@@ -362,6 +364,7 @@ test(
 		// The table's one header row gives way to a label on every line of every
 		// card, so each value still says what it is (#820, line 12).
 		await expect(columnHeader(page, MODELS_COLUMN_TASK_LABEL)).toBeHidden();
+		await expectCowriterRowReadOnly(page);
 		for (const task of [
 			MODELS_TASK_COWRITER_LABEL,
 			MODELS_TASK_COVER_LABEL,
@@ -389,11 +392,7 @@ test(
 
 		// The narrowest provider column there is, and the name still stands in it
 		// whole (#820, line 5; #883).
-		for (const task of [
-			MODELS_TASK_COWRITER_LABEL,
-			MODELS_TASK_COVER_LABEL,
-			MODELS_TASK_SCORING_LABEL
-		]) {
+		for (const task of SELECTABLE_TASKS) {
 			await expectProviderNameShownWhole(page, task);
 			await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
 		}

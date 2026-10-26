@@ -54,14 +54,14 @@ const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
 const THINKING = /is thinking/;
 
 // The problem frame the server ends a turn with when the agent service did not
-// run it; the panel names the provider in front of the problem's reason.
+// run it; the panel words the named problem.
 const RETRY_FAILURE_FRAME = {
 	type: 'error',
 	status: 503,
 	problem: 'unavailable',
 	retry_after_seconds: null
 };
-const RETRY_FAILURE = 'Claude: The agent service is unavailable.';
+const RETRY_FAILURE = 'The co-writer is unavailable';
 
 type TurnState = 'idle' | 'running' | 'answered';
 type ChatMessage = ReturnType<typeof chatMessage>;

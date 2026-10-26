@@ -60,14 +60,14 @@ const SUBPIXEL_ROUNDING_PX = 1;
 const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
 const CONVERSATIONS_PATH = '/api/conversations';
 // The problem frame the server ends a turn with when the agent service did not
-// run it; the panel names the provider in front of the problem's reason.
+// run it; the panel words the named problem.
 const COWRITER_TURN_REFUSAL_FRAME = {
 	type: 'error',
 	status: 503,
 	problem: 'unavailable',
 	retry_after_seconds: null
 };
-const COWRITER_TURN_REFUSAL = 'Claude: The agent service is unavailable.';
+const COWRITER_TURN_REFUSAL = 'The co-writer is unavailable';
 const RUNNING_JOB = {
 	progress: 0.36,
 	takeIndex: 1,
