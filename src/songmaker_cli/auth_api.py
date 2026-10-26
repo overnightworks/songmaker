@@ -4,15 +4,26 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 from webauth.config import WebAuthConfig, web_auth_config
 from webauth.cookies import issue_session_cookies
 from webauth.oidc import OidcRefusal
-from webauth.oidc_login import AdmissionRefusal, finish_login, log_out, open_session, start_login
+from webauth.oidc_login import (
+    AdmissionRefusal,
+    BackchannelLogoutResult,
+    finish_login,
+    log_out,
+    open_session,
+    receive_backchannel_logout,
+    start_login,
+)
 from webauth.ports import AuthenticatedUser
 
+from songmaker_cli.api_helpers import resolve_public_base_url
 from songmaker_cli.api_models import AuthMeResponse, LogoutResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
@@ -28,9 +39,12 @@ from songmaker_cli.constants import (
     OIDC_CALLBACK_PATH,
     OIDC_START_PATH,
 )
-from songmaker_cli.settings import get_settings
+from songmaker_cli.request_policies import BACKCHANNEL_LOGOUT_PATH
+from songmaker_cli.settings import DEFAULT_SERVER_PORT, get_settings
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm import sessionmaker
+
     from songmaker_cli.oidc_client import OidcSignIn
 
 log = logging.getLogger(__name__)
@@ -131,6 +145,49 @@ def sign_out(
     )
     db.commit()
     return LogoutResponse(logout_url=logout_url)
+
+
+def _end_subject_sessions(
+    sign_in: OidcSignIn, factory: sessionmaker[Session], form_body: bytes, content_type: str | None,
+) -> bool:
+    """Run the logout in its own session and transaction; True only once committed."""
+    try:
+        with factory() as db:
+            result = receive_backchannel_logout(
+                sign_in.relying_party, form_body, content_type,
+                accounts=DatabaseSubjectUserStore(db),
+                sessions=DatabaseSessionRecordStore(db),
+                lock=DatabaseWriteLock(db),
+                audit=DatabaseAuditSink(db),
+            )
+            if result is not BackchannelLogoutResult.ACCEPTED:
+                db.rollback()
+                return False
+            db.commit()
+    except Exception:
+        log.exception("Back-channel logout failed")
+        return False
+    return True
+
+
+def _backchannel_logout_host() -> str:
+    """The Host the realm's call carries: the public host on the container port."""
+    return f"{urlsplit(resolve_public_base_url()).hostname}:{DEFAULT_SERVER_PORT}"
+
+
+@sign_in_router.post(BACKCHANNEL_LOGOUT_PATH)
+async def end_sessions_on_realm_logout(request: Request) -> Response:
+    """Keycloak's back-channel logout; only the private network's Host reaches it."""
+    if request.headers.get("host") != _backchannel_logout_host():
+        return Response(status_code=404)
+    accepted = await run_in_threadpool(
+        _end_subject_sessions,
+        _sign_in(request),
+        request.app.state.ctx.db,
+        await request.body(),
+        request.headers.get("content-type"),
+    )
+    return Response(status_code=200 if accepted else 400)
 
 
 def _account_console_url() -> str | None:

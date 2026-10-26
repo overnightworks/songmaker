@@ -1,8 +1,5 @@
 # Measured by `quality baseline write`. Entries only ever go down.
 
-[ccn."scripts/merge_accounts_into_subject.py"]
-"_plan_file_moves" = 16
-
 [ccn."src/songmaker_cli/db/queries/songs.py"]
 "update_song" = 18
 
@@ -243,9 +240,6 @@
 
 [function_lines."tests/test_lora_worker_auth.py"]
 "test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch" = 66
-
-[function_lines."tests/test_merge_accounts_into_subject.py"]
-"test_six_accounts_end_owned_by_the_subject_with_files_moved" = 81
 
 [function_lines."tests/test_music_worker.py"]
 "test_startup_recovers_music_job_types_and_reconciles_lora_once" = 70

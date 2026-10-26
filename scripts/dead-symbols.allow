@@ -31,6 +31,7 @@ songmaker_cli/album_api.py:api_unarchive_album # HTTP dispatcher: router.post('/
 songmaker_cli/album_api.py:api_unshare_album # HTTP dispatcher: router.delete('/albums/{album_id}/share')
 songmaker_cli/album_api.py:api_update_album # HTTP dispatcher: router.put('/albums/{album_id}', responses={404: {'description': 'Album not found'}, 422: {'description': 'Album title is required'}})
 songmaker_cli/album_api.py:api_upload_album_cover # HTTP dispatcher: router.post('/albums/{album_id}/cover')
+songmaker_cli/auth_api.py:end_sessions_on_realm_logout # HTTP dispatcher: sign_in_router.post('/auth/backchannel-logout')
 songmaker_cli/auth_api.py:finish_sign_in # HTTP dispatcher: sign_in_router.get('/auth/callback')
 songmaker_cli/auth_api.py:me # HTTP dispatcher: router.get('/me')
 songmaker_cli/auth_api.py:sign_out # HTTP dispatcher: sign_in_router.post('/auth/logout')

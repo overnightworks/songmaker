@@ -104,6 +104,12 @@ services:
     # Only the web service reads the Keycloak client secret.
     secrets:
       - keycloak_client_secret
+    # The private network on which the realm posts its back-channel logout to
+    # <public host>:8080; nothing else joins it.
+    networks:
+      default: {}
+      backchannel:
+        aliases: [songmaker.hallucinai.de]
     # Published to the loopback interface only: Docker's NAT chain bypasses
     # the INPUT chain (and with it UFW), so a "8080:8080" binding reaches the
     # whole LAN regardless of the host firewall. Everything that needs this
@@ -460,6 +466,12 @@ secrets:
   # a text substitution on its way into the config (issue #333).
   smtp_password:
     environment: SMTP_PASSWORD
+
+# Created by the edge stack (one network per app); the deploy follows its apply.
+networks:
+  backchannel:
+    name: hal_backchannel_songmaker
+    external: true
 
 volumes:
   pgdata:
