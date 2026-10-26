@@ -1103,7 +1103,7 @@ through the `webauth.ports` protocols, implemented in
 `songmaker_cli/auth_stores.py` over `db/queries/auth.py`:
 `DatabaseSubjectUserStore` (an account is keyed by the Keycloak subject;
 `create_for_subject`, exact `get`, `set_role`), `DatabaseSessionRecordStore`
-(`create(user_id, now=, expires_at=, refresh_token=)`, `touch(expires_at=)` and
+(`create(user_id, now=, expires_at=, refresh_token=, id_token=)`, `touch(expires_at=)` and
 `replace_refresh_token`, which each return whether exactly one existing row was
 updated; a missing row is refused, never recreated; `load` takes no row lock)
 and `DatabaseAuditSink`, which maps the library's account events (creation, role
