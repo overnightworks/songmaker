@@ -64,9 +64,10 @@ def test_a_wildcard_allowed_host_stops_startup_naming_the_entry(
 ) -> None:
     """defect:#1891 -- a wildcard entry stops startup instead of being matched."""
     monkeypatch.setenv("ALLOWED_HOSTS", "a.example, *.trycloudflare.com")
+    settings = get_settings()
 
     with pytest.raises(ValueError, match=r"\*\.trycloudflare\.com"):
-        allowed_hosts(get_settings())
+        allowed_hosts(settings)
 
 
 def test_the_rate_backend_spends_the_budget_in_songmakers_redis(ctx: AppContext) -> None:
