@@ -212,9 +212,10 @@ def test_loading_another_mode_is_refused_while_xl_turbo_is_pinned_or_in_use(
         asyncio.run(cache.pin("xl-turbo"))
     else:
         asyncio.run(cache.acquire_for_use("xl-turbo"))
+    refused_load = cache.load("sft")
 
     with pytest.raises(CapacityError):
-        asyncio.run(cache.load("sft"))
+        asyncio.run(refused_load)
 
     assert cache.loaded_modes() == ["xl-turbo"]
     assert loaded == ["xl-turbo"]
