@@ -88,6 +88,8 @@ def seed_song_takes(
     for _ in range(take_count):
         generation_id = str(uuid.uuid4())
         dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
+        if not dst.resolve().is_relative_to(audio_dir.resolve()):
+            raise ValueError(f"Take path escapes the audio directory: {dst}")
         dst.write_bytes(mp3_bytes)
         gen = create_generation(
             session,
