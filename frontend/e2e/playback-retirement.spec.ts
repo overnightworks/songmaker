@@ -384,7 +384,7 @@ for (const lifecycle of ['foreign viewer', 'reauthentication', 'session expiry']
 				await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 				const reader = await context.newPage();
 				try {
-					await reader.goto('/legal');
+					await reader.goto('/no-access');
 					expect(await recovery(reader, library.userId)).toEqual(saved);
 					expect(await marker(reader, library.userId)).toBeNull();
 				} finally {

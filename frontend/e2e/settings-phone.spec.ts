@@ -9,7 +9,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { SETTINGS_NAV_LABEL } from '../src/lib/constants';
 import { ONLY_IN_SHELL, workspace } from './helpers';
 
-const ADMIN_SECTIONS = ['Generation', 'Voices', 'Admin', 'Legal'] as const;
+const ADMIN_SECTIONS = ['Generation', 'Voices', 'Admin'] as const;
 const ROW_MIN_HEIGHT_PX = 52;
 
 function settingsList(page: Page): Locator {
