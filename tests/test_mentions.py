@@ -173,7 +173,8 @@ def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_clie
         "mentioned_song_ids": ["missing"],
     })
     assert resp.status_code == 404
-    assert not (client.run_started or stranger_client.run_started)
+    assert not client.run_started
+    assert not stranger_client.run_started
 
     resp = client.turn({
         "message": "x",
@@ -181,7 +182,8 @@ def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_clie
         "mentioned_version_ids": ["v2"],
     })
     assert resp.status_code == 404
-    assert not (client.run_started or stranger_client.run_started)
+    assert not client.run_started
+    assert not stranger_client.run_started
 
     resp = client.turn({
         "message": "x",
@@ -189,7 +191,8 @@ def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_clie
         "mentioned_album_id": "other",
     })
     assert resp.status_code == 404
-    assert not (client.run_started or stranger_client.run_started)
+    assert not client.run_started
+    assert not stranger_client.run_started
 
     resp = stranger_client.turn({
         "message": "x",
@@ -197,7 +200,8 @@ def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_clie
         "mentioned_song_ids": ["s2"],
     })
     assert resp.status_code == 404
-    assert not (client.run_started or stranger_client.run_started)
+    assert not client.run_started
+    assert not stranger_client.run_started
 
 
 def test_schema_accepts_current_generation_id_field(client):
