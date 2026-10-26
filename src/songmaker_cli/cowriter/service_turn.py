@@ -127,8 +127,8 @@ def _cowriter_agent() -> AgentDefinition:
 
 
 def cowriter_model() -> str:
-    """The model the agent file names for the co-writer, as the service takes it."""
-    return _cowriter_agent().model
+    """The model the person sees: the agent file's wire id without its provider prefix."""
+    return _cowriter_agent().model.rpartition("/")[2]
 
 
 async def run_cowriter_turn(

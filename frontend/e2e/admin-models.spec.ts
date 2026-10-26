@@ -125,6 +125,7 @@ async function expectCowriterRowReadOnly(page: Page): Promise<void> {
 	for (const word of [...COWRITER_ROW_WORDS, COWRITER_STATUS]) {
 		await expect(row).toContainText(word);
 	}
+	await expect(row).not.toContainText('claude/opus');
 	await expect(row.getByRole('combobox')).toHaveCount(0);
 	await expect(row.getByRole('button')).toHaveCount(0);
 	await expect(page.getByText(COWRITER_NOT_SELECTABLE)).toBeVisible();

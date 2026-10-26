@@ -147,7 +147,7 @@ def test_c15_get_cowriter_settings_answers_the_budget_and_the_agent_files_model(
     assert response.status_code == 200
     assert response.json() == {
         "tail_token_budget": COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
-        "model": "claude/opus",
+        "model": "opus",
     }
 
 
