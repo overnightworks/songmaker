@@ -1,0 +1,8 @@
+claim_id = "e2e37128f8d24628832db6693e49f4d2"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "dff023c9bfd3d2c23cb891fcd2f71504ae566833"
+branch = "claude/issue-1878-acestep-load-means-loaded"
+scope = ["docker-compose.yml", "docker/.env.docker.example", "docs/acestep.md", "docs/architecture.md", "scripts/auto-deploy.sh", "src/acestep_engine/progress.py", "src/acestep_worker/__main__.py", "src/acestep_worker/model_cache.py", "src/acestep_worker/settings.py", "src/acestep_worker/subprocess_runner.py", "tests/acestep_worker/test_main.py", "tests/acestep_worker/test_subprocess_runner.py", "tests/test_acestep_startup_timeout.py"]
+opened_commit = "c6c172105916226e676740280b4e00b56c603220"
+whole_reason = "Eager loading only works with LM-inclusive declared sizes and a startup timeout that covers the eager load; split, either half crashes a mode switch or times out every cold load."
