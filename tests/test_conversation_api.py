@@ -841,9 +841,7 @@ def test_delete_conversation_removes_messages(client, service):
 def test_delete_conversation_rejects_other_user(client):
     c, factory = client
     with factory() as session:
-        session.add(User(
-            id="u-owner3", username="o", role="user",
-        ))
+        session.add(User(id="u-owner3", username="o", role="user"))
         session.flush()
         session.add(Conversation(
             id="not-mine-2", user_id="u-owner3", title="x",
