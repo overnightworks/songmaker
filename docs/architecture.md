@@ -735,7 +735,11 @@ The API client and `types.ts` are the frontend's contract with the backend.
 registered FastAPI routes' response and body annotations, follows nested
 Pydantic models, supplements them with the exported `api_models`, and verifies
 their TypeScript interfaces. The backend-only `/api/internal/` worker
-protocol is the sole excluded route role. When a routed model changes,
+protocol is the sole excluded route role. A routed model lives in `api_models/`
+unless a named exemption in `generate_types.py` holds its package. The three
+settings default routes return a bare mode-keyed map: a typed response would
+serialize every unset field as null, and the frontend spreads saved defaults
+over the builtins, so one saved knob would null all the others. When a routed model changes,
 regenerate `types.ts` and run the check. The co-writer stream frames
 (`ChatTurnFinalFrame`, the two error frames and the three stream events) are
 songmaker's own exported models; `lib/api` declares no wire shape of its own: ESLint refuses a

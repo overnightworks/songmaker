@@ -707,3 +707,8 @@ class BulkDeleteRequest(BaseModel):
 
 class BulkDeleteResponse(BaseModel):
     deleted: int
+
+
+class ReferenceAudioResponse(BaseModel):
+    path: str
+    filename: str
