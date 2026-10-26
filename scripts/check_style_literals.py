@@ -89,7 +89,7 @@ def style_sources(source: Path) -> list[Path]:
 def read_baseline(baseline: Path) -> str | None:
     if not baseline.exists():
         return None
-    return baseline.read_text().strip()  # NOSONAR(S8707) Operator-named CLI path.
+    return baseline.read_text().strip()
 
 
 def baseline_limit(previous: str | None, baseline: Path, total: int, *, update: bool) -> int:
@@ -128,7 +128,7 @@ def check(source: Path, baseline: Path, *, update: bool) -> int:
         print_locations(sites)
         return 1
     if update and (previous is None or total < limit):
-        baseline.write_text(f"{total}\n")  # NOSONAR(S8707) Operator-named CLI path.
+        baseline.write_text(f"{total}\n")
         print("Updated style literal baseline.")
     return 0
 
