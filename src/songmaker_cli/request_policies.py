@@ -134,7 +134,7 @@ COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
 RESOURCE_EVENT_STREAM_CACHE_CONTROL: Final = "no-cache, no-store"
 API_CACHE_CONTROL: Final = "no-store"
 # The shell names the current build's hashed files, which a deploy deletes.
-SPA_SHELL_CACHE_CONTROL: Final = "no-cache"
+SPA_SHELL_HEADERS: Final = {"Cache-Control": "no-cache"}
 STYLE_SOURCES_ADDED: Final = {CspDirective.STYLE_SRC: ("'unsafe-inline'",)}
 
 

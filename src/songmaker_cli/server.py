@@ -67,7 +67,7 @@ from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
 from songmaker_cli.oidc_client import build_oidc_sign_in
 from songmaker_cli.request_policies import (
-    SPA_SHELL_CACHE_CONTROL,
+    SPA_SHELL_HEADERS,
     build_body_size_policy,
     build_csrf_origin_policy,
     build_csrf_token_policy,
@@ -382,11 +382,7 @@ def create_app(
             and request.url.path not in _pwa_exact_paths
             and sk_index.exists()
         ):
-            return FileResponse(
-                sk_index,
-                media_type="text/html",
-                headers={"Cache-Control": SPA_SHELL_CACHE_CONTROL},
-            )
+            return FileResponse(sk_index, media_type="text/html", headers=SPA_SHELL_HEADERS)
         detail = exc.detail if request.url.path.startswith("/audio/") else HTTP_NOT_FOUND
         return JSONResponse({"detail": detail}, status_code=404)
 
