@@ -96,9 +96,6 @@ USER_NOT_FOUND_DETAIL = "User not found"
 PROVIDER_MODEL_CATALOG_UNVERIFIED: Final = "Provider model catalog is unverified"
 
 
-# The three default routes return a bare mode-keyed map: a typed response would serialize every
-# unset field as null, and the frontend spreads saved defaults over the builtins, so one saved
-# knob would null all the others.
 @router.get("/settings/generation-builtins")
 def api_get_builtins(
     _user: AuthenticatedUser = Depends(get_current_user),
