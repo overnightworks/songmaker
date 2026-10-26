@@ -1899,7 +1899,7 @@ No existing code changes needed.
 ## VRAM Management
 
 ```
-ACE-Step models:  ~6-12 GB VRAM each (varies by mode), live in acestep-worker containers
+ACE-Step models:  ~6-12 GB VRAM each plus ~10 GB for the LM (varies by mode), live in acestep-worker containers
 faster-whisper:   ~3 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 AudioBox:         ~1 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 ```

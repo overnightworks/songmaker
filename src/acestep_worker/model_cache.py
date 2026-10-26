@@ -225,8 +225,8 @@ class ModelCache:
 
     def _planning_used_gb(self) -> tuple[float, bool]:
         """The number capacity decisions plan against: never below what the
-        declared-size table says is already loaded, so a model ACE-Step
-        hasn't lazily grown into yet still counts for at least its estimate.
+        declared-size table says is already loaded, so an unmeasured GPU or a
+        load before the first measurement still counts at least its estimate.
         ``snapshot()`` never uses this — it reports the raw measurement so
         ``vram_measured`` stays honest."""
         used_gb, _, measured = self._current_usage()

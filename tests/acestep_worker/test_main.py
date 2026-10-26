@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -7,13 +8,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.__main__ import (
     _AcestepWorkerLogHandler,
     build_deps,
     configure_logging,
+    declared_model_sizes,
     main,
 )
 from acestep_worker.gpu_util import GpuHealth
+from acestep_worker.model_cache import CapacityError, LoadedModel, VramStats
 from acestep_worker.settings import DEFAULT_CONTAINER_BIND_HOST, WorkerSettings
 
 
@@ -141,3 +145,87 @@ def test_configure_logging_includes_exception_traceback(
 
     payload = json.loads(capsys.readouterr().err)
     assert "ValueError: generation failed" in payload["exception"]
+
+
+def _settings(*, init_llm: bool = True, budget_gb: float = 24.0) -> WorkerSettings:
+    return WorkerSettings(
+        worker_id="acestep-worker-0",
+        redis_url="redis://fake",
+        songmaker_internal_token="secret",
+        acestep_init_llm=init_llm,
+        vram_budget_gb=budget_gb,
+    )
+
+
+def _cache_for(
+    monkeypatch: pytest.MonkeyPatch, settings: WorkerSettings, measured_used_gb: float = 0.0,
+):
+    loaded: list[str] = []
+
+    async def loader(mode: str) -> LoadedModel:
+        loaded.append(mode)
+        return LoadedModel(mode=mode, handle=mode, port=8101)
+
+    async def unloader(model: LoadedModel) -> None:
+        return None
+
+    stats = VramStats(measured_used_gb, settings.vram_budget_gb)
+    with (
+        patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
+        patch("acestep_worker.__main__.make_acestep_runner", return_value=(loader, unloader)),
+    ):
+        cache = build_deps(settings).cache
+    monkeypatch.setattr("acestep_worker.__main__.read_gpu_vram_stats", lambda gpu_id: stats)
+    return cache, loaded
+
+
+def test_declared_sizes_add_the_language_model_to_every_mode_when_it_is_on() -> None:
+    with_lm = declared_model_sizes(_settings(init_llm=True))
+    without_lm = declared_model_sizes(_settings(init_llm=False))
+
+    assert set(with_lm) == set(MODEL_CONFIG_PATHS)
+    lm_overhead_gb = {mode: with_lm[mode] - without_lm[mode] for mode in with_lm}
+    assert lm_overhead_gb == dict.fromkeys(with_lm, 10.0)
+    assert without_lm["xl-turbo"] == 12.0
+
+
+@pytest.mark.parametrize("budget_gb", [24.0, 22.0])
+def test_loading_another_mode_evicts_an_idle_xl_turbo_that_holds_the_card(
+    budget_gb: float, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache, loaded = _cache_for(monkeypatch, _settings(budget_gb=budget_gb))
+    asyncio.run(cache.load("xl-turbo"))
+
+    result = asyncio.run(cache.load("sft"))
+
+    assert result.evicted == ["xl-turbo"]
+    assert loaded == ["xl-turbo", "sft"]
+
+
+@pytest.mark.parametrize("hold", ["pin", "in-use"])
+def test_loading_another_mode_is_refused_while_xl_turbo_is_pinned_or_in_use(
+    hold: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache, loaded = _cache_for(monkeypatch, _settings())
+    asyncio.run(cache.load("xl-turbo"))
+    if hold == "pin":
+        asyncio.run(cache.pin("xl-turbo"))
+    else:
+        asyncio.run(cache.acquire_for_use("xl-turbo"))
+
+    with pytest.raises(CapacityError):
+        asyncio.run(cache.load("sft"))
+
+    assert cache.loaded_modes() == ["xl-turbo"]
+    assert loaded == ["xl-turbo"]
+
+
+def test_xl_turbo_fits_an_empty_cache_on_an_idle_card_at_the_default_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache, loaded = _cache_for(monkeypatch, _settings(budget_gb=24.0), measured_used_gb=0.5)
+
+    result = asyncio.run(cache.load("xl-turbo"))
+
+    assert result.evicted == []
+    assert loaded == ["xl-turbo"]

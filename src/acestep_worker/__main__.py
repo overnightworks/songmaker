@@ -32,6 +32,16 @@ DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
     "xl-sft": 12.0,
     "xl-base": 12.0,
 }
+# The 4B LM is about 8 GB of bf16 weights, plus the 1.13 GB KV floor and about
+# 1.4 GB of CUDA context (docs/acestep.md); the smaller 1.7B LM only evicts sooner.
+LM_DECLARED_SIZE_GB = 10.0
+
+
+def declared_model_sizes(settings: WorkerSettings) -> dict[str, float]:
+    lm_size_gb = LM_DECLARED_SIZE_GB if settings.acestep_init_llm else 0.0
+    return {
+        mode: DEFAULT_MODEL_SIZES_GB.get(mode, 6.0) + lm_size_gb for mode in MODEL_CONFIG_PATHS
+    }
 
 
 class JsonFormatter(logging.Formatter):
@@ -93,7 +103,7 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     )
     cache = ModelCache(
         vram_budget_gb=settings.vram_budget_gb,
-        model_sizes={mode: DEFAULT_MODEL_SIZES_GB.get(mode, 6.0) for mode in MODEL_CONFIG_PATHS},
+        model_sizes=declared_model_sizes(settings),
         loader=loader,
         unloader=unloader,
         vram_reader=lambda: read_gpu_vram_stats(settings.gpu_id or 0),
