@@ -598,7 +598,7 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Claude · Provider probe failed');
 	});
 
-	it('reads the co-writer row without a choice: Claude, Agent service, opus, who checks, and what is not offered', async () => {
+	it('C16 reads the co-writer row without a choice: Claude, Agent service, opus, who checks, and what is not offered', async () => {
 		api.fetchCowriterSettings.mockResolvedValue(cowriterSettings({ model: 'opus' }));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');

@@ -19,7 +19,7 @@ import {
 } from './cowriter-ui';
 
 describe('co-writer copy', () => {
-	it('names the model the service runs in the header and the thinking line', () => {
+	it('C17 names the model the service runs in the header and the thinking line', () => {
 		expect(cowriterHeaderLabel('opus')).toBe('Claude opus');
 		expect(cowriterThinkingLabel()).toBe('Claude is thinking…');
 	});
@@ -69,7 +69,7 @@ describe('co-writer copy', () => {
 			{ problem: null, text: 'Chat request failed', waitSeconds: 0 }
 		]
 	] satisfies Array<[string, ChatTurnProblemFrame | ChatTurnFailureFrame, CowriterTurnError]>)(
-		'words a turn that ended as %s',
+		'C8 words a turn that ended as %s',
 		(_case, frame, error) => {
 			expect(cowriterTurnError(frame)).toEqual(error);
 		}
@@ -84,7 +84,7 @@ describe('co-writer copy', () => {
 		[40, '0:40'],
 		[65, '1:05'],
 		[COWRITER_BUSY_WAIT_CEILING_SECONDS, '5:00']
-	])('shows a wait of %i seconds as %s', (seconds, clock) => {
+	])('C8 shows a wait of %i seconds as %s', (seconds, clock) => {
 		expect(cowriterWaitClock(seconds)).toBe(clock);
 	});
 

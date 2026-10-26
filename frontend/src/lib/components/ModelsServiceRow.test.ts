@@ -35,7 +35,7 @@ function cellTexts(target: HTMLElement): string[] {
 	);
 }
 
-describe('ModelsServiceRow', () => {
+describe('C16 ModelsServiceRow', () => {
 	it('says task, provider, route, model and who checks, as words in the five columns', () => {
 		const target = renderRow();
 

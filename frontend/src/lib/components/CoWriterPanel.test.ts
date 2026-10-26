@@ -959,7 +959,7 @@ describe('CoWriterPanel failed turns', () => {
 		['sign_in_again', 'Sign in again to use the co-writer', 'bad', 'Sign in'],
 		['not_enabled', 'The co-writer is not enabled for your account', 'off', null]
 	] as const)(
-		'words %s below the retained user message in its tone, with its one action',
+		'C8 C17 words %s below the retained user message in its tone, with its one action',
 		async (problem, text, tone, action) => {
 			const target = await failWith({
 				type: 'error',
@@ -978,7 +978,7 @@ describe('CoWriterPanel failed turns', () => {
 		}
 	);
 
-	it('sends a person to sign in again and back to this page (Q5 a)', async () => {
+	it('C10 sends a person to sign in again and back to this page (Q5 a)', async () => {
 		const target = await failWith({
 			type: 'error',
 			status: 401,
@@ -997,7 +997,7 @@ describe('CoWriterPanel failed turns', () => {
 			return button;
 		}
 
-		it('counts the service’s wait down on a disabled Try again, then enables it', async () => {
+		it('C8 counts the service’s wait down on a disabled Try again, then enables it', async () => {
 			vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 			const target = await failWith({
 				type: 'error',
