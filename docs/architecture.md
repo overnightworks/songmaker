@@ -737,9 +737,9 @@ their TypeScript interfaces. The backend-only `/api/internal/` worker
 protocol is the sole excluded route role. When a routed model changes,
 regenerate `types.ts` and run the check. The co-writer stream frames
 (`ChatTurnFinalFrame`, the two error frames and the provider events) are
-exported models; outside the files the stopgap block in `eslint.config.js` names,
-`lib/api` declares no wire shape of its own: ESLint refuses a hand-written
-interface or object type there.
+exported models; `lib/api` declares no wire shape of its own: ESLint refuses a
+hand-written interface or object type there, and a frontend-only call shape
+carries a line marker with its reason.
 
 `lib/api/` is the transport: it reports what the server answered. A 429 goes to
 the `rateLimited` reaction that `routes/+layout.svelte` installs through
