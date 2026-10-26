@@ -369,9 +369,10 @@ def test_m5_a_registered_run_held_by_the_same_subject_of_another_issuer_is_refus
 
 
 def test_c4_a_run_id_that_is_already_registered_is_not_registered_again(run_id):
+    other_person = RunPerson(ISSUER, "ben")
     with running_run(run_id, person="anna"):
         with pytest.raises(service_runs.RunAlreadyRegisteredError):
-            service_runs.register(run_id, RunPerson(ISSUER, "ben"))
+            service_runs.register(run_id, other_person)
 
         assert service_runs.holder(run_id) == RunPerson(ISSUER, "anna")
 
