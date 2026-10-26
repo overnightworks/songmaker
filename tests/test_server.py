@@ -951,9 +951,9 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
 
 # ── Wildcard ALLOWED_HOSTS refusal ─────────────────────────────────
 
-
 @pytest.mark.parametrize("allowed_hosts", ["*.trycloudflare.com,testserver", "*"])
 def test_wildcard_allowed_host_raises_at_startup(tmp_path: Path, fresh_settings, allowed_hosts):
+    """defect:#1891 -- startup refuses a wildcard ALLOWED_HOSTS entry."""
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"

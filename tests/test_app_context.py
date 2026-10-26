@@ -62,6 +62,7 @@ def test_the_allowed_hosts_are_one_list_for_the_host_check_and_the_origin_allowl
 def test_a_wildcard_allowed_host_stops_startup_naming_the_entry(
     monkeypatch: pytest.MonkeyPatch, fresh_settings,
 ) -> None:
+    """defect:#1891 -- a wildcard entry stops startup instead of being matched."""
     monkeypatch.setenv("ALLOWED_HOSTS", "a.example, *.trycloudflare.com")
 
     with pytest.raises(ValueError, match=r"\*\.trycloudflare\.com"):

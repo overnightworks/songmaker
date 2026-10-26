@@ -601,6 +601,7 @@ def test_host_origin_parser_applies_exact_port_and_ipv6_rules(
 
 
 def test_a_form_post_without_origin_is_refused(security_exchange):
+    """defect:#1891 -- a form post without Origin is refused."""
     _, exchange = security_exchange
     status, _, body = asyncio.run(exchange(
         "/api/security-proof",
@@ -614,6 +615,7 @@ def test_a_form_post_without_origin_is_refused(security_exchange):
 def test_a_json_post_without_origin_or_fetch_metadata_passes_on_the_internal_path(
     security_exchange,
 ):
+    """defect:#1891 -- the internal path passes JSON without Origin or fetch metadata."""
     _, exchange = security_exchange
     status, _, _ = asyncio.run(exchange(
         "/api/internal/security-proof",
