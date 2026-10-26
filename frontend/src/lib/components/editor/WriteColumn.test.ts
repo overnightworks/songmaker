@@ -12,7 +12,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		startNewConversation: vi.fn(),
 		deleteConversation: vi.fn(),
 		fetchMemory: vi.fn().mockResolvedValue(null),
-		fetchCowriterSettings: vi.fn().mockResolvedValue({ provider: 'claude', model: '' }),
+		fetchCowriterSettings: vi.fn().mockResolvedValue({ tail_token_budget: 24000, model: '' }),
 		fetchVersions: vi.fn().mockResolvedValue([]),
 		fetchLibraryPoolQueue: vi.fn()
 	};

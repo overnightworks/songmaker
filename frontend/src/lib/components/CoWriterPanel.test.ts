@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
 import type { ChatMessageItem } from '$lib/api/types';
 import {
-	COWRITER_CLAUDE_UNVERIFIED_LABEL,
 	COWRITER_CONVERSATION_MENU_LABEL,
 	COWRITER_DELETE_CONVERSATION_TITLE,
 	COWRITER_DELETE_CONVERSATION_WARNING,
@@ -69,7 +68,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
 	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
-	fetchCowriterSettings.mockReset().mockResolvedValue({ provider: 'claude', model: 'sonnet' });
+	fetchCowriterSettings.mockReset().mockResolvedValue({ tail_token_budget: 24000, model: 'opus' });
 	fetchHealth.mockReset().mockResolvedValue(makeHealthResponse());
 });
 
@@ -77,6 +76,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	stopHealthPolling();
+	vi.useRealTimers();
 	streamCoWriterTurn.mockReset();
 });
 
@@ -266,41 +266,39 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 	});
 
 	it.each([
-		['no conversation yet', [], 'Claude · new conversation'],
+		['no conversation yet', [], 'Co-writer · Claude opus · new conversation'],
 		[
 			'one started today',
 			[conversationStartedAt('2026-09-27T08:00:00')],
-			'Claude · conversation since today'
+			'Co-writer · Claude opus · conversation since today'
 		],
 		[
 			'one started this week',
 			[conversationStartedAt('2026-09-22T10:00:00')],
-			'Claude · conversation since Tue'
+			'Co-writer · Claude opus · conversation since Tue'
 		],
 		[
 			'one started earlier this year',
 			[conversationStartedAt('2026-09-12T10:00:00')],
-			'Claude · conversation since Sep 12'
+			'Co-writer · Claude opus · conversation since Sep 12'
 		],
 		[
 			'one started last year',
 			[conversationStartedAt('2025-09-12T10:00:00')],
-			'Claude · conversation since Sep 12, 2025'
+			'Co-writer · Claude opus · conversation since Sep 12, 2025'
 		]
-	])('names the provider and %s in one line', async (_case, conversations, line) => {
+	])('names the co-writer, its model and %s in one line', async (_case, conversations, line) => {
 		fetchConversations.mockResolvedValue(conversations);
 		const target = await render();
 
 		await vi.waitFor(() => expect(conversationLine(target)).toBe(line));
 	});
 
-	it('is the only header: no Co-Writer title, and neither the model nor a conversation button on the line', async () => {
+	it('is the only header: the conversation menu is the one button on the line', async () => {
 		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00')]);
 		const target = await render();
 		const line = target.querySelector<HTMLElement>('.convo');
 
-		expect(target.textContent).not.toContain('Co-Writer');
-		expect(line?.textContent).not.toContain('sonnet');
 		expect(
 			Array.from(line?.querySelectorAll('button') ?? [], (button) =>
 				button.getAttribute('aria-label')
@@ -318,7 +316,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		const target = await render();
 
 		const menu = await openConversationMenu(target);
-		expect(menu.textContent).toContain('Claude · sonnet');
+		expect(menu.textContent).toContain('Claude opus');
 		const conversationRows = menu.querySelectorAll<HTMLButtonElement>('.conv-pick');
 		expect(conversationRows).toHaveLength(2);
 
@@ -326,14 +324,18 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenLastCalledWith('c0'));
 		await tick();
 		expect(target.querySelector('[role="menu"]')).toBeNull();
-		expect(conversationLine(target)).toBe('Claude · archived conversation from Sep 20');
+		expect(conversationLine(target)).toBe(
+			'Co-writer · Claude opus · archived conversation from Sep 20'
+		);
 
 		const reopened = await openConversationMenu(target);
 		reopened.querySelector<HTMLButtonElement>('.convo-new')?.click();
 		await tick();
 		expect(startNewConversation).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('[role="menu"]')).toBeNull();
-		await vi.waitFor(() => expect(conversationLine(target)).toBe('Claude · new conversation'));
+		await vi.waitFor(() =>
+			expect(conversationLine(target)).toBe('Co-writer · Claude opus · new conversation')
+		);
 	});
 
 	it('names each conversation in its ⋯ menu with the line’s day form', async () => {
@@ -435,12 +437,14 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			})()
 		);
 		const target = await render();
-		await vi.waitFor(() => expect(conversationLine(target)).toBe('Claude · new conversation'));
+		await vi.waitFor(() =>
+			expect(conversationLine(target)).toBe('Co-writer · Claude opus · new conversation')
+		);
 
 		await sendTurn(target, 'write a chorus');
 
 		await vi.waitFor(() =>
-			expect(conversationLine(target)).toBe('Claude · conversation since today')
+			expect(conversationLine(target)).toBe('Co-writer · Claude opus · conversation since today')
 		);
 		fetchConversations.mockResolvedValue([
 			conversationStartedAt(new Date('2026-09-27T11:59:00').toISOString())
@@ -448,7 +452,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		fetchConversationMessages.mockResolvedValue(conversation(false, ask, answer));
 		deliverReply();
 		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
-		expect(conversationLine(target)).toBe('Claude · conversation since today');
+		expect(conversationLine(target)).toBe('Co-writer · Claude opus · conversation since today');
 	});
 
 	it('counts an earlier failed message the server stored once the answered turn is read back', async () => {
@@ -921,103 +925,97 @@ describe('CoWriterPanel chat scroll across tab switches (#1063)', () => {
 	);
 });
 
-describe('CoWriterPanel unavailable before any turn', () => {
-	it('names Claude unavailable and refuses Send via click, Enter, and the retry link once its tool surface drifts', async () => {
-		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'ok' }));
-		streamCoWriterTurn.mockReturnValueOnce(
-			(async function* () {
-				yield* [];
-				throw new ApiError(503, 'Claude CLI is temporarily unavailable', '/api/chat/turn');
-			})()
-		);
-		const target = await render();
+describe('CoWriterPanel tool-surface health', () => {
+	it.each(['drift', 'unverified'] as const)(
+		'shows no banner and still sends the turn when /health reports %s',
+		async (verdict) => {
+			fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: verdict }));
+			const target = await render();
+			await vi.waitFor(() => expect(fetchHealth).toHaveBeenCalled());
 
-		await sendTurn(target, 'write a chorus');
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull()
-		);
-		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
-
-		stopHealthPolling();
-		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'drift' }));
-		startHealthPolling();
-		await vi.waitFor(() =>
-			expect(target.querySelector('.unavailable-banner')?.textContent).toContain(
-				'Claude is currently unavailable'
-			)
-		);
-
-		target.querySelector<HTMLButtonElement>('.send-btn')?.click();
-		await tick();
-		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
-
-		const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
-		if (!input) throw new Error('Expected the chat textarea');
-		input.value = 'another try';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		await tick();
-		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
-
-		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
-		await tick();
-		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
-	});
-
-	it('warns without disabling Send when the tool surface is unverified, and still sends the turn', async () => {
-		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'unverified' }));
-		const target = await render();
-		expect(target.querySelector('.unverified-banner')?.textContent).toBe(
-			COWRITER_CLAUDE_UNVERIFIED_LABEL
-		);
-		expect(target.querySelector('.unavailable-banner')).toBeNull();
-
-		await sendTurn(target, 'write a chorus');
-		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(1));
-	});
-
-	it('stays available when the tool surface is ok', async () => {
-		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'ok' }));
-		const target = await render();
-		expect(target.querySelector('.unavailable-banner')).toBeNull();
-		expect(target.querySelector('.unverified-banner')).toBeNull();
-	});
+			expect(target.querySelector('[role="status"]')).toBeNull();
+			await sendTurn(target, 'write a chorus');
+			await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(1));
+		}
+	);
 });
 
 describe('CoWriterPanel failed turns', () => {
+	async function failWith(frame: CoWriterStreamEvent): Promise<HTMLElement> {
+		streamCoWriterTurn.mockReturnValue(turnEvents([frame]));
+		const target = await render();
+		await sendTurn(target, 'write a chorus');
+		await vi.waitFor(() => expect(target.querySelector('.turn-error')).not.toBeNull());
+		return target;
+	}
+
+	function errorText(target: HTMLElement): string | undefined {
+		return target.querySelector<HTMLElement>('.turn-error .text')?.textContent ?? undefined;
+	}
+
 	it.each([
-		[
-			'the named problem after the provider’s name',
-			{ type: 'error', status: 503, problem: 'unavailable', retry_after_seconds: null },
-			'Claude: The agent service is unavailable.'
-		],
-		[
-			'the sign-in request after the provider’s name',
-			{ type: 'error', status: 401, problem: 'sign_in_again', retry_after_seconds: null },
-			'Claude: Sign in again to use the co-writer.'
-		],
-		[
-			'the endpoint’s own failure after the panel’s provider',
-			{ type: 'error', status: 500, message: 'Chat request failed' },
-			'Claude: Chat request failed'
-		]
-	] as Array<[string, CoWriterStreamEvent, string]>)(
-		'names %s below the retained user message',
-		async (_case, frame, failure) => {
-			streamCoWriterTurn.mockReturnValue(turnEvents([frame]));
-			const target = await render();
+		['unavailable', 'The co-writer is unavailable', 'wait', 'Try again'],
+		['busy', 'The co-writer is busy', 'wait', 'Try again'],
+		['sign_in_again', 'Sign in again to use the co-writer', 'bad', 'Sign in'],
+		['not_enabled', 'The co-writer is not enabled for your account', 'off', null]
+	] as const)(
+		'words %s below the retained user message in its tone, with its one action',
+		async (problem, text, tone, action) => {
+			const target = await failWith({
+				type: 'error',
+				status: 400,
+				problem,
+				retry_after_seconds: null
+			});
 
-			await sendTurn(target, 'write a chorus');
-
-			await vi.waitFor(() =>
-				expect(target.querySelector<HTMLElement>('.turn-error span')?.textContent).toBe(failure)
-			);
+			expect(errorText(target)).toBe(text);
+			expect(target.querySelector('.turn-error')?.classList.contains(tone)).toBe(true);
+			expect(target.querySelector('.turn-error svg')).not.toBeNull();
+			const actions = target.querySelectorAll('.turn-error button, .turn-error a');
+			expect(Array.from(actions, (el) => el.textContent?.trim())).toEqual(action ? [action] : []);
 			expect(target.querySelector('.typing')).toBeNull();
 			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-			expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
 		}
 	);
+
+	it('sends a person to sign in again and back to this page (Q5 a)', async () => {
+		const target = await failWith({
+			type: 'error',
+			status: 401,
+			problem: 'sign_in_again',
+			retry_after_seconds: null
+		});
+
+		const link = target.querySelector<HTMLAnchorElement>('.turn-error a.signin');
+		expect(link?.getAttribute('href')).toMatch(/^\/login\/oidc\?next=/);
+	});
+
+	describe('busy', () => {
+		function retryButton(target: HTMLElement): HTMLButtonElement {
+			const button = target.querySelector<HTMLButtonElement>('.retry-turn');
+			if (!button) throw new Error('Expected Try again');
+			return button;
+		}
+
+		it('counts the service’s wait down on a disabled Try again, then enables it', async () => {
+			vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+			const target = await failWith({
+				type: 'error',
+				status: 429,
+				problem: 'busy',
+				retry_after_seconds: 40
+			});
+
+			expect(retryButton(target).textContent?.replace(/\s+/g, ' ').trim()).toBe('Try again 0:40');
+			expect(retryButton(target).disabled).toBe(true);
+
+			vi.advanceTimersByTime(40_000);
+			await tick();
+
+			expect(retryButton(target).textContent?.trim()).toBe('Try again');
+			expect(retryButton(target).disabled).toBe(false);
+		});
+	});
 
 	it('offers Try again only on the newest message once a newer one failed too', async () => {
 		streamCoWriterTurn.mockImplementation(() =>

@@ -529,7 +529,6 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual(['Claude ✓ ready']);
 		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · no image tool',
 			'Codex ✓ ready',
@@ -547,7 +546,7 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual(['Claude · Checking…']);
+		expect(optionLabels(providerSelect(target, 'Scoring'))[0]).toBe('Claude · Checking…');
 	});
 
 	it('keeps every provider offered after the reachability probe fails', async () => {
@@ -566,10 +565,6 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(optionLabels(modelSelect(target, 'Co-Writer'))).toEqual([
-			'claude-sonnet',
-			'claude-opus-cli'
-		]);
 		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['gpt-5-codex']);
 	});
 
@@ -592,8 +587,7 @@ describe('admin models tab', () => {
 			'Cover',
 			'Scoring'
 		]);
-		expect(statusText(rowNamed(target, 'Co-Writer'))).toBe('○Checking…');
-		expect(providerSelect(target, 'Co-Writer').disabled).toBe(false);
+		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Checking…');
 	});
 
 	it('names a failed reachability probe in the row instead of claiming Checking', async () => {
@@ -601,17 +595,35 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(statusText(rowNamed(target, 'Co-Writer'))).toBe('○Claude · Provider probe failed');
+		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Claude · Provider probe failed');
 	});
 
-	it('saves the co-writer row through its history tail alone as soon as the model changes', async () => {
+	it('reads the co-writer row without a choice: Claude, Agent service, opus, who checks, and what is not offered', async () => {
+		api.fetchCowriterSettings.mockResolvedValue(cowriterSettings({ model: 'opus' }));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		await choose(modelSelect(target, 'Co-Writer'), 'claude-opus-cli');
+		const row = rowNamed(target, 'Co-Writer');
+		expect(row.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			'Co-Writer Provider Claude Route Agent service Model opus Status Checked by the agent service at each turn'
+		);
+		expect(row.querySelector('select, [role="group"], .mark')).toBeNull();
+		expect(sectionByHeading(target, 'Models').textContent).toContain(
+			'Grok, Codex: not selectable yet'
+		);
+		expect(api.updateCowriterSettings).not.toHaveBeenCalled();
+	});
 
-		expect(api.updateCowriterSettings).toHaveBeenCalledWith(8000);
-		expect(rowNamed(target, 'Co-Writer').textContent).toContain('Saved.');
+	it('lists the cover row providers from the judge settings when the co-writer settings do not load', async () => {
+		api.fetchCowriterSettings.mockRejectedValue(serverRefusal('Co-writer settings failed'));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
+			'Claude · no image tool',
+			'Codex ✓ ready',
+			'Grok · no image tool'
+		]);
 	});
 
 	it('saves the cover row with its own provider, route and model', async () => {
@@ -894,38 +906,16 @@ describe('admin models tab', () => {
 		});
 	});
 
-	it('names a rejected save in a red sub-row with a retry', async () => {
-		const rejection = 'Tail budget out of range';
-		api.updateCowriterSettings.mockRejectedValue(
-			new ApiError(422, rejection, '/api/settings/cowriter', null, rejection)
-		);
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		await choose(modelSelect(target, 'Co-Writer'), 'claude-opus-cli');
-
-		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
-		expect(failure.textContent).toContain(rejection);
-		expect(requireElement<HTMLButtonElement>(failure, '.retry').textContent?.trim()).toBe('Retry');
-
-		api.updateCowriterSettings.mockResolvedValue(cowriterSettings());
-		requireElement<HTMLButtonElement>(failure, '.retry').click();
-		await flush();
-
-		expect(api.updateCowriterSettings).toHaveBeenCalledTimes(2);
-		expect(sectionByHeading(target, 'Models').querySelector('.tt-sub.bad')).toBeNull();
-	});
-
 	it.each([
 		{
 			shape: 'a route reason the row can phrase',
-			detail: { code: 'cli_login_not_configured', message: 'grok CLI is not signed in.' },
-			sentence: 'CLI · not logged in'
+			detail: { code: 'api_key_not_set', message: 'codex key is not set.' },
+			sentence: 'API · key not set'
 		},
 		{
 			shape: 'a plain sentence from the server',
-			detail: "Unknown grok model 'grok-4'",
-			sentence: "Unknown grok model 'grok-4'"
+			detail: "Unknown codex model 'gpt-9'",
+			sentence: "Unknown codex model 'gpt-9'"
 		},
 		{
 			shape: 'a detail the page cannot read',
@@ -933,11 +923,11 @@ describe('admin models tab', () => {
 			sentence: 'The server rejected the change.'
 		}
 	])('names a rejected save that carries $shape', async ({ detail, sentence }) => {
-		api.updateCowriterSettings.mockRejectedValue(
+		api.updateJudgeSettings.mockRejectedValue(
 			new ApiError(
 				422,
 				typeof detail === 'string' ? detail : '',
-				'/api/settings/cowriter',
+				'/api/settings/judge',
 				null,
 				detail
 			)
@@ -945,11 +935,12 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		await choose(modelSelect(target, 'Co-Writer'), 'claude-opus-cli');
+		await choose(providerSelect(target, 'Scoring'), 'codex');
 
 		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
 		expect(failure.textContent).toContain(sentence);
 		expect(failure.textContent).not.toContain('Something went wrong');
+		expect(requireElement(failure, '.retry').textContent?.trim()).toBe('Retry');
 	});
 
 	it('names a rejected history-tail save next to the field with a retry', async () => {
