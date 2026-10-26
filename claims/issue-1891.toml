@@ -1,8 +1,0 @@
-claim_id = "a4d10053dc604559854389c202b8e31b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "dfaaed1458f7f61685a921981a8deab8f857518e"
-branch = "claude/issue-1891-exact-hosts-test-client-fetch-metadata"
-scope = ["docker/.env.docker.example", "docs/security.md", "quality/baseline.toml", "src/songmaker_cli/app_context.py", "tests/conftest.py", "tests/test_app_context.py", "tests/test_server.py", "tests/test_server_middleware.py"]
-opened_commit = "d6d6fda5daa30f459b8d9d1c4d370308e2234947"
-whole_reason = "One host rule read by the host check and the origin allowlist, with the test client and the documents that pin it."
