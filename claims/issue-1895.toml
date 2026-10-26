@@ -1,0 +1,8 @@
+claim_id = "1503ad96243c4a61a5d3f18d007c1832"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "9a3a372fc5d5f4da694599bc02ccc66033027543"
+branch = "claude/issue-1895-agent-service-pictures"
+scope = ["docs/design"]
+opened_commit = "d41d0d6f9f43bb8ff452f122c45cf52ce842b83f"
+whole_reason = "One set of pictures for one switch: the Models page, the co-writer panel, the cover editor and the take panel change together when the agent service takes over."
