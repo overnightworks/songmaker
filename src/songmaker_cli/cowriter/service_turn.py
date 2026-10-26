@@ -56,8 +56,7 @@ from songmaker_cli.cowriter.mcp_endpoint import (
     cowriter_mcp_availability,
     cowriter_tool_declarations,
 )
-from songmaker_cli.cowriter.service_runs import RunPerson
-from songmaker_cli.oidc_client import normalised_oidc_issuer
+from songmaker_cli.cowriter.service_runs import RunPerson, normalised_oidc_issuer
 from songmaker_cli.settings import get_settings
 
 if TYPE_CHECKING:
@@ -144,7 +143,7 @@ async def run_cowriter_turn(
     if isinstance(tokens, TurnProblem):
         yield tokens
         return
-    person = RunPerson(normalised_oidc_issuer(get_settings()) or "", caller.user.id)
+    person = RunPerson(normalised_oidc_issuer(get_settings().oidc_issuer) or "", caller.user.id)
     # Closing this generator must end the run's stream at once, so its release runs now.
     async with aclosing(_stream_run(service_url, agent.request(messages), tokens, person)) as run:
         async for outcome in run:

@@ -13,6 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+def normalised_oidc_issuer(configured_issuer: str | None) -> str | None:
+    """The configured issuer in the form tokens carry it: no trailing slash."""
+    return configured_issuer.rstrip("/") if configured_issuer else None
+
+
 @dataclass(frozen=True)
 class RunPerson:
     """The person exactly as the agent service saw them: issuer and subject."""
