@@ -476,6 +476,7 @@ class UserSession(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(TZDateTime)
     stored_refresh_token: Mapped[str | None] = mapped_column("refresh_token", Text, nullable=True)
+    stored_id_token: Mapped[str | None] = mapped_column("id_token", Text, nullable=True)
 
     user: Mapped[User] = relationship(back_populates="sessions")
 
@@ -485,6 +486,13 @@ class UserSession(Base):
         if self.stored_refresh_token is None:
             return None
         return SecretStr(self.stored_refresh_token)
+
+    @property
+    def id_token(self) -> SecretStr | None:
+        """The sign-in's ID token, wrapped like the refresh token and ending with this row."""
+        if self.stored_id_token is None:
+            return None
+        return SecretStr(self.stored_id_token)
 
 
 class RateLimitSetting(Base):
