@@ -11,6 +11,7 @@ import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
+	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	openNowPlayingLabel,
 	TAKE_PROVENANCE_REPAINT_PREFIX
@@ -105,6 +106,15 @@ const unsavedChangesDialog = (page: Page) =>
 	page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
 const lyricsField = (page: Page) => page.getByRole('textbox', { name: /^Lyrics/ });
 const entriesOf = (page: Page) => page.evaluate(() => history.length);
+// Chromium's Navigation API: the index of the entry on screen, which every Back lowers by one.
+const historyIndex = (page: Page) =>
+	page.evaluate(
+		() =>
+			(window as unknown as { navigation: { currentEntry: { index: number } } }).navigation
+				.currentEntry.index
+	);
+// Now Playing's own layers: the dialog and its This-take panel.
+const NOW_PLAYING_LAYERS = 2;
 
 async function expectOnTheSong(page: Page, song: JumpSong, hash: string): Promise<void> {
 	await expect
@@ -215,6 +225,24 @@ test.describe('a link to a take inside a folded version', () => {
 		await revertDraft(page);
 	});
 
+	test('J8 Discard on the Back that leaves the song leaves for the album', async ({ page }) => {
+		const song = await seedJumpSong(page, 'discard');
+		await openTakes(page, song);
+		await startDirtyDraft(page);
+		await provenanceLink(page, song).click();
+		await expect(takeRow(page, song.source)).toBeInViewport();
+
+		await page.goBack();
+		await page.goBack();
+
+		await expect(unsavedChangesDialog(page)).toBeVisible();
+		await unsavedChangesDialog(page)
+			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+			.click();
+		await expect(unsavedChangesDialog(page)).toHaveCount(0);
+		await expect.poll(() => new URL(page.url()).pathname).toBe(`/album/${song.albumId}`);
+	});
+
 	test('J8 Back off the song asks as ever, and Cancel keeps the song and its draft', async ({
 		page
 	}) => {
@@ -259,11 +287,15 @@ test.describe(
 			await expect(nowPlaying).toBeVisible();
 
 			// Now Playing's inner This-take panel is its topmost layer and takes the
-			// first Back, so Back runs until Now Playing is gone.
-			await expect(async () => {
-				if ((await nowPlaying.count()) > 0) await page.goBack();
-				await expect(nowPlaying).toHaveCount(0, { timeout: 1_000 });
-			}).toPass();
+			// first Back, so Back runs once per layer, each press after the previous
+			// one has moved the history entry, until Now Playing is gone.
+			const layers = await historyIndex(page);
+			for (let pressed = 0; (await nowPlaying.count()) > 0 && pressed < NOW_PLAYING_LAYERS;) {
+				await page.goBack();
+				pressed += 1;
+				await expect.poll(() => historyIndex(page)).toBe(layers - pressed);
+			}
+			await expect(nowPlaying).toHaveCount(0);
 			await expectOnTheSong(page, song, anchorOf(song.source));
 
 			await showTab(page, EDITOR_TAB_EDIT_LABEL);
