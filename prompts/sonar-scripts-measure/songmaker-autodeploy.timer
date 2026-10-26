@@ -1,0 +1,15 @@
+[Unit]
+Description=Songmaker pull-based auto-deploy timer (issue #298)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+# Persistent=false: this is a poll, not a task with a deadline. If the host
+# was off when a tick would have fired, there is nothing to "catch up" —
+# the next regular tick a couple of minutes after boot (OnBootSec) sees
+# whatever origin/main is at that point and deploys it if needed.
+Persistent=false
+Unit=songmaker-autodeploy.service
+
+[Install]
+WantedBy=timers.target
