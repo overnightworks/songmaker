@@ -262,7 +262,7 @@ test.describe(
 			// first Back, so Back runs until Now Playing is gone.
 			await expect(async () => {
 				if ((await nowPlaying.count()) > 0) await page.goBack();
-				expect(await nowPlaying.count()).toBe(0);
+				await expect(nowPlaying).toHaveCount(0, { timeout: 1_000 });
 			}).toPass();
 			await expectOnTheSong(page, song, anchorOf(song.source));
 
