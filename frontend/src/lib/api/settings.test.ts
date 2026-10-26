@@ -68,17 +68,12 @@ describe('settings API contract', () => {
 		expect(JSON.parse(String(init.body))).toEqual(payload);
 	});
 
-	it('preserves optional cowriter fields and routes in the settings payload', async () => {
-		await updateCowriterSettings('anthropic', 'claude', 1200, { anthropic: 'api' });
+	it('sends only the tail token budget in the co-writer settings payload', async () => {
+		await updateCowriterSettings(1200);
 		const [url, init] = request();
 		expect(url).toBe('/api/settings/cowriter');
 		expect(init.method).toBe('PUT');
-		expect(JSON.parse(String(init.body))).toEqual({
-			provider: 'anthropic',
-			model: 'claude',
-			tail_token_budget: 1200,
-			provider_routes: { anthropic: 'api' }
-		});
+		expect(JSON.parse(String(init.body))).toEqual({ tail_token_budget: 1200 });
 	});
 
 	it('uses the model query without a JSON body', async () => {

@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
 from agent_providers.errors import SafeRouteReason
-from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator, model_validator
 
 from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.api_models.songs import _VALID_MODEL_MODES, GenerationParams
@@ -95,19 +95,9 @@ class AvailableModelResponse(BaseModel):
 
 
 class CowriterSettingsRequest(BaseModel):
-    provider: str
-    model: str
-    tail_token_budget: int | None = None
-    provider_routes: dict[str, Literal["cli", "api"]] | None = None
+    model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="after")
-    def _validate_provider_routes(self) -> CowriterSettingsRequest:
-        if (
-            self.provider_routes is not None
-            and set(self.provider_routes) != {"claude", "grok", "codex"}
-        ):
-            raise ValueError("provider_routes must contain exactly claude, grok, and codex")
-        return self
+    tail_token_budget: int
 
 
 class ProviderRouteReadiness(BaseModel):
@@ -128,21 +118,8 @@ class ProviderRouteStatusResponse(BaseModel):
 
 
 class CowriterSettingsResponse(BaseModel):
-    provider: str
-    model: str
-    allowed_providers: list[str]
-    allowed_models: list[str]
-    models_by_provider: dict[str, list[str]]
-    selected_models_by_provider: dict[str, str]
-    models_errors: dict[str, str] = Field(default_factory=dict)
-    models_sources: dict[str, str] = Field(default_factory=dict)
-    current_models_not_in_catalog: dict[str, str] = Field(default_factory=dict)
-    probed_at: dict[str, ComputedTimestamp]
     tail_token_budget: int
-    provider_routes: dict[str, Literal["cli", "api"]] = Field(default=None)
-    provider_routes_status: dict[str, dict[Literal["cli", "api"], ProviderRouteStatusResponse]] = (
-        Field(default=None)
-    )
+    model: str
 
 
 class JudgeSettingsRequest(BaseModel):

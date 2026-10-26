@@ -129,18 +129,8 @@ const PROVIDER_STATUSES: ProviderStatus[] = [
 
 function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSettings {
 	return {
-		provider: 'claude',
 		model: 'claude-sonnet',
 		tail_token_budget: 8000,
-		allowed_providers: ['claude', 'codex', 'grok'],
-		allowed_models: ['claude-sonnet'],
-		models_by_provider: {},
-		selected_models_by_provider: {},
-		models_errors: {},
-		models_sources: {},
-		current_models_not_in_catalog: {},
-		probed_at: {},
-		provider_routes: { claude: 'cli', codex: 'cli', grok: 'cli' },
 		...overrides
 	};
 }
@@ -305,9 +295,8 @@ beforeEach(() => {
 	api.fetchBuiltinDefaults.mockResolvedValue({});
 	api.fetchProviderStatus.mockResolvedValue(PROVIDER_STATUSES);
 	api.fetchCowriterSettings.mockResolvedValue(cowriterSettings());
-	api.updateCowriterSettings.mockImplementation(
-		async (provider: string, model: string, tailTokenBudget: number) =>
-			cowriterSettings({ provider, model, tail_token_budget: tailTokenBudget })
+	api.updateCowriterSettings.mockImplementation(async (tailTokenBudget: number) =>
+		cowriterSettings({ tail_token_budget: tailTokenBudget })
 	);
 	api.fetchCoverSettings.mockResolvedValue({
 		provider: 'codex',
@@ -540,11 +529,7 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual([
-			'Claude ✓ ready',
-			'Codex ✓ ready',
-			'Grok · needs its API key'
-		]);
+		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual(['Claude ✓ ready']);
 		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · no image tool',
 			'Codex ✓ ready',
@@ -562,11 +547,7 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual([
-			'Claude · Checking…',
-			'Codex · Checking…',
-			'Grok · Checking…'
-		]);
+		expect(optionLabels(providerSelect(target, 'Co-Writer'))).toEqual(['Claude · Checking…']);
 	});
 
 	it('keeps every provider offered after the reachability probe fails', async () => {
@@ -623,17 +604,13 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Co-Writer'))).toBe('○Claude · Provider probe failed');
 	});
 
-	it('saves the co-writer row with its route map as soon as the model changes', async () => {
+	it('saves the co-writer row through its history tail alone as soon as the model changes', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
 		await choose(modelSelect(target, 'Co-Writer'), 'claude-opus-cli');
 
-		expect(api.updateCowriterSettings).toHaveBeenCalledWith('claude', 'claude-opus-cli', 8000, {
-			claude: 'cli',
-			codex: 'cli',
-			grok: 'cli'
-		});
+		expect(api.updateCowriterSettings).toHaveBeenCalledWith(8000);
 		expect(rowNamed(target, 'Co-Writer').textContent).toContain('Saved.');
 	});
 
@@ -918,20 +895,20 @@ describe('admin models tab', () => {
 	});
 
 	it('names a rejected save in a red sub-row with a retry', async () => {
-		const rejection = "Unknown grok model 'grok-4'";
+		const rejection = 'Tail budget out of range';
 		api.updateCowriterSettings.mockRejectedValue(
 			new ApiError(422, rejection, '/api/settings/cowriter', null, rejection)
 		);
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		await choose(providerSelect(target, 'Co-Writer'), 'grok');
+		await choose(modelSelect(target, 'Co-Writer'), 'claude-opus-cli');
 
 		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
 		expect(failure.textContent).toContain(rejection);
 		expect(requireElement<HTMLButtonElement>(failure, '.retry').textContent?.trim()).toBe('Retry');
 
-		api.updateCowriterSettings.mockResolvedValue(cowriterSettings({ provider: 'grok', model: '' }));
+		api.updateCowriterSettings.mockResolvedValue(cowriterSettings());
 		requireElement<HTMLButtonElement>(failure, '.retry').click();
 		await flush();
 
@@ -968,7 +945,7 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		await choose(providerSelect(target, 'Co-Writer'), 'grok');
+		await choose(modelSelect(target, 'Co-Writer'), 'claude-opus-cli');
 
 		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
 		expect(failure.textContent).toContain(sentence);
@@ -1016,11 +993,7 @@ describe('admin models tab', () => {
 		budget.dispatchEvent(new Event('change', { bubbles: true }));
 		await flush();
 
-		expect(api.updateCowriterSettings).toHaveBeenCalledWith('claude', 'claude-sonnet', 24000, {
-			claude: 'cli',
-			codex: 'cli',
-			grok: 'cli'
-		});
+		expect(api.updateCowriterSettings).toHaveBeenCalledWith(24000);
 		expect(disclosure.textContent).toContain('Saved.');
 	});
 });

@@ -125,6 +125,11 @@ def _cowriter_agent() -> AgentDefinition:
     return load_agent(files("songmaker_cli") / "agents" / _AGENT_FILE, cowriter_tool_declarations())
 
 
+def cowriter_model() -> str:
+    """The model the agent file names for the co-writer, as the service takes it."""
+    return _cowriter_agent().model
+
+
 async def run_cowriter_turn(
     caller: TurnCaller, messages: list[TurnMessage],
 ) -> AsyncIterator[TurnOutcome]:

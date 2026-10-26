@@ -140,6 +140,8 @@
 
 	let providerStatuses = $state<ProviderStatus[]>([]);
 
+	// The co-writer runs through the agent service; its row offers no choice until the Models row replaces it.
+	const COWRITER_AGENT_PROVIDER = 'claude';
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterBudget = $state(0);
 	let cowriterBudgetSaved = $state(false);
@@ -420,22 +422,21 @@
 	}
 
 	function storedRoute(provider: string): ModelsRouteKey {
-		const stored = cowriterSettings?.provider_routes?.[provider];
-		if (stored) return stored;
 		return (
 			MODELS_ROUTES.find((route) => catalogueOf(provider, route)?.readiness.state === 'ready') ??
 			FALLBACK_ROUTE
 		);
 	}
 
-	const cowriterProviderNames = $derived(cowriterSettings?.allowed_providers ?? []);
-	const cowriterProviders = $derived(taskProviders(transportRoute, cowriterProviderNames));
+	const cowriterProviders = $derived(taskProviders(transportRoute, [COWRITER_AGENT_PROVIDER]));
 	const cowriterSelection = $derived<ModelsTaskSelection>({
-		provider: cowriterSettings?.provider ?? '',
-		route: storedRoute(cowriterSettings?.provider ?? ''),
+		provider: COWRITER_AGENT_PROVIDER,
+		route: storedRoute(COWRITER_AGENT_PROVIDER),
 		model: cowriterSettings?.model ?? ''
 	});
-	const coverProviders = $derived(taskProviders(coverRoute, cowriterProviderNames));
+	const coverProviders = $derived(
+		taskProviders(coverRoute, judgeSettings?.allowed_providers ?? [])
+	);
 	const coverSelection = $derived<ModelsTaskSelection>({
 		provider: coverSettings?.provider ?? '',
 		route: coverSettings?.route ?? FALLBACK_ROUTE,
@@ -472,27 +473,15 @@
 		return describeFailure(e, MODELS_SAVE_FAILED_FALLBACK);
 	}
 
-	function routeMapWith(selection: ModelsTaskSelection): Record<string, ModelsRouteKey> {
-		const routes = Object.fromEntries(
-			cowriterProviders.map((entry) => [entry.provider, storedRoute(entry.provider)])
-		);
-		return { ...routes, [selection.provider]: selection.route };
-	}
-
-	async function saveCowriter(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
+	async function saveCowriter(): Promise<ModelsSaveOutcome> {
 		try {
-			cowriterSettings = await updateCowriterSettings(
-				selection.provider,
-				selection.model,
-				cowriterBudget,
-				routeMapWith(selection)
-			);
+			cowriterSettings = await updateCowriterSettings(cowriterBudget);
 			cowriterBudget = cowriterSettings.tail_token_budget;
 			return { ok: true };
 		} catch (e) {
 			return {
 				ok: false,
-				reason: saveFailureReason(e, MODELS_TASK_COWRITER_LABEL, selection.route)
+				reason: saveFailureReason(e, MODELS_TASK_COWRITER_LABEL, cowriterSelection.route)
 			};
 		}
 	}
@@ -530,7 +519,7 @@
 		cowriterBudgetSaved = false;
 		cowriterBudgetFailure = null;
 		cowriterBudget = budget;
-		const outcome = await saveCowriter(cowriterSelection);
+		const outcome = await saveCowriter();
 		if (outcome.ok) {
 			cowriterBudgetSaved = true;
 			return;

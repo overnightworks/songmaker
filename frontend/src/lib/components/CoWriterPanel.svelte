@@ -696,7 +696,6 @@
 	async function loadCowriterSettings(): Promise<void> {
 		try {
 			const settings = await fetchCowriterSettings();
-			providerName = settings.provider;
 			providerModel = settings.model;
 		} catch {
 			/* leave last known labels */

@@ -48,6 +48,7 @@ from songmaker_cli.constants import (
     AuditAction,
     ResourceType,
 )
+from songmaker_cli.cowriter.service_turn import cowriter_model
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.rate_limits import (
     get_all_global_rate_limits,
@@ -59,27 +60,20 @@ from songmaker_cli.db.queries.settings import (
     get_claude_chat_model,
     get_claude_scoring_model,
     get_cover_settings,
-    get_cowriter_model,
-    get_cowriter_models_by_provider,
-    get_cowriter_provider,
     get_cowriter_tail_token_budget,
-    get_effective_provider_routes,
     get_judge_model,
     get_judge_provider,
     get_judge_route,
     get_preset,
-    get_raw_stored_cowriter_settings,
     list_active_models,
     list_all_models,
     list_presets,
     list_shared_presets,
     name_exists,
     set_cover_settings,
-    set_cowriter_settings,
     set_cowriter_tail_token_budget,
     set_default_preset,
     set_judge_settings,
-    stored_provider_is_retired,
     toggle_model,
     update_preset,
 )
@@ -453,50 +447,10 @@ def _provider_probe_times(
     }
 
 
-def _cowriter_response(session) -> CowriterSettingsResponse:
-    from songmaker_cli.provider_status import provider_snapshots
-
-    provider = get_cowriter_provider(session)
-    model = get_cowriter_model(session, provider)
-    saved_models = get_cowriter_models_by_provider(session)
-    routes = get_effective_provider_routes(session)
-    snapshots = provider_snapshots()
-    models_by_provider: dict[str, list[str]] = {}
-    errors: dict[str, str] = {}
-    sources: dict[str, str] = {}
-    current_models_not_in_catalog: dict[str, str] = {}
-    selected_models_by_provider: dict[str, str] = {}
-    route_statuses_by_provider: dict[str, dict[str, ProviderRouteStatusResponse]] = {}
-    for name in sorted(COWRITER_PROVIDERS):
-        snapshot = snapshots.get(name)
-        route_statuses = _route_statuses(snapshot, saved_models[name] or None)
-        route_statuses_by_provider[name] = route_statuses
-        selected = route_statuses[routes[name]]
-        catalog_models = selected.models
-        models = catalog_models
-        error = selected.catalogue_failure.message if selected.catalogue_failure else None
-        models_by_provider[name] = models
-        if error:
-            errors[name] = error
-        if selected.catalog_source is not None:
-            sources[name] = selected.catalog_source
-        selected_models_by_provider[name] = saved_models[name]
-        if selected.retained_model_id is not None:
-            current_models_not_in_catalog[name] = saved_models[name]
+def _cowriter_response(session: Session) -> CowriterSettingsResponse:
     return CowriterSettingsResponse(
-        provider=provider,
-        model=model,
-        allowed_providers=sorted(COWRITER_PROVIDERS),
-        allowed_models=models_by_provider[provider],
-        models_by_provider=models_by_provider,
-        selected_models_by_provider=selected_models_by_provider,
-        models_errors=errors,
-        models_sources=sources,
-        current_models_not_in_catalog=current_models_not_in_catalog,
-        probed_at=_provider_probe_times(snapshots),
         tail_token_budget=get_cowriter_tail_token_budget(session),
-        provider_routes=routes,
-        provider_routes_status=route_statuses_by_provider,
+        model=cowriter_model(),
     )
 
 
@@ -549,18 +503,12 @@ def _route_statuses(
     return result
 
 
-@router.get(
-    "/settings/cowriter",
-    responses={422: {"description": "Stored co-writer configuration is invalid"}},
-)
+@router.get("/settings/cowriter")
 def api_get_cowriter_settings(
     _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> CowriterSettingsResponse:
-    try:
-        return _cowriter_response(session)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+    return _cowriter_response(session)
 
 
 def _require_selectable_model(
@@ -582,60 +530,25 @@ def _require_selectable_model(
     raise HTTPException(422, f"Unknown {provider} model '{model}'")
 
 
-def _model_the_provider_row_shows(session: Session, provider: str) -> str:
-    """The model this provider's row carries today, saved or defaulted.
-
-    A saved provider that no longer exists leaves the rows nothing to keep.
-    """
-    if stored_provider_is_retired(get_raw_stored_cowriter_settings(session).provider):
-        return ""
-    return get_cowriter_models_by_provider(session)[provider]
-
-
 @router.put(
     "/settings/cowriter",
-    responses={422: {"description": "Co-writer provider, route, or model is unknown"}},
+    responses={422: {"description": "The tail token budget is out of range or a field is unknown"}},
 )
 def api_set_cowriter_settings(
     req: CowriterSettingsRequest,
     admin: AuthenticatedUser = Depends(require_admin),
     session: Session = Depends(get_db_session),
 ) -> CowriterSettingsResponse:
-    """Save the choice on its form alone; whether it runs is the row's status."""
-    if req.provider not in COWRITER_PROVIDERS:
-        raise HTTPException(
-            422, f"Unknown co-writer provider '{req.provider}'",
-        )
-    routes = _cowriter_routes(session, req)
-    _require_selectable_model(
-        req.provider,
-        req.model,
-        _live_catalogue(req.provider, routes[req.provider]),
-        _model_the_provider_row_shows(session, req.provider),
-    )
-    set_cowriter_settings(session, req.provider, req.model, routes)
-    if req.tail_token_budget is not None:
-        try:
-            set_cowriter_tail_token_budget(session, req.tail_token_budget)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
+    try:
+        set_cowriter_tail_token_budget(session, req.tail_token_budget)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     record_audit(
         session, admin.id, AuditAction.UPDATE, ResourceType.COWRITER,
-        detail=(
-            f"provider={req.provider} model={req.model} "
-            f"routes={','.join(f'{name}={routes[name]}' for name in sorted(routes))}"
-        ),
+        detail=f"tail_token_budget={req.tail_token_budget}",
     )
     session.commit()
     return _cowriter_response(session)
-
-
-def _cowriter_routes(session: Session, req: CowriterSettingsRequest) -> dict[str, str]:
-    try:
-        stored_routes = get_effective_provider_routes(session)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    return req.provider_routes or stored_routes
 
 
 # ── Judge (lyrical-coherence) provider settings ─────────────────────

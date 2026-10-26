@@ -294,13 +294,6 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await vi.waitFor(() => expect(conversationLine(target)).toBe(line));
 	});
 
-	it('names the provider the co-writer is set to', async () => {
-		fetchCowriterSettings.mockResolvedValue({ provider: 'grok', model: 'grok-4' });
-		const target = await render();
-
-		await vi.waitFor(() => expect(conversationLine(target)).toBe('Grok · new conversation'));
-	});
-
 	it('is the only header: no Co-Writer title, and neither the model nor a conversation button on the line', async () => {
 		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00')]);
 		const target = await render();
@@ -989,19 +982,6 @@ describe('CoWriterPanel unavailable before any turn', () => {
 		const target = await render();
 		expect(target.querySelector('.unavailable-banner')).toBeNull();
 		expect(target.querySelector('.unverified-banner')).toBeNull();
-	});
-
-	it('gives Grok no pre-emptive signal — it keeps the reactive 503 path', async () => {
-		fetchCowriterSettings.mockResolvedValue({ provider: 'grok', model: 'grok-4' });
-		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'drift' }));
-		const target = await render();
-		expect(target.querySelector('.unavailable-banner')).toBeNull();
-		const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
-		if (!input) throw new Error('Expected the chat textarea');
-		input.value = 'write a chorus';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		expect(target.querySelector<HTMLButtonElement>('.send-btn')?.disabled).toBe(false);
 	});
 });
 

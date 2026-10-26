@@ -1003,10 +1003,11 @@ Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the
 
 ### Agent routes
 
-`db/queries/settings.py` owns the complete instance-wide Co-Writer route map
-and the independent Cover and Judge selections. Co-Writer and Cover capture their provider,
+`db/queries/settings.py` owns the independent Cover and Judge selections. Cover captures its provider,
 model, and explicit `cli` or `api` route before work begins. The Judge has its
 own saved route, while its worker call still captures only provider and model.
+The Co-Writer has no selection here: the turn takes its model from the agent file, and the rows
+once saved for it stay in the table unread.
 `agent_providers/dispatch.py`
 owns the resulting adapter decision for the Judge and the Cover (the Co-Writer
 turn no longer executes a route): the Judge retains its existing
@@ -1294,7 +1295,6 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `COVER_MAX_CONCURRENT_RUNS` | Stay | Default of the `cover_max_concurrent_runs` setting; the live cap arrives through the configuration. |
 | `COVER_PROMPT_MAX_CHARS` | Stay | How long songmaker's cover prompt may grow. |
 | `COVER_PROMPT_SONG_FIELD_MAX_CHARS` | Stay | How much of a song a cover prompt may quote. |
-| `COWRITER_DEFAULT_PROVIDER` | Stay | Which provider a musician gets by default — a product choice. |
 | `COWRITER_DEFAULT_TAIL_TOKEN_BUDGET` | Stay | How much conversation history songmaker sends verbatim. |
 | `COWRITER_MAX_SUMMARY_CHARS` | Stay | How long that rolling summary may grow. |
 | `COWRITER_MAX_TAIL_TOKEN_BUDGET` | Stay | Upper bound a musician may set for that history budget. |
@@ -1538,8 +1538,8 @@ close the stream.
 | GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position; a running generate job also its `phase`, take counters and `remaining_time_estimate`) |
 | POST | `/api/jobs/{id}/cancel` | user | Cancel a queued or running job (409 if not active). Terminal; later progress/finalize cannot overwrite. Does not stop in-flight GPU inference. |
 | POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. One turn runs per user at a time: a turn sent while another still runs is refused with 409, checked under the rate-limit lock, and the panel that is refused follows the running turn. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job; the web process fails every active chat job when it starts, since no turn survives a restart, and the stale-job reaper ends one whose heartbeat stops; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. A panel whose stream drops without the server's own error frame (network loss, timeout, an early end) re-reads the conversation and follows or shows that turn; it names a failure only when the message never reached the server — decided by the persisted message ids, not by text alone, so a repeated "ok" is never mistaken for the answered one before it. The turn runs at the agent service ("The co-writer turn" above); a refused or failed run emits exactly one error frame with a `problem` (`unavailable` 503, `busy` 429 with `retry_after_seconds`, `not_enabled` 403, `sign_in_again` 401) and never a local provider. |
-| GET | `/api/settings/cowriter` | user | Co-writer provider/model plus the effective `provider_routes` map and a typed readiness/catalogue snapshot for both routes of every provider. The existing provider-keyed model fields remain the selected-route projection. |
-| PUT | `/api/settings/cowriter` | admin | Atomically persist provider, model, optional complete route map, and history-tail budget. Omitting the map retains it. An unknown provider or model is rejected with a string detail; a route that cannot answer is saved with its reason in the response status. |
+| GET | `/api/settings/cowriter` | user | The history-tail budget and the read-only `model` the co-writer agent file names (`claude/opus`). |
+| PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
 | GET | `/api/settings/judge` | admin | Judge provider, route, model, and `provider_routes_status` for both routes per provider. `allowed_models` and `models_by_provider` project the saved route and retain the selected model. `models_errors` names unavailable catalogs; a missing or invalid saved route returns 422. |
 | PUT | `/api/settings/judge` | admin | Persist judge provider, route, and model. Omitting `route` or sending null keeps the saved route. The model must be listed on that route, already retained for that provider, or empty while the catalog lists nothing. Unavailable selections remain saved with their route reason; unknown selections return 422. A fresh or retired stored pair is replaceable. |
