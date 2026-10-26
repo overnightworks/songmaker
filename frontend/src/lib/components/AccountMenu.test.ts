@@ -98,6 +98,17 @@ describe('AccountMenu', () => {
 		expect(ACCOUNT_MENU_LOGOUT_LABEL).toBe('Sign out');
 	});
 
+	it('opens every legal link in a new tab so the playing song is not left', async () => {
+		const panel = await openMenu(await renderAccountMenu());
+
+		const links = Array.from(panel.querySelectorAll('a.legal-link'));
+		expect(links).toHaveLength(3);
+		for (const link of links) {
+			expect(link.getAttribute('target')).toBe('_blank');
+			expect(link.getAttribute('rel')).toContain('noopener');
+		}
+	});
+
 	it("opens the identity provider's account console in a new tab from the name", async () => {
 		const panel = await openMenu(await renderAccountMenu());
 

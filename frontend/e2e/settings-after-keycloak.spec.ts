@@ -73,6 +73,8 @@ test('the account circle opens a menu with the name, Settings, the theme, Sign o
 	for (const legal of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen']) {
 		const link = menu.getByRole('link', { name: legal, exact: true });
 		await expect(link).toBeVisible();
+		await expect(link).toHaveAttribute('target', '_blank');
+		await expect(link).toHaveAttribute('rel', /noopener/);
 	}
 	// The separator trails its item, so no line of the legal row starts on one:
 	// each link stands at the left edge of its own item.
