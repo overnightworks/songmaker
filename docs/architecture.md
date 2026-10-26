@@ -1805,9 +1805,9 @@ never been observed; with a newer observation, it is `alive`.
   jump and fall back). `acestep_engine/progress.py` reads the value against
   the fork's fixed marks (0.01 the task runs, 0.1 writing starts, 0.51
   rendering starts, 0.99 rendering ends) as an `AceStepPhase` plus the
-  fraction within it. Below 0.01 ACE-Step has not started the task — on a cold
-  start it is still loading the models it deferred (`ACESTEP_NO_INIT`) inside
-  the first `/generate` — so that value reads `loading_model`. The worker's
+  fraction within it. Below 0.01 ACE-Step has not started the task, so that
+  value reads `loading_model`; a worker-started child has already loaded its
+  models (`ACESTEP_NO_INIT=0`), so that state is short. The worker's
   `TaskStore` carries both on every generate event (a generate task is born in
   the same not-started phase, `NOT_STARTED`); the scheduler hands them on as `(phase, fraction)`
   and announces `loading_model` before a real `/load_model`. A generate
@@ -1899,7 +1899,7 @@ No existing code changes needed.
 ## VRAM Management
 
 ```
-ACE-Step models:  ~6-12 GB VRAM each (varies by mode), live in acestep-worker containers
+ACE-Step models:  ~6-12 GB VRAM each plus ~10 GB for the LM (varies by mode), live in acestep-worker containers
 faster-whisper:   ~3 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 AudioBox:         ~1 GB VRAM on GPU, runs on CPU when SCORING_DEVICE=cpu
 ```

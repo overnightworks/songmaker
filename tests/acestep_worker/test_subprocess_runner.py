@@ -102,6 +102,11 @@ def test_build_env_uses_worker_settings_defaults() -> None:
     assert env["PYTORCH_CUDA_ALLOC_CONF"] == "expandable_segments:True"
 
 
+def test_build_env_loads_the_models_before_the_child_serves() -> None:
+    env = build_env("sft", port=8101, vram_budget_gb=24.0)
+    assert env["ACESTEP_NO_INIT"] == "0"
+
+
 def test_build_env_takes_subprocess_knobs_from_worker_settings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

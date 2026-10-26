@@ -20,8 +20,9 @@ The marks, as set by the vendored fork:
   completed entry, never as progress.
 
 Before the first mark the value is the job store's own floor. It stays
-``0.0`` while the server loads the models it deferred at startup
-(``ACESTEP_NO_INIT``): ``api/job_execution_runtime.py`` awaits
+``0.0`` while the server loads any models it deferred at startup
+(``ACESTEP_NO_INIT``; the worker starts it with ``0``, so they are loaded
+before it serves): ``api/job_execution_runtime.py`` awaits
 ``ensure_models_initialized`` before ``mark_running`` (``api/jobs/store.py``)
 raises it to ``0.01``. A task below that mark has not started, so it is still
 loading its model; from ``0.01`` on it is writing. A generation without the
