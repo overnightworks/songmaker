@@ -1,5 +1,4 @@
 import { apiFetch, isNotFound, PUBLIC_SHARE_PATH_PREFIX } from './fetch';
-import { STREAM_BUILD_TIMEOUT_MS } from './queue-streams';
 import type {
 	QueueStreamManifest,
 	SharedAlbumPayload,
@@ -37,6 +36,12 @@ export function fetchSharedCollection<K extends SharedCollectionKind>(
 }
 
 type SharedStreamKind = Extract<SharedCollectionKind, 'album' | 'playlist'>;
+
+// A cold queue-stream build concatenates every track server-side and can take
+// well over the default API timeout while generation workers hold the box; a
+// patient budget here is the difference between one slow success and five
+// user-facing failures.
+const STREAM_BUILD_TIMEOUT_MS = 120_000;
 
 export function fetchSharedStream(
 	kind: SharedStreamKind,

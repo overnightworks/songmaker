@@ -13,9 +13,6 @@
 		COLLECTION_MENU_EDIT_DETAILS_LABEL,
 		COLLECTION_MENU_LABEL,
 		COLLECTION_MENU_RENAME_LABEL,
-		COLLECTION_MENU_SAVE_OFFLINE_LABEL,
-		COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL,
-		COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL,
 		COLLECTION_MENU_SHARE_LABEL,
 		COLLECTION_MENU_SHARE_OFF_HINT,
 		COLLECTION_MENU_SHARE_ON_HINT
@@ -47,10 +44,6 @@
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		oncurate?: () => void;
-		onsaveoffline?: () => void;
-		offlineSaved?: boolean;
-		offlineSaving?: boolean;
-		offlineProgressLabel?: string | null;
 	}
 
 	let {
@@ -69,11 +62,7 @@
 		hasCover = false,
 		onremovecover,
 		onaddtoplaylist,
-		oncurate,
-		onsaveoffline,
-		offlineSaved = false,
-		offlineSaving = false,
-		offlineProgressLabel = null
+		oncurate
 	}: Props = $props();
 
 	const kindLabel = $derived(kind === 'album' ? 'Album' : 'Playlist');
@@ -197,21 +186,6 @@
 			{/if}
 			{#if hasCover && onremovecover}
 				{@render actionRow(COLLECTION_MENU_COVER_REMOVE_LABEL, onremovecover)}
-			{/if}
-			{#if onsaveoffline}
-				<button
-					class="menu-item"
-					onclick={() => runAndClose(onsaveoffline)}
-					disabled={offlineSaving}
-				>
-					{#if offlineSaved}
-						{COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL}
-					{:else if offlineSaving}
-						{offlineProgressLabel ?? COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL}
-					{:else}
-						{COLLECTION_MENU_SAVE_OFFLINE_LABEL}
-					{/if}
-				</button>
 			{/if}
 			{#if onrename}
 				{@render actionRow(COLLECTION_MENU_RENAME_LABEL, onrename)}

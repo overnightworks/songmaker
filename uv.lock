@@ -411,11 +411,11 @@ wheels = [
 
 [[package]]
 name = "filelock"
-version = "3.32.7"
+version = "4.2.4"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0f/59/e19834834cb01a32febfbb0f8a23a9088088f5d45991824ff2bc3b5e8acb/filelock-3.32.7.tar.gz", hash = "sha256:37b8a3d9811b0f9aef7e5ec5c71bb320de52df51e6ca9bcd6f5ad81187660da7", size = 225154, upload-time = "2026-09-16T00:24:20.907Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/28/3893324bcadf8f89b1616637468d766af3f625008c0735bf704fdfa86617/filelock-4.2.4.tar.gz", hash = "sha256:c6d8663535e1650ee430507b4ffbac7b464dd64b7647ea0112a9f406499d163d", size = 652444, upload-time = "2026-10-19T01:57:51.001Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/df/31098c5aeb4d966b553641472bd55fcf5fdfac953549894b8a765ba44e91/filelock-3.32.7-py3-none-any.whl", hash = "sha256:65ff0d0190ea42038b32bda4b77834fb05be2cad4c5b9b01aa4dfb3614536e52", size = 100157, upload-time = "2026-09-16T00:24:19.543Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl", hash = "sha256:301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e", size = 162475, upload-time = "2026-10-19T01:57:49.419Z" },
 ]
 
 [[package]]
@@ -1712,14 +1712,14 @@ requires-dist = [
     { name = "anthropic", marker = "extra == 'api'", specifier = ">=0.20,<2" },
     { name = "arq", marker = "extra == 'server'", specifier = ">=0.26,<1" },
     { name = "audiobox-aesthetics", marker = "extra == 'scoring'", specifier = ">=0.0.4,<1" },
-    { name = "cyclopts", specifier = ">=4.0,<5" },
+    { name = "cyclopts", specifier = ">=4.0,<6" },
     { name = "fakeredis", extras = ["lua"], marker = "extra == 'dev'", specifier = ">=2.0,<3" },
     { name = "fastapi", marker = "extra == 'acestep-worker'", specifier = ">=0.100,<1" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.100,<1" },
     { name = "faster-whisper", marker = "extra == 'whisper'", specifier = ">=1.1,<2" },
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "httpx", marker = "extra == 'api'", specifier = ">=0.27,<1" },
-    { name = "huggingface-hub", marker = "extra == 'acestep-worker'", specifier = ">=0.20,<2" },
+    { name = "huggingface-hub", marker = "extra == 'acestep-worker'", specifier = ">=0.20,<3" },
     { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2.0,<3" },
     { name = "librosa", marker = "extra == 'scoring'", specifier = ">=0.10,<2" },
     { name = "librosa", marker = "extra == 'whisper'", specifier = ">=0.10,<2" },
@@ -1741,13 +1741,13 @@ requires-dist = [
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.8,<4" },
     { name = "python-dotenv", marker = "extra == 'server'", specifier = ">=1.0,<2" },
     { name = "python-multipart", marker = "extra == 'server'", specifier = ">=0.0.7,<1" },
-    { name = "python-slugify", specifier = ">=8.0,<9" },
+    { name = "python-slugify", specifier = ">=8.0,<10" },
     { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0,<7" },
     { name = "redis", extras = ["hiredis"], marker = "extra == 'acestep-worker'", specifier = ">=5.0,<9" },
     { name = "redis", extras = ["hiredis"], marker = "extra == 'server'", specifier = ">=5.0,<9" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
     { name = "scipy", specifier = ">=1.12,<2" },
-    { name = "sentence-transformers", marker = "extra == 'similarity'", specifier = ">=3,<6" },
+    { name = "sentence-transformers", marker = "extra == 'similarity'", specifier = ">=3,<7" },
     { name = "soundfile", marker = "extra == 'scoring'" },
     { name = "soundfile", marker = "extra == 'whisper'" },
     { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0,<3" },
