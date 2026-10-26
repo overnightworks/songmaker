@@ -81,15 +81,16 @@ def seed_song_takes(
     links each take to the song's version, so consumers receive the same
     metadata as a generated take. Returns the song's id.
     """
+    owner_directory = Path(owner_id).name
+    if owner_directory != owner_id:
+        raise ValueError(f"Owner id is not a single directory name: {owner_id!r}")
     slug = unique_song_slug(session, album_id, title)
     song = create_song(session, title, album_id, slug, lyrics=lyrics, prompt=prompt)
     version_id = song.latest_version.id if lyrics or prompt else None
 
     for _ in range(take_count):
         generation_id = str(uuid.uuid4())
-        dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
-        if not dst.resolve().is_relative_to(audio_dir.resolve()):
-            raise ValueError(f"Take path escapes the audio directory: {dst}")
+        dst = audio_file_path(audio_dir, owner_directory, generation_id, ".mp3")
         dst.write_bytes(mp3_bytes)
         gen = create_generation(
             session,

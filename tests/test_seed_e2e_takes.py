@@ -249,13 +249,13 @@ def test_invalid_cover_publication_writes_neither_suggestion_nor_file(
     assert job.status == status
 
 
-def test_an_owner_id_leaving_the_audio_directory_writes_nothing(tmp_path: Path) -> None:
+def test_an_owner_id_that_is_not_one_directory_name_writes_nothing(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     factory = init_test_db(tmp_path / "seed.db")
     with factory() as session:
         session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
         session.commit()
-        with pytest.raises(ValueError, match="escapes the audio directory"):
+        with pytest.raises(ValueError, match="not a single directory name"):
             seed_e2e_song_takes.seed_song_takes(
                 session, audio_dir, b"mp3",
                 album_id=_ALBUM_ID, title="Takes", take_count=1, owner_id="../outside",
