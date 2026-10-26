@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import runpy
-import sys
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,7 @@ CHECKER = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/chec
 
 
 @pytest.fixture
-def run_gate(tmp_path, monkeypatch, capsys):
+def run_gate(tmp_path, capsys):
     source = tmp_path / "src"
     source.mkdir()
     allow = tmp_path / "dead-symbols.allow"
@@ -23,8 +22,7 @@ def run_gate(tmp_path, monkeypatch, capsys):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
         allow.write_text(exemptions)
-        monkeypatch.setattr(sys, "argv", ["gate", "--source", str(source), "--allow", str(allow)])
-        status = CHECKER["main"]()
+        status = CHECKER["run"](source, allow)
         return status, capsys.readouterr().out
 
     return run
@@ -178,3 +176,10 @@ def test_allow_entry_that_suppresses_nothing_fails_and_is_named(run_gate, entry)
     )
     assert status == 1
     assert f"Allow entry suppresses nothing: {entry}" in output
+
+
+def test_gate_takes_no_path_from_the_command_line(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["gate", "--source", "/etc", "--allow", "/etc/passwd"])
+    with pytest.raises(SystemExit) as exit_info:
+        CHECKER["main"]()
+    assert exit_info.value.code == 2

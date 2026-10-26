@@ -88,15 +88,10 @@ def read_allowlist(path: Path) -> set[str]:
     return entries
 
 
-def main() -> int:
-    repository = Path(__file__).resolve().parent.parent
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=repository / "src")
-    parser.add_argument("--allow", type=Path, default=repository / "scripts/dead-symbols.allow")
-    args = parser.parse_args()
+def run(source: Path, allow: Path) -> int:
     try:
-        unreferenced = unreferenced_symbols(args.source)
-        allowed = read_allowlist(args.allow)
+        unreferenced = unreferenced_symbols(source)
+        allowed = read_allowlist(allow)
     except (OSError, SyntaxError, ValueError) as error:
         print(error)
         return 1
@@ -113,6 +108,12 @@ def main() -> int:
         f"{len(allowed)} allowed."
     )
     return 0
+
+
+def main() -> int:
+    repository = Path(__file__).resolve().parent.parent
+    argparse.ArgumentParser(description=__doc__).parse_args()
+    return run(repository / "src", repository / "scripts/dead-symbols.allow")
 
 
 if __name__ == "__main__":
