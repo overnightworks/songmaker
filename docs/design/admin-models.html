@@ -198,7 +198,7 @@
 	/* ── state frames (App-UI: Englisch) ─────────────────────── */
 	.states {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
 		gap: 1.5rem;
 		align-items: start;
 	}
@@ -1255,6 +1255,22 @@
 	.cln .cl-empty .mark { color: var(--good); margin-right: .35rem; }
 	.cln .phone .cl-grid { grid-template-columns: 1fr 1fr; }
 	.cln .phone .cl-acts .act { min-height: 44px; flex: 1; }
+
+	/* ── #1895 · der Agent-Service (Entwurf, wartet auf die Freigabe) ─────
+	   Gestrichelt umrandet = neu mit #1895. Eine Zeile ohne Bedienelement liest der Admin nur. */
+	.ags .is-new { outline: 2px dashed var(--violet); outline-offset: 2px; border-radius: 2px; }
+	.ags .tt-scroll { overflow-x: auto; max-width: 100%; }
+	.ags .tt-scroll .tt { min-width: 52rem; }
+	.ags .ro { display: block; padding: .34rem 0; font-size: .8rem; color: var(--ink); }
+	.ags .ro.none { color: var(--muted); }
+	.ags .st.plain { color: var(--ink-soft); padding-top: .34rem; }
+	.ags .later { margin: 0; font-size: .76rem; color: var(--muted); }
+	.ags .menu-item .state { white-space: normal; text-align: right; }
+	.ags .menu-item.closed { color: var(--muted); background: var(--panel-sunk); }
+	.ags .menu-item .saved-mark { color: var(--violet); font-weight: 600; margin-left: .3rem; }
+	.ags .phone .tcard .later { margin-top: .35rem; }
+	.ags .phone .menu { max-width: 100%; }
+	code, code.loc { max-width: 100%; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -1277,6 +1293,12 @@
 	„Waiting for GPU…", „Loading model…", „zu lang für die GPU" und „nicht verfügbar". Änderungen
 	daran brauchen eine neue Freigabe. Die Frames von Fassung 2 darüber sind unverändert; die Seite
 	lädt zusätzlich die Schriften der Songseite (Oswald, Open Sans) für die #1500-Frames.
+</p>
+<p class="freeze-note">
+	<strong>Entwurf für #1895, noch nicht gesegnet:</strong> Der Abschnitt
+	<a href="#agent-service">„Neu · #1895 — der Agent-Service übernimmt"</a> zeichnet die Models-Tabelle für
+	#1476 (Punkte 1–6 von „The pictures must show") in jedem Zwischenstand der Landung, am Desktop und bei
+	390&nbsp;px. Nach der Freigabe überschreibt er die Co-Writer-, Cover- und Scoring-Zeilen von Fassung 2.
 </p>
 <div class="wrap">
 	<header>
@@ -2544,6 +2566,321 @@
 							<div class="cl-card del"><div class="n">3</div><div class="l">to hard-delete now</div></div>
 						</div>
 						<div class="cl-acts"><button class="act">Refresh</button><button class="act danger">Run now</button></div>
+					</div>
+				</div>
+			</article>
+		</div>
+	</section>
+
+	<hr class="rule">
+	<section class="decisions ags" id="agent-service">
+		<h2>Neu · #1895 — der Agent-Service übernimmt<span class="proposed-tag">Entwurf · #1476 · wartet auf die Freigabe</span></h2>
+		<div class="decision">
+			<h3>Warum — #1476, „mit prio umbauen, dass der dienst genutzt wird" (26.10.2026)</h3>
+			<p>
+				Songmaker ruft keinen Anbieter mehr selbst auf. Der Co-Writer läuft über den Agent-Service, der
+				Claude unter dem einen geteilten Login betreibt; Cover und Scoring kann der Dienst noch nicht und
+				sind bis dahin <strong>nicht verfügbar</strong>. Die Tabelle behält ihre fünf Spalten, damit jeder
+				Zwischenstand der Landung lesbar bleibt: eine alte, bedienbare Zeile neben einer neuen, die der Admin
+				nur liest.
+			</p>
+			<ul>
+				<li><strong>Eine Zeile ohne Bedienelement ist eine Zeile ohne Wahl.</strong> Provider, Route und
+					Modell stehen als Text; es gibt nichts zu speichern, also auch kein „Saved.".</li>
+				<li><strong>Kein Licht, wo niemand prüft.</strong> Vor dem Angebot des Dienstes
+					(agent-runtime#444) prüft songmaker den Co-Writer nicht vorab; der Status sagt, wer prüft —
+					„Checked by the agent service at each turn" — ohne Haken und ohne Ring.</li>
+				<li><strong>Nicht verfügbar ist grau, nicht rot.</strong> Cover und Scoring tragen den leeren Ring
+					von Fassung 2 und sagen, worauf sie warten. Rot bleibt dem fehlgeschlagenen Speichern.</li>
+				<li><strong>Mit dem Angebot (Slice 12)</strong> wird das Modell wieder wählbar: die Einträge des
+					Angebots, bereite wählbar, geschlossene grau mit dem Grund des Dienstes, die gespeicherte Wahl
+					markiert; das Licht kommt aus dem Eintrag der gespeicherten Wahl.</li>
+			</ul>
+			<p>
+				Die Zustände folgen der Landungsreihenfolge aus #1476: (w) Slices 2–4, (x) Slice 5, (y) Slice 6,
+				(z) Slice 12. Nach der Freigabe überschreibt dieser Abschnitt die Co-Writer-, Cover- und
+				Scoring-Zeilen von Fassung 2 und den Abschnitt „Was offen bleibt"; der Zustand
+				„Unknown claude model ''" · „✕ Not saved" in der Scoring-Zeile kommt nicht mehr vor, weil die Zeile
+				nichts mehr speichert.
+			</p>
+		</div>
+
+		<div class="states">
+			<article class="state wide">
+				<div class="state-head"><h3>(w) Cutover-Tag · Co-Writer neu, Cover und Scoring wie heute</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1895</span></div>
+				<p class="state-note">
+					Nach Slices 2–4. Die Co-Writer-Zeile liest nur: Claude, Agent service, opus, und wer prüft.
+					Darunter grau „Grok, Codex: not selectable yet", dann Advanced mit dem History-Tail wie heute.
+					Cover und Scoring laufen an diesem Tag noch auf ihrem alten Weg und sind bedienbar wie in (a).
+				</p>
+				<div class="screen">
+					<div class="screen-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="screen-body">
+						<h4 class="screen-title">Models</h4>
+						<div class="tt-scroll"><div class="tt">
+							<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+
+							<div class="tt-row">
+								<span class="cell-task">Co-Writer</span>
+								<span class="ro is-new">Claude</span>
+								<span class="ro is-new">Agent service</span>
+								<span class="ro is-new">opus</span>
+								<span class="st plain is-new">Checked by the agent service at each turn</span>
+							</div>
+							<div class="tt-sub"><p class="later is-new">Grok, Codex: not selectable yet</p></div>
+							<div class="tt-sub">
+								<details class="adv"><summary>Advanced</summary>
+									<div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div>
+								</details>
+							</div>
+
+							<div class="tt-row">
+								<span class="cell-task">Cover</span>
+								<span><span class="sel">Codex<span class="caret">⌄</span></span></span>
+								<span><span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span><small class="why">API · no image tool</small></span>
+								<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+							</div>
+
+							<div class="tt-row">
+								<span class="cell-task">Scoring</span>
+								<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
+								<span><span class="rsw"><b class="on">CLI</b><b>API</b></span><small class="why">API · key set</small></span>
+								<span><span class="sel">opus<span class="caret">⌄</span></span></span>
+								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+							</div>
+						</div></div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(x) Nach Slice 5 · Scoring nicht verfügbar</h3><span class="tag tag-state">Not available</span><span class="proposed-tag flush">New · #1895</span></div>
+				<p class="state-note">
+					Der Kohärenz-Judge wartet auf Hintergrundläufe im Dienst. Die Scoring-Zeile wird grau, Provider
+					und Modell sind „—", der Grund steht im Status. Cover ist noch die alte Zeile.
+				</p>
+				<div class="tt-scroll"><div class="tt">
+					<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span class="ro">Claude</span><span class="ro">Agent service</span><span class="ro">opus</span>
+						<span class="st plain">Checked by the agent service at each turn</span>
+					</div>
+					<div class="tt-sub"><p class="later">Grok, Codex: not selectable yet</p></div>
+					<div class="tt-sub"><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></div>
+					<div class="tt-row">
+						<span class="cell-task">Cover</span>
+						<span><span class="sel">Codex<span class="caret">⌄</span></span></span>
+						<span><span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span><small class="why">API · no image tool</small></span>
+						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
+						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
+					</div>
+					<div class="tt-row off">
+						<span class="cell-task">Scoring</span>
+						<span class="ro none is-new">—</span>
+						<span class="ro is-new">Agent service</span>
+						<span class="ro none is-new">—</span>
+						<span class="st off is-new"><span class="mark">○</span>Not available yet: waits for background runs through the agent service</span>
+					</div>
+				</div></div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(y) Nach Slice 6 · alles über den Dienst</h3><span class="tag tag-state">Read only</span><span class="proposed-tag flush">New · #1895</span></div>
+				<p class="state-note">
+					Die letzte bedienbare Zeile geht. Cover sagt, dass es auf Bildläufe im Dienst wartet. Die Seite hat
+					nichts mehr zu speichern außer dem History-Tail.
+				</p>
+				<div class="tt-scroll"><div class="tt">
+					<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span class="ro">Claude</span><span class="ro">Agent service</span><span class="ro">opus</span>
+						<span class="st plain">Checked by the agent service at each turn</span>
+					</div>
+					<div class="tt-sub"><p class="later">Grok, Codex: not selectable yet</p></div>
+					<div class="tt-sub"><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></div>
+					<div class="tt-row off">
+						<span class="cell-task">Cover</span>
+						<span class="ro none is-new">—</span>
+						<span class="ro is-new">Agent service</span>
+						<span class="ro none is-new">—</span>
+						<span class="st off is-new"><span class="mark">○</span>Not available yet: waits for image runs through the agent service</span>
+					</div>
+					<div class="tt-row off">
+						<span class="cell-task">Scoring</span>
+						<span class="ro none">—</span><span class="ro">Agent service</span><span class="ro none">—</span>
+						<span class="st off"><span class="mark">○</span>Not available yet: waits for background runs through the agent service</span>
+					</div>
+				</div></div>
+			</article>
+
+			<article class="state wide">
+				<div class="state-head"><h3>(z) Slice 12 · mit dem Angebot des Dienstes</h3><span class="tag tag-next">Choosing</span><span class="proposed-tag flush">New · #1895</span></div>
+				<p class="state-note">
+					Sobald der Dienst sein Angebot nennt (agent-runtime#444), wird das Modell des Co-Writers wieder
+					ein Select. Die Liste zeigt die Einträge des Angebots: bereite wählbar, geschlossene grau mit dem
+					Grund, den der Dienst nennt (die Wörter unten sind Beispiele, der Dienst liefert sie). Die
+					gespeicherte Wahl trägt „saved"; der Haken im Status kommt aus ihrem Eintrag. Provider folgt der
+					Wahl, die graue Zeile „not selectable yet" entfällt, weil die Liste das jetzt selbst sagt.
+					Speichern wie (e): in der Zeile, „Saved." oder „Not saved" mit Retry.
+				</p>
+				<div class="tt-scroll"><div class="tt">
+					<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span class="ro">Claude</span>
+						<span class="ro">Agent service</span>
+						<span class="is-new">
+							<span class="sel">opus<span class="caret">⌃</span></span>
+							<div class="menu">
+								<div class="menu-item picked"><span>Claude opus<span class="saved-mark">· saved</span></span><span class="state">✓ ready</span></div>
+								<div class="menu-item"><span>Claude sonnet</span><span class="state">✓ ready</span></div>
+								<div class="menu-item closed"><span>Codex gpt-5.5</span><span class="state">not set up in the service</span></div>
+								<div class="menu-item closed"><span>Grok grok-4.6</span><span class="state">not set up in the service</span></div>
+							</div>
+						</span>
+						<span class="st ok is-new"><span class="mark">✓</span>Ready</span>
+					</div>
+					<div class="tt-sub"><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></div>
+					<div class="tt-row off">
+						<span class="cell-task">Cover</span>
+						<span class="ro none">—</span><span class="ro">Agent service</span><span class="ro none">—</span>
+						<span class="st off"><span class="mark">○</span>Not available yet: waits for image runs through the agent service</span>
+					</div>
+					<div class="tt-row off">
+						<span class="cell-task">Scoring</span>
+						<span class="ro none">—</span><span class="ro">Agent service</span><span class="ro none">—</span>
+						<span class="st off"><span class="mark">○</span>Not available yet: waits for background runs through the agent service</span>
+					</div>
+				</div></div>
+
+				<p class="state-note">
+					Drei Ausnahmen derselben Co-Writer-Zeile. <strong>Angebot nicht erreichbar:</strong> die gespeicherte
+					Wahl steht als Text, der Status sagt es, kein Licht — songmaker behauptet nichts, was es nicht
+					gefragt hat. <strong>Gespeicherte Wahl nicht mehr im Angebot:</strong> sie bleibt stehen, mit dem
+					Grund darunter; gelb, weil der Admin eine andere wählen muss. <strong>Nicht für dieses Konto:</strong>
+					das Abonnement des Dienstes dient nur dem Operator; ein anderer Admin liest das ehrlich, grau.
+				</p>
+				<div class="tt-scroll"><div class="tt">
+					<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
+					<div class="tt-row">
+						<span class="cell-task">Co-Writer</span>
+						<span class="ro">Claude</span><span class="ro">Agent service</span>
+						<span class="ro">opus</span>
+						<span class="st plain">The agent service's offer is not reachable</span>
+					</div>
+					<div class="tt-row warn">
+						<span class="cell-task">Co-Writer</span>
+						<span class="ro">Claude</span><span class="ro">Agent service</span>
+						<span><span class="sel">opus<span class="caret">⌄</span></span><small class="why warn">No longer offered: retired by the service</small></span>
+						<span class="st warn"><span class="mark">!</span>Choose another model</span>
+					</div>
+					<div class="tt-row off">
+						<span class="cell-task">Co-Writer</span>
+						<span class="ro">Claude</span><span class="ro">Agent service</span>
+						<span class="ro">opus</span>
+						<span class="st off"><span class="mark">○</span>Not available for you</span>
+					</div>
+				</div></div>
+			</article>
+		</div>
+
+		<div class="states states-390">
+			<article class="state">
+				<div class="state-head"><h3>(w′) Cutover-Tag · gestapelt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1895</span></div>
+				<p class="state-note">Dieselben Zustände wie (w), eine Karte je Aufgabe. Die Co-Writer-Karte hat kein Select mehr.</p>
+				<div class="phone p390">
+					<div class="ph-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro">Claude</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro">opus</span></div>
+							<div class="line"><span class="k">Status</span><span class="st plain">Checked by the agent service at each turn</span></div>
+							<p class="later">Grok, Codex: not selectable yet</p>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Provider</span><span><span class="sel">Codex<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Route</span><span><span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span><small class="why">API · no image tool</small></span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st ok"><span class="mark">✓</span>Ready · CLI login</span></div>
+						</div>
+						<div class="tcard">
+							<h4>Scoring</h4>
+							<div class="line"><span class="k">Provider</span><span><span class="sel">Claude<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Route</span><span><span class="rsw"><b class="on">CLI</b><b>API</b></span><small class="why">API · key set</small></span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel">opus<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st ok"><span class="mark">✓</span>Ready · CLI login</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(y′) Nach Slice 6 · gestapelt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1895</span></div>
+				<p class="state-note">Alles liest nur; Cover und Scoring grau mit ihrem Grund, vollständig, nicht gekürzt.</p>
+				<div class="phone p390">
+					<div class="ph-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro">Claude</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro">opus</span></div>
+							<div class="line"><span class="k">Status</span><span class="st plain">Checked by the agent service at each turn</span></div>
+							<p class="later">Grok, Codex: not selectable yet</p>
+							<div class="line"><span class="k"></span><span><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></span></div>
+						</div>
+						<div class="tcard off">
+							<h4>Cover</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro none">—</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro none">—</span></div>
+							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Not available yet: waits for image runs through the agent service</span></div>
+						</div>
+						<div class="tcard off">
+							<h4>Scoring</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro none">—</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span class="ro none">—</span></div>
+							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Not available yet: waits for background runs through the agent service</span></div>
+						</div>
+					</div>
+				</div>
+			</article>
+
+			<article class="state">
+				<div class="state-head"><h3>(z′) Slice 12 · gestapelt, lädt und offen</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1895</span></div>
+				<p class="state-note">Oben das offene Select wie (z). Darunter derselbe Co-Writer, während das Angebot noch geholt wird: „Checking…", kein Haken.</p>
+				<div class="phone p390">
+					<div class="ph-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-body">
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro">Claude</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span>
+								<span class="sel">opus<span class="caret">⌃</span></span>
+								<div class="menu">
+									<div class="menu-item picked"><span>Claude opus<span class="saved-mark">· saved</span></span><span class="state">✓ ready</span></div>
+									<div class="menu-item"><span>Claude sonnet</span><span class="state">✓ ready</span></div>
+									<div class="menu-item closed"><span>Codex gpt-5.5</span><span class="state">not set up in the service</span></div>
+								</div>
+							</span></div>
+							<div class="line"><span class="k">Status</span><span class="st ok"><span class="mark">✓</span>Ready</span></div>
+						</div>
+						<div class="tcard">
+							<h4>Co-Writer</h4>
+							<div class="line"><span class="k">Provider</span><span class="ro">Claude</span></div>
+							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
+							<div class="line"><span class="k">Model</span><span><span class="sel">opus<span class="caret">⌄</span></span></span></div>
+							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Checking…</span></div>
+						</div>
 					</div>
 				</div>
 			</article>
