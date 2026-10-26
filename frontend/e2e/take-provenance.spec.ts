@@ -49,6 +49,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
+	// A handler still awaiting its response body would report the disposed response as a failure.
+	await page.unrouteAll({ behavior: 'ignoreErrors' });
 	await archiveOwnedAlbum(page.request, albumId);
 });
 
