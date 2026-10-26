@@ -1,9 +1,12 @@
 import type {
+	AvailableModel,
 	Capabilities,
 	CoverSettingsResponse,
 	CowriterSettings,
+	DefaultConfigResponse,
 	JudgeSettings,
 	PresetItem,
+	PresetUpdateRequest,
 	ProviderStatus,
 	RateLimitsResponse,
 	VersionGenerationParams
@@ -26,18 +29,6 @@ export async function updateGenerationDefaults(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(data)
 	});
-}
-
-export interface ModelCapabilities {
-	defaults: Record<string, unknown>;
-	max_inference_steps: number;
-	hidden_params: string[];
-}
-
-export interface AvailableModel {
-	id: string;
-	is_active: boolean;
-	capabilities?: ModelCapabilities | null;
 }
 
 export async function fetchActiveModels(): Promise<AvailableModel[]> {
@@ -116,14 +107,12 @@ export async function fetchBuiltinDefaults(): Promise<Record<string, VersionGene
 	return apiFetch<Record<string, VersionGenerationParams>>('/api/settings/generation-builtins');
 }
 
-export async function fetchDefaultConfig(): Promise<{ config: string | null }> {
-	return apiFetch<{ config: string | null }>('/api/settings/default-config');
+export async function fetchDefaultConfig(): Promise<DefaultConfigResponse> {
+	return apiFetch<DefaultConfigResponse>('/api/settings/default-config');
 }
 
-export async function updateDefaultConfig(
-	config: string | null
-): Promise<{ config: string | null }> {
-	return apiFetch<{ config: string | null }>('/api/settings/default-config', {
+export async function updateDefaultConfig(config: string | null): Promise<DefaultConfigResponse> {
+	return apiFetch<DefaultConfigResponse>('/api/settings/default-config', {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ config })
@@ -149,7 +138,7 @@ export async function createPreset(
 
 export async function updatePreset(
 	presetId: string,
-	data: { name?: string; params?: VersionGenerationParams; is_default?: boolean }
+	data: PresetUpdateRequest
 ): Promise<PresetItem> {
 	return apiFetch<PresetItem>(`/api/settings/presets/${presetId}`, {
 		method: 'PUT',

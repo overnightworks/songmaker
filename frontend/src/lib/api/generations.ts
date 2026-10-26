@@ -1,4 +1,4 @@
-import type { RateResult, ShareResult } from './types';
+import type { BulkDeleteResponse, RateResult, ReferenceAudioResponse, ShareResult } from './types';
 import { apiFetch, type JobStatus } from './fetch';
 
 export async function generateSong(
@@ -18,6 +18,7 @@ export async function generateSong(
 	});
 }
 
+// eslint-disable-next-line no-restricted-syntax -- camelCase call arguments, not a wire body
 interface RepaintOptions {
 	lyrics?: string | null;
 	prompt?: string | null;
@@ -61,6 +62,7 @@ export async function repaintGeneration(
 	});
 }
 
+// eslint-disable-next-line no-restricted-syntax -- camelCase call arguments, not a wire body
 interface CoverOptions {
 	lyrics?: string | null;
 	prompt?: string | null;
@@ -94,15 +96,10 @@ export async function coverGeneration(
 	});
 }
 
-export interface ReferenceAudioResult {
-	path: string;
-	filename: string;
-}
-
-export async function uploadReferenceAudio(file: File): Promise<ReferenceAudioResult> {
+export async function uploadReferenceAudio(file: File): Promise<ReferenceAudioResponse> {
 	const formData = new FormData();
 	formData.append('file', file);
-	return apiFetch<ReferenceAudioResult>('/api/audio/upload', {
+	return apiFetch<ReferenceAudioResponse>('/api/audio/upload', {
 		method: 'POST',
 		body: formData
 	});
@@ -132,12 +129,8 @@ export async function deleteGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}`, { method: 'DELETE' });
 }
 
-export interface BulkDeleteResult {
-	deleted: number;
-}
-
-export async function bulkDeleteGenerations(generationIds: string[]): Promise<BulkDeleteResult> {
-	return apiFetch<BulkDeleteResult>('/api/generations/bulk-delete', {
+export async function bulkDeleteGenerations(generationIds: string[]): Promise<BulkDeleteResponse> {
+	return apiFetch<BulkDeleteResponse>('/api/generations/bulk-delete', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ generation_ids: generationIds })
