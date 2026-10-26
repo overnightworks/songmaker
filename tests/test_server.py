@@ -174,6 +174,23 @@ def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path) -> None:
     assert resp.headers["content-type"] == "font/woff2"
 
 
+@pytest.mark.parametrize(
+    ("path", "cache_control"),
+    [
+        ("/", "no-cache"),
+        ("/library", "no-cache"),
+        ("/api/albums", "no-store"),
+        ("/_app/chunk.js", None),
+    ],
+)
+def test_cache_control_per_response_kind(
+    tmp_path: Path, path: str, cache_control: str | None,
+) -> None:
+    """The SPA shell is revalidated at every load; hashed build files keep their caching."""
+    client = _sveltekit_app_client(tmp_path, {"chunk.js": b"// chunk"})
+    assert client.get(path).headers.get("Cache-Control") == cache_control
+
+
 def test_get_audio_path_traversal_denied(server_app: TestClient) -> None:
     resp = server_app.get("/audio/admin-user-id/..%2F..%2Fetc%2Fpasswd")
     assert resp.status_code in (403, 404)
