@@ -1,0 +1,8 @@
+claim_id = "b11b3619ace641f480c40ee852e91926"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "8a83677dc64250bb506e808d868cdcd48cd796c8"
+branch = "dependabot/github_actions/actions-6dc72ba0b5"
+scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml", ".github/workflows/security.yml"]
+opened_commit = "c60f2032574d42c63432e10b28fb1212aa20ea12"
+whole_reason = "One dependency group bump from dependabot spanning its manifest and lockfile or workflow files."
