@@ -802,17 +802,15 @@ only for that image run and adds `web_search="disabled"`; its only permitted Cod
 Mode command is the measured read of the bundled image skill. Each receives the
 runner's secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited.
 
-The Co-Writer JSONL gate refuses every native Codex command, MCP, web-search,
-file-change, or other non-text tool item. Completed assistant text is parsed as
-Songmaker's textual tool protocol; the shared server loop executes the owned
-Songmaker operation and supplies its result in the next CLI resume round. Unknown
-or malformed items are `codex_cli_stream_protocol_error`. Only a completed
-`error` item is a named CLI failure when no completed turn follows; an error item
+The Codex JSONL gate refuses every native Codex command, MCP, web-search,
+file-change, or other non-text tool item. Unknown or malformed items are
+`codex_cli_stream_protocol_error`. Only a completed `error` item is a named CLI
+failure when no completed turn follows; an error item
 that is started or updated remains a protocol failure. Event payloads, prompts,
 and stderr are not logged; failure logging contains only the return code and
 stderr length. `approval_policy="never"` means auto-approval within the sandbox,
-not that tools cannot run, so the transport's reported-event gate and the shared
-tool loop remain the execution boundary.
+not that tools cannot run, so the transport's reported-event gate remains the
+execution boundary.
 
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
@@ -1011,13 +1009,12 @@ mounted; a compromised container cannot add host-side profile settings or hooks.
 `ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY` are configured only
 through the deployment `.env` and become `Settings` secrets. Both
 provider-facing images install the `claude` extra, so `ANTHROPIC_API_KEY`
-serves the Claude judge, model catalog, and API co-writer tool loop. It does
-not replace the web container's Claude CLI mirror: the selected CLI route
-still uses Songmaker's MCP tools. The API and DOM expose only safe readiness
+serves the Claude judge and model catalog. It does not replace the web
+container's Claude CLI mirror, which the judge's CLI route uses. The API and DOM expose only safe readiness
 metadata (`set`/`not set` through route state), never a key value, raw
-provider body, command output, or a secret-derived value. A Co-Writer route
-is administrator-selected; a failed selected route returns its fixed safe
-reason and never retries the sibling CLI/API route. Judge settings are also
+provider body, command output, or a secret-derived value. The co-writer has no
+route to select: it runs at the agent service (see "Co-writer turn through the
+agent service"). Judge settings are also
 admin-only and expose the saved route with safe readiness metadata. The
 [Agent routes contract](architecture.md#agent-routes) describes the startup pin
 and the temporary separation between that saved route and the worker's
