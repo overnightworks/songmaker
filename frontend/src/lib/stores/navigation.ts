@@ -102,6 +102,20 @@ function pushLibraryHistory(enterPage: () => void = () => {}): Promise<void> {
 	return writeLibraryHistory(next, libraryHistoryUrl(next), 'push');
 }
 
+// A link to a take of the song on screen: one entry of the song at the take's
+// anchor, so Back returns to the place the person clicked from. The browser's
+// own hash jump would write an entry without the library state, and the
+// library would read none. It does not leave the song, so it is not guarded,
+// and it keeps no page as left: that replace would strip the anchor from a
+// standing anchor entry.
+export function jumpToTake(takeId: string): Promise<void> {
+	const anchor = `#take-${takeId}`;
+	if (location.hash === anchor) return Promise.resolve();
+	cancelLibraryHistoryApply();
+	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
+	return writeLibraryHistory(next, libraryHistoryUrl(next) + anchor, 'push');
+}
+
 export function persistLibraryHistory(): void {
 	void replaceLibraryHistory();
 }
@@ -121,7 +135,7 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 
 // A draft with changes no version holds blocks a song switch or leave (rail
 // row, prev/next, breadcrumb, Escape, Library, a collection opened anywhere, a
-// rail page link, Logout, browser or phone Back) until the owner resolves it:
+// rail page link, Logout, browser or phone Back that leaves the song) until the owner resolves it:
 // the deferred navigation is parked here, and SongDetailView renders the Save /
 // Discard / Cancel confirm and either runs the parked action (Discard, or
 // Save then run it) or drops it (Cancel). Only the song's own surface can dirty a draft, and
@@ -624,7 +638,8 @@ export async function openTakeVersion(
 // navigation, so the address route of that entry may already be resolving: no
 // library is applied until the song's entry is back, and an apply started
 // meanwhile is dropped. Documented next to the dirty-guard paragraph in
-// docs/architecture.md.
+// docs/architecture.md. A Back or Forward onto another entry of the song on
+// screen never gets here: it keeps the draft where it is.
 function putTheSongBackOverTheLanding(): void {
 	const songEntry = snapshotLibraryHistory(currentHistoryIndex() + 1);
 	const songEntryBack = writeLibraryHistory(songEntry, libraryHistoryUrl(songEntry), 'push');
@@ -653,10 +668,16 @@ export function followShellLayers(): () => void {
 
 // The history controller's landing handler: by the time a landing reaches
 // here the controller has closed the layers it left, so only a landing on
-// another page entry is the library's to apply.
+// another page entry is the library's to apply. A landing that keeps the song
+// on screen loses no draft (the editor reloads only for another song), so it
+// asks nothing; one that leaves the song asks as every other way out does.
 function onLanding(landing: Landing, landedState: unknown): void {
 	if (!landing.apply) return;
 	const state = libraryHistoryEntry(landedState);
+	if (isLibraryHistoryState(state) && state.songId && state.songId === get(selectedSongId)) {
+		void applyLanding(state);
+		return;
+	}
 	let songPutBack = false;
 	void guardDirtyNavigation(
 		() => (songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state)),

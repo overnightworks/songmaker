@@ -25,7 +25,7 @@
 "frontend/e2e/library.spec.ts" = 1305
 "frontend/e2e/offline.spec.ts" = 816
 "frontend/e2e/seed.ts" = 1205
-"frontend/e2e/song-phone.spec.ts" = 866
+"frontend/e2e/song-phone.spec.ts" = 865
 "frontend/e2e/song-versions.spec.ts" = 863
 "frontend/src/lib/api/types.ts" = 1144
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
@@ -39,9 +39,9 @@
 "frontend/src/lib/components/PlayerBar.test.ts" = 1642
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
 "frontend/src/lib/components/SongDetailView.svelte" = 1104
-"frontend/src/lib/components/SongDetailView.test.ts" = 2314
+"frontend/src/lib/components/SongDetailView.test.ts" = 2312
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1311
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/constants.ts" = 846
 "frontend/src/lib/history/historyController.test.ts" = 1103
 "frontend/src/lib/history/historyController.ts" = 953

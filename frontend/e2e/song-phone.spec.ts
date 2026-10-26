@@ -29,7 +29,7 @@ import {
 	NOW_PLAYING_TAKE_TAB,
 	nowPlayingOpenSourceLabel,
 	nowPlayingTakeLabel,
-	takeGroupLabel,
+	currentVersionHeadLabel,
 	takeRowLabel,
 	takeVersion,
 	type TakeVersion
@@ -200,10 +200,9 @@ test.describe('song page at phone width', () => {
 			await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 
 			await page.getByRole('tab', { name: /Takes/ }).click();
+			const { versionNumber } = await seededTakeVersion(page, songId);
 			await expect(
-				panel.getByText(
-					takeGroupLabel(await seededTakeVersion(page, songId), SONG_PHONE_TAKE_COUNT)
-				)
+				panel.getByText(currentVersionHeadLabel(versionNumber, SONG_PHONE_TAKE_COUNT))
 			).toBeVisible();
 
 			const playButtons = panel.getByRole('button', {

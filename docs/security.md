@@ -361,6 +361,7 @@ All responses include:
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (present whenever `COOKIE_SECURE` is true, the default; absent when it is false — see "Authentication")
 - `Cache-Control: no-store` (API responses only — prevents caching of authenticated data). The exact resource-event SSE path uses `no-cache, no-store` so intermediaries do not cache or transform its reconnect stream; other API and SSE paths retain `no-store`.
+- `Cache-Control: no-cache` on every response that carries the SPA shell (`spa_fallback`, so `/` and each client-side route), set by the shell response itself because a path rule cannot name every SPA path: the browser revalidates it at each load and a deploy reaches it, instead of reusing a shell whose hashed `/_app/` files the new build deleted. The hashed files under `/_app/` keep their caching.
 - `Cache-Control: private, max-age=31536000, immutable` on generation audio: `/audio/*` and every `/shared/**/audio/*` route (`sharing_api.py`). A generation file never changes under its name, so the listener's browser keeps it for a year, while `private` forbids any shared cache (CDN, proxy) from holding it. Consequence: a revoked share stays playable from that listener's own browser cache. Queue-stream snapshot audio is not a generation file — it expires within hours — so `/shared/queue-streams/{id}/audio` sends `no-store`.
 
 ## CORS

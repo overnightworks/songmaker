@@ -47,6 +47,15 @@ export function clearSelection(): void {
 	selectionMode.set(false);
 }
 
+// Drops every selected id outside `ids`; ends select mode when that left nothing.
+export function keepOnlySelected(ids: ReadonlySet<string>): void {
+	const current = get(selectedIds);
+	const kept = new Set([...current].filter((id) => ids.has(id)));
+	if (kept.size === current.size) return;
+	selectedIds.set(kept);
+	if (kept.size === 0) selectionMode.set(false);
+}
+
 // A selection belongs to the song it was made on; a different song starts empty.
 // Watching the store keeps this true while no take list is mounted (Edit, co-writer).
 selectedSongId.subscribe((songId) => {

@@ -19,9 +19,10 @@
 		bulkDeleteTitle,
 		selectedCountLabel,
 		openVersionLabel,
-		takeVersion,
-		takeGroupLabel,
-		type TakeVersion
+		currentVersionHeadLabel,
+		foldedGroupLabel,
+		takeRowLabel,
+		EARLIER_VERSIONS_LABEL
 	} from '$lib/constants/now-playing';
 	import { removeGenerationFromSong } from '$lib/stores/libraryData';
 	import { selectedGenerationId } from '$lib/stores/player';
@@ -31,8 +32,18 @@
 		selectionMode,
 		selectedIds,
 		selectAllUnkept,
-		clearSelection
+		clearSelection,
+		keepOnlySelected
 	} from '$lib/stores/selection';
+	import {
+		groupTakes,
+		isGroupOpen,
+		renderedTakes,
+		settleTakeFolds,
+		takeFolds,
+		toggleTakeGroup,
+		type TakeGroup
+	} from '$lib/stores/takeFolds';
 	import { addToast } from '$lib/stores/toast';
 	import { bulkDeleteGenerations } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
@@ -85,35 +96,21 @@
 	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
 
-	interface VersionGroup {
-		version: TakeVersion | null;
-		generations: GenerationItem[];
-	}
+	const groups = $derived(
+		groupTakes(song.generations, song.version_count > 0 ? latestVersionNumber : null)
+	);
 
-	const IMPORTED_GROUP_KEY = 'imported';
+	// What the person sees: the current version's takes and those of every
+	// unfolded version. Selecting, counting and deleting stay inside it.
+	const renderedGenerations = $derived(renderedTakes($takeFolds, groups));
+	const renderedIds = $derived(new Set(renderedGenerations.map((gen) => gen.id)));
+	const tickedIds = $derived([...$selectedIds].filter((id) => renderedIds.has(id)));
 
-	function groupKey(version: TakeVersion | null): string {
-		return version ? `v${version.versionNumber}` : IMPORTED_GROUP_KEY;
-	}
-
-	const groups = $derived.by((): VersionGroup[] => {
-		const map: Record<string, VersionGroup> = {};
-		for (const gen of song.generations) {
-			const version = takeVersion(gen.version_id, gen.version_number);
-			const group = (map[groupKey(version)] ??= { version, generations: [] });
-			group.generations.push(gen);
-		}
-		const result = Object.values(map);
-		result.sort((a, b) => (b.version?.versionNumber ?? -1) - (a.version?.versionNumber ?? -1));
-		return result;
+	$effect.pre(() => settleTakeFolds(groups));
+	$effect.pre(() => {
+		if ($selectedIds.size > 0) keepOnlySelected(renderedIds);
 	});
 
-	// A selection can hold ids of takes this song no longer shows; only the
-	// takes on screen are ever counted or sent.
-	const tickedIds = $derived.by((): string[] => {
-		const songTakeIds = new Set(song.generations.map((gen) => gen.id));
-		return [...$selectedIds].filter((id) => songTakeIds.has(id));
-	});
 	let confirmingBulkDelete = $state(false);
 
 	$effect(() => {
@@ -165,6 +162,38 @@
 	const jobRunning = $derived(isGenerateJobActive($generateAction));
 </script>
 
+{#snippet openLink(group: TakeGroup)}
+	{#if group.version}
+		{@const version = group.version}
+		<button
+			type="button"
+			class="version-link"
+			data-hitbox="text"
+			onclick={() => void actions.clickVersion(version.versionId)}
+		>
+			<span class="version-open"
+				>{openVersionLabel(version.versionNumber)}<Icon name="chevron-right" size={14} /></span
+			>
+		</button>
+	{/if}
+{/snippet}
+
+{#snippet takeRows(generations: GenerationItem[])}
+	{#each generations as gen (gen.id)}
+		<TakeRow
+			{gen}
+			{song}
+			{voices}
+			playlistOpen={playlistFor === gen.id}
+			{onsource}
+			onaddtoplaylist={() => (playlistFor = gen.id)}
+			onselectplaylist={onAddToPlaylist}
+			onclosepicker={() => (playlistFor = null)}
+			ondelete={() => (deleteFor = gen)}
+		/>
+	{/each}
+{/snippet}
+
 <GenerationStatusSlot {latestVersionNumber} />
 
 {#if loadStatus === 'error' && song.generations.length === 0}
@@ -195,7 +224,7 @@
 		{/each}
 		<p class="skeleton-caption">{TAKES_LOADING}</p>
 	</div>
-{:else if song.generations.length === 0 && !dirty && !jobRunning}
+{:else if song.generations.length === 0 && !groups.current && !dirty && !jobRunning}
 	<div class="empty">{TAKES_EMPTY}</div>
 {:else}
 	<div class="takes-list">
@@ -224,43 +253,54 @@
 			</div>
 		{/if}
 
-		{#each groups as group (groupKey(group.version))}
-			{@const label = takeGroupLabel(group.version, group.generations.length)}
+		{#if groups.current}
+			{@const current = groups.current}
+			<div class="version-section">
+				<div class="version-header-row version-head">
+					<span class="version-header">
+						{currentVersionHeadLabel(current.versionNumber ?? 0, current.generations.length)}
+					</span>
+					{@render openLink(current)}
+				</div>
+				{#if current.generations.length === 0 && !jobRunning}
+					<div class="version-empty">{TAKES_EMPTY}</div>
+				{/if}
+				{@render takeRows(current.generations)}
+			</div>
+		{/if}
+
+		{#if groups.current && groups.earlier.length > 0}
+			<p class="earlier-label">{EARLIER_VERSIONS_LABEL}</p>
+		{/if}
+
+		{#each groups.earlier as group (group.key)}
+			{@const open = isGroupOpen($takeFolds, groups, group.key)}
 			<div class="version-section">
 				<div class="version-header-row">
-					{#if group.version}
-						{@const version = group.version}
-						<button
-							type="button"
-							class="version-link"
-							data-hitbox="text"
-							onclick={() => void actions.clickVersion(version.versionId)}
-						>
-							<span class="version-header">{label}</span>
-							<span class="version-open"
-								>{openVersionLabel(version.versionNumber)}<Icon
-									name="chevron-right"
-									size={14}
-								/></span
+					<button
+						type="button"
+						class="version-toggle"
+						data-hitbox="text"
+						aria-expanded={open}
+						onclick={() => toggleTakeGroup(group.key, groups)}
+					>
+						<Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
+						<span class="version-header">
+							{foldedGroupLabel(group.versionNumber, group.generations.length, group.archivedCount)}
+						</span>
+						{#if !open && group.pick}
+							<span class="version-pick"
+								><Icon name="star-filled" size={12} />{takeRowLabel(
+									group.pick.generation_number
+								)}</span
 							>
-						</button>
-					{:else}
-						<span class="version-header">{label}</span>
-					{/if}
+						{/if}
+					</button>
+					{#if open}{@render openLink(group)}{/if}
 				</div>
-				{#each group.generations as gen (gen.id)}
-					<TakeRow
-						{gen}
-						{song}
-						{voices}
-						playlistOpen={playlistFor === gen.id}
-						{onsource}
-						onaddtoplaylist={() => (playlistFor = gen.id)}
-						onselectplaylist={onAddToPlaylist}
-						onclosepicker={() => (playlistFor = null)}
-						ondelete={() => (deleteFor = gen)}
-					/>
-				{/each}
+				{#if open}
+					<div class="version-takes">{@render takeRows(group.generations)}</div>
+				{/if}
 			</div>
 		{/each}
 
@@ -273,7 +313,7 @@
 				<button
 					type="button"
 					class="toolbar-btn select-all"
-					onclick={() => selectAllUnkept(song.generations)}
+					onclick={() => selectAllUnkept(renderedGenerations)}
 				>
 					{TAKE_SELECT_ALL_UNKEPT_LABEL}
 				</button>
@@ -295,7 +335,7 @@
 		onconfirm={() => {
 			const id = deleteFor?.id;
 			deleteFor = null;
-			if (id) actions.del(id);
+			if (id && renderedIds.has(id)) actions.del(id);
 		}}
 		oncancel={() => (deleteFor = null)}
 	/>
@@ -346,12 +386,56 @@
 		padding: 0.3rem 0;
 	}
 
-	.version-link {
+	.version-toggle {
 		display: flex;
 		flex: 1;
 		align-items: center;
 		gap: 0.3rem;
 		min-width: 0;
+		padding: 0;
+		background: none;
+		border: none;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.version-pick {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		margin-left: auto;
+		font-size: var(--label-font-size);
+		color: var(--accent);
+	}
+
+	.version-takes {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		padding-left: 1rem;
+	}
+
+	.earlier-label {
+		margin: 0.4rem 0 0;
+		font-size: var(--label-font-size);
+		color: var(--text-subtle);
+		font-family: var(--font-display);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.version-empty {
+		padding: 0.6rem 0;
+		color: var(--text-subtle);
+		font-style: italic;
+		font-size: 0.87rem;
+	}
+
+	.version-link {
+		display: flex;
+		align-items: center;
+		margin-left: auto;
 		padding: 0;
 		background: none;
 		border: none;
@@ -363,7 +447,6 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.1rem;
-		margin-left: auto;
 		font-size: var(--label-font-size);
 		color: var(--accent);
 	}

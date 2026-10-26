@@ -89,7 +89,7 @@ def style_sources(source: Path) -> list[Path]:
 def read_baseline(baseline: Path) -> str | None:
     if not baseline.exists():
         return None
-    return baseline.read_text().strip()  # NOSONAR(S8707) Operator-named CLI path.
+    return baseline.read_text().strip()
 
 
 def baseline_limit(previous: str | None, baseline: Path, total: int, *, update: bool) -> int:
@@ -128,23 +128,26 @@ def check(source: Path, baseline: Path, *, update: bool) -> int:
         print_locations(sites)
         return 1
     if update and (previous is None or total < limit):
-        baseline.write_text(f"{total}\n")  # NOSONAR(S8707) Operator-named CLI path.
+        baseline.write_text(f"{total}\n")
         print("Updated style literal baseline.")
     return 0
+
+
+def run(source: Path, baseline: Path, *, update: bool) -> int:
+    try:
+        return check(source, baseline, update=update)
+    except (OSError, ValueError) as error:
+        print(error)
+        return 1
 
 
 def main() -> int:
     repository = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", type=Path, default=repository / "frontend/src")
-    parser.add_argument("--baseline", type=Path, default=repository / "scripts/style-literals.txt")
     parser.add_argument("--update", action="store_true")
     args = parser.parse_args()
-    try:
-        return check(args.source, args.baseline, update=args.update)
-    except (OSError, ValueError) as error:
-        print(error)
-        return 1
+    return run(repository / "frontend/src", repository / "scripts/style-literals.txt",
+               update=args.update)
 
 
 if __name__ == "__main__":
