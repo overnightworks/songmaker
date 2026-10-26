@@ -1,0 +1,8 @@
+claim_id = "a39da8160452419898432b57aed93fd6"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "dfaaed1458f7f61685a921981a8deab8f857518e"
+branch = "claude/issue-1890-session-row-holds-id-token"
+scope = ["docs/architecture.md", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/auth.py", "tests/test_auth_stores.py", "tests/test_db.py"]
+opened_commit = "291ffb5fd3fb815f60a4445f2eab0ec641da0a57"
+whole_reason = "One nullable column, the store that writes it, and its migration, which must land together."
