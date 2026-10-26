@@ -153,7 +153,7 @@ function anchor(takeId: string): string {
 	return `#take-${takeId}`;
 }
 
-describe('jumping to a take of the song on screen', () => {
+describe('jumpToTake and the entries it writes (rule 10, cells J1, J3, J10)', () => {
 	it('writes one entry of the song at the take anchor and keeps the song open', async () => {
 		await openTheSongFromItsAlbum();
 		const entries = historyLength();
@@ -230,7 +230,7 @@ describe('jumping to a take of the song on screen', () => {
 	});
 });
 
-describe('with a draft nobody saved', () => {
+describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', () => {
 	let target: HTMLElement;
 	let view: ReturnType<typeof mount>;
 
@@ -308,5 +308,23 @@ describe('with a draft nobody saved', () => {
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		expect(location.pathname).toBe('/album/a1');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('still asks on a Back onto an entry of another song, and Cancel keeps that song and its draft', async () => {
+		discardDraft();
+		const other = song({ ...TIDE_DEFAULTS, id: 's2', slug: 's2', album_id: 'a2' });
+		await selectSong('s2', other);
+		await libraryHistoryStepsLanded();
+		loadSongData(other);
+		setDraftLyrics(UNSAVED_LYRICS);
+
+		await pressBack();
+		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
+		await libraryHistoryStepsLanded();
+		answer(DIALOG_CANCEL_LABEL);
+
+		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(editLyrics)).toBe(UNSAVED_LYRICS);
 	});
 });
