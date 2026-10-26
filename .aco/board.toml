@@ -1,2 +1,9 @@
 body_contract = "block"
 merge_method = "squash"
+dependency_paths = [
+  ".github/workflows/",
+  "frontend/package.json",
+  "frontend/pnpm-lock.yaml",
+  "pyproject.toml",
+  "uv.lock",
+]

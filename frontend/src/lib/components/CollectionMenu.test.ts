@@ -234,7 +234,7 @@ function albumMenuProps() {
 }
 
 describe('CollectionMenu album rows', () => {
-	it('915_C3: lists exactly Edit details · Cover · Curate · Add to playlist · Share · Archive · Delete, Delete red and last', async () => {
+	it('915_C3: lists exactly Edit details · Cover · Pick album takes · Add to playlist · Share · Archive · Delete, Delete red and last', async () => {
 		const { target } = await render(albumMenuProps());
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
@@ -242,7 +242,7 @@ describe('CollectionMenu album rows', () => {
 		expect(menuRowLabels(target)).toEqual([
 			'Edit details',
 			'Cover',
-			'Curate',
+			'Pick album takes',
 			'Add to playlist',
 			'Share',
 			'Archive',

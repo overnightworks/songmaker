@@ -1,10 +1,11 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import type { GenerationItem } from '$lib/api/types';
+import { selectedSongId } from '$lib/stores/player';
 
 export const selectedIds = writable<Set<string>>(new Set());
 export const selectionMode = writable(false);
 
-export const selectionCount = derived(selectedIds, ($ids) => $ids.size);
+let selectionSongId: string | null = null;
 
 export function toggleSelection(id: string): void {
 	selectedIds.update((ids) => {
@@ -45,3 +46,11 @@ export function clearSelection(): void {
 	selectedIds.set(new Set());
 	selectionMode.set(false);
 }
+
+// A selection belongs to the song it was made on; a different song starts empty.
+// Watching the store keeps this true while no take list is mounted (Edit, co-writer).
+selectedSongId.subscribe((songId) => {
+	if (songId === null || songId === selectionSongId) return;
+	clearSelection();
+	selectionSongId = songId;
+});

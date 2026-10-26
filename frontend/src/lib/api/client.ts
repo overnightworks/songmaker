@@ -76,7 +76,6 @@ export {
 	uploadPlaylistCover,
 	deletePlaylistCover
 } from './playlists';
-export { createQueueStreamSnapshot } from './queue-streams';
 export { logout, fetchMe } from './auth';
 
 export {
@@ -86,7 +85,7 @@ export {
 	startNewConversation,
 	deleteConversation
 } from './conversations';
-export type { CoWriterStreamEvent, CoWriterTurnRequest } from './conversations';
+export type { CoWriterStreamEvent } from './conversations';
 export { fetchMemory, saveUserMemory, saveSongMemory, saveAlbumMemory } from './memory';
 export {
 	fetchCapabilities,

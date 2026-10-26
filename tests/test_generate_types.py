@@ -24,6 +24,11 @@ class SeededRequest(BaseModel):
     children: list[SeededChild | str]
 
 
+class ExcludedFieldModel(BaseModel):
+    label: str
+    host_only_handle: str | None = Field(default=None, exclude=True)
+
+
 class SeededResponse(BaseModel):
     child: SeededChild
 
@@ -125,6 +130,14 @@ def test_generates_shared_repaint_mode_alias() -> None:
     assert "export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';" in result.content
     for model in (BaseGenerationParams, RepaintTaskParams, StoredGenerationParams):
         assert "repaint_mode?: RepaintMode | null;" in generate_types._model_to_interface(model)
+
+
+def test_defect_1856_skips_a_field_the_model_never_serializes() -> None:
+    """defect:#1856 -- a field the model never serializes stays out of the TypeScript."""
+    interface = generate_types._model_to_interface(ExcludedFieldModel)
+
+    assert "label: string;" in interface
+    assert "host_only_handle" not in interface
 
 
 def test_exempts_internal_routes_and_reports_their_count() -> None:

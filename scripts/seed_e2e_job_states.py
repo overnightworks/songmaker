@@ -42,6 +42,20 @@ mounted. Use the venv's Python directly:
         scripts/seed_e2e_job_states.py set-completed --job-id <id> \\
         < frontend/e2e/fixtures/take.mp3
 
+    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+        scripts/seed_e2e_job_states.py set-cover-running \\
+        --album-id <id> --started-offset 90 --owner-username e2e-ci-admin
+
+    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+        scripts/seed_e2e_job_states.py set-cover-completed --job-id <id> \\
+        < frontend/e2e/fixtures/cover.png
+
+``set-cover-running`` stands in for the one cover suggestion a web cover runner
+would be working on (CI's e2e stack mounts no image route, so no real run ever
+leaves the failed state), ``--started-offset`` moves its start into the past,
+and ``set-cover-completed`` publishes the finished run's suggestion the way
+``cover_runner.py`` does. A cover run is failed with ``set-failed``.
+
 The ``set-failed`` example stores raw worker detail to verify that musician
 reads show "Generating failed — try again." instead (L6/L11).
 
@@ -68,8 +82,9 @@ prepend_own_checkout_src(__file__)
 from songmaker_cli.api_helpers import unique_song_slug
 from songmaker_cli.config import audio_file_path, find_project_root
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, GenerationPhase, JobStatus, JobType
+from songmaker_cli.cover_suggestions import suggestion_png_path
 from songmaker_cli.db.engine import connect_db, resolve_database_url
-from songmaker_cli.db.models import Generation, Job
+from songmaker_cli.db.models import AlbumCoverSuggestion, Generation, Job
 from songmaker_cli.db.queries.auth import get_user_by_username
 from songmaker_cli.db.queries.generations import create_generation
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, get_job, update_job_status
@@ -313,10 +328,63 @@ def cmd_set_queued(session: Session, args: argparse.Namespace) -> None:
     print(job.id)
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
+def cmd_set_cover_running(session: Session, args: argparse.Namespace) -> None:
+    """Attach a fresh running cover job to an album, started ``--started-offset`` seconds ago.
 
+    Created and moved to running through the app's own query functions, as the
+    web cover runner does when it claims a queued job; ``update_job_status``
+    sets ``heartbeat_at`` to now itself.
+    """
+    owner = get_user_by_username(session, args.owner_username)
+    if owner is None:
+        raise SystemExit(f"No user named {args.owner_username!r}")
+    job = create_job(session, JobType.COVER, user_id=owner.id, album_id=args.album_id)
+    update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
+    if args.started_offset is not None:
+        job.started_at -= timedelta(seconds=args.started_offset)
+    session.commit()
+    print(job.id)
+
+
+def publish_cover_suggestion(
+    session: Session, audio_dir: Path, png_bytes: bytes, *, job_id: str,
+) -> None:
+    """Complete a running cover job and publish its one suggestion in the same commit."""
+    job = get_job(session, job_id)
+    if job is None or job.type != JobType.COVER or job.status != JobStatus.RUNNING:
+        raise SystemExit(f"Job {job_id} is not a running cover job")
+    if job.album_id is None:
+        raise SystemExit(f"Job {job_id} belongs to no album")
+    if not png_bytes:
+        raise SystemExit("No PNG bytes received on stdin")
+    suggestion_id = str(uuid.uuid4())
+    target = suggestion_png_path(audio_dir, job.album_id, suggestion_id)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(png_bytes)  # NOSONAR(S8707) Configured directory, album ID, UUID.
+        completion = JobStatusUpdate(JobStatus.COMPLETED, progress=1.0)
+        if not update_job_status(session, job_id, completion):
+            raise SystemExit(f"Job {job_id} was already terminal")
+        session.add(AlbumCoverSuggestion(
+            id=suggestion_id,
+            album_id=job.album_id,
+            job_id=job_id,
+            png_path=target.relative_to(audio_dir).as_posix(),
+        ))
+        session.commit()
+    except BaseException:
+        session.rollback()
+        target.unlink(missing_ok=True)
+        raise
+
+
+def cmd_set_cover_completed(session: Session, args: argparse.Namespace) -> None:
+    publish_cover_suggestion(
+        session, _resolve_audio_dir(), sys.stdin.buffer.read(), job_id=args.job_id,
+    )
+
+
+def _add_seed_parsers(sub) -> None:
     p_song = sub.add_parser(
         "create-song", help="Seed a song already at a given version, with real takes on it.",
     )
@@ -344,6 +412,8 @@ def main(argv: list[str] | None = None) -> int:
     p_running.add_argument("--owner-username", required=True)
     p_running.set_defaults(func=cmd_set_running)
 
+
+def _add_transition_parsers(sub) -> None:
     p_phase = sub.add_parser(
         "set-phase", help="Move an existing running generate job on to a later phase.",
     )
@@ -369,6 +439,30 @@ def main(argv: list[str] | None = None) -> int:
     p_completed.add_argument("--job-id", required=True)
     p_completed.set_defaults(func=cmd_set_completed)
 
+
+def _add_cover_parsers(sub) -> None:
+    p_cover_running = sub.add_parser(
+        "set-cover-running", help="Attach a running cover suggestion job to an album.",
+    )
+    p_cover_running.add_argument("--album-id", required=True)
+    p_cover_running.add_argument("--started-offset", type=float)
+    p_cover_running.add_argument("--owner-username", required=True)
+    p_cover_running.set_defaults(func=cmd_set_cover_running)
+
+    p_cover_completed = sub.add_parser(
+        "set-cover-completed",
+        help="Complete a running cover job with its one suggestion PNG from stdin.",
+    )
+    p_cover_completed.add_argument("--job-id", required=True)
+    p_cover_completed.set_defaults(func=cmd_set_cover_completed)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    _add_seed_parsers(sub)
+    _add_transition_parsers(sub)
+    _add_cover_parsers(sub)
     args = parser.parse_args(argv)
 
     factory = connect_db(resolve_database_url())

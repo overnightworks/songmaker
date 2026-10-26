@@ -19,11 +19,10 @@ import logging
 import time
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, Literal
+from typing import TYPE_CHECKING, Final
 
 from agent_providers.errors import (
     ProviderUnavailableError,
-    SafeRouteReason,
     SafeRouteReasonCode,
     normalize_route_failure,
 )
@@ -46,6 +45,9 @@ from songmaker_cli.api_helpers import (
 )
 from songmaker_cli.api_models import (
     ChatMessageResponse,
+    ChatTurnFailureFrame,
+    ChatTurnFinalFrame,
+    ChatTurnRouteErrorFrame,
     ChatTurnV2Request,
     ConversationListResponse,
     ConversationMessagesResponse,
@@ -596,30 +598,8 @@ _CHAT_REQUEST_FAILED: Final = "Chat request failed"
 _CHAT_COMPLETION_FAILED: Final = "Chat completion failed"
 
 
-class ChatTurnRouteErrorFrame(BaseModel):
-    """The frame a turn ends with when its provider route is unavailable."""
-
-    type: Literal["error"] = "error"
-    status: int
-    provider: str
-    route: str | None
-    reason: SafeRouteReason
-
-
-class ChatTurnFailureFrame(BaseModel):
-    """The frame a turn ends with when the endpoint itself could not finish."""
-
-    type: Literal["error"] = "error"
-    status: int
-    message: str
-
-
-def _sse_format(event: BaseModel | dict) -> str:
-    if isinstance(event, BaseModel):
-        payload = event.model_dump()
-    else:
-        payload = event
-    return f"data: {json.dumps(payload)}\n\n"
+def _sse_format(event: BaseModel) -> str:
+    return f"data: {json.dumps(event.model_dump())}\n\n"
 
 
 @router.post(
@@ -945,7 +925,7 @@ def _complete_chat_turn(
     session: Session,
     prepared: PreparedChatTurn,
     assistant_text: str,
-) -> dict:
+) -> ChatTurnFinalFrame:
     assistant_message = append_message(
         session,
         prepared.conversation_id,
@@ -958,12 +938,11 @@ def _complete_chat_turn(
     ):
         log.warning("Chat job %s was already terminal at completion", prepared.job_id)
     session.commit()
-    return {
-        "type": "final",
-        "conversation_id": prepared.conversation_id,
-        "user_message": prepared.user_message.model_dump(),
-        "assistant_message": ChatMessageResponse.from_orm(assistant_message).model_dump(),
-    }
+    return ChatTurnFinalFrame(
+        conversation_id=prepared.conversation_id,
+        user_message=prepared.user_message,
+        assistant_message=ChatMessageResponse.from_orm(assistant_message),
+    )
 
 
 def _chat_completion_failure_event(session: Session, job_id: str) -> str:

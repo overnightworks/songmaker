@@ -57,7 +57,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		bulkDeleteGenerations: vi.fn(),
 		sharePlaylist: vi.fn(),
 		unsharePlaylist: vi.fn(),
-		createQueueStreamSnapshot: vi.fn(),
 		fetchPlaylists: vi.fn().mockResolvedValue([]),
 		fetchPlaylist: vi.fn(),
 		removeFromPlaylist: vi.fn().mockResolvedValue(undefined),
@@ -65,18 +64,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchCapabilities: vi.fn().mockResolvedValue({})
 	};
 });
-vi.mock('$lib/api/queue-streams', () => ({
-	pinQueueStream: vi.fn(),
-	unpinQueueStream: vi.fn()
-}));
-vi.mock('$lib/services/offline', () => ({
-	saveStream: vi.fn(),
-	removeStream: vi.fn(),
-	offlineStreamUrl: vi.fn(() => '/offline/stream/test'),
-	rememberPlaylistOfflineStream: vi.fn(),
-	forgetPlaylistOfflineStream: vi.fn(),
-	loadSavedOfflinePlaylist: vi.fn().mockResolvedValue(null)
-}));
 vi.mock('$lib/stores/navigation', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
 	return {

@@ -866,18 +866,8 @@ def _stream_audio_url(client: TestClient, stream_path: str) -> str:
     return client.post(stream_path).json()["stream_url"]
 
 
-def _owner_stream_audio_url(client: TestClient, stream_path: str) -> str:
-    return client.post(stream_path, json={"tracks": [{"generation_id": "g1"}]}).json()[
-        "stream_url"
-    ]
-
-
 def _public_stream_manifest(client: TestClient, stream_path: str) -> dict:
     return client.post(stream_path).json()
-
-
-def _owner_stream_manifest(client: TestClient, stream_path: str) -> dict:
-    return client.post(stream_path, json={"tracks": [{"generation_id": "g1"}]}).json()
 
 
 def _audio_url(client: TestClient, audio_path: str) -> str:
@@ -948,9 +938,6 @@ def test_generation_audio_is_cached_for_good_by_the_listeners_browser_only(
     ("share_path", "stream_path", "seed", "resolve_audio_url"),
     [
         pytest.param(
-            None, "/api/queue-streams", None, _owner_stream_audio_url, id="owner-stream",
-        ),
-        pytest.param(
             "/api/albums/test_album/share", "/shared/{slug}/stream", None, _stream_audio_url,
             id="album-stream",
         ),
@@ -980,10 +967,6 @@ def test_stream_snapshot_audio_is_never_stored(
     ("share_path", "stream_path", "seed", "resolve_manifest", "expected_seed", "expected_path"),
     [
         pytest.param(
-            None, "/api/queue-streams", None, _owner_stream_manifest, 42, "admin_user/g1.mp3",
-            id="owner-stream",
-        ),
-        pytest.param(
             "/api/albums/test_album/share", "/shared/{slug}/stream", None,
             _public_stream_manifest, None, "", id="album-stream",
         ),
@@ -995,7 +978,7 @@ def test_stream_snapshot_audio_is_never_stored(
     ],
 )
 @pytest.mark.usefixtures("fake_queue_stream_build")
-def test_public_stream_tracks_hide_seed_and_stored_path_but_the_owner_keeps_them_1374_rule_8(
+def test_public_stream_tracks_hide_seed_and_stored_path(
     sharing_app: TestClient,
     share_path: str | None,
     stream_path: str,

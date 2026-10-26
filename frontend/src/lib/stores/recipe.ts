@@ -1,6 +1,11 @@
 import { writable, get } from 'svelte/store';
 import type { GenerationItem, VersionGenerationParams } from '$lib/api/types';
-import { RECIPE_REPAINT_OFF_LABEL, TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '$lib/constants';
+import {
+	RECIPE_REPAINT_OFF_LABEL,
+	RECIPE_SOURCE_DURATION_DEFAULT_SECONDS,
+	TAKE_COVER_LABEL,
+	TAKE_REPAINT_LABEL
+} from '$lib/constants';
 import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 
 export type SourceMode = 'repaint' | 'cover';
@@ -47,6 +52,11 @@ export function setSourceFromGeneration(gen: GenerationItem, mode: SourceMode): 
 		repaintEnd.set(1);
 	}
 	recipeOpen.set(true);
+}
+
+/** The take's real length; the requested Duration is 0 for auto and wrong whenever the render differs. */
+export function sourceTakeDurationSeconds(gen: GenerationItem): number {
+	return gen.audio_duration_sec ?? RECIPE_SOURCE_DURATION_DEFAULT_SECONDS;
 }
 
 export function clearSource(): void {

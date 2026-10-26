@@ -8,6 +8,9 @@ import {
 	nowPlayingTakeMeta,
 	openVersionLabel,
 	takeBatchReductionLabel,
+	bulkDeleteLabel,
+	bulkDeleteTitle,
+	selectedCountLabel,
 	takeGroupLabel,
 	takeVersion
 } from './now-playing';
@@ -130,5 +133,18 @@ describe('the names Now Playing gives its ways out (#1052)', () => {
 		}
 	])('names opening the $kind, starting with the text it shows', ({ kind, title, label }) => {
 		expect(nowPlayingOpenSourceLabel(kind, title)).toBe(label);
+	});
+});
+
+describe('bulk delete copy', () => {
+	it.each([
+		{ count: 1, title: 'Delete 1 take?' },
+		{ count: 3, title: 'Delete 3 takes?' }
+	])('asks "$title" for $count ticked', ({ count, title }) => {
+		expect(bulkDeleteTitle(count)).toBe(title);
+	});
+
+	it('counts the ticked takes the same in the button and the readout', () => {
+		expect([bulkDeleteLabel(3), selectedCountLabel(3)]).toEqual(['Delete 3', '3 selected']);
 	});
 });

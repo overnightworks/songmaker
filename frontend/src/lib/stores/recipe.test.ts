@@ -1,3 +1,4 @@
+import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
 import { makeGeneration as generation } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
@@ -10,6 +11,7 @@ import {
 	recipeChips,
 	recipeModel,
 	recipeOpen,
+	sourceTakeDurationSeconds,
 	repaintMode,
 	resetRecipeSourceForSong,
 	seedRecipeModel,
@@ -231,5 +233,34 @@ describe('recipe session state', () => {
 		expect(get(coWriterOpen)).toBe(false);
 		expect(get(recipeModel)).toBe('turbo');
 		expect(get(takesPerGenerate)).toBe(3);
+	});
+});
+
+describe('sourceTakeDurationSeconds', () => {
+	it.each([
+		{
+			name: 'the measured length when the requested Duration is auto (0)',
+			requested: 0,
+			measured: 123.4,
+			expected: 123.4
+		},
+		{
+			name: 'the measured length when it differs from the request',
+			requested: 180,
+			measured: 95.2,
+			expected: 95.2
+		},
+		{
+			name: 'the named default when the length was never measured',
+			requested: 0,
+			measured: null,
+			expected: RECIPE_SOURCE_DURATION_DEFAULT_SECONDS
+		}
+	])('gives $name', ({ requested, measured, expected }) => {
+		const take = generation({
+			generation_params: { audio_duration: requested },
+			audio_duration_sec: measured
+		});
+		expect(sourceTakeDurationSeconds(take)).toBe(expected);
 	});
 });

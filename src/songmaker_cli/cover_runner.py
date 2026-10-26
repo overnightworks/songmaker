@@ -9,6 +9,7 @@ import shutil
 import time
 import uuid
 from contextlib import suppress
+from io import BytesIO
 from pathlib import Path
 from threading import Event, Lock
 from typing import Final
@@ -21,6 +22,7 @@ from agent_providers.codex.image import (
 )
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
 from agent_providers.images import ImagePolicy
+from PIL import Image
 
 from songmaker_cli.constants import (
     ALBUM_COVER_SUGGESTIONS_DIRNAME,
@@ -38,6 +40,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_job_errors import CoverSuggestionJobError
 from songmaker_cli.cover_suggestions import remove_cover_suggestion_files, suggestion_png_path
+from songmaker_cli.covers import ai_mark_png_info
 from songmaker_cli.cowriter.routing import CoverImageDispatch, cover_image_provider_method
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries.albums import get_album
@@ -384,7 +387,10 @@ def _staging_path(audio_dir: Path, album_id: str, job_id: str) -> Path:
 
 
 def _write_staged_png(staging_dir: Path, suggestion_id: str, payload: bytes) -> None:
-    (staging_dir / f"{suggestion_id}.png").write_bytes(payload)
+    with Image.open(BytesIO(payload)) as generated:
+        generated.save(
+            staging_dir / f"{suggestion_id}.png", format="PNG", pnginfo=ai_mark_png_info(),
+        )
 
 
 def _publish_suggestion(

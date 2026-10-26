@@ -30,9 +30,9 @@ The live app is Docker-only; there is no local server path. `.venv` is for tests
 
 CI runs the pinned reusable quality gate (`quality / verdict`, mandatory jobs in `quality/config.toml`); coverage floors, Sonar and transport are in [testing](docs/testing.md#static-analysis-sonarcloud).
 
-Local runs are targeted: `ruff check` and `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
+Local runs are targeted: `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
 
-Cheap and path-triggered: `python scripts/check_no_silent_fallbacks.py src/` when touching `src/`; `python scripts/generate_types.py --check` when touching API models; `python scripts/check_root_layout.py` when adding or moving a root-level file (it owns the root allowlist).
+Before reporting a tip, run `bash scripts/static_checks.sh`: it runs CI's static gates (ruff, import contracts, the repository scripts, svelte-check, eslint, prettier, quality hygiene at CI's pin) and stops at the first red one, naming it. It needs `.venv` and `frontend/node_modules`; the script lists the gates.
 
 Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrade head`.
 
@@ -40,7 +40,7 @@ Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrad
 
 - **Query functions `flush()`, endpoints `commit()`.** Backend paths are under `src/songmaker_cli/`. `get_db_session` does not auto-commit; a missing `session.commit()` in an endpoint is silent data loss. Exception: the sign-in callback in `auth_api.py` commits the admission and the new session together, before it issues the cookies. `create_job_with_rate_limit()` and `unique_album_id()` commit the current transaction before taking an exclusive lock, so callers must hold no uncommitted business mutation.
 - **`from_orm()` classmethods on response models**; never hand-build response dicts.
-- **Engine packages are independent.** `acestep_engine`, `audio_engine` and `acestep_worker` never import `songmaker_cli`; the acestep-worker image does not install it and would crash at startup. `acestep_engine` and `acestep_worker` each own a `settings.py`. `.importlinter` (run by `lint-imports` in CI) owns the boundary. `agent_providers` and `webauth` are installed release wheels from their own repositories; `lint-imports` does not scan their internals, so a chain reaching the application through a wheel is not caught. Neither imports `songmaker_cli` today.
+- **Engine packages are independent.** `acestep_engine`, `audio_engine` and `acestep_worker` never import `songmaker_cli`; the acestep-worker image does not install it and would crash at startup. `acestep_engine` and `acestep_worker` each own a `settings.py`. `.importlinter` (judged by quality's `import-contract` rule in CI) owns the boundary. `agent_providers` and `webauth` are installed release wheels from their own repositories; `lint-imports` does not scan their internals, so a chain reaching the application through a wheel is not caught. Neither imports `songmaker_cli` today.
 - **Ownership checks on every resource endpoint**, GET included: `check_song_access()`, `check_album_access()`, `check_generation_access()` from `api_helpers.py`.
 - **Middleware order in `server.py` is security-critical.** Do not reorder.
 - **DB queries split by domain** (`db/queries/songs.py`, `auth.py`, `jobs.py`); new ones go in the matching file, and callers import that domain module directly.

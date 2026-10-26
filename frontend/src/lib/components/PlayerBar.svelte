@@ -1,7 +1,13 @@
 <script lang="ts">
 	import type { Attachment } from 'svelte/attachments';
-	import { albumList, songList, albumSongsErrorMessage } from '$lib/stores/libraryData';
 	import {
+		albumList,
+		songList,
+		albumSongsErrorMessage,
+		albumSongsLoad
+	} from '$lib/stores/libraryData';
+	import {
+		buildQueueViewModel,
 		closeNowPlaying,
 		ensureGenerationsLoaded,
 		idlePlayTarget,
@@ -26,6 +32,7 @@
 		waitingStartOf
 	} from '$lib/stores/player';
 	import { openAlbum } from '$lib/stores/navigation';
+	import { queueHoldsOneTake } from '$lib/utils/playable';
 	import { addToast } from '$lib/stores/toast';
 	import { openCollection } from '$lib/stores/collection';
 	import {
@@ -162,7 +169,19 @@
 	function onNowPlayingClick(): void {
 		if (!shownTake) return;
 		if (docked) closeNowPlaying();
-		else openNowPlaying('queue');
+		// This take for a queue of one, Queue for several; the surface keeps the
+		// tab it opened on, so a queue that grows while open does not move it.
+		else openNowPlaying(queueOpensOnThisTake() ? 'take' : 'queue');
+	}
+
+	function queueOpensOnThisTake(): boolean {
+		const queued = buildQueueViewModel(ctx, current).items.length;
+		if (ctx.type !== 'album') return queueHoldsOneTake(queued, null);
+		const albumId = ctx.albumId;
+		return queueHoldsOneTake(queued, {
+			songs: songs.filter((s) => s.album_id === albumId),
+			load: $albumSongsLoad[albumId]
+		});
 	}
 
 	$effect(() => {
