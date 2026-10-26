@@ -26,7 +26,7 @@ scoring = [
     "audiobox-aesthetics>=0.0.4,<1",
     "torch>=2.14,<2.15",
     "torchaudio>=2.11,<3",
-    "torchcodec>=0.14,<0.18",  # torchaudio 2.9+ decodes through torchcodec, whose minor tracks torch's
+    "torchcodec>=0.14,<0.15",  # torchaudio 2.9+ decodes through torchcodec, whose minor tracks torch's
     "nvidia-ml-py3>=7.352,<8",
 ]
 whisper = [

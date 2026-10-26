@@ -1755,7 +1755,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'scoring'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torch", marker = "extra == 'whisper'", specifier = ">=2.14,<2.15", index = "https://download.pytorch.org/whl/cpu" },
     { name = "torchaudio", marker = "extra == 'scoring'", specifier = ">=2.11,<3", index = "https://download.pytorch.org/whl/cpu" },
-    { name = "torchcodec", marker = "extra == 'scoring'", specifier = ">=0.14,<0.18", index = "https://download.pytorch.org/whl/cpu" },
+    { name = "torchcodec", marker = "extra == 'scoring'", specifier = ">=0.14,<0.15", index = "https://download.pytorch.org/whl/cpu" },
     { name = "uvicorn", marker = "extra == 'acestep-worker'", specifier = ">=0.20,<1" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.20,<1" },
 ]
