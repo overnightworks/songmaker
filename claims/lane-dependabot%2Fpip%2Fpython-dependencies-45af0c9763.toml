@@ -1,0 +1,8 @@
+claim_id = "cd2e7cd4c706491d9c36fe275b25d498"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "f66dc29efa22982c162897b392143c4aff0a58e6"
+branch = "dependabot/pip/python-dependencies-45af0c9763"
+scope = ["pyproject.toml"]
+opened_commit = "dc5a645d1e0911a26e31b8d5ff97b6e866f05422"
+whole_reason = "One dependency group bump from dependabot spanning its manifest and lockfile or workflow files."
