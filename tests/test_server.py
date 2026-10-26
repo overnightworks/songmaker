@@ -186,7 +186,7 @@ def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path) -> None:
 def test_cache_control_per_response_kind(
     tmp_path: Path, path: str, cache_control: str | None,
 ) -> None:
-    """The SPA shell is revalidated at every load; hashed build files keep their caching."""
+    """defect:#1899 The SPA shell is revalidated at every load; hashed build files keep their caching."""
     client = _sveltekit_app_client(tmp_path, {"chunk.js": b"// chunk"})
     assert client.get(path).headers.get("Cache-Control") == cache_control
 
