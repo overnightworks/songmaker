@@ -1,0 +1,8 @@
+claim_id = "3b2c693307694ddb96259be6646172e4"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "fa04e71f8c1be2eecc891257fe7a8f25054acd70"
+branch = "claude/issue-1904-legal-section"
+scope = [".dockerignore", "legal/datenschutz.html", "scripts/check_root_layout.py", "tests/test_check_root_layout.py"]
+opened_commit = "88e39855a1301d113cf5c1aac0c7821217e20a84"
+whole_reason = "The privacy section file, the root-layout allowlist that admits its directory, and the image exclusion; slices 2 and 3 get their own files at their pull."
