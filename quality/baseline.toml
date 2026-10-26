@@ -91,7 +91,7 @@
 "tests/test_postgresql.py" = 858
 "tests/test_queue_streams.py" = 2422
 "tests/test_resource_event_api.py" = 1239
-"tests/test_scheduler.py" = 1453
+"tests/test_scheduler.py" = 1310
 "tests/test_scorers_extended.py" = 1035
 "tests/test_server.py" = 1995
 "tests/test_sharing.py" = 2554

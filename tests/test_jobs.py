@@ -1591,10 +1591,9 @@ def _cancel_job(factory, job_id: str) -> None:
 
 def test_generation_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Path) -> None:
     _cancel_job(seeded_db, "j1")
-    dispatch = AsyncMock(return_value=_make_dto())
     with (
-        patch("songmaker_cli.jobs.dispatch_generation", dispatch),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.admit_generation_worker", new_callable=AsyncMock) as admit,
+        patch("songmaker_cli.jobs.dispatch_generation_on_worker", new_callable=AsyncMock) as run,
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
         _run(
@@ -1612,7 +1611,8 @@ def test_generation_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Pa
             )
         )
 
-    dispatch.assert_not_awaited()
+    admit.assert_not_awaited()
+    run.assert_not_awaited()
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "cancelled"
