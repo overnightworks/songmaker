@@ -11,7 +11,8 @@ import {
 	bulkDeleteLabel,
 	bulkDeleteTitle,
 	selectedCountLabel,
-	takeGroupLabel,
+	currentVersionHeadLabel,
+	foldedGroupLabel,
 	takeVersion
 } from './now-playing';
 
@@ -25,14 +26,25 @@ describe('nowPlayingTakeLabel', () => {
 	});
 });
 
-describe('takeGroupLabel', () => {
+describe('currentVersionHeadLabel (rule 1, cells 1/9)', () => {
 	it.each([
-		{ version: takeVersion('ver-7', 7), count: 4, label: 'v7 · 4 takes' },
-		{ version: takeVersion('ver-2', 2), count: 1, label: 'v2 · 1 take' },
-		{ version: takeVersion(null, null), count: 3, label: 'Imported · 3 takes' },
-		{ version: takeVersion(null, 5), count: 1, label: 'Imported · 1 take' }
-	])('names the group "$label"', ({ version, count, label }) => {
-		expect(takeGroupLabel(version, count)).toBe(label);
+		{ versionNumber: 6, count: 3, label: 'v6 current · 3 takes' },
+		{ versionNumber: 3, count: 1, label: 'v3 current · 1 take' },
+		{ versionNumber: 3, count: 0, label: 'v3 current · 0 takes' }
+	])('names the head "$label"', ({ versionNumber, count, label }) => {
+		expect(currentVersionHeadLabel(versionNumber, count)).toBe(label);
+	});
+});
+
+describe('foldedGroupLabel (rules 2 and 5, cells 1/8)', () => {
+	it.each([
+		{ versionNumber: 5, count: 5, archived: 2, label: 'v5 · 5 takes · 2 archived' },
+		{ versionNumber: 4, count: 3, archived: 3, label: 'v4 · 3 takes · all archived' },
+		{ versionNumber: 2, count: 4, archived: 0, label: 'v2 · 4 takes' },
+		{ versionNumber: 2, count: 1, archived: 0, label: 'v2 · 1 take' },
+		{ versionNumber: null, count: 2, archived: 0, label: 'Imported · 2 takes' }
+	])('names the row "$label"', ({ versionNumber, count, archived, label }) => {
+		expect(foldedGroupLabel(versionNumber, count, archived)).toBe(label);
 	});
 });
 

@@ -68,10 +68,27 @@ export function takeVersion(
 // it, so it names where it came from instead of a version and a model.
 const IMPORTED_TAKES_GROUP = 'Imported';
 export const NOW_PLAYING_IMPORTED_TAKE_HEADING = 'Imported take';
+export const EARLIER_VERSIONS_LABEL = 'Earlier versions';
 
-export function takeGroupLabel(version: TakeVersion | null, count: number): string {
-	const origin = version ? `v${version.versionNumber}` : IMPORTED_TAKES_GROUP;
-	return `${origin}${META_SEPARATOR}${count} take${count === 1 ? '' : 's'}`;
+function takeCountLabel(count: number): string {
+	return `${count} take${count === 1 ? '' : 's'}`;
+}
+
+export function currentVersionHeadLabel(versionNumber: number, count: number): string {
+	return `v${versionNumber} current${META_SEPARATOR}${takeCountLabel(count)}`;
+}
+
+// The row of a folded version, or of Imported (no version number): archived
+// takes count in the total and are named after it.
+export function foldedGroupLabel(
+	versionNumber: number | null,
+	count: number,
+	archivedCount: number
+): string {
+	const origin = versionNumber === null ? IMPORTED_TAKES_GROUP : `v${versionNumber}`;
+	const archivedShare = archivedCount === count ? 'all' : archivedCount;
+	const archived = archivedCount === 0 ? '' : `${META_SEPARATOR}${archivedShare} archived`;
+	return `${origin}${META_SEPARATOR}${takeCountLabel(count)}${archived}`;
 }
 
 export function openVersionLabel(versionNumber: number): string {
