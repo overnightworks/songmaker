@@ -3,9 +3,9 @@
 The package exposes the same public surface as the pre-split ``jobs.py`` module.
 External callers and tests use ``songmaker_cli.jobs.X`` for both imports
 (``from songmaker_cli.jobs import run_generation_job``) and patching
-(``mock.patch("songmaker_cli.jobs.dispatch_generation")``). To keep the patches
+(``mock.patch("songmaker_cli.jobs.dispatch_generation_on_worker")``). To keep the patches
 effective after the split, submodules call the patchable names through this
-package namespace (``from songmaker_cli import jobs; jobs.dispatch_generation(...)``)
+package namespace (``from songmaker_cli import jobs; jobs.dispatch_generation_on_worker(...)``)
 rather than via direct imports — that way ``mock.patch`` rebinding the attribute
 on this module is observed at call time.
 """
@@ -25,7 +25,6 @@ from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerTaskFailed,
     admit_generation_worker,
-    dispatch_generation,
     dispatch_generation_on_worker,
 )
 from songmaker_cli.scoring.subprocess_runner import get_scorer_process
@@ -94,7 +93,6 @@ __all__ = [
     "audio_file_path",
     "build_ace_config",
     "cleanup_failed_lora",
-    "dispatch_generation",
     "download_model_on_worker",
     "get_scorer_process",
     "load_generation_defaults",
