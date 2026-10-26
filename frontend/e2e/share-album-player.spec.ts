@@ -6,6 +6,7 @@
 
 import { mkdirSync } from 'node:fs';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
+import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
 import {
 	NOW_PLAYING_GO_TO_SONG,
 	SEEK_PLAYBACK_LABEL,
@@ -449,7 +450,7 @@ test.describe('a long album', () => {
 				await page.screenshot({ path: testInfo.outputPath('album-scroll-bar.png') });
 				const [barBox, footerBox] = await boundingBoxes(
 					bar,
-					page.getByRole('button', { name: 'Impressum' })
+					page.getByRole('link', { name: 'Impressum' })
 				);
 				expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
 
@@ -482,7 +483,7 @@ test.describe('rights and neighbours', () => {
 		const hrefs = await page
 			.locator(`${PLAYER_SCROLL_ROOT} a`)
 			.evaluateAll((links) => links.map((link) => link.getAttribute('href')));
-		expect(hrefs).toEqual(['/']);
+		expect(hrefs).toEqual(['/', ...LEGAL_SECTIONS.map(({ href }) => href)]);
 	});
 
 	test('1374_rule_2 F2: an unshared address still shows its status line', async ({ browser }) => {
@@ -502,15 +503,6 @@ test.describe('rights and neighbours', () => {
 				await context.close();
 			}
 		}
-	});
-
-	test('1374_rule_2 F3: the footer legal links still open', async ({ visitor }) => {
-		await openMockAlbum(visitor);
-		const { page } = visitor;
-
-		await page.getByRole('button', { name: 'Impressum' }).click();
-
-		await expect(page.getByRole('dialog', { name: 'Legal information' })).toBeVisible();
 	});
 });
 

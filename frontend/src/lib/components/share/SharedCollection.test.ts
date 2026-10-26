@@ -17,7 +17,7 @@ import {
 	type SharedTrack
 } from '$lib/share/sharedCollection';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
-import { LEGAL_SECTIONS } from '../LegalLinks.svelte';
+import { LEGAL_SECTIONS } from '$lib/constants/legal';
 import nowPlayingFrameSource from '../NowPlayingFrame.svelte?raw';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
 import SharedCollection from './SharedCollection.svelte';
@@ -274,13 +274,10 @@ describe('SharedCollection player page (#1391)', () => {
 			);
 			expect(target.querySelector('.progress-times')?.textContent).toContain('3:00');
 			expect(target.querySelector('.np-lyrics')?.textContent).toContain(LYRIC_LINE);
-			expect(buttonNames(document.body)).toEqual([
-				TRANSPORT_PLAY_LABEL,
-				...LEGAL_SECTIONS.map((section) => section.label)
-			]);
+			expect(buttonNames(document.body)).toEqual([TRANSPORT_PLAY_LABEL]);
 			expect(
 				Array.from(document.querySelectorAll('a')).map((link) => link.getAttribute('href'))
-			).toEqual(['/']);
+			).toEqual(['/', ...LEGAL_SECTIONS.map((section) => section.href)]);
 			expect(target.querySelectorAll('.track-row')).toHaveLength(0);
 			expect(document.querySelector('.player-bar')).toBeNull();
 			expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -524,7 +521,7 @@ describe.each(['album', 'playlist'] as const)('Shared %s player page', (kind) =>
 			expect(buttonNames(target).some((name) => /edit|go to song|take/i.test(name))).toBe(false);
 			expect(
 				Array.from(target.querySelectorAll('a')).map((link) => link.getAttribute('href'))
-			).toEqual(['/']);
+			).toEqual(['/', ...LEGAL_SECTIONS.map((section) => section.href)]);
 		}
 	);
 

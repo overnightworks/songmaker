@@ -71,7 +71,19 @@ test('the account circle opens a menu with the name, Settings, the theme, Sign o
 		menu.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })
 	).toBeVisible();
 	for (const legal of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen']) {
-		await expect(menu.getByRole('link', { name: legal, exact: true })).toBeVisible();
+		const link = menu.getByRole('link', { name: legal, exact: true });
+		await expect(link).toBeVisible();
+		await expect(link).toHaveAttribute('target', '_blank');
+		await expect(link).toHaveAttribute('rel', /noopener/);
+	}
+	// The separator trails its item, so no line of the legal row starts on one:
+	// each link stands at the left edge of its own item.
+	const items = menu.locator('.legal-item');
+	for (let index = 0; index < (await items.count()); index += 1) {
+		const item = items.nth(index);
+		const itemBox = await item.boundingBox();
+		const linkBox = await item.getByRole('link').boundingBox();
+		expect(linkBox?.x).toBe(itemBox?.x);
 	}
 	await expect(menu.getByText('Signed in as')).toHaveCount(0);
 
