@@ -1,8 +1,0 @@
-claim_id = "ceb2a2e65b3048ee9ed57a36acab0417"
-agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
-role = "builder"
-base = "a96f38debe5898c56a608d9507df18c40eb0594b"
-branch = "claude/issue-1856-chat-frames-generated-contract"
-scope = ["docs/architecture.md", "frontend/eslint.config.js", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/conversations.test.ts", "frontend/src/lib/api/conversations.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts", "quality/baseline.toml", "quality/config.toml", "scripts/generate_types.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/conversation_api.py", "tests/test_agent_providers_events.py", "tests/test_generate_types.py", "tests/test_quality_workflow.py"]
-opened_commit = "bd6804989dc332d284b6e8b61ae69c14e7a876e5"
-whole_reason = "One wire contract's producer, generated types and consumer, and the check that must start green over them, are one change; split by side, the generated types would have no reader."
