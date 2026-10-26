@@ -354,8 +354,9 @@ def test_a_turn_sent_while_another_runs_is_refused_and_the_message_answered_once
 
     async def _send_it_again():
         turn = ChatTurnV2Request(message="Ja bitte")
+        request = signed_in_request(c)
         with factory() as session, pytest.raises(HTTPException) as refused:
-            await api_chat_turn(turn, signed_in_request(c), _RETURNING_USER, session)
+            await api_chat_turn(turn, request, _RETURNING_USER, session)
         return refused.value.status_code
 
     assert _while_a_turn_runs(client, service, _send_it_again) == 409
