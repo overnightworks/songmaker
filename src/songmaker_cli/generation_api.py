@@ -11,7 +11,6 @@ from typing import Final
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from webauth.ports import AuthenticatedUser
@@ -38,6 +37,7 @@ from songmaker_cli.api_models import (
     LastFailedGenerationResponse,
     RateRequest,
     RateResponse,
+    ReferenceAudioResponse,
     RepaintRequest,
     RepaintTaskParams,
     ScoreRequest,
@@ -175,11 +175,6 @@ def _generation_version_or_error(gen: Generation, version_id: str | None) -> Ver
 
 
 # ── Reference audio upload ───────────────────────────────────────────
-
-
-class ReferenceAudioResponse(BaseModel):
-    path: str
-    filename: str
 
 
 @router.post(
