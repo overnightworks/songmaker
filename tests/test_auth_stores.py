@@ -222,6 +222,7 @@ def test_replacing_a_refresh_token_updates_only_an_existing_session(accounts, se
 
 
 def test_a_session_without_an_id_token_answers_none(accounts, sessions) -> None:
+    """K1 (#1890): a row written without an ID token answers None."""
     accounts.create_for_subject(_SUBJECT, "nina", "user")
     record = sessions.create(_SUBJECT, now=_later(0), expires_at=_later(), refresh_token=None)
 
@@ -232,6 +233,7 @@ def test_a_session_without_an_id_token_answers_none(accounts, sessions) -> None:
 def test_a_stored_id_token_is_returned_whole_secret_and_kept_out_of_the_repr(
     accounts, sessions, session, length: int,
 ) -> None:
+    """K1 (#1890): the ID token lives in the row as a SecretStr, whole at 8192 characters."""
     accounts.create_for_subject(_SUBJECT, "nina", "user")
     fake_token = "fake-id-token-" + "x" * (length - 14)
     record = sessions.create(
@@ -248,6 +250,7 @@ def test_a_stored_id_token_is_returned_whole_secret_and_kept_out_of_the_repr(
 
 
 def test_renewal_and_refresh_rotation_leave_the_id_token_unchanged(accounts, sessions) -> None:
+    """K1 (#1890): the ID token ends with its row, so renewal and rotation never touch it."""
     accounts.create_for_subject(_SUBJECT, "nina", "user")
     record = sessions.create(
         _SUBJECT, now=_later(0), expires_at=_later(1), refresh_token=SecretStr("rt-one"),
@@ -263,6 +266,7 @@ def test_renewal_and_refresh_rotation_leave_the_id_token_unchanged(accounts, ses
 def test_a_failed_session_insert_raises_without_the_id_token_in_the_traceback(
     tmp_path: Path,
 ) -> None:
+    """K1 (#1890): a failed insert leaks the ID token into no traceback."""
     factory = connect_db(f"sqlite:///{tmp_path / 'production-engine.db'}")
     with factory() as database_session:
         Base.metadata.create_all(database_session.get_bind())
@@ -432,6 +436,7 @@ def test_no_store_write_survives_the_endpoints_rollback(session, write) -> None:
 def test_id_token_migration_adds_and_removes_nullable_column_keeping_sessions(
     tmp_path: Path,
 ) -> None:
+    """#1890 cells 1 and 2: upgrade keeps rows with NULL id_token; downgrade drops it."""
     import importlib
 
     from alembic import command
