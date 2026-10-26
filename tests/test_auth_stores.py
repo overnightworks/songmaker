@@ -272,11 +272,13 @@ def test_a_failed_session_insert_raises_without_the_id_token_in_the_traceback(
         Base.metadata.create_all(database_session.get_bind())
         database_session.execute(text("PRAGMA foreign_keys=ON"))
         sessions = DatabaseSessionRecordStore(database_session)
+        id_token = SecretStr("fake-id-token-in-a-failed-insert")
+        expires_at = _later()
 
         with pytest.raises(IntegrityError) as failure:
             sessions.create(
-                "no-such-account", now=_later(0), expires_at=_later(), refresh_token=None,
-                id_token=SecretStr("fake-id-token-in-a-failed-insert"),
+                "no-such-account", now=_later(0), expires_at=expires_at, refresh_token=None,
+                id_token=id_token,
             )
 
     assert "fake-id-token-in-a-failed-insert" not in "".join(
