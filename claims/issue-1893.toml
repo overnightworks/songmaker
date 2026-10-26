@@ -1,8 +1,0 @@
-claim_id = "2a9be9a10ddd45268e1d526403de5c10"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "9a3a372fc5d5f4da694599bc02ccc66033027543"
-branch = "claude/issue-1893-routed-models-live-in-api-models"
-scope = ["docs/architecture.md", "docs/testing.md", "scripts/generate_types.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/settings_api.py", "tests/test_generate_types.py"]
-opened_commit = "0ff548f2fecb2d814fed23622b1e3a53025d2046"
-whole_reason = "The home check is red on the real tree until ReferenceAudioResponse moves, and the comment and two doc sentences record the same ruling, so the lane lands as one change."
