@@ -20,6 +20,7 @@ DIRECTORY_ENTRIES = frozenset(
         "docker",
         "docs",
         "frontend",
+        "legal",
         "monitoring",
         "plans",
         "prompts",

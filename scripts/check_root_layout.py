@@ -46,6 +46,7 @@ ALLOWED_ROOT_ENTRIES: dict[str, str] = {
     "docker": "per-service Dockerfiles, compose overrides, and container scripts",
     "docs": "product and architecture documentation",
     "frontend": "the SvelteKit application",
+    "legal": "hal apply reads the app's legal section here (edge#110)",
     "monitoring": "Grafana/Prometheus/Alertmanager configuration",
     "plans": "live multi-session coordination notes",
     "prompts": "review prompt templates",
