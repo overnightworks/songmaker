@@ -7,18 +7,29 @@
 // teardown, because a dirty page raises the browser's unload prompt.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { TAKE_PROVENANCE_REPAINT_PREFIX } from '../src/lib/constants';
+import {
+	DIALOG_CANCEL_LABEL,
+	EDITOR_TAB_EDIT_LABEL,
+	EDITOR_TAB_TAKES_LABEL,
+	EDITOR_UNSAVED_TITLE,
+	openNowPlayingLabel,
+	TAKE_PROVENANCE_REPAINT_PREFIX
+} from '../src/lib/constants';
 import { foldedGroupLabel } from '../src/lib/constants/now-playing';
 import {
 	createAlbum,
 	FIRST_VERSION_TAKE_COUNT,
 	openTakes,
 	readSong,
+	SECOND_VERSION_LYRICS,
 	seedFoldedSong,
+	showTab,
 	type FoldedSong
 } from './foldedSong';
-import { workspace } from './helpers';
+import { ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum } from './seed';
+
+const EDITED_LYRICS = 'Lyrics nobody saved';
 
 interface JumpSong extends FoldedSong {
 	// The v2 take that reads "Repaint from v1 · take N", and the v1 take it names.
@@ -86,6 +97,9 @@ const provenanceLink = (page: Page, song: JumpSong) =>
 	takeRow(page, song.repaint).getByRole('link', {
 		name: new RegExp(TAKE_PROVENANCE_REPAINT_PREFIX)
 	});
+const unsavedChangesDialog = (page: Page) =>
+	page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+const lyricsField = (page: Page) => page.getByRole('textbox', { name: /^Lyrics/ });
 const entriesOf = (page: Page) => page.evaluate(() => history.length);
 
 async function expectOnTheSong(page: Page, song: JumpSong, hash: string): Promise<void> {
@@ -98,6 +112,17 @@ async function expectOnTheSong(page: Page, song: JumpSong, hash: string): Promis
 }
 
 const anchorOf = (id: string) => `#take-${id}`;
+
+async function startDirtyDraft(page: Page): Promise<void> {
+	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await lyricsField(page).fill(EDITED_LYRICS);
+	await showTab(page, EDITOR_TAB_TAKES_LABEL);
+}
+
+async function revertDraft(page: Page): Promise<void> {
+	await showTab(page, EDITOR_TAB_EDIT_LABEL);
+	await lyricsField(page).fill(SECOND_VERSION_LYRICS);
+}
 
 test.describe('a link to a take inside a folded version', () => {
 	test('J1 a click unfolds the version, scrolls to the take and writes one entry of the song', async ({
@@ -161,4 +186,92 @@ test.describe('a link to a take inside a folded version', () => {
 		expect(page.url()).toBe(address);
 		for (const other of page.context().pages()) if (other !== page) await other.close();
 	});
+
+	test('J6 with an unsaved draft, Back and Forward between the entries of the song ask nothing', async ({
+		page
+	}) => {
+		const song = await seedJumpSong(page, 'draft');
+		await openTakes(page, song);
+		await startDirtyDraft(page);
+		await provenanceLink(page, song).click();
+		await expect(takeRow(page, song.source)).toBeInViewport();
+
+		await page.goBack();
+
+		await expect(unsavedChangesDialog(page)).toHaveCount(0);
+		await expectOnTheSong(page, song, '');
+		await expect(takeRow(page, song.repaint)).toBeVisible();
+
+		await page.goForward();
+
+		await expect(unsavedChangesDialog(page)).toHaveCount(0);
+		await expectOnTheSong(page, song, anchorOf(song.source));
+		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await expect(lyricsField(page)).toHaveValue(EDITED_LYRICS);
+		await revertDraft(page);
+	});
+
+	test('J8 Back off the song asks as ever, and Cancel keeps the song and its draft', async ({
+		page
+	}) => {
+		const song = await seedJumpSong(page, 'leave');
+		await openTakes(page, song);
+		await startDirtyDraft(page);
+		await provenanceLink(page, song).click();
+		await expect(takeRow(page, song.source)).toBeInViewport();
+
+		await page.goBack();
+		await expect(unsavedChangesDialog(page)).toHaveCount(0);
+		await page.goBack();
+
+		await expect(unsavedChangesDialog(page)).toBeVisible();
+		await unsavedChangesDialog(page).getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+		await expect(unsavedChangesDialog(page)).toHaveCount(0);
+		await expectOnTheSong(page, song, '');
+		await showTab(page, EDITOR_TAB_EDIT_LABEL);
+		await expect(lyricsField(page)).toHaveValue(EDITED_LYRICS);
+		await revertDraft(page);
+	});
 });
+
+test.describe(
+	'a link to a take on the phone, over Now Playing and the tabs',
+	{ tag: ONLY_IN_SHELL.mobile },
+	() => {
+		test('J7 Back closes Now Playing, the tab switch rewrites the entry and the next Back asks nothing', async ({
+			page
+		}) => {
+			const song = await seedJumpSong(page, 'phone');
+			await openTakes(page, song);
+			await takeRow(page, song.repaint).locator('.play-btn').click();
+			await startDirtyDraft(page);
+			await provenanceLink(page, song).click();
+			await expect(takeRow(page, song.source)).toBeInViewport();
+			await page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
+				.click();
+			const nowPlaying = page.getByRole('dialog', { name: song.title });
+			await expect(nowPlaying).toBeVisible();
+
+			await page.goBack();
+
+			await expect(nowPlaying).toHaveCount(0);
+			await expectOnTheSong(page, song, anchorOf(song.source));
+
+			await showTab(page, EDITOR_TAB_EDIT_LABEL);
+			await expectOnTheSong(page, song, '');
+
+			await page.goBack();
+
+			await expect(unsavedChangesDialog(page)).toHaveCount(0);
+			await expect(takeRow(page, song.repaint)).toBeVisible();
+
+			await page.goForward();
+
+			await expect(unsavedChangesDialog(page)).toHaveCount(0);
+			await expect(lyricsField(page)).toHaveValue(EDITED_LYRICS);
+			await revertDraft(page);
+		});
+	}
+);

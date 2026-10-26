@@ -8,16 +8,23 @@ import {
 import { makeAlbum as album, makeGeneration, makeSong as song } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { mount, tick, unmount } from 'svelte';
+import SongDetailView from '$lib/components/SongDetailView.svelte';
 import { goto } from '$app/navigation';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
 import { installHistoryController } from '$lib/history/historyController';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { libraryHistoryStepsLanded, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { resetCollectionForTests } from '$lib/stores/collection';
+import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { resetPlaylistsForTests } from '$lib/stores/playlists';
 import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import {
+	DIALOG_CANCEL_LABEL,
+	EDITOR_UNSAVED_DISCARD_LABEL,
+	EDITOR_UNSAVED_TITLE
+} from '$lib/constants';
 import { activeJobs, removeJob, resetGenerationFailuresForTests } from '$lib/stores/jobs';
 import { toasts } from '$lib/stores/toast';
 
@@ -91,8 +98,10 @@ import {
 	selectSong
 } from './navigation';
 
-const SOURCE_TAKE_ID = 'take-source';
-const OTHER_TAKE_ID = 'take-other';
+import { discardDraft, editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+const SOURCE_TAKE_ID = 'source';
+const OTHER_TAKE_ID = 'other';
+const UNSAVED_LYRICS = 'unsaved edit';
 const TIDE_DEFAULTS = { title: 'Tide', album_title: 'Nachtstrom', generations: [makeGeneration()] };
 
 let stopFollowingShellLayers: () => void = () => undefined;
@@ -100,7 +109,7 @@ let stopNavigation: () => void = () => undefined;
 
 beforeEach(() => {
 	fetchSong.mockReset().mockImplementation(async () => song({ ...TIDE_DEFAULTS, slug: 's1' }));
-	fetchAlbum.mockReset();
+	fetchAlbum.mockReset().mockImplementation(async () => album({ share_slug: null }));
 	fetchPlaylists.mockReset().mockResolvedValue([]);
 	fetchPlaylist.mockReset();
 	fetchLastFailedGeneration.mockReset().mockResolvedValue({ job: null });
@@ -218,5 +227,86 @@ describe('jumping to a take of the song on screen', () => {
 		expect(location.pathname).toBe('/album/a1/s1');
 		expect(location.hash).toBe(anchor(SOURCE_TAKE_ID));
 		expect(get(selectedSongId)).toBe('s1');
+	});
+});
+
+describe('with a draft nobody saved', () => {
+	let target: HTMLElement;
+	let view: ReturnType<typeof mount>;
+
+	beforeEach(async () => {
+		target = document.createElement('div');
+		document.body.append(target);
+		view = mount(SongDetailView, { target });
+		await openTheSongFromItsAlbum();
+		loadSongData(song({ ...TIDE_DEFAULTS, slug: 's1' }));
+		setDraftLyrics(UNSAVED_LYRICS);
+	});
+
+	afterEach(async () => {
+		discardDraft();
+		await unmount(view);
+		target.remove();
+	});
+
+	function unsavedChangesDialog(): HTMLElement | null {
+		return document.querySelector(`[role="dialog"][aria-label="${EDITOR_UNSAVED_TITLE}"]`);
+	}
+
+	function answer(label: string): void {
+		const buttons = Array.from(unsavedChangesDialog()?.querySelectorAll('button') ?? []);
+		buttons.find((candidate) => candidate.textContent?.trim() === label)?.click();
+	}
+
+	it('asks nothing on Back and Forward between the entries of the song, and keeps the draft', async () => {
+		await jumpToTake(SOURCE_TAKE_ID);
+		await libraryHistoryStepsLanded();
+		await jumpToTake(OTHER_TAKE_ID);
+		await libraryHistoryStepsLanded();
+
+		await pressBack();
+		expect(location.hash).toBe(anchor(SOURCE_TAKE_ID));
+		await pressBack();
+		expect(location.hash).toBe('');
+		await pressForward();
+		await pressForward();
+		await tick();
+
+		expect(location.hash).toBe(anchor(OTHER_TAKE_ID));
+		expect(unsavedChangesDialog()).toBeNull();
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(editLyrics)).toBe(UNSAVED_LYRICS);
+	});
+
+	it('still asks on the Back that leaves the song, and Cancel keeps the song and the draft', async () => {
+		await jumpToTake(SOURCE_TAKE_ID);
+		await libraryHistoryStepsLanded();
+		await pressBack();
+		expect(unsavedChangesDialog()).toBeNull();
+
+		await pressBack();
+		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
+		await libraryHistoryStepsLanded();
+		answer(DIALOG_CANCEL_LABEL);
+
+		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
+		expect(location.pathname).toBe('/album/a1/s1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(editLyrics)).toBe(UNSAVED_LYRICS);
+	});
+
+	it('leaves for the album on Discard from the Back that leaves the song', async () => {
+		await jumpToTake(SOURCE_TAKE_ID);
+		await libraryHistoryStepsLanded();
+		await pressBack();
+		await pressBack();
+		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
+		await libraryHistoryStepsLanded();
+
+		answer(EDITOR_UNSAVED_DISCARD_LABEL);
+
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+		expect(location.pathname).toBe('/album/a1');
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 });
