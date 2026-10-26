@@ -211,8 +211,8 @@ async def _stream_run(
             async for chunk in response.aiter_bytes():
                 for decoded in decoder.feed(chunk):
                     if isinstance(decoded, RunStarted):
+                        service_runs.register(str(decoded.run_id), person)
                         run_id = str(decoded.run_id)
-                        service_runs.register(run_id, person)
                     outcome = _outcome_of(decoded)
                     if outcome is not None:
                         yield outcome
@@ -220,6 +220,8 @@ async def _stream_run(
                         return
             for violation in decoder.close():
                 yield _problem_of_violation(violation)
+    except service_runs.RunAlreadyRegisteredError:
+        yield TurnProblem(ChatTurnProblem.UNAVAILABLE, "run already registered")
     except httpx.HTTPError as unreachable:
         yield TurnProblem(ChatTurnProblem.UNAVAILABLE, type(unreachable).__name__)
     finally:
