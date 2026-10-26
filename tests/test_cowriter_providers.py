@@ -139,7 +139,7 @@ def _stored_choice_rows(factory) -> dict[str, str | None]:
         }
 
 
-def test_get_cowriter_settings_answers_the_budget_and_the_agent_files_model(admin_client):
+def test_c15_get_cowriter_settings_answers_the_budget_and_the_agent_files_model(admin_client):
     client, _ = admin_client
 
     response = client.get("/api/settings/cowriter")
@@ -151,7 +151,7 @@ def test_get_cowriter_settings_answers_the_budget_and_the_agent_files_model(admi
     }
 
 
-def test_put_cowriter_settings_saves_the_budget_and_records_the_audit_line(admin_client):
+def test_c15_put_cowriter_settings_saves_the_budget_and_records_the_audit_line(admin_client):
     client, factory = admin_client
 
     response = client.put("/api/settings/cowriter", json={"tail_token_budget": 6000})
@@ -171,7 +171,7 @@ def test_put_cowriter_settings_saves_the_budget_and_records_the_audit_line(admin
         {"provider_routes": {"claude": "cli", "grok": "cli", "codex": "cli"}},
     ],
 )
-def test_put_cowriter_settings_refuses_a_choice_field_and_saves_nothing(admin_client, extra):
+def test_c15_put_cowriter_settings_refuses_a_choice_field_and_saves_nothing(admin_client, extra):
     client, factory = admin_client
     with factory() as session:
         set_claude_model(session, "cowriter_provider", "grok")
@@ -190,7 +190,7 @@ def test_put_cowriter_settings_refuses_a_choice_field_and_saves_nothing(admin_cl
     assert _stored_choice_rows(factory) == rows_before
 
 
-def test_put_cowriter_settings_leaves_the_stored_choice_rows_unread_and_unchanged(admin_client):
+def test_c15_put_cowriter_settings_leaves_the_stored_choice_rows_unread_and_unchanged(admin_client):
     client, factory = admin_client
     with factory() as session:
         set_claude_model(session, "cowriter_provider", "retired-provider")
@@ -204,7 +204,7 @@ def test_put_cowriter_settings_leaves_the_stored_choice_rows_unread_and_unchange
     assert _stored_choice_rows(factory) == rows_before
 
 
-def test_put_cowriter_settings_refuses_a_budget_out_of_range(admin_client):
+def test_c15_put_cowriter_settings_refuses_a_budget_out_of_range(admin_client):
     client, _ = admin_client
 
     response = client.put("/api/settings/cowriter", json={"tail_token_budget": 1_000_000})

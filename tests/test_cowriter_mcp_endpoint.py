@@ -349,7 +349,7 @@ def test_m5_a_registered_run_held_by_the_same_subject_of_another_issuer_is_refus
     assert is_error is True
 
 
-def test_a_run_id_that_is_already_registered_is_not_registered_again(run_id):
+def test_c4_a_run_id_that_is_already_registered_is_not_registered_again(run_id):
     with running_run(run_id, person="anna"):
         with pytest.raises(service_runs.RunAlreadyRegisteredError):
             service_runs.register(run_id, RunPerson(ISSUER, "ben"))
@@ -719,7 +719,7 @@ def test_run_server_serves_mcp_outside_the_middleware_with_the_ci_fixture_key(
     assert (reply.status, reply.body) == (401, b"")
 
 
-def test_run_server_publishes_the_mcp_verdict_for_the_turns_pre_run_guard(
+def test_c20_run_server_publishes_the_mcp_verdict_for_the_turns_pre_run_guard(
     tmp_path: Path, monkeypatch,
 ) -> None:
     monkeypatch.delenv("AGENT_SERVICE_CAPABILITY_KEY_FILE", raising=False)
