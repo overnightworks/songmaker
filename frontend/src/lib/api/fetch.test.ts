@@ -18,7 +18,6 @@ import {
 	isTransientApiFailure,
 	signInAddress
 } from './fetch';
-import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
 import { hangsUntilAborted } from '$lib/test-utils/network';
 
@@ -565,12 +564,6 @@ describe('describeFailure', () => {
 	it("gives the server's own words when it answered with a reason", () => {
 		expect(describeFailure(new ApiError(409, 'Album is locked', '/api/x'), fallback)).toBe(
 			'Album is locked'
-		);
-	});
-
-	it('gives the words a module named for the musician itself', () => {
-		expect(describeFailure(new UserFacingError('Nothing to save yet'), fallback)).toBe(
-			'Nothing to save yet'
 		);
 	});
 

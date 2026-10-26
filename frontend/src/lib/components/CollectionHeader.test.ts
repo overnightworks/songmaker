@@ -440,16 +440,10 @@ describe('CollectionHeader', () => {
 	);
 
 	it('lists playlist cover actions alongside its existing actions', async () => {
-		const props = { ...baseProps(), kind: 'playlist' as const, onsaveoffline: vi.fn() };
+		const props = { ...baseProps(), kind: 'playlist' as const };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
-		expect(menuRowLabels(menu)).toEqual([
-			'Share playlist',
-			'Upload…',
-			'Save offline',
-			'Rename',
-			'Delete playlist'
-		]);
+		expect(menuRowLabels(menu)).toEqual(['Share playlist', 'Upload…', 'Rename', 'Delete playlist']);
 	});
 
 	it('shares from the Share row and copies the link, without duplicating the logic', async () => {

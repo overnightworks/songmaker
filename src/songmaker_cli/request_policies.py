@@ -50,7 +50,7 @@ MEDIA_PATH_PREFIX: Final = "/audio/"
 JOB_STREAM_PATH: Final = PathShape(starts_with="/api/jobs/", ends_with="/stream")
 
 # Every Range-served audio endpoint outside `/audio/*`, one regex per
-# literal route in sharing_api.py / queue_stream_api.py -- each requires
+# literal route in sharing_api.py -- each requires
 # the `audio` segment at the exact position that route defines, so a slug
 # that literally reads "audio" cannot slide a real metadata route
 # (`/shared/{slug}`, `/shared/{slug}/cover`, the `/stream` manifest POSTs)
@@ -69,8 +69,7 @@ JOB_STREAM_PATH: Final = PathShape(starts_with="/api/jobs/", ends_with="/stream"
 # below, so excluding their prefixes here costs the bare-slug pattern
 # nothing. All are `FileResponse`, which serves Range requests -- the same
 # seek/scrub pattern as `/audio/*`, just for a stranger listening to a
-# public share (or, for the queue-streams routes, an authenticated preview)
-# instead of the owner's own player. A public share is the operator's
+# public share instead of the owner's own player. A public share is the operator's
 # public face: a listener range-requesting a shared album must not be
 # locked out by the same API budget that locked out the operator's own
 # player.
@@ -80,7 +79,6 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
     re.compile(r"^/shared/gen/[^/]+/audio/.+$"),         # /shared/gen/{slug}/audio/{filename}
     re.compile(r"^/shared/playlist/[^/]+/audio/.+$"),    # /shared/playlist/{slug}/audio/{filename}
     re.compile(r"^/shared/queue-streams/[^/]+/audio$"),  # /shared/queue-streams/{id}/audio
-    re.compile(r"^/api/queue-streams/[^/]+/audio$"),     # /api/queue-streams/{id}/audio
 )
 
 # Static PWA root assets are fetched by the browser and the service worker

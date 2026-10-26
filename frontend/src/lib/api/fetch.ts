@@ -6,7 +6,6 @@ import {
 	SIGN_IN_NEXT_PARAM
 } from '$lib/constants';
 import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
-import { UserFacingError } from './userFacingError';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -98,7 +97,6 @@ export function describeFailure(
 ): string {
 	if (err instanceof NetworkError && wording.offline) return wording.offline;
 	if (err instanceof ApiError && err.detail && !wording.withholdServerDetail) return err.detail;
-	if (err instanceof UserFacingError) return err.message;
 	return fallback;
 }
 

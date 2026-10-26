@@ -3,6 +3,7 @@
 Split by domain, re-exported here for backwards compatibility.
 
 The value objects shared with persistence (generation params, Whisper cues)
+and the provider wheel's stream events (assistant text, tool call, tool result)
 live beneath both layers and are re-exported here because
 ``scripts/generate_types.py`` reads this module's ``__all__`` to find the
 models that reach ``types.ts``.
@@ -10,6 +11,7 @@ models that reach ``types.ts``.
 
 from __future__ import annotations
 
+from agent_providers.events import AssistantTextEvent, ToolCallEvent, ToolResultEvent
 from pydantic import BaseModel
 
 from songmaker_cli.api_models.auth import AuthMeResponse, LogoutResponse
@@ -65,12 +67,8 @@ from songmaker_cli.api_models.queue_streams import (
     LibraryPoolQueueResponse,
     LibraryPoolTakeResponse,
     LibraryTakePool,
-    QueueStreamLibraryRequest,
     QueueStreamManifestResponse,
-    QueueStreamPinResponse,
     QueueStreamSkipResponse,
-    QueueStreamSnapshotRequest,
-    QueueStreamTrackRequest,
     QueueStreamTrackResponse,
 )
 from songmaker_cli.api_models.resource_events import (
@@ -81,8 +79,10 @@ from songmaker_cli.api_models.resource_events import (
 from songmaker_cli.api_models.settings import (
     CapabilitiesResponse,
     ChatMessageResponse,
+    ChatTurnFailureFrame,
+    ChatTurnFinalFrame,
+    ChatTurnRouteErrorFrame,
     ChatTurnV2Request,
-    ChatTurnV2Response,
     ConversationListResponse,
     ConversationMessagesResponse,
     ConversationResponse,
@@ -223,7 +223,12 @@ __all__ = [
     "CapabilitiesResponse",
     "ChatMessageResponse",
     "ChatTurnV2Request",
-    "ChatTurnV2Response",
+    "ChatTurnFailureFrame",
+    "ChatTurnFinalFrame",
+    "ChatTurnRouteErrorFrame",
+    "AssistantTextEvent",
+    "ToolCallEvent",
+    "ToolResultEvent",
     "CleanupResponse",
     "MemoryBundleResponse",
     "MemoryScopeResponse",
@@ -289,12 +294,8 @@ __all__ = [
     "PresetResponse",
     "PresetUpdateRequest",
     "ProviderStatusResponse",
-    "QueueStreamLibraryRequest",
     "QueueStreamManifestResponse",
-    "QueueStreamPinResponse",
-    "QueueStreamSnapshotRequest",
     "QueueStreamSkipResponse",
-    "QueueStreamTrackRequest",
     "QueueStreamTrackResponse",
     "RateLimitItem",
     "RateLimitUpdateRequest",

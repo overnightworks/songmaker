@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import type { SongItem } from '../src/lib/api/types';
 import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
+	LIBRARY_PAGE_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	songEditorOpenLabel
@@ -88,7 +89,23 @@ async function signIn(page: Page, library: ProofLibrary): Promise<void> {
 
 async function signOut(page: Page, shell: Shell): Promise<void> {
 	// The phone carries the account circle on the Library only.
-	if (shell === 'mobile') await openLibraryWall(page, shell);
+	if (shell === 'mobile') {
+		const origin = new URL(page.url()).origin;
+		const [response] = await Promise.all([
+			page.waitForResponse((response) => {
+				const url = new URL(response.url());
+				return (
+					response.request().method() === 'GET' &&
+					url.origin === origin &&
+					url.pathname === '/api/library/search' &&
+					url.searchParams.get('q') === LIBRARY_PAGE_LABEL
+				);
+			}),
+			openLibraryWall(page, shell)
+		]);
+		expect(response.ok()).toBe(true);
+		expect(await response.finished()).toBeNull();
+	}
 	await accountCircle(page).click();
 	await accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click();
 	// Sign out ends at the issuer's logout address, outside the app's origin.
