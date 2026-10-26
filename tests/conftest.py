@@ -36,6 +36,7 @@ from typing import Final  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402
 
 import fakeredis  # noqa: E402
+import httpx  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import structlog  # noqa: E402
@@ -95,61 +96,46 @@ OTHER_GENERATION_ERROR_TYPES = [
 SONGMAKER_FAILURE_CASES = [
     pytest.param(
         (
-            TimeoutError,
-            "private timeout",
-            "Generation timed out",
-            "Generation timed out",
-            "generation_error",
+            TimeoutError, "private timeout",
+            "Generation timed out", "Generation timed out", "generation_error",
         ),
         id="S5-B-D-timeout",
     ),
     pytest.param(
         (
-            AudioDownloadError,
-            "private download",
-            "Failed to download generated audio",
-            "Failed to download generated audio",
+            AudioDownloadError, "private download",
+            "Failed to download generated audio", "Failed to download generated audio",
             "generation_error",
         ),
         id="S5-B-D-download",
     ),
     pytest.param(
         (
-            ConnectionError,
-            "private connection",
-            "ACE-Step server not reachable",
-            "ACE-Step server not reachable",
-            "generation_error",
+            ConnectionError, "private connection",
+            "ACE-Step server not reachable", "ACE-Step server not reachable", "generation_error",
         ),
         id="S5-B-D-connection",
     ),
     pytest.param(
         (
-            NoCapacityError,
-            "private capacity",
-            "No ACE-Step workers available",
-            "Generating isn't available right now.",
+            NoCapacityError, "private capacity",
+            "No ACE-Step workers available", "Generating isn't available right now.",
             "generation_unavailable",
         ),
         id="S5-B-L10-capacity",
     ),
     pytest.param(
         (
-            RuntimeError,
-            "private runtime",
-            "Internal error during processing",
-            "Internal error during processing",
+            RuntimeError, "private runtime",
+            "Internal error during processing", "Internal error during processing",
             "generation_error",
         ),
         id="S5-B-D-runtime",
     ),
     pytest.param(
         (
-            ValueError,
-            "private unknown",
-            "An unexpected error occurred",
-            "An unexpected error occurred",
-            "generation_error",
+            ValueError, "private unknown",
+            "An unexpected error occurred", "An unexpected error occurred", "generation_error",
         ),
         id="S5-B-D-unknown",
     ),
@@ -211,8 +197,18 @@ def queries_without_session_auth(statements: Sequence[str]) -> list[str]:
 
 
 def web_client(app, **kwargs) -> TestClient:
-    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin."""
-    return TestClient(app, base_url=TEST_ORIGIN, **kwargs)
+    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin.
+
+    A request naming neither `Origin` nor `Sec-Fetch-Site` carries what a same-origin
+    browser sends; one naming either goes out as written."""
+    client = TestClient(app, base_url=TEST_ORIGIN, **kwargs)
+    client.event_hooks = {"request": [_add_same_origin_fetch_metadata]}
+    return client
+
+
+def _add_same_origin_fetch_metadata(request: httpx.Request) -> None:
+    if "origin" not in request.headers and "sec-fetch-site" not in request.headers:
+        request.headers["Sec-Fetch-Site"] = "same-origin"
 
 
 _fake_cli_processes: list[MagicMock] = []
