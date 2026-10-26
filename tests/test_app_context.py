@@ -12,7 +12,6 @@ from songmaker_cli.app_context import (
     AppContext,
     allowed_hosts,
     build_web_auth_config,
-    parse_allowed_hosts,
     parse_trusted_proxies,
 )
 from songmaker_cli.constants import (
@@ -38,28 +37,35 @@ def ctx(tmp_path: Path) -> AppContext:
 def test_the_configuration_carries_the_deployments_own_facts(
     ctx: AppContext, monkeypatch: pytest.MonkeyPatch, fresh_settings,
 ) -> None:
-    monkeypatch.setenv("ALLOWED_HOSTS", "songmaker.example, *.example")
+    monkeypatch.setenv("ALLOWED_HOSTS", "songmaker.example, localhost")
 
     config = build_web_auth_config(ctx, get_settings())
 
     assert config.signing_key == TEST_SECRET
     assert "172.18.0.1" in config.trusted_proxies
-    assert config.allowed_hosts_exact == frozenset({"songmaker.example"})
-    assert [pattern.pattern for pattern in config.allowed_hosts_patterns] == [
-        r"^[^:]+\.example(:\d+)?$",
-    ]
+    assert config.allowed_hosts_exact == frozenset({"songmaker.example", "localhost"})
+    assert config.allowed_hosts_patterns == ()
 
 
 def test_the_allowed_hosts_are_one_list_for_the_host_check_and_the_origin_allowlist(
-    monkeypatch: pytest.MonkeyPatch, fresh_settings,
+    ctx: AppContext, monkeypatch: pytest.MonkeyPatch, fresh_settings,
 ) -> None:
-    monkeypatch.setenv("ALLOWED_HOSTS", " a.example,,*.b.example ,localhost")
+    monkeypatch.setenv("ALLOWED_HOSTS", " a.example,,b.example ,localhost")
     settings = get_settings()
 
-    assert allowed_hosts(settings) == ("a.example", "*.b.example", "localhost")
-    exact, patterns = parse_allowed_hosts(settings)
-    assert exact == {"a.example", "localhost"}
-    assert [pattern.match("x.b.example:8443") is not None for pattern in patterns] == [True]
+    assert allowed_hosts(settings) == ("a.example", "b.example", "localhost")
+    assert build_web_auth_config(ctx, settings).allowed_hosts_exact == frozenset(
+        allowed_hosts(settings),
+    )
+
+
+def test_a_wildcard_allowed_host_stops_startup_naming_the_entry(
+    monkeypatch: pytest.MonkeyPatch, fresh_settings,
+) -> None:
+    monkeypatch.setenv("ALLOWED_HOSTS", "a.example, *.trycloudflare.com")
+
+    with pytest.raises(ValueError, match=r"\*\.trycloudflare\.com"):
+        allowed_hosts(get_settings())
 
 
 def test_the_rate_backend_spends_the_budget_in_songmakers_redis(ctx: AppContext) -> None:
