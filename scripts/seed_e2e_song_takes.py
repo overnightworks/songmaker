@@ -38,6 +38,7 @@ script here (see ``connect_db()`` in ``db/engine.py``).
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import uuid
 from pathlib import Path
@@ -48,7 +49,7 @@ from sqlalchemy.orm import Session
 prepend_own_checkout_src(__file__)
 
 from songmaker_cli.api_helpers import unique_song_slug
-from songmaker_cli.config import audio_file_path, find_project_root
+from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import MODEL_DEFAULT_MODE
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.queries.auth import get_user_by_username
@@ -81,17 +82,21 @@ def seed_song_takes(
     links each take to the song's version, so consumers receive the same
     metadata as a generated take. Returns the song's id.
     """
-    owner_directory = Path(owner_id).name
-    if owner_directory != owner_id or owner_directory in ("", ".", ".."):
-        raise ValueError(f"Owner id is not a single directory name: {owner_id!r}")
+    audio_root = os.path.realpath(audio_dir)
     slug = unique_song_slug(session, album_id, title)
     song = create_song(session, title, album_id, slug, lyrics=lyrics, prompt=prompt)
     version_id = song.latest_version.id if lyrics or prompt else None
 
     for _ in range(take_count):
         generation_id = str(uuid.uuid4())
-        dst = audio_file_path(audio_dir, owner_directory, generation_id, ".mp3")
-        dst.write_bytes(mp3_bytes)
+        dst = os.path.realpath(os.path.join(audio_root, owner_id, f"{generation_id}.mp3"))
+        if (
+            os.path.dirname(dst) != os.path.join(audio_root, owner_id)
+            or os.path.dirname(dst) == audio_root
+        ):
+            raise ValueError(f"Owner id is not a single directory name: {owner_id!r}")
+        Path(dst).parent.mkdir(parents=True, exist_ok=True)
+        Path(dst).write_bytes(mp3_bytes)
         gen = create_generation(
             session,
             song_id=song.id,
@@ -103,7 +108,10 @@ def seed_song_takes(
             created_by=owner_id,
         )
         create_generation_created_event(
-            session, user_id=owner_id, song_id=song.id, generation_id=gen.id,
+            session,
+            user_id=owner_id,
+            song_id=song.id,
+            generation_id=gen.id,
         )
 
     session.commit()
