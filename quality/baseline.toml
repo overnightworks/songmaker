@@ -27,11 +27,11 @@
 "frontend/e2e/seed.ts" = 1205
 "frontend/e2e/song-phone.spec.ts" = 866
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1159
+"frontend/src/lib/api/types.ts" = 1158
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1580
-"frontend/src/lib/components/CoWriterPanel.test.ts" = 1892
+"frontend/src/lib/components/CoWriterPanel.test.ts" = 1886
 "frontend/src/lib/components/LibraryWall.test.ts" = 1134
 "frontend/src/lib/components/LoraDetail.svelte" = 968
 "frontend/src/lib/components/NowPlaying.test.ts" = 1094
@@ -63,7 +63,7 @@
 "frontend/src/routes/settings/users/page.test.ts" = 1026
 "src/acestep_worker/wrapper.py" = 1092
 "src/songmaker_cli/constants.py" = 837
-"src/songmaker_cli/conversation_api.py" = 1109
+"src/songmaker_cli/conversation_api.py" = 976
 "src/songmaker_cli/jobs/generation.py" = 1203
 "src/songmaker_cli/jobs/lora_training.py" = 1552
 "src/songmaker_cli/queue_streams.py" = 976
@@ -76,8 +76,8 @@
 "tests/test_api.py" = 4765
 "tests/test_auto_deploy_alerting.py" = 2157
 "tests/test_client.py" = 870
-"tests/test_conversation_api.py" = 1142
-"tests/test_cowriter_providers.py" = 2191
+"tests/test_conversation_api.py" = 854
+"tests/test_cowriter_providers.py" = 1785
 "tests/test_db.py" = 3642
 "tests/test_install_cli_credentials_mirror.py" = 1017
 "tests/test_jobs.py" = 3518
@@ -206,18 +206,8 @@
 [function_lines."tests/test_backfill_audio_durations.py"]
 "test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
 
-[function_lines."tests/test_conversation_api.py"]
-"test_chat_turn_provider_change_preserves_conversation_context" = 83
-
 [function_lines."tests/test_cover_accounting.py"]
 "test_postgresql_serializes_publication_and_cancellation" = 94
-
-[function_lines."tests/test_cowriter_dispatch.py"]
-"test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song" = 94
-
-[function_lines."tests/test_cowriter_providers.py"]
-"test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversation" = 172
-"test_openai_adapter_allows_final_response_after_last_tool_round" = 63
 
 [function_lines."tests/test_db.py"]
 "test_acestep_canonical_names_migration_renames_json_keys" = 68

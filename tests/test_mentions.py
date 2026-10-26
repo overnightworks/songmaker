@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-from agent_providers.events import AssistantTextEvent, FinalEvent
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from fake_agent_service import CowriterStack, attach_cowriter_service
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -60,8 +60,27 @@ def _seed(session, user_id: str) -> None:
     session.commit()
 
 
+@dataclass
+class Musician:
+    """A signed-in musician whose turns reach the fake agent service."""
+
+    client: TestClient
+    stack: CowriterStack
+
+    def turn(self, payload: dict):
+        return self.client.post("/api/chat/turn", json=payload)
+
+    @property
+    def run_started(self) -> bool:
+        return bool(self.stack.agent.runs)
+
+    @property
+    def content(self) -> str:
+        return self.stack.agent.last_run.messages[-1]["text"]
+
+
 @pytest.fixture
-def client(tmp_path: Path) -> TestClient:
+def client(tmp_path: Path, monkeypatch) -> Musician:
     factory = init_db(tmp_path / "mentions.db")
     with factory() as session:
         _seed(session, "u-test")
@@ -69,11 +88,12 @@ def client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    return web_client(app)
+    web = web_client(app)
+    return Musician(web, attach_cowriter_service(web, factory, monkeypatch, "u-test"))
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path) -> TestClient:
+def stranger_client(tmp_path: Path, monkeypatch) -> Musician:
     factory = init_db(tmp_path / "mentions_spy.db")
     with factory() as session:
         _seed(session, "u-owner")
@@ -83,34 +103,19 @@ def stranger_client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    return web_client(app)
-
-
-async def _capture(*_args, **kwargs):
-    _capture.called = True
-    _capture.kwargs = kwargs
-    yield AssistantTextEvent(text="ok")
-    yield FinalEvent(text="ok")
-
-
-def _turn(client: TestClient, payload: dict):
-    _capture.called = False
-    with patch(
-        "songmaker_cli.conversation_api.stream_cowriter_turn",
-        _capture,
-    ):
-        return client.post("/api/chat/turn", json=payload)
+    web = web_client(app)
+    return Musician(web, attach_cowriter_service(web, factory, monkeypatch, "u-spy"))
 
 
 def test_mentioned_song_snapshot_is_server_loaded(client):
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "compare",
         "current_song_id": "s1",
         "mentioned_song_ids": ["s2"],
     })
     assert resp.status_code == 200
     _stream_events(resp)
-    content = _capture.kwargs["messages"][-1]["content"]
+    content = client.content
     assert "<mentioned_songs>" in content
     assert content.count("title: Rain") == 1
     assert "rain lyrics" in content
@@ -119,14 +124,14 @@ def test_mentioned_song_snapshot_is_server_loaded(client):
 
 
 def test_album_mention_loads_tracks_from_album_id_only(client):
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "album vibe",
         "current_song_id": "s1",
         "mentioned_album_id": "alb1",
     })
     assert resp.status_code == 200
     _stream_events(resp)
-    content = _capture.kwargs["messages"][-1]["content"]
+    content = client.content
     assert "<mentioned_album>" in content
     assert "title: Rock" in content
     assert "title: Thunder" in content
@@ -134,14 +139,14 @@ def test_album_mention_loads_tracks_from_album_id_only(client):
 
 
 def test_version_mention_uses_the_selected_version(client):
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "old take on lyrics",
         "current_song_id": "s1",
         "mentioned_version_ids": ["v1"],
     })
     assert resp.status_code == 200
     _stream_events(resp)
-    content = _capture.kwargs["messages"][-1]["content"]
+    content = client.content
     assert "<mentioned_versions>" in content
     assert "version_number: 1" in content
     assert "thunder lyrics" in content
@@ -149,61 +154,61 @@ def test_version_mention_uses_the_selected_version(client):
 
 
 def test_duplicate_song_ids_emit_one_block(client):
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "dup",
         "current_song_id": "s1",
         "mentioned_song_ids": ["s2", "s2"],
     })
     assert resp.status_code == 200
     _stream_events(resp)
-    content = _capture.kwargs["messages"][-1]["content"]
+    content = client.content
     assert content.count("<mentioned_songs>") == 1
     assert content.count("title: Rain") == 1
 
 
 def test_unknown_or_foreign_mention_is_404_before_provider(client, stranger_client):
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "x",
         "current_song_id": "s1",
         "mentioned_song_ids": ["missing"],
     })
     assert resp.status_code == 404
-    assert _capture.called is False
+    assert not (client.run_started or stranger_client.run_started)
 
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "x",
         "current_song_id": "s1",
         "mentioned_version_ids": ["v2"],
     })
     assert resp.status_code == 404
-    assert _capture.called is False
+    assert not (client.run_started or stranger_client.run_started)
 
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "x",
         "current_song_id": "s1",
         "mentioned_album_id": "other",
     })
     assert resp.status_code == 404
-    assert _capture.called is False
+    assert not (client.run_started or stranger_client.run_started)
 
-    resp = _turn(stranger_client, {
+    resp = stranger_client.turn({
         "message": "x",
         "current_song_id": "s1",
         "mentioned_song_ids": ["s2"],
     })
     assert resp.status_code == 404
-    assert _capture.called is False
+    assert not (client.run_started or stranger_client.run_started)
 
 
 def test_schema_accepts_current_generation_id_field(client):
-    resp = _turn(client, {
+    resp = client.turn({
         "message": "look at this take",
         "current_song_id": "s1",
         "current_generation_id": None,
     })
     assert resp.status_code == 200
     _stream_events(resp)
-    assert _capture.called is True
+    assert client.run_started
 
 
 def test_schema_caps_mention_lists_before_database_resolution():

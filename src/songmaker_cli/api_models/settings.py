@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
 from agent_providers.errors import SafeRouteReason
@@ -261,6 +262,25 @@ class ChatTurnV2Request(BaseModel):
     current_generation_id: str | None = Field(default=None, max_length=36)
 
 
+class AssistantTextEvent(BaseModel):
+    type: Literal["assistant_text"] = "assistant_text"
+    text: str
+
+
+class ToolCallEvent(BaseModel):
+    type: Literal["tool_call"] = "tool_call"
+    tool_use_id: str
+    name: str
+    input: dict[str, object] = Field(default_factory=dict)
+
+
+class ToolResultEvent(BaseModel):
+    type: Literal["tool_result"] = "tool_result"
+    tool_use_id: str
+    content: str
+    is_error: bool = False
+
+
 class ChatTurnFinalFrame(BaseModel):
     """The frame a turn ends with when the assistant's answer is stored."""
 
@@ -270,14 +290,25 @@ class ChatTurnFinalFrame(BaseModel):
     assistant_message: ChatMessageResponse
 
 
-class ChatTurnRouteErrorFrame(BaseModel):
-    """The frame a turn ends with when its provider route is unavailable."""
+class ChatTurnProblem(StrEnum):
+    """Why a co-writer turn could not run; the panel words each one."""
+
+    UNAVAILABLE = "unavailable"
+    BUSY = "busy"
+    NOT_ENABLED = "not_enabled"
+    SIGN_IN_AGAIN = "sign_in_again"
+
+
+class ChatTurnProblemFrame(BaseModel):
+    """The frame a turn ends with when the agent service did not run it.
+
+    ``retry_after_seconds`` is set only for ``busy``: the wait the service named.
+    """
 
     type: Literal["error"] = "error"
     status: int
-    provider: str
-    route: str | None
-    reason: SafeRouteReason
+    problem: ChatTurnProblem
+    retry_after_seconds: int | None = None
 
 
 class ChatTurnFailureFrame(BaseModel):

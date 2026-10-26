@@ -1,6 +1,6 @@
 import type {
 	ChatTurnFailureFrame,
-	ChatTurnRouteErrorFrame,
+	ChatTurnProblemFrame,
 	ConversationItem,
 	SongItem
 } from '$lib/api/types';
@@ -71,19 +71,23 @@ export function cowriterUnavailableLabel(provider: string): string {
 	return `${providerDisplayName(provider)} is currently unavailable`;
 }
 
-/**
- * The reason text comes from the provider library or the endpoint; the panel
- * only says whose it is — the provider the frame names, else its own.
- */
+const COWRITER_PROBLEM_REASONS = {
+	unavailable: 'The agent service is unavailable.',
+	busy: 'The agent service is busy, try again in a moment.',
+	not_enabled: 'The agent service is not enabled for you.',
+	sign_in_again: 'Sign in again to use the co-writer.'
+} as const;
+
+/** A problem frame is worded by its named problem, a failure frame by the endpoint's message. */
 export function cowriterTurnFailureLabel(
-	frame: ChatTurnRouteErrorFrame | ChatTurnFailureFrame,
+	frame: ChatTurnProblemFrame | ChatTurnFailureFrame,
 	panelProvider: string
 ): string | null {
-	const reason = 'reason' in frame ? frame.reason.message : frame.message;
+	const reason = 'problem' in frame ? COWRITER_PROBLEM_REASONS[frame.problem] : frame.message;
 	if (!reason) return null;
 	return COWRITER_TURN_FAILURE_TEMPLATE.replace(
 		'{provider}',
-		providerDisplayName('provider' in frame ? frame.provider : panelProvider)
+		providerDisplayName(panelProvider)
 	).replace('{reason}', reason);
 }
 

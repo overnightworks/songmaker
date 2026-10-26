@@ -28,7 +28,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
 from songmaker_cli.cowriter import service_runs
-from songmaker_cli.cowriter.mcp_endpoint import McpKeyProblem, compose_mcp_endpoint
+from songmaker_cli.cowriter.mcp_endpoint import (
+    McpKeyProblem,
+    compose_mcp_endpoint,
+    cowriter_mcp_availability,
+)
 from songmaker_cli.cowriter.service_runs import RunPerson
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS
 from songmaker_cli.db.models import Album, Job, Song, User, Version
@@ -226,8 +230,8 @@ def endpoint(web, mcp_environment) -> Endpoint:
 
 
 @contextmanager
-def running_run(run_id: str, person: str = "anna", job_id: str = "job-1") -> Iterator[None]:
-    service_runs.register(run_id, RunPerson(ISSUER, person), job_id)
+def running_run(run_id: str, person: str = "anna") -> Iterator[None]:
+    service_runs.register(run_id, RunPerson(ISSUER, person))
     try:
         yield
     finally:
@@ -336,13 +340,21 @@ def test_m5_a_registered_run_held_by_another_person_is_refused(endpoint, capabil
 def test_m5_a_registered_run_held_by_the_same_subject_of_another_issuer_is_refused(
     endpoint, capability, run_id,
 ):
-    service_runs.register(run_id, RunPerson("https://other.issuer/realms/x", "anna"), "job-1")
+    service_runs.register(run_id, RunPerson("https://other.issuer/realms/x", "anna"))
     try:
         is_error, _ = _refused_write(endpoint, capability)
     finally:
         service_runs.release(run_id)
 
     assert is_error is True
+
+
+def test_a_run_id_that_is_already_registered_is_not_registered_again(run_id):
+    with running_run(run_id, person="anna"):
+        with pytest.raises(service_runs.RunAlreadyRegisteredError):
+            service_runs.register(run_id, RunPerson(ISSUER, "ben"))
+
+        assert service_runs.holder(run_id) == RunPerson(ISSUER, "anna")
 
 
 def test_m6_the_same_capability_after_the_turn_ended_is_refused(endpoint, capability, run_id):
@@ -381,7 +393,7 @@ def test_m7_a_capability_for_another_app_purpose_or_issuer_is_refused(
 ):
     token = mint(signing_key, run_id, **claim_changes)
     service_runs.register(
-        run_id, RunPerson(claim_changes.get("person", (ISSUER, "anna"))[0], "anna"), "job-1",
+        run_id, RunPerson(claim_changes.get("person", (ISSUER, "anna"))[0], "anna"),
     )
     before = endpoint.snapshot()
     try:
@@ -705,3 +717,21 @@ def test_run_server_serves_mcp_outside_the_middleware_with_the_ci_fixture_key(
 
     reply = drive(served["app"], headers_for(None), rpc("ping"))
     assert (reply.status, reply.body) == (401, b"")
+
+
+def test_run_server_publishes_the_mcp_verdict_for_the_turns_pre_run_guard(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    monkeypatch.delenv("AGENT_SERVICE_CAPABILITY_KEY_FILE", raising=False)
+    monkeypatch.delenv("AGENT_SERVICE_MCP_ORIGIN", raising=False)
+    settings_now()
+    app = make_test_app(tmp_path)[0].app
+    assert cowriter_mcp_availability(app).problem is McpKeyProblem.NOT_COMPOSED
+
+    with (
+        patch("uvicorn.run"),
+        patch("songmaker_cli.server.create_app", return_value=app),
+    ):
+        run_server(project_root=tmp_path, port=9999)
+
+    assert cowriter_mcp_availability(app).problem is McpKeyProblem.ORIGIN_MISSING

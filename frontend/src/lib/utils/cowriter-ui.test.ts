@@ -1,11 +1,7 @@
 import { makeSong as song } from '$lib/test-utils/factories';
 import { describe, expect, it } from 'vitest';
 
-import type {
-	ChatTurnFailureFrame,
-	ChatTurnRouteErrorFrame,
-	ConversationItem
-} from '$lib/api/types';
+import type { ChatTurnFailureFrame, ChatTurnProblemFrame, ConversationItem } from '$lib/api/types';
 import {
 	conversationConfirmLabel,
 	conversationLineLabel,
@@ -30,22 +26,21 @@ describe('co-writer provider copy', () => {
 
 	it.each([
 		[
-			'the provider its frame names',
-			{
-				type: 'error',
-				status: 503,
-				provider: 'grok',
-				route: 'cli',
-				reason: { code: 'route_failed', message: 'Route is unavailable.' }
-			},
-			'Grok: Route is unavailable.'
+			'the panel’s provider in front of the named problem',
+			{ type: 'error', status: 503, problem: 'unavailable', retry_after_seconds: null },
+			'Claude: The agent service is unavailable.'
+		],
+		[
+			'the panel’s provider in front of the sign-in request',
+			{ type: 'error', status: 401, problem: 'sign_in_again', retry_after_seconds: null },
+			'Claude: Sign in again to use the co-writer.'
 		],
 		[
 			'the panel’s provider in front of the endpoint’s own message',
 			{ type: 'error', status: 500, message: 'Chat request failed' },
 			'Claude: Chat request failed'
 		]
-	] satisfies Array<[string, ChatTurnRouteErrorFrame | ChatTurnFailureFrame, string]>)(
+	] satisfies Array<[string, ChatTurnProblemFrame | ChatTurnFailureFrame, string]>)(
 		'names %s in front of the reason a turn failed for',
 		(_case, frame, label) => {
 			expect(cowriterTurnFailureLabel(frame, 'claude')).toBe(label);

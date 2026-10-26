@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.cowriter import service_runs
 from songmaker_cli.cowriter.service_runs import RunPerson
-from songmaker_cli.cowriter.tools import COWRITER_TOOLS, CowriterTool, execute_cowriter_tool
+from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.mcp_server.auth import MCPAuthError, load_user
 from songmaker_cli.settings import Settings
 
@@ -46,6 +46,7 @@ _REFUSED: Final = ToolOutcome("The tool call was refused.", is_error=True)
 _KEY_SETTING: Final = "agent_service_capability_key_file"
 _ORIGIN_SETTING: Final = "agent_service_mcp_origin"
 _TOOL_CATALOG: Final = "the co-writer tool catalog"
+AVAILABILITY_ATTRIBUTE: Final = "cowriter_mcp_availability"
 
 
 class McpKeyProblem(StrEnum):
@@ -56,6 +57,7 @@ class McpKeyProblem(StrEnum):
     ORIGIN_MISSING = "origin missing"
     ORIGIN_INVALID = "origin invalid"
     TOOLS_INVALID = "tools invalid"
+    NOT_COMPOSED = "not composed"
 
 
 @dataclass(frozen=True)
@@ -64,6 +66,25 @@ class McpEndpointAvailability:
 
     problem: McpKeyProblem | None = None
     reason: str = ""
+
+
+def cowriter_mcp_availability(app) -> McpEndpointAvailability:
+    """The verdict ``run_server`` published; an app that never composed the endpoint has none."""
+    published = getattr(app.state, AVAILABILITY_ATTRIBUTE, None)
+    return published or McpEndpointAvailability(McpKeyProblem.NOT_COMPOSED)
+
+
+def cowriter_tool_declarations() -> list[ToolDeclaration]:
+    """The co-writer's tools as the endpoint serves them and the agent file selects them."""
+    return [
+        ToolDeclaration(
+            name=tool.name,
+            description=tool.description,
+            parameters=tool.parameters,
+            effect=ToolEffect.SIDE_EFFECTING if tool.write else ToolEffect.READ_ONLY,
+        )
+        for tool in COWRITER_TOOLS
+    ]
 
 
 def compose_mcp_endpoint(app, settings: Settings):
@@ -147,25 +168,17 @@ def _refusing_in_front_of(app):
 
 def _tools_for(app, settings: Settings) -> list[McpTool]:
     return [
-        McpTool(
-            ToolDeclaration(
-                name=tool.name,
-                description=tool.description,
-                parameters=tool.parameters,
-                effect=ToolEffect.SIDE_EFFECTING if tool.write else ToolEffect.READ_ONLY,
-            ),
-            _handler_for(tool, app, settings.oidc_issuer),
-        )
-        for tool in COWRITER_TOOLS
+        McpTool(declaration, _handler_for(declaration.name, app, settings.oidc_issuer))
+        for declaration in cowriter_tool_declarations()
     ]
 
 
-def _handler_for(tool: CowriterTool, app, issuer: str | None):
+def _handler_for(name: str, app, issuer: str | None):
     async def handle(claims: CapabilityClaims, arguments: JsonObject) -> ToolOutcome:
         if not _is_for_the_running_turn(claims, issuer):
             return _REFUSED
         return await asyncio.to_thread(
-            _execute, app.state.ctx.db, claims.principal.sub, tool.name, arguments,
+            _execute, app.state.ctx.db, claims.principal.sub, name, arguments,
         )
 
     return handle
@@ -176,8 +189,7 @@ def _is_for_the_running_turn(claims: CapabilityClaims, issuer: str | None) -> bo
         return False
     if claims.principal.iss != issuer:
         return False
-    holder = service_runs.holder(claims.sub)
-    return holder is not None and holder.person == RunPerson(
+    return service_runs.holder(claims.sub) == RunPerson(
         claims.principal.iss, claims.principal.sub,
     )
 

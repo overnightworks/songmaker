@@ -67,12 +67,12 @@ const DESKTOP_WIDTHS = [1920, 1440, 1280, 1024] as const;
 const PHONE_VIEWPORT = { width: 375, height: 844 };
 const DESKTOP_HEIGHT = 900;
 
-// The named failures a co-writer route can end a turn with
-// (`cowriter/errors.py`). Which one this stack reports depends on how far the
-// missing CLI gets before it fails; that it is one of them, and never a silent
-// switch to another provider, is the ruled behaviour (#820, line 8).
+// The named problems a co-writer turn ends with when the agent service did not run it. This
+// stack has no agent service, and its seeded session holds no refresh token, so the turn ends
+// before any request: "sign in again". That it is a named problem, and never a silent switch
+// to a local provider, is the ruled behaviour (#820, line 8; #1476).
 const NAMED_TURN_FAILURES =
-	/API key is not set\.|CLI is not signed in\.|CLI login was rejected or has expired\.|CLI is unavailable\.|Selected route failed\./;
+	/The agent service is unavailable\.|The agent service is busy|The agent service is not enabled for you\.|Sign in again to use the co-writer\./;
 
 async function openModelsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');

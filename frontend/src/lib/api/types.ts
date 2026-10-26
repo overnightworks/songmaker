@@ -156,12 +156,11 @@ export interface ChatTurnFinalFrame {
 	assistant_message: ChatMessageItem;
 }
 
-export interface ChatTurnRouteErrorFrame {
+export interface ChatTurnProblemFrame {
 	type: 'error';
 	status: number;
-	provider: string;
-	route: string | null;
-	reason: SafeRouteReason;
+	problem: 'unavailable' | 'busy' | 'not_enabled' | 'sign_in_again';
+	retry_after_seconds?: number | null;
 }
 
 export interface ChatTurnV2Request {

@@ -456,9 +456,10 @@ def run_server(
 
     app = create_app(audio_dir, data_dir, project_root)
     # Imported here: create_app and the CI jobs without the agent-service extra import nothing new.
-    from songmaker_cli.cowriter.mcp_endpoint import compose_mcp_endpoint
+    from songmaker_cli.cowriter.mcp_endpoint import AVAILABILITY_ATTRIBUTE, compose_mcp_endpoint
 
-    served_app, _ = compose_mcp_endpoint(app, settings)
+    served_app, availability = compose_mcp_endpoint(app, settings)
+    setattr(app.state, AVAILABILITY_ATTRIBUTE, availability)
     log.info("Songmaker server: http://localhost:%d", port)
     log.info("Auth enabled (session-based)")
 

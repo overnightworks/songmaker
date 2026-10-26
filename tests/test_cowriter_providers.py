@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import sys
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,14 +16,7 @@ from agent_providers.errors import (
     SafeRouteReasonCode,
     normalize_route_failure,
 )
-from agent_providers.events import FinalEvent, ToolCallEvent
-from agent_providers.openai_adapter import (
-    _parse_tool_call,
-    stream_openai_compatible_turn,
-)
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
-from agent_providers.tool_loop import COWRITER_MAX_TOOL_ROUNDS, ToolOutcome
-from agent_providers.tools import openai_tool_schemas
 from conftest import (
     TEST_SECRET,
     make_authenticated_user,
@@ -37,6 +27,7 @@ from conftest import (
     seed_judge_route,
     web_client,
 )
+from fake_agent_service import attach_cowriter_service
 
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -50,14 +41,12 @@ from songmaker_cli.constants import (
     SETTING_JUDGE_PROVIDER,
     SETTING_JUDGE_ROUTE,
 )
-from songmaker_cli.cowriter import tools as cowriter_tools
-from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG, execute_cowriter_tool
+from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
     AvailableModel,
-    ChatMessage,
     Generation,
     Job,
     RateLimitSetting,
@@ -317,18 +306,6 @@ def test_judge_put_keeps_a_replacement_whose_provider_is_not_configured(admin_cl
     with factory() as session:
         stored = get_raw_stored_judge_settings(session)
     assert (stored.provider, stored.model) == ("grok", "")
-
-
-def test_chat_rejects_a_removed_saved_provider_without_creating_a_job(admin_client):
-    client, factory = admin_client
-    _save_removed_cowriter_provider(factory)
-
-    resp = client.post("/api/chat/turn", json={"message": "hello"})
-
-    assert resp.status_code == 422
-    assert resp.json()["detail"] == "Unknown co-writer provider 'retired-provider'"
-    with factory() as session:
-        assert session.query(Job).count() == 0
 
 
 def test_model_must_be_in_the_live_catalog(admin_client, every_provider_is_configured):
@@ -609,180 +586,6 @@ def test_cowriter_save_keeps_a_route_that_cannot_answer_and_names_why(
     assert (stored.provider, stored.model) == ("claude", "")
 
 
-def test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversation(
-    admin_client,
-    every_provider_is_configured,
-    monkeypatch,
-):
-    """Spec: REQ-COWRITER-12 -- A Claude API Co-Writer turn persists its owned song write and leaves
-    a foreign song unchanged."""
-    client, factory = admin_client
-    with factory() as session:
-        session.add(User(
-            id="u-foreign",
-            username="u-foreign",
-            role="user",
-        ))
-        session.flush()
-        session.add(Album(
-            id="alb-foreign",
-            title="Foreign",
-            artist="B",
-            created_by="u-foreign",
-        ))
-        session.add(Song(
-            id="s-foreign",
-            title="Foreign song",
-            album_id="alb-foreign",
-            track_number=1,
-        ))
-        session.commit()
-    settings = client.put(
-        "/api/settings/cowriter",
-        json={
-            "provider": "claude",
-            "model": "claude-opus-4-6",
-            "provider_routes": {"claude": "api", "grok": "api", "codex": "api"},
-        },
-    )
-    assert settings.status_code == 200
-
-    class ToolUse:
-        type = "tool_use"
-
-        def __init__(self, tool_use_id: str, name: str, input: dict) -> None:
-            self.id = tool_use_id
-            self.name = name
-            self.input = input
-
-    class Message:
-        def __init__(self, content: list[object]) -> None:
-            self.content = content
-
-    class Stream:
-        def __init__(self, text: list[str], message: Message) -> None:
-            self._text = text
-            self._message = message
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args) -> bool:
-            return False
-
-        @property
-        def text_stream(self):
-            return self._texts()
-
-        async def _texts(self):
-            for text in self._text:
-                yield text
-
-        async def get_final_message(self) -> Message:
-            return self._message
-
-    class Messages:
-        def __init__(self) -> None:
-            self.requests: list[dict] = []
-            self.streams = [
-                Stream([], Message([
-                    ToolUse(
-                        "write-1",
-                        "update_song_lyrics",
-                        {"song_id": "s1", "lyrics": "API-written lyrics"},
-                    ),
-                    ToolUse(
-                        "write-foreign",
-                        "update_song_lyrics",
-                        {"song_id": "s-foreign", "lyrics": "stolen lyrics"},
-                    ),
-                ])),
-                Stream(["finished"], Message([])),
-            ]
-
-        def stream(self, **kwargs):
-            self.requests.append(kwargs)
-            return self.streams.pop(0)
-
-    class Client:
-        def __init__(self) -> None:
-            self.messages = Messages()
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args) -> bool:
-            return False
-
-    fake_client = Client()
-
-    class AsyncAnthropic:
-        def __init__(self, **_kwargs) -> None:
-            pass
-
-        async def __aenter__(self) -> Client:
-            return await fake_client.__aenter__()
-
-        async def __aexit__(self, *args) -> bool:
-            return await fake_client.__aexit__(*args)
-
-    monkeypatch.setitem(
-        sys.modules,
-        "anthropic",
-        SimpleNamespace(AsyncAnthropic=AsyncAnthropic, APIError=Exception),
-    )
-    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-        "u-test", username="u-u-test"
-    )
-
-    response = client.post("/api/chat/turn", json={"message": "Please revise the lyrics."})
-    events = _stream_events(response)
-    final = next(event for event in events if event["type"] == "final")
-
-    assert response.status_code == 200
-    assert final["assistant_message"]["content"] == "finished"
-    assert [event["type"] for event in events].count("tool_call") == 2
-    tool_results = {
-        event["tool_use_id"]: event
-        for event in events
-        if event["type"] == "tool_result"
-    }
-    assert tool_results["write-1"]["is_error"] is False
-    assert tool_results["write-foreign"]["is_error"] is True
-    assert fake_client.messages.requests[0]["model"] == "claude-opus-4-6"
-    assert fake_client.messages.requests[1]["messages"][-1]["content"] == [
-        {
-            "type": "tool_result",
-            "tool_use_id": "write-1",
-            "content": tool_results["write-1"]["content"],
-            "is_error": False,
-        },
-        {
-            "type": "tool_result",
-            "tool_use_id": "write-foreign",
-            "content": tool_results["write-foreign"]["content"],
-            "is_error": True,
-        },
-    ]
-    with factory() as session:
-        song = session.get(Song, "s1")
-        foreign_song = session.get(Song, "s-foreign")
-        messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
-        job = session.query(Job).filter_by(type="chat").one()
-
-        assert song is not None
-        assert song.latest_version is not None
-        assert song.latest_version.lyrics == "API-written lyrics"
-        assert foreign_song is not None
-        assert foreign_song.latest_version is None
-        assert [message.role for message in messages] == ["user", "assistant"]
-        assert [message.content for message in messages] == [
-            "Please revise the lyrics.",
-            "finished",
-        ]
-        assert job.status == "completed"
-
-
 def test_grok_cli_route_status_is_ready_with_tools(
     admin_client, every_provider_is_configured,
 ):
@@ -837,103 +640,17 @@ def test_cowriter_put_requires_an_admin(admin_client):
     assert response.status_code == 403
 
 
-def test_each_saved_provider_calls_only_itself(admin_client, every_provider_is_configured):
-    client, _ = admin_client
-    captured: dict = {}
-
-    async def _claude(**kwargs):
-        captured["claude"] = kwargs
-        yield FinalEvent(text="claude-ok")
-
-    async def _oai(**kwargs):
-        captured["oai"] = kwargs
-        yield FinalEvent(text="oai-ok")
-
-    cases = [
-        ("claude", "claude-opus-4-6"),
-        ("grok", "grok-4.6"),
-        ("codex", "gpt-5.4"),
-    ]
-    for provider, model in cases:
-        captured.clear()
-        client.put("/api/settings/cowriter", json={"provider": provider, "model": model})
-        with (
-            patch("agent_providers.dispatch.stream_claude_turn", _claude),
-            patch(
-                "agent_providers.dispatch.stream_openai_compatible_turn",
-                _oai,
-            ),
-        ):
-            override_provider_runtime(xai_api_key="grok-key", openai_api_key="openai-key")
-            resp = client.post("/api/chat/turn", json={"message": "hello"})
-        events = _stream_events(resp)
-        assert any(event.get("type") == "final" for event in events)
-        if provider == "claude":
-            assert "claude" in captured
-            assert "oai" not in captured
-            ctx = captured["claude"]["messages"][-1]["content"]
-        else:
-            assert "oai" in captured
-            assert captured["oai"]["provider"] == provider
-            assert captured["oai"]["model"] == model
-            assert "claude" not in captured
-            ctx = captured["oai"]["messages"][-1]["content"]
-        assert "<user_memory>" in ctx
-        assert ctx.endswith("hello")
-
-
-def test_chat_turns_beyond_the_chat_rate_limit_are_refused(
-    admin_client,
-    monkeypatch,
-    every_provider_is_configured,
-):
-    client, _ = admin_client
+def test_chat_turns_beyond_the_chat_rate_limit_are_refused(admin_client, monkeypatch):
+    client, factory = admin_client
     monkeypatch.setenv("CHAT_RATE_LIMIT_USER", "2")
     get_settings.cache_clear()
-    client.put("/api/settings/cowriter", json={"provider": "claude", "model": "claude-opus-4-6"})
+    attach_cowriter_service(client, factory, monkeypatch, "u-test")
 
-    async def _claude(**_kwargs):
-        yield FinalEvent(text="ok")
-
-    with patch("agent_providers.dispatch.stream_claude_turn", _claude):
-        statuses = [
-            client.post("/api/chat/turn", json={"message": "hi"}).status_code for _ in range(3)
-        ]
+    statuses = [
+        client.post("/api/chat/turn", json={"message": "hi"}).status_code for _ in range(3)
+    ]
 
     assert statuses == [200, 200, 429]
-
-
-def test_missing_credentials_named_error_persists_no_reply(
-    admin_client, monkeypatch, every_provider_is_configured,
-):
-    client, factory = admin_client
-    client.put("/api/settings/cowriter", json={"provider": "grok", "model": "grok-4.6"})
-    override_provider_runtime(xai_api_key=None)
-    called = {"claude": False, "oai": False}
-
-    async def _claude(**_k):
-        called["claude"] = True
-        yield FinalEvent(text="no")
-
-    async def _oai(**_k):
-        called["oai"] = True
-        yield FinalEvent(text="no")
-
-    with (
-        patch("agent_providers.dispatch.stream_claude_turn", _claude),
-        patch("agent_providers.dispatch.stream_openai_compatible_turn", _oai),
-    ):
-        resp = client.post("/api/chat/turn", json={"message": "hi"})
-    events = _stream_events(resp)
-    err = next(event for event in events if event.get("type") == "error")
-    assert err["status"] == 503
-    assert err["provider"] == "grok"
-    assert err["route"] == "api"
-    assert err["reason"]["code"] == "api_key_not_set"
-    assert called["claude"] is False
-    assert called["oai"] is False
-    with factory() as session:
-        assert [(m.role, m.content) for m in session.query(ChatMessage)] == [("user", "hi")]
 
 
 def test_create_song_tool_hits_canonical_function(admin_client):
@@ -1040,116 +757,6 @@ def test_cowriter_provider_switch_keeps_scoring_model(
     cowriter = client.get("/api/settings/cowriter").json()
     assert cowriter["provider"] == "codex"
     assert cowriter["allowed_models"] == LIVE_CATALOG["codex"]
-
-
-def test_openai_adapter_emits_same_event_types(admin_client, every_provider_is_configured):
-    client, _ = admin_client
-    client.put("/api/settings/cowriter", json={"provider": "grok", "model": "grok-4.6"})
-
-    class _Resp:
-        status_code = 200
-
-        def json(self):
-            return {
-                "choices": [{
-                    "message": {"role": "assistant", "content": "from grok"},
-                }],
-            }
-
-    class _Client:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_a):
-            return None
-
-        async def post(self, *_a, **_k):
-            return _Resp()
-
-    override_provider_runtime(xai_api_key="k")
-    with patch("agent_providers.openai_adapter.httpx.AsyncClient", _Client):
-        resp = client.post("/api/chat/turn", json={"message": "hi"})
-    types = [event["type"] for event in _stream_events(resp)]
-    assert types.count("final") == 1
-    assert "error" not in types
-    assert "assistant_text" in types
-
-
-def _songmaker_tool_executor(session=None, user=None):
-    """Bind songmaker's tool executor the way the app's routing does."""
-    bound_session = session if session is not None else MagicMock()
-    bound_user = user or make_authenticated_user("u")
-    return lambda name, arguments: cowriter_tools.execute_cowriter_tool(
-        bound_session, bound_user, name, arguments,
-    )
-
-
-def test_openai_adapter_allows_final_response_after_last_tool_round(monkeypatch):
-    responses = [
-        {
-            "choices": [{"message": {
-                "content": "",
-                "tool_calls": [{
-                    "id": f"call-{index}",
-                    "function": {"name": "list_albums", "arguments": "{}"},
-                }],
-            }}],
-        }
-        for index in range(COWRITER_MAX_TOOL_ROUNDS)
-    ]
-    responses.append({"choices": [{"message": {"content": "done"}}]})
-
-    class _Response:
-        status_code = 200
-
-        def __init__(self, payload):
-            self.payload = payload
-
-        def json(self):
-            return self.payload
-
-    class _Client:
-        def __init__(self, *_args, **_kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args):
-            return None
-
-        async def post(self, *_args, **_kwargs):
-            return _Response(responses.pop(0))
-
-    monkeypatch.setattr("agent_providers.openai_adapter.httpx.AsyncClient", _Client)
-    execute = MagicMock(return_value=ToolOutcome("[]", False))
-    monkeypatch.setattr(
-        "songmaker_cli.cowriter.tools.execute_cowriter_tool", execute,
-    )
-
-    async def _collect_events():
-        return [
-            event
-            async for event in stream_openai_compatible_turn(
-                provider="grok",
-                api_url="https://example.invalid/chat",
-                api_key="secret",
-                model="live-model",
-                system="system",
-                messages=[{"role": "user", "content": "hello"}],
-                executor=_songmaker_tool_executor(),
-                tool_schemas=openai_tool_schemas(COWRITER_TOOL_CATALOG),
-            )
-        ]
-
-    events = asyncio.run(_collect_events())
-    assert sum(isinstance(event, ToolCallEvent) for event in events) == 8
-    assert isinstance(events[-1], FinalEvent)
-    assert events[-1].text == "done"
-    assert execute.call_count == 8
 
 
 _API_KEY_FIELD_BY_ENVIRONMENT = {
@@ -1923,19 +1530,6 @@ def test_judge_save_keeps_its_persisted_model_while_the_catalogue_is_down(
     assert unknown.json()["detail"] == "Unknown grok model 'grok-4.5'"
     with factory() as session:
         assert get_raw_stored_judge_settings(session).model == "grok-4.6"
-
-
-def test_openai_adapter_rejects_malformed_tool_arguments_without_calling_tool():
-    with pytest.raises(ProviderUnavailableError) as raised:
-        _parse_tool_call(
-            {
-                "id": "call-1",
-                "function": {"name": "list_albums", "arguments": "not-json"},
-            },
-            "grok",
-        )
-
-    assert raised.value.reason.code.value == "tool_protocol_error"
 
 
 # ── Provider-status response pin (A9, #873) ─────────────────────────

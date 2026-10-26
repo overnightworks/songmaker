@@ -1008,20 +1008,14 @@ describe('CoWriterPanel unavailable before any turn', () => {
 describe('CoWriterPanel failed turns', () => {
 	it.each([
 		[
-			'the provider’s reason after its name',
-			{ type: 'error', status: 503, reason: { message: 'CLI is unavailable.' } },
-			'Claude: CLI is unavailable.'
+			'the named problem after the provider’s name',
+			{ type: 'error', status: 503, problem: 'unavailable', retry_after_seconds: null },
+			'Claude: The agent service is unavailable.'
 		],
 		[
-			'the provider the server’s error frame names over the panel’s setting',
-			{
-				type: 'error',
-				status: 503,
-				provider: 'grok',
-				route: 'api',
-				reason: { message: 'Route is unavailable.' }
-			},
-			'Grok: Route is unavailable.'
+			'the sign-in request after the provider’s name',
+			{ type: 'error', status: 401, problem: 'sign_in_again', retry_after_seconds: null },
+			'Claude: Sign in again to use the co-writer.'
 		],
 		[
 			'the endpoint’s own failure after the panel’s provider',

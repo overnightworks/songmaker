@@ -53,16 +53,15 @@ const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
 const THINKING = /is thinking/;
 
-// The route error frame the server ends a turn with when the provider cannot
-// run; the panel names the provider in front of the library's reason.
+// The problem frame the server ends a turn with when the agent service did not
+// run it; the panel names the provider in front of the problem's reason.
 const RETRY_FAILURE_FRAME = {
 	type: 'error',
 	status: 503,
-	provider: 'claude',
-	route: null,
-	reason: { code: 'cli_binary_unavailable', message: 'CLI is unavailable.' }
+	problem: 'unavailable',
+	retry_after_seconds: null
 };
-const RETRY_FAILURE = 'Claude: CLI is unavailable.';
+const RETRY_FAILURE = 'Claude: The agent service is unavailable.';
 
 type TurnState = 'idle' | 'running' | 'answered';
 type ChatMessage = ReturnType<typeof chatMessage>;

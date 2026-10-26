@@ -3,15 +3,12 @@
 Split by domain, re-exported here for backwards compatibility.
 
 The value objects shared with persistence (generation params, Whisper cues)
-and the provider wheel's stream events (assistant text, tool call, tool result)
-live beneath both layers and are re-exported here because
-``scripts/generate_types.py`` reads this module's ``__all__`` to find the
-models that reach ``types.ts``.
+are re-exported here because ``scripts/generate_types.py`` reads this module's
+``__all__`` to find the models that reach ``types.ts``.
 """
 
 from __future__ import annotations
 
-from agent_providers.events import AssistantTextEvent, ToolCallEvent, ToolResultEvent
 from pydantic import BaseModel
 
 from songmaker_cli.api_models.auth import AuthMeResponse, LogoutResponse
@@ -77,11 +74,13 @@ from songmaker_cli.api_models.resource_events import (
     ResourceResyncEvent,
 )
 from songmaker_cli.api_models.settings import (
+    AssistantTextEvent,
     CapabilitiesResponse,
     ChatMessageResponse,
     ChatTurnFailureFrame,
     ChatTurnFinalFrame,
-    ChatTurnRouteErrorFrame,
+    ChatTurnProblem,
+    ChatTurnProblemFrame,
     ChatTurnV2Request,
     ConversationListResponse,
     ConversationMessagesResponse,
@@ -105,6 +104,8 @@ from songmaker_cli.api_models.settings import (
     RateLimitItem,
     RateLimitsResponse,
     RateLimitUpdateRequest,
+    ToolCallEvent,
+    ToolResultEvent,
 )
 from songmaker_cli.api_models.songs import (
     VALID_SCORER_NAMES,
@@ -225,7 +226,8 @@ __all__ = [
     "ChatTurnV2Request",
     "ChatTurnFailureFrame",
     "ChatTurnFinalFrame",
-    "ChatTurnRouteErrorFrame",
+    "ChatTurnProblem",
+    "ChatTurnProblemFrame",
     "AssistantTextEvent",
     "ToolCallEvent",
     "ToolResultEvent",
