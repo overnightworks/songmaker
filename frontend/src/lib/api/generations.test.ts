@@ -6,7 +6,13 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 
-import { coverGeneration, generateSong, repaintGeneration } from './generations';
+import {
+	bulkDeleteGenerations,
+	coverGeneration,
+	generateSong,
+	repaintGeneration,
+	uploadReferenceAudio
+} from './generations';
 
 function acceptRequests(): void {
 	mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 'queued' }) });
@@ -122,5 +128,33 @@ describe('generation API contract', () => {
 	])('does not send count one for %s requests', async (_name, send) => {
 		await send();
 		expect(JSON.parse(String(request()[1].body))).not.toHaveProperty('count');
+	});
+});
+
+describe('generation API wire bytes (#1882 done-when: wire bytes unchanged)', () => {
+	it('uploads the reference audio as multipart form data and returns the stored file', async () => {
+		const stored = { path: '/audio/ref.wav', filename: 'ref.wav' };
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(stored) });
+		const file = new File(['wav'], 'ref.wav', { type: 'audio/wav' });
+
+		const result = await uploadReferenceAudio(file);
+
+		const [url, init] = request();
+		expect(url).toBe('/api/audio/upload');
+		expect(init.method).toBe('POST');
+		expect((init.body as FormData).get('file')).toBe(file);
+		expect(result).toEqual(stored);
+	});
+
+	it('bulk-deletes the given generation ids as a JSON body and returns the deleted count', async () => {
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ deleted: 2 }) });
+
+		const result = await bulkDeleteGenerations(['gen-1', 'gen-2']);
+
+		const [url, init] = request();
+		expect(url).toBe('/api/generations/bulk-delete');
+		expect(init.method).toBe('POST');
+		expect(JSON.parse(String(init.body))).toEqual({ generation_ids: ['gen-1', 'gen-2'] });
+		expect(result).toEqual({ deleted: 2 });
 	});
 });

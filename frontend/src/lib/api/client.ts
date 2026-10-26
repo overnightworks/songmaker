@@ -44,12 +44,10 @@ export {
 	generateSong,
 	repaintGeneration,
 	coverGeneration,
-	type ReferenceAudioResult,
 	uploadReferenceAudio,
 	rateGeneration,
 	scoreGeneration,
 	deleteGeneration,
-	type BulkDeleteResult,
 	bulkDeleteGenerations,
 	pickGeneration,
 	unpickGeneration,
@@ -91,8 +89,6 @@ export {
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
-	type ModelCapabilities,
-	type AvailableModel,
 	fetchActiveModels,
 	fetchAllModels,
 	toggleModel,
@@ -125,8 +121,7 @@ export {
 	pinModelOnWorker,
 	unpinModelOnWorker,
 	previewGenerationRetention,
-	runGenerationRetention,
-	type GenerationRetentionReport
+	runGenerationRetention
 } from './admin';
 export {
 	listLoras,
@@ -138,9 +133,9 @@ export {
 	patchLoraSample,
 	deleteLoraSample,
 	trainLora,
-	listOwnPlayableTakes,
-	type LoraSamplePatch
+	listOwnPlayableTakes
 } from './loras';
+export type { AvailableModel, GenerationRetentionReport } from './types';
 
 export async function uploadAlbumCover(albumId: string, file: File): Promise<AlbumItem> {
 	const form = new FormData();

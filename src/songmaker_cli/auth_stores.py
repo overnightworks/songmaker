@@ -137,6 +137,12 @@ class DatabaseAuditSink:
                 action = AuditAction.CREATE
             case AccountEventKind.ROLE_CHANGED:
                 action = AuditAction.UPDATE
+            case AccountEventKind.BACKCHANNEL_LOGOUT:
+                record_audit(
+                    self.session, event.actor_id, AuditAction.DELETE, ResourceType.SESSION,
+                    event.subject_id, "back-channel logout",
+                )
+                return
             case _:
                 raise ValueError(f"Unsupported account event: {event.kind}")
         record_audit(
