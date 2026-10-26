@@ -2,8 +2,7 @@
 
 This module owns the Phase 3 conversation-scoped chat API:
 
-- ``POST /chat/turn`` — one turn in the user's active conversation,
-  with Claude able to reach song data via the songmaker MCP server.
+- ``POST /chat/turn`` — one turn in the user's active conversation, run by the agent service.
 - ``GET /conversations`` — list all the user's conversations.
 - ``GET /conversations/{id}`` — full message history of one.
 - ``POST /conversations/new`` — archive the active one and start fresh.
