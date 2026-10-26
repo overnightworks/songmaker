@@ -1,8 +1,0 @@
-claim_id = "5f2dde1a78ca4d5abeed57a85ba15be8"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "07483f7c8ca2959eefccb64142b4996c6fd236c9"
-branch = "claude/issue-1832-mcp-endpoint"
-scope = [".github/workflows/ci.yml", ".github/workflows/security.yml", "Dockerfile", "docker-compose.yml", "docker/.env.docker.example", "docker/docker-compose.ci.yml", "docs/architecture.md", "docs/security.md", "pyproject.toml", "src/songmaker_cli/cowriter/mcp_endpoint.py", "src/songmaker_cli/cowriter/service_runs.py", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "tests/fixtures/agent_service_capability_public_key.pem", "tests/test_cowriter_mcp_endpoint.py", "tests/test_cowriter_tool_catalog.py", "tests/test_packaging_boundary.py", "tests/test_server.py", "uv.lock"]
-opened_commit = "290b8beb8beb35f3b7fc3b4c41969bd7cdb4bd47"
-whole_reason = "The co-writer's MCP endpoint at /mcp on songmaker-web: McpServer composition with an availability verdict, a run registry bound to the running turn (Q8), validated tool arguments, the compose secret for the service's public signing key, the CI overlay, and the security documentation."
