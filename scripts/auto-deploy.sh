@@ -1497,6 +1497,7 @@ while IFS= read -r CANDIDATE_COMMIT; do
             break
             ;;
         waiting\ *|failed\ *)
+            log_debug "deploy candidate $CANDIDATE_COMMIT is not green: $CANDIDATE_CHECK_STATUS"
             SKIPPED_CANDIDATES+=("${RELEASE_TAG_OF[$CANDIDATE_COMMIT]} ($CANDIDATE_COMMIT)")
             ;;
         *)

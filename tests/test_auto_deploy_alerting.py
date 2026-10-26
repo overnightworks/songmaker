@@ -726,7 +726,7 @@ def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
 
     assert result.returncode == 0
     assert (
-        f"skipping deploy candidate {checkout.remote_main_sha()}: {verdict}" in checkout.journal
+        f"deploy candidate {checkout.remote_main_sha()} is not green: {verdict}" in checkout.journal
     )
     assert "no fully green release" in checkout.journal
     assert "failure count now" not in checkout.journal
@@ -877,7 +877,7 @@ def test_running_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> No
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == green_predecessor
     assert checkout.deployed_sha_file.read_text() == green_predecessor
-    assert f"skipping deploy candidate {running_head}: waiting" in checkout.journal
+    assert f"deploy candidate {running_head} is not green: waiting" in checkout.journal
     selected = f"selected newest fully green release v2026.10.25.1 ({green_predecessor})"
     assert selected in checkout.journal
 
@@ -911,7 +911,7 @@ def test_failed_head_deploys_the_newest_green_predecessor(
     ).strip() == green_predecessor
     assert checkout.deployed_sha_file.read_text() == green_predecessor
     assert "compose build" in checkout.docker_calls
-    assert f"skipping deploy candidate {failed_head}: failed" in checkout.journal
+    assert f"deploy candidate {failed_head} is not green: failed" in checkout.journal
     selected = f"selected newest fully green release v2026.10.25.1 ({green_predecessor})"
     assert selected in checkout.journal
 
