@@ -210,18 +210,15 @@ async def _stream_run(
             if response.status_code != httpx.codes.OK:
                 yield await _problem_of_refused_start(response)
                 return
-            async for chunk in response.aiter_bytes():
-                for decoded in decoder.feed(chunk):
-                    if isinstance(decoded, RunStarted):
-                        service_runs.register(str(decoded.run_id), person)
-                        run_id = str(decoded.run_id)
-                    outcome = _outcome_of(decoded)
-                    if outcome is not None:
-                        yield outcome
-                    if isinstance(outcome, (TurnAnswer, TurnProblem)):
-                        return
-            for violation in decoder.close():
-                yield _problem_of_violation(violation)
+            async for decoded in _decoded_events(response, decoder):
+                if isinstance(decoded, RunStarted):
+                    service_runs.register(str(decoded.run_id), person)
+                    run_id = str(decoded.run_id)
+                outcome = _outcome_of(decoded)
+                if outcome is not None:
+                    yield outcome
+                if isinstance(outcome, (TurnAnswer, TurnProblem)):
+                    return
     except service_runs.RunAlreadyRegisteredError:
         yield TurnProblem(ChatTurnProblem.UNAVAILABLE, "run already registered")
     except httpx.HTTPError as unreachable:
@@ -229,6 +226,16 @@ async def _stream_run(
     finally:
         if run_id is not None:
             service_runs.release(run_id)
+
+
+async def _decoded_events(
+    response: httpx.Response, decoder: RunStreamDecoder,
+) -> AsyncIterator[RunEvent | StreamViolation]:
+    async for chunk in response.aiter_bytes():
+        for decoded in decoder.feed(chunk):
+            yield decoded
+    for violation in decoder.close():
+        yield violation
 
 
 def _outcome_of(decoded: RunEvent | StreamViolation) -> TurnOutcome | None:
