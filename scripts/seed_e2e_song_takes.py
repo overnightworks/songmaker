@@ -82,7 +82,7 @@ def seed_song_takes(
     metadata as a generated take. Returns the song's id.
     """
     owner_directory = Path(owner_id).name
-    if owner_directory != owner_id:
+    if owner_directory != owner_id or owner_directory in ("", ".", ".."):
         raise ValueError(f"Owner id is not a single directory name: {owner_id!r}")
     slug = unique_song_slug(session, album_id, title)
     song = create_song(session, title, album_id, slug, lyrics=lyrics, prompt=prompt)
