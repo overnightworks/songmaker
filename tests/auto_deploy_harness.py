@@ -23,6 +23,7 @@ from auto_deploy_support import (
     GIT_FETCH_KILL_GRACE_SECONDS,
     GIT_FETCH_TIMEOUT_SECONDS,
     HUNG_TRANSPORT_SECONDS,
+    MIGRATIONS_PATH,
     PROMETHEUS_METRICS_RESPONSE,
     PROMETHEUS_RULE_PATH,
     PROMETHEUS_RULES_RESPONSE,
@@ -63,6 +64,7 @@ class Checkout:
         self._clock_file.write_text(str(CLOCK_START_EPOCH))
         self._commits_pushed = 0
         self._releases_cut = 0
+        self._hal_path = tmp_path / "hal"
         self._active_job_count = 0
         self._base_images_present = True
         self._prune_exit_code = 0
@@ -387,12 +389,15 @@ class Checkout:
         if release:
             self.cut_release(clone)
 
-    def cut_release(self, clone: Path | None = None, *, name: str | None = None) -> str:
+    def cut_release(
+        self, clone: Path | None = None, *, name: str | None = None, schema: str | None = None,
+    ) -> str:
         """Tag the clone's HEAD with the next release name, as the head does by hand."""
         clone = clone or self._up_to_date_pusher()
         self._releases_cut += 1
         tag = name or f"v2026.10.25.{self._releases_cut}"
-        git(clone, "tag", "--annotate", "--message", f"release {tag}", tag)
+        message = f"release {tag}" + (f"\n\nschema: {schema}" if schema else "")
+        git(clone, "tag", "--annotate", "--message", message, tag)
         git(clone, "push", "origin", tag)
         return tag
 
@@ -468,6 +473,34 @@ class Checkout:
         )
         git(clone, "commit", "-m", f"pin vendor/acestep at {pinned_sha}")
         self._land(clone, release=release)
+
+    def move_main_forward_with_migration(
+        self, revision: str, down_revision: str | None = None, *, release: bool = True,
+    ) -> None:
+        clone = self._up_to_date_pusher()
+        migration = clone / MIGRATIONS_PATH / f"{revision}_migration.py"
+        migration.parent.mkdir(parents=True, exist_ok=True)
+        down = "None" if down_revision is None else f'"{down_revision}"'
+        migration.write_text(
+            f'revision: str = "{revision}"\n'
+            f"down_revision: Union[str, None] = {down}\n",
+        )
+        git(clone, "add", MIGRATIONS_PATH)
+        git(clone, "commit", "-m", f"migration {revision}")
+        self._land(clone, release=release)
+
+    def install_backup_command(self, exit_code: int) -> None:
+        """Stand in for `hal backup songmaker --pre-apply`, recording into the Docker call log."""
+        write_executable(
+            self._hal_path,
+            "#!/bin/bash\n"
+            'printf "hal %s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
+            f"exit {exit_code}\n",
+        )
+
+    @property
+    def backup_calls(self) -> list[str]:
+        return [call for call in self.docker_calls.splitlines() if call.startswith("hal ")]
 
     def move_main_forward_with_compose_file(self, content: str, *, release: bool = True) -> None:
         clone = self._up_to_date_pusher()
@@ -623,6 +656,7 @@ class Checkout:
                 "DOCKER_BASE_IMAGES_PRESENT": str(self._base_images_present).lower(),
                 "DOCKER_COMPOSE_PROJECT_NAME": self._compose_project_name,
                 "DOCKER_COMPOSE_STDERR": self.compose_stderr,
+                "SONGMAKER_AUTODEPLOY_HAL": str(self._hal_path),
             },
         )
 

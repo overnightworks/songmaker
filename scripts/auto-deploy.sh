@@ -165,6 +165,10 @@ ACESTEP_SUBMODULE_PATH="vendor/acestep"
 # What the local-only base images are built from: a difference in any of these
 # between the running revision and the selected candidate rebuilds them.
 BASE_IMAGE_INPUT_PATHS=(docker/base/ "$ACESTEP_SUBMODULE_PATH")
+# A release that changes the alembic head is backed up first by edge's backup
+# owner; systemd's minimal PATH does not reach it, so its path is configuration.
+MIGRATIONS_VERSIONS_PATH="src/songmaker_cli/db/migrations/versions"
+HAL_BINARY="${SONGMAKER_AUTODEPLOY_HAL:-${HOME:-}/.local/bin/hal}"
 PROMETHEUS_CONFIG_FILE="monitoring/prometheus.yml"
 PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
 PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
@@ -1132,6 +1136,85 @@ remote_check_status() {
     fi
 }
 
+# Prints the alembic head of $1's migration files: the one revision no other
+# revision names as its parent, and nothing when the commit has no migrations.
+alembic_head_of() {
+    local commit_sha="$1"
+    local migration_lines line rest revision
+    local -a revisions=()
+    local -A parent_revisions=()
+    local -a heads=()
+    if migration_lines="$(safe_git grep -h -E '^(down_)?revision\b' "$commit_sha" -- "$MIGRATIONS_VERSIONS_PATH" 2>&1)"; then
+        :
+    elif [[ -n "$migration_lines" ]]; then
+        printf '%s' "$migration_lines"
+        return 1
+    fi
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        rest="$line"
+        while [[ "$rest" =~ [\"\']([0-9A-Za-z_]+)[\"\'](.*)$ ]]; do
+            if [[ "$line" == down_revision* ]]; then
+                parent_revisions[${BASH_REMATCH[1]}]=1
+            else
+                revisions+=("${BASH_REMATCH[1]}")
+            fi
+            rest="${BASH_REMATCH[2]}"
+        done
+    done <<<"$migration_lines"
+    for revision in "${revisions[@]}"; do
+        [[ -n "${parent_revisions[$revision]:-}" ]] || heads+=("$revision")
+    done
+    if ((${#heads[@]} > 1)); then
+        printf 'several alembic heads in %s: %s' "$commit_sha" "${heads[*]}"
+        return 1
+    fi
+    printf '%s' "${heads[0]:-}"
+}
+
+# Prints the schema the release brings: the `schema:` line of its tag message
+# when it has one, else the alembic head of its commit.
+release_schema_of() {
+    local release_tag="$1"
+    local commit_sha="$2"
+    local tag_message
+    if tag_message="$(safe_git for-each-ref --format='%(contents)' "$RELEASE_REF_PREFIX$release_tag" 2>/dev/null)" \
+        && [[ "$tag_message" =~ (^|$'\n')schema:[[:space:]]*([0-9A-Za-z_]+)[[:space:]]*($|$'\n') ]]; then
+        printf '%s' "${BASH_REMATCH[2]}"
+        return
+    fi
+    alembic_head_of "$commit_sha"
+}
+
+# A schema change is the one thing `compose up` (the one-shot migrate) cannot
+# take back, so hal's pre-apply backup runs first. Any doubt about either schema
+# counts as a change. A failed or missing backup is a counted refusal: nothing
+# is built or recreated, and the next tick tries again.
+backup_before_schema_change() {
+    local release_commit="$1"
+    local release_tag="$2"
+    local release_schema running_schema backup_exit_code
+    if release_schema="$(release_schema_of "$release_tag" "$release_commit")" \
+        && [[ -n "$DEPLOYED_SHA" ]] \
+        && running_schema="$(alembic_head_of "$DEPLOYED_SHA")" \
+        && [[ "$release_schema" == "$running_schema" ]]; then
+        log_debug "release $release_tag keeps the schema '$release_schema' — no backup"
+        return 0
+    fi
+    if [[ ! -x "$HAL_BINARY" ]]; then
+        log_err "release $release_tag may change the schema but the backup command $HAL_BINARY is missing or not executable — refusing to deploy, nothing is built or recreated"
+        fail_tick "backup command missing"
+    fi
+    log_info "release $release_tag may change the schema (running '${running_schema:-unknown}', release '${release_schema:-unknown}') — running hal backup songmaker --pre-apply"
+    if "$HAL_BINARY" backup songmaker --pre-apply; then
+        return 0
+    else
+        backup_exit_code=$?
+    fi
+    log_err "hal backup songmaker --pre-apply failed (exit $backup_exit_code) — refusing to deploy release $release_tag, nothing is built or recreated"
+    fail_tick "pre-apply backup failed"
+}
+
 # --- Release selection. A tag deploys only when its name is in the release
 # grammar and its commit is on origin/$DEPLOY_BRANCH; every other tag is named
 # once in the journal (SKIPPED_TAGS_FILE remembers what was named) and ignored.
@@ -1471,6 +1554,8 @@ fi
 # The selected commit may require a variable the previous one did not; name
 # it before the base-image and compose builds rather than after them.
 compose_config_refusal "after checking out $DEPLOY_COMMIT"
+
+backup_before_schema_change "$DEPLOY_COMMIT" "${RELEASE_TAG_OF[$DEPLOY_COMMIT]}"
 
 # Base images are local-only. Check the selected release against the revision
 # that is actually running, rather than against the checkout's previous HEAD:

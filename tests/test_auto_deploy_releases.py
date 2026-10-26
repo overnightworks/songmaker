@@ -231,6 +231,7 @@ def test_a_dirty_checkout_with_a_pending_release_is_refused(checkout: Checkout) 
 def test_an_unreadable_running_commit_counts_every_release_as_pending(
     checkout: Checkout, state: str,
 ) -> None:
+    checkout.install_backup_command(exit_code=0)
     checkout.cut_release()
     commit = checkout.head
     checkout.deployed_sha_file.write_text("garbage" if state == "garbage" else "0" * 40)
@@ -288,3 +289,76 @@ def test_a_work_clone_on_main_with_nothing_pending_stays_untouched_and_silent(
     assert checkout.uncommitted_changes == ""
     assert _deployed_sha(checkout) == running
     assert _failure_count(checkout) == "0"
+
+
+def _backup_precedes_recreate(checkout: Checkout) -> bool:
+    calls = checkout.docker_calls.splitlines()
+    backup = calls.index("hal backup songmaker --pre-apply")
+    return backup < next(i for i, call in enumerate(calls) if call.startswith("compose up"))
+
+
+def test_a_release_that_changes_the_schema_is_backed_up_once_before_the_recreate(
+    checkout: Checkout,
+) -> None:
+    checkout.install_backup_command(exit_code=0)
+    checkout.move_main_forward_with_migration("aaa111")
+    assert checkout.tick().returncode == 0
+    checkout.move_main_forward_with_migration("bbb222", down_revision="aaa111")
+    before = len(checkout.backup_calls)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert len(checkout.backup_calls) == before + 1
+    assert _backup_precedes_recreate(checkout)
+    assert _deployed_sha(checkout) == checkout.head
+
+
+def test_a_release_whose_tag_names_another_schema_than_the_running_one_is_backed_up(
+    checkout: Checkout,
+) -> None:
+    checkout.install_backup_command(exit_code=0)
+    checkout.move_main_forward_with_migration("aaa111")
+    assert checkout.tick().returncode == 0
+    checkout.move_main_forward(release=False)
+    checkout.cut_release(schema="bbb222")
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.backup_calls[-1] == "hal backup songmaker --pre-apply"
+    assert len(checkout.backup_calls) == 2
+
+
+@pytest.mark.parametrize("backup", ["exits non-zero", "is missing"])
+def test_a_failed_backup_stops_the_tick_before_anything_is_built_or_recreated(
+    checkout: Checkout, backup: str,
+) -> None:
+    if backup == "exits non-zero":
+        checkout.install_backup_command(exit_code=3)
+    checkout.move_main_forward_with_migration("aaa111")
+    running = _deployed_sha(checkout)
+
+    exit_codes = [checkout.tick().returncode for _ in range(FAILURE_ALERT_THRESHOLD)]
+
+    assert exit_codes == [0, 0, 1]
+    assert len(checkout.alert_lines()) == 1
+    assert not any("build" in call for call in checkout.docker_calls.splitlines())
+    assert not any(call.startswith("compose up") for call in checkout.docker_calls.splitlines())
+    assert _deployed_sha(checkout) == running
+
+
+def test_a_release_with_the_running_schema_is_not_backed_up(checkout: Checkout) -> None:
+    checkout.install_backup_command(exit_code=0)
+    checkout.move_main_forward_with_migration("aaa111")
+    assert checkout.tick().returncode == 0
+    checkout.move_main_forward()
+    checkout.move_main_forward(release=False)
+    checkout.cut_release(schema="aaa111")
+    calls_before = len(checkout.backup_calls)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert len(checkout.backup_calls) == calls_before
+    assert _deployed_sha(checkout) == checkout.head

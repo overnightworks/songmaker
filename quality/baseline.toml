@@ -77,7 +77,7 @@
 "tests/test_acestep_worker_train_lora.py" = 1294
 "tests/test_admin_api.py" = 1055
 "tests/test_api.py" = 4765
-"tests/test_auto_deploy_alerting.py" = 1388
+"tests/test_auto_deploy_alerting.py" = 1389
 "tests/test_client.py" = 870
 "tests/test_conversation_api.py" = 1142
 "tests/test_cowriter_providers.py" = 2191

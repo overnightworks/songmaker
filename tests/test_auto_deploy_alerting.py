@@ -1076,6 +1076,7 @@ def test_an_empty_previous_deployed_sha_reloads_changed_prometheus_rules(
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
+    checkout.install_backup_command(exit_code=0)
     checkout.deployed_sha_file.write_text("")
     checkout.move_main_forward_with_changed_alert_rules()
 
