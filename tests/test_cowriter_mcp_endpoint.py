@@ -337,6 +337,24 @@ def test_m5_a_registered_run_held_by_another_person_is_refused(endpoint, capabil
     assert endpoint.snapshot() == before
 
 
+def test_a_trailing_slash_on_the_configured_issuer_still_lets_the_tool_call_through(
+    web, mcp_environment, monkeypatch, capability, run_id,
+):
+    monkeypatch.setenv("OIDC_ISSUER", f"{ISSUER}/")
+    app, factory = web
+    wrapped, verdict = compose_mcp_endpoint(app, settings_now())
+    assert verdict.problem is None
+    try:
+        with running_run(run_id):
+            is_error, _ = Endpoint(wrapped, factory).call(
+                capability, "get_song", song_id="song-anna",
+            ).tool_result()
+    finally:
+        get_settings.cache_clear()
+
+    assert is_error is False
+
+
 def test_m5_a_registered_run_held_by_the_same_subject_of_another_issuer_is_refused(
     endpoint, capability, run_id,
 ):

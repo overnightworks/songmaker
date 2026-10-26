@@ -730,6 +730,7 @@ async def _chat_event_generator(
                         assistant_text = outcome.text
                         break
                     yield _sse_format(outcome)
+                await stream.aclose()
             except Exception as exc:
                 terminal = True
                 yield _chat_failure_event(session, prepared.job_id, exc)

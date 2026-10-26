@@ -36,6 +36,7 @@ from songmaker_cli.cowriter import service_runs
 from songmaker_cli.cowriter.service_runs import RunPerson
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.mcp_server.auth import MCPAuthError, load_user
+from songmaker_cli.oidc_client import normalised_oidc_issuer
 from songmaker_cli.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -168,7 +169,7 @@ def _refusing_in_front_of(app):
 
 def _tools_for(app, settings: Settings) -> list[McpTool]:
     return [
-        McpTool(declaration, _handler_for(declaration.name, app, settings.oidc_issuer))
+        McpTool(declaration, _handler_for(declaration.name, app, normalised_oidc_issuer(settings)))
         for declaration in cowriter_tool_declarations()
     ]
 

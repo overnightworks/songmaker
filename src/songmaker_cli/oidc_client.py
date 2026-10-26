@@ -46,6 +46,11 @@ def read_client_secret(secret_file: Path) -> SecretStr:
     return SecretStr(secret)
 
 
+def normalised_oidc_issuer(settings: Settings) -> str | None:
+    """The configured issuer in the form tokens carry it: no trailing slash."""
+    return settings.oidc_issuer.rstrip("/") if settings.oidc_issuer else None
+
+
 def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
     if not settings.oidc_issuer or not settings.oidc_client_id:
         raise ValueError("OIDC_ISSUER and OIDC_CLIENT_ID are required to serve the web app")
@@ -55,7 +60,7 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         public_base_url = resolve_public_base_url()
     except HTTPException as error:
         raise ValueError(f"PUBLIC_BASE_URL is required for sign-in: {error.detail}") from None
-    issuer = settings.oidc_issuer.rstrip("/")
+    issuer = normalised_oidc_issuer(settings)
     endpoints = f"{issuer}/{_REALM_ENDPOINT_PREFIX}"
     return OidcClientConfig(
         issuer=issuer,
