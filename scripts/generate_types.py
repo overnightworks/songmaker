@@ -156,6 +156,43 @@ EXEMPT_MODEL_ROLES = (
 )
 
 
+API_MODELS_PACKAGE = "songmaker_cli.api_models"
+
+
+@dataclass(frozen=True)
+class ModelHomeExemption:
+    packages: frozenset[str]
+    reason: str
+
+    def holds(self, model: type[BaseModel]) -> bool:
+        return any(_in_package(model.__module__, package) for package in self.packages)
+
+
+MODEL_HOME_EXEMPTIONS = (
+    ModelHomeExemption(
+        packages=frozenset({"songmaker_cli.generation_params", "songmaker_cli.whisper_cues"}),
+        reason="persistence-owned value objects that api_models re-exports (docs/architecture.md)",
+    ),
+    ModelHomeExemption(
+        packages=frozenset({"agent_providers"}),
+        reason="installed wheel whose provider events and route reason are the co-writer frames",
+    ),
+)
+
+
+def _in_package(module: str, package: str) -> bool:
+    return module == package or module.startswith(f"{package}.")
+
+
+def models_outside_api_models(models: tuple[type[BaseModel], ...]) -> tuple[str, ...]:
+    return tuple(
+        f"{model.__name__} ({model.__module__})"
+        for model in models
+        if not _in_package(model.__module__, API_MODELS_PACKAGE)
+        and not any(exemption.holds(model) for exemption in MODEL_HOME_EXEMPTIONS)
+    )
+
+
 @dataclass(frozen=True)
 class GenerationResult:
     content: str
@@ -563,6 +600,10 @@ def main() -> None:
         result = generate(routers, include_exported_models=True)
     except RouteIntrospectionError as error:
         print(f"FAIL: route introspection incomplete: {error}")
+        sys.exit(1)
+    misplaced = models_outside_api_models(result.models)
+    if misplaced:
+        print(f"FAIL: routed models declared outside {API_MODELS_PACKAGE}: {', '.join(misplaced)}")
         sys.exit(1)
     if CHECKED_MODE in sys.argv:
         sys.exit(0 if check_generated_types(result) else 1)

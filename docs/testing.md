@@ -146,7 +146,10 @@ backend-to-backend protocol rather than a browser surface.
 Run `python scripts/generate_types.py` after changing a routed model, then
 `python scripts/generate_types.py --check`. `tests/test_generate_types.py`
 plants routed response, body, and nested models to prove a stale type file
-fails with the missing model name and a regenerated file passes.
+fails with the missing model name and a regenerated file passes. A routed model
+declared outside `songmaker_cli.api_models` that no named exemption in the
+script holds makes both modes exit 1, naming the model and its module, before
+anything is written.
 
 ### Alert rules (promtool)
 
