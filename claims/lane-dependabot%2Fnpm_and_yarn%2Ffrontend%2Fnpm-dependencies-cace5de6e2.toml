@@ -1,8 +1,0 @@
-claim_id = "d4ad3cd7bc0f45999ddb6d3c62741553"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d7e8dea9250a7e4956bbc8ff8481ec9438605ca9"
-branch = "dependabot/npm_and_yarn/frontend/npm-dependencies-cace5de6e2"
-scope = ["frontend/package.json", "frontend/pnpm-lock.yaml"]
-opened_commit = "95f9ab475522c7cef058caad3df1027e6b1b5aa6"
-whole_reason = "One dependency group bump from dependabot spanning its manifest and lockfile or workflow files."
