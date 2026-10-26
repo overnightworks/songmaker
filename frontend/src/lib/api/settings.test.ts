@@ -7,9 +7,11 @@ vi.mock('$app/navigation', async () =>
 );
 
 import {
+	fetchDefaultConfig,
 	toggleModel,
 	updateCoverSettings,
 	updateCowriterSettings,
+	updateDefaultConfig,
 	updateGenerationDefaults,
 	updateJudgeSettings,
 	updateRateLimits
@@ -85,5 +87,20 @@ describe('settings API contract', () => {
 		expect(url).toBe('/api/settings/models/acestep-1.5?active=false');
 		expect(init.method).toBe('PUT');
 		expect(init.body).toBeUndefined();
+	});
+
+	it('#1882 wire bytes unchanged: reads and writes the default config as its response type', async () => {
+		const stored = { config: 'steps: 7' };
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(stored) });
+
+		expect(await fetchDefaultConfig()).toEqual(stored);
+		expect(request()[0]).toBe('/api/settings/default-config');
+
+		mockFetch.mockClear();
+		expect(await updateDefaultConfig('steps: 7')).toEqual(stored);
+		const [url, init] = request();
+		expect(url).toBe('/api/settings/default-config');
+		expect(init.method).toBe('PUT');
+		expect(JSON.parse(String(init.body))).toEqual({ config: 'steps: 7' });
 	});
 });

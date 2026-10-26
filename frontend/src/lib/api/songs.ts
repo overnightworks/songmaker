@@ -1,9 +1,10 @@
 import type {
 	PaginatedResponse,
 	ShareResult,
+	SongCreateRequest,
 	SongItem,
 	SongListenRequest,
-	VersionGenerationParams,
+	SongUpdateRequest,
 	VersionItem
 } from './types';
 import { apiFetch } from './fetch';
@@ -30,16 +31,9 @@ export async function fetchSong(songId: string): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}`);
 }
 
-export async function createSong(params: {
-	title: string;
-	album_id: string;
-	lyrics?: string;
-	prompt?: string;
-	bpm?: number;
-	audio_duration?: number;
-	key_scale?: string;
-	vocal_language?: string;
-}): Promise<SongItem> {
+export async function createSong(
+	params: Pick<SongCreateRequest, 'title' | 'album_id'> & Partial<SongCreateRequest>
+): Promise<SongItem> {
 	return apiFetch<SongItem>('/api/songs', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -49,15 +43,7 @@ export async function createSong(params: {
 
 export async function updateSong(
 	songId: string,
-	params: {
-		lyrics?: string;
-		prompt?: string;
-		bpm?: number;
-		audio_duration?: number;
-		key_scale?: string;
-		generation_params?: VersionGenerationParams | null;
-		new_version?: boolean;
-	}
+	params: Partial<SongUpdateRequest>
 ): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}`, {
 		method: 'PUT',
