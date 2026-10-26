@@ -25,14 +25,16 @@ async function legalLinks(page: Page): Promise<(string | null)[][]> {
 		);
 }
 
-test('the legal links name the central addresses', () => {
+test('1785_rule_1 the legal links name the central addresses', () => {
 	expect(LEGAL_SECTIONS.map(({ label, href }) => [label, href])).toEqual(EXPECTED_ADDRESSES);
 });
 
 test.describe('anonymous visitor', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
-	test('the sign-in page links the central legal pages in the same tab', async ({ page }) => {
+	test('1785_rule_3 the sign-in page links the central legal pages in the same tab', async ({
+		page
+	}) => {
 		const guard = new FlowGuard(page);
 		await page.goto('/login');
 		await expect(page.locator('.legal-links .legal-link')).toHaveCount(3);
@@ -41,7 +43,9 @@ test.describe('anonymous visitor', () => {
 		guard.assertClean();
 	});
 
-	test('a share page links them in new tabs, so playback keeps running', async ({ page }) => {
+	test('1785_rule_3 a share page links them in new tabs, so playback keeps running', async ({
+		page
+	}) => {
 		const guard = new FlowGuard(page, { refusalsExpectedOn: [MOCK_STREAM_REFUSAL] });
 		await openMockSharedAlbum(page);
 
@@ -50,7 +54,9 @@ test.describe('anonymous visitor', () => {
 	});
 });
 
-test('a share page opened while signed in links them the same way', async ({ page }) => {
+test('1785_rule_3 a share page opened while signed in links them the same way', async ({
+	page
+}) => {
 	const guard = new FlowGuard(page, { refusalsExpectedOn: [MOCK_STREAM_REFUSAL] });
 	await openMockSharedAlbum(page);
 

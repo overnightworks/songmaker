@@ -25,7 +25,7 @@ afterEach(async () => {
 });
 
 describe('LegalLinks', () => {
-	it('links each legal text to its section on the central site, in the same tab', async () => {
+	it('1785_rule_1 links each legal text to its section on the central site, in the same tab', async () => {
 		const target = await render();
 
 		const links = Array.from(target.querySelectorAll('a'));
@@ -37,7 +37,7 @@ describe('LegalLinks', () => {
 		expect(links.map((link) => link.getAttribute('target'))).toEqual([null, null, null]);
 	});
 
-	it('opens the links in a new tab for a page that must not be left', async () => {
+	it('1785_rule_1 opens the links in a new tab for a page that must not be left', async () => {
 		const target = await render({ newTab: true });
 
 		const links = Array.from(target.querySelectorAll('a'));

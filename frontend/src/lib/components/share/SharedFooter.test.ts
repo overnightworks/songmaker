@@ -21,7 +21,7 @@ afterEach(async () => {
 
 describe('SharedFooter legal links', () => {
 	it.each(LEGAL_SECTIONS)(
-		'opens $label on the central site in a new tab, so playback keeps running',
+		'1785_rule_1 opens $label on the central site in a new tab, so playback keeps running',
 		async ({ label, href }) => {
 			const target = await render();
 
