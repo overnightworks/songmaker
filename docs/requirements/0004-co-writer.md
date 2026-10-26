@@ -5,9 +5,9 @@
 Co-Writer is a multi-turn studio partner on one active conversation per
 musician, not one conversation per song. Durable user and song memory,
 musician-confirmed mentions, the open song's current lyrics and style prompt,
-and the relevant take's sung transcription travel with each turn. Claude, Grok,
-and Codex share the same song read and write capabilities with no silent
-provider fallback. The model may persist owned-song lyric, prompt, title, BPM,
+and the relevant take's sung transcription travel with each turn. The turn runs
+through the agent service with the same song read and write capabilities for
+every model and no local fallback. The model may persist owned-song lyric, prompt, title, BPM,
 key, and duration writes and may create songs; memory changes persist only after
 Accept; Co-Writer does not generate audio or choose the Pick or Keep. When
 conversation history fits the token-bounded tail it is sent verbatim; when over
@@ -39,20 +39,20 @@ Quelle: OPERATOR — Issue #26, “Verhalten”.
 ### REQ-COWRITER-08: When a Co-Writer turn uses a rolling summary, that summary preserves at least the album concept, locked versus open lyric decisions, names and characters, and open questions.
 Quelle: OPERATOR — Issue #26, “Locked-in”.
 
-### REQ-COWRITER-09: A Co-Writer turn uses exactly one of Claude, Grok, or Codex.
-Quelle: OPERATOR — Issue #34, “Locked-in”.
+### REQ-COWRITER-09: A Co-Writer turn runs through the agent service with the model Songmaker sends for the Co-Writer.
+Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
 
-### REQ-COWRITER-10: When no Co-Writer provider has been chosen, the provider is Claude.
-Quelle: OPERATOR — Issue #34, “Verhalten”.
+### REQ-COWRITER-10: When no Co-Writer model has been chosen, the model is `claude/opus`.
+Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
 
-### REQ-COWRITER-11: When the chosen Co-Writer provider is unknown, not configured, or unavailable, the turn ends with a named error for that provider; Songmaker does not silently use a different provider.
-Quelle: OPERATOR — Issue #34, “Locked-in”.
+### REQ-COWRITER-11: When the agent service refuses or fails the run, the turn ends with a named error; Songmaker never answers through a local provider or another model.
+Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
 
-### REQ-COWRITER-12: Claude, Grok, and Codex have the same Co-Writer read and write capabilities under the same ownership and persistence rules.
-Quelle: OPERATOR — Issue #34, “Locked-in”.
+### REQ-COWRITER-12: Every model the Co-Writer runs on gets the same tools under the same ownership and persistence rules.
+Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
 
-### REQ-COWRITER-13: Changing Co-Writer provider does not change the active conversation, its history, memory, mentions, or take context.
-Quelle: OPERATOR — Issue #34, “Verhalten”.
+### REQ-COWRITER-13: Changing the Co-Writer's model does not change the active conversation, its history, memory, mentions, or take context.
+Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
 
 ### REQ-COWRITER-14: User memory and song memory are separate; album notes are optional.
 Quelle: OPERATOR — Issue #35, “Locked-in”.
@@ -125,10 +125,10 @@ Quelle: OPERATOR — Issue #35, “Verhalten” and Acceptance.
 - Library pools, player surfaces except forwarding the matching playing take,
   generation-start, ACE-Step, and seed/model/param rules belong to 0002 and
   0003.
-- Sharing/Administration, including which role may change Co-Writer provider,
-  model, or tail budget.
-- Exact tail-budget numbers, token-count algorithm, SSE event types, MCP/CLI
-  transport, argv secrecy, and process-group reaping.
+- Sharing/Administration, including which role may change the Co-Writer's model
+  or tail budget.
+- Exact tail-budget numbers, token-count algorithm, SSE event types, and the
+  agent-service and `/mcp` transport.
 - Scoring provider and scoring model (remain Claude per Issue #34; out of
   Co-Writer).
 - Legacy per-song chat endpoints and user-applied songmaker blocks.

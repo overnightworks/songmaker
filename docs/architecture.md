@@ -128,7 +128,8 @@ User clicks "Generate"                    User clicks "Score"
   POST /api/chat/turn
   (multi-turn: loads history from DB,
    compacts it to a rolling summary plus a token-bounded tail,
-   streams through the selected co-writer provider,
+   runs one run of agents/cowriter.md at the agent service,
+   relays its events as SSE frames,
    stores user + assistant messages)
 ```
 
@@ -736,8 +737,8 @@ Pydantic models, supplements them with the exported `api_models`, and verifies
 their TypeScript interfaces. The backend-only `/api/internal/` worker
 protocol is the sole excluded route role. When a routed model changes,
 regenerate `types.ts` and run the check. The co-writer stream frames
-(`ChatTurnFinalFrame`, the two error frames and the provider events) are
-exported models; `lib/api` declares no wire shape of its own: ESLint refuses a
+(`ChatTurnFinalFrame`, the two error frames and the three stream events) are
+songmaker's own exported models; `lib/api` declares no wire shape of its own: ESLint refuses a
 hand-written interface or object type there, and a frontend-only call shape
 carries a line marker with its reason.
 
@@ -966,10 +967,39 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
-| Co-writer | Binds the musician's session and tools to the provider route the library then runs; the judge is configured separately | `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
+| Co-writer | The turn as a run at the agent service: its agent file, its tokens and run binding, the tools it calls back at `/mcp`; the cover selection's route is resolved by `cowriter/routing.py` and the judge is configured separately | `agents/cowriter.md`, `cowriter/service_turn.py`, `cowriter/service_runs.py`, `cowriter/mcp_endpoint.py`, `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
-| MCP | Claude's stdio tool server, the `/mcp` endpoint for the agent service, and shared tool schemas and in-process execution for Grok/Codex | `mcp_server/`, `cowriter/mcp_endpoint.py`, `cowriter/tools.py` |
+| MCP | Claude's stdio tool server, the `/mcp` endpoint for the agent service, and the shared tool declarations and execution | `mcp_server/`, `cowriter/mcp_endpoint.py`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
+
+### The co-writer turn
+
+`POST /api/chat/turn` (`conversation_api.py`) prepares the turn as before: the
+context envelope, the memory, the rolling summary plus a token-bounded tail, the
+chat job and the stored user message. The turn then runs as a task of its own
+through `cowriter/service_turn.py`:
+
+1. It reads the `/mcp` verdict `run_server` published on
+   `app.state.cowriter_mcp_availability`; an unavailable endpoint ends the turn
+   before any token is fetched.
+2. It turns the session's refresh token into a fresh user access token
+   (`fresh_access_token` through `DatabaseSessionTransaction` in
+   `auth_stores.py`) and takes songmaker's workload token from the same
+   relying party.
+3. It posts the `RunRequest` of `agents/cowriter.md` (`model: claude/opus`, the
+   twelve tools of `cowriter_tool_declarations()`, the agent file's body as the
+   system prompt, everything else in the messages) to `AGENT_SERVICE_URL`.
+4. It reads the event stream through agent-runtime-client's decoder and
+   registers the run id from `run_started` in `service_runs` for the person;
+   `/mcp` accepts a tool call only for a registered run. The run is released
+   when the stream ends, whatever ends it.
+5. It yields `assistant_text`, `tool_call` and `tool_result` frames in
+   songmaker's own models (heartbeats are not relayed), the answer of
+   `succeeded` that `_complete_chat_turn` stores, or one typed problem that ends
+   the turn with an error frame: `unavailable`, `busy`, `not_enabled` or
+   `sign_in_again`. The run client never falls back to a local provider.
+
+Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the-agent-service).
 
 ### Agent routes
 
@@ -978,9 +1008,9 @@ and the independent Cover and Judge selections. Co-Writer and Cover capture thei
 model, and explicit `cli` or `api` route before work begins. The Judge has its
 own saved route, while its worker call still captures only provider and model.
 `agent_providers/dispatch.py`
-owns the resulting adapter decision for all three: Co-Writer executes its
-selected route, the Judge retains its existing `call_provider_once` path in
-the scoring worker, and Cover asks `cover_image_capability(provider, route)`,
+owns the resulting adapter decision for the Judge and the Cover (the Co-Writer
+turn no longer executes a route): the Judge retains its existing
+`call_provider_once` path in the scoring worker, and Cover asks `cover_image_capability(provider, route)`,
 the one answer to whether a route carries an image tool and what blocks it
 today. Nothing else answers that: the cover job resolves its saved row through
 it, `/api/settings/providers` projects it per route as `cover_routes`, and no
@@ -1031,14 +1061,9 @@ by both the header row and `ModelsTaskRow.svelte`. Below 768px each row becomes
 one card per task with the same labelled lines;
 `frontend/e2e/admin-models.spec.ts` drives the surface at both widths.
 
-Claude's API route plus Grok's and Codex's CLI routes own the
-same shared co-writer tool loop; the CLI routes carry calls and results in the
-strict text protocol while their built-in tools remain unavailable. Codex starts
-one private thread and resumes it for each result round, with the read-only
-sandbox and its event gate enforced on every process. Claude's CLI route
-continues to use the MCP transport. The shared loop delegates each call to the
-authorized tool executor and emits normalized SSE tool-call and tool-result
-events.
+The co-writer turn does not use these routes: it runs at the agent service
+(see "The co-writer turn" below). The routes above keep serving the judge and
+the cover until their own moves.
 
 ### Engine packages (`src/`)
 
@@ -1512,7 +1537,7 @@ close the stream.
 | POST | `/api/generations/{id}/pick` | user | Pick best generation |
 | GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position; a running generate job also its `phase`, take counters and `remaining_time_estimate`) |
 | POST | `/api/jobs/{id}/cancel` | user | Cancel a queued or running job (409 if not active). Terminal; later progress/finalize cannot overwrite. Does not stop in-flight GPU inference. |
-| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. One turn runs per user at a time: a turn sent while another still runs is refused with 409, checked under the rate-limit lock, and the panel that is refused follows the running turn. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job; the web process fails every active chat job when it starts, since no turn survives a restart, and the stale-job reaper ends one whose heartbeat stops; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. A panel whose stream drops without the server's own error frame (network loss, timeout, an early end) re-reads the conversation and follows or shows that turn; it names a failure only when the message never reached the server — decided by the persisted message ids, not by text alone, so a repeated "ok" is never mistaken for the answered one before it. It captures the persisted provider/model/route once before streaming. A selected-route failure emits exactly one 503 frame with safe `provider`, `route`, and normalized `reason`; it never retries the sibling route. |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. One turn runs per user at a time: a turn sent while another still runs is refused with 409, checked under the rate-limit lock, and the panel that is refused follows the running turn. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job; the web process fails every active chat job when it starts, since no turn survives a restart, and the stale-job reaper ends one whose heartbeat stops; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. A panel whose stream drops without the server's own error frame (network loss, timeout, an early end) re-reads the conversation and follows or shows that turn; it names a failure only when the message never reached the server — decided by the persisted message ids, not by text alone, so a repeated "ok" is never mistaken for the answered one before it. The turn runs at the agent service ("The co-writer turn" above); a refused or failed run emits exactly one error frame with a `problem` (`unavailable` 503, `busy` 429 with `retry_after_seconds`, `not_enabled` 403, `sign_in_again` 401) and never a local provider. |
 | GET | `/api/settings/cowriter` | user | Co-writer provider/model plus the effective `provider_routes` map and a typed readiness/catalogue snapshot for both routes of every provider. The existing provider-keyed model fields remain the selected-route projection. |
 | PUT | `/api/settings/cowriter` | admin | Atomically persist provider, model, optional complete route map, and history-tail budget. Omitting the map retains it. An unknown provider or model is rejected with a string detail; a route that cannot answer is saved with its reason in the response status. |
 | GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
