@@ -941,7 +941,12 @@ describe('CoWriterPanel tool-surface health', () => {
 });
 
 describe('CoWriterPanel failed turns', () => {
-	async function failWith(frame: CoWriterStreamEvent): Promise<HTMLElement> {
+	async function failWith(
+		status: number,
+		problem: string,
+		retry_after_seconds: number | null = null
+	): Promise<HTMLElement> {
+		const frame = { type: 'error', status, problem, retry_after_seconds } as CoWriterStreamEvent;
 		streamCoWriterTurn.mockReturnValue(turnEvents([frame]));
 		const target = await render();
 		await sendTurn(target, 'write a chorus');
@@ -961,12 +966,7 @@ describe('CoWriterPanel failed turns', () => {
 	] as const)(
 		'C8 C17 words %s below the retained user message in its tone, with its one action',
 		async (problem, text, tone, action) => {
-			const target = await failWith({
-				type: 'error',
-				status: 400,
-				problem,
-				retry_after_seconds: null
-			});
+			const target = await failWith(400, problem);
 
 			expect(errorText(target)).toBe(text);
 			expect(target.querySelector('.turn-error')?.classList.contains(tone)).toBe(true);
@@ -980,12 +980,7 @@ describe('CoWriterPanel failed turns', () => {
 	);
 
 	it('C10 sends a person to sign in again and back to this page (Q5 a)', async () => {
-		const target = await failWith({
-			type: 'error',
-			status: 401,
-			problem: 'sign_in_again',
-			retry_after_seconds: null
-		});
+		const target = await failWith(401, 'sign_in_again');
 
 		const link = target.querySelector<HTMLAnchorElement>('.turn-error a.signin');
 		expect(link?.getAttribute('href')).toMatch(/^\/login\/oidc\?next=/);
@@ -1000,12 +995,7 @@ describe('CoWriterPanel failed turns', () => {
 
 		it('C8 counts the service’s wait down on a disabled Try again, then enables it', async () => {
 			vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
-			const target = await failWith({
-				type: 'error',
-				status: 429,
-				problem: 'busy',
-				retry_after_seconds: 40
-			});
+			const target = await failWith(429, 'busy', 40);
 
 			expect(retryButton(target).textContent?.replace(/\s+/g, ' ').trim()).toBe('Try again 0:40');
 			expect(retryButton(target).disabled).toBe(true);
