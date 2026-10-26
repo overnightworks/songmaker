@@ -28,6 +28,7 @@ import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';
 const LAPTOP_WIDTH_PX = 1280;
 const PHONE_WIDTH_PX = 390;
 const VIEWPORT_HEIGHT_PX = 844;
+const REMOVED_SAVE_OFFLINE_LABEL = 'Save offline';
 
 /**
  * Measured in CI on PR #1136: the album cold open costs 14 on desktop and 11
@@ -121,6 +122,7 @@ test('the playlist ⋯ opens fully on screen, under its own row of actions', asy
 	await expectActionRowUnderCoverAndTitle(header, 'playlist', playlist.title);
 	await expectMenuAtRowEnd(header);
 	await expectMenuFullyOnScreen(page, header);
+	await expect(page.getByRole('button', { name: REMOVED_SAVE_OFFLINE_LABEL })).toHaveCount(0);
 });
 
 test('the public playlist opens with the page-player order', async ({ browser }, testInfo) => {

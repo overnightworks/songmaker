@@ -2,6 +2,7 @@ import { expect, test as base, type Locator, type Page } from '@playwright/test'
 import type { JobItem } from '../src/lib/api/types';
 import {
 	ADMIN_TABS_LABEL,
+	ADMIN_WORKER_POOL_HREF,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_OPEN_WORKER_POOL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
@@ -43,7 +44,7 @@ const SOURCES = ['live', 'reload'] as const;
 // This slice consumes already classified jobs and identity. Arrange those API
 // boundaries; song editing, history, playback and the destination use the real app.
 async function arrangeAudience(page: Page, role: (typeof ROLES)[number]): Promise<void> {
-	await page.route('**/api/auth/me', async (route) => {
+	await page.context().route('**/api/auth/me', async (route) => {
 		const response = await route.fetch();
 		const user = await response.json();
 		await route.fulfill({ response, json: { ...user, role } });
@@ -179,9 +180,18 @@ for (const width of WIDTHS) {
 						const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 						const draft = `${await lyrics.inputValue()}\nQA keep this draft`;
 						await lyrics.fill(draft);
-						const popupReady = page.context().waitForEvent('page');
+						// Hold the tab's document until Playwright has reported the tab, so the
+						// commit cannot outrun its attach and leave it half-registered.
+						const context = page.context();
+						const popupReady = context.waitForEvent('page');
+						const workerPoolDocument = `**${ADMIN_WORKER_POOL_HREF}`;
+						await context.route(workerPoolDocument, async (route) => {
+							await popupReady;
+							await route.continue();
+						});
 						await link.click({ modifiers: ['ControlOrMeta'] });
 						const popup = await popupReady;
+						await context.unroute(workerPoolDocument);
 						await popup.setViewportSize({ width, height: 900 });
 						try {
 							await expectWorkerPool(popup, width);

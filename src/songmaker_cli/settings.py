@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Final, Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,6 +43,9 @@ from songmaker_cli.constants import (
     acestep_sse_read_timeout_seconds,
     generate_job_heartbeat_stale_threshold_seconds,
 )
+
+# The web server's port: the CLI and server default, and the port of the back-channel Host.
+DEFAULT_SERVER_PORT: Final = 8080
 
 
 @dataclass(frozen=True)

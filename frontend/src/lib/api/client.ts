@@ -44,12 +44,10 @@ export {
 	generateSong,
 	repaintGeneration,
 	coverGeneration,
-	type ReferenceAudioResult,
 	uploadReferenceAudio,
 	rateGeneration,
 	scoreGeneration,
 	deleteGeneration,
-	type BulkDeleteResult,
 	bulkDeleteGenerations,
 	pickGeneration,
 	unpickGeneration,
@@ -76,7 +74,6 @@ export {
 	uploadPlaylistCover,
 	deletePlaylistCover
 } from './playlists';
-export { createQueueStreamSnapshot } from './queue-streams';
 export { logout, fetchMe } from './auth';
 
 export {
@@ -86,14 +83,12 @@ export {
 	startNewConversation,
 	deleteConversation
 } from './conversations';
-export type { CoWriterStreamEvent, CoWriterTurnRequest } from './conversations';
+export type { CoWriterStreamEvent } from './conversations';
 export { fetchMemory, saveUserMemory, saveSongMemory, saveAlbumMemory } from './memory';
 export {
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
-	type ModelCapabilities,
-	type AvailableModel,
 	fetchActiveModels,
 	fetchAllModels,
 	toggleModel,
@@ -126,8 +121,7 @@ export {
 	pinModelOnWorker,
 	unpinModelOnWorker,
 	previewGenerationRetention,
-	runGenerationRetention,
-	type GenerationRetentionReport
+	runGenerationRetention
 } from './admin';
 export {
 	listLoras,
@@ -139,9 +133,9 @@ export {
 	patchLoraSample,
 	deleteLoraSample,
 	trainLora,
-	listOwnPlayableTakes,
-	type LoraSamplePatch
+	listOwnPlayableTakes
 } from './loras';
+export type { AvailableModel, GenerationRetentionReport } from './types';
 
 export async function uploadAlbumCover(albumId: string, file: File): Promise<AlbumItem> {
 	const form = new FormData();

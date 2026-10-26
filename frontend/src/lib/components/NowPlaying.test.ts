@@ -938,7 +938,7 @@ describe('NowPlaying curation mode (#228)', () => {
 	it('shows the album progress while curating', async () => {
 		const takes = setupAlbumCuration();
 		await renderSurface(takes[0]);
-		expect(target.querySelector('.curation-progress')?.textContent).toBe('Song 1 of 2');
+		expect(target.textContent).toContain('Pick album takes · Song 1 of 2');
 	});
 
 	it('does not render the curation bar outside curation mode', async () => {
@@ -1021,7 +1021,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		);
 	});
 
-	it('Done curating closes Now Playing and exits curation mode', async () => {
+	it('Done closes Now Playing and exits curation mode', async () => {
 		const takes = setupAlbumCuration();
 		await renderSurface(takes[0]);
 

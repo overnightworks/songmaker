@@ -109,9 +109,14 @@ services:
     secrets:
       - keycloak_client_secret
       - agent_service_signing_public_key
+    # backchannel: the private network on which the realm posts its back-channel
+    # logout to <public host>:8080; nothing else joins it. hal_mcp_songmaker:
+    # edge's per-app network for the agent service's tool calls.
     networks:
-      - default
-      - hal_mcp_songmaker
+      default: {}
+      backchannel:
+        aliases: [songmaker.hallucinai.de]
+      hal_mcp_songmaker: {}
     # Published to the loopback interface only: Docker's NAT chain bypasses
     # the INPUT chain (and with it UFW), so a "8080:8080" binding reaches the
     # whole LAN regardless of the host firewall. Everything that needs this
@@ -268,7 +273,7 @@ services:
       GPU_ID: "0"
       NVIDIA_VISIBLE_DEVICES: "0"
       VRAM_BUDGET_GB: "${ACESTEP_WORKER_VRAM_GB:-24}"
-      ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-300}"
+      ACESTEP_STARTUP_TIMEOUT_SECONDS: "${ACESTEP_STARTUP_TIMEOUT_SECONDS:-540}"
       ACESTEP_LM_MODEL_PATH: "${ACESTEP_LM_MODEL_PATH:-acestep-5Hz-lm-4B}"
       # Empty means "use ACE-Step's own default": the GPU tier's
       # max_duration_with_lm, and a single sample per request.
@@ -476,6 +481,16 @@ secrets:
   smtp_password:
     environment: SMTP_PASSWORD
 
+# Created by the edge stack (one network per app); the deploy follows its apply.
+networks:
+  backchannel:
+    name: hal_backchannel_songmaker
+    external: true
+  # Edge's per-app network for the agent service's tool calls: joined only by
+  # traefik-mcp and songmaker-web.
+  hal_mcp_songmaker:
+    external: true
+
 volumes:
   pgdata:
   redisdata:
@@ -485,9 +500,3 @@ volumes:
   promdata:
   grafdata:
   alertmanagerdata:
-
-networks:
-  # Edge's per-app network for the agent service's tool calls: joined only by
-  # traefik-mcp and songmaker-web.
-  hal_mcp_songmaker:
-    external: true

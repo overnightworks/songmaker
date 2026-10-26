@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { collectionActionLabel, type CollectionPlayKind } from '$lib/constants';
+	import CoverActivityMark, { type CoverMark } from './CoverActivityMark.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import {
 		transportButtonFace,
@@ -25,10 +26,12 @@
 		actions?: Snippet;
 		coverFallback?: Snippet;
 		/**
-		 * Makes the cover a button named `label` that opens cover editing; with
+		 * Makes the cover a button named `name` that opens cover editing; with
 		 * no cover to show, the place itself reads `label` on a dashed edge.
 		 */
-		coverOpening?: { label: string; onopen: () => void };
+		coverOpening?: { label: string; name: string; onopen: () => void };
+		/** What the cover button carries at its foot while the editor is closed. */
+		coverMark?: CoverMark;
 		/** While given, the header edits its cover in place: this takes the cover's spot. */
 		coverEditing?: Snippet;
 	}
@@ -47,6 +50,7 @@
 		actions,
 		coverFallback,
 		coverOpening,
+		coverMark,
 		coverEditing
 	}: Props = $props();
 
@@ -77,11 +81,12 @@
 				type="button"
 				class="header-cover"
 				class:header-cover-empty={!coverShown}
-				aria-label={coverOpening.label}
-				title={coverOpening.label}
+				aria-label={coverOpening.name}
+				title={coverOpening.name}
 				onclick={coverOpening.onopen}
 			>
 				{@render coverArt()}
+				{#if coverMark}<CoverActivityMark {...coverMark} />{/if}
 			</button>
 		{:else}
 			<span class="header-cover">{@render coverArt()}</span>
@@ -136,6 +141,7 @@
 	}
 
 	button.header-cover {
+		position: relative;
 		cursor: pointer;
 	}
 

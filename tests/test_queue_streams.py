@@ -17,6 +17,7 @@ from conftest import (
     web_client,
 )
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from songmaker_cli import audio_files
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
@@ -245,6 +246,32 @@ def _seed_versioned_lyrics(session) -> None:
     )
 
 
+def _shared_playlist_snapshot(client: TestClient, generation_ids: list[str]):
+    with client.app.state.ctx.db() as session:
+        playlist = session.get(Playlist, "snapshot-playlist")
+        if playlist is None:
+            generation = session.get(Generation, generation_ids[0])
+            playlist = Playlist(
+                id="snapshot-playlist", title="Snapshot proof", slug="snapshot-proof",
+                created_by=generation.song.album.created_by,
+            )
+            session.add(playlist)
+            session.flush()
+        for entry in list(playlist.entries):
+            session.delete(entry)
+        session.flush()
+        for position, generation_id in enumerate(generation_ids):
+            session.add(PlaylistEntry(
+                id=f"snapshot-entry-{position}", playlist_id=playlist.id,
+                generation_id=generation_id, position=position,
+            ))
+        session.commit()
+    share = client.post("/api/playlists/snapshot-playlist/share")
+    assert share.status_code == 200
+    slug = share.json()["share_slug"]
+    return web_client(client.app, cookies={}).post(f"/shared/playlist/{slug}/stream")
+
+
 def test_queue_stream_track_uses_generation_version_lyrics(
     tmp_path: Path,
     monkeypatch,
@@ -257,13 +284,14 @@ def test_queue_stream_track_uses_generation_version_lyrics(
         (audio_root / name).write_bytes(b"source")
     login_and_csrf(client, "owner")
 
-    resp = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g-old"}]},
-    )
+    resp = _shared_playlist_snapshot(client, ["g-old"])
     assert resp.status_code == 200
+    from songmaker_cli.queue_streams import load_queue_stream_manifest
+
+    manifest = load_queue_stream_manifest(client.app.state.ctx, resp.json()["snapshot_id"])
+    assert manifest.tracks[0].lyrics == "old verse"
     track = resp.json()["tracks"][0]
-    assert track["lyrics"] == "old verse"
+    assert track["lyrics"] is None
     assert track["album_title"] == "Nachtstrom"
 
     song = client.get("/api/songs/s1")
@@ -286,56 +314,18 @@ def test_queue_stream_missing_version_lyrics_are_null(
         (audio_root / name).write_bytes(b"source")
     login_and_csrf(client, "owner")
 
-    resp = client.post(
-        "/api/queue-streams",
-        json={
-            "tracks": [
-                {"generation_id": "g-empty"},
-                {"generation_id": "g-none"},
-            ]
-        },
-    )
+    resp = _shared_playlist_snapshot(client, ["g-empty", "g-none"])
     assert resp.status_code == 200
-    tracks = resp.json()["tracks"]
-    assert [track["lyrics"] for track in tracks] == [None, None]
+    from songmaker_cli.queue_streams import load_queue_stream_manifest
+
+    manifest = load_queue_stream_manifest(client.app.state.ctx, resp.json()["snapshot_id"])
+    assert [track.lyrics for track in manifest.tracks] == [None, None]
 
     song = client.get("/api/songs/s1")
     by_id = {gen["id"]: gen for gen in song.json()["generations"]}
     assert by_id["g-empty"]["version_lyrics"] is None
     assert by_id["g-none"]["version_lyrics"] is None
     assert song.json()["lyrics"] is not None
-
-
-def test_authenticated_queue_stream_snapshot_and_audio_range(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post(
-        "/api/queue-streams",
-        json={
-            "tracks": [
-                {"generation_id": "g1", "entry_id": "pe1"},
-                {"generation_id": "g1", "entry_id": "pe2"},
-            ]
-        },
-    )
-
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["total_duration"] == 20
-    assert data["skipped"] == []
-    assert [t["key"] for t in data["tracks"]] == ["pe1", "pe2"]
-    assert data["tracks"][1]["start_offset"] == 10
-
-    audio = client.get(data["stream_url"], headers={"Range": "bytes=0-3"})
-    assert audio.status_code == 206
-    assert audio.headers["Accept-Ranges"] == "bytes"
-    assert audio.content == b"\xff\xfb\x90\x00"
 
 
 def test_queue_stream_audio_reports_missing_snapshot_audio(
@@ -347,74 +337,38 @@ def test_queue_stream_audio_reports_missing_snapshot_audio(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    stream = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    stream = _shared_playlist_snapshot(client, ["g1"])
     snapshot_id = stream.json()["snapshot_id"]
     (tmp_path / "data" / "queue-streams" / f"{snapshot_id}.mp3").unlink()
 
-    from songmaker_cli.queue_streams import load_queue_stream_manifest
-
-    with pytest.raises(HTTPException) as exc_info:
-        load_queue_stream_manifest(client.app.state.ctx, snapshot_id)
-
-    assert exc_info.value.status_code == 404
-    assert exc_info.value.detail == "Queue stream audio not found"
-
-
-def test_authenticated_queue_stream_rejects_inaccessible_generation(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g3"}]})
-
-    assert resp.status_code == 404
-
-
-def test_authenticated_queue_stream_rate_limited(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    _patch_audio_build(monkeypatch)
-    import songmaker_cli.constants as consts
-
-    monkeypatch.setattr(consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    first = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    second = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-
-    assert first.status_code == 200
-    assert second.status_code == 429
-    assert second.headers["Retry-After"] == str(consts.QUEUE_STREAM_AUTH_RATE_WINDOW_SECONDS)
+    audio = web_client(client.app, cookies={}).get(stream.json()["stream_url"])
+    assert audio.status_code == 404
 
 
 # ── DB session / build lifecycle tests ──────────────────────────────────────
 
 
+@pytest.mark.parametrize("kind", ["album", "playlist"])
 def test_queue_stream_build_closes_db_session_before_ffmpeg_runs(
     tmp_path: Path,
     monkeypatch,
+    kind: str,
 ) -> None:
     """The request's DB session must be released before the (potentially
     multi-hour) ffmpeg cold build runs, so it never holds a pooled connection
     for the duration of the build."""
-    import songmaker_cli.queue_stream_api as qs_api
     import songmaker_cli.queue_streams as qs
+    import songmaker_cli.sharing_api as qs_api
 
     captured: dict[str, object] = {}
-    original_check = qs_api.check_generation_access
+    resolver_name = "get_album_by_slug" if kind == "album" else "get_playlist_by_slug"
+    original_check = getattr(qs_api, resolver_name)
 
-    def _capturing_check(session, gen_id, user):
+    def _capturing_check(session, slug):
         captured["session"] = session
-        return original_check(session, gen_id, user)
+        return original_check(session, slug)
 
-    monkeypatch.setattr(qs_api, "check_generation_access", _capturing_check)
+    monkeypatch.setattr(qs_api, resolver_name, _capturing_check)
     monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
 
     def _fake_concat(_concat_path: Path, output_path: Path) -> None:
@@ -430,7 +384,10 @@ def test_queue_stream_build_closes_db_session_before_ffmpeg_runs(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    share_path = "/api/albums/a1/share" if kind == "album" else "/api/playlists/pl1/share"
+    slug = client.post(share_path).json()["share_slug"]
+    stream_path = f"/shared/{slug}/stream" if kind == "album" else f"/shared/playlist/{slug}/stream"
+    resp = web_client(client.app, cookies={}).post(stream_path)
 
     assert resp.status_code == 200
     assert "session" in captured
@@ -456,21 +413,19 @@ def test_queue_stream_request_no_longer_sweeps_expired_snapshots(
         json.dumps(
             {
                 "snapshot_id": stale_id,
-                "scope": "auth",
-                "scope_id": "owner-id",
+                "scope": "shared-album",
+                "scope_id": "test-album",
                 "content_hash": "unrelated",
                 "expires_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
                 "total_duration": 1.0,
                 "windowed": False,
-                "pinned": False,
-                "pinned_at": None,
                 "tracks": [],
             }
         )
     )
     (stream_dir / f"{stale_id}.mp3").write_bytes(b"stale")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    resp = _shared_playlist_snapshot(client, ["g1"])
 
     assert resp.status_code == 200
     assert stale_manifest.exists(), "the request path must no longer sweep expired snapshots"
@@ -497,7 +452,7 @@ def test_build_lock_entries_do_not_accumulate_across_builds(
             )
             build_queue_stream_snapshot(
                 client.app.state.ctx, [source],
-                scope="auth", scope_id="owner-id", stream_url="",
+                scope="shared-album", scope_id="test-album", stream_url="",
             )
 
     assert qs._build_locks == {}, "lock table must not grow with each distinct build"
@@ -548,7 +503,7 @@ def test_concurrent_builds_for_same_content_hash_do_not_race_lock_removal(
             results.append(
                 build_queue_stream_snapshot(
                     client.app.state.ctx, [source],
-                    scope="auth", scope_id="owner-id", stream_url="",
+                    scope="shared-album", scope_id="test-album", stream_url="",
                 )
             )
 
@@ -815,7 +770,7 @@ def test_queue_stream_cache_quota_keeps_new_snapshot(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    resp = _shared_playlist_snapshot(client, ["g1"])
 
     assert resp.status_code == 200
     data = resp.json()
@@ -832,43 +787,13 @@ def test_queue_stream_windowed_by_track_count(tmp_path: Path, monkeypatch) -> No
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    resp = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
-    )
+    resp = _shared_playlist_snapshot(client, ["g1", "g2"])
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["windowed"] is True
     assert len(data["tracks"]) == 1
     assert data["tracks"][0]["generation_id"] == "g1"
-
-
-def test_queue_stream_request_model_rejects_more_than_500_tracks(
-    tmp_path: Path, monkeypatch
-) -> None:
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    # 501 tracks must be rejected by model validation before any handler logic runs
-    resp_over = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}] * 501},
-    )
-    assert resp_over.status_code == 422
-
-    # 500 tracks passes model validation; windowed by count (MAX_TRACKS=200) and succeeds
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
-    resp_at_limit = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}] * 500},
-    )
-    assert resp_at_limit.status_code == 200
-    assert resp_at_limit.json()["windowed"] is True
 
 
 def test_queue_stream_accepts_duration_at_cap(tmp_path: Path, monkeypatch) -> None:
@@ -880,7 +805,7 @@ def test_queue_stream_accepts_duration_at_cap(tmp_path: Path, monkeypatch) -> No
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    resp = _shared_playlist_snapshot(client, ["g1"])
 
     assert resp.status_code == 200
     assert resp.json()["total_duration"] == 10
@@ -903,10 +828,7 @@ def test_queue_stream_rejects_duration_above_cap_before_ffmpeg(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    response = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
-    )
+    response = _shared_playlist_snapshot(client, ["g1", "g2"])
 
     assert response.status_code == 422
     assert response.json()["detail"] == QUEUE_STREAM_DURATION_LIMIT_DETAIL
@@ -930,55 +852,15 @@ def test_queue_stream_cache_identity_includes_count_windowing(tmp_path: Path, mo
     login_and_csrf(client, "owner")
 
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
-    windowed = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
-    )
+    windowed = _shared_playlist_snapshot(client, ["g1", "g2"])
     assert windowed.status_code == 200
     assert windowed.json()["windowed"] is True
 
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 2)
-    complete = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    complete = _shared_playlist_snapshot(client, ["g1"])
     assert complete.status_code == 200
     assert complete.json()["windowed"] is False
     assert complete.json()["snapshot_id"] != windowed.json()["snapshot_id"]
-
-
-def test_queue_stream_cache_identity_includes_forced_windowing(tmp_path: Path, monkeypatch) -> None:
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    ctx = client.app.state.ctx
-
-    with ctx.db() as session:
-        generation = session.get(Generation, "g1")
-        assert generation is not None
-        source = track_source_from_generation(
-            generation,
-            key=generation.id,
-            index=0,
-            entry_id=None,
-            audio_url=f"/audio/{generation.mp3_path}",
-        )
-        complete = build_queue_stream_snapshot(
-            ctx,
-            [source],
-            scope="auth",
-            scope_id="owner-id",
-            stream_url="",
-        )
-        windowed = build_queue_stream_snapshot(
-            ctx,
-            [source],
-            scope="auth",
-            scope_id="owner-id",
-            stream_url="",
-            force_windowed=True,
-        )
-
-    assert complete.windowed is False
-    assert windowed.windowed is True
-    assert complete.snapshot_id != windowed.snapshot_id
 
 
 def test_queue_stream_not_windowed_when_within_limits(tmp_path: Path, monkeypatch) -> None:
@@ -987,10 +869,7 @@ def test_queue_stream_not_windowed_when_within_limits(tmp_path: Path, monkeypatc
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    resp = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
-    )
+    resp = _shared_playlist_snapshot(client, ["g1", "g2"])
 
     assert resp.status_code == 200
     assert resp.json()["windowed"] is False
@@ -1004,7 +883,7 @@ def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    first = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    first = _shared_playlist_snapshot(client, ["g1"])
     assert first.status_code == 200
     snapshot_id = first.json()["snapshot_id"]
 
@@ -1013,7 +892,7 @@ def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
     manifest.pop("windowed", None)
     manifest_path.write_text(json.dumps(manifest))
 
-    second = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    second = _shared_playlist_snapshot(client, ["g1"])
     assert second.status_code == 200
     assert second.json()["windowed"] is False
 
@@ -1028,7 +907,7 @@ def test_queue_stream_first_track_too_long_raises_422(tmp_path: Path, monkeypatc
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    resp = _shared_playlist_snapshot(client, ["g1"])
 
     assert resp.status_code == 422
 
@@ -1164,78 +1043,52 @@ def _write_library_audio_files(root: Path) -> None:
         (path / name).write_bytes(b"source")
 
 
-def test_library_stream_order_and_tracks(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_order_and_tracks(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={})
+    resp = client.get("/api/library/pool-queue", params={})
 
     assert resp.status_code == 200
     data = resp.json()
     # s3 (archived gen) and s4 (no gens) are skipped → only s1 and s2 appear
-    assert [t["generation_id"] for t in data["tracks"]] == ["g1b", "g2"]
+    assert [t["generation_id"] for t in data["takes"]] == ["g1b", "g2"]
     # album a1 comes before a2; within a1, track 1 before track 2
-    assert data["tracks"][0]["song_id"] == "s1"
-    assert data["tracks"][1]["song_id"] == "s2"
-    # indices are contiguous from 0
-    assert [t["index"] for t in data["tracks"]] == [0, 1]
-    assert data["tracks"][1]["start_offset"] == pytest.approx(10.0)
+    assert data["takes"][0]["song_id"] == "s1"
+    assert data["takes"][1]["song_id"] == "s2"
+    assert data["skipped_complete"] is True
 
 
-def test_library_stream_rejects_duration_above_cap_before_ffmpeg(
-    tmp_path: Path, monkeypatch
-) -> None:
-    import songmaker_cli.queue_streams as qs
-
-    concat_calls: list[object] = []
-    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 15)
-    monkeypatch.setattr(qs, "probe_audio_duration", lambda _path: 10.0)
-    monkeypatch.setattr(
-        qs,
-        "run_ffmpeg_concat",
-        lambda *_args, **_kwargs: concat_calls.append("ffmpeg"),
-    )
-    client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
-    _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
-
-    response = client.post("/api/queue-streams/library", json={})
-
-    assert response.status_code == 422
-    assert response.json()["detail"] == QUEUE_STREAM_DURATION_LIMIT_DETAIL
-    assert concat_calls == []
-
-
-def test_library_stream_picks_picked_over_first(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_picks_picked_over_first(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={})
+    resp = client.get("/api/library/pool-queue", params={})
 
     assert resp.status_code == 200
     # s1 has both g1 (not picked) and g1b (picked); library must choose g1b
-    s1_track = next(t for t in resp.json()["tracks"] if t["song_id"] == "s1")
+    s1_track = next(t for t in resp.json()["takes"] if t["song_id"] == "s1")
     assert s1_track["generation_id"] == "g1b"
 
 
-def test_library_stream_excludes_archived_generations(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_excludes_archived_generations(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={})
+    resp = client.get("/api/library/pool-queue", params={})
 
     assert resp.status_code == 200
-    song_ids = [t["song_id"] for t in resp.json()["tracks"]]
+    song_ids = [t["song_id"] for t in resp.json()["takes"]]
     assert "s3" not in song_ids  # s3's only gen is archived
 
 
-def test_library_stream_skips_songs_without_playable_generations(
+def test_library_pool_queue_skips_songs_without_playable_generations(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1244,39 +1097,40 @@ def test_library_stream_skips_songs_without_playable_generations(
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={})
+    resp = client.get("/api/library/pool-queue", params={})
 
     assert resp.status_code == 200
-    song_ids = [t["song_id"] for t in resp.json()["tracks"]]
+    song_ids = [t["song_id"] for t in resp.json()["takes"]]
     assert "s4" not in song_ids  # s4 has no generations at all
 
 
-def test_library_stream_rotation_via_start_generation_id(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_rotation_via_start_generation_id(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"start_generation_id": "g2"})
+    resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g2"})
 
     assert resp.status_code == 200
     data = resp.json()
     # Rotation puts g2's song first; g1b's song wraps to the end
-    assert [t["generation_id"] for t in data["tracks"]] == ["g2", "g1b"]
-    assert [t["index"] for t in data["tracks"]] == [0, 1]
+    assert [t["generation_id"] for t in data["takes"]] == ["g2", "g1b"]
 
 
-def test_library_stream_start_take_is_the_clicked_generation(tmp_path: Path, monkeypatch) -> None:
-    """Clicking a non-picked take streams that take, not the song's pick."""
+def test_library_pool_queue_start_take_is_the_clicked_generation(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """The selected take leads the pool even when another take is picked."""
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"start_generation_id": "g1"})
+    resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g1"})
 
     assert resp.status_code == 200
-    tracks = resp.json()["tracks"]
+    tracks = resp.json()["takes"]
     assert tracks[0]["song_id"] == "s1"
     assert tracks[0]["generation_id"] == "g1"
     assert [t["generation_id"] for t in tracks] == ["g1", "g1b", "g2"]
@@ -1287,24 +1141,15 @@ def _seed_library_with_escaping_take(session) -> None:
     session.get(Generation, "g2").mp3_path = "../outside.mp3"
 
 
-def _library_queue_requests(client, **body):
-    """The two library entry points that scan takes through the same skip rule."""
-    return {
-        "stream": lambda: client.post("/api/queue-streams/library", json=body),
-        "pool-queue": lambda: client.get("/api/library/pool-queue", params=body),
-    }
-
-
-def _library_answer(response, entry: str) -> tuple[list[str], list[tuple[str, str]]]:
+def _library_answer(response) -> tuple[list[str], list[tuple[str, str]]]:
     data = response.json()
-    taken = [t["generation_id"] for t in data["tracks" if entry == "stream" else "takes"]]
+    taken = [t["generation_id"] for t in data["takes"]]
     skipped = [(s["generation_id"], s["reason"]) for s in data["skipped"]]
     return taken, skipped
 
 
-@pytest.mark.parametrize("entry", ["stream", "pool-queue"])
 def test_library_scan_skips_a_take_escaping_the_audio_root_as_missing(
-    tmp_path: Path, monkeypatch, entry: str,
+    tmp_path: Path, monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
@@ -1312,30 +1157,29 @@ def test_library_scan_skips_a_take_escaping_the_audio_root_as_missing(
     (tmp_path / "outside.mp3").write_bytes(b"outside")
     login_and_csrf(client, "usera")
 
-    response = _library_queue_requests(client)[entry]()
+    response = client.get("/api/library/pool-queue")
 
     assert response.status_code == 200
-    taken, skipped = _library_answer(response, entry)
+    taken, skipped = _library_answer(response)
     assert taken == ["g1b"]
     assert ("g2", "missing_file") in skipped
 
 
-@pytest.mark.parametrize("entry", ["stream", "pool-queue"])
 def test_library_scan_refuses_a_start_take_escaping_the_audio_root(
-    tmp_path: Path, monkeypatch, entry: str,
+    tmp_path: Path, monkeypatch,
 ) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    response = _library_queue_requests(client, start_generation_id="g2")[entry]()
+    response = client.get("/api/library/pool-queue", params={"start_generation_id": "g2"})
 
     assert response.status_code == 422
     assert response.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 
 
-def test_library_stream_start_generation_id_not_found_returns_404(
+def test_library_pool_queue_start_generation_id_not_found_returns_404(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1344,15 +1188,12 @@ def test_library_stream_start_generation_id_not_found_returns_404(
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post(
-        "/api/queue-streams/library",
-        json={"start_generation_id": "nonexistent-id"},
-    )
+    resp = client.get("/api/library/pool-queue", params={"start_generation_id": "nonexistent-id"})
 
     assert resp.status_code == 404
 
 
-def test_library_stream_start_generation_id_owned_by_other_user_returns_404(
+def test_library_pool_queue_start_generation_id_owned_by_other_user_returns_404(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1361,15 +1202,12 @@ def test_library_stream_start_generation_id_owned_by_other_user_returns_404(
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post(
-        "/api/queue-streams/library",
-        json={"start_generation_id": "g5"},
-    )
+    resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g5"})
 
     assert resp.status_code == 404
 
 
-def test_library_stream_archived_start_generation_returns_422(
+def test_library_pool_queue_archived_start_generation_returns_422(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1378,16 +1216,13 @@ def test_library_stream_archived_start_generation_returns_422(
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post(
-        "/api/queue-streams/library",
-        json={"start_generation_id": "g3"},
-    )
+    resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g3"})
 
     assert resp.status_code == 422
     assert resp.json()["detail"] == QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 
 
-def test_library_stream_windowed_for_oversize_library(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_returns_one_more_than_track_limit(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as qs
 
@@ -1396,12 +1231,12 @@ def test_library_stream_windowed_for_oversize_library(tmp_path: Path, monkeypatc
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={})
+    resp = client.get("/api/library/pool-queue", params={})
 
     assert resp.status_code == 200
     data = resp.json()
-    assert data["windowed"] is True
-    assert len(data["tracks"]) == 1
+    assert data["skipped_complete"] is True
+    assert len(data["takes"]) == 2
 
 
 def _seed_large_library(session, *, song_count: int) -> None:
@@ -1482,8 +1317,8 @@ def test_library_pool_queue_query_count_is_constant_not_per_song(
     )
 
 
-def test_library_stream_empty_playable_library_is_422(tmp_path: Path, monkeypatch) -> None:
-    """Songs with only archived or missing generations make an honest 422, not an empty stream."""
+def test_library_pool_queue_empty_playable_library_is_422(tmp_path: Path, monkeypatch) -> None:
+    """Songs with only archived or missing generations make an honest 422, not an empty pool."""
 
     def seed_unplayable(session) -> None:
         _seed_library_data(session)
@@ -1497,37 +1332,32 @@ def test_library_stream_empty_playable_library_is_422(tmp_path: Path, monkeypatc
     client, _ = make_test_app(tmp_path, seed_db=seed_unplayable)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={})
+    resp = client.get("/api/library/pool-queue", params={})
 
     assert resp.status_code == 422
 
 
-def test_library_stream_cross_user_isolation(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_cross_user_isolation(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp_a = client.post("/api/queue-streams/library", json={})
+    resp_a = client.get("/api/library/pool-queue", params={})
     assert resp_a.status_code == 200
-    stream_url_a = resp_a.json()["stream_url"]
-    gen_ids_a = {t["generation_id"] for t in resp_a.json()["tracks"]}
+    gen_ids_a = {t["generation_id"] for t in resp_a.json()["takes"]}
     # User A's library contains only their own generations
     assert gen_ids_a == {"g1b", "g2"}
 
     client_b = web_client(client.app, cookies={})
     login_and_csrf(client_b, "userb")
 
-    resp_b = client_b.post("/api/queue-streams/library", json={})
+    resp_b = client_b.get("/api/library/pool-queue", params={})
     assert resp_b.status_code == 200
-    gen_ids_b = {t["generation_id"] for t in resp_b.json()["tracks"]}
+    gen_ids_b = {t["generation_id"] for t in resp_b.json()["takes"]}
     # User B's library contains only their own generation
     assert gen_ids_b == {"g5"}
     assert gen_ids_a.isdisjoint(gen_ids_b)
-
-    # User B cannot access user A's stream audio
-    audio_resp = client_b.get(stream_url_a, headers={"Range": "bytes=0-3"})
-    assert audio_resp.status_code == 404
 
 
 def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) -> None:
@@ -1535,7 +1365,7 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) 
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    resp = _shared_playlist_snapshot(client, ["g1"])
     data = resp.json()
     manifest_path = tmp_path / "data" / "queue-streams" / f"{data['snapshot_id']}.json"
     manifest = json.loads(manifest_path.read_text())
@@ -1547,9 +1377,6 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) 
     assert audio.status_code == 404
 
 
-# ── Pinning tests ───────────────────────────────────────────────────────────
-
-
 @pytest.mark.parametrize(
     "snapshot_id",
     [
@@ -1558,218 +1385,16 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) 
         pytest.param("0" * 32, id="unknown-hex"),
     ],
 )
-def test_queue_stream_audio_and_pinning_reject_unknown_snapshot_ids(
+def test_queue_stream_audio_rejects_unknown_snapshot_ids(
     tmp_path: Path,
     snapshot_id: str,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     login_and_csrf(client, "owner")
 
-    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio")
-    pin = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-    unpin = client.delete(f"/api/queue-streams/{snapshot_id}/pin")
+    audio = client.get(f"/shared/queue-streams/{snapshot_id}/audio")
 
     assert audio.status_code == 404
-    assert pin.status_code == 404
-    assert unpin.status_code == 404
-
-
-def test_pinned_snapshot_survives_ttl_on_access(tmp_path: Path, monkeypatch) -> None:
-    """An expired snapshot that is actively pinned must not be reaped on access."""
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-    manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
-
-    manifest = json.loads(manifest_path.read_text())
-    manifest["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-    manifest["pinned"] = True
-    manifest["pinned_at"] = datetime.now(timezone.utc).isoformat()
-    manifest_path.write_text(json.dumps(manifest))
-
-    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
-
-    assert audio.status_code == 206
-
-
-def test_pinned_snapshot_survives_cleanup_sweep(tmp_path: Path, monkeypatch) -> None:
-    """An expired but actively pinned snapshot must not be deleted by the cleanup sweep."""
-    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
-
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-    stream_dir = tmp_path / "data" / "queue-streams"
-    manifest_path = stream_dir / f"{snapshot_id}.json"
-
-    manifest = json.loads(manifest_path.read_text())
-    manifest["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-    manifest["pinned"] = True
-    manifest["pinned_at"] = datetime.now(timezone.utc).isoformat()
-    manifest_path.write_text(json.dumps(manifest))
-
-    cleanup_expired_queue_streams(client.app.state.ctx)
-
-    assert manifest_path.exists()
-    assert (stream_dir / f"{snapshot_id}.mp3").exists()
-
-
-def test_abandoned_pin_is_reaped_by_cleanup_sweep(tmp_path: Path, monkeypatch) -> None:
-    """A pinned snapshot whose pin_at is older than PIN_MAX_AGE must be reaped."""
-    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
-
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-    stream_dir = tmp_path / "data" / "queue-streams"
-    manifest_path = stream_dir / f"{snapshot_id}.json"
-
-    manifest = json.loads(manifest_path.read_text())
-    manifest["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
-    manifest["pinned"] = True
-    manifest["pinned_at"] = (datetime.now(timezone.utc) - timedelta(days=31)).isoformat()
-    manifest_path.write_text(json.dumps(manifest))
-
-    cleanup_expired_queue_streams(client.app.state.ctx)
-
-    assert not manifest_path.exists()
-    assert not (stream_dir / f"{snapshot_id}.mp3").exists()
-
-
-def test_pinned_snapshot_excluded_from_quota_eviction(tmp_path: Path, monkeypatch) -> None:
-    """Quota eviction must evict an unpinned snapshot rather than a pinned one."""
-    _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_CACHE_BYTES", 1)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    # Build snapshot A and pin it via direct manifest edit
-    resp_a = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp_a.status_code == 200
-    snapshot_a = resp_a.json()["snapshot_id"]
-    manifest_path_a = tmp_path / "data" / "queue-streams" / f"{snapshot_a}.json"
-    manifest_a = json.loads(manifest_path_a.read_text())
-    manifest_a["pinned"] = True
-    manifest_a["pinned_at"] = datetime.now(timezone.utc).isoformat()
-    manifest_path_a.write_text(json.dumps(manifest_a))
-
-    # Build snapshot B (unpinned) — quota enforcement runs on every build
-    resp_b = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g2"}]})
-    assert resp_b.status_code == 200
-    snapshot_b = resp_b.json()["snapshot_id"]
-
-    # Build snapshot C with different content — quota enforcement must evict B not A
-    resp_c = client.post(
-        "/api/queue-streams",
-        json={"tracks": [{"generation_id": "g1"}, {"generation_id": "g2"}]},
-    )
-    assert resp_c.status_code == 200
-    snapshot_c = resp_c.json()["snapshot_id"]
-
-    stream_dir = tmp_path / "data" / "queue-streams"
-    assert (stream_dir / f"{snapshot_a}.mp3").exists(), "Pinned snapshot must not be evicted"
-    assert (stream_dir / f"{snapshot_c}.mp3").exists(), "Just-built snapshot must survive"
-    assert not (stream_dir / f"{snapshot_b}.mp3").exists(), "Unpinned snapshot should be evicted"
-
-
-def test_pin_snapshot_refused_when_pinned_bytes_cap_exceeded(tmp_path: Path, monkeypatch) -> None:
-    """PIN must be refused with 409 when the pinned-bytes cap would be exceeded."""
-    _patch_audio_build(monkeypatch)
-    import songmaker_cli.queue_streams as qs
-
-    monkeypatch.setattr(qs, "QUEUE_STREAM_PINNED_MAX_BYTES", 0)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-
-    pin_resp = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-
-    assert pin_resp.status_code == 409
-
-
-def test_pin_unpin_round_trip_via_endpoints(tmp_path: Path, monkeypatch) -> None:
-    """POST .../pin sets pinned=True; DELETE .../pin clears it back to False."""
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
-
-    pin_resp = client.post(f"/api/queue-streams/{snapshot_id}/pin")
-    assert pin_resp.status_code == 200
-    pin_data = pin_resp.json()
-    assert pin_data["snapshot_id"] == snapshot_id
-    assert pin_data["pinned"] is True
-    assert pin_data["pinned_at"] is not None
-
-    unpin_resp = client.delete(f"/api/queue-streams/{snapshot_id}/pin")
-    assert unpin_resp.status_code == 200
-    unpin_data = unpin_resp.json()
-    assert unpin_data["snapshot_id"] == snapshot_id
-    assert unpin_data["pinned"] is False
-    assert unpin_data["pinned_at"] is None
-
-
-@pytest.mark.parametrize(
-    "method",
-    [pytest.param("post", id="pin"), pytest.param("delete", id="unpin")],
-)
-@pytest.mark.parametrize("scope", [pytest.param("foreign"), pytest.param("shared")])
-def test_queue_stream_pin_and_unpin_hide_foreign_and_shared_snapshots(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    method: str,
-    scope: str,
-) -> None:
-    """Pinning controls hide foreign and shared snapshots behind a 404."""
-    _patch_audio_build(monkeypatch)
-    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
-
-    if scope == "foreign":
-        stream_resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-        other_client = web_client(client.app, cookies={})
-        login_and_csrf(other_client, "other")
-        request_client = other_client
-    else:
-        share = client.post("/api/playlists/pl1/share")
-        slug = share.json()["share_slug"]
-        public = web_client(client.app, cookies={})
-        stream_resp = public.post(f"/shared/playlist/{slug}/stream")
-        request_client = client
-
-    assert stream_resp.status_code == 200
-    snapshot_id = stream_resp.json()["snapshot_id"]
-
-    response = getattr(request_client, method)(f"/api/queue-streams/{snapshot_id}/pin")
-
-    assert response.status_code == 404
 
 
 def test_crashed_json_tmp_file_cleaned_up_as_orphan(tmp_path: Path, monkeypatch) -> None:
@@ -1847,13 +1472,13 @@ def test_corrupt_manifest_file_returns_404_not_500(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
 
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
+    resp = _shared_playlist_snapshot(client, ["g1"])
     assert resp.status_code == 200
     snapshot_id = resp.json()["snapshot_id"]
     manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
     manifest_path.write_text(corrupt_manifest_text, encoding="utf-8")
 
-    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
+    audio = client.get(f"/shared/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
 
     assert audio.status_code == 404
 
@@ -1875,31 +1500,66 @@ def test_cleanup_deletes_corrupt_manifest(tmp_path: Path, monkeypatch) -> None:
     assert not corrupt.exists()
 
 
-def test_legacy_manifest_without_pin_fields_is_accessible(tmp_path: Path, monkeypatch) -> None:
-    """A pre-pin manifest (no pinned/pinned_at fields) is read as unpinned."""
+def _expired_shared_snapshot_with_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[TestClient, Path]:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner")
-
-    resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-    assert resp.status_code == 200
-    snapshot_id = resp.json()["snapshot_id"]
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = web_client(client.app, cookies={})
+    stream = public.post(f"/shared/playlist/{slug}/stream")
+    assert stream.status_code == 200
+    snapshot_id = stream.json()["snapshot_id"]
     manifest_path = tmp_path / "data" / "queue-streams" / f"{snapshot_id}.json"
-
-    # Simulate a legacy manifest by removing the pin fields
     manifest = json.loads(manifest_path.read_text())
-    manifest.pop("pinned", None)
-    manifest.pop("pinned_at", None)
+    now = datetime.now(timezone.utc)
+    manifest["expires_at"] = (now - timedelta(seconds=1)).isoformat()
+    manifest["pinned"] = True
+    manifest["pinned_at"] = now.isoformat()
     manifest_path.write_text(json.dumps(manifest))
+    return public, manifest_path
 
-    audio = client.get(f"/api/queue-streams/{snapshot_id}/audio", headers={"Range": "bytes=0-3"})
-    assert audio.status_code == 206
 
-    unpin_resp = client.delete(f"/api/queue-streams/{snapshot_id}/pin")
-    assert unpin_resp.status_code == 200
-    assert unpin_resp.json()["pinned"] is False
-    assert unpin_resp.json()["pinned_at"] is None
+def test_expired_snapshot_whose_manifest_still_says_pinned_is_swept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1859_R1 -- an expired manifest that still says pinned is swept like any other."""
+    from songmaker_cli.queue_streams import cleanup_expired_queue_streams
+
+    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch)
+
+    cleanup_expired_queue_streams(public.app.state.ctx)
+
+    assert not manifest_path.exists()
+    assert not manifest_path.with_suffix(".mp3").exists()
+
+
+def test_expired_snapshot_whose_manifest_still_says_pinned_is_not_served(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1859_R1 -- an expired manifest that still says pinned is not served."""
+    public, manifest_path = _expired_shared_snapshot_with_pin(tmp_path, monkeypatch)
+
+    assert public.get(f"/shared/queue-streams/{manifest_path.stem}/audio").status_code == 404
+
+
+@pytest.mark.parametrize("method", [pytest.param("post"), pytest.param("delete")])
+def test_the_pin_routes_are_gone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, method: str
+) -> None:
+    """1859_R1 -- the pin addresses answer like any unknown address."""
+    _patch_audio_build(monkeypatch)
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    _write_audio_files(tmp_path)
+    login_and_csrf(client, "owner")
+    snapshot_id = "opaque-snapshot"
+
+    pin = getattr(client, method)(f"/api/queue-streams/{snapshot_id}/pin")
+    unknown = getattr(client, method)(f"/api/queue-streams/{snapshot_id}/no-such-route")
+
+    assert (pin.status_code, pin.json()) == (unknown.status_code, unknown.json())
 
 
 def _reverse_in_place(items: list) -> None:
@@ -1984,7 +1644,7 @@ def _write_shuffle_audio_files(root: Path) -> None:
         (path / f"g{index}.mp3").write_bytes(b"source")
 
 
-def test_library_stream_without_shuffle_keeps_album_track_order(
+def test_library_pool_queue_without_shuffle_keeps_album_track_order(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
@@ -1992,10 +1652,10 @@ def test_library_stream_without_shuffle_keeps_album_track_order(
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+    resp = client.get("/api/library/pool-queue", params={"shuffle": False})
 
     assert resp.status_code == 200
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+    assert [track["generation_id"] for track in resp.json()["takes"]] == [
         "g1",
         "g2",
         "g3",
@@ -2003,29 +1663,27 @@ def test_library_stream_without_shuffle_keeps_album_track_order(
     ]
 
 
-def test_library_stream_shuffle_uses_injected_rng(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_shuffle_uses_injected_rng(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     monkeypatch.setattr("songmaker_cli.queue_streams.random.shuffle", _reverse_in_place)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post(
-        "/api/queue-streams/library",
-        json={"shuffle": True, "start_generation_id": "g2"},
+    resp = client.get(
+        "/api/library/pool-queue", params={"shuffle": True, "start_generation_id": "g2"},
     )
 
     assert resp.status_code == 200
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+    assert [track["generation_id"] for track in resp.json()["takes"]] == [
         "g2",
         "g4",
         "g3",
         "g1",
     ]
-    assert [track["index"] for track in resp.json()["tracks"]] == [0, 1, 2, 3]
 
 
-def test_library_stream_scan_is_bounded_and_marks_unscanned_tail(
+def test_library_pool_queue_scan_is_bounded_and_marks_unscanned_tail(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
@@ -2045,21 +1703,20 @@ def test_library_stream_scan_is_bounded_and_marks_unscanned_tail(
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+    resp = client.get("/api/library/pool-queue", params={"shuffle": False})
 
     assert resp.status_code == 200
     assert scanned == ["g1", "g2"]
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+    assert [track["generation_id"] for track in resp.json()["takes"]] == [
         "g1",
         "g2",
     ]
-    assert resp.json()["windowed"] is True
+    assert resp.json()["skipped_complete"] is False
 
 
-def test_library_stream_default_scan_limit_is_explicitly_partial(
+def test_library_pool_queue_default_scan_limit_is_explicitly_partial(
     tmp_path: Path, monkeypatch
 ) -> None:
-    import songmaker_cli.queue_stream_api as queue_stream_api
     import songmaker_cli.queue_streams as queue_streams
 
     assert queue_streams.LIBRARY_QUEUE_STREAM_SCAN_LIMIT == 1_000
@@ -2081,6 +1738,7 @@ def test_library_stream_default_scan_limit_is_explicitly_partial(
                 song_id=song.id,
                 generation_number=1,
                 mp3_path=f"user-a/scan-{index:04d}.mp3",
+                model_mode="turbo",
                 is_archived=False,
                 is_picked=True,
                 is_kept=False,
@@ -2100,43 +1758,22 @@ def test_library_stream_default_scan_limit_is_explicitly_partial(
             )
         return None
 
-    captured: dict[str, object] = {}
-
-    def fake_build(_ctx, sources, *, force_windowed=False, **_kwargs):
-        captured["source_count"] = len(sources)
-        captured["force_windowed"] = force_windowed
-        return queue_stream_api.QueueStreamManifestResponse(
-            snapshot_id="bounded-scan",
-            stream_url="",
-            expires_at="2099-01-01T00:00:00Z",
-            total_duration=0,
-            tracks=[],
-            windowed=force_windowed,
-        )
-
     monkeypatch.setattr(queue_streams, "QUEUE_STREAM_MAX_TRACKS", 1_500)
     monkeypatch.setattr(queue_streams, "list_songs", lambda *_args, **_kwargs: songs)
     monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
-    monkeypatch.setattr(
-        queue_stream_api,
-        "prepare_queue_stream_admission",
-        lambda *_args: queue_streams.QueueStreamAdmission([], False),
-    )
-    monkeypatch.setattr(queue_stream_api, "build_queue_stream_snapshot", fake_build)
 
-    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+    resp = client.get("/api/library/pool-queue", params={"shuffle": False})
 
     assert resp.status_code == 200
     assert len(scanned) == 1_000
     assert scanned[-1] == "scan-gen-1000"
     assert "scan-gen-1001" not in scanned
-    assert captured == {"source_count": 1_000, "force_windowed": True}
-    assert resp.json()["windowed"] is True
-    assert resp.json()["skipped"] == []
+    assert len(resp.json()["takes"]) == 1_000
     assert resp.json()["skipped_complete"] is False
+    assert resp.json()["skipped"] == []
 
 
-def test_library_stream_scan_stops_after_one_more_than_track_limit(
+def test_library_pool_queue_scan_stops_after_one_more_than_track_limit(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
@@ -2156,16 +1793,15 @@ def test_library_stream_scan_stops_after_one_more_than_track_limit(
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"shuffle": False})
+    resp = client.get("/api/library/pool-queue", params={"shuffle": False})
 
     assert resp.status_code == 200
     assert scanned == ["g1", "g2"]
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == ["g1"]
-    assert resp.json()["windowed"] is True
+    assert [track["generation_id"] for track in resp.json()["takes"]] == ["g1", "g2"]
     assert resp.json()["skipped_complete"] is False
 
 
-def test_library_stream_shuffles_before_bounded_scan(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_shuffles_before_bounded_scan(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.queue_streams as queue_streams
 
@@ -2184,15 +1820,15 @@ def test_library_stream_shuffles_before_bounded_scan(tmp_path: Path, monkeypatch
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"shuffle": True})
+    resp = client.get("/api/library/pool-queue", params={"shuffle": True})
 
     assert resp.status_code == 200
     assert scanned == ["g4"]
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == ["g4"]
-    assert resp.json()["windowed"] is True
+    assert [track["generation_id"] for track in resp.json()["takes"]] == ["g4"]
+    assert resp.json()["skipped_complete"] is False
 
 
-def test_library_stream_start_is_first_and_scanned_once_with_small_budget(
+def test_library_pool_queue_start_is_first_and_scanned_once_with_small_budget(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
@@ -2212,18 +1848,17 @@ def test_library_stream_start_is_first_and_scanned_once_with_small_budget(
     _write_shuffle_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post(
-        "/api/queue-streams/library",
-        json={"shuffle": False, "start_generation_id": "g4"},
+    resp = client.get(
+        "/api/library/pool-queue", params={"shuffle": False, "start_generation_id": "g4"},
     )
 
     assert resp.status_code == 200
     assert scanned == ["g4"]
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == ["g4"]
-    assert resp.json()["windowed"] is True
+    assert [track["generation_id"] for track in resp.json()["takes"]] == ["g4"]
+    assert resp.json()["skipped_complete"] is False
 
 
-def test_library_stream_unplayable_start_is_scanned_once_with_small_budget(
+def test_library_pool_queue_unplayable_start_is_scanned_once_with_small_budget(
     tmp_path: Path, monkeypatch
 ) -> None:
     _patch_audio_build(monkeypatch)
@@ -2244,9 +1879,8 @@ def test_library_stream_unplayable_start_is_scanned_once_with_small_budget(
     (tmp_path / "audio" / "user-a" / "g4.mp3").unlink()
     login_and_csrf(client, "usera")
 
-    resp = client.post(
-        "/api/queue-streams/library",
-        json={"shuffle": False, "start_generation_id": "g4"},
+    resp = client.get(
+        "/api/library/pool-queue", params={"shuffle": False, "start_generation_id": "g4"},
     )
 
     assert resp.status_code == 422
@@ -2254,13 +1888,13 @@ def test_library_stream_unplayable_start_is_scanned_once_with_small_budget(
     assert scanned == ["g4"]
 
 
-def test_library_stream_unknown_pool_is_422(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_unknown_pool_is_422(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"pool": "favorites"})
+    resp = client.get("/api/library/pool-queue", params={"pool": "favorites"})
 
     assert resp.status_code == 422
 
@@ -2455,7 +2089,7 @@ def _write_pool_audio_files(root: Path) -> None:
         ("all", ["g-both", "g-keep-a", "g-pick", "g-old", "g-keep-b", "g-pick-b"]),
     ],
 )
-def test_library_stream_pool_sets(
+def test_library_pool_queue_pool_sets(
     tmp_path: Path, monkeypatch, pool: str, expected: list[str]
 ) -> None:
     _patch_audio_build(monkeypatch)
@@ -2463,22 +2097,22 @@ def test_library_stream_pool_sets(
     _write_pool_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"pool": pool})
+    resp = client.get("/api/library/pool-queue", params={"pool": pool})
 
     assert resp.status_code == 200
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == expected
+    assert [track["generation_id"] for track in resp.json()["takes"]] == expected
 
 
-def test_library_stream_default_pool_is_mix(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_default_pool_is_mix(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={})
+    resp = client.get("/api/library/pool-queue", params={})
 
     assert resp.status_code == 200
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+    assert [track["generation_id"] for track in resp.json()["takes"]] == [
         "g-both",
         "g-keep-a",
         "g-pick",
@@ -2489,13 +2123,8 @@ def test_library_stream_default_pool_is_mix(tmp_path: Path, monkeypatch) -> None
         {"song_id": "s2", "generation_id": "g-missing", "reason": "missing_file"}
     ]
 
-    reused = client.post("/api/queue-streams/library", json={})
-    assert reused.status_code == 200
-    assert reused.json()["snapshot_id"] == resp.json()["snapshot_id"]
-    assert reused.json()["skipped"] == resp.json()["skipped"]
 
-
-def test_library_stream_reports_every_unplayable_reason(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monkeypatch) -> None:
     def seed_with_unplayable(session) -> None:
         _seed_library_pool_data(session)
         session.add_all(
@@ -2525,7 +2154,7 @@ def test_library_stream_reports_every_unplayable_reason(tmp_path: Path, monkeypa
     (tmp_path / "audio" / "user-a" / "directory.mp3").mkdir()
     login_and_csrf(client, "usera")
 
-    resp = client.post("/api/queue-streams/library", json={"pool": "all"})
+    resp = client.get("/api/library/pool-queue", params={"pool": "all"})
 
     assert resp.status_code == 200
     assert resp.json()["skipped"] == [
@@ -2630,19 +2259,18 @@ def test_library_skip_maps_file_failures_to_unreadable(
     }
 
 
-def test_library_stream_out_of_pool_start_is_temporary(tmp_path: Path, monkeypatch) -> None:
+def test_library_pool_queue_out_of_pool_start_is_temporary(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
     login_and_csrf(client, "usera")
 
-    resp = client.post(
-        "/api/queue-streams/library",
-        json={"pool": "mix", "start_generation_id": "g-old"},
+    resp = client.get(
+        "/api/library/pool-queue", params={"pool": "mix", "start_generation_id": "g-old"},
     )
 
     assert resp.status_code == 200
-    assert [track["generation_id"] for track in resp.json()["tracks"]] == [
+    assert [track["generation_id"] for track in resp.json()["takes"]] == [
         "g-old",
         "g-both",
         "g-keep-a",
@@ -2733,7 +2361,6 @@ def test_library_pool_queue_empty_pool_is_422(tmp_path: Path, monkeypatch) -> No
     assert resp.json()["detail"] == "No playable takes in pool 'mix'"
 
 
-
 def test_library_pool_queue_rate_limited(tmp_path: Path, monkeypatch) -> None:
     _patch_audio_build(monkeypatch)
     import songmaker_cli.constants as consts
@@ -2769,3 +2396,27 @@ def test_library_pool_queue_rate_limiter_failure_is_503(
     resp = client.get("/api/library/pool-queue", params={"pool": "mix"})
 
     assert resp.status_code == 503
+
+
+@pytest.mark.parametrize("authenticated", [False, True])
+@pytest.mark.parametrize(
+    ("method", "path", "schema_path"),
+    [
+        ("POST", "/api/queue-streams", "/api/queue-streams"),
+        ("POST", "/api/queue-streams/library", "/api/queue-streams/library"),
+        (
+            "GET", "/api/queue-streams/opaque-snapshot/audio",
+            "/api/queue-streams/{snapshot_id}/audio",
+        ),
+    ],
+)
+def test_removed_queue_stream_routes_are_unknown(
+    tmp_path: Path, authenticated: bool, method: str, path: str, schema_path: str,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
+    if authenticated:
+        login_and_csrf(client, "owner")
+    response = client.request(method, path)
+    unknown = client.request(method, "/api/no-such-route")
+    assert (response.status_code, response.json()) == (unknown.status_code, unknown.json())
+    assert schema_path not in client.app.openapi()["paths"]

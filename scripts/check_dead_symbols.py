@@ -2,7 +2,8 @@
 
 This conservative name scan is not a reachability proof: same-name references,
 including external forward annotations and lookup strings, can keep a symbol alive.
-Allow entries are exact src-relative path:name pairs followed by # and a reason.
+Allow entries are exact src-relative path:name pairs followed by # and a reason;
+an entry for a symbol that is not unreferenced suppresses nothing and fails.
 Same-file uses count only as AST name/attribute references, never strings/docstrings.
 An import is not a use: a re-export such as `from .auth import name as name` keeps
 nothing alive unless the importing file itself uses the bound name.
@@ -94,15 +95,23 @@ def main() -> int:
     parser.add_argument("--allow", type=Path, default=repository / "scripts/dead-symbols.allow")
     args = parser.parse_args()
     try:
-        missing = unreferenced_symbols(args.source) - read_allowlist(args.allow)
+        unreferenced = unreferenced_symbols(args.source)
+        allowed = read_allowlist(args.allow)
     except (OSError, SyntaxError, ValueError) as error:
         print(error)
         return 1
+    missing = unreferenced - allowed
+    unneeded = allowed - unreferenced
     for symbol in sorted(missing):
         print(f"No production reference: {symbol}")
-    if missing:
+    for entry in sorted(unneeded):
+        print(f"Allow entry suppresses nothing: {entry}")
+    if missing or unneeded:
         return 1
-    print("Dead-symbol gate passed.")
+    print(
+        f"Dead-symbol gate passed: {len(unreferenced)} unreferenced symbols, "
+        f"{len(allowed)} allowed."
+    )
     return 0
 
 

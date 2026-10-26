@@ -73,7 +73,7 @@ from songmaker_cli.request_policies import (
     build_rate_limit_policy,
     build_security_headers_policy,
 )
-from songmaker_cli.settings import CoverExecutor, get_settings
+from songmaker_cli.settings import DEFAULT_SERVER_PORT, CoverExecutor, get_settings
 
 log = logging.getLogger(__name__)
 
@@ -432,7 +432,7 @@ def run_server(
     audio_dir: Path | None = None,
     data_dir: Path | None = None,
     project_root: Path | None = None,
-    port: int = 8080,
+    port: int = DEFAULT_SERVER_PORT,
     open_browser: bool = False,
 ) -> None:
     import uvicorn

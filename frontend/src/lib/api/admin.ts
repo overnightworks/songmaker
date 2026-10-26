@@ -1,4 +1,10 @@
-import type { JobItem, RegistryResponse, AdminUserLoraItem, WorkerPoolResponse } from './types';
+import type {
+	AdminUserLoraItem,
+	GenerationRetentionReport,
+	JobItem,
+	RegistryResponse,
+	WorkerPoolResponse
+} from './types';
 import { apiFetch } from './fetch';
 
 export async function fetchAdminVoices(): Promise<AdminUserLoraItem[]> {
@@ -53,17 +59,6 @@ export async function unpinModelOnWorker(workerId: string, mode: string): Promis
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ mode })
 	});
-}
-
-export interface GenerationRetentionReport {
-	archived_ids: string[];
-	deleted_ids: string[];
-	archived_count: number;
-	deleted_count: number;
-	retention_days: number;
-	hard_delete_days: number;
-	scheduled_hour_utc: number;
-	dry_run: boolean;
 }
 
 export async function previewGenerationRetention(): Promise<GenerationRetentionReport> {

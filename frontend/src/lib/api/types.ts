@@ -95,6 +95,11 @@ export interface AlbumUpdateRequest {
 	year?: number | null;
 }
 
+export interface AssistantTextEvent {
+	type: 'assistant_text';
+	text: string;
+}
+
 export interface AuthUser {
 	id: string;
 	username: string;
@@ -102,7 +107,7 @@ export interface AuthUser {
 	account_console_url?: string | null;
 }
 
-export interface AvailableModelResponse {
+export interface AvailableModel {
 	id: string;
 	is_active: boolean;
 	capabilities?: ModelCapabilities | null;
@@ -138,6 +143,27 @@ export interface ChatMessageItem {
 	created_at: string;
 }
 
+export interface ChatTurnFailureFrame {
+	type: 'error';
+	status: number;
+	message: string;
+}
+
+export interface ChatTurnFinalFrame {
+	type: 'final';
+	conversation_id: string;
+	user_message: ChatMessageItem;
+	assistant_message: ChatMessageItem;
+}
+
+export interface ChatTurnRouteErrorFrame {
+	type: 'error';
+	status: number;
+	provider: string;
+	route: string | null;
+	reason: SafeRouteReason;
+}
+
 export interface ChatTurnV2Request {
 	message: string;
 	current_song_id?: string | null;
@@ -145,12 +171,6 @@ export interface ChatTurnV2Request {
 	mentioned_version_ids: string[];
 	mentioned_album_id?: string | null;
 	current_generation_id?: string | null;
-}
-
-export interface ChatTurnV2Result {
-	conversation_id: string;
-	user_message: ChatMessageItem;
-	assistant_message: ChatMessageItem;
 }
 
 export interface CleanupResult {
@@ -360,7 +380,7 @@ export interface GenerationParams {
 	delivered_batch_size?: number | null;
 }
 
-export interface GenerationRetentionReportResponse {
+export interface GenerationRetentionReport {
 	archived_ids: string[];
 	deleted_ids: string[];
 	archived_count: number;
@@ -478,12 +498,6 @@ export interface LibraryPoolTakeItem {
 	model_mode: string;
 	is_picked: boolean;
 	is_kept: boolean;
-}
-
-export interface LibraryQueueStreamRequest {
-	start_generation_id?: string | null;
-	shuffle: boolean;
-	pool: 'mix' | 'picks' | 'keeps' | 'all';
 }
 
 export interface LibrarySearchResponse {
@@ -687,20 +701,10 @@ export interface QueueStreamManifest {
 	skipped_complete: boolean;
 }
 
-export interface QueueStreamPinResponse {
-	snapshot_id: string;
-	pinned: boolean;
-	pinned_at: string | null;
-}
-
 export interface QueueStreamSkipItem {
 	song_id: string;
 	generation_id: string;
 	reason: 'missing_path' | 'missing_file' | 'unreadable_file';
-}
-
-export interface QueueStreamSnapshotRequest {
-	tracks: QueueStreamTrackRequest[];
 }
 
 export interface QueueStreamTrackItem {
@@ -721,11 +725,6 @@ export interface QueueStreamTrackItem {
 	duration: number;
 	start_offset: number;
 	end_offset: number;
-}
-
-export interface QueueStreamTrackRequest {
-	generation_id: string;
-	entry_id?: string | null;
 }
 
 export interface RateLimitItem {
@@ -994,6 +993,20 @@ export interface StatusResponse {
 
 export interface TitleUpdateRequest {
 	title: string;
+}
+
+export interface ToolCallEvent {
+	type: 'tool_call';
+	tool_use_id: string;
+	name: string;
+	input: Record<string, unknown>;
+}
+
+export interface ToolResultEvent {
+	type: 'tool_result';
+	tool_use_id: string;
+	content: string;
+	is_error: boolean;
 }
 
 export interface UnpinModelOnWorkerRequest {

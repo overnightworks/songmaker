@@ -1,3 +1,4 @@
+import { scrollWallTo } from './wall-scroll';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -21,7 +22,6 @@ import {
 	openLibraryWall,
 	openRailNav,
 	playingAudioState,
-	scrollWallHalfway,
 	shellOf,
 	SUCCESSOR_TAKES_TEST_TIMEOUT_MS,
 	type Shell,
@@ -437,7 +437,7 @@ for (const cell of RETURN_CELLS) {
 			await page.goto(LIBRARY_PATH);
 			await expectLibraryWallLoaded(page);
 			await expectRows(page);
-			if (cell.where === 'middle') await scrollWallHalfway(page);
+			if (cell.where === 'middle') await scrollWallTo(page, 'halfway');
 			else await row(page, album.title).scrollIntoViewIfNeeded();
 			const wall = await wallBody(page).evaluate((body) => ({
 				before: body.scrollTop,

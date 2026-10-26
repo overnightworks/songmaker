@@ -18,7 +18,6 @@ import type {
 } from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import {
-	createQueueStreamSnapshot,
 	fetchLastFailedGeneration,
 	fetchLibraryPoolQueue,
 	fetchPlaylist,
@@ -66,7 +65,6 @@ vi.mock('$lib/services/mediaSession', async (importOriginal) => {
 	};
 });
 vi.mock('$lib/api/client', () => ({
-	createQueueStreamSnapshot: vi.fn(),
 	fetchLibraryPoolQueue: vi.fn(),
 	fetchPlaylist: vi.fn(),
 	fetchSong: vi.fn(),
@@ -1427,7 +1425,6 @@ describe('starting a queue loads its first take on its own or reports an empty o
 			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
 			0
 		);
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({ songTitle: 'Playlist Song' }),
 			{ restart: true }
@@ -1479,7 +1476,6 @@ describe('starting a queue loads its first take on its own or reports an empty o
 		});
 		songList.set([song]);
 		await playAlbum('a1');
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({
 				generation: expect.objectContaining({ id: 'g1', mp3_path: 'a1/song_v1.mp3' })
@@ -1946,7 +1942,6 @@ describe('starting album playback from a take', () => {
 		selectedAlbumId.set('a1');
 		await playTake(clicked, song1);
 
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({
 				generation: expect.objectContaining({ id: 'g-click', mp3_path: 'a1/click.mp3' })
@@ -3235,7 +3230,6 @@ describe('shuffle rebuilds the playing queue', () => {
 		selectedAlbumId.set('a1');
 		await playTake(song1.generations[0], song1);
 
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		const ctx = get(queueContext);
 		expect(ctx.type).toBe('album');
 		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected album takes');
@@ -3252,7 +3246,6 @@ describe('shuffle rebuilds the playing queue', () => {
 			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
 			0
 		);
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 	});
 
@@ -3268,7 +3261,6 @@ describe('shuffle rebuilds the playing queue', () => {
 			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
 			0
 		);
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(get(shuffleEnabled)).toBe(false);
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 	});
@@ -3502,7 +3494,6 @@ describe('playIdleStart', () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
 		await playIdleStart();
 		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({ generation: expect.objectContaining({ id: 'g1' }) }),
 			{ restart: true }
@@ -3524,7 +3515,6 @@ describe('playIdleStart', () => {
 		});
 		await playIdleStart();
 		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
-		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({ songTitle: 'Listed' }),
 			{ restart: true }

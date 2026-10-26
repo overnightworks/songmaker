@@ -1,4 +1,5 @@
-import { expect, vi } from 'vitest';
+import { tick } from 'svelte';
+import { expect, vi, type Mock } from 'vitest';
 
 import { makeAlbum as album } from '$lib/test-utils/factories';
 import { announcedText, getByRoleButton } from '$lib/test-utils/accessible-name';
@@ -120,4 +121,19 @@ export function deferred<T>(): {
 		reject = fail;
 	});
 	return { promise, resolve, reject };
+}
+
+/**
+ * Renders the album page and lets its first cover-state read finish, so a test
+ * arranges the answers of the reads that follow, from the editor opening on.
+ */
+export async function afterPageRead(
+	render: () => Promise<HTMLElement>,
+	readSuggestions: Mock
+): Promise<HTMLElement> {
+	const target = await render();
+	await vi.waitFor(() => expect(readSuggestions).toHaveBeenCalledTimes(1));
+	await tick();
+	readSuggestions.mockClear();
+	return target;
 }

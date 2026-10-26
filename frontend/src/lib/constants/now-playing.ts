@@ -32,6 +32,20 @@ export function nowPlayingTakeLabel(
 
 export const TAKE_SELECT_LABEL = 'Select';
 
+export const TAKE_SELECT_ALL_UNKEPT_LABEL = 'Select all unkept';
+
+export function selectedCountLabel(count: number): string {
+	return `${count} selected`;
+}
+
+export function bulkDeleteLabel(count: number): string {
+	return `Delete ${count}`;
+}
+
+export function bulkDeleteTitle(count: number): string {
+	return `Delete ${count} take${count === 1 ? '' : 's'}?`;
+}
+
 export function takeRowLabel(generationNumber: number): string {
 	return `Take ${generationNumber}`;
 }
@@ -172,12 +186,12 @@ export const NOW_PLAYING_DEVIATION_ADDED_TITLE = 'Not in lyrics';
 // Curation mode (issue #228): walking an album's per-song candidate takes
 // one after another, right from the cover column's transport row so it never
 // hides behind the mobile sheet tap the queue/take tabs otherwise need.
-export const NOW_PLAYING_CURATE_GROUP_LABEL = 'Curate this album';
+export const NOW_PLAYING_CURATE_GROUP_LABEL = 'Pick album takes';
 export const NOW_PLAYING_CURATE_SKIP_LABEL = 'Skip';
-export const NOW_PLAYING_CURATE_DONE_LABEL = 'Done curating';
+export const NOW_PLAYING_CURATE_DONE_LABEL = 'Done';
 
 export function nowPlayingCurateProgress(index: number, total: number): string {
-	return `Song ${index + 1} of ${total}`;
+	return `${NOW_PLAYING_CURATE_GROUP_LABEL} · Song ${index + 1} of ${total}`;
 }
 
 export const NOW_PLAYING_Z_INDEX = 350;

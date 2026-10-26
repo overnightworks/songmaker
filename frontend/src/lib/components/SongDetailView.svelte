@@ -743,12 +743,12 @@
 		</div>
 	{/snippet}
 
-	{#snippet writeSurface(current: SongItem, withCowriter: boolean, isCompact: boolean)}
+	{#snippet writeSurface(current: SongItem, withCowriter: boolean)}
 		<div class="write-surface">
 			{#if !compact}
 				{@render saveAction()}
 			{/if}
-			<WriteColumn song={current} coWriterOpen={withCowriter} compact={isCompact} {cowriterPanel} />
+			<WriteColumn song={current} coWriterOpen={withCowriter} {cowriterPanel} />
 		</div>
 	{/snippet}
 
@@ -816,7 +816,7 @@
 	{/snippet}
 
 	{#snippet phoneEdit()}
-		{@render writeSurface(song, false, true)}
+		{@render writeSurface(song, false)}
 	{/snippet}
 
 	{#snippet cowriterPanel()}
@@ -851,10 +851,10 @@
 				{@render sharedLink()}
 				{@render recipe()}
 				{#if $coWriterOpen}
-					{@render writeSurface(song, true, compact)}
+					{@render writeSurface(song, true)}
 				{:else}
 					<div class="editor-columns">
-						{@render writeSurface(song, false, compact)}
+						{@render writeSurface(song, false)}
 						<div class="takes-column">
 							{@render expiryDigest()}
 							<TakesList {...takeListProps} />
@@ -993,10 +993,8 @@
 	}
 
 	/* On a desktop shell the header stays put and everything under it scrolls
-	   here: this fills the editor's height while the columns stand side by
-	   side, each scrolling in place, and scrolls itself once they stack or the
-	   Recipe panel grows taller than the room there is — so a take row is
-	   always reachable rather than clipped. The compact shell keeps its own
+	   here: it is the one scroller, so the Write column's text and every take
+	   row stay reachable rather than clipped in a box of their own. The compact shell keeps its own
 	   rule: the whole panel scrolls in `main`, whose bottom padding is what
 	   clears the sticky Generate bar. */
 	.detail-panel:not(.compact) .editor-body {
@@ -1072,14 +1070,6 @@
 	@container editor (min-width: 680px) {
 		.editor-columns {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
-			flex: 1;
-			min-height: 0;
-		}
-
-		/* Only two-up does the column get a height of its own to scroll in;
-		   stacked it runs on and `.editor-body` scrolls instead. */
-		.takes-column {
-			overflow-y: auto;
 		}
 	}
 

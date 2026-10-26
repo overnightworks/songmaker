@@ -22,7 +22,7 @@ Two flags on generations: **pick** is THE one for this song on the album (one pe
 
 ## Setup and run
 
-The live app is Docker-only; there is no local server path. `.venv` is for tests, type checking and IDE only. Application secrets and settings live in one gitignored `.env` at the root. The non-secret `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI` and `SONGMAKER_CODEX_CLI` overrides are the exception: the preflight reads only their exported deployment environment values. Install, first start and model download (`scripts/download_models.sh`, needs `HF_TOKEN` in `.env`) are in the README; `pnpm dev` runs the frontend alone. Agents start `docker compose up -d --build --wait` in the background.
+The live app is Docker-only; there is no local server path. `.venv` is for tests, type checking and IDE only. Application secrets and settings live in one gitignored `.env` at the root. The non-secret `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI` and `SONGMAKER_CODEX_CLI` overrides are the exception: the preflight reads only their exported deployment environment values. Install, first start and model download (`scripts/download_models.sh`, needs `HF_TOKEN` in `.env`) are in the README; `pnpm dev` runs the frontend alone. Agents start `docker compose up -d --build --wait` in the background. The external network `hal_backchannel_songmaker` is edge's: edge's `hal apply` creates it, and CI's `e2e.yml` creates its own.
 
 **Docker:** never wrap `docker compose up --build --wait` in `timeout`. A cold-cache rebuild of all 5 images takes 8-15 minutes (the acestep-worker alone is 8.84 GB); a shorter timeout SIGTERMs mid-build silently and leaves a partial deploy. After changing a Dockerfile under `docker/base/`, run `scripts/build_images.sh` first, or compose fails with `manifest unknown` for `songmaker/acestep-base:latest`.
 
@@ -30,9 +30,9 @@ The live app is Docker-only; there is no local server path. `.venv` is for tests
 
 CI runs the pinned reusable quality gate (`quality / verdict`, mandatory jobs in `quality/config.toml`); coverage floors, Sonar and transport are in [testing](docs/testing.md#static-analysis-sonarcloud).
 
-Local runs are targeted: `ruff check` and `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
+Local runs are targeted: `pytest -q` on the named files, `pnpm exec vitest run` on the named frontend file.
 
-Cheap and path-triggered: `python scripts/check_no_silent_fallbacks.py src/` when touching `src/`; `python scripts/generate_types.py --check` when touching API models; `python scripts/check_root_layout.py` when adding or moving a root-level file (it owns the root allowlist).
+Before reporting a tip, run `bash scripts/static_checks.sh`: it runs CI's static gates (ruff, import contracts, the repository scripts, svelte-check, eslint, prettier, quality hygiene at CI's pin) and stops at the first red one, naming it. It needs `.venv` and `frontend/node_modules`; the script lists the gates.
 
 Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrade head`.
 

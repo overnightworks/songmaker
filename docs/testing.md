@@ -16,7 +16,6 @@ pytest tests/test_queue_streams.py tests/test_playlists.py -q
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
-cd frontend && pnpm exec vitest run src/lib/services/offline.test.ts
 
 # Full suite — CI only, or when the operator asks
 pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
@@ -84,7 +83,7 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 
 - **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`.
-- **CI PostgreSQL contract**: `tests/test_postgresql.py`, `tests/test_cover_accounting.py`, `tests/test_reference_quota.py`, `tests/test_auth_write_lock_postgres.py` and `tests/test_merge_accounts_into_subject.py` (the one-shot account merge, deleted with its script after the switch) run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, the user-management write lock held once per transaction, transactional rollback, retention gaps, and cover publication/cancellation accounting; SQLite tests do not stand in for these guarantees. The reference quota proofs (`1301-F3-Q-BOUNDARY`, `-CONCURRENT`, `-FAILURE`, `-PATH`, `-SURFACE`) cover exact limits, retained and crash-file accounting, concurrent owner admission, independent owners, unrelated same-user writes, failed writes and request cancellation. Require the PostgreSQL contract job log to show the PostgreSQL quota cases and both write-lock cases passed with zero skipped; collection alone is not evidence. Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
+- **CI PostgreSQL contract**: `tests/test_postgresql.py`, `tests/test_cover_accounting.py`, `tests/test_reference_quota.py` and `tests/test_auth_write_lock_postgres.py` run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, the user-management write lock held once per transaction (and the back-channel logout waiting on it), transactional rollback, retention gaps, and cover publication/cancellation accounting; SQLite tests do not stand in for these guarantees. The reference quota proofs (`1301-F3-Q-BOUNDARY`, `-CONCURRENT`, `-FAILURE`, `-PATH`, `-SURFACE`) cover exact limits, retained and crash-file accounting, concurrent owner admission, independent owners, unrelated same-user writes, failed writes and request cancellation. Require the PostgreSQL contract job log to show the PostgreSQL quota cases and all three write-lock cases passed with zero skipped; collection alone is not evidence. Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
 - **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
 GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, and `security.yml`) run on push/PR to `main`.
@@ -440,7 +439,7 @@ middleware and lifecycle tests continue to use `make_test_app`.
 - **Real SQLite** for DB tests (`tmp_path` per test, `seeded_db` fixture in `conftest.py`)
 - **Synthesized audio** for mastering/scoring tests (sine waves via numpy)
 - **Mock external services**: scheduler dispatch, Whisper model, Claude API, ffmpeg
-- **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation")`
+- **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation_on_worker")`
 - **Factory fixtures** in conftest.py for WAV bytes and stereo audio
 - **`Settings` constructed with explicit kwargs** in tests; no monkeypatching of `os.environ` for the fields. Use `monkeypatch.setenv` only for the import-time env vars set in `conftest.py` (`DATABASE_URL`, `REDIS_URL`, `SESSION_SECRET`, `SONGMAKER_INTERNAL_TOKEN`, `WORKER_ID`, `PUBLIC_BASE_URL`)
 
