@@ -18,8 +18,8 @@ RemainAfterExit=yes
 # with the real project root and invoking user at install time — copying
 # this file by hand instead of running that script inherits these values
 # as-is, which is very likely wrong for a different checkout or operator.
-WorkingDirectory=/home/felix-hummert/git/songmaker
-ExecStartPre=/home/felix-hummert/git/songmaker/scripts/check_agent_cli_mounts.sh
+WorkingDirectory=/home/felix-hummert/srv/songmaker
+ExecStartPre=/home/felix-hummert/srv/songmaker/scripts/check_agent_cli_mounts.sh
 ExecStart=/usr/bin/docker compose up -d
 Restart=on-failure
 # Without this, systemd passes through the failed state before EVERY

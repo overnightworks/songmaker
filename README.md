@@ -10,7 +10,7 @@ Songmaker is Docker-only; there is no native local-dev path. The stack runs the 
 
 Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation), and a Hugging Face token (for downloading model weights).
 
-Install and first start:
+Install and first start, in the deploy checkout `~/srv/songmaker` (a clone at a release tag; a work clone has no `.env` and cannot start the live stack):
 
 ```bash
 sudo ./scripts/apparmor/install.sh                # songmaker-web does not start without its AppArmor profile
@@ -27,7 +27,7 @@ sudo ./scripts/install-autostart.sh               # start the stack after every 
 
 ## Operations
 
-- **Updates:** a systemd timer (`scripts/install-autodeploy.sh` installs it) runs `scripts/auto-deploy.sh`, which pulls and redeploys `main` once its checks are green and no job is running; its header owns the rules.
+- **Updates:** a systemd timer (`scripts/install-autodeploy.sh` installs it) runs `scripts/auto-deploy.sh`, which redeploys a release tag (`vYYYY.MM.DD.N` on `main`) once its checks are green and no job is running; a merge to `main` alone deploys nothing, and the header owns the rules.
 - **Logs and status:** `docker compose logs -f <service>` and `docker compose ps -a` (`-a` also shows a created-but-never-started container).
 - **Stop and start:** `docker compose stop` / `docker compose start` keep the volumes.
 - **Backup:** PostgreSQL and the audio volume must be backed up together with `scripts/backup.sh`; setup, cron and restore are in [`scripts/BACKUP.md`](scripts/BACKUP.md).

@@ -15,814 +15,43 @@ from __future__ import annotations
 import fcntl
 import json
 import shlex
-import stat
 import subprocess
 import time
-from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
 
 import pytest
-
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "auto-deploy.sh"
-ALERT_CONFIG_LIB = REPO_ROOT / "scripts" / "alert-config.sh"
-PROMETHEUS_RULE_PATH = Path("monitoring/rules/alert.rules.yml")
-
-FAILURE_ALERT_THRESHOLD = 3
-# Shorter than the 1h default only to keep the number of ticks a test has
-# to drive small; what is under test is that the repeat follows this
-# duration rather than a tick count.
-ALERT_REPEAT_SECONDS = 600
-# Match the production defaults while allowing the timeout test to use a
-# short, deterministic deadline.
-CHECK_RUN_LOOKUP_TIMEOUT_SECONDS = 60
-CHECK_RUN_APPEARANCE_GRACE_SECONDS = 30 * 60
-PRUNE_TIMEOUT_SECONDS = 1
-ACESTEP_SUBMODULE_PATH = "vendor/acestep"
-GIT_FETCH_TIMEOUT_SECONDS = 30
-GIT_FETCH_KILL_GRACE_SECONDS = 1
-HUNG_FETCH_TIMEOUT_SECONDS = 3
-# Long enough that a fetch which is not killed is unmistakable, and shorter
-# than the tick's own ceiling so the failure is an assertion, not a timeout.
-HUNG_TRANSPORT_SECONDS = 40
-HUNG_TICK_CEILING_SECONDS = 20
-PROMETHEUS_RULES_RESPONSE = """\
-{"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
-"""
-PROMETHEUS_METRICS_RESPONSE = """\
-# HELP prometheus_config_last_reload_successful Whether the last reload succeeded.
-# TYPE prometheus_config_last_reload_successful gauge
-prometheus_config_last_reload_successful 1
-"""
-# Any fixed point in time — the script only ever reads differences.
-CLOCK_START_EPOCH = 1_756_000_000
-CHECK_RUN_FIELD_SEPARATOR = "\x1f"
-REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.12)"
-SONAR_ACTIONS_JOB_NAME = "SonarCloud scan"
-
-REQUIRED_GRAFANA_PASSWORD = (
-    "${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env (see docker/.env.docker.example)}"
+from auto_deploy_harness import (
+    Checkout,
 )
-GRAFANA_PASSWORD_REFUSAL = (
-    "error while interpolating services.grafana.environment.GF_SECURITY_ADMIN_PASSWORD: "
-    "required variable GRAFANA_PASSWORD is missing a value: "
-    "GRAFANA_PASSWORD must be set in .env (see docker/.env.docker.example)"
+from auto_deploy_support import (
+    ACESTEP_SUBMODULE_PATH,
+    ALERT_REPEAT_SECONDS,
+    CHECK_RUN_APPEARANCE_GRACE_SECONDS,
+    CHECK_RUN_FIELD_SEPARATOR,
+    FAILURE_ALERT_THRESHOLD,
+    GIT_FETCH_TIMEOUT_SECONDS,
+    GRAFANA_PASSWORD_REFUSAL,
+    HUNG_FETCH_TIMEOUT_SECONDS,
+    HUNG_TICK_CEILING_SECONDS,
+    PRUNE_TIMEOUT_SECONDS,
+    REQUIRED_ACTIONS_JOB_NAME,
+    REQUIRED_GRAFANA_PASSWORD,
+    SONAR_ACTIONS_JOB_NAME,
+    VALID_ALERT_ENV,
+    AcestepFork,
+    ComposeConfigRefusal,
+    FailingTransport,
+    git,
+    git_output,
+    has_commit,
+    stops_running,
+    write_executable,
 )
-VALID_ALERT_ENV = """\
-ALERT_EMAIL_TO='operator@example.com'
-SMTP_HOST='smtp.example.com'
-SMTP_PORT='587'
-SMTP_USER='songmaker@example.com'
-SMTP_PASSWORD='correct-horse-battery-staple'
-"""
-
-
-@dataclass(frozen=True)
-class ComposeConfigRefusal:
-    """How the fake `docker compose config --quiet` refuses a configuration.
-
-    It exits 1, as compose does for every refusal (a missing variable, invalid
-    YAML, no compose file). ``when_compose_file_contains`` limits the refusal
-    to checkouts whose docker-compose.yml carries that text, standing in for a
-    commit that introduces a newly required variable.
-    """
-
-    stderr: str
-    when_compose_file_contains: str | None = None
-
-
-def _check_runs_response(*runs: tuple[str, ...]) -> str:
-    """Project GitHub check runs as the auto-deploy script's jq query does.
-
-    A run is status/conclusion, app/status/conclusion, or
-    app/name/status/conclusion; the omitted app is GitHub Actions and the
-    omitted name an ordinary required CI job.
-    """
-    records = []
-    for run in runs:
-        if len(run) == 2:
-            app_slug, name = "github-actions", REQUIRED_ACTIONS_JOB_NAME
-            status, conclusion = run
-        elif len(run) == 3:
-            name = REQUIRED_ACTIONS_JOB_NAME
-            app_slug, status, conclusion = run
-        elif len(run) == 4:
-            app_slug, name, status, conclusion = run
-        else:
-            raise ValueError(
-                "a check run needs status/conclusion, app/status/conclusion, "
-                "or app/name/status/conclusion",
-            )
-        records.append(
-            CHECK_RUN_FIELD_SEPARATOR.join(("check", app_slug, name, status, conclusion)) + "\n",
-        )
-    return f"envelope{CHECK_RUN_FIELD_SEPARATOR}{len(runs)}\n" + "".join(records)
-
-
-def _git(cwd: Path, *args: str) -> None:
-    subprocess.run(
-        ["git", *args],
-        cwd=cwd,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-
-def _git_output(cwd: Path, *args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
-
-
-def _has_commit(repository: Path, commit_sha: str) -> bool:
-    return subprocess.run(
-        ["git", "cat-file", "-e", f"{commit_sha}^{{commit}}"],
-        cwd=repository,
-        capture_output=True,
-    ).returncode == 0
-
-
-def _stops_running(process_id: int, within_seconds: float = 5.0) -> bool:
-    """A killed process takes a moment to die; a zombie awaiting its reaper is dead."""
-
-    def is_running() -> bool:
-        try:
-            stat_line = Path(f"/proc/{process_id}/stat").read_text()
-        except FileNotFoundError:
-            return False
-        return stat_line.rsplit(")", 1)[1].split()[0] != "Z"
-
-    deadline = time.monotonic() + within_seconds
-    while is_running() and time.monotonic() < deadline:
-        time.sleep(0.05)
-    return not is_running()
-
-
-def _write_executable(path: Path, body: str) -> None:
-    path.write_text(body)
-    path.chmod(path.stat().st_mode | stat.S_IEXEC)
-
-
-class FailingTransport(Enum):
-    """What a fetch's transport child does instead of serving objects.
-
-    Each value runs before the transport lingers, so a fetch that is not cut
-    short stays at it for HUNG_TRANSPORT_SECONDS.
-    """
-
-    HANGS = ""
-    HANGS_IGNORING_TERM = "trap '' TERM\n"
-    KILLS_ITS_GIT = (
-        "git_pid=$PPID\n"
-        'while [[ "$(</proc/$git_pid/comm)" != git ]]; do\n'
-        "    read -r _ _ _ git_pid _ </proc/$git_pid/stat\n"
-        "done\n"
-        'kill -KILL "$git_pid"\n'
-    )
-
-
-class AcestepFork:
-    """The ACE-Step fork the deploy checkout's submodule points at."""
-
-    def __init__(self, tmp_path: Path) -> None:
-        self.origin = tmp_path / "acestep-fork.git"
-        self.work = tmp_path / "acestep-work"
-        self._commits = 0
-        _git(tmp_path, "init", "--bare", "--initial-branch=main", str(self.origin))
-        _git(tmp_path, "clone", str(self.origin), str(self.work))
-        _git(self.work, "config", "user.email", "test@example.com")
-        _git(self.work, "config", "user.name", "Test")
-        self.commit()
-        self.push()
-
-    def commit(self) -> str:
-        """Commit locally, so the commit exists on the fork only once pushed."""
-        self._commits += 1
-        (self.work / "acestep.txt").write_text(f"fork commit {self._commits}\n")
-        _git(self.work, "add", "acestep.txt")
-        _git(self.work, "commit", "-m", f"fork commit {self._commits}")
-        return _git_output(self.work, "rev-parse", "HEAD")
-
-    def push(self) -> None:
-        _git(self.work, "push", "origin", "main")
-
-    @property
-    def head(self) -> str:
-        return _git_output(self.work, "rev-parse", "HEAD")
-
-    def make_unreachable(self) -> None:
-        self.origin.rename(self.origin.with_name("acestep-fork.away"))
-
-
-class Checkout:
-    """A throwaway deploy target the script under test can be run against."""
-
-    def __init__(self, tmp_path: Path) -> None:
-        self.root = tmp_path / "checkout"
-        self.origin = tmp_path / "origin.git"
-        self.log_file = tmp_path / "journal.txt"
-        self.docker_calls_file = tmp_path / "docker-calls.txt"
-        self.curl_calls_file = tmp_path / "curl-calls.txt"
-        self.check_runs_file = tmp_path / "check-runs.txt"
-        self.check_runs_raw_response_file = tmp_path / "check-runs-response.json"
-        self.check_runs_directory = tmp_path / "check-runs"
-        self.check_runs_directory.mkdir()
-        self.post_merge_marker = tmp_path / "post-merge-ran.txt"
-        self._after_check_lookup_script: Path | None = None
-        self._bin = tmp_path / "bin"
-        self._bin.mkdir()
-        self._failing_transport_pid_file = tmp_path / "failing-transport.pid"
-        self._system_bin_without_jq: Path | None = None
-        self._jq_path_filter: Path | None = None
-        self._clock_file = tmp_path / "clock.txt"
-        self._clock_file.write_text(str(CLOCK_START_EPOCH))
-        self._commits_pushed = 0
-        self._active_job_count = 0
-        self._base_images_present = True
-        self._prune_exit_code = 0
-        self._prune_sleep_seconds = 0
-        self._compose_up_exit_code = 0
-        self._compose_project_name = "songmaker"
-        self._compose_config_refusal: ComposeConfigRefusal | None = None
-        self._prometheus_ready_exit_code = 0
-        self._prometheus_reload_exit_code = 0
-        self._prometheus_rules_exit_code = 0
-        self._prometheus_metrics_exit_code = 0
-        self._prometheus_rules_response = PROMETHEUS_RULES_RESPONSE
-        self._prometheus_metrics_response = PROMETHEUS_METRICS_RESPONSE
-        self._prometheus_container = "0123456789ab"
-        self.compose_stderr = ""
-        self.check_runs_stderr = ""
-        self.check_run_lookup_timeout_seconds = CHECK_RUN_LOOKUP_TIMEOUT_SECONDS
-        self.check_run_appearance_grace_seconds = CHECK_RUN_APPEARANCE_GRACE_SECONDS
-        self.check_run_lookback_commits = 10
-        self.git_fetch_timeout_seconds = GIT_FETCH_TIMEOUT_SECONDS
-
-        _git(tmp_path, "init", "--bare", "--initial-branch=main", str(self.origin))
-        _git(tmp_path, "clone", str(self.origin), str(self.root))
-        _git(self.root, "config", "user.email", "test@example.com")
-        _git(self.root, "config", "user.name", "Test")
-
-        (self.root / "scripts").mkdir()
-        for source in (DEPLOY_SCRIPT, ALERT_CONFIG_LIB, REPO_ROOT / "scripts" / "build_images.sh"):
-            copy = self.root / "scripts" / source.name
-            copy.write_text(source.read_text())
-            copy.chmod(source.stat().st_mode)
-        self.deploy_script = self.root / "scripts" / DEPLOY_SCRIPT.name
-        (self.root / "monitoring" / "rules").mkdir(parents=True)
-        (self.root / PROMETHEUS_RULE_PATH).write_text(
-            (REPO_ROOT / PROMETHEUS_RULE_PATH).read_text(),
-        )
-        (self.root / "monitoring" / "prometheus.yml").write_text(
-            (REPO_ROOT / "monitoring" / "prometheus.yml").read_text(),
-        )
-
-        (self.root / "README.md").write_text("initial\n")
-        # The deploy guard refuses a dirty tree, and the alert config this
-        # script reads lives in an untracked .env — exactly as on the host.
-        (self.root / ".gitignore").write_text(".env\n")
-        _git(self.root, "add", "-A")
-        _git(self.root, "commit", "-m", "initial")
-        _git(self.root, "push", "origin", "main")
-
-        _write_executable(
-            self._bin / "logger",
-            '#!/bin/bash\nprintf "%s\\n" "$*" >> "$LOG_CAPTURE_FILE"\n',
-        )
-        _write_executable(
-            self._bin / "date",
-            "#!/bin/bash\n"
-            'if [[ "$1" == "+%s" ]]; then\n'
-            '    cat "$FAKE_CLOCK_FILE"\n'
-            "else\n"
-            '    exec /usr/bin/date "$@"\n'
-            "fi\n",
-        )
-        self._write_curl_stub()
-        self.set_check_runs(("completed", "success"))
-        self.set_active_jobs(0)
-
-    def set_active_jobs(self, count: int) -> None:
-        """Stand in for `docker compose exec postgres psql …`."""
-        self._active_job_count = count
-        self._write_docker_stub()
-
-    def set_base_images_present(self, present: bool) -> None:
-        """Control whether the fake Docker host has both local base images."""
-        self._base_images_present = present
-        self._write_docker_stub()
-
-    def set_prune_exit_code(self, exit_code: int) -> None:
-        self._prune_exit_code = exit_code
-        self._write_docker_stub()
-
-    def set_prune_sleep_seconds(self, seconds: int) -> None:
-        self._prune_sleep_seconds = seconds
-        self._write_docker_stub()
-
-    def set_compose_up_exit_code(self, exit_code: int) -> None:
-        self._compose_up_exit_code = exit_code
-        self._write_docker_stub()
-
-    def set_compose_project_name(self, project_name: str) -> None:
-        self._compose_project_name = project_name
-        self._write_docker_stub()
-
-    def refuse_compose_config(self, refusal: ComposeConfigRefusal) -> None:
-        """Make `docker compose config --quiet` fail the way compose itself does."""
-        self._compose_config_refusal = refusal
-        self._write_docker_stub()
-
-    def satisfy_compose_config(self) -> None:
-        """Stand in for the operator adding the missing variable to .env."""
-        self._compose_config_refusal = None
-        self._write_docker_stub()
-
-    def set_prometheus_ready_exit_code(self, exit_code: int) -> None:
-        self._prometheus_ready_exit_code = exit_code
-        self._write_curl_stub()
-
-    def set_prometheus_reload_exit_code(self, exit_code: int) -> None:
-        self._prometheus_reload_exit_code = exit_code
-        self._write_docker_stub()
-
-    def set_prometheus_rules_exit_code(self, exit_code: int) -> None:
-        self._prometheus_rules_exit_code = exit_code
-        self._write_curl_stub()
-
-    def set_prometheus_metrics_exit_code(self, exit_code: int) -> None:
-        self._prometheus_metrics_exit_code = exit_code
-        self._write_curl_stub()
-
-    def set_prometheus_rules_response(self, response: str) -> None:
-        self._prometheus_rules_response = response
-        self._write_curl_stub()
-
-    def set_prometheus_metrics_response(self, response: str) -> None:
-        self._prometheus_metrics_response = response
-        self._write_curl_stub()
-
-    def set_prometheus_container(self, container: str) -> None:
-        self._prometheus_container = container
-        self._write_docker_stub()
-
-    def _write_curl_stub(self) -> None:
-        _write_executable(
-            self._bin / "curl",
-            "#!/bin/bash\n"
-            'printf "%s\\n" "$*" >> "$CURL_CALLS_FILE"\n'
-            'if [[ "$*" == "--fail --silent --show-error --max-time 30 --retry 5 '
-            '--retry-connrefused --retry-delay 2 http://127.0.0.1:9090/-/ready" ]]; then\n'
-            f"    exit {self._prometheus_ready_exit_code}\n"
-            "fi\n"
-            'if [[ "$*" == "--fail --silent --show-error --max-time 30 '
-            'http://127.0.0.1:9090/metrics" ]]; then\n'
-            f"    printf '%s' {shlex.quote(self._prometheus_metrics_response)}\n"
-            f"    exit {self._prometheus_metrics_exit_code}\n"
-            "fi\n"
-            'if [[ "$*" == "--fail --silent --show-error --max-time 30 '
-            'http://127.0.0.1:9090/api/v1/rules" ]]; then\n'
-            f"    printf '%s' {shlex.quote(self._prometheus_rules_response)}\n"
-            f"    exit {self._prometheus_rules_exit_code}\n"
-            "fi\n"
-            'echo "unexpected curl invocation: $*" >&2\n'
-            "exit 2\n",
-        )
-
-    def _compose_config_quiet_stub(self) -> str:
-        """Compose's own validation; the wrapper runs it inside the checkout."""
-        refusal_branch = ""
-        refusal = self._compose_config_refusal
-        if refusal is not None:
-            condition = (
-                "true"
-                if refusal.when_compose_file_contains is None
-                else f"grep -qsF -- {shlex.quote(refusal.when_compose_file_contains)} "
-                "docker-compose.yml"
-            )
-            refusal_branch = (
-                f"    if {condition}; then\n"
-                f"        printf '%s\\n' {shlex.quote(refusal.stderr)} >&2\n"
-                "        exit 1\n"
-                "    fi\n"
-            )
-        return (
-            'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--quiet" ]]; then\n'
-            '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
-            '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
-            "    fi\n"
-            + refusal_branch
-            + "    exit 0\n"
-            "fi\n"
-        )
-
-    def _write_docker_stub(self) -> None:
-        _write_executable(
-            self._bin / "docker",
-            "#!/bin/bash\n"
-            'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
-            + self._compose_config_quiet_stub()
-            +
-            'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--format" '
-            '&& "$4" == "json" ]]; then\n'
-            '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
-            '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
-            "    fi\n"
-            '    printf \'{"name":"%s","services":{"songmaker-web":'
-            '{"build":{"context":"."}},"postgres":{"image":"postgres:16"}}}\\n\' '
-            '"$DOCKER_COMPOSE_PROJECT_NAME"\n'
-            "    exit 0\n"
-            "fi\n"
-            'if [[ "$1" == "compose" && "$2" == "ps" ]]; then\n'
-            '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
-            '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
-            "    fi\n"
-            '    if [[ "$3" == "-q" && "$4" == "prometheus" ]]; then\n'
-            f"        printf '%s\\n' {shlex.quote(self._prometheus_container)}\n"
-            "        exit 0\n"
-            "    fi\n"
-            '    echo container-songmaker-web\n'
-            "    exit 0\n"
-            "fi\n"
-            'if [[ "$1" == "inspect" ]]; then\n'
-            '    echo sha256:previous-songmaker-web\n'
-            "    exit 0\n"
-            "fi\n"
-            'if [[ "$1" == "image" && "$2" == "inspect" ]]; then\n'
-            '    if [[ "$DOCKER_BASE_IMAGES_PRESENT" == "true" ]]; then\n'
-            '        echo sha256:base-image\n'
-            "        exit 0\n"
-            "    fi\n"
-            "    exit 1\n"
-            "fi\n"
-            'if [[ "$1" == "kill" && "$2" == "-s" && "$3" == "HUP" '
-            f'&& "$4" == {shlex.quote(self._prometheus_container)} ]]; then\n'
-            f"    exit {self._prometheus_reload_exit_code}\n"
-            "fi\n"
-            'if [[ "$1" == "image" || "$1" == "builder" ]]; then\n'
-            '    sleep "$DOCKER_PRUNE_SLEEP_SECONDS"\n'
-            f"    exit {self._prune_exit_code}\n"
-            "fi\n"
-            'if [[ "$1" == "compose" && "$2" == "up" ]]; then\n'
-            f"    exit {self._compose_up_exit_code}\n"
-            "fi\n"
-            f"echo {self._active_job_count}\n",
-        )
-
-    def set_check_runs(self, *runs: tuple[str, ...]) -> None:
-        """Make GitHub report these app/status/conclusion pairs for the SHA."""
-        self.set_check_runs_response(_check_runs_response(*runs))
-
-    def set_check_runs_response(self, response: str) -> None:
-        """Make the fake gh process return an already-projected API response."""
-        self.check_runs_file.write_text(response)
-        _write_executable(
-            self._bin / "gh",
-            "#!/bin/bash\n"
-            'expected_prefix="repos/FlexOr2/songmaker/commits/"\n'
-            'expected_suffix="/check-runs?per_page=100"\n'
-            'if [[ "$1" != "api" || "$2" != "--paginate" ]]; then\n'
-            '    echo "unexpected gh api invocation: $*" >&2\n'
-            "    exit 2\n"
-            "fi\n"
-            'if [[ "$3" != "$expected_prefix"*"$expected_suffix" || "$4" != "--jq" ]]; then\n'
-            '    echo "unexpected gh api invocation: $*" >&2\n'
-            "    exit 2\n"
-            "fi\n"
-            'commit_sha="${3#"$expected_prefix"}"\n'
-            'commit_sha="${commit_sha%"$expected_suffix"}"\n'
-            'if [[ -n "${GH_CHECK_RUNS_STDERR:-}" ]]; then\n'
-            '    printf "%s\\n" "$GH_CHECK_RUNS_STDERR" >&2\n'
-            "fi\n"
-            'if [[ -f "$GH_CHECK_RUNS_RAW_RESPONSE_FILE" ]]; then\n'
-            '    jq -r "$5" "$GH_CHECK_RUNS_RAW_RESPONSE_FILE"\n'
-            "    exit $?\n"
-            "fi\n"
-            'response_file="${GH_CHECK_RUNS_DIRECTORY}/${commit_sha}"\n'
-            'if [[ -f "$response_file" ]]; then\n'
-            '    cat "$response_file"\n'
-            "else\n"
-            '    cat "$GH_CHECK_RUNS_FILE"\n'
-            "fi\n"
-            'if [[ -n "${GH_AFTER_CHECK_LOOKUP_SCRIPT:-}" ]]; then\n'
-            '    "$GH_AFTER_CHECK_LOOKUP_SCRIPT"\n'
-            "fi\n",
-        )
-
-    def set_check_runs_for_commit(self, commit_sha: str, *runs: tuple[str, ...]) -> None:
-        """Make GitHub report app/status/conclusion pairs for one commit only."""
-        (self.check_runs_directory / commit_sha).write_text(_check_runs_response(*runs))
-
-    def set_check_runs_raw_response(self, response: str) -> None:
-        """Make the fake gh process apply its jq filter to a raw API response."""
-        self.check_runs_raw_response_file.write_text(response)
-
-    def make_check_lookup_fail(self) -> None:
-        _write_executable(
-            self._bin / "gh",
-            "#!/bin/bash\n"
-            'echo "GitHub API unavailable" >&2\n'
-            "exit 1\n",
-        )
-
-    def make_check_lookup_terminate(self, *, kill: bool) -> None:
-        _write_executable(
-            self._bin / "gh",
-            "#!/bin/bash\n"
-            + ("kill -KILL $$\n" if kill else 'exec sleep "$GH_CHECK_RUN_LOOKUP_HANG_SECONDS"\n'),
-        )
-
-    def write_alert_config(self, content: str = VALID_ALERT_ENV) -> None:
-        (self.root / ".env").write_text(content)
-
-    def write_mount_preflight(self, body: str) -> None:
-        _write_executable(self.root / "scripts" / "check_agent_cli_mounts.sh", body)
-
-    def commit_mount_preflight(self, body: str) -> None:
-        self.write_mount_preflight(body)
-        _git(self.root, "add", "scripts/check_agent_cli_mounts.sh")
-        _git(self.root, "commit", "-m", "add mount preflight")
-        _git(self.root, "push", "origin", "main")
-
-    def _up_to_date_pusher(self) -> Path:
-        """A second clone standing in for whoever lands commits on origin/main."""
-        clone = self.root.parent / "pusher"
-        if not clone.exists():
-            _git(self.root.parent, "clone", str(self.origin), str(clone))
-            _git(clone, "config", "user.email", "test@example.com")
-            _git(clone, "config", "user.name", "Test")
-        _git(clone, "pull", "--ff-only", "origin", "main")
-        return clone
-
-    def move_main_forward(self) -> None:
-        clone = self._up_to_date_pusher()
-        self._commits_pushed += 1
-        (clone / "README.md").write_text(f"moved {self._commits_pushed}\n")
-        _git(clone, "commit", "-am", f"move main {self._commits_pushed}")
-        _git(clone, "push", "origin", "main")
-
-    def move_main_forward_with_changed_alert_rules(self) -> None:
-        clone = self._up_to_date_pusher()
-        rules = clone / PROMETHEUS_RULE_PATH
-        rules.write_text(rules.read_text() + "\n# changed by deploy test\n")
-        _git(clone, "add", str(PROMETHEUS_RULE_PATH))
-        _git(clone, "commit", "-m", "change alert rules")
-        _git(clone, "push", "origin", "main")
-
-    def move_main_forward_with_changed_prometheus_config(self) -> None:
-        clone = self._up_to_date_pusher()
-        config = clone / "monitoring" / "prometheus.yml"
-        config.write_text(config.read_text() + "\n# changed by deploy test\n")
-        _git(clone, "add", "monitoring/prometheus.yml")
-        _git(clone, "commit", "-m", "change Prometheus config")
-        _git(clone, "push", "origin", "main")
-
-    def move_main_forward_with_changed_base_image(self) -> None:
-        clone = self._up_to_date_pusher()
-        base_dockerfile = clone / "docker" / "base" / "acestep-base.Dockerfile"
-        base_dockerfile.parent.mkdir(parents=True)
-        base_dockerfile.write_text("# changed by deploy test\n")
-        _git(clone, "add", "docker/base/acestep-base.Dockerfile")
-        _git(clone, "commit", "-m", "change base image")
-        _git(clone, "push", "origin", "main")
-
-    def add_acestep_submodule(self, fork: AcestepFork, *, initialised: bool = True) -> None:
-        """Pin vendor/acestep to the fork's head, as the host's checkout has it."""
-        (self.root / ".gitmodules").write_text(
-            f'[submodule "{ACESTEP_SUBMODULE_PATH}"]\n'
-            f"\tpath = {ACESTEP_SUBMODULE_PATH}\n"
-            f"\turl = {fork.origin.as_uri()}\n",
-        )
-        _git(
-            self.root, "update-index", "--add", "--cacheinfo",
-            f"160000,{fork.head},{ACESTEP_SUBMODULE_PATH}",
-        )
-        _git(self.root, "add", ".gitmodules")
-        _git(self.root, "commit", "-m", "pin vendor/acestep")
-        _git(self.root, "push", "origin", "main")
-        # What a clone leaves behind for a submodule nobody initialised yet.
-        (self.root / ACESTEP_SUBMODULE_PATH).mkdir(parents=True)
-        if initialised:
-            _git(
-                self.root, "-c", "protocol.file.allow=always",
-                "submodule", "update", "--init", "--", ACESTEP_SUBMODULE_PATH,
-            )
-
-    def move_main_forward_with_acestep_pin(self, pinned_sha: str) -> None:
-        clone = self._up_to_date_pusher()
-        _git(
-            clone, "update-index", "--cacheinfo",
-            f"160000,{pinned_sha},{ACESTEP_SUBMODULE_PATH}",
-        )
-        _git(clone, "commit", "-m", f"pin vendor/acestep at {pinned_sha}")
-        _git(clone, "push", "origin", "main")
-
-    def move_main_forward_with_compose_file(self, content: str) -> None:
-        clone = self._up_to_date_pusher()
-        (clone / "docker-compose.yml").write_text(content)
-        _git(clone, "add", "docker-compose.yml")
-        _git(clone, "commit", "-m", "change compose file")
-        _git(clone, "push", "origin", "main")
-
-    def move_main_forward_after_check_lookup(self) -> None:
-        """Advance origin after the deploy script has checked its current SHA."""
-        clone = self.root.parent / "pusher"
-        assert clone.exists()
-        self._after_check_lookup_script = self._bin / "move-main-after-check-lookup"
-        clone_text = shlex.quote(str(clone))
-        readme_text = shlex.quote(str(clone / "README.md"))
-        _write_executable(
-            self._after_check_lookup_script,
-            "#!/bin/bash\n"
-            "set -euo pipefail\n"
-            f"printf 'moved after check lookup\\n' > {readme_text}\n"
-            f"/usr/bin/git -C {clone_text} commit -am "
-            "'move main after check lookup' >/dev/null 2>&1\n"
-            f"/usr/bin/git -C {clone_text} push origin main >/dev/null 2>&1\n",
-        )
-
-    def remote_main_sha(self) -> str:
-        return subprocess.check_output(
-            ["git", "ls-remote", "origin", "refs/heads/main"],
-            cwd=self.root,
-            text=True,
-        ).split()[0]
-
-    def remote_main_commit_timestamp(self) -> int:
-        return int(subprocess.check_output(
-            ["git", "show", "-s", "--format=%ct", "HEAD"],
-            cwd=self.root.parent / "pusher",
-            text=True,
-        ))
-
-    def make_fetches_fail(self, repository: Path, transport: FailingTransport) -> None:
-        """Make every fetch from this repository's origin run the failing transport.
-
-        The script runs git with a scrubbed environment and an absolute binary,
-        so neither PATH nor GIT_SSH_COMMAND can slow it down; the repository's
-        own remote.origin.uploadpack setting is the one seam it still honours.
-        """
-        upload_pack = self._bin / "failing-upload-pack"
-        _write_executable(
-            upload_pack,
-            f"#!/bin/bash\necho $$ >{self._failing_transport_pid_file}\n"
-            f"{transport.value}exec sleep {HUNG_TRANSPORT_SECONDS}\n",
-        )
-        _git(repository, "config", "remote.origin.uploadpack", str(upload_pack))
-
-    def make_fetches_work_again(self, repository: Path) -> None:
-        _git(repository, "config", "--unset", "remote.origin.uploadpack")
-
-    def switch_to_work_branch(self) -> None:
-        _git(self.root, "checkout", "-B", "work")
-
-    def switch_to_main(self) -> None:
-        _git(self.root, "checkout", "main")
-
-    def advance_clock(self, seconds: int) -> None:
-        """Let time pass for the script without any passing for the test."""
-        self._clock_file.write_text(str(int(self._clock_file.read_text()) + seconds))
-
-    def set_clock(self, epoch_seconds: int) -> None:
-        self._clock_file.write_text(str(epoch_seconds))
-
-    def observe_sweep_at_fetch(self, removed: Path, preserved: list[Path]) -> Path:
-        observed = self.root.parent / "sweep-observed"
-        checks = [f'[[ ! -e {shlex.quote(str(removed))} && ! -L {shlex.quote(str(removed))} ]]']
-        checks.extend(f'[[ -e {shlex.quote(str(path))} ]]' for path in preserved)
-        upload_pack = self._bin / "observing-upload-pack"
-        _write_executable(
-            upload_pack, "#!/bin/bash\n"
-            + " && ".join(checks) + f" && touch {shlex.quote(str(observed))}\n"
-            'exec /usr/bin/git-upload-pack "$@"\n',
-        )
-        _git(self.root, "config", "remote.origin.uploadpack", str(upload_pack))
-        return observed
-
-    def refuse_removal(self, path: Path) -> None:
-        _write_executable(
-            self._bin / "rm", "#!/bin/bash\n"
-            f'for arg; do [[ "$arg" == {shlex.quote(str(path))} ]] && exit 1; done\n'
-            'exec /bin/rm "$@"\n',
-        )
-
-    def adopt_current_head_as_deployed(self) -> None:
-        """Skip the first-run adoption tick the script does on a fresh state."""
-        self.tick()
-
-    def remove_jq_from_path(self) -> None:
-        self._system_bin_without_jq = self.root.parent / "usr-bin-without-jq"
-        self._system_bin_without_jq.mkdir()
-        for entry in Path("/usr/bin").iterdir():
-            if entry.name != "jq":
-                (self._system_bin_without_jq / entry.name).symlink_to(entry)
-        self._jq_path_filter = self.root.parent / "hide-jq"
-        self._jq_path_filter.write_text(
-            'command() { [[ "$1" == "-v" && "$2" == "jq" ]] && return 1; builtin command "$@"; }\n',
-        )
-
-    def tick(self) -> subprocess.CompletedProcess[str]:
-        system_bin = self._system_bin_without_jq or Path("/usr/bin")
-        return subprocess.run(
-            [str(self.deploy_script)],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            env={
-                "PATH": f"{self._bin}:{system_bin}:/bin",
-                "BASH_ENV": str(self._jq_path_filter) if self._jq_path_filter else "",
-                "HOME": str(self.root.parent),
-                "LOG_CAPTURE_FILE": str(self.log_file),
-                "DOCKER_CALLS_FILE": str(self.docker_calls_file),
-                "CURL_CALLS_FILE": str(self.curl_calls_file),
-                "GH_CHECK_RUNS_FILE": str(self.check_runs_file),
-                "GH_CHECK_RUNS_DIRECTORY": str(self.check_runs_directory),
-                "GH_CHECK_RUNS_RAW_RESPONSE_FILE": str(self.check_runs_raw_response_file),
-                "GH_CHECK_RUNS_STDERR": self.check_runs_stderr,
-                "GH_CHECK_RUN_LOOKUP_HANG_SECONDS": "10",
-                "GH_AFTER_CHECK_LOOKUP_SCRIPT": (
-                    str(self._after_check_lookup_script)
-                    if self._after_check_lookup_script is not None
-                    else ""
-                ),
-                "FAKE_CLOCK_FILE": str(self._clock_file),
-                "SONGMAKER_AUTODEPLOY_FAILURE_ALERT_THRESHOLD": str(FAILURE_ALERT_THRESHOLD),
-                "SONGMAKER_AUTODEPLOY_ALERT_REPEAT_SECONDS": str(ALERT_REPEAT_SECONDS),
-                "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_TIMEOUT_SECONDS": str(
-                    self.check_run_lookup_timeout_seconds,
-                ),
-                "SONGMAKER_AUTODEPLOY_CHECK_RUN_APPEARANCE_GRACE_SECONDS": str(
-                    self.check_run_appearance_grace_seconds,
-                ),
-                "SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS": str(
-                    self.check_run_lookback_commits,
-                ),
-                "SONGMAKER_AUTODEPLOY_GIT_FETCH_TIMEOUT_SECONDS": str(
-                    self.git_fetch_timeout_seconds,
-                ),
-                "SONGMAKER_AUTODEPLOY_GIT_FETCH_KILL_GRACE_SECONDS": str(
-                    GIT_FETCH_KILL_GRACE_SECONDS,
-                ),
-                "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS": str(PRUNE_TIMEOUT_SECONDS),
-                "DOCKER_PRUNE_SLEEP_SECONDS": str(self._prune_sleep_seconds),
-                "DOCKER_BASE_IMAGES_PRESENT": str(self._base_images_present).lower(),
-                "DOCKER_COMPOSE_PROJECT_NAME": self._compose_project_name,
-                "DOCKER_COMPOSE_STDERR": self.compose_stderr,
-            },
-        )
-
-    @property
-    def journal(self) -> str:
-        return self.log_file.read_text() if self.log_file.exists() else ""
-
-    @property
-    def head(self) -> str:
-        return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=self.root, text=True,
-        ).strip()
-
-    @property
-    def failing_transport_pid(self) -> int:
-        return int(self._failing_transport_pid_file.read_text())
-
-    @property
-    def acestep_head(self) -> str:
-        return _git_output(self.root / ACESTEP_SUBMODULE_PATH, "rev-parse", "HEAD")
-
-    @property
-    def uncommitted_changes(self) -> str:
-        return _git_output(self.root, "status", "--porcelain")
-
-    @property
-    def build_and_recreate_calls(self) -> list[str]:
-        return [
-            call for call in self.docker_calls.splitlines()
-            if "build" in call or call.startswith("compose up")
-        ]
-
-    @property
-    def docker_calls(self) -> str:
-        return self.docker_calls_file.read_text() if self.docker_calls_file.exists() else ""
-
-    @property
-    def curl_calls(self) -> str:
-        return self.curl_calls_file.read_text() if self.curl_calls_file.exists() else ""
-
-    def alert_lines(self) -> list[str]:
-        return [line for line in self.journal.splitlines() if "ALERT:" in line]
-
-    @property
-    def failure_count_file(self) -> Path:
-        return self.root / ".git" / "songmaker-autodeploy.failcount"
-
-    @property
-    def deployed_sha_file(self) -> Path:
-        return self.root / ".git" / "songmaker-autodeploy.deployed-sha"
 
 
 @pytest.fixture
 def stuck_checkout(tmp_path: Path) -> Checkout:
-    """A checkout whose every tick refuses to deploy: HEAD is off main."""
+    """A checkout whose every tick refuses to deploy: HEAD is on a work branch."""
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -872,7 +101,7 @@ def test_a_recovered_tick_resets_the_streak(stuck_checkout: Checkout) -> None:
     for _ in range(FAILURE_ALERT_THRESHOLD):
         stuck_checkout.tick()
 
-    stuck_checkout.switch_to_main()
+    stuck_checkout.detach_at(stuck_checkout.head)
     recovered = stuck_checkout.tick()
     assert recovered.returncode == 0
 
@@ -957,7 +186,7 @@ def test_an_invalid_compose_configuration_refuses_before_the_job_guard_and_the_p
     exit_codes = [checkout.tick().returncode for _ in range(FAILURE_ALERT_THRESHOLD)]
 
     assert exit_codes == [0, 0, 1]
-    assert "reason: compose configuration refused before pull" in checkout.journal
+    assert "reason: compose configuration refused before checkout" in checkout.journal
     assert compose_error in checkout.journal
     assert checkout.head == head_before
     assert set(checkout.docker_calls.splitlines()) == {"compose config --quiet"}
@@ -996,7 +225,7 @@ def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_b
 
     assert fast_forward_tick.returncode == 0
     assert checkout.head == checkout.remote_main_sha()
-    assert "refuses the stack configuration after fast-forward" in checkout.journal
+    assert "refuses the stack configuration after checking out" in checkout.journal
     assert GRAFANA_PASSWORD_REFUSAL in checkout.journal
     assert checkout.build_and_recreate_calls == []
     assert checkout.deployed_sha_file.read_text() == deployed_before
@@ -1005,7 +234,7 @@ def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_b
 
     checkout.tick()
 
-    assert "refuses the stack configuration before pull" in checkout.journal
+    assert "refuses the stack configuration before checkout" in checkout.journal
 
     checkout.satisfy_compose_config()
     repaired_tick = checkout.tick()
@@ -1125,12 +354,12 @@ def test_a_changed_acestep_pin_is_checked_out_and_rebuilds_the_bases(
     """defect:#1479 cell 1 -- a pin change in the selected commit is fetched, checked
     out and rebuilds both bases before compose build, whatever diff ignores of submodules."""
     if submodule_ignore_setting is not None:
-        _git(acestep_checkout.root, "config", submodule_ignore_setting, "all")
+        git(acestep_checkout.root, "config", submodule_ignore_setting, "all")
     new_pin = acestep_fork.commit()
     acestep_fork.push()
     acestep_checkout.move_main_forward_with_acestep_pin(new_pin)
     submodule = acestep_checkout.root / ACESTEP_SUBMODULE_PATH
-    assert not _has_commit(submodule, new_pin)
+    assert not has_commit(submodule, new_pin)
 
     result = acestep_checkout.tick()
 
@@ -1191,7 +420,7 @@ def test_an_uninitialised_submodule_refuses_the_tick(
     checkout.move_main_forward_with_acestep_pin(new_pin)
     # Were the pin looked up in the superproject under the submodule's name,
     # this decoy would let that lookup succeed and fetch the commit into it.
-    _git(acestep_fork.work, "push", str(checkout.origin), f"{new_pin}:refs/heads/decoy")
+    git(acestep_fork.work, "push", str(checkout.origin), f"{new_pin}:refs/heads/decoy")
 
     result = checkout.tick()
 
@@ -1201,7 +430,7 @@ def test_an_uninitialised_submodule_refuses_the_tick(
     assert checkout.head == head_before
     assert checkout.deployed_sha_file.read_text() == deployed_before
     assert checkout.build_and_recreate_calls == []
-    assert not _has_commit(checkout.root, new_pin)
+    assert not has_commit(checkout.root, new_pin)
 
 
 @pytest.mark.parametrize(
@@ -1244,7 +473,7 @@ def test_a_fetch_that_cannot_finish_is_a_counted_refusal_that_leaves_no_process_
 
     assert result.returncode == 0
     assert elapsed < HUNG_TICK_CEILING_SECONDS
-    assert _stops_running(acestep_checkout.failing_transport_pid)
+    assert stops_running(acestep_checkout.failing_transport_pid)
     assert f"{failing_description} {journal_wording}" in acestep_checkout.journal
     assert acestep_checkout.failure_count_file.read_text() == "1"
     assert acestep_checkout.build_and_recreate_calls == []
@@ -1499,7 +728,7 @@ def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
     assert (
         f"skipping deploy candidate {checkout.remote_main_sha()}: {verdict}" in checkout.journal
     )
-    assert "no fully green deploy candidate" in checkout.journal
+    assert "no fully green release" in checkout.journal
     assert "failure count now" not in checkout.journal
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
@@ -1649,7 +878,8 @@ def test_running_head_deploys_the_newest_green_predecessor(tmp_path: Path) -> No
     ).strip() == green_predecessor
     assert checkout.deployed_sha_file.read_text() == green_predecessor
     assert f"skipping deploy candidate {running_head}: waiting" in checkout.journal
-    assert f"selected newest fully green deploy candidate {green_predecessor}" in checkout.journal
+    selected = f"selected newest fully green release v2026.10.25.1 ({green_predecessor})"
+    assert selected in checkout.journal
 
 
 @pytest.mark.parametrize(
@@ -1682,7 +912,8 @@ def test_failed_head_deploys_the_newest_green_predecessor(
     assert checkout.deployed_sha_file.read_text() == green_predecessor
     assert "compose build" in checkout.docker_calls
     assert f"skipping deploy candidate {failed_head}: failed" in checkout.journal
-    assert f"selected newest fully green deploy candidate {green_predecessor}" in checkout.journal
+    selected = f"selected newest fully green release v2026.10.25.1 ({green_predecessor})"
+    assert selected in checkout.journal
 
 
 def test_lookback_limit_does_not_deploy_a_green_commit_outside_the_window(tmp_path: Path) -> None:
@@ -1706,7 +937,7 @@ def test_lookback_limit_does_not_deploy_a_green_commit_outside_the_window(tmp_pa
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == local_head_before
-    assert "no fully green deploy candidate among the newest 1 commits" in checkout.journal
+    assert "no fully green release among the newest 1;" in checkout.journal
     assert "compose build" not in checkout.docker_calls
 
 
@@ -1927,7 +1158,7 @@ def test_future_commit_timestamp_cannot_starve_first_seen_grace_alarm(
 
     assert result.returncode == 0
     assert "has not reported a check run within 1800s of its commit" in checkout.journal
-    assert "no fully green deploy candidate" in checkout.journal
+    assert "no fully green release" in checkout.journal
     assert "failure count now" not in checkout.journal
     assert "compose build" not in checkout.docker_calls
 
@@ -1998,7 +1229,7 @@ def test_post_merge_hook_is_not_run_by_the_deploy_fast_forward(tmp_path: Path) -
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     hook = checkout.root / ".git" / "hooks" / "post-merge"
-    _write_executable(
+    write_executable(
         hook,
         "#!/bin/bash\n"
         f"printf 'ran' > {shlex.quote(str(checkout.post_merge_marker))}\n",
@@ -2126,7 +1357,7 @@ def test_unremovable_stale_temp_refuses_before_fetch_and_alerts_on_third_tick(
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
-    before = _git_output(checkout.root, "rev-parse", "origin/main")
+    before = git_output(checkout.root, "rev-parse", "origin/main")
     if advance_origin:
         checkout.move_main_forward()
     stale = checkout.root / ".git/songmaker-autodeploy.git-fetch.Abc123"
@@ -2138,7 +1369,7 @@ def test_unremovable_stale_temp_refuses_before_fetch_and_alerts_on_third_tick(
     for count, status in enumerate((0, 0, 1), start=1):
         assert checkout.tick().returncode == status
         assert checkout.failure_count_file.read_text() == str(count)
-        assert _git_output(checkout.root, "rev-parse", "origin/main") == before
+        assert git_output(checkout.root, "rev-parse", "origin/main") == before
     assert stale.exists()
     assert f"-p user.err -- stale temp file could not be removed: {stale}" in checkout.journal
     assert ("ALERT: 3 ticks in a row deferred/failed, "

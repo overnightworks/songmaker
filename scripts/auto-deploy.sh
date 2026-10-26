@@ -2,18 +2,21 @@
 # Pull-based auto-deploy for Songmaker (issue #298).
 #
 # A GitOps timer, not a webhook or a self-hosted CI runner: this script polls
-# origin/main every couple of minutes (see songmaker-autodeploy.timer) and
-# fast-forwards + redeploys the local checkout when main has moved. Before it
-# pulls, it verifies through GitHub that every GitHub Actions check run for
-# the newest green commit in the fetched main history has completed
-# successfully, skipped, or neutral, with at least one success; check runs
-# from other apps are advisory. The script itself does not re-run tests.
+# origin every couple of minutes (see songmaker-autodeploy.timer) and deploys
+# only a release tag. A landing on main deploys nothing by itself; the head
+# cuts a tag `vYYYY.MM.DD.N` on a green main commit, and the next tick checks
+# that commit out detached in the deploy checkout and redeploys it. Tags are
+# read from origin into a private ref namespace, never from local refs/tags.
+# Before it checks out, it verifies through GitHub that every GitHub Actions
+# check run for the newest green release has completed successfully, skipped,
+# or neutral, with at least one success; check runs from other apps are
+# advisory. The script itself does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
 #     stream. `docker compose build` (image build only, no container
 #     recreate) is now separated from `docker compose up -d --wait`
-#     (container recreate). The active-jobs check runs once before the pull
+#     (container recreate). The active-jobs check runs once before the checkout
 #     and again right before the recreate step, so the only window a job can
 #     start and still get killed is the few seconds between that second
 #     check and the recreate — not the 8-15 minutes a cold-cache build can
@@ -21,25 +24,25 @@
 #     to the next tick, which finds the image already built and is back at
 #     the recheck within seconds.
 #   - "Up to date" is judged against what actually got recreated, not just
-#     what got pulled. A `deployed.sha` file in the state directory is
+#     what got checked out. A `deployed.sha` file in the state directory is
 #     written ONLY by `record_success`, right after `compose up -d --wait`
-#     succeeds. Up-to-date means `HEAD == origin/$DEPLOY_BRANCH` AND
-#     `deployed.sha == HEAD` — not `HEAD == origin/$DEPLOY_BRANCH` alone.
-#     Without this, a tick that pulled and built but deferred the recreate
-#     (jobs still active, or a build/up failure) already sits on the new
-#     HEAD; every following tick then saw "local == remote" and treated the
+#     succeeds. Up-to-date means no release is newer than `deployed.sha`
+#     (its commit is `deployed.sha` or an ancestor of it) — not "HEAD is the
+#     newest release". Without this, a tick that checked out and built but
+#     deferred the recreate (jobs still active, or a build/up failure)
+#     already sits on the release; every following tick would treat the
 #     stale running containers as "nothing to deploy" forever, silently
 #     resetting the setback counter along the way. The first tick that ever
 #     finds no `deployed.sha` (fresh install) adopts the current HEAD as
 #     already-deployed instead of deploying — the operator chose that to
 #     keep `install-autodeploy.sh`'s `enable --now` harmless; the
-#     consequence is that a checkout installed while behind main stays on
+#     consequence is that a checkout installed behind the newest release stays on
 #     the stale stack until the operator deploys it once by hand (see
 #     docs/architecture.md).
 #   - Migrations occasionally abort loudly on lock_timeout (see the
 #     c9d4a2f18e37 unique-slug-index migration). That is not fatal — the
-#     next tick retries the same pull+deploy. A tick that could not deploy
-#     despite main having moved (a hard refusal, or a pull/build/up
+#     next tick retries the same deploy. A tick that could not deploy
+#     despite a release being pending (a hard refusal, or a fetch/build/up
 #     failure) increments a consecutive-FAILURE counter; only the tick
 #     that crosses N in a row escalates to a prio=err journal line worth
 #     paging on — and, since issue #333, is also the only tick that exits
@@ -58,18 +61,19 @@
 #     record_failure / fail_tick / record_busy_deferral below). Both
 #     counters reset only after a deploy and its Docker cleanup both succeed,
 #     or on a genuine "nothing to deploy" tick.
-#   - This host's `.env` and checkout are also the operator's manual
-#     workspace. A dirty tree, a diverged local main, or HEAD sitting on a
-#     branch other than the deploy branch are left completely untouched —
-#     the script only ever fast-forwards a clean checkout of the deploy
-#     branch. The up-to-date shortcut (including the deployed.sha check)
-#     runs BEFORE this branch guard: an operator sitting on an experiment
-#     branch with nothing actually pending to deploy must not get a loud
-#     err line every ~2 minutes for no reason (see step ordering below).
+#   - The deploy checkout (`~/srv/songmaker`) holds the live `.env`. A dirty
+#     tree, or a checkout on a branch (a work clone), is left completely
+#     untouched: the script only ever detaches a clean, detached checkout
+#     and never moves it backwards. A work clone with a release pending is a
+#     counted refusal, so a unit still pointing at one alerts instead of going
+#     stale. The up-to-date shortcut (including the deployed.sha check) runs
+#     BEFORE this branch guard: a work clone with nothing actually pending
+#     must not get a loud err line every ~2 minutes for no reason (see step
+#     ordering below).
 #   - The ACE-Step submodule pin (vendor/acestep) ships with the commit that
-#     moves it. A plain `git merge --ff-only` leaves the submodule on the old
+#     moves it. A plain `git checkout --detach` leaves the submodule on the old
 #     commit, which `git status --porcelain` then reports as dirty: the dirty
-#     guard would refuse every later tick. So before the fast-forward,
+#     guard would refuse every later tick. So before the checkout,
 #     fetch_acestep_pin makes the pinned commit available in the submodule
 #     (a network failure or an uninitialised submodule is a counted refusal
 #     that moves nothing), and right after it checkout_acestep_pin checks the
@@ -94,7 +98,7 @@
 # invocation can safely carry as one argument, so only a short log_err line
 # with the exit code goes through `logger`. `log()` itself additionally
 # truncates any payload to ~2000 chars as a second line of defense for
-# every other captured-output log line in this script (git status, pull,
+# every other captured-output log line in this script (git status, checkout,
 # fetch, the DB check).
 #
 # All journal lines are tagged "songmaker-autodeploy" (`journalctl -t
@@ -142,7 +146,13 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 LOG_TAG="songmaker-autodeploy"
 LOG_PAYLOAD_MAX_CHARS=2000
+# The branch a release commit must be on. Only a tag deploys; main itself never does.
 DEPLOY_BRANCH="${SONGMAKER_AUTODEPLOY_BRANCH:-main}"
+# Release tags are fetched into this private namespace and only read from it:
+# local refs/tags never decide what goes live.
+RELEASE_REF_PREFIX="refs/songmaker-autodeploy/releases/"
+# vYYYY.MM.DD.N: a real calendar date, N from 1 without a leading zero.
+RELEASE_TAG_GRAMMAR='^v([0-9]{4})\.([0-9]{2})\.([0-9]{2})\.([1-9][0-9]{0,8})$'
 PRUNE_RETENTION_HOURS=48
 PRUNE_TIMEOUT_SECONDS="${SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS:-600}"
 PREVIOUS_IMAGE_TAG="previous"
@@ -308,6 +318,7 @@ FIRST_SEEN_COMMIT_FILE="${SONGMAKER_AUTODEPLOY_FIRST_SEEN_COMMIT_FILE:-$STATE_DI
 FAILURE_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_FAILURE_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.failure-escalated-at}"
 BUSY_ESCALATED_AT_FILE="${SONGMAKER_AUTODEPLOY_BUSY_ESCALATED_AT_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.busy-escalated-at}"
 GUARD_REASON_FILE="${SONGMAKER_AUTODEPLOY_GUARD_REASON_FILE:-$STATE_DIR_FALLBACK/songmaker-autodeploy.guard-reason}"
+SKIPPED_TAGS_FILE="$STATE_DIR_FALLBACK/songmaker-autodeploy.skipped-tags"
 FAILURE_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_FAILURE_ALERT_THRESHOLD:-3}"
 BUSY_ALERT_THRESHOLD="${SONGMAKER_AUTODEPLOY_BUSY_ALERT_THRESHOLD:-30}"
 # Wall-clock time between one escalation of an unbroken streak and the
@@ -646,7 +657,7 @@ reload_prometheus_rules() {
     fi
 }
 
-# --- Active-jobs guard, called once before the pull and once again right
+# --- Active-jobs guard, called once before the checkout and once again right
 # before the container recreate (see the header). Bounded by a short
 # `timeout` — a wedged DB connection must not hang a tick, unlike the image
 # build below, which is allowed to run as long as it needs.
@@ -805,9 +816,9 @@ escalation_due() {
     printf '%s' "$now" >"$timestamp_file"
 }
 
-# A tick that could not deploy at all despite $DEPLOY_BRANCH having moved —
-# a hard refusal (wrong branch, dirty tree, diverged), a fail-closed DB
-# check, or a pull/build/up failure. This is the "something is actually
+# A tick that could not deploy at all despite a release being pending —
+# a hard refusal (work clone, dirty tree), a fail-closed DB
+# check, or a fetch/build/up failure. This is the "something is actually
 # broken" signal: N of these in a row (default 3) pages.
 #
 # Returns success on exactly the ticks that escalated, so fail_tick below
@@ -935,7 +946,7 @@ acestep_pin_of() {
     fi
 }
 
-# Runs before the fast-forward, so a pin that cannot be had leaves the checkout
+# Runs before the checkout, so a pin that cannot be had leaves the checkout
 # untouched and the next tick retries from step 2. Every submodule lookup is
 # anchored to $REPO_ROOT: this script never changes its working directory, and
 # a bare `git -C vendor/acestep` on an uninitialised submodule resolves to the
@@ -969,8 +980,8 @@ fetch_acestep_pin() {
         "cannot fetch the $ACESTEP_SUBMODULE_PATH pin $pinned_sha"
 }
 
-# Runs right after the fast-forward is verified, before the configuration guard
-# can refuse the tick: the fast-forward alone leaves the submodule on its old
+# Runs right after the checkout is verified, before the configuration guard
+# can refuse the tick: the checkout alone leaves the submodule on its old
 # commit, which the dirty guard would then refuse on every later tick. The
 # pin's objects are already local (fetch_acestep_pin), so nothing here touches
 # the network. A submodule status that starts with a space proves its HEAD
@@ -1121,6 +1132,85 @@ remote_check_status() {
     fi
 }
 
+# --- Release selection. A tag deploys only when its name is in the release
+# grammar and its commit is on origin/$DEPLOY_BRANCH; every other tag is named
+# once in the journal (SKIPPED_TAGS_FILE remembers what was named) and ignored.
+declare -a CURRENT_SKIPPED_TAGS=()
+declare -A RELEASE_TAG_OF=()
+DEPLOY_CANDIDATES=""
+
+note_skipped_tag() {
+    CURRENT_SKIPPED_TAGS+=("$1: $2")
+}
+
+# Names each skipped tag the first tick it is seen, then remembers exactly the
+# tags skipped now, so a tag that is deleted or becomes eligible is forgotten.
+report_skipped_tags() {
+    local entry
+    local -A already_named=()
+    if [[ -f "$SKIPPED_TAGS_FILE" ]]; then
+        while IFS= read -r entry; do
+            already_named[$entry]=1
+        done <"$SKIPPED_TAGS_FILE"
+    fi
+    : >"$SKIPPED_TAGS_FILE"
+    for entry in "${CURRENT_SKIPPED_TAGS[@]}"; do
+        [[ -n "${already_named[$entry]:-}" ]] || log_info "skipping tag $entry"
+        printf '%s\n' "$entry" >>"$SKIPPED_TAGS_FILE"
+    done
+}
+
+# Sets DEPLOY_CANDIDATES (commit per line, newest release first, at most
+# CHECK_RUN_LOOKBACK_COMMITS) and RELEASE_TAG_OF (commit -> its newest tag).
+collect_release_candidates() {
+    local release_refs ref tag commit key ordered="" ordered_line
+    local candidate_count=0
+    if ! release_refs="$(safe_git for-each-ref --format='%(refname)' "$RELEASE_REF_PREFIX" 2>&1)"; then
+        log_err "cannot list the release tags fetched from origin in $REPO_ROOT: $release_refs"
+        fail_tick "cannot list release tags"
+    fi
+    while IFS= read -r ref; do
+        [[ -n "$ref" ]] || continue
+        tag="${ref#"$RELEASE_REF_PREFIX"}"
+        if [[ "$tag" =~ $RELEASE_TAG_GRAMMAR ]] \
+            && [[ "$(date -u -d "${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}" +%F 2>/dev/null)" == "${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}" ]]; then
+            printf -v key '%04d%02d%02d%09d' "$((10#${BASH_REMATCH[1]}))" "$((10#${BASH_REMATCH[2]}))" "$((10#${BASH_REMATCH[3]}))" "${BASH_REMATCH[4]}"
+            ordered+="$key $tag"$'\n'
+        else
+            note_skipped_tag "$tag" "not a release name (vYYYY.MM.DD.N with a real date)"
+        fi
+    done <<<"$release_refs"
+
+    while IFS= read -r ordered_line; do
+        [[ -n "$ordered_line" ]] || continue
+        ((candidate_count < CHECK_RUN_LOOKBACK_COMMITS)) || break
+        tag="${ordered_line#* }"
+        if ! commit="$(safe_git rev-parse --verify --quiet "$RELEASE_REF_PREFIX$tag^{commit}")"; then
+            note_skipped_tag "$tag" "does not name a commit"
+        elif ! safe_git merge-base --is-ancestor "$commit" "origin/$DEPLOY_BRANCH"; then
+            note_skipped_tag "$tag" "its commit $commit is not on origin/$DEPLOY_BRANCH"
+        elif [[ -z "${RELEASE_TAG_OF[$commit]:-}" ]]; then
+            RELEASE_TAG_OF[$commit]="$tag"
+            DEPLOY_CANDIDATES+="${DEPLOY_CANDIDATES:+$'\n'}$commit"
+            candidate_count=$((candidate_count + 1))
+        fi
+    done < <(sort -r <<<"$ordered")
+    report_skipped_tags
+}
+
+# A release is pending unless the running commit is it or already contains it.
+# An unknown running commit leaves every release pending, never up to date.
+any_release_pending() {
+    local commit
+    while IFS= read -r commit; do
+        [[ -n "$commit" ]] || continue
+        if [[ -z "$DEPLOYED_SHA" ]] || ! safe_git merge-base --is-ancestor "$commit" "$DEPLOYED_SHA"; then
+            return 0
+        fi
+    done <<<"$DEPLOY_CANDIDATES"
+    return 1
+}
+
 # --- 1. Refuse to overlap with another run in flight (a slow cold-cache
 # build can outlive one 2-minute tick). Busy is the expected steady state
 # under a running build, not an error — logged at debug so an unfiltered
@@ -1146,10 +1236,11 @@ if ! LOCAL_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
     fail_tick "cannot determine local HEAD"
 fi
 
-# --no-recurse-submodules: the pin gate before the fast-forward is the one
-# owner of the ACE-Step fetch, so a bad pin in a newer, unselected commit
-# cannot block an older green candidate here.
-if FETCH_OUTPUT="$(safe_git_fetch "$REPO_ROOT" --no-recurse-submodules origin "$DEPLOY_BRANCH" 2>&1)"; then
+# The branch tells which commits a release may be on; the tags land in a private
+# namespace (--no-tags keeps refs/tags out of it). --no-recurse-submodules: the
+# pin gate before the checkout is the one owner of the ACE-Step fetch, so a bad
+# pin in a newer, unselected release cannot block an older green one here.
+if FETCH_OUTPUT="$(safe_git_fetch "$REPO_ROOT" --no-tags --prune --no-recurse-submodules origin "$DEPLOY_BRANCH" "+refs/tags/v*:${RELEASE_REF_PREFIX}v*" 2>&1)"; then
     :
 else
     FETCH_EXIT_CODE=$?
@@ -1165,11 +1256,13 @@ fi
 
 # --- 3. Up-to-date shortcut — the common case, and must stay silent. Judged
 # against what is actually RUNNING ($DEPLOYED_SHA_FILE, written only by
-# record_success), not just what is checked out: a tick that pulled/built
-# but deferred the recreate already sits on the new HEAD, so "local ==
-# remote" alone would call that "nothing to deploy" forever. Runs before the
-# branch guard: an operator sitting on an unrelated branch with nothing
-# pending to deploy must not get a loud line every ~2 minutes.
+# record_success), not just what is checked out: a tick that checked out and
+# built a release but deferred the recreate already sits on its commit, so
+# "HEAD is the release" alone would call that "nothing to deploy" forever.
+# Nothing is pending when no release is newer than the running commit, which
+# also covers "no release at all": a landing on main alone deploys nothing.
+# Runs before the branch guard: a work clone with nothing pending must not
+# get a loud line every ~2 minutes.
 if [[ ! -f "$DEPLOYED_SHA_FILE" ]]; then
     printf '%s' "$LOCAL_HEAD" >"$DEPLOYED_SHA_FILE"
     reset_counters
@@ -1183,40 +1276,40 @@ if ! DEPLOYED_SHA="$(cat "$DEPLOYED_SHA_FILE" 2>&1)"; then
 elif ! [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
     log_err "deployed-sha file $DEPLOYED_SHA_FILE has unexpected content ('$DEPLOYED_SHA') — treating deploy state as unknown, will re-verify by deploying"
     DEPLOYED_SHA=""
+elif ! safe_git cat-file -e "$DEPLOYED_SHA^{commit}" 2>/dev/null; then
+    log_err "deployed-sha $DEPLOYED_SHA is not a commit in $REPO_ROOT — treating deploy state as unknown, will re-verify by deploying"
+    DEPLOYED_SHA=""
 fi
 
-if [[ "$LOCAL_HEAD" == "$REMOTE_HEAD" && "$DEPLOYED_SHA" == "$LOCAL_HEAD" ]]; then
+collect_release_candidates
+if ! any_release_pending; then
     reset_counters
-    log_debug "already at origin/$DEPLOY_BRANCH ($LOCAL_HEAD) and deployed — nothing to deploy"
+    log_debug "no release newer than the running commit ($DEPLOYED_SHA) — nothing to deploy"
     exit 0
 fi
 
-# --- 4. On the deploy branch? Reached only once step 3 has established that
-# something is actually pending — but on a work branch that is essentially
-# every tick: HEAD there is essentially never == origin/$DEPLOY_BRANCH, so
-# this guard fires continuously for as long as the operator stays away from
-# it, not as some rare edge case. A detached HEAD or a non-deploy branch
-# therefore only re-logs at prio=err when the reason actually changes
-# (log_guard_reason); record_failure still counts every tick regardless, so
-# the ALERT threshold is unaffected by the log-level damping.
-if ! CURRENT_BRANCH="$(safe_git symbolic-ref --quiet --short HEAD 2>&1)"; then
-    log_guard_reason "HEAD at $REPO_ROOT is not on a branch (detached?) — refusing to deploy, not touching the tree: $CURRENT_BRANCH"
-    fail_tick "HEAD not on a branch"
+# --- 4. A deploy checkout, not a work clone? Reached only once step 3 has
+# established that a release is actually pending. A checkout on a branch is
+# someone's workspace: the script never resets, rebases or detaches it. It
+# is a counted refusal so a unit still pointing at a work clone alerts instead
+# of going silently stale (log_guard_reason damps the repeated err line;
+# record_failure still counts every tick, so the ALERT threshold is unaffected).
+if CURRENT_BRANCH="$(safe_git symbolic-ref --quiet --short HEAD 2>&1)"; then
+    log_guard_reason "HEAD at $REPO_ROOT is on branch '$CURRENT_BRANCH', a work clone and not a deploy checkout (detached at a release) — refusing to deploy the pending release, not touching the tree"
+    fail_tick "HEAD on branch $CURRENT_BRANCH, not a deploy checkout"
+elif (($? != 1)); then
+    log_err "cannot determine whether HEAD at $REPO_ROOT is on a branch: $CURRENT_BRANCH"
+    fail_tick "cannot read the checked-out branch"
 fi
 
-if [[ "$CURRENT_BRANCH" != "$DEPLOY_BRANCH" ]]; then
-    log_guard_reason "HEAD at $REPO_ROOT is on branch '$CURRENT_BRANCH', not the deploy branch '$DEPLOY_BRANCH' — refusing to deploy, not touching the tree"
-    fail_tick "HEAD on branch $CURRENT_BRANCH instead of $DEPLOY_BRANCH"
-fi
-
-# Branch guard passed — clear any stale reason so a future recurrence (after
-# a branch change or a successful deploy in between) logs at err again
-# instead of being suppressed by a reason left over from before.
+# Guard passed — clear any stale reason so a future recurrence (after a
+# branch change or a successful deploy in between) logs at err again instead
+# of being suppressed by a reason left over from before.
 rm -f "$GUARD_REASON_FILE"
 
-# --- 5. Safe to touch? A dirty working tree or a diverged (non-fast-
-# forwardable) local main stops here — the host's checkout is also the
-# operator's manual workspace.
+# --- 5. Safe to touch? A dirty working tree stops here — the host's checkout
+# is also the operator's manual workspace. Never going backwards is checked
+# against the selected release in step 9.
 if ! STATUS_OUTPUT="$(safe_git status --porcelain 2>&1)"; then
     log_err "cannot determine working tree status in $REPO_ROOT: $STATUS_OUTPUT"
     fail_tick "git status failed"
@@ -1227,14 +1320,9 @@ if [[ -n "$STATUS_OUTPUT" ]]; then
     fail_tick "working tree dirty"
 fi
 
-if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_HEAD"; then
-    log_err "local HEAD ($LOCAL_HEAD) has diverged from origin/$DEPLOY_BRANCH ($REMOTE_HEAD) — not fast-forwardable, refusing to deploy, not touching the tree"
-    fail_tick "local HEAD diverged from origin/$DEPLOY_BRANCH"
-fi
-
 # The checked-out stack configuration must be complete before anything
 # below runs; see compose_config_refusal.
-compose_config_refusal "before pull"
+compose_config_refusal "before checkout"
 
 # --- 6. Job guard, ahead of the first step that touches the checkout. An
 # unreachable DB fails closed: unknown job state is treated as "do not
@@ -1269,7 +1357,7 @@ fi
 
 # --- 8. Agent-CLI mount preflight, the last check before anything is
 # changed. When the verifier from issue #350 is present, make its named
-# failure a regular deploy refusal before a pull or an expensive image build.
+# failure a regular deploy refusal before the checkout or an expensive image build.
 # Until that change lands, absence is explicit rather than a silent fallback:
 # this tick names the missing preflight and continues with the guards already
 # available in this checkout.
@@ -1281,20 +1369,11 @@ elif ! MOUNT_PREFLIGHT_ERROR="$(bash "$MOUNT_PREFLIGHT_SCRIPT" 2>&1)"; then
     fail_tick "agent CLI mount preflight failed"
 fi
 
-# --- 9. Select the newest fully green commit in the recent main history.
-# A newer running or failed commit is skipped rather than becoming a reason to
+# --- 9. Select the newest fully green release (candidates from step 3). A
+# newer running or failed release is skipped rather than becoming a reason to
 # hold an already-verified predecessor back. An unavailable or malformed
 # GitHub answer is still fail-closed: without its result we cannot prove that
 # a predecessor is the newest green candidate.
-if ! DEPLOY_CANDIDATES="$(safe_git rev-list --first-parent --max-count="$CHECK_RUN_LOOKBACK_COMMITS" "origin/$DEPLOY_BRANCH" 2>&1)"; then
-    log_err "cannot list the newest $CHECK_RUN_LOOKBACK_COMMITS commits for origin/$DEPLOY_BRANCH: $DEPLOY_CANDIDATES"
-    fail_tick "cannot list deploy candidates"
-fi
-if [[ -z "$DEPLOY_CANDIDATES" ]]; then
-    log_err "origin/$DEPLOY_BRANCH has no commits to evaluate for deployment"
-    fail_tick "no deploy candidates"
-fi
-
 DEPLOY_COMMIT=""
 while IFS= read -r CANDIDATE_COMMIT; do
     if [[ "$CANDIDATE_COMMIT" == "$REMOTE_HEAD" ]]; then
@@ -1321,7 +1400,7 @@ while IFS= read -r CANDIDATE_COMMIT; do
     case "$CANDIDATE_CHECK_STATUS" in
         green)
             DEPLOY_COMMIT="$CANDIDATE_COMMIT"
-            log_info "selected newest fully green deploy candidate $DEPLOY_COMMIT from origin/$DEPLOY_BRANCH"
+            log_info "selected newest fully green release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT)"
             break
             ;;
         waiting\ *|failed\ *)
@@ -1335,29 +1414,29 @@ while IFS= read -r CANDIDATE_COMMIT; do
 done <<<"$DEPLOY_CANDIDATES"
 
 if [[ -z "$DEPLOY_COMMIT" ]]; then
-    log_info "no fully green deploy candidate among the newest $CHECK_RUN_LOOKBACK_COMMITS commits of origin/$DEPLOY_BRANCH; waiting"
+    log_info "no fully green release among the newest $CHECK_RUN_LOOKBACK_COMMITS; waiting"
     exit 0
 fi
 
-if [[ "$LOCAL_HEAD" == "$DEPLOY_COMMIT" && "$DEPLOYED_SHA" == "$DEPLOY_COMMIT" ]]; then
+if [[ "$LOCAL_HEAD" == "$DEPLOYED_SHA" ]] && safe_git merge-base --is-ancestor "$DEPLOY_COMMIT" "$DEPLOYED_SHA"; then
     reset_counters
-    log_debug "newest fully green deploy candidate $DEPLOY_COMMIT is already running; waiting for a newer green commit"
+    log_debug "newest fully green release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT) is already running or older; waiting for a newer green release"
     exit 0
 fi
 
 if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$DEPLOY_COMMIT"; then
-    log_err "newest fully green deploy candidate $DEPLOY_COMMIT is behind local HEAD $LOCAL_HEAD — refusing to roll the checkout backwards"
-    fail_tick "deploy candidate is behind local HEAD"
+    log_err "newest fully green release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT) does not contain local HEAD $LOCAL_HEAD — refusing to move the checkout backwards"
+    fail_tick "release does not contain local HEAD"
 fi
 
-# --- 10. Fast-forward exactly the selected green commit, then build.
-# Do not use `git pull` here: it would fetch a second time and could move the
-# checkout past $DEPLOY_COMMIT after its checks were accepted. No timeout around
+# --- 10. Check out exactly the selected green release commit, detached, then
+# build. The tag was resolved to its commit before the check-run lookup, so a
+# newer tag pushed since cannot change what is checked out. No timeout around
 # the build (AGENTS.md) — a
 # cold-cache rebuild legitimately takes 8-15 minutes. Building does not
 # recreate any running container, so it cannot kill an in-flight job by
 # itself — the recheck in step 11 is what guards the actual recreate. Both
-# the fast-forward and `compose build` stream straight to this process's own
+# the checkout and `compose build` stream straight to this process's own
 # stdout/stderr rather than being captured — a failed build's full output
 # can easily exceed what a single logger argument can carry (see header) —
 # only a short log_err line with the exit code goes through `logger`.
@@ -1369,18 +1448,19 @@ if [[ -n "$ACESTEP_PIN" ]]; then
     fetch_acestep_pin "$ACESTEP_PIN"
 fi
 
-if ! MERGE_OUTPUT="$(safe_git merge --ff-only "$DEPLOY_COMMIT" 2>&1)"; then
-    log_err "git merge --ff-only to selected deploy candidate ($DEPLOY_COMMIT) failed in $REPO_ROOT: $MERGE_OUTPUT"
-    fail_tick "git fast-forward failed"
+log_info "checking out release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT) detached"
+if ! CHECKOUT_OUTPUT="$(safe_git checkout --detach "$DEPLOY_COMMIT" 2>&1)"; then
+    log_err "git checkout --detach of selected release ${RELEASE_TAG_OF[$DEPLOY_COMMIT]} ($DEPLOY_COMMIT) failed in $REPO_ROOT: $CHECKOUT_OUTPUT"
+    fail_tick "git checkout of the release failed"
 fi
 
 if ! CHECKED_OUT_HEAD="$(safe_git rev-parse HEAD 2>&1)"; then
-    log_err "cannot determine HEAD in $REPO_ROOT after fast-forward: $CHECKED_OUT_HEAD"
-    fail_tick "cannot determine HEAD after fast-forward"
+    log_err "cannot determine HEAD in $REPO_ROOT after the checkout: $CHECKED_OUT_HEAD"
+    fail_tick "cannot determine HEAD after the checkout"
 fi
 
 if [[ "$CHECKED_OUT_HEAD" != "$DEPLOY_COMMIT" ]]; then
-    log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the selected deploy candidate $DEPLOY_COMMIT — refusing to build"
+    log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after the checkout, not the selected release commit $DEPLOY_COMMIT — refusing to build"
     fail_tick "checked out commit differs from verified commit"
 fi
 
@@ -1390,11 +1470,11 @@ fi
 
 # The selected commit may require a variable the previous one did not; name
 # it before the base-image and compose builds rather than after them.
-compose_config_refusal "after fast-forward to $DEPLOY_COMMIT"
+compose_config_refusal "after checking out $DEPLOY_COMMIT"
 
-# Base images are local-only. Check the selected candidate against the revision
+# Base images are local-only. Check the selected release against the revision
 # that is actually running, rather than against the checkout's previous HEAD:
-# a prior build-only deferral may already have advanced this checkout.
+# a prior build-only deferral may already have moved this checkout.
 if base_images_need_build "$DEPLOYED_SHA" "$DEPLOY_COMMIT"; then
     if "$SCRIPT_DIR/build_images.sh" bases; then
         :
