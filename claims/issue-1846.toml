@@ -1,8 +1,0 @@
-claim_id = "a83f110c4f7e40a09c5cbcb5bc1b61a0"
-agent = "Claude 1e76a7fc-8a2a-4d72-8081-65243354a031"
-role = "builder"
-base = "3f77c4db1a6e5c474310e7b3a6a75a6ba5d69f69"
-branch = "claude/issue-1846-s6k-scripts-sonar-scope"
-scope = ["docs/testing.md", "quality/config.toml", "scripts", "sonar-project.properties", "tests/test_check_dead_symbols.py", "tests/test_check_style_literals.py", "tests/test_quality_workflow.py", "tests/test_seed_e2e_takes.py"]
-opened_commit = "87cd5c52821369282c14abde87b534da07374cdc"
-whole_reason = "The scope switch, its secret allowlist entry and any code fix the measurement demands are one change: the switch may land only together with the zero it was measured at."
