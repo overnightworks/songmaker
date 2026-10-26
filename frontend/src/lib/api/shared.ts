@@ -9,6 +9,7 @@ import type {
 
 export type SharedCollectionKind = 'album' | 'playlist' | 'song' | 'take';
 
+// eslint-disable-next-line no-restricted-syntax -- map from a share kind to its generated payload
 interface SharedPayloads {
 	album: SharedAlbumPayload;
 	playlist: SharedPlaylistPayload;
