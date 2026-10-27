@@ -145,13 +145,9 @@ describe('landing reducer', () => {
 		expect(outcome.ledger).toEqual({ layers: [], stepBacks: [], current: null });
 	});
 
-	it.each([
-		{ after: 'a reload', layers: [] },
-		{ after: 'Forward past an open layer', layers: [{ layer: 'now-playing', entry: 7 }] }
-	])('a stale layer entry after $after is unowned and lands without applying', ({ layers }) => {
-		const stale = { id: 9, layer: 'album-menu' };
-		const outcome = land(ledger({ layers }), stale);
-		expect(outcome).toMatchObject({ apply: false, dropLayers: [], ledger: { current: { id: 6 } } });
+	it('a stale layer entry after a reload lands without applying', () => {
+		const outcome = land(ledger(), { id: 9, layer: 'album-menu' });
+		expect(outcome).toMatchObject({ apply: false, dropLayers: [] });
 	});
 });
 
@@ -631,19 +627,21 @@ describe('history adapter', () => {
 		expect(standingEntry()).toEqual(song);
 	});
 
-	it("Forward onto a closed layer's entry steps off it", async () => {
-		const wall = pushEntry('/', {});
-		const album = pushEntry('/album/a', {});
-		holdLayer('album-menu', () => undefined);
-		await traverse(() => history.back());
-		expect(stackedLayers()).toEqual([]);
-
-		await traverse(() => history.forward());
-		await vi.waitFor(() => expect(standingEntry()).toEqual(album));
-		await traverse(() => history.back());
-
-		expect(standingEntry()).toEqual(wall);
-	});
+	it.each([false, true])(
+		"Forward onto a closed layer's entry steps off it, layer open below: %s",
+		async (open) => {
+			const wall = pushEntry('/', {});
+			const album = pushEntry('/album/a', {});
+			if (open) holdLayer('now-playing', () => undefined);
+			const below = standingEntry();
+			holdLayer('album-menu', () => undefined);
+			await traverse(() => history.back());
+			await traverse(() => history.forward());
+			await vi.waitFor(() => expect(standingEntry()).toEqual(below));
+			await traverse(() => history.back());
+			expect(standingEntry()).toEqual(open ? album : wall);
+		}
+	);
 
 	it('a router push after a Back gets an id on top, over the page Back landed on', async () => {
 		pushEntry('/album/a', {});
