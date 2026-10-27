@@ -263,8 +263,10 @@
 				>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
 			>
 		{:else if albumLine}<span class="cover-line">{albumLine}</span>{/if}
-		{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
-		<AiNotice look="badge" />
+		<div class="notice-row">
+			{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
+			<AiNotice look="badge" />
+		</div>
 	</div>
 {/snippet}
 
@@ -376,9 +378,11 @@
 	{#if collectionHead}
 		<div class="cover-meta">
 			<h1 class="cover-title">{collectionHead.title}</h1>
-			<span class="cover-line">{collectionHead.subtitle}</span>
+			<div class="notice-row">
+				<span class="cover-line">{collectionHead.subtitle}</span>
+				<AiNotice look="badge" />
+			</div>
 			<span class="cover-line now-playing-line">{collectionHead.nowPlaying}</span>
-			<AiNotice look="badge" />
 		</div>
 	{:else}
 		{@render coverMeta()}
@@ -652,6 +656,14 @@
 		align-items: center;
 		gap: 0.2rem;
 		text-align: center;
+	}
+	.notice-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.2rem 0.5rem;
+		max-width: 100%;
 	}
 	.cover-title {
 		margin: 0;
@@ -941,6 +953,9 @@
 		gap: 0.4rem;
 		text-align: left;
 	}
+	.now-playing.page .notice-row {
+		justify-content: flex-start;
+	}
 	.now-playing.page .cover-title {
 		font-size: 2.6rem;
 		font-weight: 500;
@@ -1014,6 +1029,9 @@
 		.now-playing.page.stacked .cover-meta {
 			align-items: center;
 			text-align: center;
+		}
+		.now-playing.page.stacked .notice-row {
+			justify-content: center;
 		}
 		.now-playing.page.stacked .transport.solo {
 			justify-content: center;

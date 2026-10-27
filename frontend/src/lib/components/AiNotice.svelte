@@ -11,12 +11,12 @@
 </script>
 
 {#if look === 'badge'}
-	<span class="ai-notice badge" lang="de" data-testid="ai-notice"
+	<span class="ai-notice badge" lang="de"
 		><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span
 		>{WORDS.generated}</span
 	>
 {:else}
-	<p class="ai-notice line" lang="de" data-testid="ai-notice">
+	<p class="ai-notice line" lang="de">
 		<span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{WORDS.writing}
 	</p>
 {/if}

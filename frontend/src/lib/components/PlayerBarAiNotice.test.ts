@@ -45,8 +45,8 @@ afterEach(async () => {
 	vi.restoreAllMocks();
 });
 
-describe('PlayerBar (#1906 P5)', () => {
-	it('the mini-player bar carries no AI notice while a take is loaded', async () => {
+describe('1906_P5 PlayerBar', () => {
+	it('1906_P5: the mini-player bar carries no AI notice while a take is loaded', async () => {
 		audioPlayer.load(
 			{
 				generation: makeGeneration({ mp3_path: 'take.mp3' }),
@@ -64,7 +64,7 @@ describe('PlayerBar (#1906 P5)', () => {
 		await tick();
 
 		expect(target.querySelector('.track-title')).toHaveTextContent('Opening Move');
-		expect(target.querySelector('[data-testid="ai-notice"]')).toBeNull();
+		expect(target.querySelector('.ai-notice')).toBeNull();
 		expect(target).not.toHaveTextContent('KI-generiert');
 	});
 });

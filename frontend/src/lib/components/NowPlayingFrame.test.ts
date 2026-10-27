@@ -48,36 +48,48 @@ describe('NowPlayingFrame', () => {
 		expect(cover?.querySelector('img')).toHaveAttribute('src', '/cover.webp');
 	});
 	it.each([
-		{ name: 'a song page', props: { surface: 'page' as const } },
-		{ name: 'the full player', props: { surface: 'full' as const, showTakeLabel: true } },
+		{ name: 'a song page', props: { surface: 'page' as const }, line: null },
+		{
+			name: 'the full player',
+			props: { surface: 'full' as const, showTakeLabel: true },
+			line: 'take'
+		},
 		{
 			name: 'a collection page',
 			props: {
 				surface: 'page' as const,
 				collectionHead: { title: 'Night Drive', subtitle: 'Nina · Album', nowPlaying: 'Tide' }
-			}
+			},
+			line: 'Nina · Album'
 		}
-	])('1906 $name carries the KI-generiert badge', async ({ props }) => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted = mount(NowPlayingFrame, {
-			target,
-			props: {
-				...props,
-				coverUrl: '/cover.webp',
-				info: {
-					generation: makeGeneration(),
-					songId: 'song-1',
-					songTitle: 'Tide',
-					albumTitle: 'Night Drive',
-					artist: '',
-					lyrics: null
+	])(
+		'1906_P1: $name carries the KI-generiert badge beside the line that names what plays',
+		async ({ props, line }) => {
+			const target = document.createElement('div');
+			document.body.append(target);
+			mounted = mount(NowPlayingFrame, {
+				target,
+				props: {
+					...props,
+					coverUrl: '/cover.webp',
+					info: {
+						generation: makeGeneration(),
+						songId: 'song-1',
+						songTitle: 'Tide',
+						albumTitle: 'Night Drive',
+						artist: '',
+						lyrics: null
+					}
 				}
-			}
-		});
-		await tick();
-		const badges = target.querySelectorAll('[data-testid="ai-notice"]');
-		expect(badges).toHaveLength(1);
-		expect(badges[0]).toHaveTextContent('KI-generiert');
-	});
+			});
+			await tick();
+			const badges = target.querySelectorAll('.ai-notice');
+			expect(badges).toHaveLength(1);
+			expect(badges[0]).toHaveTextContent('KI-generiert');
+			const row = badges[0].parentElement;
+			expect(row).toHaveClass('notice-row');
+			if (line === 'take') expect(row?.firstElementChild).toHaveClass('cover-line');
+			else if (line) expect(row).toHaveTextContent(line);
+		}
+	);
 });

@@ -40,8 +40,8 @@ afterEach(async () => {
 	stopHealthPolling();
 });
 
-describe('CoWriterPanel (#1906, Art. 50 AI Act)', () => {
-	it('says in its own row under the header that the musician writes with an AI', async () => {
+describe('1906_E3 CoWriterPanel (Art. 50 AI Act)', () => {
+	it('1906_E3: says in its own row under the header that the musician writes with an AI', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);
 		startHealthPolling();
@@ -55,7 +55,7 @@ describe('CoWriterPanel (#1906, Art. 50 AI Act)', () => {
 		await tick();
 
 		const header = target.querySelector('.convo');
-		const notice = target.querySelector('[data-testid="ai-notice"]');
+		const notice = target.querySelector('.ai-notice');
 		expect(notice).toHaveTextContent('Du schreibst mit einer KI');
 		expect(notice).toHaveAttribute('lang', 'de');
 		expect(header?.nextElementSibling).toBe(notice);
