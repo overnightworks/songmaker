@@ -1,8 +1,0 @@
-claim_id = "c8e5f7851f85444aa3c4e78695f2aaef"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3dd44033bc47539b658355a19776518bf605c976"
-branch = "claude/issue-1906-ai-notice-pictures"
-scope = ["docs/design/README.md", "docs/design/now-playing.html", "docs/design/share-player.html", "docs/design/song-page-phone.html", "docs/design/song-page.html", "frontend/e2e/ai-notice.spec.ts", "frontend/e2e/share-album-fixtures.ts", "frontend/e2e/share-album-player.spec.ts", "frontend/e2e/share-playlist-player.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/AiNotice.svelte", "frontend/src/lib/components/AiNotice.test.ts", "frontend/src/lib/components/CoWriterAiNotice.test.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/NowPlayingFrame.test.ts", "frontend/src/lib/components/PlayerBarAiNotice.test.ts", "frontend/src/lib/components/share/SharedCollection.test.ts", "quality/baseline.toml"]
-opened_commit = "69ba7c1e1d794dfd0968a8c84d7006908a3ee5cf"
-whole_reason = "Step 1 is the picture for the three surfaces that must carry the notice: the share player, the app's player and the co-writer panel, plus their index entry; the build's files are named at step 2's pull."
