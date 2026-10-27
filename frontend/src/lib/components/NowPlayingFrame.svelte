@@ -28,9 +28,9 @@
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		NOW_PLAYING_Z_INDEX,
 		nowPlayingFromLabel,
-		nowPlayingNoticeLead,
 		nowPlayingOpenSourceLabel,
 		nowPlayingSheetCloseLabel,
+		nowPlayingTakeLabel,
 		type NowPlayingSource,
 		type NowPlayingSurfaceKind
 	} from '$lib/constants/now-playing';
@@ -171,7 +171,18 @@
 	let mobilePanelSeeded = false;
 	let mobileSheet: HTMLDivElement | undefined = $state();
 
-	const noticeLead = $derived(nowPlayingNoticeLead(info, !(stacked && source), showTakeLabel));
+	// The line the AI badge stands in: what plays (album and artist, unless the
+	// source link names it) and, when asked, the take.
+	const noticeLead = $derived(
+		[
+			...(stacked && source ? [] : [info.albumTitle, info.artist]),
+			...(showTakeLabel
+				? [nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)]
+				: [])
+		]
+			.filter((part) => part.length > 0)
+			.join(' · ')
+	);
 
 	// Before the player holds a take, the slider shows where it would start
 	// and how long it runs.
