@@ -38,8 +38,8 @@
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1121
 "frontend/src/lib/components/PlayerBar.test.ts" = 1642
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
-"frontend/src/lib/components/SongDetailView.svelte" = 1104
-"frontend/src/lib/components/SongDetailView.test.ts" = 2312
+"frontend/src/lib/components/SongDetailView.svelte" = 1100
+"frontend/src/lib/components/SongDetailView.test.ts" = 2311
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/constants.ts" = 846
