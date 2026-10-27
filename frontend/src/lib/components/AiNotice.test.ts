@@ -24,11 +24,14 @@ describe('1906_E3 AiNotice (Art. 50 AI Act)', () => {
 	it.each([
 		{ look: 'badge' as const, words: 'KI-generiert' },
 		{ look: 'line' as const, words: 'Du schreibst mit einer KI' }
-	])('1906_E3: the $look says exactly the ruled German words, marked as German', async ({ look, words }) => {
-		const notice = await render(look);
-		expect(notice.textContent?.trim()).toBe(words);
-		expect(notice).toHaveAttribute('lang', 'de');
-	});
+	])(
+		'1906_E3: the $look says exactly the ruled German words, marked as German',
+		async ({ look, words }) => {
+			const notice = await render(look);
+			expect(notice.textContent?.trim()).toBe(words);
+			expect(notice).toHaveAttribute('lang', 'de');
+		}
+	);
 
 	it.each(['badge', 'line'] as const)(
 		'1906_E3: the %s hides its spark icon from a screen reader',
