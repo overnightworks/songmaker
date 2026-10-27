@@ -29,9 +29,12 @@ const ENGINE_PARAM_KEYS: readonly EngineParamKey[] = [
 const SONG_FIELDS = ['bpm', 'duration', 'key', 'voice', 'reference'] as const;
 const GENERATE_FIELDS = ['model', 'takes'] as const;
 
-/** A recipe field: a named row, the Preset row, or one engine parameter. */
-export type RecipeField =
-	(typeof SONG_FIELDS)[number] | (typeof GENERATE_FIELDS)[number] | 'preset' | EngineParamKey;
+/**
+ * A recipe field: a named row (SONG_FIELDS, GENERATE_FIELDS), the 'preset'
+ * row, or one engine parameter. The engine keys are open strings, so the
+ * named rows cannot narrow this type.
+ */
+export type RecipeField = string;
 
 /** The recipe's editable state as the page holds it. */
 export interface RecipeValues {
@@ -101,11 +104,9 @@ function withParams(
 
 function withoutKeys(
 	params: VersionGenerationParams,
-	keys: readonly EngineParamKey[]
+	keys: readonly string[]
 ): VersionGenerationParams {
-	return Object.fromEntries(
-		Object.entries(params).filter(([key]) => !(keys as readonly string[]).includes(key))
-	);
+	return Object.fromEntries(Object.entries(params).filter(([key]) => !keys.includes(key)));
 }
 
 function withoutEngineFields(values: RecipeValues): RecipeValues {
