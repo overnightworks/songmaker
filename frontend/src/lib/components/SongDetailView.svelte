@@ -769,8 +769,8 @@
 			/>
 		{:else}
 			{@render header()}
+			{@render sharedLink()}
 			<div class="editor-body">
-				{@render sharedLink()}
 				<div class="editor-columns">
 					<div class="write-column">
 						{@render writeSurface(song)}

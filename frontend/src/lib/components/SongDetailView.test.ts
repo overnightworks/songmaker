@@ -1650,9 +1650,9 @@ describe('the editor answers to its own width, not the viewport', () => {
 	// on #185 — 1100 and 1280 with Now Playing docked — is the real proof.
 	it('makes the body under the header the size container its columns query', () => {
 		expect(songDetailViewSource).toMatch(/\.editor-body \{[^}]*container: editor \/ size;/);
-		// The header is deliberately left outside it: a size container is also
-		// the containing block for the fixed overlays the header carries.
+		// Header and shared-link line stay outside it: it contains fixed overlays and sizes the Co-writer column.
 		expect(songDetailViewSource).not.toMatch(/\.detail-panel \{[^}]*container:/);
+		expect(songDetailViewSource).toMatch(/\{@render sharedLink\(\)\}\s*<div class="editor-body">/);
 	});
 
 	it('stacks Write and Takes until the editor itself has room for both', () => {
