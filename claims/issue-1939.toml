@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "45c59381e479e7f4b0130e185a1623c7da251206"
 branch = "claude/issue-1939-history-names-and-docs-say-what-the-cont"
-scope = ["docs/architecture.md", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
+scope = ["docs/architecture.md", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "quality/baseline.toml"]
 opened_commit = "00d392328df5b0a65405a9e5bc25075b248a0f25"
 whole_reason = "One rename with all its callers, three corrected docs statements and two comments are one cut: the docs name the new symbol and the comments describe the same history owner, with one deleted conjunct beside them."
