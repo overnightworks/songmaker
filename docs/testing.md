@@ -19,6 +19,7 @@ cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 
 # Full suite — CI only, or when the operator asks
 pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci.ini
+uv run --frozen --only-group frontend python scripts/copy_kit_assets.py
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 

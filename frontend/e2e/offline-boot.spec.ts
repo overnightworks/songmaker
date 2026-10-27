@@ -1,6 +1,18 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { HOME_PATH, offlineStrip, waitForServiceWorkerControl } from './helpers';
 import { readSeededLibrary } from './seed';
+
+/** The kit's look as the offline page shows it: both faces loaded from the shell cache, the token set. */
+async function offlineLook(page: Page) {
+	return page.evaluate(async () => {
+		await document.fonts.ready;
+		return {
+			displayFace: document.fonts.check('700 16px Oswald'),
+			bodyFace: document.fonts.check('400 16px "Open Sans"'),
+			background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+		};
+	});
+}
 
 for (const address of ['root', 'album'] as const) {
 	test(`1160-F42-boot: an offline reload at the ${address} address shows the app's offline strip`, async ({
@@ -17,6 +29,13 @@ for (const address of ['root', 'album'] as const) {
 		expect(response?.ok()).toBe(true);
 		expect(new URL(page.url()).pathname).toBe(path);
 		await expect(offlineStrip(page)).toBeVisible();
+		await expect
+			.poll(() => offlineLook(page))
+			.toEqual({
+				displayFace: true,
+				bodyFace: true,
+				background: '#0d0d0d'
+			});
 	});
 }
 
