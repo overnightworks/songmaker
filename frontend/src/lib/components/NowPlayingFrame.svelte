@@ -297,7 +297,12 @@
 	{/if}
 {/snippet}
 
-{#snippet iconButton(icon: string, label: string, onclick: (() => void) | undefined, disabled = false)}
+{#snippet iconButton(
+	icon: string,
+	label: string,
+	onclick: (() => void) | undefined,
+	disabled = false
+)}
 	<button
 		type="button"
 		class="icon-btn"

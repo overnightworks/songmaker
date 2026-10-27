@@ -46,7 +46,10 @@ describe('CoWriterPanel (#1906, Art. 50 AI Act)', () => {
 		document.body.append(target);
 		startHealthPolling();
 		await Promise.resolve();
-		mounted = mount(CoWriterPanel, { target, props: { currentSongId: 's1', currentAlbumId: 'a1' } });
+		mounted = mount(CoWriterPanel, {
+			target,
+			props: { currentSongId: 's1', currentAlbumId: 'a1' }
+		});
 		await tick();
 		await Promise.resolve();
 		await tick();

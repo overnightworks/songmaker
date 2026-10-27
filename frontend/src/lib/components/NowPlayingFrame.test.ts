@@ -64,6 +64,7 @@ describe('NowPlayingFrame', () => {
 			target,
 			props: {
 				...props,
+				coverUrl: '/cover.webp',
 				info: {
 					generation: makeGeneration(),
 					songId: 'song-1',

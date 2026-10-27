@@ -202,6 +202,15 @@ test.describe('before Play', () => {
 		await expectNowPlayingLine(page, mockSongTitle(1), 1, 3);
 	});
 
+	test('1906 the album page says KI-generiert, wholly in view', async ({ visitor }) => {
+		await openMockAlbum(visitor);
+		const { page } = visitor;
+
+		const notice = page.getByText('KI-generiert', { exact: true });
+		await expect(notice).toHaveAttribute('lang', 'de');
+		await expect(notice).toBeInViewport({ ratio: 1 });
+	});
+
 	test('1374_rule_2 A4: Previous song is disabled and Next song enabled', async ({ visitor }) => {
 		await openMockAlbum(visitor);
 

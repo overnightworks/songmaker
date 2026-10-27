@@ -12,7 +12,8 @@
 
 {#if look === 'badge'}
 	<span class="ai-notice badge" lang="de" data-testid="ai-notice"
-		><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{WORDS.generated}</span
+		><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span
+		>{WORDS.generated}</span
 	>
 {:else}
 	<p class="ai-notice line" lang="de" data-testid="ai-notice">
