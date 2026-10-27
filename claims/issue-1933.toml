@@ -1,0 +1,8 @@
+claim_id = "5d76fe87eb52442db07a78ff37276be6"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "846d8859eb13db75b30f5d24e488e60c6afcd0ee"
+branch = "claude/issue-1933-songmaker-reads-its-family-tokens-and-fo"
+scope = [".dockerignore", ".github/workflows/ci.yml", "Dockerfile", "docs/design/README.md", "docs/design/vocabulary.html", "docs/testing.md", "frontend/.gitignore", "frontend/README.md", "frontend/e2e/offline-boot.spec.ts", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/app.css", "pyproject.toml", "scripts/copy_kit_assets.py", "tests/test_copy_kit_assets.py", "uv.lock"]
+opened_commit = "9fe76bca0608bccc9f3d1ce5d691fa2cbd19d7e4"
+whole_reason = "Moving the family tokens and fonts to appkit is one move: the copy pipeline without the app.css switch has no caller, and the switch cannot build without the pipeline."
