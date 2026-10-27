@@ -1,6 +1,11 @@
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeGeneration, makeHealthResponse, makeSong, makeVersion } from '$lib/test-utils/factories';
+import {
+	makeGeneration,
+	makeHealthResponse,
+	makeSong,
+	makeVersion
+} from '$lib/test-utils/factories';
 import type { JobItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 
@@ -46,7 +51,7 @@ import {
 } from './recipe';
 import { addToast } from './toast';
 
-const queuedJob: JobItem = { id: 'job1', type: 'generate', status: 'queued', progress: 0 };
+const sourceTaskJob: JobItem = { id: 'job1', type: 'generate', status: 'queued', progress: 0 };
 
 beforeEach(async () => {
 	discardDraft();
@@ -61,8 +66,8 @@ beforeEach(async () => {
 	const song = makeSong({ lyrics: 'verse', prompt: 'folk' });
 	vi.mocked(fetchVersions).mockResolvedValue([makeVersion()]);
 	vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse());
-	vi.mocked(repaintGeneration).mockResolvedValue(queuedJob);
-	vi.mocked(coverGeneration).mockResolvedValue(queuedJob);
+	vi.mocked(repaintGeneration).mockResolvedValue(sourceTaskJob);
+	vi.mocked(coverGeneration).mockResolvedValue(sourceTaskJob);
 	songList.set([song]);
 	selectedSongId.set(song.id);
 	loadSongData(song);
@@ -140,7 +145,7 @@ describe('runSourceTask', () => {
 		await runSourceTask();
 		expect(updateSong).toHaveBeenCalled();
 		expect(repaintGeneration).toHaveBeenCalled();
-		expect(updateSong.mock.invocationCallOrder[0]).toBeLessThan(
+		expect(vi.mocked(updateSong).mock.invocationCallOrder[0]).toBeLessThan(
 			vi.mocked(repaintGeneration).mock.invocationCallOrder[0]
 		);
 	});

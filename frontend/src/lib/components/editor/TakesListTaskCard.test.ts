@@ -11,7 +11,7 @@ vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
 let list: ReturnType<typeof mount> | undefined;
 
-function takeOn(id: string, versionNumber: number): GenerationItem {
+function takeInVersion(id: string, versionNumber: number): GenerationItem {
 	return makeGeneration({
 		id,
 		song_id: 'song-a',
@@ -21,9 +21,9 @@ function takeOn(id: string, versionNumber: number): GenerationItem {
 	});
 }
 
-const takes = [takeOn('c1', 2), takeOn('c2', 2), takeOn('a1', 1)];
+const takes = [takeInVersion('c1', 2), takeInVersion('c2', 2), takeInVersion('a1', 1)];
 
-async function render(): Promise<HTMLElement> {
+async function renderList(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	list = mount(TakesListHarness, {
@@ -41,7 +41,7 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
-function cardRowIds(target: HTMLElement): (string | undefined)[] {
+function rowIdsWithCard(target: HTMLElement): (string | undefined)[] {
 	return [...target.querySelectorAll('.task')].map((card) =>
 		card.previousElementSibling?.id.replace('take-', '')
 	);
@@ -62,47 +62,47 @@ afterEach(async () => {
 describe('task card in the take list', () => {
 	it('renders only directly under the source take', async () => {
 		setSourceFromGeneration(takes[1], 'repaint');
-		const target = await render();
-		expect(cardRowIds(target)).toEqual(['c2']);
+		const target = await renderList();
+		expect(rowIdsWithCard(target)).toEqual(['c2']);
 	});
 
 	it('renders no card without a source', async () => {
-		const target = await render();
+		const target = await renderList();
 		expect(target.querySelector('.task')).toBeNull();
 	});
 
 	it('swaps the card for the other verb and moves it to another take', async () => {
-		const target = await render();
+		const target = await renderList();
 		setSourceFromGeneration(takes[0], 'repaint');
 		await tick();
 		setSourceFromGeneration(takes[0], 'cover');
 		await tick();
-		expect(cardRowIds(target)).toEqual(['c1']);
+		expect(rowIdsWithCard(target)).toEqual(['c1']);
 		expect(target.querySelector('.task .what')?.textContent).toBe('Cover');
 		setSourceFromGeneration(takes[1], 'cover');
 		await tick();
-		expect(cardRowIds(target)).toEqual(['c2']);
+		expect(rowIdsWithCard(target)).toEqual(['c2']);
 	});
 
 	it('closes with the source being cleared', async () => {
 		setSourceFromGeneration(takes[0], 'repaint');
-		const target = await render();
+		const target = await renderList();
 		clearSource();
 		await tick();
 		expect(target.querySelector('.task')).toBeNull();
 	});
 
 	it('unfolds the version holding the source take', async () => {
-		const target = await render();
+		const target = await renderList();
 		expect(target.querySelector('#take-a1')).toBeNull();
 		setSourceFromGeneration(takes[2], 'repaint');
 		await tick();
-		expect(cardRowIds(target)).toEqual(['a1']);
+		expect(rowIdsWithCard(target)).toEqual(['a1']);
 	});
 
 	it('names the version the take will land in', async () => {
 		setSourceFromGeneration(takes[0], 'repaint');
-		const target = await render();
+		const target = await renderList();
 		expect(target.querySelector('.task-foot .hint')?.textContent).toBe('New take in v2');
 	});
 });
