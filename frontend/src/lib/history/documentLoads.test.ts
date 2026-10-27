@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { browserDocumentLoads } from './documentLoads';
 
+// K3
 describe('browserDocumentLoads.submitPost', () => {
 	afterEach(() => {
 		vi.restoreAllMocks();

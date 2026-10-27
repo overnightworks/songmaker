@@ -23,7 +23,7 @@ from fake_oidc_issuer import Person
 from httpx import Response
 from oidc_world import World
 
-from songmaker_cli.auth_api import LOGOUT_BUTTON_LABEL
+from songmaker_cli.constants import LOGOUT_BUTTON_LABEL
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
 
 MEMBER = "/apps/songmaker"
@@ -311,6 +311,7 @@ def test_logging_out_without_a_session_still_clears_the_cookie_and_posts_no_hint
 
 
 def test_logging_out_a_row_from_before_the_upgrade_posts_no_hint(world: World) -> None:
+    """E1, cell 22."""
     world.sign_in(_member())
     with world.factory() as session:
         session.query(UserSession).one().stored_id_token = None
@@ -323,6 +324,7 @@ def test_logging_out_a_row_from_before_the_upgrade_posts_no_hint(world: World) -
 
 
 def test_the_logout_answer_is_not_stored_and_carries_its_own_policy(world: World) -> None:
+    """cell 15."""
     world.sign_in(_member())
 
     response = world.client.post("/auth/logout", headers=_same_origin())
@@ -347,6 +349,7 @@ def test_logging_out_is_post_only(world: World) -> None:
 
 
 def test_a_write_needs_the_browser_to_say_it_is_same_origin_and_no_token(world: World) -> None:
+    """cell 11."""
     world.seed(SUBJECT, "felix", "admin")
     login_and_csrf(world.client, "felix")
 
@@ -546,6 +549,7 @@ def test_a_sign_in_keeps_the_issued_refresh_token_in_the_session_row(world: Worl
 def test_a_sign_in_keeps_the_id_token_in_the_session_row_and_sets_only_the_session_cookie(
     world: World,
 ) -> None:
+    """acceptance 1, cell 16."""
     response = world.sign_in(_member())
 
     with world.factory() as session:
@@ -561,6 +565,7 @@ def test_a_sign_in_keeps_the_id_token_in_the_session_row_and_sets_only_the_sessi
 def test_the_id_token_is_in_no_log_and_no_url_of_the_sign_in_and_the_sign_out(
     world: World, caplog,
 ) -> None:
+    """cell 35."""
     with caplog.at_level("DEBUG"):
         signed_in = world.sign_in(_member())
         token = _stored_id_token(world)

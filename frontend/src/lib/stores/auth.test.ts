@@ -202,6 +202,7 @@ describe('checkAuth with the server out of reach', () => {
 });
 
 describe('logout', () => {
+	// K4
 	it('checks that the server answers before it posts the logout form', async () => {
 		const order: string[] = [];
 		mockFetchMe.mockImplementation(async () => {

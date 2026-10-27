@@ -626,6 +626,22 @@ def test_a_worker_registration_without_origin_or_fetch_metadata_passes_the_origi
     assert status == 200
 
 
+def test_a_worker_registration_with_a_wrong_token_and_no_origin_headers_is_refused(
+    security_exchange,
+):
+    """K7, cell 8 -- without origin headers a wrong internal token is still refused."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange(
+        "/api/internal/workers/register",
+        headers=[
+            (b"content-type", b"application/json"),
+            (b"x-internal-token", b"wrong-token"),
+        ],
+        body=b"{}",
+    ))
+    assert status == 401
+
+
 @pytest.mark.parametrize("path", ["/api/internalx/security-proof", "/auth/backchannel-logoutx"])
 def test_the_origin_exemption_is_the_exact_path_and_the_exact_prefix(security_exchange, path):
     """K7, cell 9 -- a path that only starts like an exempt one is not exempt."""

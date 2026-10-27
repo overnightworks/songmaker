@@ -34,6 +34,7 @@ from songmaker_cli.auth_stores import (
     DatabaseWriteLock,
 )
 from songmaker_cli.constants import (
+    LOGOUT_BUTTON_LABEL,
     LOGOUT_PATH,
     NO_ACCESS_PATH,
     OIDC_CALLBACK_PATH,
@@ -52,8 +53,6 @@ log = logging.getLogger(__name__)
 
 SIGN_IN_FAILED_STATUS: int = 403
 DEFAULT_LANDING_PATH = "/"
-# Shown on the logout page only where no script runs; the account menu words the same button.
-LOGOUT_BUTTON_LABEL = "Sign out"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 sign_in_router = APIRouter(tags=["auth"])

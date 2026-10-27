@@ -830,3 +830,6 @@ SECRET_ENV_KEYS: Final[tuple[str, ...]] = (
     "GRAFANA_USER",
     "GRAFANA_PASSWORD",
 )
+
+# Shown on the logout page only where no script runs; the account menu words the same button.
+LOGOUT_BUTTON_LABEL: Final[str] = "Sign out"

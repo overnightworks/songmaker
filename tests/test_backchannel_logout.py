@@ -214,7 +214,7 @@ def test_every_answer_of_the_back_channel_carries_no_store(world: World) -> None
     assert {answer.headers["cache-control"] for answer in answers} == {"no-store"}
 
 
-def test_the_back_channel_is_exempt_from_the_origin_check_and_the_token_check(
+def test_the_back_channel_is_exempt_from_the_origin_check(
     world: World,
 ) -> None:
     _sign_in_twice(world)

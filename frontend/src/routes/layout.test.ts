@@ -1034,7 +1034,6 @@ describe('signing out on the phone', () => {
 			'fetch',
 			vi.fn(async () => Response.json(USER))
 		);
-		onTestFinished(() => void vi.unstubAllGlobals());
 		const documentLoads = documentLoadsStandIn();
 		standInForDocumentLoadsForTests(documentLoads);
 		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();

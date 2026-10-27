@@ -192,6 +192,7 @@ test('a logout from another origin is refused, a same-origin one answers the log
 	expect(own.headers()['content-type']).toContain('text/html');
 });
 
+// Cell 26
 test('with JavaScript off the logout page shows one button named like the account menu entry', async ({
 	browser,
 	request
