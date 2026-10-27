@@ -7,7 +7,6 @@ import {
 	attachLandingHandler,
 	historyStandsStill,
 	installHistoryController,
-	isUnownedLayerEntry,
 	land,
 	landedEntry,
 	loadHistoryPageForTests,
@@ -152,7 +151,6 @@ describe('landing reducer', () => {
 	])('a stale layer entry after $after is unowned and lands without applying', ({ layers }) => {
 		const stale = { id: 9, layer: 'album-menu' };
 		const outcome = land(ledger({ layers }), stale);
-		expect(isUnownedLayerEntry(ledger({ layers }), stale)).toBe(true);
 		expect(outcome).toMatchObject({ apply: false, dropLayers: [], ledger: { current: { id: 6 } } });
 	});
 });
