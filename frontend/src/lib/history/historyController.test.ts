@@ -33,7 +33,7 @@ import {
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
-import { watchBack } from '$lib/test-utils/library-history';
+import { pressBack, watchBack } from '$lib/test-utils/library-history';
 
 type Ledger = Parameters<typeof land>[0];
 type Landing = ReturnType<typeof land>;
@@ -81,14 +81,6 @@ function sessionStorageRefusingWritesAfter(acceptedWrites: number): void {
 		if (writes > acceptedWrites) throw storageQuotaExceeded();
 		acceptWrite.call(this, key, value);
 	});
-}
-
-async function popstateAfterBack(): Promise<void> {
-	const landed = new Promise((resolve) =>
-		window.addEventListener('popstate', resolve, { once: true })
-	);
-	history.back();
-	await landed;
 }
 
 describe('landing reducer', () => {
@@ -450,7 +442,7 @@ describe('history adapter', () => {
 		const album = pushEntry('/album/a', {});
 		pushEntry('/album/b', {});
 		detachLandingHandler();
-		await popstateAfterBack();
+		await pressBack();
 
 		const heard: Landing[] = [];
 		detachLandingHandler = attachLandingHandler((landing) => heard.push(landing));
@@ -466,7 +458,7 @@ describe('history adapter', () => {
 		let menuOpen = true;
 		holdLayer('account-menu', () => (menuOpen = false));
 		detachLandingHandler();
-		await popstateAfterBack();
+		await pressBack();
 
 		expect(menuOpen).toBe(false);
 		expect(stackedLayers()).toEqual([]);
@@ -694,7 +686,7 @@ describe('history adapter', () => {
 		detachLandingHandler();
 		detachLandingHandler = attachLandingHandler(() => heard.push('controller'));
 
-		await popstateAfterBack();
+		await pressBack();
 		window.removeEventListener('popstate', routerHears);
 
 		expect(heard).toEqual(['router', 'controller']);
@@ -760,7 +752,7 @@ describe('route convergence after a landing', () => {
 	async function backFromSettings(): Promise<void> {
 		await vi.mocked(goto)('/settings');
 		stampNavigatedEntry('goto');
-		await popstateAfterBack();
+		await pressBack();
 	}
 
 	it('Back onto an entry written over another page mounts the route of its own address', async () => {
@@ -855,7 +847,7 @@ describe('route convergence after a landing', () => {
 			to: navigationTo('/album/a'),
 			complete: loading.complete
 		});
-		await popstateAfterBack();
+		await pressBack();
 		fakePage.url = new URL('/settings', location.href);
 
 		await loading.abort();
