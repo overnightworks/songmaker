@@ -148,7 +148,8 @@ test('no access offers Sign out and Back, and Back leads to the signed-out page'
 test('Sign out on no access posts to the server and the answer sends the browser on to the issuer', async ({
 	page
 }) => {
-	const guard = new FlowGuard(page);
+	// The sign-out first reads the session; this browser has none, and a 401 passes that check.
+	const guard = new FlowGuard(page, { refusalsExpectedOn: SESSION_REFUSED });
 	await page.goto('/no-access');
 
 	const [answer, issuerLogout] = await Promise.all([
