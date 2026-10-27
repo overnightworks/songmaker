@@ -86,7 +86,7 @@ async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) 
 }
 
 describe('EditorHeader', () => {
-	it('renders one header row with Generate alone and no Recipe toggle (C6, #1935 acceptance 6)', async () => {
+	it('renders one header row with Generate alone and no Recipe toggle (C4, #1935 acceptance 6)', async () => {
 		const { target } = await render();
 		const rows = target.querySelectorAll('.detail-header');
 		expect(rows).toHaveLength(1);

@@ -1,6 +1,7 @@
 import { writable, get } from 'svelte/store';
 import type { GenerationItem } from '$lib/api/types';
 import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
+import { RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
 import { takeUseSeedToast } from '$lib/constants/take-task';
 import { addToast } from '$lib/stores/toast';
 
@@ -24,7 +25,7 @@ interface SeedFromTake {
 // persist across songs for the session rather than living on the version, and
 // are seeded once from the first available model.
 export const recipeModel = writable<string | null>(null);
-export const takesPerGenerate = writable<number>(1);
+export const takesPerGenerate = writable<number>(RECIPE_TAKES_STANDARD);
 
 // Whether the recipe card is open; it closes when the editor switches songs.
 export const recipeOpen = writable(false);

@@ -103,21 +103,23 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
 	});
 
-	test('with the Recipe open the card is on the left and the composer is on screen (C6, #1935 acceptance 8)', async ({
-		page
-	}) => {
-		await openPickedSong(page);
-		await cowriterTab(page).click();
-		await workspace(page).locator('.recipe-line').click();
-		const viewport = page.viewportSize();
-		const composerBox = await composer(page).boundingBox();
-		const panelBox = await workspace(page)
-			.getByRole('region', { name: RECIPE_PANEL_LABEL, exact: true })
-			.boundingBox();
-		if (!viewport || !composerBox || !panelBox) throw new Error('Expected both laid out');
-		expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height);
-		expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(composerBox.x);
-	});
+	for (const height of [900, 600]) {
+		test(`with the Recipe open at 1440x${height} the card is on the left and the composer is on screen (C6, #1935 acceptance 8)`, async ({
+			page
+		}) => {
+			await page.setViewportSize({ width: 1440, height });
+			await openPickedSong(page);
+			await cowriterTab(page).click();
+			await workspace(page).locator('.recipe-line').click();
+			const composerBox = await composer(page).boundingBox();
+			const panelBox = await workspace(page)
+				.getByRole('region', { name: RECIPE_PANEL_LABEL, exact: true })
+				.boundingBox();
+			if (!composerBox || !panelBox) throw new Error('Expected both laid out');
+			await expect(composer(page)).toBeInViewport({ ratio: 1 });
+			expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(composerBox.x);
+		});
+	}
 
 	test('the composer is on screen at 1440x600 with the Recipe closed (C6, #1935 acceptance 8)', async ({
 		page
@@ -125,8 +127,6 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await page.setViewportSize({ width: 1440, height: 600 });
 		await openPickedSong(page);
 		await cowriterTab(page).click();
-		const composerBox = await composer(page).boundingBox();
-		if (!composerBox) throw new Error('Expected the composer laid out');
-		expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(600);
+		await expect(composer(page)).toBeInViewport({ ratio: 1 });
 	});
 });
