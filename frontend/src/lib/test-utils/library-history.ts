@@ -2,7 +2,7 @@ import { tick } from 'svelte';
 import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-	holdLibraryHistoryUntilRouterStarts,
+	restoreLibraryHistoryOnRouterStart,
 	libraryHistoryEntry,
 	openLibraryAddress,
 	loadLibraryHistoryPageForTests,
@@ -122,7 +122,7 @@ async function traverseHistory(step: () => void): Promise<void> {
 export function reloadLibraryPageBeforeRouterStarts(): () => void {
 	loadLibraryHistoryPageForTests();
 	startFakeRouter();
-	const reportStart = holdLibraryHistoryUntilRouterStarts();
+	const reportStart = restoreLibraryHistoryOnRouterStart();
 	return () => {
 		stampNavigatedEntry('enter');
 		reportStart();
