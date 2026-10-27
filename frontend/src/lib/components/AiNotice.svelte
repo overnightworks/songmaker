@@ -44,6 +44,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
+		justify-content: var(--ai-row-justify, center);
 		gap: 0.2rem 0.6rem;
 	}
 	.badge {

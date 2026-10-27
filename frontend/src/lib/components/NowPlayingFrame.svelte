@@ -296,12 +296,7 @@
 	{/if}
 {/snippet}
 
-{#snippet iconButton(
-	icon: string,
-	label: string,
-	onclick: (() => void) | undefined,
-	disabled = false
-)}
+{#snippet iconButton(icon: string, label: string, onclick?: () => void, disabled = false)}
 	<button
 		type="button"
 		class="icon-btn"
@@ -936,6 +931,7 @@
 	}
 	.now-playing.page .cover-meta {
 		align-items: flex-start;
+		--ai-row-justify: flex-start;
 		gap: 0.4rem;
 		text-align: left;
 	}
@@ -1011,6 +1007,7 @@
 		.now-playing.page.stacked .np-player-col,
 		.now-playing.page.stacked .cover-meta {
 			align-items: center;
+			--ai-row-justify: center;
 			text-align: center;
 		}
 		.now-playing.page.stacked .transport.solo {
