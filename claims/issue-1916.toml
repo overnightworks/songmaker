@@ -1,0 +1,7 @@
+claim_id = "5fcb72bd64474bf0ae772c786042d961"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "03de43304b9b3828d540e797aff55e99248a06d6"
+branch = "claude/issue-1916-privacy-old-cookies-session-tokens"
+scope = ["legal/datenschutz.html"]
+opened_commit = "78e90a090958bf5b66b664060e77a87e540d1b81"
