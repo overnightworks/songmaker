@@ -629,6 +629,7 @@ describe('history adapter', () => {
 			const below = standingEntry();
 			holdLayer('album-menu', () => undefined);
 			await traverse(() => history.back());
+			expect(stackedLayers()).toHaveLength(open ? 1 : 0);
 			await traverse(() => history.forward());
 			await vi.waitFor(() => expect(standingEntry()).toEqual(below));
 			await traverse(() => history.back());
@@ -708,7 +709,7 @@ describe('history adapter', () => {
 		expect(location.pathname).toBe('/settings/voices');
 	});
 
-	it('A1 (#1921): a second landing on the unowned layer entry presses Back once in total', () => {
+	it('a second landing on the unowned layer entry presses Back once in total', () => {
 		pushEntry('/settings/voices', {});
 		pushEntry('/settings/voices', {}, 'account-menu');
 		resetHistoryControllerForTests();
