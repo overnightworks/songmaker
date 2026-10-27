@@ -109,7 +109,7 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await openPickedSong(page);
 		await cowriterTab(page).click();
 		await workspace(page)
-			.getByRole('button', { name: EDITOR_VIEW_RECIPE_LABEL, exact: true })
+			.getByRole('button', { name: EDITOR_VIEW_RECIPE_LABEL, exact: true, pressed: false })
 			.click();
 		const viewport = page.viewportSize();
 		const composerBox = await composer(page).boundingBox();
