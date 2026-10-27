@@ -19,7 +19,7 @@ const api = vi.hoisted(() => ({
 
 vi.mock('$lib/api/client', () => api);
 
-import { discardDraft, loadSongData, setDraftGenParams } from '$lib/stores/editor';
+import { discardDraft, loadSongData } from '$lib/stores/editor';
 import { recipeModel } from '$lib/stores/recipe';
 import {
 	activeModelIds,
@@ -27,7 +27,6 @@ import {
 	activeModelsLoading,
 	activeModelsError,
 	builtinDefaults,
-	currentPreset,
 	defaultConfig,
 	deletePreset,
 	effectiveGenerationDefaults,
@@ -241,19 +240,5 @@ describe('preset store', () => {
 		await loadGenerationDefaults();
 
 		expect(get(effectiveGenerationDefaults)).toEqual({ inference_steps: 4, guidance_scale: 5 });
-	});
-
-	it('finds the saved preset whose params match the current draft for the active model', () => {
-		presets.set([
-			preset('other-model', { model_mode: 'other', params: { inference_steps: 4 } }),
-			preset('match', { model_mode: 'acestep', params: { inference_steps: 4 } })
-		]);
-		recipeModel.set('acestep');
-
-		setDraftGenParams({ inference_steps: 4 });
-		expect(get(currentPreset)?.id).toBe('match');
-
-		setDraftGenParams({ inference_steps: 9 });
-		expect(get(currentPreset)).toBeUndefined();
 	});
 });

@@ -193,11 +193,11 @@ describe('ParamControls change marks', () => {
 		});
 		const input = [...target.querySelectorAll<HTMLInputElement>('input[type="number"]')].find(
 			(candidate) => candidate.value === '0.5'
-		)!;
-		const label = input.labels?.[0];
+		);
+		const label = input?.labels?.[0];
 		expect(label?.textContent).toMatch(/temperature/i);
-		label!.click();
+		label?.click();
 		expect(onresetfield).not.toHaveBeenCalled();
-		expect(input.value).toBe('0.5');
+		expect(input?.value).toBe('0.5');
 	});
 });

@@ -5,6 +5,7 @@ import {
 	changedRecipeTabs,
 	chooseEnginePreset,
 	engineParams,
+	matchingEnginePreset,
 	recipeDiffersFromStandard,
 	resetRecipeField,
 	resetRecipeTab,
@@ -195,5 +196,22 @@ describe('engineParams', () => {
 			genParams: { user_lora_id: 'mara', reference_audio_path: 'a', shift: 5, thinking: false }
 		});
 		expect(engineParams(start)).toEqual({ shift: 5, thinking: false });
+	});
+});
+
+describe('matchingEnginePreset', () => {
+	const presets = [
+		{ id: 'other-model', model_mode: 'other', params: { inference_steps: 4 } },
+		{ id: 'match', model_mode: 'acestep', params: { inference_steps: 4 } }
+	];
+
+	it('finds the preset of the recipe model whose engine fields are the draft', () => {
+		const draft = values({ model: 'acestep', genParams: { inference_steps: 4 } });
+		expect(matchingEnginePreset(draft, presets)?.id).toBe('match');
+	});
+
+	it('finds none when the draft matches no preset', () => {
+		const draft = values({ model: 'acestep', genParams: { inference_steps: 9 } });
+		expect(matchingEnginePreset(draft, presets)).toBeUndefined();
 	});
 });
