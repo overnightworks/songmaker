@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock('$lib/stores/generateAction', async (importOriginal) => {
 	const { writable: store } = await import('svelte/store');
 	const actual = await importOriginal<typeof import('$lib/stores/generateAction')>();
-	const generateAction = store({ kind: 'idle', mode: 'repaint' });
+	const generateAction = store({ kind: 'idle' });
 	state.current = generateAction;
 	return {
 		generateAction,
@@ -58,7 +58,7 @@ function setGenerateState(next: GenerateState): void {
 beforeEach(() => {
 	resetRecipeSourceForSong();
 	runSourceTask.mockReset();
-	setGenerateState({ kind: 'idle', mode: 'repaint' });
+	setGenerateState({ kind: 'idle' });
 });
 
 afterEach(async () => {
@@ -127,15 +127,15 @@ describe('both cards (S4, #1912 acceptance 2, 4, 5)', () => {
 	});
 
 	it.each([
-		{ label: 'idle', next: { kind: 'idle', mode: 'repaint' }, disabled: false },
+		{ label: 'idle', next: { kind: 'idle' }, disabled: false },
 		{
 			label: 'failed',
-			next: { kind: 'failed', mode: 'repaint', cause: 'x', unavailable: false },
+			next: { kind: 'failed', cause: 'x', unavailable: false },
 			disabled: false
 		},
 		{
 			label: 'disabled',
-			next: { kind: 'disabled', mode: 'repaint', reason: null },
+			next: { kind: 'disabled', reason: null },
 			disabled: true
 		},
 		{ label: 'queued', next: { kind: 'queued' }, disabled: true }

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	EDITOR_GENERATE_CANCEL_LABEL,
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
+	EDITOR_GENERATE_LABEL,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_SELECT_MODEL_TITLE,
@@ -22,7 +23,7 @@ import {
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
-	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
+	return writable<GenerateState>({ kind: 'idle' });
 });
 vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
@@ -80,13 +81,9 @@ describe('GenerateButton', () => {
 		}
 	);
 
-	it.each([
-		['generate', 'Generate'],
-		['repaint', 'Repaint'],
-		['cover', 'Cover']
-	] as const)('generates in %s mode with a single word and no version', async (mode, label) => {
-		await render({ kind: 'idle', mode });
-		const button = getByRoleButton(document.body, label);
+	it('generates with a single word and no version', async () => {
+		await render({ kind: 'idle' });
+		const button = getByRoleButton(document.body, EDITOR_GENERATE_LABEL);
 		expect(button.disabled).toBe(false);
 		expect(document.body.querySelectorAll('button')).toHaveLength(1);
 		button.click();
@@ -173,7 +170,7 @@ describe('GenerateButton', () => {
 	] as const)(
 		'disables generation as an outline button with its %s reason under ⓘ',
 		async (_state, reason) => {
-			await render({ kind: 'disabled', mode: 'generate', reason });
+			await render({ kind: 'disabled', reason });
 			const button = getByRoleButton(document.body, 'Generate');
 			expect(button.disabled).toBe(true);
 			expect(button.title).toBe(reason);
@@ -185,7 +182,7 @@ describe('GenerateButton', () => {
 
 	it('carries the disabled reason inside the one outline button in the slim phone bar', async () => {
 		await render(
-			{ kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
+			{ kind: 'disabled', reason: EDITOR_MISSING_CONTENT_TITLE },
 			{ reasonInside: true }
 		);
 		const button = getByRoleButton(document.body, `Generate — ${EDITOR_MISSING_CONTENT_TITLE}`);
@@ -197,7 +194,7 @@ describe('GenerateButton', () => {
 	it.each([false, true])(
 		'keeps its label and shows no ⓘ when disabled without a reason of its own (reason inside: %s)',
 		async (reasonInside) => {
-			await render({ kind: 'disabled', mode: 'generate', reason: null }, { reasonInside });
+			await render({ kind: 'disabled', reason: null }, { reasonInside });
 			const button = getByRoleButton(document.body, 'Generate');
 			expect(button.disabled).toBe(true);
 			expect(button.title).toBe('');

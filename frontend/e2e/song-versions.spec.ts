@@ -30,7 +30,7 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {
 	DIALOG_CANCEL_LABEL,
-	EDITOR_GENERATE_MODE_LABELS,
+	EDITOR_GENERATE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
@@ -379,7 +379,7 @@ test.describe('the versions of a song', () => {
 			await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
 			await expect(loadedToast(page)).toBeVisible();
 			const generate = workspace(page).getByRole('button', {
-				name: nameStartingWith(EDITOR_GENERATE_MODE_LABELS.generate)
+				name: nameStartingWith(EDITOR_GENERATE_LABEL)
 			});
 			// On the phone the toast rises above the docked Generate bar, so
 			// Generate takes the tap while the toast still shows.

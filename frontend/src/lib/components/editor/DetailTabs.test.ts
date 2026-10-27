@@ -5,7 +5,7 @@ import { detailTab, type DetailTab } from '$lib/stores/navigation';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
-	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
+	return writable<GenerateState>({ kind: 'idle' });
 });
 vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
@@ -24,7 +24,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	detailTab.set('edit');
-	action.set({ kind: 'idle', mode: 'generate' });
+	action.set({ kind: 'idle' });
 });
 
 afterEach(async () => {
@@ -125,8 +125,8 @@ describe('DetailTabs', () => {
 			},
 			true
 		],
-		['idle', { kind: 'idle', mode: 'generate' }, false],
-		['disabled', { kind: 'disabled', mode: 'generate', reason: 'No models' }, false],
+		['idle', { kind: 'idle' }, false],
+		['disabled', { kind: 'disabled', reason: 'No models' }, false],
 		['failed', failed, false]
 	] as const)(
 		'[defect:#1568] carries a ring on Takes exactly while %s',

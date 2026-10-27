@@ -12,13 +12,13 @@ import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
-import { EDITOR_GENERATE_MODE_LABELS, EDITOR_MISSING_CONTENT_TITLE } from '$lib/constants';
+import { EDITOR_GENERATE_LABEL, EDITOR_MISSING_CONTENT_TITLE } from '$lib/constants';
 import type { GenerateState } from '$lib/stores/generateAction';
 
-const IDLE_GENERATE: GenerateState = { kind: 'idle', mode: 'generate' };
+const IDLE_GENERATE: GenerateState = { kind: 'idle' };
 const generateAction = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
-	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
+	return writable<GenerateState>({ kind: 'idle' });
 });
 vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
@@ -101,7 +101,7 @@ function expectGenerateAsPrimaryAction(target: HTMLElement): void {
 	const primaryAction = target
 		.querySelector('[role="tabpanel"] > :last-child')
 		?.querySelector('button');
-	expect(primaryAction?.textContent?.trim()).toBe(EDITOR_GENERATE_MODE_LABELS.generate);
+	expect(primaryAction?.textContent?.trim()).toBe(EDITOR_GENERATE_LABEL);
 }
 
 describe('SongPhoneView', () => {
@@ -190,7 +190,6 @@ describe('SongPhoneView', () => {
 	it('keeps the Edit action bar one row: a disabled Generate says why inside itself', async () => {
 		generateAction.set({
 			kind: 'disabled',
-			mode: 'generate',
 			reason: EDITOR_MISSING_CONTENT_TITLE
 		});
 		const target = await render();

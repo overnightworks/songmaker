@@ -333,11 +333,7 @@ export const COWRITER_TOOL_CALL_TARGET_PREFIX = 'for:';
 export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 	'This proposal applies to a different song than the one you have open';
 
-export const EDITOR_GENERATE_MODE_LABELS = {
-	generate: 'Generate',
-	repaint: TAKE_REPAINT_LABEL,
-	cover: TAKE_COVER_LABEL
-};
+export const EDITOR_GENERATE_LABEL = 'Generate';
 export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
 export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
 export const EDITOR_OPEN_WORKER_POOL_LABEL = 'Open worker pool';

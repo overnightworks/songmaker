@@ -54,8 +54,6 @@ import { addToast } from './toast';
 
 const requestInFlight = writable(false);
 
-type GenerateMode = 'generate' | 'repaint' | 'cover';
-
 function progressPercent(job: JobItem | null): number {
 	return job ? Math.round(job.progress * 100) : 0;
 }
@@ -145,7 +143,7 @@ function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): ActiveJ
  * card stays, but there is nothing left to cancel (#1039 O3).
  */
 export type GenerateState =
-	| { kind: 'idle'; mode: GenerateMode }
+	| { kind: 'idle' }
 	| {
 			kind: 'queued';
 			jobId: string;
@@ -167,8 +165,8 @@ export type GenerateState =
 			offline: boolean;
 			ended: boolean;
 	  }
-	| { kind: 'failed'; mode: GenerateMode; cause: string; unavailable: boolean }
-	| { kind: 'disabled'; mode: GenerateMode; reason: string | null };
+	| { kind: 'failed'; cause: string; unavailable: boolean }
+	| { kind: 'disabled'; reason: string | null };
 
 type GenerateBusyState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
 type GenerateJobState = GenerateBusyState & { jobId: string };
@@ -247,8 +245,6 @@ const generatePresentation = derived(
 		editPrompt,
 		recipeModel,
 		activeModels,
-		sourceGeneration,
-		sourceMode,
 		generationFailures,
 		offline
 	],
@@ -260,8 +256,6 @@ const generatePresentation = derived(
 		prompt,
 		model,
 		models,
-		source,
-		mode,
 		failures,
 		isOffline
 	]): GenerateState => {
@@ -272,22 +266,20 @@ const generatePresentation = derived(
 		const disabledReason = disabledReasonFor({ lyrics, prompt, model, models });
 
 		const disabled = pending || isOffline || !lyrics || !prompt || model === null;
-		const actionMode: GenerateMode = source ? mode : 'generate';
 		const cause = song ? failures[song.id] : undefined;
 		if (job?.status === 'queued') return queuedState(job, reconnecting, isOffline);
 		if (pending) return generatingState(job, reconnecting, isOffline);
 		// Offline, Generate has no words of its own: the one offline strip says it.
 		if (disabled) {
-			return { kind: 'disabled', mode: actionMode, reason: isOffline ? null : disabledReason };
+			return { kind: 'disabled', reason: isOffline ? null : disabledReason };
 		}
 		if (cause !== undefined)
 			return {
 				kind: 'failed',
-				mode: actionMode,
 				cause: cause.message,
 				unavailable: cause.unavailable
 			};
-		return { kind: 'idle', mode: actionMode };
+		return { kind: 'idle' };
 	}
 );
 
@@ -410,12 +402,9 @@ async function startSourceJob(
 }
 
 export function generate(): Promise<void> {
-	return startJobFromEditor((request) => {
-		const source = get(sourceGeneration);
-		return source
-			? startSourceJob(request, source)
-			: generateSong(request.songId, request.count, request.model, request.versionId, request.seed);
-	});
+	return startJobFromEditor((request) =>
+		generateSong(request.songId, request.count, request.model, request.versionId, request.seed)
+	);
 }
 
 /** The task card's press: a repaint or cover of the open source take; the source stays open. */

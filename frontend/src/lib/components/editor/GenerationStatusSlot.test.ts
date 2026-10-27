@@ -14,7 +14,7 @@ import { failed, queued, running } from '$lib/test-utils/generate-states';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
-	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
+	return writable<GenerateState>({ kind: 'idle' });
 });
 vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
@@ -62,8 +62,8 @@ async function render(state: GenerateState, latestVersionNumber = 8): Promise<vo
 
 describe('GenerationStatusSlot', () => {
 	it.each([
-		{ kind: 'idle', mode: 'generate' },
-		{ kind: 'disabled', mode: 'generate', reason: 'No models' },
+		{ kind: 'idle' },
+		{ kind: 'disabled', reason: 'No models' },
 		failed
 	] as const)('renders nothing while the generate action is $kind', async (state) => {
 		await render(state);

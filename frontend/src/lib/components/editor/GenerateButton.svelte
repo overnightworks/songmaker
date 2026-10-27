@@ -5,7 +5,7 @@
 	import {
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-		EDITOR_GENERATE_MODE_LABELS,
+		EDITOR_GENERATE_LABEL,
 		EDITOR_OPEN_WORKER_POOL_LABEL,
 		ADMIN_WORKER_POOL_HREF
 	} from '$lib/constants';
@@ -90,21 +90,20 @@
 			<p class="reason reason-below">{presentation.reason}</p>
 		{/if}
 	{:else}
-		{@const modeLabel = EDITOR_GENERATE_MODE_LABELS[presentation.mode]}
 		<button
 			type="button"
 			class="primary-button"
 			class:failed={presentation.kind === 'failed'}
 			disabled={presentation.kind === 'disabled'}
 			title={presentation.kind === 'disabled' ? (presentation.reason ?? undefined) : undefined}
-			aria-label={reasonInsideButton === null ? undefined : `${modeLabel} — ${reasonInsideButton}`}
+			aria-label={reasonInsideButton === null ? undefined : `${EDITOR_GENERATE_LABEL} — ${reasonInsideButton}`}
 			onclick={() => void generate()}
 		>
 			{#if reasonInsideButton !== null}
 				{@render disabledReason(reasonInsideButton)}
 			{:else}
 				{#if presentation.kind === 'failed'}<Icon name="triangle-alert" />{/if}
-				{modeLabel}
+				{EDITOR_GENERATE_LABEL}
 			{/if}
 		</button>
 		{#if presentation.kind === 'disabled' && presentation.reason !== null && reasonInsideButton === null}
