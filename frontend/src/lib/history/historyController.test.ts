@@ -137,9 +137,14 @@ describe('landing reducer', () => {
 		expect(outcome.ledger).toEqual({ layers: [], stepBacks: [], current: null });
 	});
 
-	it('a stale layer entry after a reload lands without applying', () => {
-		const outcome = land(ledger(), { id: 9, layer: 'album-menu' });
+	it.each([
+		{ after: 'a reload', layers: [] },
+		{ after: 'Forward past an open layer', layers: [{ layer: 'now-playing', entry: 7 }] }
+	])('a stale layer entry after $after lands without applying', ({ layers }) => {
+		const outcome = land(ledger({ layers }), { id: 9, layer: 'album-menu' });
+
 		expect(outcome).toMatchObject({ apply: false, dropLayers: [] });
+		expect(outcome.ledger.current).toEqual({ id: 6 });
 	});
 });
 
@@ -377,13 +382,9 @@ describe('history adapter', () => {
 	it('an id-less entry below stamped entries stays foreign', async () => {
 		seedForeignEntry('/album/a');
 		pushEntry('/album/b', {});
-		const landed = nextLanding();
-		history.back();
-		await landed;
+		await traverse(() => history.back());
 
-		const stamped = replaceEntry('/album/a', {});
-
-		expect(stamped).toBeNull();
+		expect(replaceEntry('/album/a', {})).toBeNull();
 		expect(standingEntry()).toBeUndefined();
 	});
 
@@ -701,9 +702,7 @@ describe('history adapter', () => {
 		installHistoryController();
 		attachRecordingHandler();
 
-		const steppedOff = nextLanding();
-		stampNavigatedEntry('enter');
-		await steppedOff;
+		await traverse(() => stampNavigatedEntry('enter'));
 
 		expect(standingEntry()).toEqual(page);
 		expect(location.pathname).toBe('/settings/voices');
