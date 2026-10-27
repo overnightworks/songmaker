@@ -10,7 +10,7 @@ import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	openNowPlayingLabel,
+	NOW_PLAYING_LABEL,
 	songEditorOpenLabel,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_REPAINT_LABEL
@@ -168,7 +168,7 @@ test(
 		await openSong(page, songs.title);
 		await page
 			.getByRole('contentinfo')
-			.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
+			.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
 			.click();
 		await page
 			.locator('.np-take')
