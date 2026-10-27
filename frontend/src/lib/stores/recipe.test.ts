@@ -40,7 +40,7 @@ function requestedRecipeDefaults(): Partial<GenerationItem> {
 }
 
 describe('recipeChips', () => {
-	it('projects the eight labeled chips from editor and recipe state', () => {
+	it('C1: projects the eight labeled chips from editor and recipe state', () => {
 		const chips = recipeChips({
 			model: 'turbo',
 			takes: 2,
@@ -66,7 +66,7 @@ describe('recipeChips', () => {
 		expect(chips.find((c) => c.key === 'duration')?.value).toBe('195 s');
 	});
 
-	it('shows Auto for zero BPM/duration', () => {
+	it('C1: shows Auto for zero BPM/duration', () => {
 		const chips = recipeChips({
 			model: null,
 			takes: 1,
@@ -203,6 +203,8 @@ describe('seed from a take (C1, #1928 acceptance 1)', () => {
 	beforeEach(() => {
 		seedFromTake.set(null);
 		toasts.set([]);
+		sourceGeneration.set(null);
+		sourceMode.set('repaint');
 	});
 
 	it('is set from the take, says so in a toast and is replaced by the next one', () => {
