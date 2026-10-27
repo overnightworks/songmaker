@@ -22,7 +22,7 @@ WORK_CLONE="$HOME/git/songmaker"
 RELEASE_CLONE="$HOME/srv/songmaker"
 TIMER=songmaker-autodeploy.timer
 UNITS=(songmaker-autodeploy.service songmaker.service songmaker-cli-credentials-mirror.service songmaker-alert@.service)
-TAG_GRAMMAR='^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}\.[1-9][0-9]{0,8}$'
+REPOSITORY_URL=https://github.com/overnightworks/songmaker.git
 
 step_label=""
 last_safe_step=4
@@ -32,17 +32,17 @@ begin() {
     printf '%s: %s\n' "$step_label" "$2"
 }
 
-# Lines of `systemctl cat` that fix a unit's paths.
-unit_path_lines() {
-    systemctl cat "${UNITS[@]}" | grep -E '^(WorkingDirectory|ExecStart|ExecStartPre)='
-}
-
-# Succeeds when the unit lines exist and every one names the directory.
+# Succeeds when every WorkingDirectory= and every absolute script path in the
+# Exec* lines names the directory, and nothing names the other clone. The docker
+# executable of songmaker.service names no checkout and is not a script path.
 units_name_only() {
-    local directory=$1 lines
-    lines=$(unit_path_lines) || return 1
-    [[ -n $lines ]] || return 1
-    ! grep -v -F -e "$directory" <<<"$lines" >/dev/null
+    local directory=$1 other=$2 output working scripts
+    output=$(systemctl cat "${UNITS[@]}") || return 1
+    working=$(grep -E '^WorkingDirectory=' <<<"$output") || return 1
+    scripts=$(grep -E '^Exec' <<<"$output" | grep -oE '(^|[ =])/[^ ]+\.(sh|py)' | sed -E 's/^[ =]//') || return 1
+    ! grep -v -x -F -e "WorkingDirectory=$directory" <<<"$working" >/dev/null || return 1
+    ! grep -v -F -e "$directory/" <<<"$scripts" >/dev/null || return 1
+    ! grep -F -e "$other" <<<"$output" >/dev/null
 }
 
 compose_project_name() {
@@ -67,18 +67,22 @@ stop_with() {
 # `step 5` and later (switch): the clone, the copies or the units may have changed.
 stop_switch() {
     local failed_number=${step_label#step }
+    local consequence=""
     if ((failed_number <= last_safe_step)); then
-        sudo systemctl start "$TIMER" || printf 'could not restart the timer; run: sudo systemctl start %s\n' "$TIMER" >&2
-        stop_with "$1; nothing changed, the timer is running again"
+        if sudo systemctl start "$TIMER"; then
+            consequence="; nothing changed, the timer is running again"
+        else
+            consequence="; nothing changed, but the timer could not be restarted (run: sudo systemctl start $TIMER)"
+        fi
     fi
-    printf 'stopped at %s: %s\n' "$step_label" "$1" >&2
+    printf 'stopped at %s: %s%s\n' "$step_label" "$1" "$consequence" >&2
     printf 'back out with: %s --backout\n' "$0" >&2
     exit 1
 }
 
 stop_backout() {
     printf 'stopped at %s: %s\n' "$step_label" "$1" >&2
-    printf 'nothing further was run; tell the head\n' >&2
+    printf 'the later backout steps were not run; tell the head\n' >&2
     exit 1
 }
 
@@ -89,7 +93,8 @@ announce_sudo() {
 
 switch() {
     local tag=$1 answer
-    [[ $tag =~ $TAG_GRAMMAR ]] || { printf 'not a release tag: %s\n' "$tag" >&2; exit 2; }
+    git ls-remote --exit-code --tags "$REPOSITORY_URL" "refs/tags/$tag" >/dev/null ||
+        { printf 'not a tag of %s: %s\n' "$REPOSITORY_URL" "$tag" >&2; exit 2; }
     announce_sudo
 
     begin "step 1" "stop the autodeploy timer"
@@ -111,10 +116,10 @@ switch() {
     [[ $(sort -u <<<"$devices" | wc -l) -eq 1 ]] || stop_switch "~/srv is on another file system"
 
     begin "step 5" "clone the repository to ~/srv/songmaker"
-    git clone https://github.com/overnightworks/songmaker.git "$RELEASE_CLONE" || stop_switch "the clone failed"
+    git clone "$REPOSITORY_URL" "$RELEASE_CLONE" || stop_switch "the clone failed"
 
     begin "step 6" "check out $tag detached"
-    git -C "$RELEASE_CLONE" checkout --detach "$tag" || stop_switch "$tag could not be checked out"
+    git -C "$RELEASE_CLONE" checkout --detach "refs/tags/$tag" || stop_switch "$tag could not be checked out"
 
     begin "step 7" "initialise vendor/acestep"
     git -C "$RELEASE_CLONE" submodule update --init vendor/acestep || stop_switch "the submodule update failed"
@@ -140,7 +145,7 @@ switch() {
     (cd "$RELEASE_CLONE" && sudo ./scripts/install-autodeploy.sh) || stop_switch "install-autodeploy.sh failed"
 
     begin "step 14" "check that every unit names $RELEASE_CLONE"
-    units_name_only "$RELEASE_CLONE" || stop_switch "a unit does not name $RELEASE_CLONE"
+    units_name_only "$RELEASE_CLONE" "$WORK_CLONE" || stop_switch "a unit does not name $RELEASE_CLONE"
 
     begin "step 15" "wait 2 minutes for the first tick, then read the journal"
     sleep 120
@@ -171,6 +176,16 @@ backout() {
         flock "$RELEASE_CLONE/.git/songmaker-autodeploy.lock" true || stop_backout "the lock could not be taken"
     fi
 
+    # Before any unit changes: once a release deployed from the release clone, a refusal must leave the units alone.
+    begin "backout B7b" "check that no release deployed from $RELEASE_CLONE"
+    local config_files
+    config_files=$(compose_config_files) || stop_backout "docker compose ls failed"
+    if [[ $config_files == *"$RELEASE_CLONE"* ]]; then
+        stop_backout "a release already deployed from $RELEASE_CLONE; ~/srv is not removed, there is no way back, cut a newer tag"
+    fi
+    [[ $config_files == "$WORK_CLONE/docker-compose.yml" ]] ||
+        stop_backout "the songmaker project's compose file is '$config_files', not $WORK_CLONE/docker-compose.yml"
+
     begin "backout B3" "check that the old .env is still there"
     [[ -f $WORK_CLONE/.env ]] || stop_backout "$WORK_CLONE/.env is gone; there is no way back, cut a newer tag"
 
@@ -184,16 +199,7 @@ backout() {
     (cd "$WORK_CLONE" && sudo ./scripts/install-autodeploy.sh) || stop_backout "install-autodeploy.sh failed"
 
     begin "backout B7" "check that every unit names $WORK_CLONE"
-    units_name_only "$WORK_CLONE" || stop_backout "a unit does not name $WORK_CLONE"
-
-    begin "backout B7b" "check that no release deployed from $RELEASE_CLONE"
-    local config_files
-    config_files=$(compose_config_files) || stop_backout "docker compose ls failed"
-    if [[ $config_files == *"$RELEASE_CLONE"* ]]; then
-        stop_backout "a release already deployed from $RELEASE_CLONE; ~/srv is not removed, there is no way back, cut a newer tag"
-    fi
-    [[ $config_files == "$WORK_CLONE/docker-compose.yml" ]] ||
-        stop_backout "the songmaker project's compose file is '$config_files', not $WORK_CLONE/docker-compose.yml"
+    units_name_only "$WORK_CLONE" "$RELEASE_CLONE" || stop_backout "a unit does not name $WORK_CLONE"
 
     begin "backout B8" "remove the release clone $RELEASE_CLONE"
     rm -rf "$RELEASE_CLONE" || stop_backout "$RELEASE_CLONE could not be removed"
