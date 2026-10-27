@@ -352,7 +352,7 @@ function pathnameOf(url: string): string {
 // under the id the controller gave back to it -- unless a write since has
 // given the entry a library of its own, which is newer. The app layout reports
 // every navigation; only the first is the start.
-export function holdLibraryHistoryUntilRouterStarts(): () => void {
+export function restoreLibraryHistoryOnRouterStart(): () => void {
 	let loaded: unknown = libraryHistoryEntry(historyStateOnLoad());
 	return () => {
 		const restored = loaded;
