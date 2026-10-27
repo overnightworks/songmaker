@@ -37,6 +37,7 @@
 		openCollectionEntry,
 		openLibraryWall,
 		openEditTab,
+		openTakesTab,
 		clearGenerationSelection,
 		persistLibraryHistory,
 		selectNeighborSong,
@@ -82,11 +83,10 @@
 		setSourceFromGeneration,
 		sourceGeneration,
 		sourceMode,
-		takesPerGenerate,
-		type SourceMode
+		takesPerGenerate
 	} from '$lib/stores/recipe';
 	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
-	import type { GenerationItem, SongItem, VersionItem } from '$lib/api/types';
+	import type { SongItem, VersionItem } from '$lib/api/types';
 	import {
 		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
@@ -293,7 +293,8 @@
 	$effect(() => {
 		const pending = $pendingSource;
 		if (!pending || !song || pending.generation.song_id !== song.id) return;
-		useSource(pending.generation, pending.mode);
+		setSourceFromGeneration(pending.generation, pending.mode);
+		if (compact) openTakesTab();
 		pendingSource.set(null);
 	});
 
@@ -450,18 +451,13 @@
 					dirty,
 					draftVersionNumber,
 					latestVersionNumber,
-					onsource: useSource,
+					onsource: setSourceFromGeneration,
 					onretry: () => {
 						if (song) void refreshTakes(song.id);
 					}
 				} satisfies ComponentProps<typeof TakesList>)
 			: null
 	);
-
-	function useSource(gen: GenerationItem, mode: SourceMode): void {
-		setSourceFromGeneration(gen, mode);
-		if (compact) openEditTab();
-	}
 
 	type VersionLoadAnswer = 'loaded' | 'already-the-draft' | 'declined';
 
