@@ -221,7 +221,8 @@ test.describe('before Play', () => {
 			const nameLine = page.locator('.cover-line').filter({ has: notice });
 			const longName = Array(12).fill('A very long artist and album name').join(' ');
 			const nameRows = await nameLine.evaluate((line, name) => {
-				const nameText = line.firstChild!;
+				const nameText = line.firstChild;
+				if (!nameText) throw new Error('the name line has no text');
 				nameText.textContent = `${name} `;
 				const range = document.createRange();
 				range.selectNodeContents(nameText);
