@@ -786,7 +786,7 @@ describe('SongDetailView recipe and takes', () => {
 	] as const;
 
 	it.each(sourceCases)(
-		'lands a picked-up %s source on its task card (compact: %s)',
+		'lands a picked-up %s source on its task card (compact: %s) (S9, #1927 acceptance 7)',
 		async (mode, compact) => {
 			stubLibraryMedia({ narrow: compact, compact });
 			const target = await renderView();
