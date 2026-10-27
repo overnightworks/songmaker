@@ -33,7 +33,7 @@ import {
 import { selectedSongId } from '$lib/stores/player';
 import type { SongItem } from '$lib/api/types';
 
-const songDefaults = {
+const savedSongFields = {
 	slug: 'test',
 	title: 'Test',
 	lyrics: 'hello',
@@ -136,7 +136,7 @@ describe('handleSave', () => {
 			})
 		);
 		selectedSongId.set('s1');
-		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		loadSongData(makeSong({ ...savedSongFields, id: 's1' }));
 		await Promise.resolve();
 		const latest = version(4);
 		versions.set([latest, version(3), version(2), version(1)]);
@@ -150,7 +150,7 @@ describe('handleSave', () => {
 		if (action === 'load v2') loadVersionAsDraft(version(2));
 		if (action === 'undo latest') loadVersionAsDraft(latest)?.undo();
 		if (action === 'undo v3') undo?.undo();
-		finishSave(makeSong({ ...songDefaults, id: 's1', lyrics: sentLyrics }));
+		finishSave(makeSong({ ...savedSongFields, id: 's1', lyrics: sentLyrics }));
 		await saving;
 		return sentLyrics;
 	}
@@ -174,7 +174,7 @@ describe('handleSave', () => {
 			expect(get(draftLoadedFrom)).toBe(nextFrom);
 			expect(get(isDirty)).toBe(dirty);
 			vi.mocked(updateSong).mockResolvedValueOnce(
-				makeSong({ ...songDefaults, lyrics: expectedLyrics })
+				makeSong({ ...savedSongFields, lyrics: expectedLyrics })
 			);
 			await handleSave('s1');
 			expect(updateSong).toHaveBeenLastCalledWith(
@@ -191,10 +191,10 @@ describe('handleSave', () => {
 		vi.clearAllMocks();
 		const { updateSong } = await import('$lib/api/client');
 		const mockUpdate = vi.mocked(updateSong);
-		const saved = makeSong({ ...songDefaults, version_count: 2 });
+		const saved = makeSong({ ...savedSongFields, version_count: 2 });
 		mockUpdate.mockResolvedValueOnce(saved);
 
-		loadSongData(makeSong(songDefaults));
+		loadSongData(makeSong(savedSongFields));
 		setDraftLyrics('new lyrics');
 		expect(get(isDirty)).toBe(true);
 
@@ -209,7 +209,7 @@ describe('handleSave', () => {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockRejectedValueOnce(new Error('Network error'));
 
-		loadSongData(makeSong(songDefaults));
+		loadSongData(makeSong(savedSongFields));
 		setDraftLyrics('new lyrics');
 
 		await expect(handleSave('s1')).rejects.toThrow('Network error');
