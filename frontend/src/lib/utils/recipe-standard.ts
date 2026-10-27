@@ -1,5 +1,5 @@
 import type { VersionGenerationParams } from '$lib/api/types';
-import { RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
+import { RECIPE_DURATION_STANDARD_SECONDS, RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
 import {
 	DIT_BOOL_FIELDS,
 	DIT_NUMBER_FIELDS,
@@ -29,12 +29,9 @@ const ENGINE_PARAM_KEYS: readonly EngineParamKey[] = [
 const SONG_FIELDS = ['bpm', 'duration', 'key', 'voice', 'reference'] as const;
 const GENERATE_FIELDS = ['model', 'takes'] as const;
 
-/**
- * A recipe field: a named row (SONG_FIELDS, GENERATE_FIELDS), the 'preset'
- * row, or one engine parameter. The engine keys are open strings, so the
- * named rows cannot narrow this type.
- */
-export type RecipeField = string;
+/** A recipe field: a named row (SONG_FIELDS, GENERATE_FIELDS), the 'preset' row, or one engine parameter. */
+export type RecipeField =
+	(typeof SONG_FIELDS)[number] | (typeof GENERATE_FIELDS)[number] | 'preset' | EngineParamKey;
 
 /** The recipe's editable state as the page holds it. */
 export interface RecipeValues {
@@ -67,7 +64,7 @@ export function changedRecipeFields(
 ): Set<RecipeField> {
 	const changed = new Set<RecipeField>();
 	if (values.bpm !== 0) changed.add('bpm');
-	if (values.audioDuration !== 0) changed.add('duration');
+	if (values.audioDuration !== RECIPE_DURATION_STANDARD_SECONDS) changed.add('duration');
 	if (values.keyScale !== '') changed.add('key');
 	if (values.genParams?.user_lora_id) changed.add('voice');
 	if (values.genParams?.reference_audio_path) changed.add('reference');
@@ -122,7 +119,7 @@ export function resetRecipeField(
 		case 'bpm':
 			return { ...values, bpm: 0 };
 		case 'duration':
-			return { ...values, audioDuration: 0 };
+			return { ...values, audioDuration: RECIPE_DURATION_STANDARD_SECONDS };
 		case 'key':
 			return { ...values, keyScale: '' };
 		case 'model':

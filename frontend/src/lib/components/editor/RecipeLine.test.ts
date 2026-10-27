@@ -11,6 +11,7 @@ import {
 	setDraftBpm,
 	setDraftGenParams
 } from '$lib/stores/editor';
+import { RECIPE_DURATION_STANDARD_SECONDS } from '$lib/constants/recipe';
 import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
 import { activeModels, loadActiveModels } from '$lib/stores/presets';
 import { loras } from '$lib/stores/loras';
@@ -31,7 +32,14 @@ vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 let mounted: ReturnType<typeof mount>;
 
 beforeEach(async () => {
-	loadSongData(makeSong({ bpm: 0, audio_duration: 0, key_scale: '', generation_params: null }));
+	loadSongData(
+		makeSong({
+			bpm: 0,
+			audio_duration: RECIPE_DURATION_STANDARD_SECONDS,
+			key_scale: '',
+			generation_params: null
+		})
+	);
 	discardDraft();
 	recipeOpen.set(false);
 	recipeModel.set('turbo');
@@ -108,7 +116,7 @@ describe('RecipeLine', () => {
 		(target.querySelector('[data-field-reset="bpm"]') as HTMLButtonElement).click();
 		await tick();
 		expect(get(editBpm)).toBe(0);
-		expect(get(editAudioDuration)).toBe(0);
+		expect(get(editAudioDuration)).toBe(RECIPE_DURATION_STANDARD_SECONDS);
 		expect(target.querySelector('[data-field-reset]')).toBeNull();
 	});
 

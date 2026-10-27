@@ -5,13 +5,17 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
 	COWRITER_COMPOSER_PLACEHOLDER,
+	NEW_PLACE_CREATE_LABEL,
+	NEW_SONG_ROW_LABEL,
+	NEW_SONG_TITLE_LABEL,
+	newSongCardLabel,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	RECIPE_PANEL_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
-import { readSeededLibrary } from './seed';
+import { csrfHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
+import { archiveOwnedAlbum, readSeededLibrary } from './seed';
 
 const DRAFT = 'mach den Chorus härter';
 
@@ -128,5 +132,52 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await openPickedSong(page);
 		await cowriterTab(page).click();
 		await expect(composer(page)).toBeInViewport({ ratio: 1 });
+	});
+
+	test('a song made in the UI shows the closed Recipe line without a dot, and its composer stays on screen with a shared-link line (C1, C6, #1935 acceptance 2, 8)', async ({
+		page
+	}) => {
+		await page.goto(HOME_PATH);
+		const albumTitle = `Nightdrive recipe ${Date.now()}`;
+		const albumResponse = await page.request.post('/api/albums', {
+			headers: await csrfHeaders(page),
+			data: { title: albumTitle, artist: '' }
+		});
+		expect(albumResponse.ok()).toBe(true);
+		const album = (await albumResponse.json()) as { id: string };
+		try {
+			await page.goto(`/album/${album.id}`);
+			const surface = workspace(page);
+			await surface.getByRole('button', { name: NEW_SONG_ROW_LABEL, exact: true }).click();
+			const card = surface.getByRole('form', { name: newSongCardLabel(albumTitle) });
+			await card.getByLabel(NEW_SONG_TITLE_LABEL).fill('Fresh recipe song');
+			const created = page.waitForResponse(
+				(response) =>
+					response.url().endsWith('/api/songs') && response.request().method() === 'POST'
+			);
+			await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+			const song = (await (await created).json()) as { id: string };
+			await expect(surface.getByRole('heading', { name: 'Fresh recipe song' })).toBeVisible();
+			await expect(
+				surface.getByRole('button', { name: RECIPE_PANEL_LABEL, exact: true })
+			).toBeVisible();
+
+			const shared = await page.request.post(`/api/songs/${song.id}/share`, {
+				headers: await csrfHeaders(page),
+				data: {}
+			});
+			expect(shared.ok()).toBe(true);
+			await page.reload();
+			await expect(
+				surface.getByRole('button', { name: RECIPE_PANEL_LABEL, exact: true })
+			).toBeVisible();
+			for (const height of [900, 700, 600]) {
+				await page.setViewportSize({ width: 1440, height });
+				await cowriterTab(page).click();
+				await expect(composer(page)).toBeInViewport({ ratio: 1 });
+			}
+		} finally {
+			await archiveOwnedAlbum(page.request, album.id);
+		}
 	});
 });
