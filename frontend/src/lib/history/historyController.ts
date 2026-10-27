@@ -93,15 +93,13 @@ export function land(ledger: HistoryLedger, landed: HistoryEntry | null): Landin
 // A layer entry that no open layer with that entry id owns -- one a reload or
 // a Forward came back onto -- is a copy of the page below it, where Back would
 // visibly do nothing.
-export function isUnownedLayerEntry(
-	ledger: HistoryLedger,
-	entry: HistoryEntry | null
-): entry is HistoryEntry {
+function isUnownedLayerEntry(ledger: HistoryLedger, entry: HistoryEntry | null): boolean {
 	return (
 		entry?.layer !== undefined &&
 		!ledger.layers.some((open) => open.entry === entry.id && open.layer === entry.layer)
 	);
 }
+export { isUnownedLayerEntry as isUnownedLayerEntryForTests };
 
 // Read and incremented on every allocation, never cached: a reload, a
 // bfcache restore or a return from another document starts this module afresh
@@ -746,7 +744,7 @@ function dropLayers(open: readonly OpenLayerEntry[]): void {
 // Steps off a layer entry no open layer owns. A step back off it already
 // underway is not started again.
 function stepOffUnownedLayerEntry(entry: HistoryEntry | null): void {
-	if (!isUnownedLayerEntry(ledger, entry)) return;
+	if (entry === null || !isUnownedLayerEntry(ledger, entry)) return;
 	if (ledger.stepBacks.includes(entry.id - 1)) return;
 	void stepBackTo(entry.id - 1);
 }

@@ -7,7 +7,7 @@ import {
 	attachLandingHandler,
 	historyStandsStill,
 	installHistoryController,
-	isUnownedLayerEntry,
+	isUnownedLayerEntryForTests,
 	land,
 	landedEntry,
 	loadHistoryPageForTests,
@@ -145,7 +145,7 @@ describe('landing reducer', () => {
 		const stale = { id: 9, layer: 'album-menu' };
 		const outcome = land(ledger({ layers }), stale);
 
-		expect(isUnownedLayerEntry(outcome.ledger, stale)).toBe(true);
+		expect(isUnownedLayerEntryForTests(outcome.ledger, stale)).toBe(true);
 		expect(outcome).toMatchObject({ apply: false, dropLayers: [] });
 		expect(outcome.ledger.current).toEqual({ id: 6 });
 	});
@@ -734,7 +734,7 @@ describe('history adapter', () => {
 		expect(location.pathname).toBe('/settings/voices');
 	});
 
-	it('a second landing on the unowned layer entry presses Back once in total', () => {
+	it('A1 (#1921): a second landing on the unowned layer entry presses Back once in total', () => {
 		pushEntry('/settings/voices', {});
 		pushEntry('/settings/voices', {}, 'account-menu');
 		resetHistoryControllerForTests();
