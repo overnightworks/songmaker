@@ -359,7 +359,6 @@ export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable 
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
 export const EDITOR_LYRICS_LABEL = 'Lyrics';
-export const EDITOR_STYLE_LABEL = 'Style';
 export const EDITOR_STYLE_PROMPT_LABEL = 'Style Prompt';
 export const EDITOR_UNSAVED_TITLE = 'Unsaved changes';
 export const EDITOR_UNSAVED_MESSAGE =

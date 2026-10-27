@@ -13,7 +13,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 }));
 
 const mounted: Array<ReturnType<typeof mount>> = [];
-const snippets = {
+const paneSnippets = {
 	expiryDigest: createRawSnippet(() => ({ render: () => '<div>Expiry digest</div>' })),
 	cowriter: createRawSnippet(() => ({
 		render: () => '<div class="cowriter-screen"><textarea aria-label="Message"></textarea></div>'
@@ -35,7 +35,7 @@ async function render(generationCount = 11) {
 		mount(ListenTabs, {
 			target,
 			props: {
-				...snippets,
+				...paneSnippets,
 				takeListProps: {
 					song: makeSong({ generations: [], generation_count: generationCount }),
 					dirty: false,
@@ -50,7 +50,7 @@ async function render(generationCount = 11) {
 	return target;
 }
 
-function tabNamed(target: HTMLElement, tab: 'takes' | 'cowriter'): HTMLButtonElement {
+function listenTab(target: HTMLElement, tab: 'takes' | 'cowriter'): HTMLButtonElement {
 	const found = target.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`);
 	if (!found) throw new Error(`Expected the ${tab} tab`);
 	return found;
@@ -64,15 +64,15 @@ describe('ListenTabs', () => {
 	it.each<DetailTab>(['takes', 'edit'])('selects Takes while the detail tab is %s', async (tab) => {
 		detailTab.set(tab);
 		const target = await render();
-		expect(tabNamed(target, 'takes').getAttribute('aria-selected')).toBe('true');
-		expect(tabNamed(target, 'cowriter').getAttribute('aria-selected')).toBe('false');
+		expect(listenTab(target, 'takes').getAttribute('aria-selected')).toBe('true');
+		expect(listenTab(target, 'cowriter').getAttribute('aria-selected')).toBe('false');
 	});
 
 	it('selects Co-writer while the detail tab is cowriter', async () => {
 		detailTab.set('cowriter');
 		const target = await render();
-		expect(tabNamed(target, 'cowriter').getAttribute('aria-selected')).toBe('true');
-		expect(tabNamed(target, 'takes').getAttribute('aria-selected')).toBe('false');
+		expect(listenTab(target, 'cowriter').getAttribute('aria-selected')).toBe('true');
+		expect(listenTab(target, 'takes').getAttribute('aria-selected')).toBe('false');
 	});
 
 	it('labels the tabs with the take count', async () => {
@@ -85,10 +85,10 @@ describe('ListenTabs', () => {
 
 	it('writes the clicked tab to the detail tab', async () => {
 		const target = await render();
-		tabNamed(target, 'cowriter').click();
+		listenTab(target, 'cowriter').click();
 		await tick();
 		expect(get(detailTab)).toBe('cowriter');
-		tabNamed(target, 'takes').click();
+		listenTab(target, 'takes').click();
 		await tick();
 		expect(get(detailTab)).toBe('takes');
 	});
@@ -103,20 +103,20 @@ describe('ListenTabs', () => {
 	] as const)('moves and focuses the tab for %s from %s', async (key, from, to) => {
 		detailTab.set(from);
 		const target = await render();
-		const current = tabNamed(target, from);
+		const current = listenTab(target, from);
 		current.focus();
 		current.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 		await tick();
 		expect(get(detailTab)).toBe(to);
-		expect(document.activeElement).toBe(tabNamed(target, to));
+		expect(document.activeElement).toBe(listenTab(target, to));
 	});
 
 	it('keeps tab targets and panel wiring of a real tablist', async () => {
 		const target = await render();
 		expect(target.querySelector('[role="tablist"]')).not.toBeNull();
-		const takes = tabNamed(target, 'takes');
+		const takes = listenTab(target, 'takes');
 		expect(takes.tabIndex).toBe(0);
-		expect(tabNamed(target, 'cowriter').tabIndex).toBe(-1);
+		expect(listenTab(target, 'cowriter').tabIndex).toBe(-1);
 		const panel = document.getElementById(takes.getAttribute('aria-controls') ?? '');
 		expect(panel?.getAttribute('role')).toBe('tabpanel');
 	});
@@ -125,7 +125,7 @@ describe('ListenTabs', () => {
 		const target = await render();
 		expect(takesPane(target)).not.toBeNull();
 		expect(target.textContent).toContain('Expiry digest');
-		tabNamed(target, 'cowriter').click();
+		listenTab(target, 'cowriter').click();
 		await tick();
 		expect(takesPane(target)).toBeNull();
 	});
@@ -133,15 +133,15 @@ describe('ListenTabs', () => {
 	it('does not mount the Co-writer before its first open and keeps it mounted, hidden, after leaving', async () => {
 		const target = await render();
 		expect(target.querySelector('.cowriter-screen')).toBeNull();
-		tabNamed(target, 'cowriter').click();
+		listenTab(target, 'cowriter').click();
 		await tick();
 		const composer = target.querySelector('.cowriter-screen textarea') as HTMLTextAreaElement;
 		composer.value = 'mach den Chorus härter';
 		expect(cowriterPane(target)?.hidden).toBe(false);
-		tabNamed(target, 'takes').click();
+		listenTab(target, 'takes').click();
 		await tick();
 		expect(cowriterPane(target)?.hidden).toBe(true);
-		tabNamed(target, 'cowriter').click();
+		listenTab(target, 'cowriter').click();
 		await tick();
 		expect(target.querySelector('.cowriter-screen textarea')).toBe(composer);
 		expect(composer.value).toBe('mach den Chorus härter');
