@@ -26,11 +26,11 @@
 # choose that moment deliberately. Starting songmaker-autodeploy.timer only
 # arms a ~2-minute schedule; the first tick it triggers goes through
 # auto-deploy.sh's own guards in order — up-to-date short-circuit (including
-# the deployed.sha check), deploy-branch check, dirty-tree/diverge check,
+# the deployed.sha check), work-clone (branch) check, dirty-tree check,
 # active-jobs check before AND after the build — before it would ever touch
 # the stack. Its very first-ever tick (no deployed.sha yet) ADOPTS the
 # current HEAD as already-deployed instead of deploying: if this checkout
-# was behind main at install time, the stack stays on that stale commit
+# was behind the newest release at install time, the stack stays on that stale commit
 # until the operator deploys it once by hand (see docs/architecture.md).
 # There is no unguarded moment to protect the operator from, so there is no
 # reason to make them run a second command.
@@ -181,8 +181,9 @@ sudo systemctl enable --now songmaker-autodeploy.timer
 echo
 echo "Done. songmaker-autodeploy.timer is armed and will tick every ~2 minutes."
 echo "The first tick runs within 2 minutes and is safe to run against the live"
-echo "stack: auto-deploy.sh only pulls + redeploys when origin/main has moved,"
-echo "the local tree is clean and fast-forwardable, and no jobs are active."
+echo "stack: auto-deploy.sh only redeploys when a new release tag (vYYYY.MM.DD.N)"
+echo "is on origin/main and green, the checkout is detached and clean, and no"
+echo "jobs are active."
 echo
 echo "songmaker-alert@.service is installed alongside it (issue #333):"
 echo "songmaker-autodeploy.service emails ALERT_EMAIL_TO once three deploy"

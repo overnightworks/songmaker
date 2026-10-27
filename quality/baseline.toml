@@ -73,7 +73,7 @@
 "tests/test_acestep_worker_train_lora.py" = 1294
 "tests/test_admin_api.py" = 1055
 "tests/test_api.py" = 4764
-"tests/test_auto_deploy_alerting.py" = 2157
+"tests/test_auto_deploy_alerting.py" = 1389
 "tests/test_client.py" = 870
 "tests/test_conversation_api.py" = 853
 "tests/test_cowriter_providers.py" = 1255
@@ -198,9 +198,6 @@
 "test_s8_live_stream_during_second_take" = 94
 "test_s8_live_stream_during_second_take.drive" = 68
 "test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime" = 81
-
-[function_lines."tests/test_auto_deploy_alerting.py"]
-"Checkout.__init__" = 84
 
 [function_lines."tests/test_backfill_audio_durations.py"]
 "test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
