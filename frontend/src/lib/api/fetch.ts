@@ -163,18 +163,6 @@ function parseRetryAfterSeconds(resp: Pick<Response, 'headers'>): number | null 
 	return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
-// webauth sets the `__Host-` prefixed cookie when the static COOKIE_SECURE
-// setting is true and falls back to the plain name otherwise
-// (COOKIE_SECURE=false in e2e), so the reader checks the stronger name first
-// and falls back to the plain one -- never both set with different values in
-// practice, but `__Host-` wins if they ever are.
-function getCsrfToken(): string {
-	const hostPrefixed = /(?:^|;\s*)__Host-csrf_token=([^;]*)/.exec(document.cookie);
-	if (hostPrefixed) return decodeURIComponent(hostPrefixed[1]);
-	const plain = /(?:^|;\s*)csrf_token=([^;]*)/.exec(document.cookie);
-	return plain ? decodeURIComponent(plain[1]) : '';
-}
-
 // The public share reads (`/shared/*`, sharing_api.py) authenticate nobody, so
 // a 401 there cannot mean that a session ended; the share player opts out the
 // same way (`onAuthLost: null`).
@@ -246,16 +234,6 @@ function abortOnCallerOrTimeout(
 	return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
 }
 
-function addCsrfToken(init: RequestInit, method: string): RequestInit {
-	if (method === 'GET' || method === 'HEAD') return init;
-	const token = getCsrfToken();
-	if (!token) return init;
-	return {
-		...init,
-		headers: { 'X-CSRF-Token': token, ...(init.headers as Record<string, string>) }
-	};
-}
-
 async function throwForFailedResponse(response: Response, path: string): Promise<void> {
 	if (response.ok) return;
 	const { detail, responseDetail, errorType, jobId } = await readErrorBody(response);
@@ -293,17 +271,13 @@ export async function apiFetch<T>(
 	init?: RequestInit,
 	timeoutMs?: number
 ): Promise<T> {
-	const method = init?.method?.toUpperCase() ?? 'GET';
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
-	const opts = addCsrfToken(
-		{
-			credentials: 'include',
-			...init,
-			signal: abortOnCallerOrTimeout(init?.signal, controller.signal)
-		},
-		method
-	);
+	const opts: RequestInit = {
+		credentials: 'include',
+		...init,
+		signal: abortOnCallerOrTimeout(init?.signal, controller.signal)
+	};
 	try {
 		const resp = await orNetworkError(path, controller.signal, fetch(path, opts));
 		await throwForFailedResponse(resp, path);
@@ -357,21 +331,17 @@ export async function* sseFetch<T = unknown>(
 	init: RequestInit,
 	timeoutMs?: number
 ): AsyncGenerator<T> {
-	const method = init.method?.toUpperCase() ?? 'GET';
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs ?? API_TIMEOUT_MS);
-	const opts = addCsrfToken(
-		{
-			credentials: 'include',
-			...init,
-			signal: abortOnCallerOrTimeout(init.signal, controller.signal),
-			headers: {
-				Accept: 'text/event-stream',
-				...(init.headers as Record<string, string>)
-			}
-		},
-		method
-	);
+	const opts: RequestInit = {
+		credentials: 'include',
+		...init,
+		signal: abortOnCallerOrTimeout(init.signal, controller.signal),
+		headers: {
+			Accept: 'text/event-stream',
+			...(init.headers as Record<string, string>)
+		}
+	};
 	try {
 		const resp = await orNetworkError(path, controller.signal, fetch(path, opts));
 		await throwForFailedResponse(resp, path);

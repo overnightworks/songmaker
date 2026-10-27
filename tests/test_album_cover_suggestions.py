@@ -72,7 +72,6 @@ def _seed_albums(session) -> None:
 def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     login_and_csrf(client, "alice")
-    client.headers["Origin"] = "http://127.0.0.1:8080"
     return client, factory
 
 
@@ -573,7 +572,6 @@ def test_foreign_cover_suggestion_routes_are_not_found(
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     _add_suggestion(factory, tmp_path / "audio")
     login_and_csrf(client, "bob")
-    client.headers["Origin"] = "http://127.0.0.1:8080"
 
     foreign = getattr(client, method)(path, **kwargs)
 
@@ -695,7 +693,6 @@ def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path) -> Non
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
     login_and_csrf(client, "admin")
-    client.headers["Origin"] = "http://127.0.0.1:8080"
 
     listed = client.get("/api/albums/alice-album/cover-suggestions")
     fetched = client.get(

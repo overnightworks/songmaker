@@ -214,9 +214,10 @@ def test_every_answer_of_the_back_channel_carries_no_store(world: World) -> None
     assert {answer.headers["cache-control"] for answer in answers} == {"no-store"}
 
 
-def test_the_back_channel_is_exempt_from_the_origin_check_and_the_token_check(
+def test_the_back_channel_is_exempt_from_the_origin_check(
     world: World,
 ) -> None:
+    """K7, K8."""
     _sign_in_twice(world)
 
     response = _backchannel(
@@ -238,18 +239,15 @@ def test_the_exemptions_are_exact_to_the_back_channel_path(world: World, path: s
     assert response.status_code == 403
 
 
-def test_the_rate_limit_exemption_is_exact_and_the_token_policy_has_none() -> None:
-    from songmaker_cli.request_policies import (
-        build_csrf_token_policy,
-        build_rate_limit_policy,
-    )
+def test_the_rate_limit_exemption_is_exact() -> None:
+    """K7, K8."""
+    from songmaker_cli.request_policies import build_rate_limit_policy
     from songmaker_cli.settings import get_settings
 
     exempt = build_rate_limit_policy(get_settings()).exempt
 
     assert exempt.matches(BACKCHANNEL_PATH)
     assert not exempt.matches(BACKCHANNEL_PATH + "x")
-    assert not build_csrf_token_policy().token_exempt.matches(BACKCHANNEL_PATH)
 
 
 def test_a_logout_completed_after_the_callback_commit_ends_the_new_session(world: World) -> None:

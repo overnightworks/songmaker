@@ -462,7 +462,7 @@ def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
         json={"title": "New Song", "album_id": "test_album"},
-        headers={"origin": "http://localhost:8080"},
+        headers={"origin": "https://localhost:8080"},
     )
     assert resp.status_code == 200
 
@@ -470,11 +470,11 @@ def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
 @pytest.mark.parametrize(
     ("fetch_site", "origin", "expected_status"),
     [
-        ("same-origin", "http://localhost:8080", 200),
+        ("same-origin", "https://localhost:8080", 200),
         ("same-origin", "http://evil.example.com", 200),
-        ("cross-site", "http://localhost:8080", 403),
-        ("none", "http://localhost:8080", 403),
-        ("same-site", "http://localhost:8080", 200),
+        ("cross-site", "https://localhost:8080", 403),
+        ("none", "https://localhost:8080", 403),
+        ("same-site", "https://localhost:8080", 200),
         ("same-site", "http://evil.example.com", 403),
     ],
 )

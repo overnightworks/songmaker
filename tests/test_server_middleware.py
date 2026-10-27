@@ -21,7 +21,6 @@ from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.middleware import (
     BodySizeLimitMiddleware,
     CsrfOriginMiddleware,
-    CsrfTokenMiddleware,
     IpRateLimitMiddleware,
     SecurityHeadersMiddleware,
 )
@@ -285,7 +284,6 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
         BodySizeLimitMiddleware,
         IpRateLimitMiddleware,
         CsrfOriginMiddleware,
-        CsrfTokenMiddleware,
         TrustedHostMiddleware,
         AccessLogMiddleware,
     ]
@@ -524,7 +522,9 @@ def test_installed_stack_adds_security_headers_to_refusals(security_exchange, ou
         }
         expected = 500
     elif outcome == "origin":
-        arguments = {"headers": [(b"origin", b"https://foreign.example")]}
+        arguments = {
+            "path": "/api/security-proof", "headers": [(b"origin", b"https://foreign.example")],
+        }
     else:
         arguments = {"path": "/api/security-proof"}
     status, headers, body = asyncio.run(exchange(**arguments))
@@ -575,11 +575,11 @@ def test_csrf_refusals_spend_ip_budget_and_429_keeps_security_headers(
     ("app.example", "https://user@app.example", 403),
     ("app.example", "https://user:password@app.example", 403),
     ("app.example", "https:///missing", 403),
-    ("[::1]", "http://[::1]:8080", 200),
-    ("[::1]:8080", "http://[::1]:8080", 200),
-    ("[::1]:8080", "http://[::1]:8081", 403),
-    ("[::1]", "http://user@[::1]", 403),
-    ("[::1]", "http://[::1", 403),
+    ("[::1]", "https://[::1]:8080", 200),
+    ("[::1]:8080", "https://[::1]:8080", 200),
+    ("[::1]:8080", "https://[::1]:8081", 403),
+    ("[::1]", "https://user@[::1]", 403),
+    ("[::1]", "https://[::1", 403),
 ])
 def test_host_origin_parser_applies_exact_port_and_ipv6_rules(
     security_exchange, monkeypatch, allowed, origin, expected,
@@ -594,9 +594,10 @@ def test_host_origin_parser_applies_exact_port_and_ipv6_rules(
     install_web_auth_config(app, replace(
         installed_web_auth_config(app),
         allowed_hosts_exact=frozenset(allowed_hosts(get_settings())),
-        allowed_hosts_patterns=(),
     ))
-    status, _, _ = asyncio.run(exchange(headers=[(b"origin", origin.encode())]))
+    status, _, _ = asyncio.run(
+        exchange("/api/security-proof", headers=[(b"origin", origin.encode())]),
+    )
     assert status == expected
 
 
@@ -609,13 +610,13 @@ def test_a_form_post_without_origin_is_refused(security_exchange):
         body=b"title=X",
     ))
     assert status == 403
-    assert b"Missing Origin header on form submission" in body
+    assert b"Missing Origin header" in body
 
 
-def test_a_json_post_without_origin_or_fetch_metadata_passes_on_the_internal_path(
+def test_a_worker_registration_without_origin_or_fetch_metadata_passes_the_origin_layer(
     security_exchange,
 ):
-    """defect:#1891 -- the internal path passes JSON without Origin or fetch metadata."""
+    """K7, cell 8 -- the internal path passes with neither header; its token is its proof."""
     _, exchange = security_exchange
     status, _, _ = asyncio.run(exchange(
         "/api/internal/security-proof",
@@ -625,47 +626,93 @@ def test_a_json_post_without_origin_or_fetch_metadata_passes_on_the_internal_pat
     assert status == 200
 
 
-@pytest.mark.parametrize("path", [LOGOUT_PATH, "/api/internal/proof"])
-def test_token_exempt_paths_still_reject_foreign_origins(security_exchange, path):
-    """defect:#1590 -- every host token exemption remains behind origin protection."""
+def test_a_worker_registration_with_a_wrong_token_and_no_origin_headers_is_refused(
+    security_exchange,
+):
+    """K7, cell 8 -- without origin headers a wrong internal token is still refused."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange(
+        "/api/internal/workers/register",
+        headers=[
+            (b"content-type", b"application/json"),
+            (b"x-internal-token", b"wrong-token"),
+        ],
+        body=b"{}",
+    ))
+    assert status == 401
+
+
+@pytest.mark.parametrize("path", ["/api/internalx/security-proof", "/auth/backchannel-logoutx"])
+def test_the_origin_exemption_is_the_exact_path_and_the_exact_prefix(security_exchange, path):
+    """K7, cell 9 -- a path that only starts like an exempt one is not exempt."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange(path, headers=[(b"content-type", b"application/json")]))
+    assert status == 403
+
+
+@pytest.mark.parametrize("headers", [(), [(b"referer", b"https://localhost/")]])
+def test_a_json_write_without_origin_or_fetch_metadata_is_refused_and_referer_does_not_admit_it(
+    security_exchange, headers,
+):
+    """K6, cell 10."""
+    _, exchange = security_exchange
+    status, _, body = asyncio.run(exchange(
+        "/api/security-proof", headers=[(b"content-type", b"application/json"), *headers],
+        body=b"{}",
+    ))
+    assert status == 403
+    assert b"Missing Origin header" in body
+
+
+@pytest.mark.parametrize(("site", "expected"), [
+    (b"cross-site", 403), (b"none", 403), (b"same-origin", 200),
+])
+def test_a_write_is_admitted_by_fetch_metadata_alone(security_exchange, site, expected):
+    """K6, cell 11 -- same-origin passes with no token header; cross-site and none do not."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange("/api/security-proof", headers=[(b"sec-fetch-site", site)]))
+    assert status == expected
+
+
+@pytest.mark.parametrize(("origin", "expected"), [
+    (b"http://localhost", 403), (b"https://localhost", 200),
+])
+def test_a_listed_host_named_over_http_is_refused_while_cookies_are_secure(
+    security_exchange, origin, expected,
+):
+    """K6, cell 12."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange("/api/security-proof", headers=[(b"origin", origin)]))
+    assert status == expected
+
+
+@pytest.mark.parametrize("path", [LOGOUT_PATH, "/api/security-proof"])
+def test_every_path_but_the_exempt_ones_rejects_foreign_origins(security_exchange, path):
+    """K6 -- the logout is behind the origin check like every other write."""
     _, exchange = security_exchange
     status, _, _ = asyncio.run(exchange(path, headers=[(b"origin", b"https://foreign.example")]))
     assert status == 403
 
 
-@pytest.mark.parametrize(("cookie_kind", "token_kind", "expected"), [
-    ("valid", "valid", 200),
-    ("valid", "missing", 403),
-    ("valid", "wrong", 403),
-    ("valid", "non-ascii", 403),
-    ("tampered", "valid", 403),
-    ("non-ascii", "valid", 403),
-])
-def test_installed_csrf_stack_rejects_bad_tokens_and_cookies_without_500(
-    security_exchange, cookie_kind, token_kind, expected,
-):
-    """defect:#1590 -- malformed input cannot turn a CSRF refusal into an exception."""
+def test_the_internal_path_no_longer_rejects_a_foreign_origin(security_exchange):
+    """K7 -- workers have no browser; the internal token decides."""
+    _, exchange = security_exchange
+    status, _, _ = asyncio.run(exchange(
+        "/api/internal/security-proof", headers=[(b"origin", b"https://foreign.example")],
+    ))
+    assert status == 200
+
+
+@pytest.mark.parametrize("cookie_kind", ["tampered", "non-ascii"])
+def test_a_bad_session_cookie_is_refused_with_401_and_never_a_500(security_exchange, cookie_kind):
+    """defect:#1590 -- malformed input cannot turn a refusal into an exception."""
     app, exchange = security_exchange
     config = installed_web_auth_config(app)
-    issued = issued_cookies("proof-session", config)
-    cookie = issued[config.session_cookie_name]
-    token = issued[config.csrf_cookie_name]
-    if cookie_kind == "tampered":
-        cookie = "altered-" + cookie
-    elif cookie_kind == "non-ascii":
-        cookie = "é"
-    if token_kind == "wrong":
-        token = "wrong"
-    elif token_kind == "non-ascii":
-        token = "é"
-    headers = [
-        (b"cookie", f"{config.session_cookie_name}={cookie}".encode("latin-1")),
-        (b"origin", b"http://localhost"),
-    ]
-    if token_kind != "missing":
-        headers.append((config.csrf_header_name.encode(), token.encode("latin-1")))
-    status, _, _ = asyncio.run(exchange("/api/security-proof", headers=headers))
-    assert status == expected
+    cookie = issued_cookies("proof-session", config)[config.session_cookie_name]
+    cookie = "altered-" + cookie if cookie_kind == "tampered" else "é"
+    headers = [(b"cookie", f"{config.session_cookie_name}={cookie}".encode("latin-1"))]
+    status, _, _ = asyncio.run(exchange("/api/auth/me", method="GET", headers=headers))
+    assert status == 401
 
 
 @pytest.mark.parametrize(("path", "expected"), [

@@ -522,10 +522,6 @@ export interface LoadedModelDetailItem {
 	size_gb: number;
 }
 
-export interface LogoutResponse {
-	logout_url: string;
-}
-
 export interface LoraCapacityErrorResponse {
 	detail: string;
 	reason: 'voice_limit' | 'training_queue_full';
