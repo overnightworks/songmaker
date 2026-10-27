@@ -38,10 +38,9 @@ const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
 // previous local run left behind, so their titles carry a per-run marker.
 const ALBUM_TITLE_PREFIX = 'E2E Album';
 const PLAYLIST_TITLE_PREFIX = 'E2E Playlist';
-const KINETIC_STRIP_ALBUM_TITLE_PREFIX = 'E2E Kinetic Strip Album';
-// Dedicated album for song-phone.spec.ts (issue #995), same reasoning as the
-// kinetic-strip album above: its song is seeded well past v1 and mutated by
-// the flow's own job-state seeding, so it stays off the shared base library.
+// Dedicated album for song-phone.spec.ts (issue #995): its song is seeded well
+// past v1 and mutated by the flow's own job-state seeding, so it stays off the
+// shared base library.
 const SONG_PHONE_ALBUM_TITLE_PREFIX = 'E2E Song Phone Album';
 // A second, sibling album: the rail's one-open-album rule (#323) and its
 // real CSS visibility (#326) only show up with two albums that can each be
@@ -183,8 +182,6 @@ export interface SeededLibrary {
 	secondAlbumTitle: string;
 	/** One of the second album's own songs, for the visibility assertion. */
 	secondAlbumSongTitle: string;
-	/** Dedicated album the kinetic-strip flow can mutate without changing the base library. */
-	kineticStripAlbumId: string;
 	/** Dedicated album song-phone.spec.ts and take-arrives.spec.ts seed their own songs and job states into. */
 	songPhoneAlbumId: string;
 }
@@ -441,10 +438,6 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 			prompt: 'calm test tone'
 		});
 	}
-	const kineticStripAlbum = await seed.postJson<CreatedResource>('/api/albums', {
-		title: `${KINETIC_STRIP_ALBUM_TITLE_PREFIX} ${runMarker()}`,
-		artist: ALBUM_ARTIST
-	});
 	const songPhoneAlbum = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${SONG_PHONE_ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
@@ -463,7 +456,6 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		listenReorderSongs,
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
-		kineticStripAlbumId: kineticStripAlbum.id,
 		songPhoneAlbumId: songPhoneAlbum.id,
 		playlistTakes: playlistSongTitles.map((songTitle) => ({
 			songTitle,
@@ -684,8 +676,7 @@ function takeId(takes: Map<string, string>, songTitle: string): string {
  * seed's `SONG_TITLES`: those are shared across every flow in the run, and
  * more than one of them (`library.spec.ts`'s own `takeLabel`, `takeId`
  * above) depends on the base seed's one-take-per-song count staying exactly
- * one. Used by a flow that needs a strip of many takes to genuinely
- * overflow its container (`kinetic-strip.spec.ts`, issue #358).
+ * one. Used by a flow that needs a song with many takes.
  */
 export async function seedTakeStripSong(
 	albumId: string,
@@ -719,7 +710,7 @@ export async function seedTakeStripSong(
 		return songId;
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
-		throw new Error(`Seeding the kinetic-strip song's takes failed: ${detail}`, { cause: err });
+		throw new Error(`Seeding the song's takes failed: ${detail}`, { cause: err });
 	}
 }
 

@@ -63,7 +63,7 @@ function readReducedMotion(): { matches: boolean } & Pick<
  * reports `auto`), which makes the overflow properties unable to tell the two
  * axes apart for exactly the row/column toggle this action exists for.
  * `flex-direction` carries no such ambiguity and is what both orientations
- * this action drives (TakeStrip's row and column layouts) already declare.
+ * this action drives (the Rail's row and column layouts) already declare.
  */
 export const kineticScroll: Action<HTMLElement, KineticScrollOptions> = (node, initial) => {
 	let options = initial;

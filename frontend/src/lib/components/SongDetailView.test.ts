@@ -88,7 +88,6 @@ import {
 	recipeModel,
 	seedFromTake,
 	recipeOpen,
-	coWriterOpen,
 	setSourceFromGeneration,
 	sourceGeneration,
 	sourceMode
@@ -318,7 +317,6 @@ beforeEach(() => {
 	pendingTakeUse.set(null);
 	seedFromTake.set(null);
 	recipeOpen.set(false);
-	coWriterOpen.set(false);
 	recipeModel.set(null);
 	clearSelection();
 	songList.set([song(editableSongDefaults())]);
@@ -361,6 +359,8 @@ afterEach(async () => {
 	resetNavigationForTests();
 	pendingVersionLoad.set(null);
 	versionDeleteRequest.set(null);
+	recipeOpen.set(false);
+	clearSelection();
 	selectedSongId.set(null);
 	selectedAlbumId.set(null);
 	songList.set([]);
@@ -373,11 +373,11 @@ afterEach(async () => {
 });
 
 describe('SongDetailView header — one row, every state', () => {
-	it('shows Co-Writer/Recipe toggles stacked and Generate alone, never a second toolbar row', async () => {
+	it('shows the Recipe toggle and Generate alone, no Co-writer button, never a second toolbar row (S9, #1927 acceptance 1)', async () => {
 		const target = await renderView();
 		const actions = header(target).querySelector<HTMLElement>('.editor-header-actions');
 		if (!actions) throw new Error('Expected header actions');
-		expect(visibleText(actions)).toContain(EDITOR_VIEW_COWRITER_LABEL);
+		expect(visibleText(actions)).not.toContain(EDITOR_VIEW_COWRITER_LABEL);
 		expect(visibleText(actions)).toContain(EDITOR_VIEW_RECIPE_LABEL);
 		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
 		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
@@ -394,15 +394,18 @@ describe('SongDetailView header — one row, every state', () => {
 		expect(target.querySelector('.recipe-panel')).not.toBeNull();
 	});
 
-	it('switches the Write column into Co-Writer mode without hiding the header', async () => {
+	it('opens the Co-writer in the right column while Style and Lyrics stay the growing document (S9, #1927 acceptance 2)', async () => {
 		const target = await renderView();
-		clickNamed(header(target), EDITOR_VIEW_COWRITER_LABEL);
+		expect(target.querySelector('.cowriter')).toBeNull();
+		const tab = target.querySelector<HTMLButtonElement>('[role="tab"][data-tab="cowriter"]');
+		if (!tab) throw new Error('Expected the Co-writer tab');
+		tab.click();
 		await tick();
-		await Promise.resolve();
-		await tick();
-		expect(get(coWriterOpen)).toBe(true);
-		expect(target.querySelector('.cowriter-mode')).not.toBeNull();
+		expect(get(detailTab)).toBe('cowriter');
+		expect(target.querySelector('.cowriter')).not.toBeNull();
 		expect(target.querySelector('.detail-header')).not.toBeNull();
+		expect(target.querySelectorAll('.write-mode textarea')).toHaveLength(2);
+		expect(target.querySelector('.take-row')).toBeNull();
 	});
 });
 
@@ -425,12 +428,16 @@ describe('SongDetailView share link', () => {
 });
 
 describe('SongDetailView desktop vs compact layout', () => {
-	it('shows Write and Takes as two simultaneous columns on desktop, no tab switcher', async () => {
+	it('shows Write and the Takes · Co-writer tabs as two simultaneous columns on desktop (S9, #1927 acceptance 1)', async () => {
 		const target = await renderView();
 		expect(target.querySelector('.editor-columns')).not.toBeNull();
-		expect(target.querySelector('[role="tablist"]')).toBeNull();
+		const tabs = target.querySelectorAll('.editor-columns [role="tab"]');
+		expect(Array.from(tabs, (tab) => tab.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+			'Takes 1',
+			'Co-writer'
+		]);
 		expect(target.querySelector('.lyrics-area')).not.toBeNull();
-		expect(target.querySelector('.takes-column')).not.toBeNull();
+		expect(target.querySelector('.take-row')).not.toBeNull();
 	});
 
 	it('publishes the song actions in the layout bar and clears them when leaving', async () => {
@@ -781,18 +788,18 @@ describe('SongDetailView recipe and takes', () => {
 	});
 
 	it.each(sourceCases)(
-		'lands a picked-up %s source on its task card (compact: %s)',
+		'lands a picked-up %s source on its task card (compact: %s) (S9, #1927 acceptance 7)',
 		async (mode, compact) => {
 			stubLibraryMedia({ narrow: compact, compact });
 			const target = await renderView();
-			detailTab.set('edit');
+			detailTab.set(compact ? 'edit' : 'cowriter');
 
 			pendingTakeUse.set({ generation: generation(sourceRecipeDefaults()), use: mode });
 			await tick();
 			await tick();
 			expect(get(recipeOpen)).toBe(false);
 			expect(get(sourceMode)).toBe(mode);
-			if (compact) expect(get(detailTab)).toBe('takes');
+			expect(get(detailTab)).toBe('takes');
 			expect(target.querySelector('.take-row + .task')).not.toBeNull();
 		}
 	);
@@ -1295,22 +1302,15 @@ describe('SongDetailView unsaved-draft guard', () => {
 	});
 });
 
-describe('SongDetailView Co-Writer and Recipe stacked (both open)', () => {
-	it('shows the condensed EditorStacked summary instead of the full panel, keeping the chat visible; Edit reveals the full panel', async () => {
+describe('SongDetailView Co-writer tab with the Recipe open', () => {
+	it('shows the full recipe on the left and the chat on the right (S9, #1927 acceptance 8)', async () => {
 		const target = await renderView();
-		coWriterOpen.set(true);
+		detailTab.set('cowriter');
 		recipeOpen.set(true);
 		await tick();
 
-		expect(target.querySelector('.editor-stacked')).not.toBeNull();
-		expect(target.querySelector('.recipe-panel')).toBeNull();
-		expect(target.querySelector('.cowriter-chat')).not.toBeNull();
-
-		target.querySelector<HTMLButtonElement>('.stacked-edit')?.click();
-		await tick();
-
-		expect(target.querySelector('.recipe-panel')).not.toBeNull();
-		expect(target.querySelector('.editor-stacked')).toBeNull();
+		expect(target.querySelector('.editor-columns > .write-column .recipe-panel')).not.toBeNull();
+		expect(target.querySelector('.editor-columns > .listen-tabs .cowriter')).not.toBeNull();
 	});
 });
 

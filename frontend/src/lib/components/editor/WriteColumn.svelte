@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
 	import {
 		draftLoadedFrom,
 		editLyrics,
@@ -11,23 +10,18 @@
 	import type { SongItem } from '$lib/api/types';
 	import {
 		EDITOR_LYRICS_LABEL,
-		EDITOR_STYLE_LABEL,
 		EDITOR_STYLE_PROMPT_LABEL,
-		EDITOR_TAB_TAKES_LABEL,
 		versionLoadedFromLabel
 	} from '$lib/constants';
 	import Icon from '../Icon.svelte';
 	import GrowingTextarea from './GrowingTextarea.svelte';
-	import TakeStrip from './TakeStrip.svelte';
 	import VersionsSheet from './VersionsSheet.svelte';
 
 	interface Props {
 		song: SongItem;
-		coWriterOpen: boolean;
-		cowriterPanel: Snippet;
 	}
 
-	let { song, coWriterOpen, cowriterPanel }: Props = $props();
+	let { song }: Props = $props();
 
 	const lyricsFieldId = $props.id();
 	const generationActions = getGenerationActions();
@@ -37,58 +31,27 @@
 	}
 </script>
 
-{#if coWriterOpen}
-	<div class="cowriter-mode">
-		<div class="cowriter-columns">
-			<div class="cowriter-chat">
-				{@render cowriterPanel()}
-			</div>
-			<div class="cowriter-lyrics">
-				<span class="lyrics-label"
-					>{EDITOR_LYRICS_LABEL} <VersionsSheet {song} onload={loadVersion} /></span
-				>
-				{@render loadedFromHint()}
-				<textarea
-					class="lyrics-area"
-					value={$editLyrics}
-					oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
-				<label class="style-field">
-					<span>{EDITOR_STYLE_LABEL}</span>
-					<textarea
-						rows="2"
-						value={$editPrompt}
-						oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
-				</label>
-			</div>
-			<div class="cowriter-takes">
-				<span class="takes-heading">{EDITOR_TAB_TAKES_LABEL}</span>
-				<TakeStrip {song} />
-			</div>
-		</div>
+<div class="write-mode">
+	<label class="edit-field">
+		<span>{EDITOR_STYLE_PROMPT_LABEL}</span>
+		<GrowingTextarea value={$editPrompt} oninput={setDraftPrompt} minimumLines={4} />
+	</label>
+	<div class="edit-field">
+		<span>
+			<label for={lyricsFieldId}>{EDITOR_LYRICS_LABEL}</label>
+			<VersionsSheet {song} onload={loadVersion} />
+		</span>
+		{@render loadedFromHint()}
+		<GrowingTextarea
+			id={lyricsFieldId}
+			class="lyrics-area"
+			value={$editLyrics}
+			oninput={setDraftLyrics}
+			minimumLines={15}
+			monospace
+		/>
 	</div>
-{:else}
-	<div class="write-mode">
-		<label class="edit-field">
-			<span>{EDITOR_STYLE_PROMPT_LABEL}</span>
-			<GrowingTextarea value={$editPrompt} oninput={setDraftPrompt} minimumLines={4} />
-		</label>
-		<div class="edit-field">
-			<span>
-				<label for={lyricsFieldId}>{EDITOR_LYRICS_LABEL}</label>
-				<VersionsSheet {song} onload={loadVersion} />
-			</span>
-			{@render loadedFromHint()}
-			<GrowingTextarea
-				id={lyricsFieldId}
-				class="lyrics-area"
-				value={$editLyrics}
-				oninput={setDraftLyrics}
-				minimumLines={15}
-				monospace
-			/>
-		</div>
-	</div>
-{/if}
+</div>
 
 {#snippet loadedFromHint()}
 	{#if $draftLoadedFrom !== null}
@@ -130,182 +93,5 @@
 		margin-top: -0.1rem;
 		font-size: 0.74rem;
 		color: var(--text-subtle);
-	}
-
-	.style-field textarea,
-	.lyrics-area {
-		padding: 0.6rem 0.8rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text);
-		font-size: 1rem;
-		width: 100%;
-		min-width: 0;
-	}
-
-	.style-field textarea:focus,
-	.lyrics-area:focus {
-		border-color: var(--accent);
-		outline: none;
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
-	}
-
-	.lyrics-area {
-		font-family: 'Courier New', monospace;
-		font-size: 1rem;
-		line-height: 1.6;
-		min-height: 200px;
-		resize: vertical;
-	}
-
-	/* Filling a fixed height only works where every part has a column of its
-	   own to scroll in — the editor above its two-up floor. Stacked, they run
-	   on and the workspace scrolls — sharing one height squeezed the lyrics
-	   column below its content, which then spilled over the take strip
-	   (#185). Co-Writer mode itself is desktop-only: the phone's Co-writer
-	   tab (#1016) instantiates CoWriterPanel directly, so this block never
-	   renders compact. */
-	.cowriter-mode {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		min-height: 0;
-		flex-shrink: 0;
-	}
-
-	/* Chat, lyrics and the take strip stand side by side only where the editor
-	   has the room for them (the `editor` container SongDetailView owns, #185).
-	   Below that they stack, and the strip goes back to scrolling sideways. */
-	.cowriter-columns {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr);
-		gap: 1rem;
-		min-height: 0;
-	}
-
-	/* Stacked, the chat column would be as tall as the whole conversation: its
-	   message list would never reach a bound to scroll in and the composer
-	   would sit below the fold, out of reach. A share of the viewport gives it
-	   that bound — but the viewport isn't `.editor-body`'s own box: docking Now
-	   Playing narrows the editor below the two-up floor exactly where the
-	   header wraps to three lines, and 60dvh of the full window ran past
-	   `.editor-body`'s own visible height there, leaving the composer behind a
-	   scroll of the wrong container (#185). `.editor-body` reports no size of
-	   its own to style against — it isn't a container, WriteColumn is one of
-	   its children, sharing it with the Recipe chip row above `.cowriter-mode`
-	   — so the second bound is the same chrome sum measured directly at
-	   1100×800 and 1280×800 with the dock open, the width band this rule
-	   actually governs: two-up crosses the 680px container threshold below and
-	   overrides this back to `auto`. From the viewport's top: the wrapped
-	   header (147.75px) + the panel's own padding and the gaps around
-	   `.editor-body` (~56px) + the Recipe chip row this song's params render
-	   above the chat column (~69px) + the player bar's reserved height
-	   (`--player-height`: 88px online; while offline it also holds the offline
-	   strip on the bar's top edge, which this fixed estimate leaves out, so
-	   offline the strip overlaps the foot of the chat by its own height) ≈
-	   441px. 100dvh minus that is the room `.cowriter-chat` actually has below
-	   its own top before the fold, and 60dvh remains the
-	   cap on a window tall enough to make it the smaller side. A song whose
-	   params render a taller (wrapped) chip row eats into this margin — the
-	   same approximation the wrapped-header estimate already carries. */
-	.cowriter-chat {
-		height: min(60dvh, calc(100dvh - 441px));
-	}
-
-	@container editor (min-width: 680px) {
-		.cowriter-mode {
-			flex: 1;
-			min-height: 0;
-		}
-
-		.cowriter-chat {
-			height: auto;
-		}
-
-		.cowriter-columns {
-			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-			flex: 1;
-		}
-
-		/* A grid item's default min-height is `auto`, not `0` — without
-		   overriding it, `.cowriter-takes` refuses to shrink below its own
-		   content and never actually stretches to the row's height, so
-		   `overflow-y: auto` below never gets anything to clip: the column just
-		   keeps growing with every take instead of scrolling internally (found
-		   only against a real render with enough takes to expose it, issue
-		   #358 — jsdom cannot compute this). `.cowriter-chat` and
-		   `.cowriter-lyrics` already carry the same declaration for the same
-		   reason. */
-		.cowriter-takes {
-			width: 7rem;
-			align-items: center;
-			min-height: 0;
-		}
-
-		.cowriter-takes :global(.take-strip) {
-			flex-direction: column;
-			overflow-x: visible;
-			overflow-y: auto;
-			touch-action: pan-y;
-			min-height: 0;
-		}
-	}
-
-	.cowriter-chat,
-	.cowriter-lyrics {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		min-height: 0;
-		min-width: 0;
-	}
-
-	.cowriter-chat :global(.cowriter) {
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-	}
-
-	.style-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-	}
-
-	.style-field span,
-	.lyrics-label {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: var(--label-font-size);
-		color: var(--text-muted);
-		text-transform: uppercase;
-		font-family: var(--font-display);
-		letter-spacing: 0.5px;
-	}
-
-	.cowriter-lyrics .lyrics-area {
-		flex: 1;
-	}
-
-	/* Stacked, the strip is a row that scrolls sideways, so it has to fill the
-	   width it is given: centred, it sized to its 14 chips instead and the
-	   editor body clipped the ones past the fold away — scrollable only in
-	   name, since nothing overflowed the strip itself (#185). Centring is the
-	   two-up column's rule, where the chips sit above one another. */
-	.cowriter-takes {
-		display: flex;
-		flex-direction: column;
-		align-items: stretch;
-		gap: 0.4rem;
-		min-width: 0;
-	}
-
-	.takes-heading {
-		font-size: 0.62rem;
-		color: var(--text-subtle);
-		text-transform: uppercase;
-		font-family: var(--font-display);
-		letter-spacing: 0.5px;
 	}
 </style>

@@ -2,7 +2,6 @@
 	import type { ShareResult, SongItem } from '$lib/api/types';
 	import {
 		ALBUM_COVER_ACCEPT,
-		EDITOR_VIEW_COWRITER_LABEL,
 		EDITOR_VIEW_RECIPE_LABEL,
 		EDITOR_VIEWS_LABEL,
 		SONG_COVER_REMOVE_LABEL,
@@ -53,9 +52,7 @@
 		onaddtoplaylist: () => void;
 		ondeletesong: () => void;
 		recipeOpen: boolean;
-		coWriterOpen: boolean;
 		ontogglerecipe: () => void;
-		ontogglecowriter: () => void;
 		saveDisabled: boolean;
 		onsave: () => void;
 	}
@@ -92,9 +89,7 @@
 		onaddtoplaylist,
 		ondeletesong,
 		recipeOpen,
-		coWriterOpen,
 		ontogglerecipe,
-		ontogglecowriter,
 		saveDisabled,
 		onsave
 	}: Props = $props();
@@ -206,15 +201,6 @@
 
 	<div class="editor-header-actions">
 		<div class="editor-views" role="group" aria-label={EDITOR_VIEWS_LABEL}>
-			<button
-				type="button"
-				class="view-toggle"
-				data-hitbox="text"
-				aria-pressed={coWriterOpen}
-				onclick={ontogglecowriter}
-			>
-				{EDITOR_VIEW_COWRITER_LABEL}
-			</button>
 			<button
 				type="button"
 				class="view-toggle"
