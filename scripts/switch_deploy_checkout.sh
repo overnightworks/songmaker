@@ -27,6 +27,7 @@ REPOSITORY_URL=https://github.com/overnightworks/songmaker.git
 step_label=""
 last_safe_step=4
 installers_started=no
+timer_was_active=yes
 
 begin() {
     step_label=$1
@@ -84,7 +85,9 @@ stop_switch() {
 # Before B4 nothing was reinstalled, so a refusal leaves the old deployer running.
 stop_backout() {
     local consequence=""
-    if [[ $installers_started == no ]]; then
+    if [[ $installers_started == no && $timer_was_active == no ]]; then
+        consequence="; nothing changed, the timer stays stopped, as before the backout"
+    elif [[ $installers_started == no ]]; then
         if sudo systemctl start "$TIMER"; then
             consequence="; nothing changed, the timer is running again"
         else
@@ -178,6 +181,8 @@ switch() {
 backout() {
     announce_sudo
 
+    timer_was_active=no
+    ! systemctl is-active --quiet "$TIMER" || timer_was_active=yes
     begin "backout B1" "stop the autodeploy timer"
     sudo systemctl stop "$TIMER" || stop_backout "the timer did not stop"
 

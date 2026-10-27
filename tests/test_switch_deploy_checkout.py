@@ -31,6 +31,10 @@ case "$(basename "$0")" in
     systemctl)
         case "${1:-}" in
             is-active)
+                if [ "${2:-}" = "--quiet" ]; then
+                    [ "${FAKE_TIMER_STATE:-active}" = active ]
+                    exit
+                fi
                 echo "${FAKE_SERVICE_STATE:-inactive}"
                 [ "${FAKE_SERVICE_STATE:-inactive}" = active ] ;;
             cat) cat "$HOME/unit-lines" ;;
@@ -422,24 +426,29 @@ def test_backout_refuses_and_keeps_the_clone_unless_the_stack_runs_from_the_work
 
 
 @pytest.mark.parametrize(
-    ("label", "environment", "later_step"),
+    ("label", "environment", "later_step", "timer_restarted"),
     [
-        ("backout B1", {"FAIL_ON": "systemctl stop"}, "backout B2"),
-        ("backout B2", {"FAIL_ON": "flock"}, "backout B7b"),
-        ("backout B7b", {"FAIL_ON": "compose ls"}, "backout B3"),
-        ("backout B4", {"FAIL_ON": "install-cli-credentials-mirror"}, "backout B5"),
-        ("backout B5", {"FAIL_ON": "install-autostart"}, "backout B6"),
-        ("backout B6", {"FAIL_ON": "install-autodeploy"}, "backout B7"),
-        ("backout B7", {"unit_directory": "/home/someone/git/songmaker"}, "backout B8"),
+        ("backout B1", {"FAIL_ON": "systemctl stop"}, "backout B2", True),
+        ("backout B2", {"FAIL_ON": "flock"}, "backout B7b", True),
+        ("backout B7b", {"FAIL_ON": "compose ls"}, "backout B3", True),
+        ("backout B4", {"FAIL_ON": "install-cli-credentials-mirror"}, "backout B5", False),
+        ("backout B5", {"FAIL_ON": "install-autostart"}, "backout B6", False),
+        ("backout B6", {"FAIL_ON": "install-autodeploy"}, "backout B7", False),
+        (
+            "backout B7",
+            {"unit_directory": "/home/someone/git/songmaker"},
+            "backout B8",
+            False,
+        ),
     ],
 )
 def test_backout_stops_at_the_first_failed_step_and_removes_nothing(
-    run_switch, label: str, environment: dict[str, str], later_step: str
+    run_switch, label: str, environment: dict[str, str], later_step: str, timer_restarted: bool
 ) -> None:
     """defect:#1880 S4 -- a failed backout step stops there and keeps the release clone."""
 
     release = run_switch.home / "srv" / "songmaker"
-    run_switch(TAG)
+    switched = run_switch(TAG)
 
     outcome = run_switch("--backout", **environment)
 
@@ -447,6 +456,39 @@ def test_backout_stops_at_the_first_failed_step_and_removes_nothing(
     assert f"stopped at {label}" in outcome.result.stderr
     assert f"{later_step}:" not in outcome.result.stdout
     assert release.exists()
+    backout_calls = outcome.recording[len(switched.recording) :]
+    assert ("sudo systemctl start songmaker-autodeploy.timer" in backout_calls) is timer_restarted
+
+
+def test_backout_refusal_leaves_a_timer_stopped_before_it_stopped(run_switch) -> None:
+    """defect:#1880 S4 -- a refusal before B4 does not start a timer that was already stopped."""
+
+    switched = run_switch(TAG)
+
+    outcome = run_switch("--backout", FAKE_TIMER_STATE="inactive", FAKE_CONFIG_FILES="")
+
+    assert outcome.result.returncode != 0
+    assert "stopped at backout B7b" in outcome.result.stderr
+    assert "the timer stays stopped, as before the backout" in outcome.result.stderr
+    backout_calls = outcome.recording[len(switched.recording) :]
+    assert "sudo systemctl start songmaker-autodeploy.timer" not in backout_calls
+
+
+def test_backout_refusal_before_the_installers_reports_a_failed_timer_restart(run_switch) -> None:
+    """defect:#1880 S4 -- a timer that cannot be restarted is reported with its recovery command."""
+
+    switched = run_switch(TAG)
+
+    outcome = run_switch("--backout", FAIL_ON="systemctl start", FAKE_CONFIG_FILES="")
+
+    assert outcome.result.returncode != 0
+    assert "stopped at backout B7b" in outcome.result.stderr
+    assert "the timer could not be restarted" in outcome.result.stderr
+    assert "run: sudo systemctl start songmaker-autodeploy.timer" in outcome.result.stderr
+    assert "the timer is running again" not in outcome.result.stderr
+    assert "backed out" not in outcome.result.stdout
+    backout_calls = outcome.recording[len(switched.recording) :]
+    assert not [call for call in backout_calls if call.startswith("sudo ./scripts/install-")]
 
 
 def test_backout_stops_when_the_old_env_is_gone(run_switch) -> None:
