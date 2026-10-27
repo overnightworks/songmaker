@@ -7,6 +7,7 @@ import {
 	COWRITER_COMPOSER_PLACEHOLDER,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
+	EDITOR_VIEW_RECIPE_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
@@ -83,5 +84,32 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
 		await page.reload();
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
+	});
+
+	test('both tabs are at least 44px high and a click just below one selects it (S9, #1927 acceptance 10)', async ({
+		page
+	}) => {
+		await openPickedSong(page);
+		const box = await cowriterTab(page).boundingBox();
+		if (!box) throw new Error('Expected the Co-writer tab to be laid out');
+		expect(box.height).toBeGreaterThanOrEqual(44);
+		await page.mouse.click(box.x + box.width / 2, box.y + box.height - 2);
+		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
+	});
+
+	test('with the Recipe open the full panel is on the left and the composer is on screen (S9, #1927 acceptance 8 and 9)', async ({
+		page
+	}) => {
+		await openPickedSong(page);
+		await cowriterTab(page).click();
+		await workspace(page)
+			.getByRole('button', { name: EDITOR_VIEW_RECIPE_LABEL, exact: true })
+			.click();
+		const viewport = page.viewportSize();
+		const composerBox = await composer(page).boundingBox();
+		const panelBox = await workspace(page).locator('.recipe-panel').boundingBox();
+		if (!viewport || !composerBox || !panelBox) throw new Error('Expected both laid out');
+		expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height);
+		expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(composerBox.x);
 	});
 });

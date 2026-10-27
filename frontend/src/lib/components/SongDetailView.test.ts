@@ -1309,8 +1309,8 @@ describe('SongDetailView Co-writer tab with the Recipe open', () => {
 		recipeOpen.set(true);
 		await tick();
 
-		expect(target.querySelector('.recipe-panel')).not.toBeNull();
-		expect(target.querySelector('.cowriter')).not.toBeNull();
+		expect(target.querySelector('.editor-columns > .write-column .recipe-panel')).not.toBeNull();
+		expect(target.querySelector('.editor-columns > .listen-tabs .cowriter')).not.toBeNull();
 	});
 });
 

@@ -776,9 +776,6 @@
 
 	{#snippet recipe()}
 		<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
-		{#if $recipeOpen && !compact}
-			<RecipePanel onclose={() => recipeOpen.set(false)} />
-		{/if}
 	{/snippet}
 
 	{#snippet phoneEdit()}
@@ -817,7 +814,12 @@
 				{@render sharedLink()}
 				{@render recipe()}
 				<div class="editor-columns">
-					{@render writeSurface(song)}
+					<div class="write-column">
+						{#if $recipeOpen}
+							<RecipePanel onclose={() => recipeOpen.set(false)} />
+						{/if}
+						{@render writeSurface(song)}
+					</div>
 					<ListenTabs {expiryDigest} cowriter={cowriterPanel} {takeListProps} />
 				</div>
 			</div>
@@ -960,6 +962,15 @@
 		flex: 1;
 		min-height: 0;
 		overflow: hidden auto;
+	}
+
+	/* The recipe panel opens above the Write fields, in the left column, so the
+	   Listen column on the right keeps its place and its composer on screen. */
+	.write-column {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		min-width: 0;
 	}
 
 	.write-surface {
