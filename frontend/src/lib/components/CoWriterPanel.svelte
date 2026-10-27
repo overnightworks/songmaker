@@ -70,6 +70,7 @@
 	} from '$lib/utils/cowriter-ui';
 	import ChatInput from './ChatInput.svelte';
 	import CoWriterTurnError from './CoWriterTurnError.svelte';
+	import AiNotice from './AiNotice.svelte';
 	import Icon from './Icon.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
@@ -1017,6 +1018,7 @@
 			{/if}
 		</div>
 	</div>
+	<AiNotice look="line" />
 
 	{#if conversationAwaitingDelete}
 		<ConfirmDeleteDialog
@@ -1287,18 +1289,10 @@
 		vertical-align: middle;
 	}
 
-	.convo-memory:hover {
-		background: var(--bg);
-	}
-
 	.conv-row {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-	}
-
-	.conv-row.active .conv-pick {
-		background: var(--bg);
 	}
 
 	.conv-pick {
@@ -1316,7 +1310,9 @@
 		min-width: 0;
 	}
 
-	.conv-pick:hover {
+	.conv-pick:hover,
+	.conv-row.active .conv-pick,
+	.convo-memory:hover {
 		background: var(--bg);
 	}
 

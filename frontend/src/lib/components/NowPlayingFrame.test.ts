@@ -47,4 +47,36 @@ describe('NowPlayingFrame', () => {
 		expect(cover).not.toHaveTextContent('Collection mosaic');
 		expect(cover?.querySelector('img')).toHaveAttribute('src', '/cover.webp');
 	});
+	it.each([
+		{ name: 'a song page', props: { surface: 'page' as const } },
+		{ name: 'the full player', props: { surface: 'full' as const, showTakeLabel: true } },
+		{
+			name: 'a collection page',
+			props: {
+				surface: 'page' as const,
+				collectionHead: { title: 'Night Drive', subtitle: 'Nina · Album', nowPlaying: 'Tide' }
+			}
+		}
+	])('1906 $name carries the KI-generiert badge', async ({ props }) => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(NowPlayingFrame, {
+			target,
+			props: {
+				...props,
+				info: {
+					generation: makeGeneration(),
+					songId: 'song-1',
+					songTitle: 'Tide',
+					albumTitle: 'Night Drive',
+					artist: '',
+					lyrics: null
+				}
+			}
+		});
+		await tick();
+		const badges = target.querySelectorAll('[data-testid="ai-notice"]');
+		expect(badges).toHaveLength(1);
+		expect(badges[0]).toHaveTextContent('KI-generiert');
+	});
 });
