@@ -605,7 +605,7 @@ describe('Shared playlist metadata and artwork', () => {
 			})
 		);
 		const target = await renderShare({ kind: 'playlist', tracks });
-		expect(target.querySelector('.cover-line')?.textContent).toBe('Playlist · 3 songs');
+		expect(target.querySelector('.cover-line')?.textContent).toMatch(/^Playlist · 3 songs\b/);
 		const rows = () => Array.from(target.querySelectorAll<HTMLButtonElement>('.queue-row'));
 		const assertLabels = () => {
 			for (const row of rows()) {

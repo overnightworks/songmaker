@@ -61,7 +61,8 @@ test('1906_P5: the full player says KI-generiert and the mini-player bar does no
 		.first()
 		.click();
 
-	const player = page.getByRole('dialog');
+	// A layer on the phone, the docked complementary panel on desktop.
+	const player = page.locator('.now-playing');
 	const notice = player.getByText(AI_GENERATED_WORDS, { exact: true });
 	await expect(notice).toBeVisible();
 	await expect(notice).toHaveAttribute('lang', 'de');
