@@ -5,12 +5,12 @@ import {
 	holdLibraryHistoryUntilRouterStarts,
 	libraryHistoryEntry,
 	openLibraryAddress,
-	libraryHistoryStepsLanded,
 	loadLibraryHistoryPageForTests,
 	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
 import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
 import {
+	historyComesToRest,
 	installHistoryController,
 	mountRouteOfLandedAddress,
 	ownStepBacksUnderwayForTests,
@@ -131,7 +131,7 @@ export function reloadLibraryPageBeforeRouterStarts(): () => void {
 
 export function reloadLibraryPage(): Promise<void> {
 	reloadLibraryPageBeforeRouterStarts()();
-	return libraryHistoryStepsLanded();
+	return historyComesToRest();
 }
 
 // The id of the entry history will stand on once the step back the history

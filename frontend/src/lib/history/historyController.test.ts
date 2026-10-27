@@ -7,6 +7,7 @@ import {
 	attachLandingHandler,
 	historyStandsStill,
 	installHistoryController,
+	isUnownedLayerEntry,
 	land,
 	landedEntry,
 	loadHistoryPageForTests,
@@ -33,6 +34,7 @@ import {
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
+import { watchBack } from '$lib/test-utils/library-history';
 
 type Ledger = Parameters<typeof land>[0];
 type Landing = ReturnType<typeof land>;
@@ -86,7 +88,7 @@ describe('landing reducer', () => {
 	it('an own step lands on the expected id', () => {
 		const outcome = land(ledger({ stepBacks: [6] }), { id: 6 });
 
-		expect(outcome).toMatchObject({ settled: [6], dropLayers: [], stepOff: false, apply: false });
+		expect(outcome).toMatchObject({ settled: [6], dropLayers: [], apply: false });
 		expect(outcome.ledger.stepBacks).toEqual([]);
 	});
 
@@ -116,7 +118,7 @@ describe('landing reducer', () => {
 		});
 
 		expect(outcome.dropLayers).toEqual([top, middle]);
-		expect(outcome).toMatchObject({ stepOff: false, apply: false });
+		expect(outcome).toMatchObject({ apply: false });
 		expect(outcome.ledger.layers).toEqual([below]);
 	});
 
@@ -131,7 +133,6 @@ describe('landing reducer', () => {
 		expect(outcome).toMatchObject({
 			dropLayers: [...layers].reverse(),
 			settled: [1, 2],
-			stepOff: false,
 			apply: true
 		});
 		expect(outcome.ledger).toEqual({ layers: [], stepBacks: [], current: null });
@@ -141,9 +142,11 @@ describe('landing reducer', () => {
 		{ after: 'a reload', layers: [] },
 		{ after: 'Forward past an open layer', layers: [{ layer: 'now-playing', entry: 7 }] }
 	])('a stale layer entry after $after is stepped off', ({ layers }) => {
-		const outcome = land(ledger({ layers }), { id: 9, layer: 'album-menu' });
+		const stale = { id: 9, layer: 'album-menu' };
+		const outcome = land(ledger({ layers }), stale);
 
-		expect(outcome).toMatchObject({ stepOff: true, apply: false, dropLayers: [] });
+		expect(isUnownedLayerEntry(outcome.ledger, stale)).toBe(true);
+		expect(outcome).toMatchObject({ apply: false, dropLayers: [] });
 		expect(outcome.ledger.current).toEqual({ id: 6 });
 	});
 });
@@ -293,7 +296,7 @@ describe('history adapter', () => {
 		history.forward();
 		await steppedBack;
 
-		expect(landings.slice(1).map(({ stepOff }) => stepOff)).toEqual([true, false]);
+		expect(landings).toHaveLength(3);
 		expect(history.state['sveltekit:states'].entry).toEqual(page);
 	});
 
@@ -729,6 +732,21 @@ describe('history adapter', () => {
 
 		expect(standingEntry()).toEqual(page);
 		expect(location.pathname).toBe('/settings/voices');
+	});
+
+	it('a second landing on the unowned layer entry presses Back once in total', () => {
+		pushEntry('/settings/voices', {});
+		pushEntry('/settings/voices', {}, 'account-menu');
+		resetHistoryControllerForTests();
+		loadHistoryPageForTests();
+		const back = watchBack();
+		installHistoryController();
+		attachRecordingHandler();
+
+		window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+
+		expect(back.presses()).toBe(1);
+		back.stop();
 	});
 });
 

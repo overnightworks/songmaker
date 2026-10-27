@@ -5,6 +5,7 @@ import { get, writable } from 'svelte/store';
 import { layerSwitch, resetLayersForTests } from '$lib/stores/layers';
 import { fetchAlbum } from '$lib/api/albums';
 import {
+	historyComesToRest,
 	attachLandingHandler,
 	releaseLayerEntriesForTests,
 	stepBackOffStandingEntry,
@@ -59,7 +60,6 @@ import {
 	isLibraryHistoryState,
 	keepLibraryPageAsLeft,
 	libraryHistoryEntry,
-	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
 	libraryRootState,
 	librarySurface,
@@ -264,7 +264,7 @@ export function openPlaylist(playlistId: string): Promise<void> {
 // the transition. Phone tabs use the same page targets.
 export async function openRailSearchTarget(target: RailSearchTarget): Promise<void> {
 	if (targetAlreadyShown(target)) {
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		return;
 	}
 	if (target.kind === 'album') {
@@ -299,7 +299,7 @@ type AppPageHref =
 
 export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		await keepLibraryPageAsLeft();
 		const args: [AppPageHref] = [href];
 		await goto(resolve(...(args as Parameters<typeof resolve>)));
@@ -647,7 +647,7 @@ function putTheSongBackOverTheLanding(): void {
 }
 
 async function stepBackOntoTraversalLanding(): Promise<void> {
-	await libraryHistoryStepsLanded();
+	await historyComesToRest();
 	void stepBackOffStandingEntry();
 }
 

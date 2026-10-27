@@ -12,9 +12,9 @@ import { mount, tick, unmount } from 'svelte';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
 import { goto } from '$app/navigation';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
-import { installHistoryController } from '$lib/history/historyController';
+import { historyComesToRest, installHistoryController } from '$lib/history/historyController';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { libraryHistoryStepsLanded, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
@@ -146,7 +146,7 @@ afterEach(() => {
 async function openTheSongFromItsAlbum(): Promise<void> {
 	await openAlbum('a1');
 	await selectSong('s1');
-	await libraryHistoryStepsLanded();
+	await historyComesToRest();
 }
 
 function anchor(takeId: string): string {
@@ -159,7 +159,7 @@ describe('jumpToTake and the entries it writes (rule 10, cells J1, J3, J10)', ()
 		const entries = historyLength();
 
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		expect(location.pathname).toBe('/album/a1/s1');
 		expect(location.hash).toBe(anchor(SOURCE_TAKE_ID));
@@ -171,7 +171,7 @@ describe('jumpToTake and the entries it writes (rule 10, cells J1, J3, J10)', ()
 	it('writes nothing when the address already ends in that anchor', async () => {
 		await openTheSongFromItsAlbum();
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		const entries = historyLength();
 
 		await jumpToTake(SOURCE_TAKE_ID);
@@ -183,11 +183,11 @@ describe('jumpToTake and the entries it writes (rule 10, cells J1, J3, J10)', ()
 	it('writes a further entry for another take', async () => {
 		await openTheSongFromItsAlbum();
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		const entries = historyLength();
 
 		await jumpToTake(OTHER_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		expect(historyLength()).toBe(entries + 1);
 		expect(location.hash).toBe(anchor(OTHER_TAKE_ID));
@@ -196,7 +196,7 @@ describe('jumpToTake and the entries it writes (rule 10, cells J1, J3, J10)', ()
 	it('goes Back to the song without the anchor and Forward to the anchor, with the song open', async () => {
 		await openTheSongFromItsAlbum();
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		await pressBack();
 
@@ -213,7 +213,7 @@ describe('jumpToTake and the entries it writes (rule 10, cells J1, J3, J10)', ()
 	it('steps album, song and anchor in order with no question when the draft is clean', async () => {
 		await openTheSongFromItsAlbum();
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		await pressBack();
 		await pressBack();
@@ -260,9 +260,9 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 
 	it('asks nothing on Back and Forward between the entries of the song, and keeps the draft', async () => {
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		await jumpToTake(OTHER_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		await pressBack();
 		expect(location.hash).toBe(anchor(SOURCE_TAKE_ID));
@@ -280,13 +280,13 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 
 	it('still asks on the Back that leaves the song, and Cancel keeps the song and the draft', async () => {
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		await pressBack();
 		expect(unsavedChangesDialog()).toBeNull();
 
 		await pressBack();
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		answer(DIALOG_CANCEL_LABEL);
 
 		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
@@ -297,11 +297,11 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 
 	it('leaves for the album on Discard from the Back that leaves the song', async () => {
 		await jumpToTake(SOURCE_TAKE_ID);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		await pressBack();
 		await pressBack();
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		answer(EDITOR_UNSAVED_DISCARD_LABEL);
 
@@ -314,13 +314,13 @@ describe('Back and Forward with a draft nobody saved (rule 15, cells J6, J8)', (
 		discardDraft();
 		const other = song({ ...TIDE_DEFAULTS, id: 's2', slug: 's2', album_id: 'a2' });
 		await selectSong('s2', other);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		loadSongData(other);
 		setDraftLyrics(UNSAVED_LYRICS);
 
 		await pressBack();
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		answer(DIALOG_CANCEL_LABEL);
 
 		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
