@@ -608,86 +608,15 @@ describe('handleSave', () => {
 	const version = (number: number) =>
 		makeVersion({ id: 'v' + number, version_number: number, lyrics: 'loaded version' });
 
-	const saveScenarios = [
-		{
-			scenario: 'no intervening edit',
-			from: null,
-			editBefore: true,
-			action: 'none',
-			nextFrom: null,
-			expectedLyrics: 'sent draft',
-			dirty: false
-		},
-		{
-			scenario: 'typing during save',
-			from: null,
-			editBefore: true,
-			action: 'type',
-			nextFrom: null,
-			expectedLyrics: 'typed during save',
-			dirty: true
-		},
-		{
-			scenario: 'typing after loaded version',
-			from: 1,
-			editBefore: true,
-			action: 'type',
-			nextFrom: null,
-			expectedLyrics: 'typed during save',
-			dirty: true
-		},
-		{
-			scenario: 'another version loaded during save',
-			from: 1,
-			editBefore: true,
-			action: 'load v2',
-			nextFrom: 2,
-			expectedLyrics: 'loaded version',
-			dirty: true
-		},
-		{
-			scenario: 'same version reloaded during save',
-			from: 1,
-			editBefore: true,
-			action: 'load v1',
-			nextFrom: 1,
-			expectedLyrics: 'loaded version',
-			dirty: true
-		},
-		{
-			scenario: 'unchanged-version no-op load',
-			from: 1,
-			editBefore: false,
-			action: 'load v1',
-			nextFrom: null,
-			expectedLyrics: 'loaded version',
-			dirty: false
-		},
-		{
-			scenario: 'load latest then Undo during save',
-			from: 1,
-			editBefore: true,
-			action: 'undo latest',
-			nextFrom: null,
-			expectedLyrics: 'sent draft',
-			dirty: false
-		},
-		{
-			scenario: 'load v2, load v3, Save, then Undo',
-			from: 2,
-			editBefore: false,
-			action: 'undo v3',
-			nextFrom: 2,
-			expectedLyrics: 'loaded version',
-			dirty: true
-		}
-	];
-
 	async function saveWithIntervention({
 		from,
 		editBefore,
 		action
-	}: Pick<(typeof saveScenarios)[number], 'from' | 'editBefore' | 'action'>): Promise<string> {
+	}: {
+		from: number | null;
+		editBefore: boolean;
+		action: string;
+	}): Promise<string> {
 		const { updateSong } = await import('$lib/api/client');
 		let finishSave!: (song: SongItem) => void;
 		vi.mocked(updateSong).mockReturnValueOnce(
@@ -715,18 +644,24 @@ describe('handleSave', () => {
 		return sentLyrics;
 	}
 
-	it.each(saveScenarios)(
-		'defect:#1598 save records the sent draft as saved: $scenario',
-		async (scenario) => {
+	describe.each`
+		scenario                                | from    | editBefore | action           | nextFrom | expectedLyrics         | dirty
+		${'no intervening edit'}                | ${null} | ${true}    | ${'none'}        | ${null}  | ${'sent draft'}        | ${false}
+		${'typing during save'}                 | ${null} | ${true}    | ${'type'}        | ${null}  | ${'typed during save'} | ${true}
+		${'typing after loaded version'}        | ${1}    | ${true}    | ${'type'}        | ${null}  | ${'typed during save'} | ${true}
+		${'another version loaded during save'} | ${1}    | ${true}    | ${'load v2'}     | ${2}     | ${'loaded version'}    | ${true}
+		${'same version reloaded during save'}  | ${1}    | ${true}    | ${'load v1'}     | ${1}     | ${'loaded version'}    | ${true}
+		${'unchanged-version no-op load'}       | ${1}    | ${false}   | ${'load v1'}     | ${null}  | ${'loaded version'}    | ${false}
+		${'load latest then Undo during save'}  | ${1}    | ${true}    | ${'undo latest'} | ${null}  | ${'sent draft'}        | ${false}
+		${'load v2, load v3, Save, then Undo'}  | ${2}    | ${false}   | ${'undo v3'}     | ${2}     | ${'loaded version'}    | ${true}
+	`('defect:#1598 save while $scenario', (scenario) => {
+		it('records the sent draft as saved', async () => {
 			const sentLyrics = await saveWithIntervention(scenario);
 			discardDraft();
 			expect(get(editLyrics)).toBe(sentLyrics);
-		}
-	);
+		});
 
-	it.each(saveScenarios)(
-		'defect:#1598 save records only the sent draft and provenance: $scenario',
-		async (scenario) => {
+		it('records only the sent draft and provenance', async () => {
 			const { updateSong } = await import('$lib/api/client');
 			const { nextFrom, expectedLyrics, dirty } = scenario;
 			await saveWithIntervention(scenario);
@@ -744,8 +679,8 @@ describe('handleSave', () => {
 			expect(get(isDirty)).toBe(false);
 			discardDraft();
 			expect(get(editLyrics)).toBe(expectedLyrics);
-		}
-	);
+		});
+	});
 });
 
 describe('discardDraft', () => {
