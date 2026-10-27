@@ -248,17 +248,7 @@ const generatePresentation = derived(
 		generationFailures,
 		offline
 	],
-	([
-		song,
-		jobs,
-		inFlight,
-		lyrics,
-		prompt,
-		model,
-		models,
-		failures,
-		isOffline
-	]): GenerateState => {
+	([song, jobs, inFlight, lyrics, prompt, model, models, failures, isOffline]): GenerateState => {
 		const tracked = song ? pendingGenerateJob(song, jobs) : null;
 		const job = tracked?.job ?? null;
 		const reconnecting = isOffline || tracked?.streamStale === true;

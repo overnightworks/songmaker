@@ -37,13 +37,8 @@ import {
 } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { activeModels } from '$lib/stores/presets';
-import {
-	clearSource,
-	recipeModel,
-	setSourceFromGeneration,
-	sourceGeneration
-} from '$lib/stores/recipe';
-import { RECIPE_SAVE_AS_PRESET_LABEL, RECIPE_SOURCE_MODE_HINT } from '$lib/constants';
+import { clearSource, recipeModel, setSourceFromGeneration } from '$lib/stores/recipe';
+import { RECIPE_SAVE_AS_PRESET_LABEL } from '$lib/constants';
 import { createPreset, uploadReferenceAudio } from '$lib/api/client';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { addToast } from '$lib/stores/toast';
@@ -116,58 +111,17 @@ describe('RecipePanel', () => {
 		expect(get(editBpm)).toBe(140);
 	});
 
-	it('disables repaint mode tabs until a take is used as a source', async () => {
-		const target = await render();
-		const repaintButtons = Array.from(
-			target.querySelectorAll<HTMLButtonElement>('.repaint-row .segmented button')
-		);
-		expect(repaintButtons[0].textContent).toBe('Off');
-		expect(repaintButtons[0].classList.contains('active')).toBe(true);
-		for (const btn of repaintButtons.slice(1)) {
-			expect(btn.disabled).toBe(true);
-		}
-
-		setSourceFromGeneration(makeGeneration({ version_number: 3, generation_number: 2 }), 'repaint');
-		await tick();
-		const afterSource = Array.from(
-			target.querySelectorAll<HTMLButtonElement>('.repaint-row .segmented button')
-		);
-		expect(afterSource[1].disabled).toBe(false);
-		expect(target.querySelector('.source-bar')?.textContent).toContain('v3');
-		expect(get(sourceGeneration)?.id).toBe('g1');
-	});
-
-	it('shows a finite end time when the repaint source take was made with auto Duration', async () => {
-		const target = await render();
-		setSourceFromGeneration(
-			makeGeneration({ generation_params: { audio_duration: 0 }, audio_duration_sec: 123.4 }),
-			'repaint'
-		);
-		await tick();
-		const endHandle = target.querySelector<HTMLElement>('.handle-end');
-		const picker = target.querySelector<HTMLElement>('.waveform-picker');
-		if (!endHandle || !picker) throw new Error('Expected the repaint range picker');
-		picker.getBoundingClientRect = () => new DOMRect(0, 0, 1000, 40);
-		endHandle.setPointerCapture = vi.fn();
-		const pointer = (type: string, clientX: number) =>
-			new MouseEvent(type, { clientX, bubbles: true, cancelable: true });
-		endHandle.dispatchEvent(pointer('pointerdown', 1000));
-		endHandle.dispatchEvent(pointer('pointermove', 500));
-		await tick();
-		const times = Array.from(target.querySelectorAll('.time-display span')).map(
-			(el) => el.textContent
-		);
-		expect(times).toEqual(['0:00.00', '1:01.72']);
-	});
-
 	it.each(['repaint', 'cover'] as const)(
-		'says that %s uses the lyrics and style currently in the editor',
+		'shows no Repaint row, no Off and no Source bar with a %s source set',
 		async (mode) => {
 			const target = await render();
 			setSourceFromGeneration(makeGeneration({ version_number: 3, generation_number: 2 }), mode);
 			await tick();
 
-			expect(target.querySelector('.source-mode-hint')?.textContent).toBe(RECIPE_SOURCE_MODE_HINT);
+			expect(target.textContent).not.toContain('Repaint');
+			expect(target.textContent).not.toContain('Off');
+			expect(target.textContent).not.toContain('Source');
+			expect(target.querySelector('.waveform-picker')).toBeNull();
 		}
 	);
 

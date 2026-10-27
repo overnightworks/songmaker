@@ -96,7 +96,9 @@
 			class:failed={presentation.kind === 'failed'}
 			disabled={presentation.kind === 'disabled'}
 			title={presentation.kind === 'disabled' ? (presentation.reason ?? undefined) : undefined}
-			aria-label={reasonInsideButton === null ? undefined : `${EDITOR_GENERATE_LABEL} — ${reasonInsideButton}`}
+			aria-label={reasonInsideButton === null
+				? undefined
+				: `${EDITOR_GENERATE_LABEL} — ${reasonInsideButton}`}
 			onclick={() => void generate()}
 		>
 			{#if reasonInsideButton !== null}

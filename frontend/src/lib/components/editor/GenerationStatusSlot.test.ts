@@ -61,14 +61,13 @@ async function render(state: GenerateState, latestVersionNumber = 8): Promise<vo
 }
 
 describe('GenerationStatusSlot', () => {
-	it.each([
-		{ kind: 'idle' },
-		{ kind: 'disabled', reason: 'No models' },
-		failed
-	] as const)('renders nothing while the generate action is $kind', async (state) => {
-		await render(state);
-		expect(document.body.querySelector('.status-slot')).toBeNull();
-	});
+	it.each([{ kind: 'idle' }, { kind: 'disabled', reason: 'No models' }, failed] as const)(
+		'renders nothing while the generate action is $kind',
+		async (state) => {
+			await render(state);
+			expect(document.body.querySelector('.status-slot')).toBeNull();
+		}
+	);
 
 	it.each([
 		{

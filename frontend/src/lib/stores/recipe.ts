@@ -1,12 +1,6 @@
 import { writable, get } from 'svelte/store';
 import type { GenerationItem, VersionGenerationParams } from '$lib/api/types';
-import {
-	RECIPE_REPAINT_OFF_LABEL,
-	RECIPE_SOURCE_DURATION_DEFAULT_SECONDS,
-	TAKE_COVER_LABEL,
-	TAKE_REPAINT_LABEL
-} from '$lib/constants';
-import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
+import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
 
 export type SourceMode = 'repaint' | 'cover';
 export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
@@ -132,9 +126,6 @@ interface RecipeChipInput {
 	voiceLabel: string;
 	pinnedSeed: number | null;
 	genParams: VersionGenerationParams | null;
-	sourceGeneration: GenerationItem | null;
-	sourceMode: SourceMode;
-	repaintMode: RepaintMode;
 	// The last-saved version's values, compared against the draft fields above
 	// to mark a chip "changed". Omitted fields are treated as unchanged.
 	savedBpm?: number;
@@ -154,12 +145,6 @@ function paramsSubsetEqual(
 // Pure projection from editor/recipe state to the labeled chip row — kept
 // side-effect free so it can be unit tested without mounting a component.
 export function recipeChips(input: RecipeChipInput): RecipeChip[] {
-	const sourceTake = input.sourceGeneration
-		? nowPlayingTakeLabel(
-				input.sourceGeneration.version_number,
-				input.sourceGeneration.generation_number
-			)
-		: RECIPE_REPAINT_OFF_LABEL;
 	return [
 		{
 			key: 'model',
@@ -235,16 +220,6 @@ export function recipeChips(input: RecipeChipInput): RecipeChip[] {
 				input.savedGenParams === undefined ? input.genParams : input.savedGenParams,
 				DIT_PARAM_KEYS
 			)
-		},
-		{
-			key: 'repaint',
-			label:
-				input.sourceMode === 'cover' && input.sourceGeneration
-					? TAKE_COVER_LABEL
-					: TAKE_REPAINT_LABEL,
-			value: sourceTake,
-			title: 'Regenerate part of a take instead of starting fresh',
-			changed: false
 		}
 	];
 }

@@ -14,21 +14,7 @@
 		setDraftGenParams,
 		pinnedSeed
 	} from '$lib/stores/editor';
-	import {
-		recipeModel,
-		recipeOpen,
-		takesPerGenerate,
-		sourceGeneration,
-		sourceMode,
-		sourceTakeDurationSeconds,
-		repaintStart,
-		repaintEnd,
-		repaintMode,
-		repaintStrength,
-		coverStrength,
-		coverNoiseStrength,
-		clearSource
-	} from '$lib/stores/recipe';
+	import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
 	import {
 		activeModels,
 		activeModelsLoading,
@@ -44,7 +30,6 @@
 	} from '$lib/stores/presets';
 	import {
 		RECIPE_PANEL_LABEL,
-		RECIPE_SOURCE_LABEL,
 		RECIPE_GROUP_SOUND_LABEL,
 		RECIPE_GROUP_TEXT_LABEL,
 		RECIPE_GROUP_REPRODUCE_LABEL,
@@ -53,10 +38,7 @@
 		RECIPE_SEED_RANDOM_LABEL,
 		RECIPE_SEED_PINNED_LABEL,
 		RECIPE_DEFAULT_PINNED_SEED,
-		RECIPE_REPAINT_OFF_LABEL,
 		RECIPE_USES_LABEL,
-		TAKE_REPAINT_LABEL,
-		TAKE_COVER_LABEL,
 		VOICE_PICKER_NONE_LABEL,
 		PHONE_RECIPE_LOADING,
 		PHONE_RECIPE_LOADED,
@@ -68,10 +50,6 @@
 		PHONE_RECIPE_UPLOAD_ERROR,
 		PHONE_RECIPE_REMOVE,
 		PHONE_RECIPE_DEFAULTS_ERROR,
-		PHONE_RECIPE_REPAINT_STRENGTH,
-		PHONE_RECIPE_COVER_STRENGTH,
-		PHONE_RECIPE_NOISE_STRENGTH,
-		PHONE_RECIPE_REPAINT_MODES,
 		RECIPE_BPM_MAX,
 		RECIPE_DURATION_MAX_SECONDS,
 		RECIPE_TAKES_PER_GENERATE_OPTIONS,
@@ -79,7 +57,6 @@
 	} from '$lib/constants';
 	import VoicePicker from '../VoicePicker.svelte';
 	import ParamControls from '../ParamControls.svelte';
-	import WaveformRangePicker from '../WaveformRangePicker.svelte';
 
 	interface Props {
 		chips: RecipeChip[];
@@ -149,7 +126,7 @@
 		},
 		{
 			label: RECIPE_GROUP_REPRODUCE_LABEL,
-			rows: chips.filter((chip) => chip.key === 'seed' || chip.key === 'repaint')
+			rows: chips.filter((chip) => chip.key === 'seed')
 		}
 	]);
 
@@ -337,60 +314,6 @@
 										value={$pinnedSeed}
 										oninput={(event) => pinnedSeed.set(Number(event.currentTarget.value))}
 									/>{/if}
-							{:else if row.key === 'repaint'}
-								<button type="button" onclick={clearSource}>{RECIPE_REPAINT_OFF_LABEL}</button>
-								{#if $sourceGeneration}
-									<select aria-label={RECIPE_SOURCE_LABEL} bind:value={$sourceMode}
-										><option value="repaint">{TAKE_REPAINT_LABEL}</option><option value="cover"
-											>{TAKE_COVER_LABEL}</option
-										></select
-									>
-									{#if $sourceMode === 'repaint'}
-										<select aria-label={TAKE_REPAINT_LABEL} bind:value={$repaintMode}
-											>{#each PHONE_RECIPE_REPAINT_MODES as mode (mode.value)}<option
-													value={mode.value}>{mode.label}</option
-												>{/each}</select
-										>
-										<WaveformRangePicker
-											audioUrl={`/audio/${$sourceGeneration.mp3_path}`}
-											duration={sourceTakeDurationSeconds($sourceGeneration)}
-											startPercent={$repaintStart}
-											endPercent={$repaintEnd}
-											onchange={(start, end) => {
-												repaintStart.set(start);
-												repaintEnd.set(end);
-											}}
-										/>
-										{#if $repaintMode === 'balanced'}<label
-												>{PHONE_RECIPE_REPAINT_STRENGTH}<input
-													type="range"
-													min="0"
-													max="1"
-													step="0.01"
-													bind:value={$repaintStrength}
-												/><output>{Math.round($repaintStrength * 100)}%</output></label
-											>{/if}
-									{:else}
-										<label
-											>{PHONE_RECIPE_COVER_STRENGTH}<input
-												type="range"
-												min="0"
-												max="1"
-												step="0.01"
-												bind:value={$coverStrength}
-											/><output>{Math.round($coverStrength * 100)}%</output></label
-										>
-										<label
-											>{PHONE_RECIPE_NOISE_STRENGTH}<input
-												type="range"
-												min="0"
-												max="1"
-												step="0.01"
-												bind:value={$coverNoiseStrength}
-											/><output>{Math.round($coverNoiseStrength * 100)}%</output></label
-										>
-									{/if}
-								{/if}
 							{/if}
 						</div>
 					{/if}
