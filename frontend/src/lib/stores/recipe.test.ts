@@ -10,7 +10,6 @@ import {
 	applyTakeUse,
 	clearSeed,
 	pendingTakeUse,
-	recipeChips,
 	recipeModel,
 	recipeOpen,
 	sourceTakeDurationSeconds,
@@ -37,114 +36,6 @@ function requestedRecipeDefaults(): Partial<GenerationItem> {
 		}
 	};
 }
-
-describe('recipeChips', () => {
-	it('C1: projects the eight labeled chips from editor and recipe state', () => {
-		const chips = recipeChips({
-			model: 'turbo',
-			takes: 2,
-			bpm: 108,
-			audioDuration: 195,
-			keyScale: 'A major',
-			voiceLabel: 'None',
-			genParams: null
-		});
-		expect(chips.map((c) => c.key)).toEqual([
-			'model',
-			'takes',
-			'bpm',
-			'duration',
-			'key',
-			'voice',
-			'lm',
-			'dit'
-		]);
-		expect(chips.find((c) => c.key === 'model')?.value).toBe('TURBO');
-		expect(chips.find((c) => c.key === 'takes')?.value).toBe('×2');
-		expect(chips.find((c) => c.key === 'bpm')?.value).toBe('108');
-		expect(chips.find((c) => c.key === 'duration')?.value).toBe('195 s');
-	});
-
-	it('C1: shows Auto for zero BPM/duration', () => {
-		const chips = recipeChips({
-			model: null,
-			takes: 1,
-			bpm: 0,
-			audioDuration: 0,
-			keyScale: '',
-			voiceLabel: 'None',
-			genParams: null
-		});
-		expect(chips.find((c) => c.key === 'bpm')?.value).toBe('Auto');
-		expect(chips.find((c) => c.key === 'duration')?.value).toBe('Auto');
-		expect(chips.find((c) => c.key === 'key')?.value).toBe('—');
-		expect(chips.find((c) => c.key === 'model')?.value).toBe('—');
-	});
-
-	it('marks LM and DIT Custom only when a param in that group is overridden', () => {
-		const base = {
-			model: 'turbo',
-			takes: 1,
-			bpm: 120,
-			audioDuration: 180,
-			keyScale: 'Am',
-			voiceLabel: 'None',
-			sourceGeneration: null,
-			sourceMode: 'repaint' as const,
-			repaintMode: 'conservative' as const
-		};
-		expect(recipeChips({ ...base, genParams: null }).find((c) => c.key === 'lm')?.value).toBe(
-			'Default'
-		);
-		expect(
-			recipeChips({ ...base, genParams: { lm_temperature: 0.8 } }).find((c) => c.key === 'lm')
-				?.value
-		).toBe('Custom');
-		expect(
-			recipeChips({ ...base, genParams: { inference_steps: 40 } }).find((c) => c.key === 'dit')
-				?.value
-		).toBe('Custom');
-		expect(
-			recipeChips({ ...base, genParams: { lm_temperature: 0.8 } }).find((c) => c.key === 'dit')
-				?.value
-		).toBe('Default');
-	});
-
-	it('marks a chip changed only when the draft value differs from the last-saved version', () => {
-		const base = {
-			model: 'turbo',
-			takes: 1,
-			bpm: 120,
-			audioDuration: 180,
-			keyScale: 'Am',
-			voiceLabel: 'None',
-			genParams: null,
-			sourceGeneration: null,
-			sourceMode: 'repaint' as const,
-			repaintMode: 'conservative' as const,
-			savedBpm: 120,
-			savedAudioDuration: 180,
-			savedKeyScale: 'Am',
-			savedGenParams: null
-		};
-		expect(recipeChips(base).find((c) => c.key === 'bpm')?.changed).toBe(false);
-		expect(recipeChips({ ...base, bpm: 140 }).find((c) => c.key === 'bpm')?.changed).toBe(true);
-		expect(recipeChips({ ...base, keyScale: 'C' }).find((c) => c.key === 'key')?.changed).toBe(
-			true
-		);
-		expect(
-			recipeChips({ ...base, genParams: { lm_temperature: 0.8 } }).find((c) => c.key === 'lm')
-				?.changed
-		).toBe(true);
-		expect(
-			recipeChips({ ...base, genParams: { lm_temperature: 0.8 } }).find((c) => c.key === 'dit')
-				?.changed
-		).toBe(false);
-		expect(recipeChips({ ...base, model: 'base' }).find((c) => c.key === 'model')?.changed).toBe(
-			false
-		);
-	});
-});
 
 describe('recipe session state', () => {
 	beforeEach(() => {

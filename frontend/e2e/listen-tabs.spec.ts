@@ -7,8 +7,7 @@ import {
 	COWRITER_COMPOSER_PLACEHOLDER,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
-	EDITOR_VIEW_RECIPE_LABEL,
-	EDITOR_VIEWS_LABEL,
+	RECIPE_PANEL_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
@@ -104,20 +103,30 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
 	});
 
-	test('with the Recipe open the full panel is on the left and the composer is on screen (S9, #1927 acceptance 8 and 9)', async ({
+	test('with the Recipe open the card is on the left and the composer is on screen (C6, #1935 acceptance 8)', async ({
 		page
 	}) => {
 		await openPickedSong(page);
 		await cowriterTab(page).click();
-		await workspace(page)
-			.getByRole('group', { name: EDITOR_VIEWS_LABEL })
-			.getByRole('button', { name: EDITOR_VIEW_RECIPE_LABEL, exact: true })
-			.click();
+		await workspace(page).locator('.recipe-line').click();
 		const viewport = page.viewportSize();
 		const composerBox = await composer(page).boundingBox();
-		const panelBox = await workspace(page).locator('.recipe-panel').boundingBox();
+		const panelBox = await workspace(page)
+			.getByRole('region', { name: RECIPE_PANEL_LABEL, exact: true })
+			.boundingBox();
 		if (!viewport || !composerBox || !panelBox) throw new Error('Expected both laid out');
 		expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height);
 		expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(composerBox.x);
+	});
+
+	test('the composer is on screen at 1440x600 with the Recipe closed (C6, #1935 acceptance 8)', async ({
+		page
+	}) => {
+		await page.setViewportSize({ width: 1440, height: 600 });
+		await openPickedSong(page);
+		await cowriterTab(page).click();
+		const composerBox = await composer(page).boundingBox();
+		if (!composerBox) throw new Error('Expected the composer laid out');
+		expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(600);
 	});
 });

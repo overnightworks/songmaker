@@ -166,3 +166,12 @@ export function chooseEnginePreset(
 		return params;
 	});
 }
+
+/** The engine fields alone, as a preset stores them. */
+export function engineParams(values: RecipeValues): VersionGenerationParams {
+	return Object.fromEntries(
+		Object.entries(values.genParams ?? {}).filter(
+			([key, value]) => value != null && (ENGINE_PARAM_KEYS as readonly string[]).includes(key)
+		)
+	);
+}

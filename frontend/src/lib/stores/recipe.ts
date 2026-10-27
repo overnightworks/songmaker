@@ -1,5 +1,5 @@
 import { writable, get } from 'svelte/store';
-import type { GenerationItem, VersionGenerationParams } from '$lib/api/types';
+import type { GenerationItem } from '$lib/api/types';
 import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
 import { takeUseSeedToast } from '$lib/constants/take-task';
 import { addToast } from '$lib/stores/toast';
@@ -26,7 +26,7 @@ interface SeedFromTake {
 export const recipeModel = writable<string | null>(null);
 export const takesPerGenerate = writable<number>(1);
 
-// The Editor's two independent, stackable views (epic #98 "Views vs. Action").
+// Whether the recipe card is open; it closes when the editor switches songs.
 export const recipeOpen = writable(false);
 
 // Repaint/cover source state — merged from the former stores/source.ts.
@@ -104,148 +104,4 @@ export function resetRecipeSourceForSong(): void {
 	coverNoiseStrength.set(0);
 	recipeOpen.set(false);
 	clearSeed();
-}
-
-const LM_PARAM_KEYS: (keyof VersionGenerationParams)[] = [
-	'lm_temperature',
-	'lm_top_k',
-	'lm_top_p',
-	'lm_cfg_scale',
-	'lm_repetition_penalty',
-	'batch_size',
-	'thinking',
-	'use_cot_caption',
-	'use_cot_language',
-	'lm_negative_prompt'
-];
-
-const DIT_PARAM_KEYS: (keyof VersionGenerationParams)[] = [
-	'inference_steps',
-	'guidance_scale',
-	'shift',
-	'cfg_interval_start',
-	'cfg_interval_end',
-	'velocity_norm_threshold',
-	'velocity_ema_factor',
-	'latent_shift',
-	'latent_rescale',
-	'audio_cover_strength',
-	'infer_method',
-	'sampler_mode',
-	'use_adg'
-];
-
-function hasAnyParam(
-	genParams: VersionGenerationParams | null,
-	keys: readonly (keyof VersionGenerationParams)[]
-): boolean {
-	if (!genParams) return false;
-	return keys.some((key) => genParams[key] != null);
-}
-
-export interface RecipeChip {
-	key: string;
-	label: string;
-	value: string;
-	title: string;
-	changed: boolean;
-}
-
-interface RecipeChipInput {
-	model: string | null;
-	takes: number;
-	bpm: number;
-	audioDuration: number;
-	keyScale: string;
-	voiceLabel: string;
-	genParams: VersionGenerationParams | null;
-	// The last-saved version's values, compared against the draft fields above
-	// to mark a chip "changed". Omitted fields are treated as unchanged.
-	savedBpm?: number;
-	savedAudioDuration?: number;
-	savedKeyScale?: string;
-	savedGenParams?: VersionGenerationParams | null;
-}
-
-function paramsSubsetEqual(
-	a: VersionGenerationParams | null,
-	b: VersionGenerationParams | null,
-	keys: readonly (keyof VersionGenerationParams)[]
-): boolean {
-	return keys.every((key) => (a?.[key] ?? null) === (b?.[key] ?? null));
-}
-
-// Pure projection from editor/recipe state to the labeled chip row — kept
-// side-effect free so it can be unit tested without mounting a component.
-export function recipeChips(input: RecipeChipInput): RecipeChip[] {
-	return [
-		{
-			key: 'model',
-			label: 'Model',
-			value: input.model ? input.model.toUpperCase() : '—',
-			title: 'Model used for the next generation',
-			changed: false
-		},
-		{
-			key: 'takes',
-			label: 'Takes',
-			value: `×${input.takes}`,
-			title: 'How many takes Generate produces at once',
-			changed: false
-		},
-		{
-			key: 'bpm',
-			label: 'BPM',
-			value: input.bpm > 0 ? String(input.bpm) : 'Auto',
-			title: 'Target tempo (0 = let the model choose)',
-			changed: input.bpm !== (input.savedBpm ?? input.bpm)
-		},
-		{
-			key: 'duration',
-			label: 'Duration',
-			value: input.audioDuration > 0 ? `${input.audioDuration} s` : 'Auto',
-			title: 'Target length (0 = let the model choose)',
-			changed: input.audioDuration !== (input.savedAudioDuration ?? input.audioDuration)
-		},
-		{
-			key: 'key',
-			label: 'Key',
-			value: input.keyScale || '—',
-			title: 'Target musical key',
-			changed: input.keyScale !== (input.savedKeyScale ?? input.keyScale)
-		},
-		{
-			key: 'voice',
-			label: 'Voice',
-			value: input.voiceLabel,
-			title: 'Cloned voice applied to vocals',
-			changed:
-				(input.genParams?.user_lora_id ?? null) !==
-				(input.savedGenParams === undefined
-					? (input.genParams?.user_lora_id ?? null)
-					: (input.savedGenParams?.user_lora_id ?? null))
-		},
-		{
-			key: 'lm',
-			label: 'LM',
-			value: hasAnyParam(input.genParams, LM_PARAM_KEYS) ? 'Custom' : 'Default',
-			title: 'Language-model generation parameters',
-			changed: !paramsSubsetEqual(
-				input.genParams,
-				input.savedGenParams === undefined ? input.genParams : input.savedGenParams,
-				LM_PARAM_KEYS
-			)
-		},
-		{
-			key: 'dit',
-			label: 'DIT',
-			value: hasAnyParam(input.genParams, DIT_PARAM_KEYS) ? 'Custom' : 'Default',
-			title: 'Diffusion-transformer generation parameters',
-			changed: !paramsSubsetEqual(
-				input.genParams,
-				input.savedGenParams === undefined ? input.genParams : input.savedGenParams,
-				DIT_PARAM_KEYS
-			)
-		}
-	];
 }

@@ -58,12 +58,7 @@
 		handleSave,
 		computeDraftVersionNumber,
 		draftSavesAsNewVersion,
-		discardDraft,
-		editBpm,
-		editAudioDuration,
-		editKeyScale,
-		editGenParams,
-		savedSongData
+		discardDraft
 	} from '$lib/stores/editor';
 	import type { VersionDeleteEditorLoss } from '$lib/stores/editor';
 	import { activeModels, loadActiveModels } from '$lib/stores/presets';
@@ -73,13 +68,9 @@
 	import {
 		applyTakeUse,
 		pendingTakeUse,
-		recipeChips,
-		recipeModel,
-		recipeOpen,
 		resetRecipeSourceForSong,
 		seedRecipeModel,
-		setSourceFromGeneration,
-		takesPerGenerate
+		setSourceFromGeneration
 	} from '$lib/stores/recipe';
 	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
 	import type { SongItem, VersionItem } from '$lib/api/types';
@@ -122,8 +113,6 @@
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import EditorHeader from './editor/EditorHeader.svelte';
-	import RecipeChips from './editor/RecipeChips.svelte';
-	import RecipePanel from './editor/RecipePanel.svelte';
 	import ListenTabs from './editor/ListenTabs.svelte';
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
@@ -359,29 +348,6 @@
 		media.addEventListener('change', sync);
 		return () => media.removeEventListener('change', sync);
 	});
-
-	const chips = $derived(
-		recipeChips({
-			model: $recipeModel,
-			takes: $takesPerGenerate,
-			bpm: $editBpm,
-			audioDuration: $editAudioDuration,
-			keyScale: $editKeyScale,
-			voiceLabel: resolveVoiceLabel($editGenParams?.user_lora_id ?? null),
-			genParams: $editGenParams,
-			savedBpm: $savedSongData.bpm,
-			savedAudioDuration: $savedSongData.audio_duration,
-			savedKeyScale: $savedSongData.key_scale,
-			savedGenParams: $savedSongData.genParams
-		})
-	);
-
-	function resolveVoiceLabel(loraId: string | null): string {
-		if (!loraId) return 'None';
-		const voice = $loras.find((l) => l.id === loraId);
-		if (!voice) return 'Custom';
-		return voice.deleted_at ? `${voice.name} — voice deleted` : voice.name;
-	}
 
 	setGenerationActions({
 		...takeActionsFor(() => song),
@@ -761,8 +727,6 @@
 			onunshare={onSongShareDisable}
 			onaddtoplaylist={() => (songPlaylistPickerOpen = true)}
 			ondeletesong={() => (showDeleteConfirm = true)}
-			recipeOpen={$recipeOpen}
-			ontogglerecipe={() => recipeOpen.update((v) => !v)}
 			saveDisabled={!dirty}
 			onsave={() => void onSaveVersion()}
 		/>
@@ -772,10 +736,6 @@
 		{#if song.is_shared && song.share_slug}
 			<ShareLinkChip url={`${window.location.origin}${sharePagePath('song', song.share_slug)}`} />
 		{/if}
-	{/snippet}
-
-	{#snippet recipe()}
-		<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
 	{/snippet}
 
 	{#snippet phoneEdit()}
@@ -806,18 +766,13 @@
 				cowriter={cowriterPanel}
 				{expiryDigest}
 				{takeListProps}
-				{chips}
 			/>
 		{:else}
 			{@render header()}
 			<div class="editor-body">
 				{@render sharedLink()}
-				{@render recipe()}
 				<div class="editor-columns">
 					<div class="write-column">
-						{#if $recipeOpen}
-							<RecipePanel onclose={() => recipeOpen.set(false)} />
-						{/if}
 						{@render writeSurface(song)}
 					</div>
 					<ListenTabs {expiryDigest} cowriter={cowriterPanel} {takeListProps} />
@@ -931,10 +886,16 @@
 		flex: 1 0 auto;
 	}
 
+	/* The desktop shell already ends above the player bar (+layout.svelte), so
+	   only the compact shell reserves the bar's height here. */
+	.detail-panel:not(.compact) {
+		padding-bottom: 1.2rem;
+	}
+
 	/* Everything under the header answers to the width the editor actually
 	   has — docking Now Playing takes NOW_PLAYING_DOCKED_WIDTH_PX out of
 	   `main`, and these columns must fold for that exactly as they fold for a
-	   smaller screen (#185). Named `editor`, so WriteColumn, RecipePanel and
+	   smaller screen (#185). Named `editor`, so WriteColumn, RecipeTabs and
 	   the takes column can all ask the same question.
 
 	   It deliberately starts below the header: a size container also becomes
@@ -964,8 +925,8 @@
 		overflow: hidden auto;
 	}
 
-	/* The recipe panel opens above the Write fields, in the left column, so the
-	   Listen column on the right keeps its place and its composer on screen. */
+	/* The recipe opens at the top of the Write column, so the Listen column on
+	   the right keeps its place and its composer on screen. */
 	.write-column {
 		display: flex;
 		flex-direction: column;

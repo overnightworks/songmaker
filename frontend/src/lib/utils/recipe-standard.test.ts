@@ -4,6 +4,7 @@ import {
 	changedRecipeFields,
 	changedRecipeTabs,
 	chooseEnginePreset,
+	engineParams,
 	recipeDiffersFromStandard,
 	resetRecipeField,
 	resetRecipeTab,
@@ -185,5 +186,14 @@ describe('chooseEnginePreset', () => {
 
 	it('leaves no params object when nothing is kept', () => {
 		expect(chooseEnginePreset(values({ genParams: { shift: 5 } }), null).genParams).toBeNull();
+	});
+});
+
+describe('engineParams', () => {
+	it('keeps the engine fields and leaves Voice and Reference out of a preset', () => {
+		const start = values({
+			genParams: { user_lora_id: 'mara', reference_audio_path: 'a', shift: 5, thinking: false }
+		});
+		expect(engineParams(start)).toEqual({ shift: 5, thinking: false });
 	});
 });
