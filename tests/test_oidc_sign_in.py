@@ -392,7 +392,8 @@ def test_a_worker_call_with_the_internal_token_passes_the_csrf_checks(world: Wor
 def test_a_same_origin_admin_write_is_refused_by_the_auth_check_not_the_job_pool(
     world: World, role: str | None, expected_status: int,
 ) -> None:
-    """The admin check runs before the job-pool dependency, which raises when no pool exists."""
+    """defect:#1907 (found in the build): an anonymous same-origin write answers 401, a non-admin
+    403, never a server error; the admin check runs before the job pool."""
     if role:
         world.seed(SUBJECT, "felix", role)
         login_and_csrf(world.client, "felix")
