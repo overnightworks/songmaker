@@ -54,7 +54,7 @@ describe('recipe session state', () => {
 		expect(get(recipeModel)).toBe('fast');
 	});
 
-	it('setSourceFromGeneration leaves the Recipe panel closed and resets a repaint range', () => {
+	it('setSourceFromGeneration leaves the Recipe closed and resets a repaint range', () => {
 		const gen = generation(requestedRecipeDefaults());
 		repaintStart.set(0.3);
 		repaintEnd.set(0.6);

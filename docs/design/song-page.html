@@ -1180,7 +1180,7 @@ und keiner weiß, wer den Rollback kennt.</div></div></div><div class="dcol list
   <div class="card rcard open"><div class="vtabs"><button class="vt"><span class="tn">Song</span></button><button class="vt on"><span class="tn">Generate</span></button><button class="vt"><span class="tn">Engine</span></button><button class="vclose" title="Close the recipe"><svg class="ic sm" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button></div><div class="vbody">
   <div class="kv"><span class="k">Model</span><span class="v">XL-TURBO <span class="okst"><i></i>loaded</span><svg class="ic sm" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></div>
   <div class="kv"><span class="k">Takes per Generate</span><span class="v"><span class="seg"><button class="on">1</button><button>2</button><button>3</button><button>5</button><button>10</button></span></span></div>
-  <div class="vfoot"><span>Saved with the version</span></div>
+  <div class="vfoot"><button class="reset">Reset all</button></div>
 </div></div>
 </div></div></figure></div></div>
 <ul class="honest"><li><b>Better:</b> Model and Takes — what decides how many of what the next press makes — are one short tab; today they sit in Sound between BPM and Key. Takes keeps today’s five choices (1 2 3 5 10).</li><li><b>Better:</b> the seed leaves the recipe: today it is “Random | Pinned” plus a number field, where “Pinned 0” is a seed nobody chose; here it is a chip at the Generate button, “Seed · take 11 ×”, that exists exactly while a take’s seed is in effect (dimmed on the left).</li><li><b>Not better:</b> today a seed can be typed; here it only comes from a take. A seed from outside the app has no way in — a named gap, kept until someone needs it.</li></ul></div>
@@ -1188,7 +1188,7 @@ und keiner weiß, wer den Rollback kennt.</div></div></div><div class="dcol list
   <div class="card rcard open"><div class="vtabs"><button class="vt"><span class="tn">Song</span></button><button class="vt on"><span class="tn">Generate</span></button><button class="vt"><span class="tn">Engine</span></button><button class="vclose" title="Close the recipe"><svg class="ic sm" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button></div><div class="vbody">
   <div class="kv"><span class="k">Model</span><span class="v">XL-TURBO <span class="okst"><i></i>loaded</span><svg class="ic sm" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></div>
   <div class="kv"><span class="k">Takes per Generate</span><span class="v"><span class="seg"><button class="on">1</button><button>2</button><button>3</button><button>5</button><button>10</button></span></span></div>
-  <div class="vfoot"><span>Saved with the version</span></div>
+  <div class="vfoot"><button class="reset">Reset all</button></div>
 </div></div>
 </div></div></figure></div></div>
 <ul class="honest"><li><b>Better:</b> on the phone today these rows live in two groups (Sound, Reproduce) and the seed opens a Random | Pinned pair with a number under it; here one tab with two rows, and the seed is the chip in the Generate bar.</li><li><b>Kept from today:</b> Model shows its “loaded” state in the row, as today.</li><li><b>Not better:</b> the tab is almost empty — two rows — because the seed moved out; it earns its place only as the home of Model and Takes.</li></ul></div>
@@ -1218,7 +1218,7 @@ und keiner weiß, wer den Rollback kennt.</div></div></div><div class="dcol list
 <ul class="honest"><li><b>Better:</b> the Preset row names the preset where today the row says “Default / Default” for LM / DiT, which names two groups and no preset; a preset that differs gets the dot and a ↺.</li><li><b>Kept from today:</b> the same two-column grid of the same fields, opened under a row; nothing is cut or hidden on the phone either.</li><li><b>Not better:</b> it is as long as today — nineteen fields are nineteen fields; the tab only moves them below the other two tabs.</li></ul></div>
 <h3 class="sub">Where every field of today’s panel goes</h3><div class="scroll"><table class="map"><tr><th>Today (RecipePanel.svelte, RecipeChips.svelte)</th><th>At the Take</th></tr>
 <tr><td>Chip strip (Model · Takes · BPM · Duration · Key · Voice · Seed · LM · DiT · Repaint)</td><td>the closed line “Recipe ›” — no values; “Recipe •” when anything differs from its standard. Repaint is no recipe value any more</td></tr>
-<tr><td>“Saved with the version. Changes mark the draft.” · Collapse</td><td>tab footer line “Saved with the version” · ˄ at the end of the strip closes the recipe back to its line</td></tr>
+<tr><td>“Saved with the version. Changes mark the draft.” · Collapse</td><td>tab footer line “Saved with the version” on Song and Engine (Model and Takes are session state, so Generate carries only Reset all) · ˄ at the end of the strip closes the recipe back to its line</td></tr>
 <tr><td>a changed field (today: “Changes mark the draft”)</td><td>a dot on the closed line, on the tab and on the field; ↺ on the field, “Reset all” on the tab</td></tr>
 <tr><td>Preset · Save as preset · Manage in Settings → Generation</td><td><b>Engine</b> (a preset is exactly the Engine fields)</td></tr>
 <tr><td>Sound: BPM · Duration · Key</td><td><b>Song</b> (direct inputs, “Auto” instead of “0 (0 = auto)”)</td></tr>

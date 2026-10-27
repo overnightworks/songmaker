@@ -1,6 +1,6 @@
 // The take's Repaint and Cover open a task card under that take (#1912, S4 of
 // #1804): it sends one repaint or cover request with the card's values, stays
-// open until its cross removes it, never opens the Recipe panel, and the page
+// open until its cross removes it, never opens the Recipe, and the page
 // scrolls as one. The job endpoints are answered here, so no worker is needed.
 // With a card open the Recipe has no Repaint row and the header Generate stays
 // plain (#1923, S4 and S8). Both projects run it: 390 px (Takes tab) and 1440 px.

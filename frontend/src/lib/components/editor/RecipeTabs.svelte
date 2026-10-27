@@ -272,15 +272,15 @@
 {/snippet}
 
 {#snippet takesControl()}
-	<select
-		aria-label={RECIPE_TAKES_LABEL}
-		value={values.takes}
-		onchange={(event) => onchange({ ...values, takes: Number(event.currentTarget.value) })}
-	>
+	<span class="seg" role="group" aria-label={RECIPE_TAKES_LABEL}>
 		{#each RECIPE_TAKES_OPTIONS as count (count)}
-			<option value={count}>×{count}</option>
+			<button
+				type="button"
+				aria-pressed={values.takes === count}
+				onclick={() => onchange({ ...values, takes: count })}>{count}</button
+			>
 		{/each}
-	</select>
+	</span>
 {/snippet}
 
 {#snippet presetControl()}
@@ -508,6 +508,26 @@
 	.kv input {
 		width: 8rem;
 		text-align: right;
+	}
+
+	.seg {
+		display: inline-flex;
+		gap: 0.25rem;
+	}
+
+	.seg button {
+		min-width: var(--hitbox-frequent);
+		min-height: var(--hitbox-frequent);
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.seg button[aria-pressed='true'] {
+		border-color: var(--primary);
+		color: var(--primary);
 	}
 
 	.upload input {

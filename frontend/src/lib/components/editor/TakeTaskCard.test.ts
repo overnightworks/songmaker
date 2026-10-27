@@ -127,7 +127,9 @@ describe('Cover card (S4, #1912 acceptance 3)', () => {
 describe('the card reaches the frames (#1923 acceptance 5, 6)', () => {
 	it('captions the repaint waveform Range and the foot says the header Generate stays', async () => {
 		const target = await renderCard('repaint');
-		expect(target.querySelector('.range-caption')?.textContent).toBe('Range');
+		expect(target.querySelector('.range-caption')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			'Range drag the handles'
+		);
 		expect(flatText(target)).toContain('New take in v7 · the header Generate stays what it is');
 	});
 
@@ -135,6 +137,8 @@ describe('the card reaches the frames (#1923 acceptance 5, 6)', () => {
 		const target = await renderCard('cover');
 		expect(flatText(target)).toContain('Noise');
 		expect(flatText(target)).toContain('more noise, more surprise');
+		const ends = Array.from(target.querySelectorAll('.slider')[1].querySelectorAll('.end'));
+		expect(ends.map((end) => end.textContent)).toEqual(['0', '1']);
 		expect(flatText(target)).toContain('the header Generate stays what it is');
 	});
 

@@ -5,10 +5,13 @@ import { formatTime } from '$lib/utils/format';
 export const TAKE_TASK_CLOSE_LABEL = 'Close';
 export const TAKE_TASK_CLOSE_TITLE = 'Close — nothing changes';
 export const TAKE_TASK_RANGE_LABEL = 'Range';
+export const TAKE_TASK_RANGE_CAPTION = 'drag the handles';
 export const TAKE_TASK_REPAINT_STRENGTH_LABEL = 'Repaint strength';
 export const TAKE_TASK_COVER_STRENGTH_LABEL = 'Cover strength';
 export const TAKE_TASK_NOISE_LABEL = 'Noise';
 export const TAKE_TASK_NOISE_CAPTION = 'more noise, more surprise';
+export const TAKE_TASK_NOISE_MIN_LABEL = '0';
+export const TAKE_TASK_NOISE_MAX_LABEL = '1';
 export const TAKE_TASK_REPAINT_MODES: { value: RepaintMode; label: string }[] = [
 	{ value: 'conservative', label: 'Conservative' },
 	{ value: 'balanced', label: 'Balanced' },

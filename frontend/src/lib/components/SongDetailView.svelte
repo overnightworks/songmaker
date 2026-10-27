@@ -896,7 +896,9 @@
 	   has — docking Now Playing takes NOW_PLAYING_DOCKED_WIDTH_PX out of
 	   `main`, and these columns must fold for that exactly as they fold for a
 	   smaller screen (#185). Named `editor`, so WriteColumn, RecipeTabs and
-	   the takes column can all ask the same question.
+	   the takes column can all ask the same question. It is a size container
+	   (its height is the flex remainder under the header, never its content)
+	   so the Co-writer column can be exactly as tall as the body (`cqh`).
 
 	   It deliberately starts below the header: a size container also becomes
 	   the containing block for `position: fixed` descendants, and the header
@@ -907,7 +909,7 @@
 	   rounded up to a round 680. Below it the editor stacks, as it does in the
 	   compact shell. */
 	.editor-body {
-		container: editor / inline-size;
+		container: editor / size;
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;

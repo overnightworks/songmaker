@@ -15,7 +15,7 @@ import {
 
 export type RecipeTab = 'song' | 'generate' | 'engine';
 
-export type EngineParamKey = keyof VersionGenerationParams;
+type EngineParamKey = keyof VersionGenerationParams;
 
 const ENGINE_PARAM_KEYS: readonly EngineParamKey[] = [
 	...DIT_NUMBER_FIELDS,

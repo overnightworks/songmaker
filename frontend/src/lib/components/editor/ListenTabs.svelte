@@ -29,6 +29,11 @@
 		if (selected === 'cowriter') cowriterOpened = true;
 	});
 
+	// A tab names its panel only while that panel is in the page.
+	function panelInPage(tab: ListenTab): boolean {
+		return tab === 'takes' ? selected === 'takes' : cowriterOpened || selected === 'cowriter';
+	}
+
 	function onKeydown(event: KeyboardEvent): void {
 		let tab: ListenTab;
 		switch (event.key) {
@@ -52,14 +57,14 @@
 	}
 </script>
 
-<div class="listen-tabs">
+<div class="listen-tabs" class:fills-body={selected === 'cowriter'}>
 	<div class="tablist" role="tablist" aria-label={EDITOR_TABS_LABEL}>
 		{#each LISTEN_TABS as tab (tab)}
 			<button
 				type="button"
 				role="tab"
 				id={`listen-tab-${tab}`}
-				aria-controls={`listen-panel-${tab}`}
+				aria-controls={panelInPage(tab) ? `listen-panel-${tab}` : undefined}
 				data-tab={tab}
 				class:active={selected === tab}
 				aria-selected={selected === tab}
@@ -141,14 +146,22 @@
 	}
 
 	/* The message list scrolls inside the pane and the composer stays on
-	   screen. The bound is relative to the viewport because the pane sits in a
-	   page that scrolls as one: 441px is the chrome above it (header, panel
-	   padding, recipe chips) plus the player bar. */
+	   screen: with the Co-writer shown the column is as tall as the editor body
+	   (a size container, SongDetailView) and stays put while the Write column
+	   scrolls, so no sum of the chrome above it is needed. */
+	.listen-tabs.fills-body {
+		position: sticky;
+		top: 0;
+		align-self: start;
+		height: 100cqh;
+		min-height: 20rem;
+	}
+
 	.cowriter-pane {
 		display: flex;
 		flex-direction: column;
-		min-height: 16rem;
-		height: min(60dvh, calc(100dvh - 441px));
+		flex: 1;
+		min-height: 0;
 	}
 
 	.cowriter-pane[hidden] {

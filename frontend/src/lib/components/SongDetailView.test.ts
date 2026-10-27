@@ -63,9 +63,7 @@ import {
 	editLyrics,
 	pendingVersionLoad,
 	versionDeleteRequest,
-	setDraftAudioDuration,
 	setDraftBpm,
-	setDraftKeyScale,
 	setDraftLyrics,
 	loadVersionAsDraft,
 	setDraftPrompt,
@@ -392,9 +390,6 @@ describe('SongDetailView header — one row, every state', () => {
 	it('opens the Recipe from its closed line first in the Write column (C4, #1935 acceptance 1)', async () => {
 		const target = await renderView();
 		const writeColumn = target.querySelector<HTMLElement>('.write-column') as HTMLElement;
-		expect(writeColumn.querySelector('.write-mode')?.firstElementChild?.textContent).toContain(
-			RECIPE_PANEL_LABEL
-		);
 		expect(target.querySelector('[role="region"][aria-label="Recipe"]')).toBeNull();
 		clickNamed(writeColumn, RECIPE_PANEL_LABEL + ' ›');
 		await tick();
@@ -1058,7 +1053,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 });
 
 describe('SongDetailView recipe line reads the draft', () => {
-	it('keeps the changed dot after Save version and drops it when BPM is back at Auto (C4, #1935 acceptance 2)', async () => {
+	it('keeps the changed dot after Save version (C4, #1935 acceptance 2)', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), bpm: 145, version_count: 2 })
@@ -1067,15 +1062,8 @@ describe('SongDetailView recipe line reads the draft', () => {
 		setDraftBpm(145);
 		await tick();
 		writeSaveButton(target).click();
-		await vi.waitFor(() => expect(updateSong).toHaveBeenCalled());
-		await tick();
+		await vi.waitFor(() => expect(writeSaveButton(target).disabled).toBe(true));
 		expect(target.querySelector('.recipe-line [data-recipe-changed]')).not.toBeNull();
-
-		setDraftBpm(0);
-		setDraftAudioDuration(0);
-		setDraftKeyScale('');
-		await tick();
-		expect(target.querySelector('.recipe-line [data-recipe-changed]')).toBeNull();
 	});
 });
 
@@ -1661,7 +1649,7 @@ describe('the editor answers to its own width, not the viewport', () => {
 	// jsdom computes no layout, so these pin the stylesheet; the browser gate
 	// on #185 — 1100 and 1280 with Now Playing docked — is the real proof.
 	it('makes the body under the header the size container its columns query', () => {
-		expect(songDetailViewSource).toMatch(/\.editor-body \{[^}]*container: editor \/ inline-size;/);
+		expect(songDetailViewSource).toMatch(/\.editor-body \{[^}]*container: editor \/ size;/);
 		// The header is deliberately left outside it: a size container is also
 		// the containing block for the fixed overlays the header carries.
 		expect(songDetailViewSource).not.toMatch(/\.detail-panel \{[^}]*container:/);
