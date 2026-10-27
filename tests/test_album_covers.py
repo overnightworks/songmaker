@@ -118,7 +118,6 @@ def _seed_owners(session) -> None:
 def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_owners)
     login_and_csrf(client, username)
-    client.headers["Origin"] = "http://127.0.0.1:8080"
     return client, factory
 
 

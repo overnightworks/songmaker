@@ -1090,7 +1090,7 @@ the cover until their own moves.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.20.1`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.23.0`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
@@ -1128,7 +1128,7 @@ and the migrate step, which never create the web app, start without the realm's
 settings. `GET /login/oidc` starts the login; `GET /auth/callback` runs
 `finish_login` (admission, account creation or role change) and `open_session`
 under `DatabaseWriteLock` in one transaction and commits before
-`issue_session_cookies`; `POST /auth/logout` runs `log_out`. A refusal at the
+`issue_session_cookies`; `POST /auth/logout` runs `log_out` and answers its page. A refusal at the
 callback is answered with the SPA shell and 403 (the path is the marker the SPA
 reads), except a non-member, who is redirected to `/no-access`.
 
@@ -1156,13 +1156,13 @@ The same seam carries the four request policies in `webauth.policies`. The
 library owns what a rate limit, a CSRF check, a body cap, and a response header
 are; which of songmaker's paths each applies to is a product decision built in
 `songmaker_cli/request_policies.py` — the budget classes and their paths, the
-CSRF-protected and token-exempt routes, the upload routes that may exceed the
+origin-exempt routes, the upload routes that may exceed the
 JSON body cap, and the CSP line with its inline-script hashes and cacheability
 rules. `server.create_app` installs them with one
 `install_web_auth_middleware()` call; no middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
 SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → CsrfOrigin →
-CsrfToken → TrustedHost → AccessLog → Router. The Host check is Starlette's
+TrustedHost → AccessLog → Router. The Host check is Starlette's
 `TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
@@ -1565,7 +1565,7 @@ close the stream.
 | GET | `/api/auth/me` | user | The signed-in account |
 | GET | `/login/oidc` | public | Start the Keycloak sign-in (303); `next` is a path of this app |
 | GET | `/auth/callback` | public | Finish the sign-in: 303 to `next` or `/`, to `/no-access` for a non-member, else 403 with the SPA shell |
-| POST | `/auth/logout` | public | End the session and answer `{logout_url}` |
+| POST | `/auth/logout` | public | End the session and answer the page that ends the Keycloak session |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
 | GET | `/metrics` | public | Job stats, HTTP counters, VRAM usage (Prometheus) |
 | POST/DELETE | `/api/albums/{id}/share` | user | Enable/revoke album sharing |

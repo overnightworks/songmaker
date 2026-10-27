@@ -11,6 +11,8 @@ export const NO_ACCESS_BACK_LABEL = 'Back';
 export const SIGN_IN_FAILED_HEADING = 'Login failed';
 export const SIGN_IN_FAILED_MESSAGE = 'Sign-in did not work. Please try again.';
 export const SIGN_IN_RETRY_LABEL = 'Try again';
+// The route a sign-out posts to; the server answers the page that ends the identity provider's session.
+export const LOGOUT_ADDRESS = '/auth/logout';
 
 export const AUTH_CHECK_RATE_LIMITED_ERROR =
 	'Too many requests. Retry in a moment to check your session.';

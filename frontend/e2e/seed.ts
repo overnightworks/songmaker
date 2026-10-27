@@ -27,10 +27,8 @@ const COMPOSE_ARGS = ['compose', '-f', 'docker-compose.yml', '-f', 'docker/docke
 export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
 export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
 
-const CSRF_COOKIE = 'csrf_token';
 // The app's own take address (`audioUrlOf` in `services/audioPlayer.svelte.ts`).
 const AUDIO_PATH_PREFIX = '/audio/';
-const CSRF_HEADER = 'x-csrf-token';
 
 const ALBUM_ARTIST = 'E2E Ensemble';
 // Fixed titles: only one album is ever open at a time, so they stay unique on
@@ -316,17 +314,11 @@ async function archivePreviousE2EAlbums(): Promise<void> {
 }
 
 class SeedApi {
-	constructor(
-		private readonly api: APIRequestContext,
-		private readonly csrfToken: string
-	) {}
+	constructor(private readonly api: APIRequestContext) {}
 
 	/** Seeds from a context that already carries a seeded session (`seedAccount`). */
-	static async fromSession(api: APIRequestContext): Promise<SeedApi> {
-		const { cookies } = await api.storageState();
-		const csrf = cookies.find((cookie) => cookie.name === CSRF_COOKIE);
-		if (!csrf) throw new Error('Context carries no CSRF cookie');
-		return new SeedApi(api, csrf.value);
+	static fromSession(api: APIRequestContext): SeedApi {
+		return new SeedApi(api);
 	}
 
 	async postJson<T>(url: string, data: unknown): Promise<T> {
@@ -347,7 +339,7 @@ class SeedApi {
 
 	async delete(url: string): Promise<void> {
 		const response = await this.api.delete(url, {
-			headers: { [CSRF_HEADER]: this.csrfToken, origin: BASE_URL }
+			headers: { origin: BASE_URL }
 		});
 		if (!response.ok()) {
 			throw new Error(`DELETE ${url} failed: ${response.status()} ${await response.text()}`);
@@ -359,9 +351,9 @@ class SeedApi {
 		body: { data?: unknown; multipart?: Record<string, MultipartFile> }
 	): Promise<T> {
 		const response = await this.api.post(url, {
-			// The origin header is what the CSRF origin check reads on a form
-			// submission; without it a multipart upload is rejected with 403.
-			headers: { [CSRF_HEADER]: this.csrfToken, origin: BASE_URL },
+			// Playwright's request context sends no fetch metadata, so the origin
+			// header is what the origin check reads; without it a write gets 403.
+			headers: { origin: BASE_URL },
 			...body
 		});
 		if (!response.ok()) {
@@ -399,7 +391,7 @@ async function seedSongsWithOneTakeEach(
 
 export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary> {
 	await archivePreviousE2EAlbums();
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const albumTitle = `${ALBUM_TITLE_PREFIX} ${runMarker()}`;
 
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
@@ -487,7 +479,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
  * rather than injecting a LoRA sample into the database.
  */
 export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoiceTake> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const marker = runMarker();
 	const songTitle = `E2E Voice Source ${marker}`;
 	const caption = VOICES_OCCUPANCY_PROMPT;
@@ -540,7 +532,7 @@ export async function seedVoiceAdapterComparisonSong(
 	api: APIRequestContext,
 	userLoraId: string | null
 ): Promise<SeededVoiceProofSong> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const marker = runMarker();
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `E2E Voice Adapter Album ${marker}`,
@@ -603,7 +595,7 @@ export async function setVoiceProofModelMode(
 
 /** Creates draft voices through the public API so the UI can prove the configured limit. */
 export async function seedVoiceDrafts(api: APIRequestContext, count: number): Promise<string[]> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const voiceIds: string[] = [];
 	for (let index = 0; index < count; index += 1) {
 		const voice = await seed.postJson<CreatedResource>('/api/loras', {
@@ -619,7 +611,7 @@ export async function deleteVoiceProofData(
 	api: APIRequestContext,
 	voiceIds: readonly string[]
 ): Promise<void> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	for (const voiceId of voiceIds) {
 		const response = await api.get(`/api/loras/${voiceId}`);
 		if (!response.ok()) {
@@ -652,7 +644,7 @@ export async function queueGenerateForVoiceProof(
 	songId: string,
 	versionId: string
 ): Promise<QueuedJob> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	return seed.postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
 		count: 1,
 		model: 'sft',
@@ -667,7 +659,7 @@ export async function queueVoiceAdapterComparison(
 	versionId: string,
 	seedValue: number
 ): Promise<QueuedJob> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	return seed.postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
 		count: 1,
 		model: 'sft',
@@ -912,7 +904,7 @@ export async function seedPlaylist(
 	library: SeededLibrary,
 	takeCount = library.playlistTakes.length
 ): Promise<SeededPlaylist> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const title = `${PLAYLIST_TITLE_PREFIX} ${runMarker()}`;
 	const playlist = await seed.postJson<CreatedPlaylist>('/api/playlists', { title });
 	for (const take of library.playlistTakes.slice(0, takeCount)) {
@@ -948,8 +940,6 @@ interface SeededSessionRow {
 	username: string;
 	session_cookie_name: string;
 	session_cookie_value: string;
-	csrf_cookie_name: string;
-	csrf_cookie_value: string;
 	secure: boolean;
 	same_site: 'strict' | 'lax';
 }
@@ -1002,16 +992,15 @@ function sessionCookies(row: SeededSessionRow): Cookie[] {
 			name: row.session_cookie_name,
 			value: row.session_cookie_value,
 			httpOnly: true
-		},
-		{ ...shared, name: row.csrf_cookie_name, value: row.csrf_cookie_value, httpOnly: false }
+		}
 	];
 }
 
 /**
  * Signs `username` in without Keycloak: the account is found or
  * created and given a database session straight from the stack's own side, so
- * the app itself signs the cookies. The throwaway stack drops the account
- * with the run.
+ * the app itself signs the cookies, and the row holds an ID token. The throwaway
+ * stack drops the account with the run.
  */
 export async function seedAccount(
 	username: string,
@@ -1039,7 +1028,7 @@ export function signedInApi(account: SeededAccount): Promise<APIRequestContext> 
  * before their first pick. `api` carries the account's session (`signedInApi`).
  */
 export async function seedUnpickedLibrary(api: APIRequestContext): Promise<SeededUnpickedLibrary> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
@@ -1080,7 +1069,7 @@ export async function seedOwnSongAddress(
 	account: SeededAccount,
 	songTitle: string
 ): Promise<string> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	return (await createOwnSong(api, seed, account.username, songTitle)).address;
 }
 
@@ -1090,7 +1079,7 @@ export async function seedOwnTakeAddress(
 	account: SeededAccount,
 	songTitle: string
 ): Promise<string> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const song = await createOwnSong(api, seed, account.username, songTitle);
 	await seedAfterAlbum(api, song.albumId, () =>
 		seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
@@ -1129,7 +1118,7 @@ export interface PhoneLibraryFixture {
 
 /** A fresh account's 43 albums, including unheard, archived-only and unpicked music. */
 export async function seedPhoneLibrary(api: APIRequestContext): Promise<PhoneLibraryFixture> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	const albums: PhoneLibraryFixture['albums'] = [];
 	const tracks: PhoneLibraryFixture['tracks'] = {};
 	// Repeated MPEG frames keep the real tone sounding throughout transport assertions.
@@ -1184,7 +1173,7 @@ export async function seedPhoneLibrary(api: APIRequestContext): Promise<PhoneLib
 }
 
 export async function archiveOwnedAlbum(api: APIRequestContext, albumId: string): Promise<void> {
-	const seed = await SeedApi.fromSession(api);
+	const seed = SeedApi.fromSession(api);
 	await seed.postJson(`/api/albums/${albumId}/archive`, {});
 }
 

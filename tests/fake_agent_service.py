@@ -36,7 +36,7 @@ from agent_runtime_client.wire import (
     ToolCall,
     ToolResult,
 )
-from conftest import apply_csrf_header, issued_cookies
+from conftest import issued_cookies
 from fake_oidc_issuer import FakeIssuer, a_fake_issuer
 
 from songmaker_cli.cowriter import service_offer, service_turn
@@ -330,12 +330,12 @@ def attach_cowriter_service(
             now=now,
             expires_at=now + timedelta(seconds=config.session_lifetime.idle_seconds),
             refresh_token=None if refresh_token is None else _secret(refresh_token),
+            id_token=None,
         )
         session.commit()
         session_id = record.id
     for name, value in issued_cookies(session_id, config).items():
         client.cookies.set(name, value)
-    apply_csrf_header(client)
     return CowriterStack(agent, issuer, session_id)
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -24,7 +24,7 @@ from webauth.oidc_login import (
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import resolve_public_base_url
-from songmaker_cli.api_models import AuthMeResponse, LogoutResponse
+from songmaker_cli.api_models import AuthMeResponse
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.auth_stores import (
@@ -52,6 +52,8 @@ log = logging.getLogger(__name__)
 
 SIGN_IN_FAILED_STATUS: int = 403
 DEFAULT_LANDING_PATH = "/"
+# Shown on the logout page only where no script runs; the account menu words the same button.
+LOGOUT_BUTTON_LABEL: Final[str] = "Sign out"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 sign_in_router = APIRouter(tags=["auth"])
@@ -100,6 +102,7 @@ def finish_sign_in(
         sessions=DatabaseSessionRecordStore(db),
         lock=lock,
         max_sessions=get_settings().max_concurrent_sessions_per_user,
+        keeps_id_token=True,
     )
     db.commit()
     issue_session_cookies(response, session.id, config)
@@ -135,17 +138,17 @@ def _refused(
 @sign_in_router.post(LOGOUT_PATH)
 def sign_out(
     request: Request,
-    response: Response,
     db: Session = Depends(get_db_session),
     config: WebAuthConfig = Depends(web_auth_config),
-) -> LogoutResponse:
-    logout_url = log_out(
-        _sign_in(request).relying_party, request, response, config,
+) -> Response:
+    answer = log_out(
+        _sign_in(request).relying_party, request, config,
         sessions=DatabaseSessionRecordStore(db),
         lock=DatabaseWriteLock(db),
+        button_label=LOGOUT_BUTTON_LABEL,
     )
     db.commit()
-    return LogoutResponse(logout_url=logout_url)
+    return answer
 
 
 def _end_subject_sessions(

@@ -44,7 +44,6 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.ports import AuthenticatedUser  # noqa: E402
 from worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
@@ -515,18 +514,8 @@ def install_app_context(app, ctx) -> None:
     install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
 
 
-def apply_csrf_header(client) -> None:
-    """Extract the csrf_token cookie and set it as a default X-CSRF-Token header.
-
-    Call after login/setup to enable CSRF-protected mutating requests in tests.
-    """
-    token = client.cookies.get(DEFAULT_CSRF_COOKIE_NAME)
-    if token:
-        client.headers["X-CSRF-Token"] = token
-
-
 def issued_cookies(session_id: str, config) -> dict[str, str]:
-    """The session and CSRF cookies the library issues for ``session_id``, by name."""
+    """The session cookie the library issues for ``session_id``, by name."""
     from fastapi import Response
     from webauth.cookies import issue_session_cookies
 
@@ -539,7 +528,7 @@ def issued_cookies(session_id: str, config) -> dict[str, str]:
 
 
 def login_and_csrf(client, username: str) -> None:
-    """Open a session for the seeded ``username`` and configure the CSRF header.
+    """Open a session for the seeded ``username``.
 
     Writes the session row straight to the database and issues the cookies the
     callback would, because signing in itself needs the issuer.
@@ -557,13 +546,12 @@ def login_and_csrf(client, username: str) -> None:
         user_id = session.query(User).filter_by(username=username).one().id
         idle = timedelta(seconds=config.session_lifetime.idle_seconds)
         record = DatabaseSessionRecordStore(session).create(
-            user_id, now=now, expires_at=now + idle, refresh_token=None,
+            user_id, now=now, expires_at=now + idle, refresh_token=None, id_token=None,
         )
         session.commit()
         session_id = record.id
     for name, value in issued_cookies(session_id, config).items():
         client.cookies.set(name, value)
-    apply_csrf_header(client)
 
 
 def mock_http_response(data: bytes, status: int = 200) -> MagicMock:

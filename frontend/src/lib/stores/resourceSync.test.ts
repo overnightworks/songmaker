@@ -1,3 +1,4 @@
+import { documentLoadsStandIn } from '$lib/test-utils/document-loads';
 import { makeGeneration as gen, makeSong as song } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
@@ -1853,7 +1854,7 @@ describe('resource sync owner', () => {
 		'opens no stream when $when after the page began leaving for a fresh document',
 		async ({ beforeTheLeave, afterTheLeave }) => {
 			vi.useFakeTimers();
-			standInForDocumentLoadsForTests({ assign: vi.fn(), replace: vi.fn(), reload: vi.fn() });
+			standInForDocumentLoadsForTests(documentLoadsStandIn());
 			const { controller, sources } = setup();
 			await beforeTheLeave(controller, sources);
 			const streamsBeforeTheLeave = sources.length;
@@ -1952,7 +1953,7 @@ describe('library resource sync wiring', () => {
 		'handles a %s auth probe through the singleton owner',
 		async (status, syncStatus, error, pageOffline) => {
 			vi.useFakeTimers();
-			const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+			const documentLoads = documentLoadsStandIn();
 			standInForDocumentLoadsForTests(documentLoads);
 			vi.stubGlobal('EventSource', MockEventSource);
 			vi.stubGlobal(
@@ -2007,11 +2008,9 @@ describe('library resource sync wiring', () => {
 					}
 				})
 			);
-			standInForDocumentLoadsForTests({
-				assign: vi.fn(),
-				replace: vi.fn(),
-				reload: () => void happened.push('document load')
-			});
+			standInForDocumentLoadsForTests(
+				documentLoadsStandIn({ reload: vi.fn(() => void happened.push('document load')) })
+			);
 			onTestFinished(
 				resourceSync.subscribe((state) => {
 					if (state.error === RESOURCE_SYNC_ERROR) happened.push('sync error');
