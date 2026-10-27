@@ -26,7 +26,7 @@
 			keys: ['model', 'takes', 'bpm', 'duration', 'key', 'voice']
 		},
 		{ label: RECIPE_GROUP_TEXT_LABEL, keys: ['lm', 'dit'] },
-		{ label: RECIPE_GROUP_REPRODUCE_LABEL, keys: ['seed', 'repaint'] }
+		{ label: RECIPE_GROUP_REPRODUCE_LABEL, keys: ['seed'] }
 	];
 
 	function summarize(keys: string[]): string {

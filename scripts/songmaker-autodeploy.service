@@ -19,8 +19,8 @@ Type=oneshot
 # copying this file by hand instead of running that script inherits these
 # values as-is, which is very likely wrong for a different checkout or
 # operator.
-WorkingDirectory=/home/felix-hummert/git/songmaker
-ExecStart=/home/felix-hummert/git/songmaker/scripts/auto-deploy.sh
+WorkingDirectory=/home/felix-hummert/srv/songmaker
+ExecStart=/home/felix-hummert/srv/songmaker/scripts/auto-deploy.sh
 User=felix-hummert
 # No Group= override: the stack owner (User= above) is already a member of
 # the docker group, so the process inherits it as a supplementary group.

@@ -75,6 +75,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
         ("#1734", 'mandatory job "Acceptance evidence (integration)" removed'),
         ("#1856", "size baseline raises file_lines frontend/src/lib/api/types.ts 1125 -> 1159"),
         ("#1784", "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"),
+        ("#1914", "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1145"),
     ]
     for entry in loosened:
         assert set(entry) == {"what", "item", "date", "reason"}

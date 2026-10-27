@@ -56,13 +56,7 @@ import { songList } from './libraryData';
 import { selectedSongId } from './player';
 import { activeModels } from './presets';
 import {
-	coverNoiseStrength,
-	coverStrength,
 	recipeModel,
-	repaintEnd,
-	repaintMode,
-	repaintStart,
-	repaintStrength,
 	resetRecipeSourceForSong,
 	sourceGeneration,
 	sourceMode,
@@ -121,31 +115,31 @@ describe('generate action presentation', () => {
 		{
 			state: 'idle',
 			setup: () => {},
-			expectedState: { kind: 'idle', mode: 'generate' }
+			expectedState: { kind: 'idle' }
 		},
 		{
 			state: 'dirty',
-			expectedState: { kind: 'idle', mode: 'generate' },
+			expectedState: { kind: 'idle' },
 			setup: () => setDraftLyrics('new verse')
 		},
 		{
 			state: 'missing lyrics',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
+			expectedState: { kind: 'disabled', reason: EDITOR_MISSING_CONTENT_TITLE },
 			setup: () => setDraftLyrics('')
 		},
 		{
 			state: 'missing prompt',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
+			expectedState: { kind: 'disabled', reason: EDITOR_MISSING_CONTENT_TITLE },
 			setup: () => setDraftPrompt('')
 		},
 		{
 			state: 'no selected model',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_SELECT_MODEL_TITLE },
+			expectedState: { kind: 'disabled', reason: EDITOR_SELECT_MODEL_TITLE },
 			setup: () => recipeModel.set(null)
 		},
 		{
 			state: 'no active models',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_NO_MODELS_WARNING },
+			expectedState: { kind: 'disabled', reason: EDITOR_NO_MODELS_WARNING },
 			setup: () => {
 				recipeModel.set(null);
 				activeModels.set([]);
@@ -153,24 +147,24 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'no worker online',
-			expectedState: { kind: 'idle', mode: 'generate' },
+			expectedState: { kind: 'idle' },
 			setup: () => {
 				vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 			}
 		},
 		{
 			state: 'browser offline',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: null },
+			expectedState: { kind: 'disabled', reason: null },
 			setup: () => browserReportsOnline(false)
 		},
 		{
 			state: 'server unreachable while the browser is online',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: null },
+			expectedState: { kind: 'disabled', reason: null },
 			setup: () => reportResourceStreamReachable(false)
 		},
 		{
 			state: 'offline with missing lyrics',
-			expectedState: { kind: 'disabled', mode: 'generate', reason: null },
+			expectedState: { kind: 'disabled', reason: null },
 			setup: () => {
 				setDraftLyrics('');
 				reportResourceStreamReachable(false);
@@ -178,7 +172,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'queue full',
-			expectedState: { kind: 'idle', mode: 'generate' },
+			expectedState: { kind: 'idle' },
 			setup: () => {
 				vi.mocked(fetchHealth).mockResolvedValue(
 					makeHealthResponse({ queue_depth_cap_reached: true })
@@ -248,7 +242,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'another song running',
-			expectedState: { kind: 'idle', mode: 'generate' },
+			expectedState: { kind: 'idle' },
 			setup: () => activeJobs.set([{ songId: 's2', job: queuedJob }])
 		}
 	])('[defect:#1568] exposes the state for $state', async ({ setup, expectedState }) => {
@@ -319,24 +313,15 @@ describe('generate action presentation', () => {
 		}
 	);
 
-	it.each(
-		(['generate', 'repaint', 'cover'] as const).flatMap((mode) =>
-			[false, true].map((unavailable) => ({ mode, unavailable }))
-		)
-	)(
-		'C1 C3: exposes and clears the selected failure for $mode, unavailable=$unavailable',
-		async ({ mode, unavailable }) => {
-			if (mode !== 'generate') {
-				sourceGeneration.set(makeGeneration());
-				sourceMode.set(mode);
-			}
+	it.each([false, true])(
+		'C1 C3: exposes and clears the selected failure, unavailable=%s',
+		async (unavailable) => {
 			generationFailures.set({
 				s1: { message: 'Worker exhausted GPU memory', unavailable },
 				s2: { message: 'Another failure', unavailable: false }
 			});
 			expect(get(generateAction)).toEqual({
 				kind: 'failed',
-				mode,
 				cause: 'Worker exhausted GPU memory',
 				unavailable
 			});
@@ -451,7 +436,7 @@ describe('generate action presentation', () => {
 
 	it('does not show another song failure', () => {
 		generationFailures.set({ s2: { message: 'Another failure', unavailable: false } });
-		expect(get(generateAction)).toEqual({ kind: 'idle', mode: 'generate' });
+		expect(get(generateAction)).toEqual({ kind: 'idle' });
 	});
 
 	describe("once the job's takes are in the list", () => {
@@ -739,70 +724,30 @@ describe('generate action execution', () => {
 		}
 	);
 
-	it.each([
-		{ mode: 'repaint', variant: 'balanced' },
-		{ mode: 'repaint', variant: 'conservative' },
-		{ mode: 'cover', variant: 'noise' },
-		{ mode: 'cover', variant: 'no noise' }
-	] as const)('generates $mode with $variant recipe settings', async ({ mode, variant }) => {
-		sourceGeneration.set(makeGeneration());
-		sourceMode.set(mode);
-		repaintStart.set(0.2);
-		repaintEnd.set(0.8);
-		repaintMode.set(variant === 'balanced' ? 'balanced' : 'conservative');
-		repaintStrength.set(0.6);
-		coverStrength.set(0.7);
-		coverNoiseStrength.set(variant === 'noise' ? 0.3 : 0);
-		expect(get(generateAction)).toEqual({ kind: 'idle', mode });
-		await generate();
-		const options = { model: 'turbo', seed: 42, versionId: 'v1', count: 2 };
-		if (mode === 'repaint') {
-			expect(repaintGeneration).toHaveBeenCalledWith('g1', 0.2, 0.8, {
-				...options,
-				repaintMode: variant,
-				repaintStrength: variant === 'balanced' ? 0.6 : undefined
-			});
-		} else {
-			expect(coverGeneration).toHaveBeenCalledWith('g1', 0.7, {
-				...options,
-				coverNoiseStrength: variant === 'noise' ? 0.3 : undefined
-			});
-		}
-		expect(get(generateAction)).toMatchObject({ kind: 'queued', jobId: queuedJob.id });
-		expect(get(pinnedSeed)).toBeNull();
-	});
-
-	it.each([{ mode: 'generate' }, { mode: 'repaint' }, { mode: 'cover' }] as const)(
-		'a $mode press refused as unavailable shows its lasting line with no toast',
-		async ({ mode }) => {
-			const line = "Generating isn't available right now.";
-			const refusal = new ApiError(
-				503,
-				line,
-				'/api/x',
-				null,
-				line,
-				'generation_unavailable',
-				'job9'
-			);
-			if (mode === 'generate') vi.mocked(generateSong).mockRejectedValueOnce(refusal);
-			else {
-				sourceGeneration.set(makeGeneration());
-				sourceMode.set(mode);
-				vi.mocked(mode === 'repaint' ? repaintGeneration : coverGeneration).mockRejectedValueOnce(
-					refusal
-				);
-			}
+	it.each(['repaint', 'cover'] as const)(
+		'the header generate with a %s source open still makes new takes from the recipe (S4, #1923 acceptance 3)',
+		async (mode) => {
+			sourceGeneration.set(makeGeneration());
+			sourceMode.set(mode);
+			expect(get(generateAction)).toEqual({ kind: 'idle' });
 			await generate();
-			expect(addToast).not.toHaveBeenCalled();
-			expect(get(generationFailures)).toEqual({ s1: { message: line, unavailable: true } });
-			expect(get(generateAction)).toMatchObject({
-				kind: 'failed',
-				cause: line,
-				unavailable: true
-			});
+			expect(generateSong).toHaveBeenCalledWith('s1', 2, 'turbo', 'v1', 42);
+			expect(repaintGeneration).not.toHaveBeenCalled();
+			expect(coverGeneration).not.toHaveBeenCalled();
+			expect(get(generateAction)).toMatchObject({ kind: 'queued', jobId: queuedJob.id });
 		}
 	);
+
+	it('a press refused as unavailable shows its lasting line with no toast (S4, #1923 acceptance 3)', async () => {
+		const line = "Generating isn't available right now.";
+		vi.mocked(generateSong).mockRejectedValueOnce(
+			new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'job9')
+		);
+		await generate();
+		expect(addToast).not.toHaveBeenCalled();
+		expect(get(generationFailures)).toEqual({ s1: { message: line, unavailable: true } });
+		expect(get(generateAction)).toMatchObject({ kind: 'failed', cause: line, unavailable: true });
+	});
 
 	it.each([
 		{

@@ -66,7 +66,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 const generateState = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
-	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
+	return writable<GenerateState>({ kind: 'idle' });
 });
 vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
@@ -124,7 +124,7 @@ function versionedSongDefaults(): Partial<SongItem> {
 	};
 }
 
-const IDLE: GenerateState = { kind: 'idle', mode: 'generate' };
+const IDLE: GenerateState = { kind: 'idle' };
 // defect:#1568 — these fixtures retain determinate progress and no elapsed phase.
 const RUNNING: GenerateState = {
 	kind: 'generating',

@@ -25,7 +25,6 @@ export const queued: Extract<GenerateState, { kind: 'queued' }> = {
 
 export const failed: Extract<GenerateState, { kind: 'failed' }> = {
 	kind: 'failed',
-	mode: 'generate',
 	cause: 'Worker error',
 	unavailable: false
 };

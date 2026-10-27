@@ -122,6 +122,22 @@ class CowriterSettingsResponse(BaseModel):
     model: str
 
 
+class CowriterOfferState(StrEnum):
+    """What the agent service's offer says about the co-writer's model; the row words each one."""
+
+    READY = "ready"
+    NOT_BUILT = "not_built"
+    NO_LONGER_OFFERED = "no_longer_offered"
+    NOT_REACHABLE = "not_reachable"
+    NOT_AVAILABLE = "not_available"
+    SIGN_IN_AGAIN = "sign_in_again"
+
+
+class CowriterOfferResponse(BaseModel):
+    state: CowriterOfferState
+    model: str
+
+
 class JudgeSettingsRequest(BaseModel):
     provider: str
     route: Literal["cli", "api"] | None = None
