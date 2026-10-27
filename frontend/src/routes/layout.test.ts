@@ -1020,10 +1020,9 @@ describe('a reload over the phone Now Playing', () => {
 });
 
 // A sign-out the server can answer posts the logout form over the account
-// menu's entry, and nothing steps back on the way (#1340, ruling A). The
-// account circle lives on the Library (#1354 rule 25).
+// menu's entry, and nothing steps back on the way (#1340, ruling A; cells 17
+// and 25). The account circle lives on the Library (#1354 rule 25).
 describe('signing out on the phone', () => {
-	// Cells 17 and 25.
 	it("from the open account menu posts the logout form over the menu's entry, and steps back nowhere", async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
