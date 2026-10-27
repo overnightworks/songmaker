@@ -102,6 +102,14 @@ test('Cover swaps the card and its button sends the cover request (S4, #1912 acc
 		await expect(card(page)).toHaveCount(1);
 		await expect(card(page).locator('.what')).toHaveText(TAKE_COVER_LABEL);
 
+		const trackWidths = await card(page)
+			.locator('input[type="range"]')
+			.evaluateAll((inputs) => inputs.map((input) => input.getBoundingClientRect().width));
+		expect(trackWidths.length).toBeGreaterThan(1);
+		for (const width of trackWidths) {
+			expect(width).toBeGreaterThanOrEqual(Math.max(...trackWidths) - 4);
+		}
+
 		const request = page.waitForRequest(/\/api\/generations\/[^/]+\/cover$/);
 		await page.route(/\/api\/generations\/[^/]+\/cover$/, (route) =>
 			route.fulfill({ json: QUEUED_JOB })

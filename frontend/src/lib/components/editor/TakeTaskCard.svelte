@@ -239,7 +239,7 @@
 
 	.slider {
 		display: grid;
-		grid-template-columns: auto 1fr auto;
+		grid-template-columns: 3rem 1fr 3rem;
 		align-items: center;
 		gap: 8px;
 	}
@@ -249,7 +249,13 @@
 	}
 
 	.slider input {
+		grid-column: 2;
 		min-width: 0;
+	}
+
+	.slider output,
+	.slider .end:last-child {
+		grid-column: 3;
 	}
 
 	.slider output,
