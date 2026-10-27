@@ -317,7 +317,7 @@ def test_a7_a_failed_read_logs_only_its_closed_state_name(web, caplog):
 
 
 def test_m21_two_readers_of_the_same_refresh_token_both_succeed_and_the_last_rotation_stands(
-    web,
+    web, monkeypatch
 ):
     issued: list[str] = []
     both_read_the_first_token = threading.Barrier(2, timeout=10)
@@ -327,7 +327,13 @@ def test_m21_two_readers_of_the_same_refresh_token_both_succeed_and_the_last_rot
         web.issuer.rotates_refresh_token_to = f"rotated-{len(issued)}"
         issued.append(web.issuer.rotates_refresh_token_to)
 
-    web.issuer.before_renewal = after_both_asked
+    answer_renewal = web.issuer._renewal
+
+    def renewal_after_both_asked():
+        after_both_asked()
+        return answer_renewal()
+
+    monkeypatch.setattr(web.issuer, "_renewal", renewal_after_both_asked)
     states: list[str] = []
     second_reader = TestClient(web.client.app)
     second_reader.cookies.update(web.client.cookies)
