@@ -8,6 +8,7 @@ import {
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_VIEW_RECIPE_LABEL,
+	EDITOR_VIEWS_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
@@ -109,7 +110,8 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await openPickedSong(page);
 		await cowriterTab(page).click();
 		await workspace(page)
-			.getByRole('button', { name: EDITOR_VIEW_RECIPE_LABEL, exact: true, pressed: false })
+			.getByRole('group', { name: EDITOR_VIEWS_LABEL })
+			.getByRole('button', { name: EDITOR_VIEW_RECIPE_LABEL, exact: true })
 			.click();
 		const viewport = page.viewportSize();
 		const composerBox = await composer(page).boundingBox();
