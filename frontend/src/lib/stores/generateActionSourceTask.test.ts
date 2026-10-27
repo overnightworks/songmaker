@@ -132,21 +132,7 @@ describe('runSourceTask (S4, #1912 acceptance 4)', () => {
 		expect(repaintGeneration).not.toHaveBeenCalled();
 	});
 
-	it('sends the seed on every press and keeps it set', async () => {
-		await generate();
-		await generate();
-		expect(generateSong).toHaveBeenNthCalledWith(1, 's1', 2, 'turbo', 'v1', 42);
-		expect(generateSong).toHaveBeenNthCalledWith(2, 's1', 2, 'turbo', 'v1', 42);
-		expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
-	});
-
-	it('sends no seed once it is cleared', async () => {
-		seedFromTake.set(null);
-		await generate();
-		expect(generateSong).toHaveBeenCalledWith('s1', 2, 'turbo', 'v1', null);
-	});
-
-	it('keeps the seed set after the press and after a failed press', async () => {
+	it('C2: keeps the seed set after the press and after a failed press', async () => {
 		sourceGeneration.set(makeGeneration());
 		sourceMode.set('cover');
 		await runSourceTask();
@@ -192,5 +178,21 @@ describe('runSourceTask (S4, #1912 acceptance 4)', () => {
 		await runSourceTask();
 		expect(addToast).not.toHaveBeenCalled();
 		expect(get(generationFailures)).toEqual({ s1: { message: line, unavailable: true } });
+	});
+});
+
+describe('generate seed (C2, #1928 acceptance 3, 4)', () => {
+	it('sends the seed on every press and keeps it set', async () => {
+		await generate();
+		await generate();
+		expect(generateSong).toHaveBeenNthCalledWith(1, 's1', 2, 'turbo', 'v1', 42);
+		expect(generateSong).toHaveBeenNthCalledWith(2, 's1', 2, 'turbo', 'v1', 42);
+		expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
+	});
+
+	it('sends no seed once it is cleared', async () => {
+		seedFromTake.set(null);
+		await generate();
+		expect(generateSong).toHaveBeenCalledWith('s1', 2, 'turbo', 'v1', null);
 	});
 });

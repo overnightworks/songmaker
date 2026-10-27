@@ -376,7 +376,7 @@ describe('NowPlayingTake', () => {
 		expect(rate).toHaveBeenCalledWith('s1', 'g1', 50, 'Loved the bridge');
 	});
 
-	it('names the seed action Use seed with the seed as its hint', async () => {
+	it('C5: names the seed action Use seed with the seed as its hint', async () => {
 		await render({ generation: generation(generationDefaults) });
 		const row = target.querySelector<HTMLButtonElement>('.use-seed');
 		expect(row?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Use seed 48113');
@@ -384,7 +384,7 @@ describe('NowPlayingTake', () => {
 		expect(row?.querySelector('svg')).not.toBeNull();
 	});
 
-	it('omits the seed action when the take has no seed', async () => {
+	it('C5: omits the seed action when the take has no seed', async () => {
 		await render({ generation: generation({ ...generationDefaults, seed: null }) });
 		expect(target.querySelector('.use-seed')).toBeNull();
 	});

@@ -199,7 +199,7 @@ describe('both cards (S4, #1912 acceptance 2, 4, 5)', () => {
 	});
 });
 
-describe('seed line on the card', () => {
+describe('seed line on the card (C8, #1928)', () => {
 	it.each(['repaint', 'cover'] as const)(
 		'says the seed comes from its take on a %s card',
 		async (mode) => {

@@ -127,7 +127,7 @@ describe('TakeMenu', () => {
 		}
 	);
 
-	it('shows the seed as the Use seed row hint', async () => {
+	it('C4: shows the seed as the Use seed row hint', async () => {
 		const { target } = await render({ gen: gen({ seed: 4127730 }) });
 		expect(menuRow(target, TAKE_USE_SEED_LABEL).querySelector('.menu-item-hint')?.textContent).toBe(
 			'4127730'

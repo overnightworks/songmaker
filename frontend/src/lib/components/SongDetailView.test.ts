@@ -773,7 +773,7 @@ describe('SongDetailView recipe and takes', () => {
 		['cover', true]
 	] as const;
 
-	it('lands a handed-over seed as the chip once its song is open', async () => {
+	it('C6: lands a handed-over seed as the chip once its song is open', async () => {
 		await renderView();
 		pendingTakeUse.set({ generation: generation({ seed: 7, generation_number: 3 }), use: 'seed' });
 		await tick();

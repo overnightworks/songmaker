@@ -271,7 +271,7 @@ def test_an_owner_id_that_is_not_one_directory_name_writes_nothing(
     ("take_seed_base", "expected_seeds"),
     [(40, [40, 41]), (None, [None, None])],
 )
-def test_take_seed_base_numbers_the_takes_and_without_it_they_have_no_seed(
+def test_1928_c10_take_seed_base_numbers_the_takes_and_without_it_they_have_no_seed(
     tmp_path: Path, take_seed_base: int | None, expected_seeds: list[int | None],
 ) -> None:
     factory = init_test_db(tmp_path / "seed.db")

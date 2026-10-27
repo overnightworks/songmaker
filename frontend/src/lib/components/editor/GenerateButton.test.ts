@@ -93,7 +93,7 @@ describe('GenerateButton', () => {
 		expect(generate).toHaveBeenCalledOnce();
 	});
 
-	it('shows no seed chip without a seed', async () => {
+	it('C3: shows no seed chip without a seed', async () => {
 		await render({ kind: 'idle' });
 		expect(document.body.textContent).not.toContain('Seed');
 	});
@@ -101,15 +101,18 @@ describe('GenerateButton', () => {
 	it.each([
 		{ state: 'idle', view: { kind: 'idle' } as GenerateState },
 		{ state: 'running', view: running }
-	])('shows the seed chip with the take while $state and clears it with ×', async ({ view }) => {
-		seedFromTake.set({ seed: 4127730, takeNumber: 11 });
-		await render(view);
-		expect(document.body.querySelector('.seed-chip')?.textContent?.trim()).toBe('Seed · take 11');
-		getByRoleButton(document.body, 'Clear seed').click();
-		await tick();
-		expect(document.body.querySelector('.seed-chip')).toBeNull();
-		expect(get(seedFromTake)).toBeNull();
-	});
+	])(
+		'C3: shows the seed chip with the take while $state and clears it with ×',
+		async ({ view }) => {
+			seedFromTake.set({ seed: 4127730, takeNumber: 11 });
+			await render(view);
+			expect(document.body.querySelector('.seed-chip')?.textContent?.trim()).toBe('Seed · take 11');
+			getByRoleButton(document.body, 'Clear seed').click();
+			await tick();
+			expect(document.body.querySelector('.seed-chip')).toBeNull();
+			expect(get(seedFromTake)).toBeNull();
+		}
+	);
 
 	it('shows the queue position and reason and cancels the queued job', async () => {
 		await render(queued);
