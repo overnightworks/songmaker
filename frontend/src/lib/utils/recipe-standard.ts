@@ -103,9 +103,9 @@ function withoutKeys(
 	params: VersionGenerationParams,
 	keys: readonly EngineParamKey[]
 ): VersionGenerationParams {
-	const kept = { ...params };
-	for (const key of keys) delete kept[key];
-	return kept;
+	return Object.fromEntries(
+		Object.entries(params).filter(([key]) => !(keys as readonly string[]).includes(key))
+	);
 }
 
 function withoutEngineFields(values: RecipeValues): RecipeValues {
