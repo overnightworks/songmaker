@@ -7,14 +7,13 @@ mounted. The script itself arrives on stdin and the request as JSON in the
     docker compose exec -T -e SEED_SESSIONS_REQUEST='{"seed": [{"username": "e2e-x"}]}' \
         songmaker-web /app/.venv/bin/python - < seed_sessions.py
 
-A request holds ``seed`` (entries ``username``, optional ``role`` and optional
-``without_id_token``, which opens a session as one from before the upgrade holds it).
+A request holds ``seed`` (entries ``username`` and optional ``role``).
 
 ``seed`` finds or creates each account and opens a database session for it,
 printing the signed session cookie exactly as the app issues it after a
-Keycloak login; the row holds an ID token unless the entry says otherwise. The stack has no admin bootstrap, so this is the
-only place an e2e admin account comes into being. The helper never ships: it
-lives outside ``scripts/``, which the image copies.
+Keycloak login; the row holds an ID token. The stack has no admin bootstrap,
+so this is the only place an e2e admin account comes into being. The helper
+never ships: it lives outside ``scripts/``, which the image copies.
 """
 
 from __future__ import annotations
@@ -78,7 +77,7 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
         now=now,
         expires_at=now + timedelta(seconds=config.session_lifetime.idle_seconds),
         refresh_token=None,
-        id_token=None if entry.get("without_id_token") else SecretStr(f"e2e-id-token-{user.username}"),
+        id_token=SecretStr(f"e2e-id-token-{user.username}"),
     )
     cookies = _issued_cookies(record.id, config)
     return {

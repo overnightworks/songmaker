@@ -145,6 +145,7 @@ test('no access offers Sign out and Back, and Back leads to the signed-out page'
 	guard.assertClean();
 });
 
+// Cell 20 (K3, E2).
 test('Sign out on no access posts to the server and the answer sends the browser on to the issuer', async ({
 	page
 }) => {
@@ -180,6 +181,7 @@ test('Sign out on no access posts to the server and the answer sends the browser
 	guard.assertClean();
 });
 
+// Cell 14.
 test('a logout from another origin is refused, a same-origin one answers the logout page', async ({
 	request
 }) => {

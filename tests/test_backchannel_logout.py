@@ -217,6 +217,7 @@ def test_every_answer_of_the_back_channel_carries_no_store(world: World) -> None
 def test_the_back_channel_is_exempt_from_the_origin_check(
     world: World,
 ) -> None:
+    """K7, K8."""
     _sign_in_twice(world)
 
     response = _backchannel(
@@ -239,6 +240,7 @@ def test_the_exemptions_are_exact_to_the_back_channel_path(world: World, path: s
 
 
 def test_the_rate_limit_exemption_is_exact() -> None:
+    """K7, K8."""
     from songmaker_cli.request_policies import build_rate_limit_policy
     from songmaker_cli.settings import get_settings
 

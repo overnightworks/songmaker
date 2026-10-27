@@ -765,11 +765,11 @@ export { releaseLayerEntries as releaseLayerEntriesForTests };
 // Over a layer's entry it replaces that entry (a form POST is pushed instead):
 // Back finds no copy of the page to step off again, and nothing steps back
 // meanwhile (#1230). Over a page entry it is pushed, keeping the page, so Back
-// loads it afresh and asks for the session again. With two or more layers open, the lower layers' entries
-// stay (accepted residual of the ruling). A page leaves once: the leave counts
-// from its first call, so a second refusal arriving meanwhile -- two library
-// requests refused together -- loads nothing more, where each further load
-// would abort the one before it.
+// loads it afresh and asks for the session again. With two or more layers
+// open, the lower layers' entries stay (accepted residual of the ruling). A
+// page leaves once: the leave counts from its first call, so a second refusal
+// arriving meanwhile -- two library requests refused together -- loads nothing
+// more, where each further load would abort the one before it.
 let documentLoads: DocumentLoads = browserDocumentLoads;
 let leftForFreshDocument = false;
 

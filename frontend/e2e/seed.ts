@@ -317,8 +317,8 @@ class SeedApi {
 	constructor(private readonly api: APIRequestContext) {}
 
 	/** Seeds from a context that already carries a seeded session (`seedAccount`). */
-	static fromSession(api: APIRequestContext): Promise<SeedApi> {
-		return Promise.resolve(new SeedApi(api));
+	static async fromSession(api: APIRequestContext): Promise<SeedApi> {
+		return new SeedApi(api);
 	}
 
 	async postJson<T>(url: string, data: unknown): Promise<T> {
@@ -952,7 +952,7 @@ const SEED_SESSIONS_REQUEST_VARIABLE = 'SEED_SESSIONS_REQUEST';
  * request in the environment) and returns its last stdout line, the JSON result.
  */
 async function runSeedSessions(sessionRequest: {
-	seed?: Array<{ username: string; role?: AccountRole; without_id_token?: boolean }>;
+	seed?: Array<{ username: string; role?: AccountRole }>;
 }): Promise<SeededSessionRow[]> {
 	try {
 		const { stdout } = await execWithStdin(
@@ -999,16 +999,14 @@ function sessionCookies(row: SeededSessionRow): Cookie[] {
 /**
  * Signs `username` in without Keycloak: the account is found or
  * created and given a database session straight from the stack's own side, so
- * the app itself signs the cookies, and the row holds an ID token unless
- * `without_id_token` says it predates the upgrade. The throwaway stack drops the account
- * with the run.
+ * the app itself signs the cookies, and the row holds an ID token. The throwaway
+ * stack drops the account with the run.
  */
 export async function seedAccount(
 	username: string,
-	role: AccountRole = NON_ADMIN_ROLE,
-	without_id_token = false
+	role: AccountRole = NON_ADMIN_ROLE
 ): Promise<SeededAccount> {
-	const [row] = await runSeedSessions({ seed: [{ username, role, without_id_token }] });
+	const [row] = await runSeedSessions({ seed: [{ username, role }] });
 	return { id: row.user_id, username: row.username, cookies: sessionCookies(row) };
 }
 
