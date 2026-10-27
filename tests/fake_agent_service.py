@@ -246,11 +246,14 @@ def never_answers_offer(longest_read_seconds: float) -> OfferBehavior:
 
 
 def trickles_offer_forever() -> OfferBehavior:
-    """Bytes keep arriving inside every read timeout, so only an overall deadline ends the wait."""
+    """The stand-in never answers and the in-process transport enforces no timeouts.
+
+    Only an overall deadline ends the wait.
+    """
 
     async def respond(_request: httpx.Request) -> httpx.Response:
-        await asyncio.Event().wait()
-        raise AssertionError("unreachable")
+        await asyncio.sleep(5)
+        raise AssertionError("the overall deadline did not fire")
 
     return respond
 
