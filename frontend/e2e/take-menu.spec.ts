@@ -282,7 +282,7 @@ test.describe('Use seed row', () => {
 							await expect(rows).toHaveCount(ROW_LABELS_IN_ORDER.length + 1);
 							await expect(rows.nth(2)).toContainText(TAKE_USE_SEED_LABEL);
 							await expect(rows.nth(2).locator('.menu-item-hint')).toHaveText(
-								String(FIRST_TAKE_SEED + index)
+								String(FIRST_TAKE_SEED + TAKE_COUNT - 1 - index)
 							);
 							await expect(rows.nth(2).locator('svg')).toHaveCount(1);
 							await closeWithEscape(page, trigger);

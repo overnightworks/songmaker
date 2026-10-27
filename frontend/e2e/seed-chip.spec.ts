@@ -10,17 +10,19 @@ import {
 	EDITOR_GENERATE_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
-	openNowPlayingLabel,
+	NOW_PLAYING_LABEL,
 	songEditorOpenLabel,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_REPAINT_LABEL
 } from '../src/lib/constants';
+import { NOW_PLAYING_TAKE_TAB } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
 
 const TAKE_COUNT = 3;
+// The takes list shows the newest first, so take 1 is the last row.
 const FIRST_TAKE_SEED = 4127730;
 const OTHER_TAKE_SEED = 52000;
 const QUEUED_JOB = { id: 'e2e-seed-job', type: 'generate', status: 'queued', progress: 0 };
@@ -72,11 +74,11 @@ async function openOwnSong(page: Page): Promise<Songs> {
 	return songs;
 }
 
-async function useSeedOfFirstTake(page: Page): Promise<void> {
+async function useSeedOfTakeOne(page: Page): Promise<void> {
 	await showTab(page, EDITOR_TAB_TAKES_LABEL);
 	await workspace(page)
 		.locator('.take-row')
-		.first()
+		.last()
 		.getByRole('button', { name: TAKE_OVERFLOW_LABEL })
 		.click();
 	await page
@@ -105,7 +107,7 @@ test('Use seed puts the chip at Generate and Generate sends the seed while the c
 	page
 }) => {
 	await openOwnSong(page);
-	await useSeedOfFirstTake(page);
+	await useSeedOfTakeOne(page);
 	await showChip(page, 1);
 	expect(await pressGenerate(page)).toMatchObject({ seed: FIRST_TAKE_SEED });
 	await expect(chip(page)).toBeVisible();
@@ -113,7 +115,7 @@ test('Use seed puts the chip at Generate and Generate sends the seed while the c
 
 test('× takes the chip away and the next Generate sends no seed (S6)', async ({ page }) => {
 	await openOwnSong(page);
-	await useSeedOfFirstTake(page);
+	await useSeedOfTakeOne(page);
 	await showChip(page, 1);
 	await chip(page).getByRole('button', { name: SEED_CHIP_CLEAR_LABEL }).click();
 	await expect(chip(page)).toHaveCount(0);
@@ -122,11 +124,11 @@ test('× takes the chip away and the next Generate sends no seed (S6)', async ({
 
 test('A Repaint from the card sends the seed and the chip stays (S6)', async ({ page }) => {
 	await openOwnSong(page);
-	await useSeedOfFirstTake(page);
+	await useSeedOfTakeOne(page);
 	await showTab(page, EDITOR_TAB_TAKES_LABEL);
 	await workspace(page)
 		.locator('.take-row')
-		.first()
+		.last()
 		.getByRole('button', { name: TAKE_OVERFLOW_LABEL })
 		.click();
 	await page
@@ -143,7 +145,7 @@ test('A Repaint from the card sends the seed and the chip stays (S6)', async ({ 
 
 test('A song switch clears the chip and coming back shows none (D5)', async ({ page }) => {
 	const songs = await openOwnSong(page);
-	await useSeedOfFirstTake(page);
+	await useSeedOfTakeOne(page);
 	await showChip(page, 1);
 	await page.goBack();
 	await openSong(page, songs.otherTitle);
@@ -162,13 +164,14 @@ test(
 		const songs = await seedSongs();
 		await page.goto(`/album/${albumId}`);
 		await openSong(page, songs.otherTitle);
-		await workspace(page).locator('.take-row').first().locator('.play-btn').click();
+		await workspace(page).locator('.take-row').last().locator('.play-btn').click();
 		await page.goBack();
 		await openSong(page, songs.title);
 		await page
 			.getByRole('contentinfo')
-			.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
+			.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
 			.click();
+		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB, exact: true }).click();
 		await page
 			.locator('.np-take')
 			.getByRole('button', { name: nameStartingWith(TAKE_USE_SEED_LABEL) })
