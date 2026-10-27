@@ -25,6 +25,10 @@ from agent_runtime_client.wire import (
     Failed,
     FailureCode,
     Heartbeat,
+    Offer,
+    OfferedModel,
+    OfferReason,
+    OfferRoute,
     RejectionCode,
     RunRejection,
     RunStarted,
@@ -35,7 +39,7 @@ from agent_runtime_client.wire import (
 from conftest import apply_csrf_header, issued_cookies
 from fake_oidc_issuer import FakeIssuer, a_fake_issuer
 
-from songmaker_cli.cowriter import service_turn
+from songmaker_cli.cowriter import service_offer, service_turn
 from songmaker_cli.cowriter.mcp_endpoint import AVAILABILITY_ATTRIBUTE, McpEndpointAvailability
 
 if TYPE_CHECKING:
@@ -184,12 +188,83 @@ def fails_to_connect(error: Exception) -> Behavior:
     return respond
 
 
+OfferBehavior = Callable[[httpx.Request], Awaitable[httpx.Response]]
+
+
+@dataclass(frozen=True)
+class RecordedOfferRequest:
+    """One ``GET /offer`` as the service received it."""
+
+    url: str
+    headers: httpx.Headers
+
+
+def offered_model(model_id: str, *, ready: bool = True) -> OfferedModel:
+    return OfferedModel(
+        id=model_id, object="model", created=0, owned_by="agent-service", route=OfferRoute.CLI,
+        background=True, ready=ready, reason=None if ready else OfferReason.NOT_BUILT,
+    )
+
+
+def offers(*models: OfferedModel) -> OfferBehavior:
+    """A 200 whose body lists ``models``."""
+
+    async def respond(_request: httpx.Request) -> httpx.Response:
+        body = Offer(v=PROTOCOL_VERSION, object="list", data=list(models)).model_dump_json()
+        return httpx.Response(200, headers={"content-type": "application/json"}, content=body)
+
+    return respond
+
+
+def answers_offer_with(status: int, content: bytes, *, content_type: str) -> OfferBehavior:
+    async def respond(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, headers={"content-type": content_type}, content=content)
+
+    return respond
+
+
+def refuses_offer(status: int, code: RejectionCode) -> OfferBehavior:
+    body = RunRejection(v=PROTOCOL_VERSION, code=code, message="Refused.").model_dump_json()
+    return answers_offer_with(status, body.encode(), content_type="application/json")
+
+
+def never_answers_offer(longest_read_seconds: float) -> OfferBehavior:
+    """The connection opens and nothing comes back: the request's own read timeout fires.
+
+    The in-process transport enforces no timeouts, so the stand-in asserts that the caller set a
+    read timeout of at most ``longest_read_seconds`` on the request and then raises the error
+    the real transport raises when it expires.
+    """
+
+    async def respond(request: httpx.Request) -> httpx.Response:
+        read_timeout = request.extensions["timeout"]["read"]
+        assert read_timeout is not None
+        assert read_timeout <= longest_read_seconds
+        raise httpx.ReadTimeout("nothing came back", request=request)
+
+    return respond
+
+
+def offer_fails_to_connect(error: Exception) -> OfferBehavior:
+    async def respond(_request: httpx.Request) -> httpx.Response:
+        raise error
+
+    return respond
+
+
 @dataclass
 class FakeAgentService:
-    """Answers ``POST /runs`` with ``behavior``; ``runs`` holds every request it received."""
+    """Answers ``POST /runs`` with ``behavior`` and ``GET /offer`` with ``offer_behavior``.
+
+    ``runs`` and ``offer_requests`` hold every request it received.
+    """
 
     behavior: Behavior = field(default_factory=lambda: answers("ok"))
     runs: list[RecordedRun] = field(default_factory=list)
+    offer_behavior: OfferBehavior = field(
+        default_factory=lambda: offers(offered_model("claude/opus")),
+    )
+    offer_requests: list[RecordedOfferRequest] = field(default_factory=list)
 
     @property
     def last_run(self) -> RecordedRun:
@@ -198,10 +273,16 @@ class FakeAgentService:
     def reply_with(self, behavior: Behavior) -> None:
         self.behavior = behavior
 
+    def reply_to_offer_with(self, behavior: OfferBehavior) -> None:
+        self.offer_behavior = behavior
+
     def client_for(self, base_url: str) -> httpx.AsyncClient:
         return httpx.AsyncClient(base_url=base_url, transport=httpx.MockTransport(self._handle))
 
     async def _handle(self, request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == "/offer":
+            self.offer_requests.append(RecordedOfferRequest(str(request.url), request.headers))
+            return await self.offer_behavior(request)
         run = RecordedRun(str(request.url), request.headers, json.loads(request.content))
         self.runs.append(run)
         return await self.behavior(run)
@@ -239,6 +320,7 @@ def attach_cowriter_service(
     app.state.oidc_sign_in = issuer.relying_party_for_app()
     agent = FakeAgentService()
     monkeypatch.setattr(service_turn, "service_client", agent.client_for)
+    monkeypatch.setattr(service_offer, "service_client", agent.client_for)
 
     config = installed_web_auth_config(app)
     now = datetime.now(timezone.utc)
