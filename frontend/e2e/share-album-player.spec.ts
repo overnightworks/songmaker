@@ -211,6 +211,27 @@ test.describe('before Play', () => {
 		await expect(notice).toBeInViewport({ ratio: 1 });
 	});
 
+	test(
+		'1906_P3: at 390 the notice sits on its own line below a long title, whole and unshrunk',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ visitor }) => {
+			await openMockAlbum(visitor);
+			const { page } = visitor;
+			const title = page.getByRole('heading', { level: 1 });
+			await title.evaluate((heading) => {
+				heading.textContent = Array(12).fill('A very long album title').join(' ');
+			});
+			const notice = page.getByText('KI-generiert', { exact: true });
+			const [titleBox, noticeBox] = await boundingBoxes(title, notice);
+			expect(noticeBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+			expect(await notice.evaluate((badge) => badge.scrollWidth <= badge.clientWidth)).toBe(true);
+			const fontSizeOf = () => notice.evaluate((badge) => getComputedStyle(badge).fontSize);
+			const phoneFontSize = await fontSizeOf();
+			await page.setViewportSize({ width: 1440, height: 900 });
+			expect(phoneFontSize).toBe(await fontSizeOf());
+		}
+	);
+
 	test('1374_rule_2 A4: Previous song is disabled and Next song enabled', async ({ visitor }) => {
 		await openMockAlbum(visitor);
 
