@@ -15,6 +15,7 @@ import {
 	TAKE_OVERFLOW_LABEL,
 	TAKE_REPAINT_LABEL
 } from '../src/lib/constants';
+import { NOW_PLAYING_TAKE_TAB } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';
@@ -170,6 +171,7 @@ test(
 			.getByRole('contentinfo')
 			.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
 			.click();
+		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB, exact: true }).click();
 		await page
 			.locator('.np-take')
 			.getByRole('button', { name: nameStartingWith(TAKE_USE_SEED_LABEL) })
