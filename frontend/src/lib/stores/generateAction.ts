@@ -1,6 +1,6 @@
 import { derived, get, readable, writable } from 'svelte/store';
 import { cancelJob, generateSong } from '$lib/api/client';
-import type { JobItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, JobItem, SongItem } from '$lib/api/types';
 import {
 	EDITOR_GENERATE_CANCEL_FAILED,
 	EDITOR_GENERATE_LAST_SEEN_TEMPLATE,
@@ -342,7 +342,19 @@ export const generateAction = readable<GenerateState>(undefined, (set) => {
 	};
 });
 
-export async function generate(): Promise<void> {
+interface JobRequest {
+	songId: string;
+	model: string;
+	versionId: string | undefined;
+	seed: number | null;
+	count: number;
+}
+
+// The one shell for every press that starts a job: guard, save a dirty draft,
+// start the job, track it, and show a refusal where Generate shows it.
+async function startJobFromEditor(
+	start: (request: JobRequest) => Promise<JobItem | null>
+): Promise<void> {
 	const song = get(selectedSong);
 	const model = get(recipeModel);
 	if (!song || model === null || get(requestInFlight)) return;
@@ -351,34 +363,14 @@ export async function generate(): Promise<void> {
 	requestInFlight.set(true);
 	try {
 		if (get(isDirty)) await handleSave(song.id);
-		const versionId = get(versions)[get(currentVersionIndex)]?.id;
-		const seed = get(pinnedSeed);
-		const source = get(sourceGeneration);
-		let job;
-		if (source && get(sourceMode) === 'repaint') {
-			const { repaintGeneration } = await import('$lib/api/client');
-			const mode = get(repaintMode);
-			job = await repaintGeneration(source.id, get(repaintStart), get(repaintEnd), {
-				model,
-				seed,
-				versionId,
-				count: get(takesPerGenerate),
-				repaintMode: mode,
-				repaintStrength: mode === 'balanced' ? get(repaintStrength) : undefined
-			});
-		} else if (source && get(sourceMode) === 'cover') {
-			const { coverGeneration } = await import('$lib/api/client');
-			const noise = get(coverNoiseStrength);
-			job = await coverGeneration(source.id, get(coverStrength), {
-				model,
-				seed,
-				versionId,
-				count: get(takesPerGenerate),
-				coverNoiseStrength: noise > 0 ? noise : undefined
-			});
-		} else {
-			job = await generateSong(song.id, get(takesPerGenerate), model, versionId, seed);
-		}
+		const job = await start({
+			songId: song.id,
+			model,
+			versionId: get(versions)[get(currentVersionIndex)]?.id,
+			seed: get(pinnedSeed),
+			count: get(takesPerGenerate)
+		});
+		if (job === null) return;
 		pinnedSeed.set(null);
 		trackJob(job, { songId: song.id });
 	} catch (e) {
@@ -388,6 +380,50 @@ export async function generate(): Promise<void> {
 	} finally {
 		requestInFlight.set(false);
 	}
+}
+
+async function startSourceJob(
+	{ model, seed, versionId, count }: JobRequest,
+	source: GenerationItem
+): Promise<JobItem> {
+	if (get(sourceMode) === 'repaint') {
+		const { repaintGeneration } = await import('$lib/api/client');
+		const mode = get(repaintMode);
+		return repaintGeneration(source.id, get(repaintStart), get(repaintEnd), {
+			model,
+			seed,
+			versionId,
+			count,
+			repaintMode: mode,
+			repaintStrength: mode === 'balanced' ? get(repaintStrength) : undefined
+		});
+	}
+	const { coverGeneration } = await import('$lib/api/client');
+	const noise = get(coverNoiseStrength);
+	return coverGeneration(source.id, get(coverStrength), {
+		model,
+		seed,
+		versionId,
+		count,
+		coverNoiseStrength: noise > 0 ? noise : undefined
+	});
+}
+
+export function generate(): Promise<void> {
+	return startJobFromEditor((request) => {
+		const source = get(sourceGeneration);
+		return source
+			? startSourceJob(request, source)
+			: generateSong(request.songId, request.count, request.model, request.versionId, request.seed);
+	});
+}
+
+/** The task card's press: a repaint or cover of the open source take; the source stays open. */
+export function runSourceTask(): Promise<void> {
+	return startJobFromEditor((request) => {
+		const source = get(sourceGeneration);
+		return Promise.resolve(source ? startSourceJob(request, source) : null);
+	});
 }
 
 export async function cancelGeneration(jobId: string): Promise<void> {

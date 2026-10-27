@@ -351,6 +351,7 @@ describe('PhoneRecipeSection', () => {
 			makeGeneration({ generation_params: { audio_duration: 180 } }),
 			'repaint'
 		);
+		recipeOpen.set(true);
 		const target = await render();
 		await click(target, 'Repaint');
 		const mode = target.querySelector<HTMLSelectElement>(
@@ -381,6 +382,7 @@ describe('PhoneRecipeSection', () => {
 
 	it('edits cover strengths and clears a source picked from a take', async () => {
 		setSourceFromGeneration(makeGeneration(), 'cover');
+		recipeOpen.set(true);
 		const target = await render();
 		await click(target, 'Cover');
 		const inputs = target.querySelectorAll<HTMLInputElement>('input[type="range"]');
