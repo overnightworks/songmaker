@@ -773,45 +773,44 @@ describe('SongDetailView recipe and takes', () => {
 		expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 	});
 
-	it.each(['repaint', 'cover'] as const)(
-		'lands a picked-up %s source in the Recipe panel',
-		async (mode) => {
-			const target = await renderView();
-			expect(get(recipeOpen)).toBe(false);
-
-			pendingSource.set({ generation: generation(sourceRecipeDefaults()), mode });
-			await tick();
-			await tick();
-			expect(get(recipeOpen)).toBe(true);
-			expect(get(sourceMode)).toBe(mode);
-			clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
-			await tick();
-			clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
-			await tick();
-			expect(get(recipeOpen)).toBe(true);
-		}
-	);
-
-	it.each([
+	const sourceCases = [
 		['repaint', false],
 		['cover', false],
 		['repaint', true],
 		['cover', true]
-	] as const)(
-		'opens the recipe with the menu take as %s source (compact: %s)',
+	] as const;
+
+	it.each(sourceCases)(
+		'lands a picked-up %s source on its task card (compact: %s)',
 		async (mode, compact) => {
 			stubLibraryMedia({ narrow: compact, compact });
 			const target = await renderView();
+			detailTab.set('edit');
+
+			pendingSource.set({ generation: generation(sourceRecipeDefaults()), mode });
+			await tick();
+			await tick();
 			expect(get(recipeOpen)).toBe(false);
+			expect(get(sourceMode)).toBe(mode);
+			if (compact) expect(get(detailTab)).toBe('takes');
+			expect(target.querySelector('.take-row + .task')).not.toBeNull();
+		}
+	);
+
+	it.each(sourceCases)(
+		'opens the task card for the menu take as %s source (compact: %s)',
+		async (mode, compact) => {
+			stubLibraryMedia({ narrow: compact, compact });
+			const target = await renderView();
 			target.querySelector<HTMLButtonElement>('.take-row .menu-trigger')?.click();
 			await tick();
 			clickNamed(target, mode === 'repaint' ? TAKE_REPAINT_LABEL : TAKE_COVER_LABEL);
 			await tick();
-			expect(get(recipeOpen)).toBe(true);
+			expect(get(recipeOpen)).toBe(false);
 			expect(get(sourceMode)).toBe(mode);
 			expect(get(sourceGeneration)?.id).toBe('g1');
-			expect(target.querySelector(compact ? '.phone-recipe' : '.recipe-panel')).not.toBeNull();
-			if (compact) expect(target.querySelector('[role="dialog"]')).toBeNull();
+			expect(target.querySelector('.take-row + .task')).not.toBeNull();
+			expect(target.querySelector('[role="dialog"]')).toBeNull();
 		}
 	);
 

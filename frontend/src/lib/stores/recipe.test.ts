@@ -12,7 +12,9 @@ import {
 	recipeModel,
 	recipeOpen,
 	sourceTakeDurationSeconds,
+	repaintEnd,
 	repaintMode,
+	repaintStart,
 	resetRecipeSourceForSong,
 	seedRecipeModel,
 	setSourceFromGeneration,
@@ -206,12 +208,15 @@ describe('recipe session state', () => {
 		expect(get(recipeModel)).toBe('fast');
 	});
 
-	it('setSourceFromGeneration opens the Recipe panel and resets a repaint range', () => {
+	it('setSourceFromGeneration leaves the Recipe panel closed and resets a repaint range', () => {
 		const gen = generation(requestedRecipeDefaults());
+		repaintStart.set(0.3);
+		repaintEnd.set(0.6);
 		setSourceFromGeneration(gen, 'repaint');
 		expect(get(sourceGeneration)).toBe(gen);
 		expect(get(sourceMode)).toBe('repaint');
-		expect(get(recipeOpen)).toBe(true);
+		expect([get(repaintStart), get(repaintEnd)]).toEqual([0, 1]);
+		expect(get(recipeOpen)).toBe(false);
 	});
 
 	it('clearSource removes the picked take', () => {

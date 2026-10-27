@@ -25,7 +25,9 @@
 		EARLIER_VERSIONS_LABEL
 	} from '$lib/constants/now-playing';
 	import { removeGenerationFromSong } from '$lib/stores/libraryData';
+	import { currentVersionIndex, versions } from '$lib/stores/editor';
 	import { selectedGenerationId } from '$lib/stores/player';
+	import { sourceGeneration } from '$lib/stores/recipe';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
 	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
 	import {
@@ -39,8 +41,10 @@
 		groupTakes,
 		isGroupOpen,
 		renderedTakes,
+		revealTakeGroup,
 		settleTakeFolds,
 		takeFolds,
+		takeGroupKey,
 		toggleTakeGroup,
 		type TakeGroup
 	} from '$lib/stores/takeFolds';
@@ -53,6 +57,7 @@
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 	import { generateAction, isGenerateJobActive } from '$lib/stores/generateAction';
 	import TakeRow from './TakeRow.svelte';
+	import TakeTaskCard from './TakeTaskCard.svelte';
 
 	// Varying row widths draw the shape of what is coming, not a grey rectangle.
 	const SKELETON_ROW_WIDTHS_PX = [190, 150, 172];
@@ -107,6 +112,20 @@
 	const tickedIds = $derived([...$selectedIds].filter((id) => renderedIds.has(id)));
 
 	$effect.pre(() => settleTakeFolds(groups));
+
+	// A card opened from Now Playing may sit under a folded version, and a press
+	// that saves a draft folds the source's version: the card stays open.
+	$effect(() => {
+		void groups.current?.key;
+		if ($sourceGeneration) revealTakeGroup(takeGroupKey($sourceGeneration));
+	});
+
+	// The version a press lands in: the unsaved draft's, else the loaded one.
+	const landingVersionNumber = $derived(
+		dirty
+			? draftVersionNumber
+			: ($versions[$currentVersionIndex]?.version_number ?? latestVersionNumber)
+	);
 	$effect.pre(() => {
 		if ($selectedIds.size > 0) keepOnlySelected(renderedIds);
 	});
@@ -191,6 +210,9 @@
 			onclosepicker={() => (playlistFor = null)}
 			ondelete={() => (deleteFor = gen)}
 		/>
+		{#if $sourceGeneration?.id === gen.id}
+			<TakeTaskCard {gen} {landingVersionNumber} />
+		{/if}
 	{/each}
 {/snippet}
 
