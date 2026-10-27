@@ -21,7 +21,7 @@ try:
 except ImportError:  # FastAPI < 0.141 eagerly flattens included routers.
     iter_route_contexts = None
 
-from _repo_path import prepend_own_checkout_src
+from repo_path import prepend_own_checkout_src
 
 prepend_own_checkout_src(__file__)
 

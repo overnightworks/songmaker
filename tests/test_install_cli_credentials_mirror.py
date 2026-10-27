@@ -26,7 +26,7 @@ COPIED_SCRIPTS = (
     "dotenv_file.py",
     "main_checkout.py",
     "check_agent_cli_mounts.sh",
-    "agent-cli-paths.sh",
+    "agent_cli_paths.sh",
     "alert.sh",
     "songmaker-cli-credentials-mirror.service",
     "songmaker-cli-credentials-mirror.path",

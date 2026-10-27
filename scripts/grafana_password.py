@@ -3,7 +3,7 @@
 
 Usage, once, from the main checkout with the stack running:
 
-    ./scripts/grafana-password
+    ./scripts/grafana_password.py
 
 1. If ``.env`` has no ``GRAFANA_PASSWORD``, an empty one, or a publicly known
    one (``admin``, anything starting with ``CHANGEME``), a fresh random value
@@ -73,7 +73,7 @@ class Password:
 
 def main() -> int:
     if len(sys.argv) > 1:
-        return _fail("takes no arguments; usage: ./scripts/grafana-password")
+        return _fail("takes no arguments; usage: ./scripts/grafana_password.py")
     repo_root = Path(__file__).resolve().parent.parent
     env_file = repo_root / ".env"
     try:
@@ -97,7 +97,7 @@ def main() -> int:
 
 
 def _fail(message: str) -> int:
-    print(f"grafana-password: {message}", file=sys.stderr)
+    print(f"grafana_password.py: {message}", file=sys.stderr)
     return 1
 
 

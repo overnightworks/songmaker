@@ -17,7 +17,7 @@ from test_install_cli_credentials_mirror import (
 )
 
 AUTOSTART_FILES = (
-    "agent-cli-paths.sh",
+    "agent_cli_paths.sh",
     "alert-config.sh",
     "alert.sh",
     "check_agent_cli_mounts.sh",

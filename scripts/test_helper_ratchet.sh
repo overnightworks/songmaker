@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Fails when the backend or frontend tests define more duplicate helper names than the baseline allows.
 set -euo pipefail
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

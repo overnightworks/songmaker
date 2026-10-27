@@ -25,7 +25,7 @@ from test_install_cli_credentials_mirror import (
 )
 from test_prove_codex_image_sandbox import proof
 
-INSTALLER = REPO_ROOT / "scripts" / "apparmor" / "install.sh"
+INSTALLER = REPO_ROOT / "scripts" / "apparmor" / "install_profile.sh"
 PROFILE = INSTALLER.parent / proof.DEFAULT_WEB_PROFILE
 A_STALE_COPY = b"profile songmaker-web { # rules from an older checkout\n}\n"
 A_LONG_AGO_NS = 1_600_000_000 * 10**9
@@ -337,7 +337,7 @@ def _refuses_the_name(run_installer, name: str) -> None:
     assert not any(run_installer.installed_dir.iterdir())
 
 
-@pytest.mark.parametrize("name", ["no-such-profile", "../songmaker-web", "install.sh"])
+@pytest.mark.parametrize("name", ["no-such-profile", "../songmaker-web", "install_profile.sh"])
 def test_the_installer_refuses_a_name_that_is_not_a_profile_beside_it(
     run_installer, name: str,
 ) -> None:

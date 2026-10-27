@@ -6,7 +6,7 @@ import {
 	WORKER_CHUNK_PLACEHOLDER,
 	collectWorkerChunkPaths,
 	injectWorkerChunkPaths
-} from '../scripts/inject-worker-precache.mjs';
+} from '../scripts/inject_worker_precache.mjs';
 import serviceWorkerSource from './service-worker.ts?raw';
 
 const ALIGN_WORKER = '/_app/immutable/workers/lyrics-align.worker-Db2gWdvJ.js';

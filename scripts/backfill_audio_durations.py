@@ -51,7 +51,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from _repo_path import prepend_own_checkout_src
+from repo_path import prepend_own_checkout_src
 from sqlalchemy.orm import Session
 
 prepend_own_checkout_src(__file__)
