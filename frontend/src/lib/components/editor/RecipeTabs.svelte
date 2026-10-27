@@ -7,7 +7,6 @@
 		activeModels,
 		activeModelsError,
 		activeModelsLoading,
-		currentPreset,
 		effectiveGenerationDefaults,
 		generationDefaultsError,
 		loadActiveModels,
@@ -21,6 +20,7 @@
 		changedRecipeTabs,
 		chooseEnginePreset,
 		engineParams,
+		matchingEnginePreset,
 		resetRecipeField,
 		resetRecipeTab,
 		type RecipeField,
@@ -97,6 +97,7 @@
 	const matchingPresets = $derived($presets.filter((preset) => preset.model_mode === values.model));
 	const ownPresets = $derived(matchingPresets.filter((preset) => !preset.is_shared));
 	const sharedPresets = $derived(matchingPresets.filter((preset) => preset.is_shared));
+	const chosenPreset = $derived(matchingEnginePreset(values, $presets));
 	const hasEngineChange = $derived(changedFields.has('preset'));
 	const referencePath = $derived(values.genParams?.reference_audio_path ?? null);
 
@@ -286,10 +287,10 @@
 {#snippet presetControl()}
 	<select
 		aria-label={RECIPE_PRESET_LABEL}
-		value={$currentPreset?.id ?? (hasEngineChange ? 'custom' : '')}
+		value={chosenPreset?.id ?? (hasEngineChange ? 'custom' : '')}
 		onchange={(event) => choosePreset(event.currentTarget.value)}
 	>
-		{#if !$currentPreset && hasEngineChange}
+		{#if !chosenPreset && hasEngineChange}
 			<option value="custom" disabled>{RECIPE_PRESET_CUSTOM_OPTION}</option>
 		{/if}
 		<option value="">{RECIPE_PRESET_DEFAULT_OPTION}</option>

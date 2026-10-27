@@ -185,6 +185,17 @@ describe('RecipeTabs', () => {
 		expect(props.values.genParams).toEqual({ user_lora_id: 'mara', inference_steps: 12 });
 	});
 
+	it('the Preset row names the chosen preset while a Voice is set', async () => {
+		const target = await renderTabs(
+			atStandard({ genParams: { user_lora_id: 'mara', inference_steps: 12 } })
+		);
+		await clickSettled(recipeTabNamed(target, 'Engine'));
+		const select = target.querySelector<HTMLSelectElement>(
+			'select[aria-label="Preset"]'
+		) as HTMLSelectElement;
+		expect(select.value).toBe('warm');
+	});
+
 	it('closes from the end of the tab row', async () => {
 		const target = await renderTabs();
 		await clickSettled(getByRoleButton(target, 'Close the recipe'));

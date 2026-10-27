@@ -167,11 +167,30 @@ export function chooseEnginePreset(
 	});
 }
 
-/** The engine fields alone, as a preset stores them. */
-export function engineParams(values: RecipeValues): VersionGenerationParams {
+function engineFields(params: VersionGenerationParams | null): VersionGenerationParams {
 	return Object.fromEntries(
-		Object.entries(values.genParams ?? {}).filter(
+		Object.entries(params ?? {}).filter(
 			([key, value]) => value != null && (ENGINE_PARAM_KEYS as readonly string[]).includes(key)
 		)
 	);
+}
+
+/** The engine fields alone, as a preset stores them. */
+export function engineParams(values: RecipeValues): VersionGenerationParams {
+	return engineFields(values.genParams);
+}
+
+/** The preset of the recipe's model whose engine fields are the recipe's; Voice and Reference do not count. */
+export function matchingEnginePreset<
+	Preset extends { model_mode: string; params: VersionGenerationParams }
+>(values: RecipeValues, presets: readonly Preset[]): Preset | undefined {
+	const current = Object.entries(engineParams(values));
+	return presets.find((preset) => {
+		if (preset.model_mode !== values.model) return false;
+		const stored = engineFields(preset.params);
+		return (
+			Object.keys(stored).length === current.length &&
+			current.every(([key, value]) => (stored as Record<string, unknown>)[key] === value)
+		);
+	});
 }
