@@ -58,7 +58,6 @@ function rowIdsWithCard(target: HTMLElement): (string | undefined)[] {
 }
 
 beforeEach(() => {
-	Element.prototype.scrollIntoView = vi.fn();
 	selectedSongId.set('song-a');
 	resetRecipeSourceForSong();
 });

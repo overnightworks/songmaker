@@ -60,7 +60,7 @@
 	// foot on screen, on open and when the verb swaps, but not while a slider moves.
 	$effect(() => {
 		void repainting;
-		taskElement?.scrollIntoView({ block: 'nearest' });
+		taskElement?.scrollIntoView?.({ block: 'nearest' });
 	});
 	const unavailable = $derived(
 		$generateAction.kind === 'disabled' || isGenerateBusy($generateAction)
