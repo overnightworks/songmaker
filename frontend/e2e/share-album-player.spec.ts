@@ -202,7 +202,7 @@ test.describe('before Play', () => {
 		await expectNowPlayingLine(page, mockSongTitle(1), 1, 3);
 	});
 
-	test('1906 the album page says KI-generiert, wholly in view', async ({ visitor }) => {
+	test('1906_P1: the album page says KI-generiert, wholly in view', async ({ visitor }) => {
 		await openMockAlbum(visitor);
 		const { page } = visitor;
 

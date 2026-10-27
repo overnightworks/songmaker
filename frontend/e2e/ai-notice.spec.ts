@@ -36,7 +36,7 @@ async function expectWhollyInView(page: Page, notice: Locator): Promise<void> {
 	expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
 }
 
-test('the full player says KI-generiert and the mini-player bar does not', async ({
+test('1906_P5: the full player says KI-generiert and the mini-player bar does not', async ({
 	page
 }, testInfo) => {
 	const library = readSeededLibrary();
@@ -69,7 +69,7 @@ test('the full player says KI-generiert and the mini-player bar does not', async
 	await page.screenshot({ path: testInfo.outputPath('full-player-notice.png') });
 });
 
-test('the co-writer says Du schreibst mit einer KI under its header', async ({
+test('1906_E3: the co-writer says Du schreibst mit einer KI under its header', async ({
 	page
 }, testInfo) => {
 	const library = readSeededLibrary();
