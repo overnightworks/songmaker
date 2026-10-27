@@ -57,7 +57,7 @@ function card(page: Page): Locator {
 	return page.locator('.task');
 }
 
-test('Repaint opens a card under the take and its button sends the range', async ({
+test('Repaint opens a card under the take and its button sends the range (S4, #1912 acceptance 1, 2, 4)', async ({
 	page
 }, testInfo) => {
 	await onOwnTakes(page, async () => {
@@ -90,7 +90,9 @@ test('Repaint opens a card under the take and its button sends the range', async
 	});
 });
 
-test('Cover swaps the card and its button sends the cover request', async ({ page }, testInfo) => {
+test('Cover swaps the card and its button sends the cover request (S4, #1912 acceptance 3, 4, 6)', async ({
+	page
+}, testInfo) => {
 	await onOwnTakes(page, async () => {
 		if (shellOf(testInfo) === 'mobile') {
 			await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();

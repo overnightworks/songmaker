@@ -88,7 +88,7 @@ afterEach(() => {
 	resetConnectivityForTests();
 });
 
-describe('runSourceTask', () => {
+describe('runSourceTask (S4, #1912 acceptance 4)', () => {
 	it.each([
 		{ variant: 'balanced', strength: 0.6 },
 		{ variant: 'conservative', strength: undefined }

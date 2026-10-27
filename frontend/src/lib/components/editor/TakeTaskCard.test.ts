@@ -70,7 +70,7 @@ const flatText = (target: HTMLElement) => target.textContent?.replace(/\s+/g, ' 
 const cardButton = (target: HTMLElement, name: string) =>
 	Array.from(target.querySelectorAll('button')).find((b) => b.textContent?.trim() === name);
 
-describe('Repaint card', () => {
+describe('Repaint card (S4, #1912 acceptance 2)', () => {
 	it('shows the head, the range, how much changes and the foot', async () => {
 		const target = await renderCard('repaint');
 		expect(flatText(target)).toContain('Repaint take 11 · v6 · 3:13');
@@ -103,7 +103,7 @@ describe('Repaint card', () => {
 	});
 });
 
-describe('Cover card', () => {
+describe('Cover card (S4, #1912 acceptance 3)', () => {
 	it('shows closeness, noise over 0 to 1, the hint, the foot and the Cover button', async () => {
 		const target = await renderCard('cover');
 		expect(flatText(target)).toContain('Cover take 11 · v6 · 3:13');
@@ -118,7 +118,7 @@ describe('Cover card', () => {
 	});
 });
 
-describe('both cards', () => {
+describe('both cards (S4, #1912 acceptance 5)', () => {
 	it.each(['repaint', 'cover'] as const)('the %s button runs the source task', async (mode) => {
 		const target = await renderCard(mode);
 		target.querySelector<HTMLButtonElement>('.task-foot button')?.click();
