@@ -71,7 +71,6 @@
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
 	import {
-		coWriterOpen,
 		applyTakeUse,
 		pendingTakeUse,
 		recipeChips,
@@ -125,7 +124,7 @@
 	import EditorHeader from './editor/EditorHeader.svelte';
 	import RecipeChips from './editor/RecipeChips.svelte';
 	import RecipePanel from './editor/RecipePanel.svelte';
-	import EditorStacked from './editor/EditorStacked.svelte';
+	import ListenTabs from './editor/ListenTabs.svelte';
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
 	import { phoneAppBar } from '$lib/stores/ui';
@@ -150,7 +149,6 @@
 	let coverFailed = $state(false);
 	let coverBusy = $state(false);
 	let requestedParentAlbumId: string | null = $state(null);
-	let stackedExpanded = $state(false);
 
 	const song = $derived($selectedSong);
 	const songs = $derived($songList);
@@ -290,7 +288,7 @@
 	$effect(() => {
 		const pending = $pendingTakeUse;
 		if (!pending || !song || pending.generation.song_id !== song.id) return;
-		if (applyTakeUse(pending) && compact) openTakesTab();
+		if (applyTakeUse(pending)) openTakesTab();
 		pendingTakeUse.set(null);
 	});
 
@@ -377,15 +375,6 @@
 			savedGenParams: $savedSongData.genParams
 		})
 	);
-
-	// Both toggles stacked pushes the full Recipe panel's three multi-field
-	// groups below the fold — see EditorStacked.svelte. Not relevant on
-	// compact, where Recipe expands inline.
-	const stacked = $derived($coWriterOpen && $recipeOpen && !compact);
-
-	$effect(() => {
-		if (!stacked) stackedExpanded = false;
-	});
 
 	function resolveVoiceLabel(loraId: string | null): string {
 		if (!loraId) return 'None';
@@ -731,12 +720,12 @@
 		</div>
 	{/snippet}
 
-	{#snippet writeSurface(current: SongItem, withCowriter: boolean)}
+	{#snippet writeSurface(current: SongItem)}
 		<div class="write-surface">
 			{#if !compact}
 				{@render saveAction()}
 			{/if}
-			<WriteColumn song={current} coWriterOpen={withCowriter} {cowriterPanel} />
+			<WriteColumn song={current} />
 		</div>
 	{/snippet}
 
@@ -773,9 +762,7 @@
 			onaddtoplaylist={() => (songPlaylistPickerOpen = true)}
 			ondeletesong={() => (showDeleteConfirm = true)}
 			recipeOpen={$recipeOpen}
-			coWriterOpen={$coWriterOpen}
 			ontogglerecipe={() => recipeOpen.update((v) => !v)}
-			ontogglecowriter={() => coWriterOpen.update((v) => !v)}
 			saveDisabled={!dirty}
 			onsave={() => void onSaveVersion()}
 		/>
@@ -789,22 +776,10 @@
 
 	{#snippet recipe()}
 		<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
-		{#if $recipeOpen && !compact}
-			{#if stacked && !stackedExpanded}
-				<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
-			{:else}
-				<RecipePanel
-					onclose={() => {
-						if (stacked) stackedExpanded = false;
-						else recipeOpen.set(false);
-					}}
-				/>
-			{/if}
-		{/if}
 	{/snippet}
 
 	{#snippet phoneEdit()}
-		{@render writeSurface(song, false)}
+		{@render writeSurface(song)}
 	{/snippet}
 
 	{#snippet cowriterPanel()}
@@ -838,17 +813,15 @@
 			<div class="editor-body">
 				{@render sharedLink()}
 				{@render recipe()}
-				{#if $coWriterOpen}
-					{@render writeSurface(song, true)}
-				{:else}
-					<div class="editor-columns">
-						{@render writeSurface(song, false)}
-						<div class="takes-column">
-							{@render expiryDigest()}
-							<TakesList {...takeListProps} />
-						</div>
+				<div class="editor-columns">
+					<div class="write-column">
+						{#if $recipeOpen}
+							<RecipePanel onclose={() => recipeOpen.set(false)} />
+						{/if}
+						{@render writeSurface(song)}
 					</div>
-				{/if}
+					<ListenTabs {expiryDigest} cowriter={cowriterPanel} {takeListProps} />
+				</div>
 			</div>
 		{/if}
 	</div>
@@ -991,6 +964,15 @@
 		overflow: hidden auto;
 	}
 
+	/* The recipe panel opens above the Write fields, in the left column, so the
+	   Listen column on the right keeps its place and its composer on screen. */
+	.write-column {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		min-width: 0;
+	}
+
 	.write-surface {
 		display: flex;
 		flex-direction: column;
@@ -1059,13 +1041,6 @@
 		.editor-columns {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
-	}
-
-	.takes-column {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		min-width: 0;
 	}
 
 	.expiry-digest {

@@ -359,7 +359,6 @@ export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable 
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
 export const EDITOR_LYRICS_LABEL = 'Lyrics';
-export const EDITOR_STYLE_LABEL = 'Style';
 export const EDITOR_STYLE_PROMPT_LABEL = 'Style Prompt';
 export const EDITOR_UNSAVED_TITLE = 'Unsaved changes';
 export const EDITOR_UNSAVED_MESSAGE =
@@ -479,10 +478,6 @@ export const RECIPE_PRESET_DEFAULT_OPTION = 'Default';
 export const RECIPE_SAVE_AS_PRESET_LABEL = 'Save as preset';
 export const RECIPE_MANAGE_PRESETS_LABEL = 'Manage in Settings → Generation';
 export const RECIPE_USES_LABEL = 'Generate uses this recipe';
-// Shown instead of the full panel when Co-Writer and Recipe are both open, so
-// the chat column stays above the fold; "Edit" reveals the full panel.
-export const RECIPE_STACKED_LABEL = 'Recipe summary';
-export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const SEARCH_OPEN_LABEL = 'Search';

@@ -1,11 +1,8 @@
 # ruff: noqa: E402
 """Bulk-seed a song with many playable takes directly against the database.
 
-``frontend/e2e/kinetic-strip.spec.ts`` (issue #358) needs a song with dozens
-of takes to genuinely overflow the take strip's scrollable container, in
-both its row and column layouts — a real render, not an assumption, showed
-that fewer than ~14 takes never overflow either at DESKTOP_VIEWPORT (the
-column container simply grows to fit them). Seeding that many takes through
+The end-to-end specs that need a song with dozens of takes (the take folds,
+menu and selection flows) seed it here. Seeding that many takes through
 ``POST /api/songs/{id}/reimport`` one at a time would repeat the exact
 mistake issue #344 already found and fixed for the rail's filler albums:
 the server's IP rate limiter counts every request it receives regardless of
@@ -26,7 +23,7 @@ are mounted. Use the venv's Python directly:
 
     docker compose exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_song_takes.py \\
-        --album-id e2e-album-mtizek8x --title "Kinetic Strip Takes" \\
+        --album-id e2e-album-mtizek8x --title "Many Takes" \\
         --take-count 25 --owner-username e2e-ci-admin \\
         < frontend/e2e/fixtures/take.mp3
 

@@ -446,7 +446,6 @@ test('1354_37b_64: plays the album pick, curates a playlist and serves the publi
 	if (shell === 'mobile') {
 		const takesTab = surface.getByRole('tab', { name: /Takes/ });
 		await expect(takesTab).toHaveCount(1);
-		await expect(surface.locator('.take-strip')).toHaveCount(0);
 		await takesTab.click();
 	}
 	const takeControl = surface.locator('.take-row').filter({ hasText: library.takeLabel });
