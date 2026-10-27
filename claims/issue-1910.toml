@@ -1,7 +1,0 @@
-claim_id = "ce0c61a6d46a4ea9a6880c5cc2aef5be"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6d0774482aa848c0836eb00b6c13010935e2577e"
-branch = "claude/issue-1910-privacy-cowriter-agent-service"
-scope = ["legal/datenschutz.html"]
-opened_commit = "24d99e625b8d71654e16d93579dbd01ba44ba50e"
