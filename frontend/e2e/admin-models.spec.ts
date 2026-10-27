@@ -44,7 +44,7 @@ import {
 	modelsRouteNotAvailablePhrase,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { FlowGuard, ONLY_IN_SHELL, waitForServiceWorkerControl, workspace } from './helpers';
+import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -83,10 +83,6 @@ const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL, MODELS_TASK_SCORING_LABEL];
 async function openModelsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');
 	await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible();
-	// A reload that lands while the worker is still installing and claiming the
-	// page never reaches the server, and a test that saves before it reloads
-	// then leaves the instance-wide selection changed.
-	await waitForServiceWorkerControl(page);
 
 	const compactTabs = page.getByRole('combobox', { name: ADMIN_TABS_LABEL, exact: true });
 	if (await compactTabs.count()) {
