@@ -120,7 +120,7 @@ describe('ListenTabs', () => {
 		expect(panel?.getAttribute('role')).toBe('tabpanel');
 	});
 
-	it('mounts the Takes pane only while Takes is selected (S9, #1927 acceptance 3)', async () => {
+	it('mounts the Takes pane only while Takes is selected (S9, #1927 acceptance 4)', async () => {
 		const target = await render();
 		expect(takesPane(target)).not.toBeNull();
 		expect(target.textContent).toContain('Expiry digest');

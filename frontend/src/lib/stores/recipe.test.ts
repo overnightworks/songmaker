@@ -180,7 +180,7 @@ describe('recipe session state', () => {
 		expect(get(sourceGeneration)).toBeNull();
 	});
 
-	it('resetRecipeSourceForSong clears the source and closes the recipe view but keeps the model', () => {
+	it('resetRecipeSourceForSong clears the source and closes the recipe view but keeps the model (#1927)', () => {
 		recipeModel.set('turbo');
 		takesPerGenerate.set(3);
 		setSourceFromGeneration(generation(requestedRecipeDefaults()), 'repaint');
