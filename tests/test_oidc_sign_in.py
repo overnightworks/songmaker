@@ -277,6 +277,7 @@ def _hidden_fields(page: Response) -> dict[str, str]:
 def test_logging_out_ends_the_session_and_answers_the_page_that_posts_the_stored_token(
     world: World,
 ) -> None:
+    """K2, cell 15."""
     world.sign_in(_member())
     session_cookie = world.client.cookies.get(SESSION_COOKIE)
     stored_token = _stored_id_token(world)
@@ -303,6 +304,7 @@ def test_logging_out_ends_the_session_and_answers_the_page_that_posts_the_stored
 def test_logging_out_without_a_session_still_clears_the_cookie_and_posts_no_hint(
     world: World,
 ) -> None:
+    """E2, cell 21."""
     response = world.client.post("/auth/logout", headers=_same_origin())
 
     assert response.status_code == 200
@@ -349,7 +351,7 @@ def test_logging_out_is_post_only(world: World) -> None:
 
 
 def test_a_write_needs_the_browser_to_say_it_is_same_origin_and_no_token(world: World) -> None:
-    """cell 11."""
+    """Cell 11 through the whole app: a real session and route, not the middleware probe."""
     world.seed(SUBJECT, "felix", "admin")
     login_and_csrf(world.client, "felix")
 
@@ -384,6 +386,22 @@ def test_a_worker_call_with_the_internal_token_passes_the_csrf_checks(world: Wor
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(("role", "expected_status"), [(None, 401), ("user", 403)])
+def test_a_same_origin_admin_write_is_refused_by_the_auth_check_not_the_job_pool(
+    world: World, role: str | None, expected_status: int,
+) -> None:
+    """The admin check runs before the job-pool dependency, which raises when no pool exists."""
+    if role:
+        world.seed(SUBJECT, "felix", role)
+        login_and_csrf(world.client, "felix")
+
+    response = world.client.post(
+        "/api/admin/registry/sft/download", headers={"Sec-Fetch-Site": "same-origin"},
+    )
+
+    assert response.status_code == expected_status
 
 
 # -- M21 / M23: headers and cookies ----------------------------------------------

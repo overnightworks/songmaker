@@ -394,9 +394,9 @@ async def restart_worker_endpoint(
 )
 async def download_model_endpoint(
     mode: str,
+    admin: AuthenticatedUser = Depends(require_admin),
     db: Session = Depends(get_db_session),
     pool: ArqRedis = Depends(get_arq_pool_dep),
-    admin: AuthenticatedUser = Depends(require_admin),
 ) -> JobResponse:
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
