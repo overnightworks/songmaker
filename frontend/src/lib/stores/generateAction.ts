@@ -24,7 +24,6 @@ import {
 	editPrompt,
 	handleSave,
 	isDirty,
-	pinnedSeed,
 	retireVersionLoadUndo,
 	versions
 } from './editor';
@@ -46,6 +45,7 @@ import {
 	repaintMode,
 	repaintStart,
 	repaintStrength,
+	seedFromTake,
 	sourceGeneration,
 	sourceMode,
 	takesPerGenerate
@@ -349,11 +349,10 @@ async function startJobFromEditor(
 			songId: song.id,
 			model,
 			versionId: get(versions)[get(currentVersionIndex)]?.id,
-			seed: get(pinnedSeed),
+			seed: get(seedFromTake)?.seed ?? null,
 			count: get(takesPerGenerate)
 		});
 		if (job === null) return;
-		pinnedSeed.set(null);
 		trackJob(job, { songId: song.id });
 	} catch (e) {
 		if (!showGenerationUnavailableRefusal(song.id, e)) {

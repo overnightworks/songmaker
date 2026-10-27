@@ -26,6 +26,7 @@ import {
 	repaintMode,
 	repaintStart,
 	resetRecipeSourceForSong,
+	seedFromTake,
 	setSourceFromGeneration,
 	sourceGeneration
 } from '$lib/stores/recipe';
@@ -196,4 +197,23 @@ describe('both cards (S4, #1912 acceptance 2, 4, 5)', () => {
 		expect(get(repaintMode)).toBe('aggressive');
 		clearSource();
 	});
+});
+
+describe('seed line on the card (C8, #1928)', () => {
+	it.each(['repaint', 'cover'] as const)(
+		'says the seed comes from its take on a %s card',
+		async (mode) => {
+			seedFromTake.set({ seed: 4127730, takeNumber: 11 });
+			const target = await renderCard(mode);
+			expect(flatText(target)).toContain('seed: from take 11');
+		}
+	);
+
+	it.each(['repaint', 'cover'] as const)(
+		'says nothing about a seed on a %s card without one',
+		async (mode) => {
+			const target = await renderCard(mode);
+			expect(flatText(target)).not.toMatch(/seed/i);
+		}
+	);
 });

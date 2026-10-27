@@ -197,7 +197,6 @@ export const NOW_PLAYING_RATING_LABEL = 'Your rating';
 export const NOW_PLAYING_RATING_NOTES_PLACEHOLDER = 'Notes (optional)';
 export const NOW_PLAYING_RATING_SAVE = 'Save rating';
 export const NOW_PLAYING_RATING_SAVING = 'Saving…';
-export const NOW_PLAYING_PIN_SEED_PREFIX = 'Pin seed';
 export const NOW_PLAYING_DEVIATION_ADDED_TITLE = 'Not in lyrics';
 
 // Curation mode (issue #228): walking an album's per-song candidate takes

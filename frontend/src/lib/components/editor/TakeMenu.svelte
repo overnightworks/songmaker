@@ -11,6 +11,7 @@
 		TAKE_REPAINT_LABEL,
 		TAKE_SHARE_LABEL
 	} from '$lib/constants';
+	import { TAKE_USE_SEED_LABEL } from '$lib/constants/take-task';
 	import { createShareToggle } from '$lib/stores/shareToggle.svelte';
 	import Icon from '../Icon.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
@@ -19,13 +20,15 @@
 		gen: GenerationItem;
 		onrepaint: () => void;
 		oncover: () => void;
+		onuseseed: () => void;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 		onaddtoplaylist: () => void;
 		ondelete: () => void;
 	}
 
-	let { gen, onrepaint, oncover, onshare, onunshare, onaddtoplaylist, ondelete }: Props = $props();
+	let { gen, onrepaint, oncover, onuseseed, onshare, onunshare, onaddtoplaylist, ondelete }: Props =
+		$props();
 
 	const takeLabel = $derived(
 		gen.version_number !== null
@@ -66,6 +69,13 @@
 		<Icon name="layers" size={14} />
 		{TAKE_COVER_LABEL}
 	</button>
+	{#if gen.seed != null}
+		<button class="menu-item" onclick={() => runAndClose(onuseseed)}>
+			<Icon name="pin" size={14} />
+			{TAKE_USE_SEED_LABEL}
+			<span class="menu-item-hint">{gen.seed}</span>
+		</button>
+	{/if}
 	<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
 		<Icon name="list-plus" size={14} />
 		{TAKE_PLAYLIST_LABEL}

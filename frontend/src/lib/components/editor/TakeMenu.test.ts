@@ -11,6 +11,7 @@ import {
 	TAKE_REPAINT_LABEL,
 	TAKE_SHARE_LABEL
 } from '$lib/constants';
+import { TAKE_USE_SEED_LABEL } from '$lib/constants/take-task';
 import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
@@ -45,9 +46,10 @@ afterEach(async () => {
 
 function defaultProps() {
 	return {
-		gen: gen({ version_number: 3, generation_number: 2 }),
+		gen: gen({ version_number: 3, generation_number: 2, seed: null }),
 		onrepaint: vi.fn(),
 		oncover: vi.fn(),
+		onuseseed: vi.fn(),
 		onshare: vi.fn(async () => ({
 			status: 'ok',
 			share_url: 'https://example.com/share/gen/take',
@@ -99,15 +101,19 @@ describe('TakeMenu', () => {
 		expect(menuRow(target, TAKE_SHARE_LABEL).title).toBe('Shared: /share/gen/take');
 	});
 
-	it.each([false, true])(
-		'915_C3: offers five ordered actions with an icon each, Delete last in red, and leaves Keep to the row when kept is %s',
-		async (kept) => {
+	it.each([
+		{ seed: null, rows: [] as string[] },
+		{ seed: 4127730, rows: [TAKE_USE_SEED_LABEL] }
+	])(
+		'915_C3: offers ordered actions with an icon each, Use seed third only for a take with seed $seed, Delete last in red',
+		async ({ seed, rows: seedRows }) => {
 			const { target } = await render({
-				gen: gen({ is_kept: kept, is_shared: true, is_archived: true })
+				gen: gen({ is_kept: true, is_shared: true, is_archived: true, seed })
 			});
 			expect(menuRowLabels(target)).toEqual([
 				TAKE_REPAINT_LABEL,
 				TAKE_COVER_LABEL,
+				...seedRows,
 				TAKE_PLAYLIST_LABEL,
 				TAKE_SHARE_LABEL,
 				TAKE_DELETE_LABEL
@@ -115,14 +121,18 @@ describe('TakeMenu', () => {
 			const rows = Array.from(target.querySelectorAll('.menu-item'));
 			expect(rows.every((row) => row.querySelector('svg') !== null)).toBe(true);
 			expect(rows.map((row) => row.classList.contains('destructive'))).toEqual([
-				false,
-				false,
-				false,
-				false,
+				...rows.slice(0, -1).map(() => false),
 				true
 			]);
 		}
 	);
+
+	it('C4: shows the seed as the Use seed row hint', async () => {
+		const { target } = await render({ gen: gen({ seed: 4127730 }) });
+		expect(menuRow(target, TAKE_USE_SEED_LABEL).querySelector('.menu-item-hint')?.textContent).toBe(
+			'4127730'
+		);
+	});
 
 	it('915_C3: is a dialog of plain buttons named More, not a menu', async () => {
 		const { target } = await render();
@@ -135,12 +145,13 @@ describe('TakeMenu', () => {
 	it.each([
 		['Repaint', 'onrepaint'],
 		['Cover', 'oncover'],
+		['Use seed', 'onuseseed'],
 		['Add to playlist', 'onaddtoplaylist'],
 		['Delete', 'ondelete']
 	] as const)(
 		'915_C3: runs %s and closes the menu, handing focus back to More',
 		async (label, callback) => {
-			const { target, props } = await render();
+			const { target, props } = await render({ gen: gen({ seed: 4127730 }) });
 			menuRow(target, label).click();
 			await vi.waitFor(() => expect(document.activeElement).toBe(moreButtonIn(target)));
 			expect(props[callback]).toHaveBeenCalledOnce();
