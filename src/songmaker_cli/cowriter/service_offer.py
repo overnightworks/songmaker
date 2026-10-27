@@ -17,12 +17,12 @@ from agent_runtime_client.wire import Offer, RejectionCode, RunRejection, parse_
 from pydantic import ValidationError
 
 from songmaker_cli.api_models import ChatTurnProblem, CowriterOfferState
+from songmaker_cli.cowriter import service_turn
 from songmaker_cli.cowriter.service_turn import (
     WORKLOAD_TOKEN_HEADER,
     TurnProblem,
     cowriter_model_id,
     fetch_tokens,
-    service_client,
 )
 from songmaker_cli.settings import get_settings
 
@@ -57,7 +57,13 @@ async def _state_of_the_offer(app: FastAPI, session_id: str | None) -> CowriterO
             return CowriterOfferState.SIGN_IN_AGAIN
         return CowriterOfferState.NOT_REACHABLE
     try:
-        async with service_client(service_url) as client:
+        # httpx applies its timeout to each network wait, so a trickling answer needs a deadline.
+        async with (
+            asyncio.timeout(OFFER_TIMEOUT_SECONDS),
+            service_turn.service_client(
+                service_url,
+            ) as client,
+        ):
             response = await client.get(
                 OFFER_PATH,
                 headers={
@@ -66,7 +72,7 @@ async def _state_of_the_offer(app: FastAPI, session_id: str | None) -> CowriterO
                 },
                 timeout=OFFER_TIMEOUT_SECONDS,
             )
-    except httpx.HTTPError:
+    except (httpx.HTTPError, TimeoutError):
         return CowriterOfferState.NOT_REACHABLE
     return _state_of_the_answer(response)
 

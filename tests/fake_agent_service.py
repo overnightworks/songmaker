@@ -39,7 +39,7 @@ from agent_runtime_client.wire import (
 from conftest import issued_cookies
 from fake_oidc_issuer import FakeIssuer, a_fake_issuer
 
-from songmaker_cli.cowriter import service_offer, service_turn
+from songmaker_cli.cowriter import service_turn
 from songmaker_cli.cowriter.mcp_endpoint import AVAILABILITY_ATTRIBUTE, McpEndpointAvailability
 
 if TYPE_CHECKING:
@@ -245,6 +245,16 @@ def never_answers_offer(longest_read_seconds: float) -> OfferBehavior:
     return respond
 
 
+def trickles_offer_forever() -> OfferBehavior:
+    """Bytes keep arriving inside every read timeout, so only an overall deadline ends the wait."""
+
+    async def respond(_request: httpx.Request) -> httpx.Response:
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    return respond
+
+
 def offer_fails_to_connect(error: Exception) -> OfferBehavior:
     async def respond(_request: httpx.Request) -> httpx.Response:
         raise error
@@ -320,7 +330,6 @@ def attach_cowriter_service(
     app.state.oidc_sign_in = issuer.relying_party_for_app()
     agent = FakeAgentService()
     monkeypatch.setattr(service_turn, "service_client", agent.client_for)
-    monkeypatch.setattr(service_offer, "service_client", agent.client_for)
 
     config = installed_web_auth_config(app)
     now = datetime.now(timezone.utc)

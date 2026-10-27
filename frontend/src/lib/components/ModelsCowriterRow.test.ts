@@ -107,7 +107,7 @@ describe('the answered offer', () => {
 	it.each([
 		{ name: 'M6 says the state', answer: offerOf('not_reachable'), shown: 'opus' },
 		{
-			name: 'a failed request to songmaker says the same',
+			name: 'A2 a failed request to songmaker says the same',
 			answer: new Error('network'),
 			shown: 'page-model'
 		}
@@ -146,7 +146,7 @@ describe('the rest of the row', () => {
 		expect(target.querySelector('details')?.textContent).toContain('24000');
 	});
 
-	it('offers nothing to choose', async () => {
+	it('A8 offers nothing to choose', async () => {
 		const target = await settledRow(offerOf('ready'));
 
 		expect(target.querySelector('select, input, button, [role="group"]')).toBeNull();

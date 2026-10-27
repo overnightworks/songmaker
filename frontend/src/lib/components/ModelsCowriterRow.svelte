@@ -4,7 +4,11 @@
 	import { fetchCowriterOffer } from '$lib/api/client';
 	import { signInAddress } from '$lib/api/fetch';
 	import type { CowriterOfferResponse } from '$lib/api/types';
-	import { COWRITER_PROVIDER_LABEL, MODELS_TASK_COWRITER_LABEL } from '$lib/constants';
+	import {
+		COWRITER_PROVIDER_LABEL,
+		MODELS_STATUS_CHECKING_LABEL,
+		MODELS_TASK_COWRITER_LABEL
+	} from '$lib/constants';
 	import ModelsServiceRow from './ModelsServiceRow.svelte';
 
 	type OfferState = CowriterOfferResponse['state'];
@@ -16,7 +20,7 @@
 	};
 
 	const MODELS_TAB_ADDRESS = '/settings/users?tab=models';
-	const CHECKING: Status = { text: 'Checking…', tone: 'off' };
+	const CHECKING: Status = { text: MODELS_STATUS_CHECKING_LABEL, tone: 'off' };
 	const STATUS_OF_STATE: Record<OfferState, Status> = {
 		ready: { text: 'Ready', tone: 'ok' },
 		not_built: { text: 'Not set up in the service', tone: 'off' },

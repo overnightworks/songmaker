@@ -77,7 +77,7 @@ describe('settings API contract', () => {
 		expect(JSON.parse(String(init.body))).toEqual({ tail_token_budget: 1200 });
 	});
 
-	it('reads the co-writer offer from its own admin route as the state and the model', async () => {
+	it('A6 A9 reads the co-writer offer from its own admin route as the state and the model', async () => {
 		const offer = { state: 'ready', model: 'opus' };
 		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(offer) });
 

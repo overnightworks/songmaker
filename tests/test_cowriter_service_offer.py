@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
 
 import httpx
 import pytest
@@ -25,15 +24,17 @@ from fake_agent_service import (
     offered_model,
     offers,
     refuses_offer,
+    trickles_offer_forever,
 )
 from fake_oidc_issuer import USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN
 from fastapi.testclient import TestClient
 
-from songmaker_cli.cowriter.service_offer import OFFER_TIMEOUT_SECONDS
+from songmaker_cli.cowriter import service_offer
 from songmaker_cli.db.models import UserSession
 
 OFFER_PATH = "/api/settings/cowriter/offer"
 OPUS = "claude/opus"
+OFFER_TIMEOUT_CEILING_SECONDS = 10
 ROTATED_REFRESH_TOKEN = "fake-rotated-refresh-token"  # noqa: S105
 ALL_SECRETS = (USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN, A_REFRESH_TOKEN, ROTATED_REFRESH_TOKEN)
 
@@ -114,7 +115,7 @@ def test_m9_a_forbidden_answer_reads_as_not_available_for_you(web):
     assert web.state() == "not_available"
 
 
-def test_the_offer_request_carries_the_users_token_and_the_workload_token(web):
+def test_a1_a2_the_offer_is_asked_once_with_the_users_token_and_the_workload_token(web):
     web.state()
 
     [request] = web.agent.offer_requests
@@ -123,20 +124,15 @@ def test_the_offer_request_carries_the_users_token_and_the_workload_token(web):
     assert request.headers["agent-workload-token"] == WORKLOAD_ACCESS_TOKEN
 
 
-def test_one_read_asks_the_service_once(web):
-    web.state()
-
-    assert len(web.agent.offer_requests) == 1
-
-
 # ── A2: the offer cannot be read (M4 to M7, M19, M20, M22) ───────────
 
 
 UNREADABLE_OFFERS = [
     pytest.param(
-        offer_fails_to_connect(httpx.ConnectError("refused")), id="M5-connect-error",
+        offer_fails_to_connect(httpx.ConnectError("refused")),
+        id="M5-connect-error",
     ),
-    pytest.param(never_answers_offer(OFFER_TIMEOUT_SECONDS), id="M19-never-answers"),
+    pytest.param(never_answers_offer(OFFER_TIMEOUT_CEILING_SECONDS), id="M19-never-answers"),
     pytest.param(refuses_offer(503, RejectionCode.UNAVAILABLE), id="M6-unavailable"),
     pytest.param(refuses_offer(401, RejectionCode.UNAUTHORIZED), id="M6-unauthorized"),
     pytest.param(
@@ -165,8 +161,16 @@ def test_an_offer_that_cannot_be_read_reads_as_not_reachable(web, behavior):
     assert web.state() == "not_reachable"
 
 
+def test_a2_an_offer_that_trickles_past_its_deadline_reads_as_not_reachable(web, monkeypatch):
+    monkeypatch.setattr(service_offer, "OFFER_TIMEOUT_SECONDS", 0.2)
+    web.agent.reply_to_offer_with(trickles_offer_forever())
+
+    assert web.state() == "not_reachable"
+
+
 def test_m4_without_an_agent_service_url_nothing_is_fetched_and_no_token_rotates(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     web = _web(tmp_path, monkeypatch, "anna")
     monkeypatch.delenv("AGENT_SERVICE_URL")
@@ -205,7 +209,9 @@ def test_m10_a_refused_renewal_asks_the_admin_to_sign_in_again(web):
     assert web.agent.offer_requests == []
 
 
-def test_a_session_without_a_refresh_token_asks_the_admin_to_sign_in_again(tmp_path, monkeypatch):
+def test_a5_m10_a_session_without_a_refresh_token_asks_the_admin_to_sign_in_again(
+    tmp_path, monkeypatch
+):
     web = _web(tmp_path, monkeypatch, "anna", refresh_token=None)
 
     assert web.state() == "sign_in_again"
@@ -226,7 +232,7 @@ def test_m13_a_member_is_refused_and_the_service_gets_no_request(tmp_path, monke
     assert web.issuer.grants_seen == []
 
 
-def test_the_cowriter_settings_do_not_read_the_offer(web):
+def test_a6_the_cowriter_settings_do_not_read_the_offer(web):
     response = web.client.get("/api/settings/cowriter")
 
     assert response.status_code == 200
@@ -237,22 +243,39 @@ def test_the_cowriter_settings_do_not_read_the_offer(web):
 # ── A7: no token anywhere (M14) ──────────────────────────────────────
 
 
-FAILURES: list[Callable[[Web], None]] = [
-    lambda web: web.agent.reply_to_offer_with(offer_fails_to_connect(httpx.ConnectError("x"))),
-    lambda web: web.agent.reply_to_offer_with(refuses_offer(503, RejectionCode.UNAVAILABLE)),
-    lambda web: web.agent.reply_to_offer_with(refuses_offer(401, RejectionCode.UNAUTHORIZED)),
-    lambda web: web.agent.reply_to_offer_with(
-        answers_offer_with(502, b"<html></html>", content_type="text/html"),
+FAILURES = [
+    pytest.param(
+        lambda web: web.agent.reply_to_offer_with(offer_fails_to_connect(httpx.ConnectError("x"))),
+        id="M5",
     ),
-    lambda web: web.agent.reply_to_offer_with(
-        answers_offer_with(200, b"not json", content_type="application/json"),
+    pytest.param(
+        lambda web: web.agent.reply_to_offer_with(refuses_offer(503, RejectionCode.UNAVAILABLE)),
+        id="M6-503",
     ),
-    lambda web: setattr(web.issuer, "refuses_refresh_with", "invalid_grant"),
-    lambda web: setattr(web.issuer, "unreachable", True),
+    pytest.param(
+        lambda web: web.agent.reply_to_offer_with(refuses_offer(401, RejectionCode.UNAUTHORIZED)),
+        id="M6-401",
+    ),
+    pytest.param(
+        lambda web: web.agent.reply_to_offer_with(
+            answers_offer_with(502, b"<html></html>", content_type="text/html"),
+        ),
+        id="M6b",
+    ),
+    pytest.param(
+        lambda web: web.agent.reply_to_offer_with(
+            answers_offer_with(200, b"not json", content_type="application/json"),
+        ),
+        id="M7",
+    ),
+    pytest.param(
+        lambda web: setattr(web.issuer, "refuses_refresh_with", "invalid_grant"), id="M10"
+    ),
+    pytest.param(lambda web: setattr(web.issuer, "unreachable", True), id="M11"),
 ]
 
 
-@pytest.mark.parametrize("fail", FAILURES, ids=lambda fail: str(FAILURES.index(fail)))
+@pytest.mark.parametrize("fail", FAILURES)
 def test_m14_a_failed_read_leaves_no_token_in_a_log_line_or_the_response(web, caplog, fail):
     web.issuer.rotates_refresh_token_to = ROTATED_REFRESH_TOKEN
     fail(web)
@@ -266,7 +289,7 @@ def test_m14_a_failed_read_leaves_no_token_in_a_log_line_or_the_response(web, ca
         assert secret not in caplog.text
 
 
-def test_a_successful_read_leaves_no_token_in_a_log_line_or_the_response(web, caplog):
+def test_a7_a_successful_read_leaves_no_token_in_a_log_line_or_the_response(web, caplog):
     web.issuer.rotates_refresh_token_to = ROTATED_REFRESH_TOKEN
     caplog.set_level(logging.DEBUG)
 
@@ -279,7 +302,7 @@ def test_a_successful_read_leaves_no_token_in_a_log_line_or_the_response(web, ca
     assert web.stored_refresh_token() == ROTATED_REFRESH_TOKEN
 
 
-def test_a_failed_read_logs_only_its_closed_state_name(web, caplog):
+def test_a7_a_failed_read_logs_only_its_closed_state_name(web, caplog):
     web.agent.reply_to_offer_with(refuses_offer(503, RejectionCode.UNAVAILABLE))
     caplog.set_level(logging.INFO, logger="songmaker_cli.cowriter.service_offer")
 
@@ -298,15 +321,13 @@ def test_m21_two_readers_of_the_same_refresh_token_both_succeed_and_the_last_rot
 ):
     issued: list[str] = []
     both_read_the_first_token = threading.Barrier(2, timeout=10)
-    renew = web.issuer._renewal  # noqa: SLF001 -- the realm's answer to a refresh grant
 
-    def renewal_after_both_asked():
+    def after_both_asked():
         both_read_the_first_token.wait()
         web.issuer.rotates_refresh_token_to = f"rotated-{len(issued)}"
         issued.append(web.issuer.rotates_refresh_token_to)
-        return renew()
 
-    web.issuer._renewal = renewal_after_both_asked  # noqa: SLF001
+    web.issuer.before_renewal = after_both_asked
     states: list[str] = []
     second_reader = TestClient(web.client.app)
     second_reader.cookies.update(web.client.cookies)
@@ -315,8 +336,7 @@ def test_m21_two_readers_of_the_same_refresh_token_both_succeed_and_the_last_rot
         states.append(client.get(OFFER_PATH).json()["state"])
 
     threads = [
-        threading.Thread(target=read_with, args=(client,))
-        for client in (web.client, second_reader)
+        threading.Thread(target=read_with, args=(client,)) for client in (web.client, second_reader)
     ]
     for thread in threads:
         thread.start()
