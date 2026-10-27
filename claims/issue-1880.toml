@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "3de338a0fe6bfa64de96a4cc76d6dda6d532bed2"
 branch = "claude/issue-1880-release-tag-watcher"
-scope = ["AGENTS.md", "README.md", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "quality/baseline.toml", "scripts/BACKUP.md", "scripts/auto-deploy.sh", "scripts/backup.sh", "scripts/install-autodeploy.sh", "scripts/songmaker-alert@.service", "scripts/songmaker-autodeploy.service", "scripts/songmaker-autodeploy.timer", "scripts/songmaker-cli-credentials-mirror.service", "scripts/songmaker.service", "tests"]
+scope = ["AGENTS.md", "README.md", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "quality/baseline.toml", "scripts/BACKUP.md", "scripts/auto-deploy.sh", "scripts/backup.sh", "scripts/install-autodeploy.sh", "scripts/songmaker-alert@.service", "scripts/songmaker-autodeploy.service", "scripts/songmaker-autodeploy.timer", "scripts/songmaker-cli-credentials-mirror.service", "scripts/songmaker.service", "scripts/switch_deploy_checkout.sh", "tests"]
 opened_commit = "31694625ef538940dd063bbfa4c0f79752f98cff"
 whole_reason = "Fetch, selection, guard and checkout change together, and the text files must name the deploy checkout on the day the watcher starts refusing work clones."
