@@ -61,7 +61,6 @@
 				id={`listen-tab-${tab}`}
 				aria-controls={`listen-panel-${tab}`}
 				data-tab={tab}
-				data-hitbox="text"
 				class:active={selected === tab}
 				aria-selected={selected === tab}
 				tabindex={selected === tab ? 0 : -1}

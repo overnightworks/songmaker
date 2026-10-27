@@ -86,13 +86,19 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
 	});
 
-	test('both tabs are at least 44px high and a click just below one selects it (S9, #1927 acceptance 10)', async ({
+	test('both tabs are at least 44px high and a click near the bottom edge of the Co-writer tab selects it (S9, #1927 acceptance 10)', async ({
 		page
 	}) => {
 		await openPickedSong(page);
+		for (const tab of await page
+			.getByRole('tablist', { name: 'Editor tabs' })
+			.getByRole('tab')
+			.all()) {
+			const tabBox = await tab.boundingBox();
+			expect(tabBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+		}
 		const box = await cowriterTab(page).boundingBox();
 		if (!box) throw new Error('Expected the Co-writer tab to be laid out');
-		expect(box.height).toBeGreaterThanOrEqual(44);
 		await page.mouse.click(box.x + box.width / 2, box.y + box.height - 2);
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
 	});
