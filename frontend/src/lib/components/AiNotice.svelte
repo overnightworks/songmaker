@@ -39,7 +39,6 @@
 	.spark {
 		display: inline-flex;
 		flex: none;
-		color: var(--primary);
 	}
 	.row {
 		display: flex;
@@ -52,6 +51,9 @@
 		border: 1px solid var(--border);
 		border-radius: 999px;
 		white-space: nowrap;
+	}
+	.line .spark {
+		color: var(--primary);
 	}
 	.line {
 		display: flex;
