@@ -958,9 +958,9 @@ describe('a reload on a library page', () => {
 	});
 });
 
-// A phone tab reloaded over the full Now Playing comes back onto that layer's
-// entry; the installed history controller steps off it once the router start
-// has run -- but only while the page still stands there (issue #1002).
+// A phone tab reloaded over the full Now Playing comes back onto a layer entry
+// no open layer owns; with no session the sign-in start loads afresh from
+// there, with no step back, and the return lands on the page (issue #1002).
 describe('a reload over the phone Now Playing', () => {
 	it.each([
 		{ page: 'Home', address: HOME_ROUTE_PATH, openAddress: openHomeAddress, surface: 'home' },

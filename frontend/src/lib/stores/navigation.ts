@@ -293,7 +293,8 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // An app-page link (a Settings row, the account name or its menu, a search hit
 // that names a page) leaves the song for an app page, so it asks the same
 // dirty-draft question as every other way out before it navigates. Pending
-// history-layer steps must land before pushing the page (#1165, #1289).
+// history-layer steps must land before pushing the page: a step back landing
+// after the push would take the address back to the song (#1143).
 type AppPageHref =
 	Extract<RailSearchTarget, { kind: 'page' }>['href'] | typeof ADMIN_WORKER_POOL_HREF;
 

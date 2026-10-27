@@ -45,7 +45,7 @@
 	import { followUnsavedDraftAtUnload } from '$lib/stores/editor';
 	import { closeTopLayer } from '$lib/stores/layers';
 	import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
-	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
+	import { restoreLibraryHistoryOnRouterStart } from '$lib/stores/libraryContext';
 	import {
 		installHistoryController,
 		loadAfresh,
@@ -206,7 +206,7 @@
 	// first navigation it reports, the page it started on, has its id back. A
 	// Back or Forward the router would mount under another address than the
 	// one it lands on mounts the route of that address instead.
-	const reportRouterStarted = holdLibraryHistoryUntilRouterStarts();
+	const reportRouterStarted = restoreLibraryHistoryOnRouterStart();
 	afterNavigate((navigation) => {
 		stampNavigatedEntry(navigation.type);
 		reportRouterStarted();

@@ -44,7 +44,7 @@
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/constants.ts" = 818
 "frontend/src/lib/history/historyController.test.ts" = 918
-"frontend/src/lib/history/historyController.ts" = 953
+"frontend/src/lib/history/historyController.ts" = 950
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
