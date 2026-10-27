@@ -40,8 +40,8 @@ MIRROR_SCRIPT="$SCRIPT_DIR/mirror_agent_cli_credentials.py"
 MIRROR_SERVICE_UNIT="songmaker-cli-credentials-mirror.service"
 MIRROR_PATH_UNIT="songmaker-cli-credentials-mirror.path"
 MIRROR_TIMER_UNIT="songmaker-cli-credentials-mirror.timer"
-# shellcheck source=scripts/agent-cli-paths.sh
-source "$SCRIPT_DIR/agent-cli-paths.sh"
+# shellcheck source=scripts/agent_cli_paths.sh
+source "$SCRIPT_DIR/agent_cli_paths.sh"
 
 HOME_DIR=""
 CREDENTIALS_DIR=""

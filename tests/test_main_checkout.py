@@ -1,7 +1,7 @@
 """Behavioural tests for ``scripts/main_checkout.py`` (issue #1499): which checkout is the main one.
 
 Every path that is not a git checkout is refused with the module's one failure,
-``CheckoutError``, saying so: callers such as ``scripts/grafana-password`` catch
+``CheckoutError``, saying so: callers such as ``scripts/grafana_password.py`` catch
 nothing else. Checkouts are real repositories built in ``tmp_path``.
 """
 

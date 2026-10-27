@@ -23,8 +23,3 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 11
 item = "#1784"
 date = 2026-10-22
 reason = "generated API types gain two optional fields (account_console_url, scheduled_hour_utc); the generator's --check gates the file; quality is asked to exempt linguist-generated files (operator question, 22.10.2026)"
-
-[secrets]
-allow = [
-    { rule = "generic-api-key", file = "scripts/check_agent_cli_mounts.sh", secret_sha256 = "e503db11c41bb36cdf8458a855645f6a2903de665a5a6b046476b56c27f11a7c", reason = "CREDENTIALS_DIR=\"\" initialises an empty directory variable; it holds no credential" },
-]

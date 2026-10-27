@@ -13,7 +13,7 @@ Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation
 Install and first start:
 
 ```bash
-sudo ./scripts/apparmor/install.sh                # songmaker-web does not start without its AppArmor profile
+sudo ./scripts/apparmor/install_profile.sh                # songmaker-web does not start without its AppArmor profile
 cp docker/.env.docker.example .env                # fill in the required secrets
 docker compose up -d --build --wait               # never wrap in `timeout`
 sudo ./scripts/install-cli-credentials-mirror.sh  # agent-CLI login mirror

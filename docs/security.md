@@ -623,7 +623,7 @@ denies the write on its own and the check would still pass with
 the mask section disappearing entirely, never as evidence for the write rule.
 
 An operator installs the AppArmor policy with
-`sudo scripts/apparmor/install.sh` and then recreates the service with
+`sudo scripts/apparmor/install_profile.sh` and then recreates the service with
 `docker compose up -d songmaker-web`. The script stages a copy of the profile
 as a dotfile in `/etc/apparmor.d/`, checks that those staged bytes parse
 (`apparmor_parser -QK`) and declare the `songmaker-web` profile and no other
@@ -671,7 +671,7 @@ in the profile, including its brace lists, so a rename that reaches only one
 of them is a red test instead of a silently refused mount. A project that
 embeds `agent_providers` takes those prefixes and derives its own profile from
 them. The profile *name* is a parameter wherever it is used —
-`sudo scripts/apparmor/install.sh [profile]`,
+`sudo scripts/apparmor/install_profile.sh [profile]`,
 `python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
 `SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
 `tests/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
@@ -752,7 +752,7 @@ the live proof remains the next rollout step.
 An operator runs the rollout and proof in this exact order:
 
 ```sh
-sudo scripts/apparmor/install.sh
+sudo scripts/apparmor/install_profile.sh
 docker compose up -d songmaker-web
 python scripts/prove_codex_image_sandbox.py
 ```

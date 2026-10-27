@@ -11,7 +11,7 @@ const APP_SHELL_URL = '/index.html';
 
 /**
  * The hashed Web Worker chunks, rewritten into the built file by
- * `scripts/inject-worker-precache.mjs`. Vite bundles workers in a pass whose
+ * `scripts/inject_worker_precache.mjs`. Vite bundles workers in a pass whose
  * output never reaches the client manifest that `build` is generated from, so
  * the finished build is the only place these paths exist.
  */
