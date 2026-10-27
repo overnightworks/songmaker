@@ -2,6 +2,7 @@ import type { BeforeNavigate, NavigationType } from '@sveltejs/kit';
 import { untrack } from 'svelte';
 import { goto, pushState, replaceState } from '$app/navigation';
 import { page } from '$app/state';
+import { browserDocumentLoads, documentAddress, type DocumentLoads } from './documentLoads';
 import {
 	dropLayersFrom,
 	keepLayerHistory,
@@ -761,17 +762,15 @@ export { releaseLayerEntries as releaseLayerEntriesForTests };
 // inside this one, so nothing the signed-in page held survives in memory
 // (#1340, ruling A of 14.10.2026). The load waits until history has come to
 // rest, so it leaves from the entry a navigation already under way lands on.
-// Over a layer's entry it replaces that entry: Back finds no copy of the page
-// to step off again, and nothing steps back meanwhile (#1230). Over a page
-// entry it is pushed, keeping the page, so Back loads it afresh and asks for
-// the session again. With two or more layers open, the lower layers' entries
+// Over a layer's entry it replaces that entry (a form POST is pushed instead):
+// Back finds no copy of the page to step off again, and nothing steps back
+// meanwhile (#1230). Over a page entry it is pushed, keeping the page, so Back
+// loads it afresh and asks for the session again. With two or more layers open, the lower layers' entries
 // stay (accepted residual of the ruling). A page leaves once: the leave counts
 // from its first call, so a second refusal arriving meanwhile -- two library
 // requests refused together -- loads nothing more, where each further load
 // would abort the one before it.
-type DocumentLoads = Pick<Location, 'assign' | 'replace' | 'reload'>;
-
-let documentLoads: DocumentLoads = window.location;
+let documentLoads: DocumentLoads = browserDocumentLoads;
 let leftForFreshDocument = false;
 
 function standsOnLayerEntry(): boolean {
@@ -784,35 +783,36 @@ export function leavesForFreshDocument(): boolean {
 	return leftForFreshDocument;
 }
 
-// Loading an address with a `#` part over an address that differs from it in
-// nothing else only scrolls to that anchor and loads no document: the page
-// would stay, signed in, while it counts as gone (#1340). The standing address
-// can carry one -- a take's provenance link, a bookmark -- so a fresh document
-// is loaded at the address without it.
-function documentAddress(url: string): string {
-	const address = new URL(url, location.href);
-	address.hash = '';
-	return address.href;
-}
-
-export async function loadAfresh(url: string): Promise<void> {
+async function leaveOnce(load: () => void): Promise<void> {
 	if (leftForFreshDocument) return;
 	leftForFreshDocument = true;
 	await historyComesToRest();
-	const address = documentAddress(url);
-	if (standsOnLayerEntry()) documentLoads.replace(address);
-	else documentLoads.assign(address);
+	load();
+}
+
+export function loadAfresh(url: string): Promise<void> {
+	return leaveOnce(() => {
+		const address = documentAddress(url);
+		if (standsOnLayerEntry()) documentLoads.replace(address);
+		else documentLoads.assign(address);
+	});
 }
 
 // The address history stands on, loaded afresh. Over a page entry this is a
 // reload: the entry keeps the id the controller stamped into it, and a reload
 // loads the document whatever `#` part the address has.
-export async function reloadAfresh(): Promise<void> {
-	if (leftForFreshDocument) return;
-	leftForFreshDocument = true;
-	await historyComesToRest();
-	if (standsOnLayerEntry()) documentLoads.replace(documentAddress(location.href));
-	else documentLoads.reload();
+export function reloadAfresh(): Promise<void> {
+	return leaveOnce(() => {
+		if (standsOnLayerEntry()) documentLoads.replace(documentAddress(location.href));
+		else documentLoads.reload();
+	});
+}
+
+// A form POST cannot replace an entry, so it is pushed over the standing one,
+// a page's or a layer's; Back then reaches the entry it left, which a restore
+// from the cache loads afresh and a plain load asks the server about.
+export function leaveByPostingForm(action: string): Promise<void> {
+	return leaveOnce(() => documentLoads.submitPost(action));
 }
 
 // A browser that kept the page left for a fresh document in its back-forward
@@ -944,7 +944,7 @@ export function resetHistoryControllerForTests(): void {
 	navigationsStarted = 0;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
-	documentLoads = window.location;
+	documentLoads = browserDocumentLoads;
 	leftForFreshDocument = false;
 }
 

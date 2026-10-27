@@ -23,7 +23,7 @@ from fake_oidc_issuer import Person
 from httpx import Response
 from oidc_world import World
 
-from songmaker_cli.constants import LOGOUT_BUTTON_LABEL
+from songmaker_cli.auth_api import LOGOUT_BUTTON_LABEL
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
 
 MEMBER = "/apps/songmaker"

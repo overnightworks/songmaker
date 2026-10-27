@@ -74,7 +74,7 @@ export {
 	uploadPlaylistCover,
 	deletePlaylistCover
 } from './playlists';
-export { logout, fetchMe } from './auth';
+export { fetchMe } from './auth';
 
 export {
 	streamCoWriterTurn,

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -117,70 +117,6 @@ describe('sseFetch', () => {
 		});
 		const gen = sseFetch('/api/chat/turn', { method: 'POST' });
 		await expect(gen.next()).rejects.toBeInstanceOf(ApiError);
-	});
-
-	it('sends CSRF header on mutating requests', async () => {
-		document.cookie = 'csrf_token=token-xyz';
-		mockFetch.mockResolvedValueOnce({ ok: true, body: streamFrom([]) });
-		const gen = sseFetch('/api/chat/turn', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: '{}'
-		});
-		await gen.next();
-		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
-		const headers = call[1].headers as Record<string, string>;
-		expect(headers['X-CSRF-Token']).toBe('token-xyz');
-	});
-});
-
-describe('CSRF token on a mutating request', () => {
-	// jsdom's real cookie jar refuses a `__Host-` prefixed cookie on the
-	// insecure `http://localhost` test origin (the prefix requires a secure
-	// context), so the raw `document.cookie` string -- the one shape
-	// `getCsrfToken` actually parses -- is stubbed directly instead.
-	function lastRequestHeaders(): Record<string, string> | undefined {
-		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
-		return call[1].headers;
-	}
-
-	let cookieValue = '';
-	const originalCookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie');
-	if (!originalCookieDescriptor) throw new Error('jsdom dropped the document.cookie descriptor');
-
-	beforeEach(() => {
-		cookieValue = '';
-		Object.defineProperty(document, 'cookie', {
-			configurable: true,
-			get: () => cookieValue
-		});
-	});
-
-	afterEach(() => {
-		Object.defineProperty(document, 'cookie', originalCookieDescriptor);
-	});
-
-	it.each([
-		[
-			'the __Host- cookie set first',
-			'__Host-csrf_token=host-tok; csrf_token=plain-tok',
-			'host-tok'
-		],
-		['the plain cookie set first', 'csrf_token=plain-tok; __Host-csrf_token=host-tok', 'host-tok'],
-		['only the plain cookie present', 'csrf_token=plain-tok', 'plain-tok']
-	])('with %s, the token used is %s', async (_label, rawCookie, expectedToken) => {
-		cookieValue = rawCookie;
-		mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
-		await apiFetch('/api/albums', { method: 'POST' });
-		const headers = lastRequestHeaders();
-		expect(headers?.['X-CSRF-Token']).toBe(expectedToken);
-	});
-
-	it('adds no header when neither cookie is present', async () => {
-		mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
-		await apiFetch('/api/albums', { method: 'POST' });
-		const headers = lastRequestHeaders();
-		expect(headers?.['X-CSRF-Token']).toBeUndefined();
 	});
 });
 

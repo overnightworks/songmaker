@@ -1,15 +1,16 @@
 import { writable, derived, get } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
-import { ApiError, fetchMe, logout as apiLogout } from '$lib/api/client';
+import { ApiError, fetchMe } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { RATE_LIMITED_STATUS, SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
-import { loadAfresh, reloadAfresh } from '$lib/history/historyController';
+import { leaveByPostingForm, reloadAfresh } from '$lib/history/historyController';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
 	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
-	AUTH_CHECK_SERVER_ERROR
+	AUTH_CHECK_SERVER_ERROR,
+	LOGOUT_ADDRESS
 } from '$lib/constants/auth';
 import { reportSessionCheckReachable } from '$lib/stores/connectivity';
 
@@ -112,16 +113,17 @@ export function resetAuthForTests(): void {
 	signOutFailed.set(false);
 }
 
-// A sign-out ends here only once the server confirms the session is gone: a
-// shared device must not look signed out while the server still holds it
-// (#1340, ruling A of 14.10.2026). The server answers the identity provider's
-// logout address, which ends its session too. Confirmed, it forgets what was
-// playing and what the player recorded, which a session that merely ran out
-// keeps for the same user's next sign-in, and leaves by a fresh document load
-// of that address, so nothing the signed-in page held survives in memory. The
-// player is unloaded first, so a save on the way out cannot write the record
-// again (#1187).
-// From the request on the user is still set but no longer has a session to
+// A sign-out leaves only once the server answers: a shared device must not
+// look signed out while nothing can end the session (#1340, ruling A of
+// 14.10.2026). The check is the session read, which a session already gone
+// (a 401) passes: the identity provider's session still has to end. Past the
+// check it forgets what was playing and what the player recorded, which a
+// session that merely ran out keeps for the same user's next sign-in, and
+// leaves through a top-level form POST to the server, whose answer ends the
+// identity provider's session too, so nothing the signed-in page held survives
+// in memory. The player is unloaded first, so a save on the way out cannot
+// write the record again (#1187).
+// From the check on the user is still set but no longer has a session to
 // lose: a request refused meanwhile -- a poll -- is this sign-out, not an
 // expiry.
 export async function logout(): Promise<void> {
@@ -129,19 +131,20 @@ export async function logout(): Promise<void> {
 	const user = get(currentUser);
 	signingOut = true;
 	signOutFailed.set(false);
-	let logoutUrl: string;
 	try {
-		logoutUrl = await apiLogout();
-	} catch {
-		signingOut = false;
-		signOutFailed.set(true);
-		return;
+		await fetchMe();
+	} catch (error) {
+		if (classifyAuthFailure(error) === 'unreachable') {
+			signingOut = false;
+			signOutFailed.set(true);
+			return;
+		}
 	}
 	audioPlayer.unload();
 	if (user) {
 		forgetPlaybackResume(user.id);
 	}
-	await loadAfresh(logoutUrl);
+	await leaveByPostingForm(LOGOUT_ADDRESS);
 }
 
 // What a refused request asks before it reacts as a lost session.

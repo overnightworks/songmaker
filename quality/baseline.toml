@@ -21,13 +21,13 @@
 
 [file_lines]
 "frontend/e2e/back-closes-overlay.spec.ts" = 1241
-"frontend/e2e/helpers.ts" = 843
+"frontend/e2e/helpers.ts" = 839
 "frontend/e2e/library.spec.ts" = 1305
 "frontend/e2e/offline.spec.ts" = 816
-"frontend/e2e/seed.ts" = 1205
+"frontend/e2e/seed.ts" = 1196
 "frontend/e2e/song-phone.spec.ts" = 865
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1144
+"frontend/src/lib/api/types.ts" = 1140
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1537
@@ -43,7 +43,7 @@
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/constants.ts" = 846
-"frontend/src/lib/history/historyController.test.ts" = 1103
+"frontend/src/lib/history/historyController.test.ts" = 934
 "frontend/src/lib/history/historyController.ts" = 953
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
@@ -56,7 +56,7 @@
 "frontend/src/lib/stores/navigation.test.ts" = 3045
 "frontend/src/lib/stores/player.test.ts" = 5283
 "frontend/src/lib/stores/player.ts" = 2242
-"frontend/src/lib/stores/resourceSync.test.ts" = 2040
+"frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1070
 "frontend/src/routes/layout.test.ts" = 1404
 "frontend/src/routes/settings/users/+page.svelte" = 1209
@@ -69,7 +69,7 @@
 "src/songmaker_cli/queue_streams.py" = 976
 "src/songmaker_cli/sharing_api.py" = 868
 "tests/acestep_worker/test_wrapper.py" = 1631
-"tests/conftest.py" = 945
+"tests/conftest.py" = 933
 "tests/test_acestep_worker_train_lora.py" = 1294
 "tests/test_admin_api.py" = 1055
 "tests/test_api.py" = 4764
@@ -172,7 +172,7 @@
 
 [function_lines."src/songmaker_cli/server.py"]
 "_lifespan" = 85
-"create_app" = 182
+"create_app" = 180
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
 "_make_deps" = 64
