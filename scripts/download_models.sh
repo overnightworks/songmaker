@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Downloads the model checkpoints ACE-Step needs into vendor/acestep/checkpoints.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

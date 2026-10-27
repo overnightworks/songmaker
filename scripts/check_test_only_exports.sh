@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Reports test-only exports in the frontend that no production file imports.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 

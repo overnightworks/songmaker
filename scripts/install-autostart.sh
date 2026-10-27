@@ -122,8 +122,8 @@ ESCAPED_ALERT_SCRIPT="$(sed_escape_replacement "$PROJECT_ROOT/scripts/alert.sh")
 ESCAPED_PREFLIGHT="$(sed_escape_replacement \
     "$PREFLIGHT_SCRIPT")"
 
-# shellcheck source=scripts/agent-cli-paths.sh
-source "$SCRIPT_DIR/agent-cli-paths.sh"
+# shellcheck source=scripts/agent_cli_paths.sh
+source "$SCRIPT_DIR/agent_cli_paths.sh"
 require_main_checkout "$PROJECT_ROOT" install-autostart.sh || exit 1
 
 refuse_silent_takeover "$UNIT_TARGET" WorkingDirectory \

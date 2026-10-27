@@ -1,4 +1,4 @@
-"""Behavioural tests for scripts/grafana-password (issue #1359), driven as a real subprocess.
+"""Behavioural tests for scripts/grafana_password.py (issue #1359), driven as a real subprocess.
 
 The command runs from a scratch main checkout: a git repository holding the
 command and the shared ``.env`` reader, with its ``.env`` at the root, exactly
@@ -33,7 +33,7 @@ from pathlib import Path
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
-COMMAND_FILES = ("grafana-password", "dotenv_file.py", "main_checkout.py")
+COMMAND_FILES = ("grafana_password.py", "dotenv_file.py", "main_checkout.py")
 
 ADMIN_USER = "grafana-admin"
 INITIAL_GRAFANA_PASSWORD = "admin"
@@ -167,7 +167,7 @@ class Sandbox:
             (self.docker_dir / record).unlink(missing_ok=True)
         logins_before = self.grafana.accepted_logins
         completed = subprocess.run(
-            [str((checkout or self.checkout) / "scripts" / "grafana-password")],
+            [str((checkout or self.checkout) / "scripts" / "grafana_password.py")],
             capture_output=True,
             text=True,
             check=False,

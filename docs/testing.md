@@ -18,7 +18,7 @@ pytest tests/test_queue_streams.py tests/test_playlists.py -q
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 
 # Full suite — CI only, or when the operator asks
-pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci
+pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci.ini
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -68,7 +68,7 @@ Adoption is complete only after authenticated enforcement checks and the post-me
 
 The scope covers `src`, `frontend/src` and `scripts`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
-Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci` and `sonar-project.properties`, except `scripts/**`, which only the Sonar side names because pytest `--cov` never measures `scripts` and its lines would otherwise read as 0 % new code: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
+Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci.ini` and `sonar-project.properties`, except `scripts/**`, which only the Sonar side names because pytest `--cov` never measures `scripts` and its lines would otherwise read as 0 % new code: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
 
 ### Parallel Execution
 
@@ -77,11 +77,11 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 - `mock_arq_pool` fixture (conftest.py) isolates the arq connection pool
 - `_reset_settings_cache` and `_reset_worker_singletons` autouse fixtures clear `Settings`/`WorkerBase` per-test state
 - Settings/worker singletons are reset by fixtures; scorer model caches live in subprocesses
-- Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; BPM, silence, and spectral scorers remain measured (see `.github/workflows/coveragerc-ci`)
+- Heavy scorer tests are excluded from CI coverage because the CI image doesn't ship the Whisper/provider model runtimes; BPM, silence, and spectral scorers remain measured (see `.github/workflows/coveragerc-ci.ini`)
 
 ## Coverage Targets
 
-- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
+- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci.ini`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`.
 - **CI PostgreSQL contract**: `tests/test_postgresql.py`, `tests/test_cover_accounting.py`, `tests/test_reference_quota.py` and `tests/test_auth_write_lock_postgres.py` run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, the user-management write lock held once per transaction (and the back-channel logout waiting on it), transactional rollback, retention gaps, and cover publication/cancellation accounting; SQLite tests do not stand in for these guarantees. The reference quota proofs (`1301-F3-Q-BOUNDARY`, `-CONCURRENT`, `-FAILURE`, `-PATH`, `-SURFACE`) cover exact limits, retained and crash-file accounting, concurrent owner admission, independent owners, unrelated same-user writes, failed writes and request cancellation. Require the PostgreSQL contract job log to show the PostgreSQL quota cases and all three write-lock cases passed with zero skipped; collection alone is not evidence. Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
 - **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
@@ -376,7 +376,7 @@ frontend/src/
 │                                  +page.svelte entry points (loading/error/retry, stream vs
 │                                  classic playback, windowed-stream stop, Now Playing)
 └── service-worker.test.ts         The build-time worker-chunk precache injection
-                                   (`scripts/inject-worker-precache.mjs`): the placeholder rewrite,
+                                   (`scripts/inject_worker_precache.mjs`): the placeholder rewrite,
                                    the build failures it refuses to pass on, and that
                                    `service-worker.ts` still carries the placeholder it rewrites
 ```
@@ -462,7 +462,7 @@ middleware and lifecycle tests continue to use `make_test_app`.
   `.test.ts` a real `$state` proxy or props a mounted component follows when the test changes them
 - **The service worker's worker precache is a build artifact**: Vite bundles Web Workers in a pass
   whose output never reaches the client manifest `$service-worker`'s `build` list comes from, so
-  `pnpm build` runs `scripts/inject-worker-precache.mjs` to rewrite the hashed chunk paths into the
+  `pnpm build` runs `scripts/inject_worker_precache.mjs` to rewrite the hashed chunk paths into the
   built file. Unit tests cover the injection; the artifact itself is proven by `pnpm build` and
   `grep workers/ frontend/build/service-worker.js`
 - **Hitbox floor tests measure the real cascade, not the hitbox sheet alone.** Vitest never extracts
