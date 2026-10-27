@@ -114,15 +114,17 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   „upload") und `now-playing.html` („Coherence not available"). Die Gründe
   geschlossener Einträge in Slice 12 sind Beispielwörter, kein gesegneter
   Text.
-- Entwurf #1906 (nicht gesegnet): die KI-Kennzeichnung nach Art. 50 der KI-Verordnung.
-  Wortlaut gerult (E3, Operator 19.10.2026): „KI-generiert“ am Song oder Album
-  und „Du schreibst mit einer KI“ im Co-Writer, immer sichtbar, ohne Schalter.
-  Dateien: `share-player.html` (Abschnitt 8, Telefon und Desktop),
-  `now-playing.html` (Abschnitt 5, P5 bis P5c und D5), `song-page.html`
-  (Abschnitt „You write with an AI“, D5c) und `song-page-phone.html` (7f). Offen:
-  Platzierung und Aussehen (Abzeichen am Song, ruhige Zeile im Co-Writer),
-  Verhalten bei 390, Vorlesetext und das Sprachgemisch aus englischer App und
-  deutschen Worten.
+- KI-Kennzeichnung nach Art. 50 der KI-Verordnung (#1906), gesegnet vom
+  Operator am 27.10.2026 (P1 bis P5). Wortlaut gerult (E3, Operator 19.10.2026):
+  „KI-generiert“ am Song oder Album und „Du schreibst mit einer KI“ im
+  Co-Writer, immer sichtbar, ohne Schalter. Das Abzeichen steht in der Zeile,
+  die nennt, was läuft (hinter „v4 · take 7“ oder dem Namen), und bricht bei 390
+  in eine eigene zentrierte Zeile um, wenn diese Zeile lang ist; die Co-Writer-Zeile
+  steht in einer eigenen Zeile unter der Kopfzeile. Der Vorlesetext ist reiner
+  Text mit `lang="de"`, das Symbol ist verborgen. Die deutschen Worte bleiben in
+  der englischen App. Dateien: `share-player.html` (Abschnitt 8),
+  `now-playing.html` (Abschnitt 5), `song-page.html` (Abschnitt „You write with
+  an AI“) und `song-page-phone.html` (7f).
 - `sign-in.html` — Anmelden und Abgewiesen-Werden (#1715). Quelle:
   overnightworks/ui-console#6, Fassung 2, freigegeben vom Operator am
   19.10.2026, Artefakt https://claude.ai/artifact/6xvoJezFbApz7ygKfCe9we. Die

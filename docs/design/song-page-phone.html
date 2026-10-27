@@ -730,7 +730,6 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .board-head b { font-weight: 600; }
 .ai-note { flex: none; display: flex; align-items: flex-start; gap: .4rem; padding: .45rem .75rem; font-size: .78rem; line-height: 1.35; color: var(--text-muted); border-bottom: 1px solid var(--border); }
 .ai-note .ic { width: 14px; height: 14px; margin-top: .1rem; color: var(--action); flex: none; }
-.draft { display: inline-block; padding: 1px 9px; border-radius: 999px; background: #e0457b; color: #fff; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
 .new { outline: 2px dashed var(--action); outline-offset: -2px; border-radius: 3px; }
 .option { display: inline-block; margin-left: .35rem; padding: 0 .4rem; border-radius: 3px; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; background: #e8e2ef; color: #4a4552; }
 .option.rec { background: var(--score-good-bg); color: var(--score-good); }
@@ -1793,7 +1792,7 @@ the morning gives away</span></div>
 
 
 <figure>
-	<figcaption><b>7f · Notice under the header, 390</b> — “Du schreibst mit einer KI”, ruled words (E3, operator 19.10.2026), always on, no switch. <span class="draft">Draft · #1906 · not blessed</span></figcaption>
+	<figcaption><b>7f · Notice under the header, 390</b> — “Du schreibst mit einer KI”, ruled words (E3, operator 19.10.2026), always on, no switch. Blessed, operator 27.10.2026.</figcaption>
 	<div class="split">
 	<div class="device" id="f7f-b">
 		<header class="appbar">
@@ -1822,9 +1821,8 @@ the morning gives away</span></div>
 	</div>
 	</div>
 	<div class="frame-note">
-		<p><b>Recommended.</b> A quiet line on its own row under the conversation line. The header row (“Co-writer · Claude opus · conversation since Tue” and ⋯) is untouched and does not crowd; the line wraps to two lines on a long translation and never truncates, because it is the notice. The spark is the app's own.</p>
-		<p><b>Alternative, not drawn.</b> The notice inside the header row. At 390 it would push “conversation since Tue” into an ellipsis, so the header would lose its own information; rejected.</p>
-		<p><b>Screen reader.</b> Plain text in reading order right after the header, not a live region, with <code>lang="de"</code> for German speech. The icon is hidden. The English UI around the German words is an open point for the operator.</p>
+		<p><b>Placement.</b> A quiet line on its own row under the conversation line. The header row (“Co-writer · Claude opus · conversation since Tue” and ⋯) is untouched and does not crowd; the line wraps to two lines on a long translation and never truncates, because it is the notice. The spark is the app's own.</p>
+		<p><b>Screen reader.</b> Plain text in reading order right after the header, not a live region, with <code>lang="de"</code> for German speech. The icon is hidden. The German words stay inside the English UI (decided).</p>
 	</div>
 </figure>
 
