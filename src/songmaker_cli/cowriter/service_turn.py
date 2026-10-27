@@ -101,7 +101,7 @@ class TurnCaller:
 
 
 @dataclass(frozen=True)
-class _RunTokens:
+class RunTokens:
     user: SecretStr
     workload: SecretStr
 
@@ -126,9 +126,14 @@ def _cowriter_agent() -> AgentDefinition:
     return load_agent(files("songmaker_cli") / "agents" / _AGENT_FILE, cowriter_tool_declarations())
 
 
+def cowriter_model_id() -> str:
+    """The agent file's model as the service names it, provider prefix included."""
+    return _cowriter_agent().model
+
+
 def cowriter_model() -> str:
     """The model the person sees: the agent file's wire id without its provider prefix."""
-    return _cowriter_agent().model.rpartition("/")[2]
+    return cowriter_model_id().rpartition("/")[2]
 
 
 async def run_cowriter_turn(
@@ -140,7 +145,7 @@ async def run_cowriter_turn(
         yield unusable
         return
     agent, service_url = unusable
-    tokens = await asyncio.to_thread(_fetch_tokens, caller.app, caller.session_id)
+    tokens = await asyncio.to_thread(fetch_tokens, caller.app, caller.session_id)
     if isinstance(tokens, TurnProblem):
         yield tokens
         return
@@ -167,7 +172,7 @@ def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "agent file refused")
 
 
-def _fetch_tokens(app: FastAPI, session_id: str | None) -> _RunTokens | TurnProblem:
+def fetch_tokens(app: FastAPI, session_id: str | None) -> RunTokens | TurnProblem:
     """The person's fresh access token, then songmaker's workload token; never both unchecked."""
     if session_id is None:
         return TurnProblem(ChatTurnProblem.SIGN_IN_AGAIN, "no session")
@@ -183,7 +188,7 @@ def _fetch_tokens(app: FastAPI, session_id: str | None) -> _RunTokens | TurnProb
     workload = relying_party.workload_access_token()
     if isinstance(workload, OidcRefusal):
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "workload token refused")
-    return _RunTokens(user, workload)
+    return RunTokens(user, workload)
 
 
 def _problem_of_refusal(refusal: AccessTokenRefusal) -> TurnProblem:
@@ -193,7 +198,7 @@ def _problem_of_refusal(refusal: AccessTokenRefusal) -> TurnProblem:
 
 
 async def _stream_run(
-    service_url: str, request, tokens: _RunTokens, person: RunPerson,
+    service_url: str, request, tokens: RunTokens, person: RunPerson,
 ) -> AsyncIterator[TurnOutcome]:
     run_id: str | None = None
     decoder = RunStreamDecoder()

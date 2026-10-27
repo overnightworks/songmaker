@@ -40,7 +40,7 @@
 		MODELS_ROUTE_NOT_AVAILABLE_CODE,
 		routeReasonSentence
 	} from '$lib/components/ModelsTaskRow.svelte';
-	import ModelsServiceRow from '$lib/components/ModelsServiceRow.svelte';
+	import ModelsCowriterRow from '$lib/components/ModelsCowriterRow.svelte';
 	import type {
 		ModelsRouteKey,
 		ModelsRouteReason,
@@ -63,7 +63,6 @@
 		MODELS_COLUMN_ROUTE_LABEL,
 		MODELS_COLUMN_STATUS_LABEL,
 		MODELS_COLUMN_TASK_LABEL,
-		COWRITER_PROVIDER_LABEL,
 		MODELS_HEADING,
 		MODELS_HISTORY_TAIL_LABEL,
 		MODELS_RETRY_LABEL,
@@ -729,15 +728,7 @@
 						<span>{MODELS_COLUMN_STATUS_LABEL}</span>
 					</div>
 					{#if cowriterSettings}
-						<ModelsServiceRow
-							task={MODELS_TASK_COWRITER_LABEL}
-							provider={COWRITER_PROVIDER_LABEL}
-							route="Agent service"
-							model={cowriterSettings.model}
-							status="Checked by the agent service at each turn"
-							note="Grok, Codex: not selectable yet"
-							advanced={cowriterAdvanced}
-						/>
+						<ModelsCowriterRow model={cowriterSettings.model} advanced={cowriterAdvanced} />
 					{:else}
 						<p class="hint">{MODELS_LOADING_LABEL}</p>
 					{/if}

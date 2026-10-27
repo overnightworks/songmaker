@@ -1048,9 +1048,13 @@ unusable one stays saved until its next turn or job fails with the named reason.
 Cover and the scoring Judge are what ask that one dispatch; the Co-Writer runs at
 the agent service. Settings › Admin › **Models** shows all three: one table, one
 row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
-read-only (`ModelsServiceRow.svelte`): Claude, Agent service, the model the
-agent file names, and who checks it ("Checked by the agent service at each
-turn", no readiness light); under it, greyed, what is not selectable yet, and
+read-only (`ModelsCowriterRow.svelte`): Claude, Agent service, the model the
+agent file names, and a status the row takes from the agent service's offer
+(`GET /api/settings/cowriter/offer`, admin only, read once per opening of the tab):
+"✓ Ready", "Not set up in the service", "Not available for you", "No longer
+offered by the agent service" under the model, "The agent service's offer is not
+reachable" (no light) or "Sign in again to check the offer"; "Checking…" while it
+loads. Under it, greyed, what is not selectable yet, and
 the history tail under Advanced. The Cover and Scoring rows offer every provider, because what a provider
 cannot do, or has not been set up for, is a reason next to the choice and never
 a missing control: an unusable route stays visible and greyed with its reason
