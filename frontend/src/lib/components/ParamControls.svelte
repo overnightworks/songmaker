@@ -17,6 +17,7 @@
 	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { addToast } from '$lib/stores/toast';
+	import { RECIPE_ENGINE_RESET_TITLE, RECIPE_RESET_GLYPH } from '$lib/constants/recipe';
 
 	interface Props {
 		values: VersionGenerationParams;
@@ -24,6 +25,10 @@
 		onchange: (params: VersionGenerationParams) => void;
 		hiddenParams?: string[];
 		maxInferenceSteps?: number;
+		// Keys that differ from their default get a dot and a reset; without
+		// them every field renders plain, as on the settings pages.
+		changedKeys?: ReadonlySet<string>;
+		onresetfield?: (key: keyof VersionGenerationParams) => void;
 	}
 
 	function tooltip(key: string): string {
@@ -35,7 +40,9 @@
 		placeholders,
 		onchange,
 		hiddenParams = [],
-		maxInferenceSteps = 200
+		maxInferenceSteps = 200,
+		changedKeys,
+		onresetfield
 	}: Props = $props();
 
 	let compact = $state(false);
@@ -105,6 +112,23 @@
 	}
 </script>
 
+{#snippet fieldHead(key: keyof VersionGenerationParams, label: string)}
+	<span class="setting-head"
+		><span>{label}</span>
+		{#if changedKeys?.has(key)}
+			<i class="changed-dot" data-field-changed aria-hidden="true"></i>
+			<button
+				type="button"
+				class="field-reset"
+				data-field-reset
+				title={RECIPE_ENGINE_RESET_TITLE}
+				aria-label={`${label}: ${RECIPE_ENGINE_RESET_TITLE}`}
+				onclick={() => onresetfield?.(key)}>{RECIPE_RESET_GLYPH}</button
+			>
+		{/if}</span
+	>
+{/snippet}
+
 {#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string })}
 	<div class="setting param-error" title={tooltip(f.key)}>
 		<span>{f.label}</span>
@@ -115,7 +139,7 @@
 {#snippet numberField(f: NumberParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<label class="setting" title={tooltip(f.key)}>
-			<span>{f.label}</span>
+			{@render fieldHead(f.key, f.label)}
 			<input
 				type="number"
 				min={f.min}
@@ -136,7 +160,7 @@
 {#snippet selectField(f: SelectParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<label class="setting" title={tooltip(f.key)}>
-			<span>{f.label}</span>
+			{@render fieldHead(f.key, f.label)}
 			<select
 				value={values[f.key] ?? ''}
 				title={tooltip(f.key)}
@@ -158,7 +182,7 @@
 
 {#snippet textField(f: TextParamField)}
 	<label class="setting full-width" title={tooltip(f.key)}>
-		<span>{f.label}</span>
+		{@render fieldHead(f.key, f.label)}
 		<input
 			type="text"
 			value={(values[f.key] as string | null | undefined) ?? ''}
@@ -171,7 +195,7 @@
 
 {#snippet boolField(f: BoolParamField)}
 	<label class="setting toggle" title={tooltip(f.key)}>
-		<span>{f.label}</span>
+		{@render fieldHead(f.key, f.label)}
 		<input
 			type="checkbox"
 			checked={(values[f.key] as boolean | null | undefined) ?? f.defaultValue}
@@ -266,6 +290,31 @@
 		text-transform: uppercase;
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
+	}
+
+	.setting-head {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.changed-dot {
+		width: 0.45rem;
+		height: 0.45rem;
+		border-radius: 50%;
+		background: var(--primary);
+	}
+
+	.field-reset {
+		padding: 0 0.25rem;
+		border: none;
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.field-reset:hover {
+		color: var(--primary);
 	}
 
 	.setting.full-width {

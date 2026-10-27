@@ -58,7 +58,8 @@ const LOADED_PLACEHOLDERS: Required<VersionGenerationParams> = {
 
 async function renderControls(
 	compact: boolean,
-	placeholders: VersionGenerationParams = {}
+	placeholders: VersionGenerationParams = {},
+	extraProps: Record<string, unknown> = {}
 ): Promise<HTMLElement> {
 	stubMatchMedia(compact);
 	if (compact) document.documentElement.dataset.pointer = 'coarse';
@@ -71,7 +72,8 @@ async function renderControls(
 		props: {
 			values: {},
 			placeholders: placeholders as Required<VersionGenerationParams>,
-			onchange: vi.fn()
+			onchange: vi.fn(),
+			...extraProps
 		}
 	});
 	await tick();
@@ -158,5 +160,27 @@ describe('ParamControls placeholders', () => {
 				(t) => t.type === 'error' && t.message === 'Default missing for inference_steps'
 			)
 		).toBe(true);
+	});
+});
+
+describe('ParamControls change marks', () => {
+	it('renders no mark and no reset when no changed keys are given', async () => {
+		const target = await renderControls(false, LOADED_PLACEHOLDERS);
+		expect(target.querySelector('[data-field-reset]')).toBeNull();
+		expect(target.querySelector('[data-field-changed]')).toBeNull();
+	});
+
+	it('marks only a changed field with a dot and a reset that names the field', async () => {
+		const onresetfield = vi.fn();
+		const target = await renderControls(false, LOADED_PLACEHOLDERS, {
+			values: { lm_temperature: 0.5 },
+			changedKeys: new Set(['lm_temperature']),
+			onresetfield
+		});
+		const resets = target.querySelectorAll<HTMLButtonElement>('[data-field-reset]');
+		expect(resets).toHaveLength(1);
+		expect(target.querySelectorAll('[data-field-changed]')).toHaveLength(1);
+		resets[0].click();
+		expect(onresetfield).toHaveBeenCalledWith('lm_temperature');
 	});
 });
