@@ -177,10 +177,7 @@
 	const takeLabel = $derived(
 		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
 	);
-	// The badge follows the take line; without a take line (share pages) it
-	// stands on the album line instead, unless the source link names it.
 	const noticeLead = $derived(showTakeLabel ? takeLabel : stacked && source ? '' : albumLine);
-
 	// Before the player holds a take, the slider shows where it would start
 	// and how long it runs.
 	const duration = $derived(
