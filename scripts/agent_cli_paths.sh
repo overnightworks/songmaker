@@ -20,7 +20,7 @@
 #                           something else.
 #
 # Sourced, never executed:
-#   source "$SCRIPT_DIR/agent-cli-paths.sh"
+#   source "$SCRIPT_DIR/agent_cli_paths.sh"
 
 # The account that owns the stack, read from passwd rather than from $HOME:
 # under `sudo -H` the environment says /root while compose still mounts out of
