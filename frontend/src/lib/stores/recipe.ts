@@ -57,9 +57,14 @@ export function clearSeed(): void {
 	seedFromTake.set(null);
 }
 
-export function applyTakeUse({ generation, use }: PendingTakeUse): void {
-	if (use === 'seed') useSeed(generation);
-	else setSourceFromGeneration(generation, use);
+// Returns whether the use opened a task card.
+export function applyTakeUse({ generation, use }: PendingTakeUse): boolean {
+	if (use === 'seed') {
+		useSeed(generation);
+		return false;
+	}
+	setSourceFromGeneration(generation, use);
+	return true;
 }
 
 export function seedRecipeModel(activeModelIds: readonly string[]): void {

@@ -290,8 +290,7 @@
 	$effect(() => {
 		const pending = $pendingTakeUse;
 		if (!pending || !song || pending.generation.song_id !== song.id) return;
-		applyTakeUse(pending);
-		if (compact && pending.use !== 'seed') openTakesTab();
+		if (applyTakeUse(pending) && compact) openTakesTab();
 		pendingTakeUse.set(null);
 	});
 

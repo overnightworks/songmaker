@@ -199,7 +199,7 @@ describe('recipe session state', () => {
 	});
 });
 
-describe('seed from a take', () => {
+describe('seed from a take (C1, #1928 acceptance 1)', () => {
 	beforeEach(() => {
 		seedFromTake.set(null);
 		toasts.set([]);
@@ -232,6 +232,17 @@ describe('seed from a take', () => {
 		expect(get(seedFromTake)).toEqual({ seed: 5, takeNumber: 2 });
 		expect(get(sourceGeneration)).toBeNull();
 	});
+
+	it.each([
+		{ use: 'seed', opensTaskCard: false },
+		{ use: 'repaint', opensTaskCard: true },
+		{ use: 'cover', opensTaskCard: true }
+	] as const)(
+		'C1: a $use hand-over reports opening a task card: $opensTaskCard',
+		({ use, opensTaskCard }) => {
+			expect(applyTakeUse({ generation: generation({ seed: 5 }), use })).toBe(opensTaskCard);
+		}
+	);
 });
 
 describe('sourceTakeDurationSeconds', () => {
