@@ -1,20 +1,22 @@
 import type {
 	ChatTurnFailureFrame,
-	ChatTurnRouteErrorFrame,
+	ChatTurnProblemFrame,
 	ConversationItem,
 	SongItem
 } from '$lib/api/types';
 import {
 	COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
+	COWRITER_BUSY_WAIT_CEILING_SECONDS,
 	COWRITER_CONVERSATION_CONFIRM_TEMPLATE,
 	COWRITER_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_CONVERSATION_SINCE_TEMPLATE,
 	COWRITER_NEW_CONVERSATION_LABEL,
 	COWRITER_MESSAGE_COUNT_TEMPLATE,
 	COWRITER_NEW_CONVERSATION_LINE,
+	COWRITER_PROVIDER_LABEL,
 	COWRITER_SINGLE_MESSAGE_COUNT,
-	COWRITER_TURN_FAILURE_TEMPLATE,
+	COWRITER_UNAVAILABLE_TEXT,
 	DAY_LABEL_TODAY
 } from '$lib/constants';
 import {
@@ -63,37 +65,59 @@ export function cowriterToolCallTarget(
 	return { title: song.title, foreign: songId !== currentSongId };
 }
 
-export function cowriterThinkingLabel(provider: string): string {
-	return `${providerDisplayName(provider)} is thinking…`;
+export function cowriterThinkingLabel(): string {
+	return `${COWRITER_PROVIDER_LABEL} is thinking…`;
 }
 
-export function cowriterUnavailableLabel(provider: string): string {
-	return `${providerDisplayName(provider)} is currently unavailable`;
+export type CowriterProblem = ChatTurnProblemFrame['problem'];
+
+/** How a turn that could not run reads in the panel; `problem` is null for the endpoint's own failure message. */
+export interface CowriterTurnError {
+	problem: CowriterProblem | null;
+	text: string;
+	waitSeconds: number;
 }
 
-/**
- * The reason text comes from the provider library or the endpoint; the panel
- * only says whose it is — the provider the frame names, else its own.
- */
-export function cowriterTurnFailureLabel(
-	frame: ChatTurnRouteErrorFrame | ChatTurnFailureFrame,
-	panelProvider: string
-): string | null {
-	const reason = 'reason' in frame ? frame.reason.message : frame.message;
-	if (!reason) return null;
-	return COWRITER_TURN_FAILURE_TEMPLATE.replace(
-		'{provider}',
-		providerDisplayName('provider' in frame ? frame.provider : panelProvider)
-	).replace('{reason}', reason);
+const COWRITER_PROBLEM_TEXTS: Record<CowriterProblem, string> = {
+	unavailable: COWRITER_UNAVAILABLE_TEXT,
+	busy: 'The co-writer is busy',
+	not_enabled: 'The co-writer is not enabled for your account',
+	sign_in_again: 'Sign in again to use the co-writer'
+};
+
+export function cowriterTurnError(
+	frame: ChatTurnProblemFrame | ChatTurnFailureFrame
+): CowriterTurnError | null {
+	if (!('problem' in frame)) {
+		return frame.message ? { problem: null, text: frame.message, waitSeconds: 0 } : null;
+	}
+	const requestedWait = frame.problem === 'busy' ? (frame.retry_after_seconds ?? 0) : 0;
+	return {
+		problem: frame.problem,
+		text: COWRITER_PROBLEM_TEXTS[frame.problem],
+		waitSeconds: Math.min(requestedWait, COWRITER_BUSY_WAIT_CEILING_SECONDS)
+	};
+}
+
+/** The tone and glyph a named problem is drawn in: red only where the person alone can end it. */
+export const COWRITER_PROBLEM_LOOKS: Record<CowriterProblem, { tone: string; icon: string }> = {
+	sign_in_again: { tone: 'bad', icon: 'triangle-alert' },
+	busy: { tone: 'wait', icon: 'clock' },
+	not_enabled: { tone: 'off', icon: 'ban' },
+	unavailable: { tone: 'wait', icon: 'circle-alert' }
+};
+
+/** A wait as the clock "m:ss". */
+export function cowriterWaitClock(seconds: number): string {
+	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 export function providerDisplayName(provider: string): string {
 	return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
-export function cowriterHeaderLabel(provider: string, model: string): string {
-	if (!model) return 'Co-Writer';
-	return `${providerDisplayName(provider)} · ${model}`;
+export function cowriterHeaderLabel(model: string): string {
+	return `${COWRITER_PROVIDER_LABEL} ${model}`;
 }
 
 /** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */

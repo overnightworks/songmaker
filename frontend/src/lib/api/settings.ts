@@ -49,21 +49,11 @@ export async function fetchCowriterSettings(): Promise<CowriterSettings> {
 	return apiFetch<CowriterSettings>('/api/settings/cowriter');
 }
 
-export async function updateCowriterSettings(
-	provider: string,
-	model: string,
-	tailTokenBudget?: number,
-	providerRoutes?: Record<string, 'cli' | 'api'>
-): Promise<CowriterSettings> {
+export async function updateCowriterSettings(tailTokenBudget: number): Promise<CowriterSettings> {
 	return apiFetch<CowriterSettings>('/api/settings/cowriter', {
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			provider,
-			model,
-			tail_token_budget: tailTokenBudget,
-			provider_routes: providerRoutes
-		})
+		body: JSON.stringify({ tail_token_budget: tailTokenBudget })
 	});
 }
 

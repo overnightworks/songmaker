@@ -37,10 +37,10 @@
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 	import TakeRetentionPanel from '$lib/components/TakeRetentionPanel.svelte';
 	import ModelsTaskRow, {
-		MODELS_ROUTES,
 		MODELS_ROUTE_NOT_AVAILABLE_CODE,
 		routeReasonSentence
 	} from '$lib/components/ModelsTaskRow.svelte';
+	import ModelsServiceRow from '$lib/components/ModelsServiceRow.svelte';
 	import type {
 		ModelsRouteKey,
 		ModelsRouteReason,
@@ -63,6 +63,7 @@
 		MODELS_COLUMN_ROUTE_LABEL,
 		MODELS_COLUMN_STATUS_LABEL,
 		MODELS_COLUMN_TASK_LABEL,
+		COWRITER_PROVIDER_LABEL,
 		MODELS_HEADING,
 		MODELS_HISTORY_TAIL_LABEL,
 		MODELS_RETRY_LABEL,
@@ -140,6 +141,7 @@
 
 	let providerStatuses = $state<ProviderStatus[]>([]);
 
+	// The co-writer runs through the agent service; its row offers no choice until the Models row replaces it.
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterBudget = $state(0);
 	let cowriterBudgetSaved = $state(false);
@@ -419,23 +421,9 @@
 		}));
 	}
 
-	function storedRoute(provider: string): ModelsRouteKey {
-		const stored = cowriterSettings?.provider_routes?.[provider];
-		if (stored) return stored;
-		return (
-			MODELS_ROUTES.find((route) => catalogueOf(provider, route)?.readiness.state === 'ready') ??
-			FALLBACK_ROUTE
-		);
-	}
-
-	const cowriterProviderNames = $derived(cowriterSettings?.allowed_providers ?? []);
-	const cowriterProviders = $derived(taskProviders(transportRoute, cowriterProviderNames));
-	const cowriterSelection = $derived<ModelsTaskSelection>({
-		provider: cowriterSettings?.provider ?? '',
-		route: storedRoute(cowriterSettings?.provider ?? ''),
-		model: cowriterSettings?.model ?? ''
-	});
-	const coverProviders = $derived(taskProviders(coverRoute, cowriterProviderNames));
+	const coverProviders = $derived(
+		taskProviders(coverRoute, judgeSettings?.allowed_providers ?? [])
+	);
 	const coverSelection = $derived<ModelsTaskSelection>({
 		provider: coverSettings?.provider ?? '',
 		route: coverSettings?.route ?? FALLBACK_ROUTE,
@@ -472,31 +460,6 @@
 		return describeFailure(e, MODELS_SAVE_FAILED_FALLBACK);
 	}
 
-	function routeMapWith(selection: ModelsTaskSelection): Record<string, ModelsRouteKey> {
-		const routes = Object.fromEntries(
-			cowriterProviders.map((entry) => [entry.provider, storedRoute(entry.provider)])
-		);
-		return { ...routes, [selection.provider]: selection.route };
-	}
-
-	async function saveCowriter(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
-		try {
-			cowriterSettings = await updateCowriterSettings(
-				selection.provider,
-				selection.model,
-				cowriterBudget,
-				routeMapWith(selection)
-			);
-			cowriterBudget = cowriterSettings.tail_token_budget;
-			return { ok: true };
-		} catch (e) {
-			return {
-				ok: false,
-				reason: saveFailureReason(e, MODELS_TASK_COWRITER_LABEL, selection.route)
-			};
-		}
-	}
-
 	async function saveCover(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
 		try {
 			coverSettings = await updateCoverSettings(
@@ -530,12 +493,13 @@
 		cowriterBudgetSaved = false;
 		cowriterBudgetFailure = null;
 		cowriterBudget = budget;
-		const outcome = await saveCowriter(cowriterSelection);
-		if (outcome.ok) {
+		try {
+			cowriterSettings = await updateCowriterSettings(budget);
+			cowriterBudget = cowriterSettings.tail_token_budget;
 			cowriterBudgetSaved = true;
-			return;
+		} catch (e) {
+			cowriterBudgetFailure = saveFailureReason(e, MODELS_TASK_COWRITER_LABEL, FALLBACK_ROUTE);
 		}
-		cowriterBudgetFailure = outcome.reason;
 	}
 
 	async function loadGenDefaults() {
@@ -765,17 +729,19 @@
 						<span>{MODELS_COLUMN_STATUS_LABEL}</span>
 					</div>
 					{#if cowriterSettings}
-						<ModelsTaskRow
+						<ModelsServiceRow
 							task={MODELS_TASK_COWRITER_LABEL}
-							providers={cowriterProviders}
-							selection={cowriterSelection}
-							save={saveCowriter}
+							provider={COWRITER_PROVIDER_LABEL}
+							route="Agent service"
+							model={cowriterSettings.model}
+							status="Checked by the agent service at each turn"
+							note="Grok, Codex: not selectable yet"
 							advanced={cowriterAdvanced}
 						/>
 					{:else}
 						<p class="hint">{MODELS_LOADING_LABEL}</p>
 					{/if}
-					{#if coverSettings && cowriterSettings}
+					{#if coverSettings}
 						<ModelsTaskRow
 							task={MODELS_TASK_COVER_LABEL}
 							providers={coverProviders}

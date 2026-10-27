@@ -2,7 +2,7 @@ import type {
 	AssistantTextEvent,
 	ChatTurnFailureFrame,
 	ChatTurnFinalFrame,
-	ChatTurnRouteErrorFrame,
+	ChatTurnProblemFrame,
 	ChatTurnV2Request,
 	ConversationItem,
 	ConversationListResponse,
@@ -18,7 +18,7 @@ export type CoWriterStreamEvent =
 	| ToolCallEvent
 	| ToolResultEvent
 	| ChatTurnFinalFrame
-	| ChatTurnRouteErrorFrame
+	| ChatTurnProblemFrame
 	| ChatTurnFailureFrame;
 
 export function streamCoWriterTurn(req: ChatTurnV2Request): AsyncGenerator<CoWriterStreamEvent> {

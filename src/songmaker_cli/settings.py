@@ -223,6 +223,9 @@ class Settings(BaseSettings):
     # unavailable.
     agent_service_mcp_origin: str | None = None
     agent_service_capability_key_file: Path | None = None
+    # Where the co-writer turn starts its runs; checked where the turn runs, so workers and the
+    # migrate step start without it.
+    agent_service_url: str | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30

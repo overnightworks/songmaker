@@ -1,8 +1,7 @@
-"""Canonical songmaker tool catalog for every co-writer provider.
+"""Canonical songmaker tool catalog for the co-writer.
 
-Claude reaches these functions through the MCP server and the agent
-service through ``/mcp``. Grok and Codex call ``execute_cowriter_tool``
-in-process. Query logic and ownership checks stay in ``mcp_server.tools``.
+The agent service reaches these functions through ``/mcp``. Query logic and
+ownership checks stay in ``mcp_server.tools``.
 
 ``execute_cowriter_tool``'s ``arguments: dict[str, Any]`` is exempt from
 ``scripts/check_no_silent_fallbacks.py``'s dict-any-in-signature rule:
@@ -19,7 +18,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from agent_providers.tool_loop import ToolOutcome
-from agent_providers.tools import ToolCatalog, ToolDeclaration
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
@@ -197,19 +195,6 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
 )
 
 _TOOLS_BY_NAME = {tool.name: tool for tool in COWRITER_TOOLS}
-
-COWRITER_TOOL_CATALOG: ToolCatalog = ToolCatalog(
-    tools=tuple(
-        ToolDeclaration(
-            name=tool.name,
-            description=tool.description,
-            parameters=tool.parameters,
-        )
-        for tool in COWRITER_TOOLS
-    ),
-)
-"""The same catalog the provider layer renders, parses and validates against."""
-
 
 def _serialize(result: Any) -> str:
     if isinstance(result, list):

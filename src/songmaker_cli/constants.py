@@ -157,11 +157,7 @@ SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
 # chain only while the judge provider stays on its default, Claude, so a
 # musician who already customized claude_scoring_model keeps that value.
 CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
-SETTING_COWRITER_PROVIDER = "cowriter_provider"
-SETTING_COWRITER_MODEL = "cowriter_model"
-SETTING_COWRITER_PROVIDER_MODEL_PREFIX = "cowriter_model_"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
-SETTING_PROVIDER_ROUTES = "provider_routes"
 SETTING_JUDGE_PROVIDER = "judge_provider"
 SETTING_JUDGE_ROUTE = "judge_route"
 SETTING_JUDGE_MODEL = "judge_model"
@@ -209,7 +205,6 @@ CURRENT_SONG_FRESHNESS_NOTE = (
     "fields it does not show are not set."
 )
 
-COWRITER_DEFAULT_PROVIDER = "claude"
 COWRITER_DEFAULT_TAIL_TOKEN_BUDGET = 24_000
 COWRITER_MIN_TAIL_TOKEN_BUDGET = 2_000
 COWRITER_MAX_TAIL_TOKEN_BUDGET = 100_000

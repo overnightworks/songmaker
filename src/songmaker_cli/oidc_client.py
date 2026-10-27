@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 from fastapi import HTTPException
 from pydantic import SecretStr
@@ -36,6 +36,15 @@ if TYPE_CHECKING:
 _REALM_ENDPOINT_PREFIX = "protocol/openid-connect"
 
 
+@overload
+def normalised_oidc_issuer(configured_issuer: str) -> str: ...
+@overload
+def normalised_oidc_issuer(configured_issuer: str | None) -> str | None: ...
+def normalised_oidc_issuer(configured_issuer: str | None) -> str | None:
+    """The configured issuer in the form tokens carry it: no trailing slash."""
+    return configured_issuer.rstrip("/") if configured_issuer else None
+
+
 def read_client_secret(secret_file: Path) -> SecretStr:
     try:
         secret = secret_file.read_text(encoding="utf-8").strip()
@@ -55,7 +64,7 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         public_base_url = resolve_public_base_url()
     except HTTPException as error:
         raise ValueError(f"PUBLIC_BASE_URL is required for sign-in: {error.detail}") from None
-    issuer = settings.oidc_issuer.rstrip("/")
+    issuer = normalised_oidc_issuer(settings.oidc_issuer)
     endpoints = f"{issuer}/{_REALM_ENDPOINT_PREFIX}"
     return OidcClientConfig(
         issuer=issuer,

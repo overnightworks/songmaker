@@ -90,6 +90,8 @@ services:
       # The agent service calls the co-writer's tools back at /mcp.
       AGENT_SERVICE_MCP_ORIGIN: ${AGENT_SERVICE_MCP_ORIGIN:-https://songmaker.mcp.internal}
       AGENT_SERVICE_CAPABILITY_KEY_FILE: /run/secrets/agent_service_signing_public_key
+      # The co-writer turn starts its runs here, on hal_agent_songmaker.
+      AGENT_SERVICE_URL: ${AGENT_SERVICE_URL:-http://agent-service:8080}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
@@ -112,11 +114,14 @@ services:
     # backchannel: the private network on which the realm posts its back-channel
     # logout to <public host>:8080; nothing else joins it. hal_mcp_songmaker:
     # edge's per-app network for the agent service's tool calls.
+    # hal_agent_songmaker: edge's per-app network on which songmaker-web reaches
+    # the agent service to start the co-writer's runs.
     networks:
       default: {}
       backchannel:
         aliases: [songmaker.hallucinai.de]
       hal_mcp_songmaker: {}
+      hal_agent_songmaker: {}
     # Published to the loopback interface only: Docker's NAT chain bypasses
     # the INPUT chain (and with it UFW), so a "8080:8080" binding reaches the
     # whole LAN regardless of the host firewall. Everything that needs this
@@ -489,6 +494,10 @@ networks:
   # Edge's per-app network for the agent service's tool calls: joined only by
   # traefik-mcp and songmaker-web.
   hal_mcp_songmaker:
+    external: true
+  # Edge's per-app network for the co-writer's runs: joined only by the agent
+  # service and songmaker-web.
+  hal_agent_songmaker:
     external: true
 
 volumes:

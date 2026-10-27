@@ -3,25 +3,20 @@
 from __future__ import annotations
 
 import pytest
-from agent_providers.errors import SafeRouteReasonCode, normalize_route_failure
-from agent_providers.events import (
-    AssistantTextEvent,
-    FinalEvent,
-    ToolCallEvent,
-    ToolResultEvent,
-)
 
 from songmaker_cli.api_models import (
+    AssistantTextEvent,
     ChatMessageResponse,
     ChatTurnFailureFrame,
     ChatTurnFinalFrame,
-    ChatTurnRouteErrorFrame,
+    ChatTurnProblem,
+    ChatTurnProblemFrame,
+    ToolCallEvent,
+    ToolResultEvent,
 )
 from songmaker_cli.conversation_api import _sse_format
 
-A_CORRELATION_ID = "job-42"
-
-PROVIDER_EVENTS = [
+STREAM_EVENTS = [
     (
         AssistantTextEvent(text="Let me look at that song."),
         'data: {"type": "assistant_text", "text": "Let me look at that song."}\n\n',
@@ -35,10 +30,6 @@ PROVIDER_EVENTS = [
         ToolResultEvent(tool_use_id="call-1", content="Ballad in D", is_error=False),
         'data: {"type": "tool_result", "tool_use_id": "call-1", "content": "Ballad in D",'
         ' "is_error": false}\n\n',
-    ),
-    (
-        FinalEvent(text="Here is the second verse."),
-        'data: {"type": "final", "text": "Here is the second verse."}\n\n',
     ),
 ]
 
@@ -66,14 +57,26 @@ FINAL_FRAME = (
 
 ERROR_FRAMES = [
     (
-        ChatTurnRouteErrorFrame(
-            status=503,
-            provider="grok",
-            route="cli",
-            reason=normalize_route_failure(SafeRouteReasonCode.CLI_BINARY_UNAVAILABLE),
+        ChatTurnProblemFrame(status=503, problem=ChatTurnProblem.UNAVAILABLE),
+        'data: {"type": "error", "status": 503, "problem": "unavailable",'
+        ' "retry_after_seconds": null}\n\n',
+    ),
+    (
+        ChatTurnProblemFrame(
+            status=429, problem=ChatTurnProblem.BUSY, retry_after_seconds=30,
         ),
-        'data: {"type": "error", "status": 503, "provider": "grok", "route": "cli",'
-        ' "reason": {"code": "cli_binary_unavailable", "message": "CLI is unavailable."}}\n\n',
+        'data: {"type": "error", "status": 429, "problem": "busy",'
+        ' "retry_after_seconds": 30}\n\n',
+    ),
+    (
+        ChatTurnProblemFrame(status=403, problem=ChatTurnProblem.NOT_ENABLED),
+        'data: {"type": "error", "status": 403, "problem": "not_enabled",'
+        ' "retry_after_seconds": null}\n\n',
+    ),
+    (
+        ChatTurnProblemFrame(status=401, problem=ChatTurnProblem.SIGN_IN_AGAIN),
+        'data: {"type": "error", "status": 401, "problem": "sign_in_again",'
+        ' "retry_after_seconds": null}\n\n',
     ),
     (
         ChatTurnFailureFrame(status=500, message="Chat request failed"),
@@ -81,23 +84,12 @@ ERROR_FRAMES = [
     ),
 ]
 
-A_TURN = [*PROVIDER_EVENTS, FINAL_FRAME, *ERROR_FRAMES]
+A_TURN = [*STREAM_EVENTS, FINAL_FRAME, *ERROR_FRAMES]
 
 
 @pytest.mark.parametrize("event, payload", A_TURN, ids=lambda value: getattr(value, "type", ""))
 def test_every_frame_of_a_turn_serializes_to_its_established_sse_payload(event, payload):
     assert _sse_format(event) == payload
-
-
-@pytest.mark.parametrize(
-    "event, payload", PROVIDER_EVENTS, ids=lambda value: getattr(value, "type", ""),
-)
-def test_a_correlated_event_puts_no_extra_byte_on_the_wire(event, payload):
-    """The host's own handle for the turn rides along for its logs, never to a client."""
-    correlated = event.model_copy(update={"correlation_id": A_CORRELATION_ID})
-
-    assert correlated.correlation_id == A_CORRELATION_ID
-    assert _sse_format(correlated) == payload
 
 
 def test_a_tool_call_without_input_still_carries_an_empty_input_object():

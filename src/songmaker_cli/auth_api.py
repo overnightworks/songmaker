@@ -39,6 +39,7 @@ from songmaker_cli.constants import (
     OIDC_CALLBACK_PATH,
     OIDC_START_PATH,
 )
+from songmaker_cli.oidc_client import normalised_oidc_issuer
 from songmaker_cli.request_policies import BACKCHANNEL_LOGOUT_PATH
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, get_settings
 
@@ -191,8 +192,8 @@ async def end_sessions_on_realm_logout(request: Request) -> Response:
 
 
 def _account_console_url() -> str | None:
-    issuer = get_settings().oidc_issuer
-    return f"{issuer.rstrip('/')}/account" if issuer else None
+    issuer = normalised_oidc_issuer(get_settings().oidc_issuer)
+    return f"{issuer}/account" if issuer else None
 
 
 @router.get("/me")

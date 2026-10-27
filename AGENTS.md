@@ -16,7 +16,7 @@ Two flags on generations: **pick** is THE one for this song on the album (one pe
 
 **Scoring** is purely informational auto-rating: BPM accuracy, spectral quality, silence, emotional dynamics, text accuracy (Whisper transcript of what was sung vs the lyrics, which the user also sees).
 
-**Co-writer** is one active multi-turn conversation per musician, not per song (`chat_messages`, scoped via `conversations`), with a chosen provider (Claude, Grok or Codex) sharing the same song read/write capabilities. Memory, tools and @-mentions: [architecture](docs/architecture.md). Co-writer expansion (more memory or mention features) is frozen until organically needed (operator ruling 2026-08-24). There is no per-song chat; the co-writer runs only through `POST /chat/turn` in `conversation_api.py`.
+**Co-writer** is one active multi-turn conversation per musician, not per song (`chat_messages`, scoped via `conversations`); each turn is one run of `agents/cowriter.md` at the agent service (the model songmaker sends, `claude/opus` by default) that reads and writes songs through the tools songmaker serves at `/mcp`, with no local provider fallback. Memory, tools and @-mentions: [architecture](docs/architecture.md). Co-writer expansion (more memory or mention features) is frozen until organically needed (operator ruling 2026-08-24). There is no per-song chat; the co-writer runs only through `POST /chat/turn` in `conversation_api.py`.
 
 **Seed pinning** reproduces a generation (pin a previous seed, regenerate with tweaked params).
 
@@ -58,7 +58,7 @@ Schema changes: `alembic revision --autogenerate -m "..."`, then `alembic upgrad
 ## Constraints and known debt
 
 - **Claude CLI call paths carry song content only through the tool-surface gate** (`verify_cli_tool_surface()` and `verify_no_builtin_cli_tools()` in `agent_providers/claude/provider.py`; the co-writer expects exactly the twelve tools in `MCP_TOOL_NAMES`, `cowriter/mcp_spec.py`). A drifted surface refuses the call, never server startup; `GET /health` reports `ok`/`drift`/`unverified`. Mechanics, caches and single-flight: [Claude Chat Security](docs/security.md#claude-chat-security).
-- **Agent-CLI bind mounts** never expose an operator profile; `ANTHROPIC_API_KEY` serves the API routes (judge, catalog, API co-writer) but does not replace the mounted CLI the CLI co-writer route needs: [Agent-CLI Mounts](docs/security.md#agent-cli-mounts).
+- **Agent-CLI bind mounts** never expose an operator profile; `ANTHROPIC_API_KEY` serves the API routes (judge, catalog) but does not replace the mounted CLI the CLI routes (judge, cover) need: [Agent-CLI Mounts](docs/security.md#agent-cli-mounts).
 - **The DB owns session validity** (`touch()` must return a real `bool`). `get_current_user` commits renewal in its own short transaction; stores never commit endpoint writes; stream callers commit before streaming. Keycloak group changes apply only at the next sign-in, so removing someone ends nothing until their sessions expire: revoke as described in [Authentication](docs/security.md#revocation).
 - **Trust model** (subprocesses share the OS user, one shared worker token, single-node): accepted for a single-user deployment; rationale and limits in [Worker Pool Trust Boundary](docs/security.md#ace-step-worker-pool-trust-boundary).
 - **GPU isolation is by container.** Only `songmaker-acestep-worker-N` has a GPU; `songmaker-scoring-worker` runs `SCORING_DEVICE=cpu`, so nothing arbitrates VRAM. NVML and worker health: [ACE-Step](docs/acestep.md#operating-the-worker-pool).

@@ -53,16 +53,15 @@ const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
 const THINKING = /is thinking/;
 
-// The route error frame the server ends a turn with when the provider cannot
-// run; the panel names the provider in front of the library's reason.
+// The problem frame the server ends a turn with when the agent service did not
+// run it; the panel words the named problem.
 const RETRY_FAILURE_FRAME = {
 	type: 'error',
 	status: 503,
-	provider: 'claude',
-	route: null,
-	reason: { code: 'cli_binary_unavailable', message: 'CLI is unavailable.' }
+	problem: 'unavailable',
+	retry_after_seconds: null
 };
-const RETRY_FAILURE = 'Claude: CLI is unavailable.';
+const RETRY_FAILURE = 'The co-writer is unavailable';
 
 type TurnState = 'idle' | 'running' | 'answered';
 type ChatMessage = ReturnType<typeof chatMessage>;
@@ -273,9 +272,10 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await composer.fill(newer);
 		await composer.press('Enter');
 
-		await expect(
-			page.locator('.message', { hasText: newer }).getByRole('button', { name: 'Try again' })
-		).toHaveCount(1);
+		const errorRowBelow = (text: string) =>
+			page.locator('.message', { hasText: text }).locator('xpath=following-sibling::*[1]');
+		await expect(errorRowBelow(newer).getByRole('button', { name: 'Try again' })).toHaveCount(1);
+		await expect(errorRowBelow(older).getByRole('button', { name: 'Try again' })).toHaveCount(0);
 		await expect(tryAgain).toHaveCount(1);
 	});
 

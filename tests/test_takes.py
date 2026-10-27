@@ -8,9 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from agent_providers.events import AssistantTextEvent, FinalEvent
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
-from fastapi.testclient import TestClient
+from fake_agent_service import CowriterStack, attach_cowriter_service
 
 from songmaker_cli.constants import JobType
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -98,7 +97,7 @@ def client(tmp_path: Path):
 
 
 @pytest.fixture
-def stranger_client(tmp_path: Path):
+def stranger_client(tmp_path: Path, monkeypatch):
     factory = init_db(tmp_path / "takes_spy.db")
     with factory() as session:
         _seed(session, "u-owner")
@@ -108,30 +107,25 @@ def stranger_client(tmp_path: Path):
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    return web_client(app)
+    web = web_client(app)
+    return web, attach_cowriter_service(web, factory, monkeypatch, "u-spy")
 
 
-async def _capture(*_args, **kwargs):
-    _capture.called = True
-    _capture.kwargs = kwargs
-    yield AssistantTextEvent(text="ok")
-    yield FinalEvent(text="ok")
+@pytest.fixture
+def service(client, monkeypatch) -> CowriterStack:
+    c, factory = client
+    return attach_cowriter_service(c, factory, monkeypatch, "u-test")
 
 
-def _turn(client: TestClient, payload: dict):
-    _capture.called = False
-    with patch(
-        "songmaker_cli.conversation_api.stream_cowriter_turn",
-        _capture,
-    ):
-        return client.post("/api/chat/turn", json=payload)
+def _turn(client, payload: dict):
+    return client.post("/api/chat/turn", json=payload)
 
 
-def _content() -> str:
-    return _capture.kwargs["messages"][-1]["content"]
+def _content(service: CowriterStack) -> str:
+    return service.agent.last_run.messages[-1]["text"]
 
 
-def test_playing_take_wins_over_pick(client):
+def test_playing_take_wins_over_pick(client, service):
     c, _ = client
     resp = _turn(c, {
         "message": "how did this take sing",
@@ -140,7 +134,7 @@ def test_playing_take_wins_over_pick(client):
     })
     assert resp.status_code == 200
     _stream_events(resp)
-    body = _content()
+    body = _content(service)
     assert "<current_take>" in body
     assert "generation_id: gB" in body
     assert "whisper_text:\nsung B" in body
@@ -148,12 +142,12 @@ def test_playing_take_wins_over_pick(client):
     assert "generation_id: gA" not in body.split("<current_take>")[1]
 
 
-def test_without_player_uses_playable_pick(client):
+def test_without_player_uses_playable_pick(client, service):
     c, _ = client
     resp = _turn(c, {"message": "x", "current_song_id": "s1"})
     assert resp.status_code == 200
     _stream_events(resp)
-    body = _content()
+    body = _content(service)
     assert "generation_id: gA" in body
     assert "whisper_text:\nsung A" in body
     assert "is_picked: true" in body
@@ -161,17 +155,17 @@ def test_without_player_uses_playable_pick(client):
     assert "text_accuracy: 81.0" in body
 
 
-def test_without_pick_uses_newest_playable(client):
+def test_without_pick_uses_newest_playable(client, service):
     c, factory = client
     with factory() as session:
         session.query(Generation).filter_by(id="gA").update({"is_picked": False})
         session.commit()
     resp = _turn(c, {"message": "x", "current_song_id": "s1"})
     _stream_events(resp)
-    assert "generation_id: gEmpty" in _content()
+    assert "generation_id: gEmpty" in _content(service)
 
 
-def test_no_playable_take_is_named_empty_state(client):
+def test_no_playable_take_is_named_empty_state(client, service):
     c, factory = client
     with factory() as session:
         session.query(Generation).filter(Generation.song_id == "s1").update({
@@ -180,13 +174,13 @@ def test_no_playable_take_is_named_empty_state(client):
         session.commit()
     resp = _turn(c, {"message": "x", "current_song_id": "s1"})
     _stream_events(resp)
-    body = _content()
+    body = _content(service)
     assert "<no_take>" in body
     assert "no playable take" in body
     assert "<current_take>" not in body
 
 
-def test_missing_whisper_and_scores_stay_empty(client):
+def test_missing_whisper_and_scores_stay_empty(client, service):
     c, _ = client
     resp = _turn(c, {
         "message": "x",
@@ -194,32 +188,33 @@ def test_missing_whisper_and_scores_stay_empty(client):
         "current_generation_id": "gEmpty",
     })
     _stream_events(resp)
-    take = _content().split("<current_take>")[1]
+    take = _content(service).split("<current_take>")[1]
     assert "whisper_text:\n" in take
     assert "sung" not in take.split("whisper_text:")[1].split("is_picked")[0]
     assert "written" not in take
     assert "scores:" not in take
 
 
-def test_explicit_unknown_or_foreign_generation_is_404(client, stranger_client):
+def test_explicit_unknown_or_foreign_generation_is_404(client, service, stranger_client):
+    stranger, stranger_service = stranger_client
     resp = _turn(client[0], {
         "message": "x",
         "current_song_id": "s1",
         "current_generation_id": "missing",
     })
     assert resp.status_code == 404
-    assert _capture.called is False
+    assert service.agent.runs == []
 
-    resp = _turn(stranger_client, {
+    resp = _turn(stranger, {
         "message": "x",
         "current_song_id": "s1",
         "current_generation_id": "gA",
     })
     assert resp.status_code == 404
-    assert _capture.called is False
+    assert stranger_service.agent.runs == []
 
 
-def test_wrong_song_or_unplayable_is_422(client):
+def test_wrong_song_or_unplayable_is_422(client, service):
     c, _ = client
     resp = _turn(c, {
         "message": "x",
@@ -227,7 +222,7 @@ def test_wrong_song_or_unplayable_is_422(client):
         "current_generation_id": "g2",
     })
     assert resp.status_code == 422
-    assert _capture.called is False
+    assert service.agent.runs == []
 
     resp = _turn(c, {
         "message": "x",
@@ -235,10 +230,10 @@ def test_wrong_song_or_unplayable_is_422(client):
         "current_generation_id": "gArch",
     })
     assert resp.status_code == 422
-    assert _capture.called is False
+    assert service.agent.runs == []
 
 
-def test_chat_turn_does_not_enqueue_scoring(client):
+def test_chat_turn_does_not_enqueue_scoring(client, service):
     c, factory = client
     with patch("songmaker_cli.generation_api.api_score_generation") as score_ep, patch(
         "songmaker_cli.scoring.pipeline.run_pipeline", create=True,

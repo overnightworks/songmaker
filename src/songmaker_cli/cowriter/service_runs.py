@@ -21,22 +21,22 @@ class RunPerson:
     subject: str
 
 
-@dataclass(frozen=True)
-class RunHolder:
-    person: RunPerson
-    job_id: str
+class RunAlreadyRegisteredError(ValueError):
+    """A run id is registered once: a second registration would hand a live run to another turn."""
 
 
-_RUNNING: dict[str, RunHolder] = {}
+_RUNNING: dict[str, RunPerson] = {}
 
 
-def register(run_id: str, person: RunPerson, job_id: str) -> None:
-    _RUNNING[run_id] = RunHolder(person, job_id)
+def register(run_id: str, person: RunPerson) -> None:
+    if run_id in _RUNNING:
+        raise RunAlreadyRegisteredError(run_id)
+    _RUNNING[run_id] = person
 
 
 def release(run_id: str) -> None:
     _RUNNING.pop(run_id, None)
 
 
-def holder(run_id: str) -> RunHolder | None:
+def holder(run_id: str) -> RunPerson | None:
     return _RUNNING.get(run_id)

@@ -34,14 +34,11 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version
 from songmaker_cli.db.queries.settings import (
-    get_cowriter_model,
-    get_cowriter_provider,
     get_judge_model,
     get_judge_provider,
     get_judge_route,
     pin_judge_route_if_unset,
     set_claude_model,
-    set_cowriter_settings,
     set_judge_settings,
 )
 from songmaker_cli.jobs.scoring import run_scoring_job
@@ -128,20 +125,6 @@ def test_judge_provider_without_a_stored_model_falls_back_cleanly(
         session.commit()
         assert get_judge_provider(session) == "grok"
         assert get_judge_model(session, "grok") == ""
-
-
-def test_judge_settings_are_not_coupled_to_the_cowriters(tmp_path: Path) -> None:
-    """Each task gets its own provider choice (operator ruling, #315)."""
-    factory = init_db(tmp_path / "settings.db")
-    with factory() as session:
-        set_cowriter_settings(session, "codex", "gpt-5.4")
-        set_judge_settings(session, "grok", "api", "grok-4.6")
-        session.commit()
-
-        assert get_cowriter_provider(session) == "codex"
-        assert get_cowriter_model(session, "codex") == "gpt-5.4"
-        assert get_judge_provider(session) == "grok"
-        assert get_judge_model(session, "grok") == "grok-4.6"
 
 
 @pytest.mark.parametrize("route", ["cli", "api"])
@@ -243,19 +226,6 @@ def test_default_judge_model_is_available_for_get_and_first_save(
         json={"provider": "claude", "model": "claude-nonexistent-9"},
     )
     assert unknown.status_code == 422
-
-
-def test_judge_and_cowriter_settings_are_independent_through_the_api(
-    admin_client, every_provider_is_configured,
-) -> None:
-    client, _ = admin_client
-    client.put("/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"})
-    client.put("/api/settings/judge", json={"provider": "grok", "model": "grok-4.6"})
-
-    cowriter = client.get("/api/settings/cowriter").json()
-    judge = client.get("/api/settings/judge").json()
-    assert cowriter["provider"] == "codex"
-    assert judge["provider"] == "grok"
 
 
 # ── run_scoring_job wiring ───────────────────────────────────────────
