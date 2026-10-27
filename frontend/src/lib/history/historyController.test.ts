@@ -7,6 +7,7 @@ import {
 	attachLandingHandler,
 	historyStandsStill,
 	installHistoryController,
+	isUnownedLayerEntry,
 	land,
 	landedEntry,
 	loadHistoryPageForTests,
@@ -148,11 +149,11 @@ describe('landing reducer', () => {
 	it.each([
 		{ after: 'a reload', layers: [] },
 		{ after: 'Forward past an open layer', layers: [{ layer: 'now-playing', entry: 7 }] }
-	])('a stale layer entry after $after is stepped off', ({ layers }) => {
-		const outcome = land(ledger({ layers }), { id: 9, layer: 'album-menu' });
-
-		expect(outcome).toMatchObject({ apply: false, dropLayers: [] });
-		expect(outcome.ledger.current).toEqual({ id: 6 });
+	])('a stale layer entry after $after is unowned and lands without applying', ({ layers }) => {
+		const stale = { id: 9, layer: 'album-menu' };
+		const outcome = land(ledger({ layers }), stale);
+		expect(isUnownedLayerEntry(ledger({ layers }), stale)).toBe(true);
+		expect(outcome).toMatchObject({ apply: false, dropLayers: [], ledger: { current: { id: 6 } } });
 	});
 });
 
@@ -471,7 +472,6 @@ describe('history adapter', () => {
 		let menuOpen = true;
 		holdLayer('account-menu', () => (menuOpen = false));
 		detachLandingHandler();
-
 		await popstateAfterBack();
 
 		expect(menuOpen).toBe(false);

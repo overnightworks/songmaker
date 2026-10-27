@@ -92,7 +92,7 @@ export function land(ledger: HistoryLedger, landed: HistoryEntry | null): Landin
 
 // A layer entry no open layer owns -- one a reload or a Forward came back
 // onto -- is a copy of the page below it, where Back would do nothing.
-function isUnownedLayerEntry(ledger: HistoryLedger, entry: HistoryEntry | null): boolean {
+export function isUnownedLayerEntry(ledger: HistoryLedger, entry: HistoryEntry | null): boolean {
 	return (
 		entry?.layer !== undefined &&
 		!ledger.layers.some((open) => open.entry === entry.id && open.layer === entry.layer)
