@@ -30,12 +30,12 @@
 "frontend/src/lib/api/types.ts" = 1144
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
-"frontend/src/lib/components/CoWriterPanel.svelte" = 1537
+"frontend/src/lib/components/CoWriterPanel.svelte" = 1533
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1857
 "frontend/src/lib/components/LibraryWall.test.ts" = 1134
 "frontend/src/lib/components/LoraDetail.svelte" = 968
 "frontend/src/lib/components/NowPlaying.test.ts" = 1094
-"frontend/src/lib/components/NowPlayingFrame.svelte" = 1121
+"frontend/src/lib/components/NowPlayingFrame.svelte" = 1109
 "frontend/src/lib/components/PlayerBar.test.ts" = 1642
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
 "frontend/src/lib/components/SongDetailView.svelte" = 1104
