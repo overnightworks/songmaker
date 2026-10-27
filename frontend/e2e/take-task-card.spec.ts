@@ -2,10 +2,13 @@
 // #1804): it sends one repaint or cover request with the card's values, stays
 // open until its cross removes it, never opens the Recipe panel, and the page
 // scrolls as one. The job endpoints are answered here, so no worker is needed.
-// Both projects run it: 390 px (Takes tab) and 1440 px.
+// With a card open the Recipe has no Repaint row and the header Generate stays
+// plain (#1923, S4 and S8). Both projects run it: 390 px (Takes tab) and 1440 px.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
+	EDITOR_GENERATE_LABEL,
+	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
 	TAKE_COVER_LABEL,
 	TAKE_OVERFLOW_LABEL,
@@ -117,5 +120,54 @@ test('Cover swaps the card and its button sends the cover request (S4, #1912 acc
 		await card(page).locator('.task-foot button').click();
 		const body = (await request).postDataJSON() as Record<string, unknown>;
 		expect(body).toHaveProperty('audio_cover_strength');
+	});
+});
+
+test('With a card open the Recipe holds no Repaint row, no Off and no Source bar (S8, #1923 acceptance 1)', async ({
+	page
+}, testInfo) => {
+	const mobile = shellOf(testInfo) === 'mobile';
+	await onOwnTakes(page, async () => {
+		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+		await openVerb(page, TAKE_REPAINT_LABEL);
+		await expect(card(page)).toHaveCount(1);
+		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_EDIT_LABEL) }).click();
+		await page.locator('.recipe-chips, .recipe-heading').click();
+		const recipe = page.locator('.recipe-panel, #phone-recipe-fields');
+		await expect(recipe).toBeVisible();
+		await expect(recipe).not.toContainText(TAKE_REPAINT_LABEL);
+		await expect(recipe).not.toContainText('Off');
+		await expect(recipe).not.toContainText('Source');
+		await expect(page.locator('.recipe-chips, .phone-recipe').first()).not.toContainText(
+			TAKE_REPAINT_LABEL
+		);
+	});
+});
+
+test('The header Generate stays plain with a card open and sends no repaint (S4, #1923 acceptance 3)', async ({
+	page
+}, testInfo) => {
+	const mobile = shellOf(testInfo) === 'mobile';
+	await onOwnTakes(page, async () => {
+		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+		await openVerb(page, TAKE_REPAINT_LABEL);
+		await expect(card(page)).toHaveCount(1);
+		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_EDIT_LABEL) }).click();
+
+		const sent: string[] = [];
+		page.on('request', (request) => {
+			if (request.method() === 'POST') sent.push(new URL(request.url()).pathname);
+		});
+		const request = page.waitForRequest(/\/api\/songs\/[^/]+\/generate$/);
+		await page.route(/\/api\/songs\/[^/]+\/generate$/, (route) =>
+			route.fulfill({ json: QUEUED_JOB })
+		);
+		const generate = page.getByRole('button', { name: EDITOR_GENERATE_LABEL, exact: true });
+		await expect(generate).toBeEnabled();
+		await generate.click();
+		await request;
+		expect(sent.filter((path) => /\/(repaint|cover)$/.test(path))).toEqual([]);
+		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_TAKES_LABEL) }).click();
+		await expect(card(page)).toHaveCount(1);
 	});
 });

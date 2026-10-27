@@ -142,14 +142,15 @@ describe('the card reaches the frames (#1923 acceptance 5, 6)', () => {
 		expect(scrollIntoView).toHaveBeenCalledTimes(1);
 		expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
 		expect(scrollIntoView.mock.contexts[0]).toBe(target.querySelector('.task'));
-		setSourceFromGeneration(get(sourceGeneration)!, 'cover');
+		setSourceFromGeneration(makeGeneration(), 'cover');
 		await tick();
 		expect(scrollIntoView).toHaveBeenCalledTimes(2);
 	});
 
 	it('does not scroll again while a slider moves', async () => {
 		const target = await renderCard('cover');
-		const slider = target.querySelector<HTMLInputElement>('input[type="range"]')!;
+		const slider = target.querySelector<HTMLInputElement>('input[type="range"]');
+		if (!slider) throw new Error('Expected a slider');
 		slider.value = '0.4';
 		slider.dispatchEvent(new Event('input', { bubbles: true }));
 		await tick();

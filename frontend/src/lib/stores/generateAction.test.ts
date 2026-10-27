@@ -56,13 +56,7 @@ import { songList } from './libraryData';
 import { selectedSongId } from './player';
 import { activeModels } from './presets';
 import {
-	coverNoiseStrength,
-	coverStrength,
 	recipeModel,
-	repaintEnd,
-	repaintMode,
-	repaintStart,
-	repaintStrength,
 	resetRecipeSourceForSong,
 	sourceGeneration,
 	sourceMode,
