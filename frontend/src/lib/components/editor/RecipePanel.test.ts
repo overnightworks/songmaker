@@ -97,7 +97,7 @@ async function render() {
 }
 
 describe('RecipePanel', () => {
-	it('shows Sound and Text groups, no seed row, with a Preset row on top', async () => {
+	it('C7: shows Sound and Text groups, no seed row, with a Preset row on top', async () => {
 		const target = await render();
 		const titles = Array.from(target.querySelectorAll('.group-title')).map((el) => el.textContent);
 		expect(titles).toEqual(['Sound', 'Text']);

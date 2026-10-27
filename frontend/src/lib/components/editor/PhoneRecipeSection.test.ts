@@ -206,7 +206,7 @@ describe('PhoneRecipeSection', () => {
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 
-	it('holds no seed row, no Random or Pinned choice and no Reproduce group, with or without a seed set', async () => {
+	it('C7: holds no seed row, no Random or Pinned choice and no Reproduce group, with or without a seed set', async () => {
 		seedFromTake.set({ seed: 42, takeNumber: 3 });
 		const target = await render();
 		await click(target, 'Recipe');
