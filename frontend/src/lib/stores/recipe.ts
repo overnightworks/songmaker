@@ -51,7 +51,6 @@ export function setSourceFromGeneration(gen: GenerationItem, mode: SourceMode): 
 		repaintStart.set(0);
 		repaintEnd.set(1);
 	}
-	recipeOpen.set(true);
 }
 
 /** The take's real length; the requested Duration is 0 for auto and wrong whenever the render differs. */

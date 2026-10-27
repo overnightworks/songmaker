@@ -597,7 +597,7 @@ function chooseSongTab(tab: DetailTab): void {
 	void writeLibraryHistory({ ...current, detailTab: tab }, libraryHistoryUrl(current), 'replace');
 }
 
-function openTakesTab(): void {
+export function openTakesTab(): void {
 	detailTab.set('takes');
 }
 
