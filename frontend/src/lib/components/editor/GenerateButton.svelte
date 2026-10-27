@@ -18,6 +18,7 @@
 		type GenerateState
 	} from '$lib/stores/generateAction';
 	import Icon from '../Icon.svelte';
+	import SeedChip from './SeedChip.svelte';
 
 	interface Props {
 		// The phone's Generate bar is one slim row (#1011): a disabled Generate
@@ -47,6 +48,7 @@
 {/snippet}
 
 <div class="generate-action">
+	<SeedChip />
 	{#if isGenerateBusy(presentation)}
 		<div class="progress-button" class:reconnecting role="status">
 			{#if presentation.kind === 'queued'}

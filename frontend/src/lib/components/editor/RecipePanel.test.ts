@@ -31,13 +31,17 @@ import {
 	editGenParams,
 	editBpm,
 	loadSongData,
-	pinnedSeed,
 	setDraftBpm,
 	setDraftLyrics
 } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { activeModels } from '$lib/stores/presets';
-import { clearSource, recipeModel, setSourceFromGeneration } from '$lib/stores/recipe';
+import {
+	clearSource,
+	recipeModel,
+	seedFromTake,
+	setSourceFromGeneration
+} from '$lib/stores/recipe';
 import { RECIPE_SAVE_AS_PRESET_LABEL } from '$lib/constants';
 import { createPreset, uploadReferenceAudio } from '$lib/api/client';
 import { ApiError, NetworkError } from '$lib/api/fetch';
@@ -67,7 +71,7 @@ beforeEach(() => {
 			share_slug: null
 		})
 	);
-	pinnedSeed.set(null);
+	seedFromTake.set({ seed: 42, takeNumber: 3 });
 	clearSource();
 	recipeModel.set('turbo');
 	activeModels.set([]);
@@ -93,10 +97,11 @@ async function render() {
 }
 
 describe('RecipePanel', () => {
-	it('shows Sound, Text, and Reproduce groups with a Preset row on top', async () => {
+	it('shows Sound and Text groups, no seed row, with a Preset row on top', async () => {
 		const target = await render();
 		const titles = Array.from(target.querySelectorAll('.group-title')).map((el) => el.textContent);
-		expect(titles).toEqual(['Sound', 'Text', 'Reproduce']);
+		expect(titles).toEqual(['Sound', 'Text']);
+		expect(target.textContent).not.toMatch(/Seed|Random|Pinned/);
 		expect(target.querySelector('.preset-row')).not.toBeNull();
 	});
 
@@ -157,7 +162,7 @@ describe('RecipePanel', () => {
 describe("RecipePanel at the editor's own width", () => {
 	// jsdom computes no grid layout, so this pins the stylesheet; the browser
 	// gate on #185 opens the panel beside a docked Now Playing.
-	it('packs Sound / Text / Reproduce into as many columns as it is wide', () => {
+	it('packs Sound / Text into as many columns as it is wide', () => {
 		expect(recipePanelSource).toMatch(
 			/\.recipe-groups \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(13rem, 1fr\)\);/
 		);

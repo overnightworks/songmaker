@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { RecipeChip } from '$lib/stores/recipe';
 	import {
-		RECIPE_GROUP_REPRODUCE_LABEL,
 		RECIPE_GROUP_SOUND_LABEL,
 		RECIPE_GROUP_TEXT_LABEL,
 		RECIPE_STACKED_EDIT_LABEL,
@@ -25,8 +24,7 @@
 			label: RECIPE_GROUP_SOUND_LABEL,
 			keys: ['model', 'takes', 'bpm', 'duration', 'key', 'voice']
 		},
-		{ label: RECIPE_GROUP_TEXT_LABEL, keys: ['lm', 'dit'] },
-		{ label: RECIPE_GROUP_REPRODUCE_LABEL, keys: ['seed'] }
+		{ label: RECIPE_GROUP_TEXT_LABEL, keys: ['lm', 'dit'] }
 	];
 
 	function summarize(keys: string[]): string {
@@ -40,7 +38,7 @@
 
 <!--
 	Rendered instead of the full RecipePanel only when Co-Writer and Recipe are
-	both open (the "stacked" state) — the full panel's three multi-field groups
+	both open (the "stacked" state) — the full panel's multi-field groups
 	push the chat column below the fold at typical viewport heights. This is a
 	one-row-per-group summary; "Edit" swaps in the full panel on demand.
 -->

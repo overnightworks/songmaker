@@ -10,7 +10,6 @@ vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
 	setPick: vi.fn().mockResolvedValue(undefined),
 	setKeep: vi.fn().mockResolvedValue(undefined),
 	rate: vi.fn().mockResolvedValue(undefined),
-	pinSeed: vi.fn(),
 	rescore: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock('$lib/stores/navigation', () => ({
@@ -22,10 +21,10 @@ import { get } from 'svelte/store';
 import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '$lib/constants';
 import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '$lib/constants/now-playing';
 import { activeJobs } from '$lib/stores/jobs';
-import { pinSeed, rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
+import { rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
 import { openTakeVersion, revealPlayingSong } from '$lib/stores/navigation';
 import { nowPlayingOpen, nowPlayingSurface } from '$lib/stores/player';
-import { pendingSource } from '$lib/stores/recipe';
+import { pendingTakeUse } from '$lib/stores/recipe';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
 const generationDefaults = {
@@ -47,7 +46,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	vi.clearAllMocks();
 	nowPlayingSurface.set('closed');
-	pendingSource.set(null);
+	pendingTakeUse.set(null);
 	activeJobs.set([]);
 });
 
@@ -318,7 +317,7 @@ describe('NowPlayingTake', () => {
 		expect(target.textContent).not.toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
 	});
 
-	it.each(['.badge-btn', '.pin-seed', '.take-source-action', '.rescore-hint', '.rescore'])(
+	it.each(['.badge-btn', '.use-seed', '.take-source-action', '.rescore-hint', '.rescore'])(
 		'opts %s into the frequent hitbox',
 		async (selector) => {
 			// Sizing itself is pinned once for the shared mechanism in
@@ -377,23 +376,26 @@ describe('NowPlayingTake', () => {
 		expect(rate).toHaveBeenCalledWith('s1', 'g1', 50, 'Loved the bridge');
 	});
 
-	it('pins the seed through takeActions', async () => {
+	it('names the seed action Use seed with the seed as its hint', async () => {
 		await render({ generation: generation(generationDefaults) });
-		target.querySelector<HTMLButtonElement>('.pin-seed')?.click();
-		expect(pinSeed).toHaveBeenCalledWith(48113);
+		const row = target.querySelector<HTMLButtonElement>('.use-seed');
+		expect(row?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Use seed 48113');
+		expect(row?.querySelector('.use-seed-hint')?.textContent).toBe('48113');
+		expect(row?.querySelector('svg')).not.toBeNull();
 	});
 
-	it('omits the pin seed action when the take has no seed', async () => {
+	it('omits the seed action when the take has no seed', async () => {
 		await render({ generation: generation({ ...generationDefaults, seed: null }) });
-		expect(target.querySelector('.pin-seed')).toBeNull();
+		expect(target.querySelector('.use-seed')).toBeNull();
 	});
 
 	it.each([
 		['Repaint', 'repaint'],
-		['Cover', 'cover']
+		['Cover', 'cover'],
+		['Use seed', 'seed']
 	] as const)(
-		'%s sets the recipe source, closes Now Playing, and navigates to the song',
-		async (label, mode) => {
+		'%s hands the take over, closes Now Playing, and navigates to its song',
+		async (label, use) => {
 			nowPlayingSurface.set('full');
 			const gen = generation(generationDefaults);
 			const withSong = song({
@@ -406,12 +408,12 @@ describe('NowPlayingTake', () => {
 			});
 			await render({ generation: gen, song: withSong });
 
-			Array.from(target.querySelectorAll<HTMLButtonElement>('.take-source-action'))
-				.find((button) => button.textContent?.trim() === label)
+			Array.from(target.querySelectorAll<HTMLButtonElement>('.take-source-action, .use-seed'))
+				.find((button) => button.textContent?.trim().startsWith(label))
 				?.click();
 			await tick();
 
-			expect(get(pendingSource)).toEqual({ generation: gen, mode });
+			expect(get(pendingTakeUse)).toEqual({ generation: gen, use });
 			expect(get(nowPlayingOpen)).toBe(false);
 			expect(revealPlayingSong).toHaveBeenCalledWith(withSong, gen.id);
 		}

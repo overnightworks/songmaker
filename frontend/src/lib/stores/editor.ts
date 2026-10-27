@@ -209,9 +209,6 @@ interface VersionDeleteRequest {
 // container and inherit the Lyrics label's type.
 export const versionDeleteRequest = writable<VersionDeleteRequest | null>(null);
 
-// --- Pinned seed (forwarded to the next generation request) ---
-export const pinnedSeed = writable<number | null>(null);
-
 function songDataFromSong(s: SongItem): SongData {
 	return {
 		lyrics: s.lyrics,

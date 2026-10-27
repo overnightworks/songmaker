@@ -8,7 +8,6 @@ import {
 	editAudioDuration,
 	editKeyScale,
 	editGenParams,
-	pinnedSeed,
 	savedSongData,
 	loadSongData,
 	setDraftGenParams
@@ -16,6 +15,7 @@ import {
 import {
 	recipeChips,
 	recipeModel,
+	seedFromTake,
 	recipeOpen,
 	takesPerGenerate,
 	setSourceFromGeneration
@@ -63,7 +63,6 @@ beforeEach(async () => {
 	recipeOpen.set(false);
 	recipeModel.set('turbo');
 	takesPerGenerate.set(1);
-	pinnedSeed.set(null);
 	loras.set([]);
 	await loadActiveModels();
 });
@@ -94,7 +93,6 @@ const chipsStore = derived(
 		editAudioDuration,
 		editKeyScale,
 		editGenParams,
-		pinnedSeed,
 		savedSongData
 	],
 	([
@@ -104,7 +102,6 @@ const chipsStore = derived(
 		$editAudioDuration,
 		$editKeyScale,
 		$editGenParams,
-		$pinnedSeed,
 		$saved
 	]) =>
 		recipeChips({
@@ -114,7 +111,6 @@ const chipsStore = derived(
 			audioDuration: $editAudioDuration,
 			keyScale: $editKeyScale,
 			voiceLabel: voiceLabelFor($editGenParams?.user_lora_id),
-			pinnedSeed: $pinnedSeed,
 			genParams: $editGenParams,
 			savedBpm: $saved.bpm,
 			savedAudioDuration: $saved.audio_duration,
@@ -209,22 +205,12 @@ describe('PhoneRecipeSection', () => {
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 
-	it('pins, edits and releases a seed', async () => {
+	it('holds no seed row, no Random or Pinned choice and no Reproduce group, with or without a seed set', async () => {
+		seedFromTake.set({ seed: 42, takeNumber: 3 });
 		const target = await render();
 		await click(target, 'Recipe');
-		await click(target, 'Seed');
-		await click(target, 'Pinned');
-		const input = target.querySelector<HTMLInputElement>(
-			'input[aria-label="Seed"]'
-		) as HTMLInputElement;
-		input.value = '42';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		expect(get(pinnedSeed)).toBe(42);
-		expect(getByRoleButton(target, 'Seed').textContent).toContain('Pinned 42');
-		await click(target, 'Random');
-		expect(get(pinnedSeed)).toBeNull();
-		expect(target.querySelector('input')).toBeNull();
+		expect(target.textContent).not.toMatch(/Seed|Random|Pinned|Reproduce/);
+		expect(target.querySelector('input[type="number"][aria-label="Seed"]')).toBeNull();
 	});
 
 	it('uses the voice picker to remove the selected voice inline', async () => {

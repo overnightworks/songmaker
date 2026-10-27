@@ -17,7 +17,6 @@
 		NOW_PLAYING_KEEP_LABEL,
 		NOW_PLAYING_LYRICS_ROW_LABEL,
 		NOW_PLAYING_PICK_LABEL,
-		NOW_PLAYING_PIN_SEED_PREFIX,
 		NOW_PLAYING_RATING_LABEL,
 		NOW_PLAYING_RATING_NOTES_PLACEHOLDER,
 		NOW_PLAYING_RATING_SAVE,
@@ -33,15 +32,9 @@
 	} from '$lib/constants/now-playing';
 	import { openTakeVersion, revealPlayingSong } from '$lib/stores/navigation';
 	import { closeNowPlaying } from '$lib/stores/player';
-	import { pendingSource } from '$lib/stores/recipe';
-	import {
-		pinSeed,
-		rate,
-		rescore,
-		rescoringTakeIds,
-		setKeep,
-		setPick
-	} from '$lib/stores/takeActions';
+	import { TAKE_USE_SEED_LABEL } from '$lib/constants/take-task';
+	import { pendingTakeUse, type TakeUse } from '$lib/stores/recipe';
+	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '$lib/stores/takeActions';
 	import { computeDiffByKey } from '$lib/utils/diff';
 	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
 	import { buildTakeRecipe } from '$lib/utils/recipe-summary';
@@ -217,13 +210,8 @@
 		void rescore(song.id, generation.id);
 	}
 
-	function onPinSeed(): void {
-		if (generation.seed == null) return;
-		pinSeed(generation.seed);
-	}
-
-	function useSource(mode: 'repaint' | 'cover'): void {
-		pendingSource.set({ generation, mode });
+	function useOnSong(use: TakeUse): void {
+		pendingTakeUse.set({ generation, use });
 		closeNowPlaying();
 		void revealPlayingSong(song, generation.id);
 	}
@@ -406,16 +394,22 @@
 
 	<div class="take-links">
 		{#if generation.seed != null}
-			<button type="button" class="pin-seed" data-hitbox="frequent" onclick={onPinSeed}>
-				{NOW_PLAYING_PIN_SEED_PREFIX}
-				{generation.seed}
+			<button
+				type="button"
+				class="use-seed"
+				data-hitbox="frequent"
+				onclick={() => useOnSong('seed')}
+			>
+				<Icon name="pin" size={12} />
+				{TAKE_USE_SEED_LABEL}
+				<span class="use-seed-hint">{generation.seed}</span>
 			</button>
 		{/if}
 		<button
 			type="button"
 			class="take-source-action repaint"
 			data-hitbox="frequent"
-			onclick={() => useSource('repaint')}
+			onclick={() => useOnSong('repaint')}
 		>
 			{TAKE_REPAINT_LABEL}
 		</button>
@@ -423,7 +417,7 @@
 			type="button"
 			class="take-source-action cover"
 			data-hitbox="frequent"
-			onclick={() => useSource('cover')}
+			onclick={() => useOnSong('cover')}
 		>
 			{TAKE_COVER_LABEL}
 		</button>
@@ -708,7 +702,7 @@
 		flex-wrap: wrap;
 		gap: 0.5rem;
 	}
-	.pin-seed,
+	.use-seed,
 	.take-source-action,
 	.rescore {
 		align-self: flex-start;
@@ -723,11 +717,19 @@
 		letter-spacing: 0.4px;
 		cursor: pointer;
 	}
-	.pin-seed:hover,
+	.use-seed:hover,
 	.take-source-action:hover,
 	.rescore:hover:not(:disabled) {
 		border-color: var(--primary);
 		color: var(--text);
+	}
+	.use-seed {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+	.use-seed-hint {
+		color: var(--text-subtle);
 	}
 	.rescore:disabled {
 		color: var(--text-subtle);

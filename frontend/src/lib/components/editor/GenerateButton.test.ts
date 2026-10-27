@@ -1,5 +1,6 @@
 import { currentUser } from '$lib/stores/auth';
 import { mount, tick, unmount } from 'svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	EDITOR_GENERATE_CANCEL_LABEL,
@@ -10,6 +11,7 @@ import {
 	EDITOR_SELECT_MODEL_TITLE,
 	HITBOX_FREQUENT_PX
 } from '$lib/constants';
+import { seedFromTake } from '$lib/stores/recipe';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { failed, queued, running } from '$lib/test-utils/generate-states';
@@ -41,6 +43,7 @@ let component: ReturnType<typeof mount>;
 beforeEach(() => {
 	vi.resetAllMocks();
 	currentUser.set(null);
+	seedFromTake.set(null);
 	injectHitboxStyles();
 	setPointer('coarse');
 });
@@ -88,6 +91,24 @@ describe('GenerateButton', () => {
 		expect(document.body.querySelectorAll('button')).toHaveLength(1);
 		button.click();
 		expect(generate).toHaveBeenCalledOnce();
+	});
+
+	it('shows no seed chip without a seed', async () => {
+		await render({ kind: 'idle' });
+		expect(document.body.textContent).not.toContain('Seed');
+	});
+
+	it.each([
+		{ state: 'idle', view: { kind: 'idle' } as GenerateState },
+		{ state: 'running', view: running }
+	])('shows the seed chip with the take while $state and clears it with ×', async ({ view }) => {
+		seedFromTake.set({ seed: 4127730, takeNumber: 11 });
+		await render(view);
+		expect(document.body.querySelector('.seed-chip')?.textContent?.trim()).toBe('Seed · take 11');
+		getByRoleButton(document.body, 'Clear seed').click();
+		await tick();
+		expect(document.body.querySelector('.seed-chip')).toBeNull();
+		expect(get(seedFromTake)).toBeNull();
 	});
 
 	it('shows the queue position and reason and cancels the queued job', async () => {

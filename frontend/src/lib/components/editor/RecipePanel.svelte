@@ -9,8 +9,7 @@
 		setDraftBpm,
 		setDraftAudioDuration,
 		setDraftKeyScale,
-		setDraftGenParams,
-		pinnedSeed
+		setDraftGenParams
 	} from '$lib/stores/editor';
 	import { recipeModel, takesPerGenerate } from '$lib/stores/recipe';
 	import {
@@ -31,8 +30,6 @@
 	import { addToast } from '$lib/stores/toast';
 	import {
 		RECIPE_COLLAPSE_LABEL,
-		RECIPE_DEFAULT_PINNED_SEED,
-		RECIPE_GROUP_REPRODUCE_LABEL,
 		RECIPE_GROUP_SOUND_LABEL,
 		RECIPE_GROUP_TEXT_LABEL,
 		RECIPE_MANAGE_PRESETS_LABEL,
@@ -41,8 +38,6 @@
 		RECIPE_PRESET_LABEL,
 		RECIPE_SAVED_HINT,
 		RECIPE_SAVE_AS_PRESET_LABEL,
-		RECIPE_SEED_PINNED_LABEL,
-		RECIPE_SEED_RANDOM_LABEL,
 		RECIPE_USES_LABEL
 	} from '$lib/constants';
 	import ParamControls from '../ParamControls.svelte';
@@ -287,40 +282,6 @@
 				{maxInferenceSteps}
 			/>
 		</section>
-
-		<section class="recipe-group">
-			<h4 class="group-title">{RECIPE_GROUP_REPRODUCE_LABEL}</h4>
-			<div class="seed-row">
-				<span class="field-label">Seed</span>
-				<div class="segmented">
-					<button
-						type="button"
-						data-hitbox="frequent"
-						class:active={$pinnedSeed == null}
-						onclick={() => pinnedSeed.set(null)}
-					>
-						{RECIPE_SEED_RANDOM_LABEL}
-					</button>
-					<button
-						type="button"
-						data-hitbox="frequent"
-						class:active={$pinnedSeed != null}
-						onclick={() => pinnedSeed.set($pinnedSeed ?? RECIPE_DEFAULT_PINNED_SEED)}
-					>
-						{RECIPE_SEED_PINNED_LABEL}{$pinnedSeed != null ? ` ${$pinnedSeed}` : ''}
-					</button>
-				</div>
-				{#if $pinnedSeed != null}
-					<input
-						class="seed-input"
-						type="number"
-						min="0"
-						value={$pinnedSeed}
-						oninput={(e) => pinnedSeed.set(Number(e.currentTarget.value))}
-					/>
-				{/if}
-			</div>
-		</section>
 	</div>
 
 	<p class="recipe-footer-hint">{RECIPE_USES_LABEL}</p>
@@ -387,8 +348,7 @@
 	.preset-select-label select,
 	.preset-name-input,
 	.field select,
-	.field input,
-	.seed-input {
+	.field input {
 		padding: 0.35rem 0.55rem;
 		background: var(--bg);
 		border: 1px solid var(--border);
@@ -460,15 +420,13 @@
 		gap: 0.55rem;
 	}
 
-	.field,
-	.seed-row {
+	.field {
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
 	}
 
-	.field span,
-	.field-label {
+	.field span {
 		font-size: var(--label-font-size);
 		color: var(--text-muted);
 		text-transform: uppercase;
@@ -480,30 +438,6 @@
 		text-transform: none;
 		letter-spacing: 0;
 		opacity: 0.7;
-	}
-
-	.segmented {
-		display: flex;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		overflow: hidden;
-		width: fit-content;
-	}
-
-	.segmented button {
-		padding: 0.3rem 0.7rem;
-		border: none;
-		background: var(--bg);
-		color: var(--text-muted);
-		font-size: 0.72rem;
-		font-family: var(--font-display);
-		letter-spacing: 0.4px;
-		cursor: pointer;
-	}
-
-	.segmented button.active {
-		background: var(--primary);
-		color: #fff;
 	}
 
 	.reference-section {

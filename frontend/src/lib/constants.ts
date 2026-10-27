@@ -474,17 +474,11 @@ export const RECIPE_SAVED_HINT = 'Saved with the version. Changes mark the draft
 export const RECIPE_COLLAPSE_LABEL = 'Collapse';
 export const RECIPE_GROUP_SOUND_LABEL = 'Sound';
 export const RECIPE_GROUP_TEXT_LABEL = 'Text';
-export const RECIPE_GROUP_REPRODUCE_LABEL = 'Reproduce';
 export const RECIPE_PRESET_LABEL = 'Preset';
 export const RECIPE_PRESET_DEFAULT_OPTION = 'Default';
 export const RECIPE_SAVE_AS_PRESET_LABEL = 'Save as preset';
 export const RECIPE_MANAGE_PRESETS_LABEL = 'Manage in Settings → Generation';
-export const RECIPE_SEED_RANDOM_LABEL = 'Random';
-export const RECIPE_SEED_PINNED_LABEL = 'Pinned';
 export const RECIPE_USES_LABEL = 'Generate uses this recipe';
-// A freshly pinned seed with no prior value starts at 0 rather than a random
-// number, so pinning is deterministic and immediately editable.
-export const RECIPE_DEFAULT_PINNED_SEED = 0;
 // Shown instead of the full panel when Co-Writer and Recipe are both open, so
 // the chat column stays above the fold; "Edit" reveals the full panel.
 export const RECIPE_STACKED_LABEL = 'Recipe summary';

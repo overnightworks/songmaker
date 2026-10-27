@@ -28,9 +28,9 @@ import {
 	repaintGeneration,
 	updateSong
 } from '$lib/api/client';
-import { discardDraft, loadSongData, pinnedSeed, setDraftLyrics } from './editor';
+import { discardDraft, loadSongData, setDraftLyrics } from './editor';
 import { resetConnectivityForTests } from './connectivity';
-import { runSourceTask } from './generateAction';
+import { generate, runSourceTask } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
 import { activeJobs, generationFailures, removeJob, resetGenerationFailuresForTests } from './jobs';
 import { songList } from './libraryData';
@@ -45,6 +45,7 @@ import {
 	repaintStart,
 	repaintStrength,
 	resetRecipeSourceForSong,
+	seedFromTake,
 	sourceGeneration,
 	sourceMode,
 	takesPerGenerate
@@ -68,6 +69,7 @@ beforeEach(async () => {
 	vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse());
 	vi.mocked(repaintGeneration).mockResolvedValue(sourceTaskJob);
 	vi.mocked(coverGeneration).mockResolvedValue(sourceTaskJob);
+	vi.mocked(generateSong).mockResolvedValue(sourceTaskJob);
 	songList.set([song]);
 	selectedSongId.set(song.id);
 	loadSongData(song);
@@ -75,7 +77,7 @@ beforeEach(async () => {
 	recipeModel.set('turbo');
 	activeModels.set([{ id: 'turbo', is_active: true }]);
 	takesPerGenerate.set(2);
-	pinnedSeed.set(42);
+	seedFromTake.set({ seed: 42, takeNumber: 3 });
 	startHealthPolling();
 	await Promise.resolve();
 });
@@ -128,6 +130,30 @@ describe('runSourceTask (S4, #1912 acceptance 4)', () => {
 			coverNoiseStrength: sent
 		});
 		expect(repaintGeneration).not.toHaveBeenCalled();
+	});
+
+	it('sends the seed on every press and keeps it set', async () => {
+		await generate();
+		await generate();
+		expect(generateSong).toHaveBeenNthCalledWith(1, 's1', 2, 'turbo', 'v1', 42);
+		expect(generateSong).toHaveBeenNthCalledWith(2, 's1', 2, 'turbo', 'v1', 42);
+		expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
+	});
+
+	it('sends no seed once it is cleared', async () => {
+		seedFromTake.set(null);
+		await generate();
+		expect(generateSong).toHaveBeenCalledWith('s1', 2, 'turbo', 'v1', null);
+	});
+
+	it('keeps the seed set after the press and after a failed press', async () => {
+		sourceGeneration.set(makeGeneration());
+		sourceMode.set('cover');
+		await runSourceTask();
+		expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
+		vi.mocked(coverGeneration).mockRejectedValueOnce(new Error('boom'));
+		await runSourceTask();
+		expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
 	});
 
 	it('leaves the source in place after the press', async () => {
