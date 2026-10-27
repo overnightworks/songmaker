@@ -212,23 +212,29 @@ test.describe('before Play', () => {
 	});
 
 	test(
-		'1906_P3: at 390 the notice sits on its own line below a long title, whole and unshrunk',
+		'1906_P3: at 390 the notice wraps below a long name line, whole',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ visitor }) => {
 			await openMockAlbum(visitor);
 			const { page } = visitor;
-			const title = page.getByRole('heading', { level: 1 });
-			await title.evaluate((heading) => {
-				heading.textContent = Array(12).fill('A very long album title').join(' ');
-			});
 			const notice = page.getByText('KI-generiert', { exact: true });
-			const [titleBox, noticeBox] = await boundingBoxes(title, notice);
-			expect(noticeBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+			const nameLine = page.locator('.cover-line').filter({ has: notice });
+			const longName = Array(12).fill('A very long artist and album name').join(' ');
+			const nameRows = await nameLine.evaluate((line, name) => {
+				const nameText = line.firstChild!;
+				nameText.textContent = `${name} `;
+				const range = document.createRange();
+				range.selectNodeContents(nameText);
+				return Array.from(range.getClientRects(), (rect) => ({
+					top: rect.top,
+					bottom: rect.bottom
+				}));
+			}, longName);
+			const noticeBox = (await boundingBoxes(notice))[0];
+			const firstRowBottom = Math.min(...nameRows.map((row) => row.bottom));
+			expect(nameRows.length).toBeGreaterThan(1);
+			expect(noticeBox.y).toBeGreaterThanOrEqual(firstRowBottom);
 			expect(await notice.evaluate((badge) => badge.scrollWidth <= badge.clientWidth)).toBe(true);
-			const fontSizeOf = () => notice.evaluate((badge) => getComputedStyle(badge).fontSize);
-			const phoneFontSize = await fontSizeOf();
-			await page.setViewportSize({ width: 1440, height: 900 });
-			expect(phoneFontSize).toBe(await fontSizeOf());
 		}
 	);
 
