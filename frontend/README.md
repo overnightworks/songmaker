@@ -18,7 +18,7 @@ src/
 ## Conventions
 
 - **Types are generated, not handwritten.** `src/lib/api/types.ts` is regenerated from the backend Pydantic models by `python scripts/generate_types.py` (runs at the project root). CI fails if `types.ts` is out of sync. Never edit `types.ts` by hand.
-- **API calls go through `lib/api/`** — never `fetch()` from a component or store directly. The client wraps error handling, CSRF, and the canonical base URL.
+- **API calls go through `lib/api/`** — never `fetch()` from a component or store directly. The client wraps error handling and the canonical base URL.
 - **State lives in stores**, not in component-local state, when it crosses page or component boundaries.
 - **Test stores, utils and components** (for example `AlbumMetaEditor.test.ts`).
 
