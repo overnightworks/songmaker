@@ -1,7 +1,0 @@
-claim_id = "3d10a32fa42f404189ba6f40594ee190"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "c4df0b14ca49033b04071b342b399a63297b3481"
-branch = "claude/issue-1925-privacy-text-browser-storage"
-scope = ["legal/datenschutz.html"]
-opened_commit = "6ac845ace558885fdf9e36b0df67513877510e5b"
