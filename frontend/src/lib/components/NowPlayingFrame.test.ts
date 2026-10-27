@@ -48,7 +48,11 @@ describe('NowPlayingFrame', () => {
 		expect(cover?.querySelector('img')).toHaveAttribute('src', '/cover.webp');
 	});
 	it.each([
-		{ name: 'a song page', props: { surface: 'page' as const }, line: 'Night Drive' },
+		{
+			name: 'a share song page',
+			props: { surface: 'page' as const, showTakeLabel: false },
+			line: 'Night Drive'
+		},
 		{
 			name: 'the full player',
 			props: { surface: 'full' as const, showTakeLabel: true },
@@ -88,8 +92,10 @@ describe('NowPlayingFrame', () => {
 			expect(badges[0]).toHaveTextContent('KI-generiert');
 			const row = badges[0].closest('.cover-line');
 			expect(row).not.toBeNull();
-			if (line === 'take') expect(row).toHaveTextContent(/take/i);
-			else if (line) expect(row).toHaveTextContent(line);
+			if (line === 'take') {
+				expect(row).toHaveTextContent(/take/i);
+				expect(row).not.toHaveTextContent('Night Drive');
+			} else if (line) expect(row).toHaveTextContent(line);
 		}
 	);
 });

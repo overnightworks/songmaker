@@ -171,18 +171,15 @@
 	let mobilePanelSeeded = false;
 	let mobileSheet: HTMLDivElement | undefined = $state();
 
-	// The line the AI badge stands in: what plays (album and artist, unless the
-	// source link names it) and, when asked, the take.
-	const noticeLead = $derived(
-		[
-			...(stacked && source ? [] : [info.albumTitle, info.artist]),
-			...(showTakeLabel
-				? [nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)]
-				: [])
-		]
-			.filter((part) => part.length > 0)
-			.join(' · ')
+	const albumLine = $derived(
+		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
 	);
+	const takeLabel = $derived(
+		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
+	);
+	// The badge follows the take line; without a take line (share pages) it
+	// stands on the album line instead, unless the source link names it.
+	const noticeLead = $derived(showTakeLabel ? takeLabel : stacked && source ? '' : albumLine);
 
 	// Before the player holds a take, the slider shows where it would start
 	// and how long it runs.
@@ -268,7 +265,7 @@
 				aria-label={nowPlayingOpenSourceLabel(source.kind, source.title)}
 				>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
 			>
-		{/if}
+		{:else if albumLine && showTakeLabel}<span class="cover-line">{albumLine}</span>{/if}
 		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
 	</div>
 {/snippet}
