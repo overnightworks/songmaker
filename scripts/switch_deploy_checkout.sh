@@ -26,6 +26,7 @@ REPOSITORY_URL=https://github.com/overnightworks/songmaker.git
 
 step_label=""
 last_safe_step=4
+installers_started=no
 
 begin() {
     step_label=$1
@@ -80,8 +81,17 @@ stop_switch() {
     exit 1
 }
 
+# Before B4 nothing was reinstalled, so a refusal leaves the old deployer running.
 stop_backout() {
-    printf 'stopped at %s: %s\n' "$step_label" "$1" >&2
+    local consequence=""
+    if [[ $installers_started == no ]]; then
+        if sudo systemctl start "$TIMER"; then
+            consequence="; nothing changed, the timer is running again"
+        else
+            consequence="; nothing changed, but the timer could not be restarted (run: sudo systemctl start $TIMER)"
+        fi
+    fi
+    printf 'stopped at %s: %s%s\n' "$step_label" "$1" "$consequence" >&2
     printf 'the later backout steps were not run; tell the head\n' >&2
     exit 1
 }
@@ -189,6 +199,7 @@ backout() {
     begin "backout B3" "check that the old .env is still there"
     [[ -f $WORK_CLONE/.env ]] || stop_backout "$WORK_CLONE/.env is gone; there is no way back, cut a newer tag"
 
+    installers_started=yes
     begin "backout B4" "reinstall the agent-CLI login mirror from the work clone"
     (cd "$WORK_CLONE" && sudo ./scripts/install-cli-credentials-mirror.sh --force) || stop_backout "install-cli-credentials-mirror.sh failed"
 

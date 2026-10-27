@@ -417,6 +417,8 @@ def test_backout_refuses_and_keeps_the_clone_unless_the_stack_runs_from_the_work
     assert release.exists()
     backout_calls = outcome.recording[len(switched.recording) :]
     assert not [call for call in backout_calls if call.startswith("sudo ./scripts/install-")]
+    assert "sudo systemctl start songmaker-autodeploy.timer" in backout_calls
+    assert "the timer is running again" in outcome.result.stderr
 
 
 @pytest.mark.parametrize(
@@ -458,4 +460,6 @@ def test_backout_stops_when_the_old_env_is_gone(run_switch) -> None:
     assert outcome.result.returncode != 0
     assert "stopped at backout B3" in outcome.result.stderr
     assert "backout B4" not in outcome.result.stdout
+    assert "sudo systemctl start songmaker-autodeploy.timer" in outcome.recording
+    assert "the timer is running again" in outcome.result.stderr
     assert (outcome.home / "srv" / "songmaker").exists()
