@@ -21,7 +21,8 @@ function renderRow(props: Record<string, unknown> = {}): HTMLElement {
 				provider: 'Claude',
 				route: 'Agent service',
 				model: 'opus',
-				status: 'Checked by the agent service at each turn',
+				status: 'Ready',
+				statusTone: 'plain',
 				...props
 			}
 		})
@@ -44,7 +45,7 @@ describe('C16 ModelsServiceRow', () => {
 			'Provider Claude',
 			'Route Agent service',
 			'Model opus',
-			'Status Checked by the agent service at each turn'
+			'Status Ready'
 		]);
 	});
 
@@ -55,10 +56,42 @@ describe('C16 ModelsServiceRow', () => {
 		expect(target.textContent).not.toContain('Saved');
 	});
 
-	it('shows a readiness light for no one: no check mark and no ring', () => {
-		const target = renderRow();
+	it.each([
+		{ statusTone: 'plain', mark: null },
+		{ statusTone: 'ok', mark: '✓' },
+		{ statusTone: 'off', mark: '○' },
+		{ statusTone: 'warn', mark: '!' }
+	])('draws the $statusTone status with the mark $mark', ({ statusTone, mark }) => {
+		const target = renderRow({ statusTone });
 
-		expect(target.querySelector('.mark')).toBeNull();
+		const status = target.querySelector('.st');
+		expect(status?.classList.contains(statusTone)).toBe(true);
+		expect(status?.querySelector('.mark')?.textContent ?? null).toBe(mark);
+	});
+
+	it('draws a status link after the status words', () => {
+		const target = renderRow({
+			status: 'Sign in again to check the offer',
+			statusLink: { href: '/login/oidc?next=%2Fsettings', text: 'Sign in' }
+		});
+
+		const link = target.querySelector<HTMLAnchorElement>('.st a');
+		expect(link?.textContent).toBe('Sign in');
+		expect(link?.getAttribute('href')).toBe('/login/oidc?next=%2Fsettings');
+	});
+
+	it('shows a warning under the model and leaves the status cell empty', () => {
+		const target = renderRow({
+			status: '',
+			modelWarning: 'No longer offered by the agent service'
+		});
+
+		expect(cellTexts(target)[3]).toBe('Model opus No longer offered by the agent service');
+		expect(target.querySelector('.why.warn')?.textContent).toBe(
+			'No longer offered by the agent service'
+		);
+		expect(cellTexts(target)[4]).toBe('Status');
+		expect(target.querySelector('.st')).toBeNull();
 	});
 
 	it('greys the note line under the row', () => {

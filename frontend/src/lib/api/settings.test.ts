@@ -7,6 +7,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 import {
+	fetchCowriterOffer,
 	fetchDefaultConfig,
 	toggleModel,
 	updateCoverSettings,
@@ -74,6 +75,17 @@ describe('settings API contract', () => {
 		expect(url).toBe('/api/settings/cowriter');
 		expect(init.method).toBe('PUT');
 		expect(JSON.parse(String(init.body))).toEqual({ tail_token_budget: 1200 });
+	});
+
+	it('reads the co-writer offer from its own admin route as the state and the model', async () => {
+		const offer = { state: 'ready', model: 'opus' };
+		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(offer) });
+
+		await expect(fetchCowriterOffer()).resolves.toEqual(offer);
+
+		const [url, init] = request();
+		expect(url).toBe('/api/settings/cowriter/offer');
+		expect(init.method ?? 'GET').toBe('GET');
 	});
 
 	it('uses the model query without a JSON body', async () => {

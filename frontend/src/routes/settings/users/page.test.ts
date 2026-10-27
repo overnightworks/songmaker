@@ -34,6 +34,7 @@ const api = vi.hoisted(() => ({
 	fetchAllModels: vi.fn(),
 	toggleModel: vi.fn(),
 	fetchCowriterSettings: vi.fn(),
+	fetchCowriterOffer: vi.fn(),
 	updateCowriterSettings: vi.fn(),
 	fetchJudgeSettings: vi.fn(),
 	updateJudgeSettings: vi.fn(),
@@ -295,6 +296,7 @@ beforeEach(() => {
 	api.fetchBuiltinDefaults.mockResolvedValue({});
 	api.fetchProviderStatus.mockResolvedValue(PROVIDER_STATUSES);
 	api.fetchCowriterSettings.mockResolvedValue(cowriterSettings());
+	api.fetchCowriterOffer.mockResolvedValue({ state: 'ready', model: 'opus' });
 	api.updateCowriterSettings.mockImplementation(async (tailTokenBudget: number) =>
 		cowriterSettings({ tail_token_budget: tailTokenBudget })
 	);
@@ -598,20 +600,15 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Claude · Provider probe failed');
 	});
 
-	it('C16 reads the co-writer row without a choice: Claude, Agent service, opus, who checks, and what is not offered', async () => {
-		api.fetchCowriterSettings.mockResolvedValue(cowriterSettings({ model: 'opus' }));
+	it('C16 reads the co-writer row once the Models tab opens, without a choice', async () => {
 		const target = await renderPage(true);
+		expect(api.fetchCowriterOffer).not.toHaveBeenCalled();
 		await selectTab(target, 'models');
 
 		const row = rowNamed(target, 'Co-Writer');
-		expect(row.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-			'Co-Writer Provider Claude Route Agent service Model opus Status Checked by the agent service at each turn'
-		);
-		expect(row.querySelector('select, [role="group"], .mark')).toBeNull();
-		expect(sectionByHeading(target, 'Models').textContent).toContain(
-			'Grok, Codex: not selectable yet'
-		);
-		expect(api.updateCowriterSettings).not.toHaveBeenCalled();
+		await vi.waitFor(() => expect(row.textContent).toContain('✓Ready'));
+		expect(row.querySelector('select, [role="group"]')).toBeNull();
+		expect(api.fetchCowriterOffer).toHaveBeenCalledTimes(1);
 	});
 
 	it('lists the cover row providers from the judge settings when the co-writer settings do not load', async () => {

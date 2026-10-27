@@ -74,9 +74,11 @@ const DESKTOP_HEIGHT = 900;
 const NAMED_TURN_FAILURES =
 	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Sign in again to use the co-writer/;
 
-// The co-writer row of the Models table: words, no control (#1476, lines 1 and 2).
+// The co-writer row of the Models table: words, no control (#1476, lines 1 and 2). This stack's
+// seeded session holds no refresh token, so the offer cannot be read for the admin and the row
+// asks to sign in again (#1914, A5).
 const COWRITER_ROW_WORDS = ['Claude', 'Agent service', 'opus'];
-const COWRITER_STATUS = 'Checked by the agent service at each turn';
+const COWRITER_STATUS = 'Sign in again to check the offer';
 const COWRITER_NOT_SELECTABLE = 'Grok, Codex: not selectable yet';
 const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL, MODELS_TASK_SCORING_LABEL];
 
@@ -128,6 +130,7 @@ async function expectCowriterRowReadOnly(page: Page): Promise<void> {
 	await expect(row).not.toContainText('claude/opus');
 	await expect(row.getByRole('combobox')).toHaveCount(0);
 	await expect(row.getByRole('button')).toHaveCount(0);
+	await expect(row.getByRole('link', { name: 'Sign in' })).toBeVisible();
 	await expect(page.getByText(COWRITER_NOT_SELECTABLE)).toBeVisible();
 }
 
