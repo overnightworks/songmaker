@@ -1,4 +1,3 @@
-import { makeSong } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { PresetItem } from '$lib/api/types';
@@ -19,7 +18,6 @@ const api = vi.hoisted(() => ({
 
 vi.mock('$lib/api/client', () => api);
 
-import { discardDraft, loadSongData } from '$lib/stores/editor';
 import { recipeModel } from '$lib/stores/recipe';
 import {
 	activeModelIds,
@@ -61,8 +59,6 @@ function preset(id: string, overrides: Partial<PresetItem> = {}): PresetItem {
 }
 
 beforeEach(() => {
-	discardDraft();
-	loadSongData(makeSong());
 	vi.clearAllMocks();
 	presets.set([]);
 	builtinDefaults.set({});
