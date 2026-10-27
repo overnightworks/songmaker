@@ -118,7 +118,7 @@ describe('Cover card (S4, #1912 acceptance 3)', () => {
 	});
 });
 
-describe('both cards (S4, #1912 acceptance 5)', () => {
+describe('both cards (S4, #1912 acceptance 2, 4, 5)', () => {
 	it.each(['repaint', 'cover'] as const)('the %s button runs the source task', async (mode) => {
 		const target = await renderCard(mode);
 		target.querySelector<HTMLButtonElement>('.task-foot button')?.click();

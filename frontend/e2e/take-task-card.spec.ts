@@ -13,7 +13,7 @@ import {
 } from '../src/lib/constants';
 import { TAKE_TASK_CLOSE_LABEL } from '../src/lib/constants/take-task';
 import { csrfHeaders, shellOf } from './helpers';
-import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
+import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
 
 const SONG_TITLE = 'Take task card cells';
 const TAKE_COUNT = 3;
@@ -28,7 +28,7 @@ async function onOwnTakes(page: Page, flow: () => Promise<void>): Promise<void> 
 	expect(album.ok()).toBe(true);
 	const { id: albumId } = (await album.json()) as { id: string };
 	try {
-		const songId = await seedTakeStripSong(albumId, SONG_TITLE, TAKE_COUNT);
+		const songId = await seedSongPhoneSong(albumId, SONG_TITLE, 1, TAKE_COUNT);
 		const song = await page.request.get(`/api/songs/${songId}`);
 		const { slug } = (await song.json()) as { slug: string };
 		await page.goto(`/album/${albumId}/${slug}`);

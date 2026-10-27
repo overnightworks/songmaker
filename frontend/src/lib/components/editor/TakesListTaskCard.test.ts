@@ -59,7 +59,7 @@ afterEach(async () => {
 	clearSource();
 });
 
-describe('task card in the take list (S4, #1912 acceptance 1 and 6)', () => {
+describe('task card in the take list (S4, #1912 acceptance 1, 2, 6, 7)', () => {
 	it('renders only directly under the source take', async () => {
 		setSourceFromGeneration(takes[1], 'repaint');
 		const target = await renderList();
