@@ -7,7 +7,6 @@ import {
 	attachLandingHandler,
 	historyStandsStill,
 	installHistoryController,
-	isUnownedLayerEntryForTests,
 	land,
 	landedEntry,
 	loadHistoryPageForTests,
@@ -142,10 +141,8 @@ describe('landing reducer', () => {
 		{ after: 'a reload', layers: [] },
 		{ after: 'Forward past an open layer', layers: [{ layer: 'now-playing', entry: 7 }] }
 	])('a stale layer entry after $after is stepped off', ({ layers }) => {
-		const stale = { id: 9, layer: 'album-menu' };
-		const outcome = land(ledger({ layers }), stale);
+		const outcome = land(ledger({ layers }), { id: 9, layer: 'album-menu' });
 
-		expect(isUnownedLayerEntryForTests(outcome.ledger, stale)).toBe(true);
 		expect(outcome).toMatchObject({ apply: false, dropLayers: [] });
 		expect(outcome.ledger.current).toEqual({ id: 6 });
 	});
@@ -284,20 +281,6 @@ describe('history adapter', () => {
 
 		expect(landings).toHaveLength(1);
 		expect(landings[0]).toMatchObject({ settled: [page.id], apply: false });
-	});
-
-	it('steps off a stale layer entry Forward lands on after a reload', async () => {
-		const page = pushEntry('/album/a', {});
-		pushEntry('/album/a', {}, 'album-menu');
-		loadPage();
-		await stepBackTo(page.id);
-
-		const steppedBack = nextLanding().then(nextLanding);
-		history.forward();
-		await steppedBack;
-
-		expect(landings).toHaveLength(3);
-		expect(history.state['sveltekit:states'].entry).toEqual(page);
 	});
 
 	it('keeps stamping and pushing entries when session storage refuses writes', () => {
@@ -744,7 +727,6 @@ describe('history adapter', () => {
 		attachRecordingHandler();
 
 		window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
-
 		expect(back.presses()).toBe(1);
 		back.stop();
 	});

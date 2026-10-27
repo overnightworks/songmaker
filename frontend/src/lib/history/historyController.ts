@@ -90,16 +90,14 @@ export function land(ledger: HistoryLedger, landed: HistoryEntry | null): Landin
 	};
 }
 
-// A layer entry that no open layer with that entry id owns -- one a reload or
-// a Forward came back onto -- is a copy of the page below it, where Back would
-// visibly do nothing.
+// A layer entry no open layer owns -- one a reload or a Forward came back
+// onto -- is a copy of the page below it, where Back would do nothing.
 function isUnownedLayerEntry(ledger: HistoryLedger, entry: HistoryEntry | null): boolean {
 	return (
 		entry?.layer !== undefined &&
 		!ledger.layers.some((open) => open.entry === entry.id && open.layer === entry.layer)
 	);
 }
-export { isUnownedLayerEntry as isUnownedLayerEntryForTests };
 
 // Read and incremented on every allocation, never cached: a reload, a
 // bfcache restore or a return from another document starts this module afresh
@@ -668,10 +666,7 @@ export function historyStandsStill(): Promise<void> {
 
 // Resolves once history has come to rest: a write released when history
 // stands still may navigate and move it again, so the wait starts over until
-// nothing is left to land. A navigation that leaves the library waits here: a
-// step back still in flight (the unsaved-changes dialog leaving its own
-// entry) would land after its push and take the address back to the song
-// (issue #1143).
+// nothing is left to land.
 export function historyComesToRest(): Promise<void> {
 	if (!historyMoves()) return Promise.resolve();
 	return historyStandsStill().then(historyComesToRest);
@@ -741,8 +736,7 @@ function dropLayers(open: readonly OpenLayerEntry[]): void {
 	if (depth !== -1) dropLayersFrom(depth);
 }
 
-// Steps off a layer entry no open layer owns. A step back off it already
-// underway is not started again.
+// A step back off the entry already underway is not started again.
 function stepOffUnownedLayerEntry(entry: HistoryEntry | null): void {
 	if (entry === null || !isUnownedLayerEntry(ledger, entry)) return;
 	if (ledger.stepBacks.includes(entry.id - 1)) return;
