@@ -27,6 +27,7 @@ sudo ./scripts/install-autostart.sh               # start the stack after every 
 
 ## Operations
 
+- **Moving the deploy checkout:** `scripts/switch_deploy_checkout.sh <tag>` switches a host from the work clone `~/git/songmaker` to the release clone `~/srv/songmaker` (it prints each step, stops at the first failed check and asks before deleting the old `.env`); `scripts/switch_deploy_checkout.sh --backout` returns, until a release has deployed from `~/srv/songmaker`. Neither touches the running containers.
 - **Updates:** a systemd timer (`scripts/install-autodeploy.sh` installs it) runs `scripts/auto-deploy.sh`, which redeploys a release tag (`vYYYY.MM.DD.N` on `main`) once its checks are green and no job is running; a merge to `main` alone deploys nothing, and the header owns the rules.
 - **Logs and status:** `docker compose logs -f <service>` and `docker compose ps -a` (`-a` also shows a created-but-never-started container).
 - **Stop and start:** `docker compose stop` / `docker compose start` keep the volumes.
