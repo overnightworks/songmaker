@@ -725,7 +725,7 @@ describe('generate action execution', () => {
 	);
 
 	it.each(['repaint', 'cover'] as const)(
-		'the header generate with a %s source open still makes new takes from the recipe',
+		'the header generate with a %s source open still makes new takes from the recipe (S4, #1923 acceptance 3)',
 		async (mode) => {
 			sourceGeneration.set(makeGeneration());
 			sourceMode.set(mode);
@@ -738,7 +738,7 @@ describe('generate action execution', () => {
 		}
 	);
 
-	it('a press refused as unavailable shows its lasting line with no toast', async () => {
+	it('a press refused as unavailable shows its lasting line with no toast (S4, #1923 acceptance 3)', async () => {
 		const line = "Generating isn't available right now.";
 		vi.mocked(generateSong).mockRejectedValueOnce(
 			new ApiError(503, line, '/api/x', null, line, 'generation_unavailable', 'job9')

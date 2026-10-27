@@ -329,7 +329,7 @@ describe('PhoneRecipeSection', () => {
 	});
 
 	it.each(['repaint', 'cover'] as const)(
-		'shows no Repaint row and no Source bar with a %s source set',
+		'shows no Repaint row and no Source bar with a %s source set (S8, #1923 acceptance 1)',
 		async (mode) => {
 			setSourceFromGeneration(makeGeneration(), mode);
 			recipeOpen.set(true);

@@ -112,7 +112,7 @@ describe('RecipePanel', () => {
 	});
 
 	it.each(['repaint', 'cover'] as const)(
-		'shows no Repaint row, no Off and no Source bar with a %s source set',
+		'shows no Repaint row, no Off and no Source bar with a %s source set (S8, #1923 acceptance 1)',
 		async (mode) => {
 			const target = await render();
 			setSourceFromGeneration(makeGeneration({ version_number: 3, generation_number: 2 }), mode);

@@ -878,7 +878,7 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 	});
 
 	it.each(['repaint', 'cover'] as const)(
-		'keeps Generate plain with a %s source set',
+		'keeps Generate plain with a %s source set (S4, #1923 acceptance 3)',
 		async (mode) => {
 			const target = await renderView();
 			setSourceFromGeneration(generation(sourceRecipeDefaults()), mode);

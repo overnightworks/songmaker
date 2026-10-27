@@ -81,7 +81,7 @@ describe('GenerateButton', () => {
 		}
 	);
 
-	it('generates with a single word and no version', async () => {
+	it('generates with a single word and no version (S4, #1923 acceptance 3)', async () => {
 		await render({ kind: 'idle' });
 		const button = getByRoleButton(document.body, EDITOR_GENERATE_LABEL);
 		expect(button.disabled).toBe(false);
