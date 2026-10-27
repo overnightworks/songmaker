@@ -44,10 +44,7 @@ describe('recipeChips', () => {
 			keyScale: 'A major',
 			voiceLabel: 'None',
 			pinnedSeed: null,
-			genParams: null,
-			sourceGeneration: null,
-			sourceMode: 'repaint',
-			repaintMode: 'conservative'
+			genParams: null
 		});
 		expect(chips.map((c) => c.key)).toEqual([
 			'model',
@@ -58,15 +55,13 @@ describe('recipeChips', () => {
 			'voice',
 			'seed',
 			'lm',
-			'dit',
-			'repaint'
+			'dit'
 		]);
 		expect(chips.find((c) => c.key === 'model')?.value).toBe('TURBO');
 		expect(chips.find((c) => c.key === 'takes')?.value).toBe('×2');
 		expect(chips.find((c) => c.key === 'bpm')?.value).toBe('108');
 		expect(chips.find((c) => c.key === 'duration')?.value).toBe('195 s');
 		expect(chips.find((c) => c.key === 'seed')?.value).toBe('Random');
-		expect(chips.find((c) => c.key === 'repaint')?.value).toBe('Off');
 	});
 
 	it('shows Auto for zero BPM/duration and Pinned for a pinned seed', () => {
@@ -78,10 +73,7 @@ describe('recipeChips', () => {
 			keyScale: '',
 			voiceLabel: 'None',
 			pinnedSeed: 48113,
-			genParams: null,
-			sourceGeneration: null,
-			sourceMode: 'repaint',
-			repaintMode: 'conservative'
+			genParams: null
 		});
 		expect(chips.find((c) => c.key === 'bpm')?.value).toBe('Auto');
 		expect(chips.find((c) => c.key === 'duration')?.value).toBe('Auto');
@@ -118,40 +110,6 @@ describe('recipeChips', () => {
 			recipeChips({ ...base, genParams: { lm_temperature: 0.8 } }).find((c) => c.key === 'dit')
 				?.value
 		).toBe('Default');
-	});
-
-	it('shows the mode and source take when a source is picked', () => {
-		const gen = generation({
-			...requestedRecipeDefaults(),
-			version_number: 2,
-			generation_number: 3
-		});
-		const base = {
-			model: 'turbo',
-			takes: 1,
-			bpm: 120,
-			audioDuration: 180,
-			keyScale: 'Am',
-			voiceLabel: 'None',
-			pinnedSeed: null,
-			genParams: null,
-			repaintMode: 'balanced' as const
-		};
-		expect(
-			recipeChips({ ...base, sourceGeneration: gen, sourceMode: 'repaint' }).find(
-				(c) => c.key === 'repaint'
-			)?.value
-		).toBe('v2 · take 3');
-		expect(
-			recipeChips({ ...base, sourceGeneration: gen, sourceMode: 'repaint' }).find(
-				(c) => c.key === 'repaint'
-			)?.label
-		).toBe('Repaint');
-		expect(
-			recipeChips({ ...base, sourceGeneration: gen, sourceMode: 'cover' }).find(
-				(c) => c.key === 'repaint'
-			)?.label
-		).toBe('Cover');
 	});
 
 	it('marks a chip changed only when the draft value differs from the last-saved version', () => {

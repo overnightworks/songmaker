@@ -17,7 +17,7 @@ import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
-	EDITOR_GENERATE_MODE_LABELS,
+	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATING_LABEL,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_SAVE_FAILED,
@@ -311,6 +311,7 @@ function albumSongs(): SongItem[] {
 }
 
 beforeEach(() => {
+	Element.prototype.scrollIntoView = vi.fn();
 	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
 	discardDraft();
 	resetNavigationForTests();
@@ -388,7 +389,7 @@ describe('SongDetailView header — one row, every state', () => {
 		expect(visibleText(actions)).toContain(EDITOR_VIEW_RECIPE_LABEL);
 		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
 		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
-			EDITOR_GENERATE_MODE_LABELS.generate
+			EDITOR_GENERATE_LABEL
 		);
 	});
 
@@ -864,7 +865,7 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 		const target = await renderView();
 		const generateBtn = () =>
 			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-				(el) => el.textContent?.trim() === EDITOR_GENERATE_MODE_LABELS.generate
+				(el) => el.textContent?.trim() === EDITOR_GENERATE_LABEL
 			);
 		expect(generateBtn()?.disabled).toBe(true);
 
@@ -876,25 +877,18 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 		expect(generateBtn()?.disabled).toBe(false);
 	});
 
-	it.each([
-		['repaint', 'Repaint'],
-		['cover', 'Cover']
-	] as const)('names Generate after the active %s mode', async (mode, label) => {
-		const target = await renderView();
-		setSourceFromGeneration(generation(sourceRecipeDefaults()), mode);
-		await tick();
+	it.each(['repaint', 'cover'] as const)(
+		'keeps Generate plain with a %s source set (S4, #1923 acceptance 3)',
+		async (mode) => {
+			const target = await renderView();
+			setSourceFromGeneration(generation(sourceRecipeDefaults()), mode);
+			await tick();
 
-		expect(target.querySelector('.generate-action .primary-button')?.textContent?.trim()).toBe(
-			label
-		);
-	});
-
-	it('keeps Text2Music named Generate', async () => {
-		const target = await renderView();
-		expect(target.querySelector('.generate-action .primary-button')?.textContent?.trim()).toBe(
-			EDITOR_GENERATE_MODE_LABELS.generate
-		);
-	});
+			expect(target.querySelector('.generate-action .primary-button')?.textContent?.trim()).toBe(
+				EDITOR_GENERATE_LABEL
+			);
+		}
+	);
 });
 
 describe.each([false, true])('SongDetailView Generate with phone layout %s', (phone) => {
@@ -916,7 +910,7 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		expect(btn?.disabled).toBe(false);
 		expect(btn?.title).toBe('');
 		expect(target.querySelector('.generate-action .reason')).toBeNull();
-		expect(btn?.textContent).toContain(EDITOR_GENERATE_MODE_LABELS.generate);
+		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
 	});
 
 	it('[defect:#1579] shows the full failure at Generate and retries through the same button', async () => {
@@ -930,7 +924,7 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 		expect(action.textContent).toContain(cause);
 		expect(target.querySelector('.takes-list')?.textContent ?? '').not.toContain(cause);
 		expect(action.querySelectorAll('button')).toHaveLength(1);
-		getByRoleButton(action, EDITOR_GENERATE_MODE_LABELS.generate).click();
+		getByRoleButton(action, EDITOR_GENERATE_LABEL).click();
 		await vi.waitFor(() =>
 			expect(action.querySelector('[role="status"]')?.textContent).toContain('Queued')
 		);
@@ -2253,7 +2247,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			act: (target: HTMLElement) =>
 				getByRoleButton(
 					target.querySelector<HTMLElement>('.generate-action') ?? target,
-					EDITOR_GENERATE_MODE_LABELS.generate
+					EDITOR_GENERATE_LABEL
 				).click()
 		}
 	])('the Undo toast of a load goes with the next action: $action', async ({ act }) => {
@@ -2295,7 +2289,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 
 		getByRoleButton(
 			target.querySelector<HTMLElement>('.generate-action') ?? target,
-			EDITOR_GENERATE_MODE_LABELS.generate
+			EDITOR_GENERATE_LABEL
 		).click();
 		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
 

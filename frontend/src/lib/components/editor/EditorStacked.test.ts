@@ -23,8 +23,7 @@ const CHIPS: RecipeChip[] = [
 	chip({ key: 'voice', label: 'Voice', value: 'None' }),
 	chip({ key: 'seed', label: 'Seed', value: 'Random' }),
 	chip({ key: 'lm', label: 'LM', value: 'Default' }),
-	chip({ key: 'dit', label: 'DIT', value: 'Default' }),
-	chip({ key: 'repaint', label: 'Repaint', value: 'Off' })
+	chip({ key: 'dit', label: 'DIT', value: 'Default' })
 ];
 
 async function render(overrides: Partial<{ chips: RecipeChip[]; onexpand: () => void }> = {}) {
@@ -47,7 +46,6 @@ describe('EditorStacked', () => {
 		expect(rows[1].textContent).toContain('Text');
 		expect(rows[1].textContent).toContain('LM Default');
 		expect(rows[2].textContent).toContain('Reproduce');
-		expect(rows[2].textContent).toContain('Repaint Off');
 	});
 
 	it('expands to the full panel on Edit', async () => {

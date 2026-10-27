@@ -18,13 +18,6 @@ import {
 	recipeModel,
 	recipeOpen,
 	takesPerGenerate,
-	sourceGeneration,
-	sourceMode,
-	coverStrength,
-	coverNoiseStrength,
-	repaintMode,
-	repaintStrength,
-	repaintStart,
 	setSourceFromGeneration
 } from '$lib/stores/recipe';
 import { activeModels, loadActiveModels } from '$lib/stores/presets';
@@ -71,7 +64,6 @@ beforeEach(async () => {
 	recipeModel.set('turbo');
 	takesPerGenerate.set(1);
 	pinnedSeed.set(null);
-	sourceGeneration.set(null);
 	loras.set([]);
 	await loadActiveModels();
 });
@@ -103,9 +95,6 @@ const chipsStore = derived(
 		editKeyScale,
 		editGenParams,
 		pinnedSeed,
-		sourceGeneration,
-		sourceMode,
-		repaintMode,
 		savedSongData
 	],
 	([
@@ -116,9 +105,6 @@ const chipsStore = derived(
 		$editKeyScale,
 		$editGenParams,
 		$pinnedSeed,
-		$sourceGeneration,
-		$sourceMode,
-		$repaintMode,
 		$saved
 	]) =>
 		recipeChips({
@@ -130,9 +116,6 @@ const chipsStore = derived(
 			voiceLabel: voiceLabelFor($editGenParams?.user_lora_id),
 			pinnedSeed: $pinnedSeed,
 			genParams: $editGenParams,
-			sourceGeneration: $sourceGeneration,
-			sourceMode: $sourceMode,
-			repaintMode: $repaintMode,
 			savedBpm: $saved.bpm,
 			savedAudioDuration: $saved.audio_duration,
 			savedKeyScale: $saved.key_scale,
@@ -345,56 +328,16 @@ describe('PhoneRecipeSection', () => {
 		}
 	});
 
-	it('edits repaint mode, strength and waveform range inline', async () => {
-		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Audio unavailable')));
-		setSourceFromGeneration(
-			makeGeneration({ generation_params: { audio_duration: 180 } }),
-			'repaint'
-		);
-		recipeOpen.set(true);
-		const target = await render();
-		await click(target, 'Repaint');
-		const mode = target.querySelector<HTMLSelectElement>(
-			'select[aria-label="Repaint"]'
-		) as HTMLSelectElement;
-		mode.value = 'balanced';
-		mode.dispatchEvent(new Event('change', { bubbles: true }));
-		await tick();
-		const strength = target.querySelector<HTMLInputElement>(
-			'input[type="range"]'
-		) as HTMLInputElement;
-		strength.value = '0.6';
-		strength.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		expect(get(repaintMode)).toBe('balanced');
-		expect(get(repaintStrength)).toBe(0.6);
-		const waveform = target.querySelector<HTMLElement>('.waveform-picker') as HTMLElement;
-		vi.spyOn(waveform, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 300, 64));
-		const start = target.querySelector<HTMLElement>('[aria-label="Repaint start"]') as HTMLElement;
-		start.setPointerCapture = vi.fn();
-		start.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 0 }));
-		start.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 75 }));
-		start.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
-		await tick();
-		expect(get(repaintStart)).toBeCloseTo(0.25);
-		expect(start.getAttribute('aria-valuenow')).toBe('25');
-	});
-
-	it('edits cover strengths and clears a source picked from a take', async () => {
-		setSourceFromGeneration(makeGeneration(), 'cover');
-		recipeOpen.set(true);
-		const target = await render();
-		await click(target, 'Cover');
-		const inputs = target.querySelectorAll<HTMLInputElement>('input[type="range"]');
-		for (const input of inputs) {
-			input.value = '0.4';
-			input.dispatchEvent(new Event('input', { bubbles: true }));
+	it.each(['repaint', 'cover'] as const)(
+		'shows no Repaint row and no Source bar with a %s source set (S8, #1923 acceptance 1)',
+		async (mode) => {
+			setSourceFromGeneration(makeGeneration(), mode);
+			recipeOpen.set(true);
+			const target = await render();
+			expect(target.textContent).not.toContain('Repaint');
+			expect(target.textContent).not.toContain('Off');
+			expect(target.textContent).not.toContain('Source');
+			expect(target.querySelector('.waveform-picker')).toBeNull();
 		}
-		await tick();
-		expect(get(sourceMode)).toBe('cover');
-		expect(get(coverStrength)).toBe(0.4);
-		expect(get(coverNoiseStrength)).toBe(0.4);
-		await click(target, 'Off');
-		expect(get(sourceGeneration)).toBeNull();
-	});
+	);
 });
