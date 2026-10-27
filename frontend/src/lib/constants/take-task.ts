@@ -36,3 +36,20 @@ export function takeTaskRepaintButtonLabel(
 ): string {
 	return `${label} ${formatTime(startSeconds)} – ${formatTime(endSeconds)}`;
 }
+
+// The seed a take hands to the next jobs: its menu row, Now Playing's row, the
+// chip at Generate, the card line and the toast.
+export const TAKE_USE_SEED_LABEL = 'Use seed';
+export const SEED_CHIP_CLEAR_LABEL = 'Clear seed';
+
+export function seedChipLabel(takeNumber: number): string {
+	return `Seed · take ${takeNumber}`;
+}
+
+export function takeTaskSeedLine(takeNumber: number): string {
+	return `seed: from take ${takeNumber}`;
+}
+
+export function takeUseSeedToast(takeNumber: number): string {
+	return `Seed from take ${takeNumber}`;
+}

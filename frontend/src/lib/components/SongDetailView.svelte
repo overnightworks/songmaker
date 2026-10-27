@@ -59,7 +59,6 @@
 		computeDraftVersionNumber,
 		draftSavesAsNewVersion,
 		discardDraft,
-		pinnedSeed,
 		editBpm,
 		editAudioDuration,
 		editKeyScale,
@@ -73,7 +72,8 @@
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
 	import {
 		coWriterOpen,
-		pendingSource,
+		applyTakeUse,
+		pendingTakeUse,
 		recipeChips,
 		recipeModel,
 		recipeOpen,
@@ -288,11 +288,10 @@
 	});
 
 	$effect(() => {
-		const pending = $pendingSource;
+		const pending = $pendingTakeUse;
 		if (!pending || !song || pending.generation.song_id !== song.id) return;
-		setSourceFromGeneration(pending.generation, pending.mode);
-		if (compact) openTakesTab();
-		pendingSource.set(null);
+		if (applyTakeUse(pending) && compact) openTakesTab();
+		pendingTakeUse.set(null);
 	});
 
 	$effect(() => {
@@ -371,7 +370,6 @@
 			audioDuration: $editAudioDuration,
 			keyScale: $editKeyScale,
 			voiceLabel: resolveVoiceLabel($editGenParams?.user_lora_id ?? null),
-			pinnedSeed: $pinnedSeed,
 			genParams: $editGenParams,
 			savedBpm: $savedSongData.bpm,
 			savedAudioDuration: $savedSongData.audio_duration,
@@ -691,7 +689,7 @@
 		const action = get(pendingDirtyNavigation);
 		pendingDirtyNavigation.set(null);
 		if (choice === 'cancel') {
-			pendingSource.set(null);
+			pendingTakeUse.set(null);
 			pendingVersionLoad.set(null);
 			return;
 		}
@@ -702,7 +700,7 @@
 				await handleSave(song.id);
 			} catch (e) {
 				addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
-				pendingSource.set(null);
+				pendingTakeUse.set(null);
 				pendingVersionLoad.set(null);
 				return;
 			}

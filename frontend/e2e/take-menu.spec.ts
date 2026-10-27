@@ -17,6 +17,7 @@ import {
 	TAKE_REPAINT_LABEL,
 	TAKE_SHARE_LABEL
 } from '../src/lib/constants';
+import { TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import {
 	boundingBoxes,
 	csrfHeaders,
@@ -27,13 +28,14 @@ import {
 	type Shell
 } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf, VIEWPORT_MARGIN_PX } from './menu-viewport';
-import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
+import { archiveOwnedAlbum, seedSongPhoneSong, seedTakeStripSong } from './seed';
 
 const VIEWPORT_HEIGHT_PX = 844;
 const ALBUM_FORM_MENU_WIDTH_PX = 238;
 const SONG_TITLE = 'Take menu cells';
 const TAKE_COUNT = 16;
 const MIDDLE_TAKE_INDEX = TAKE_COUNT / 2;
+const FIRST_TAKE_SEED = 4127730;
 const FOOT_OF_LIST_REACH_PX = HITBOX_FREQUENT_PX;
 const SAME_PLACE_TOLERANCE_PX = 0.5;
 const ROW_LABELS_IN_ORDER = [
@@ -92,7 +94,8 @@ test.afterEach(({}, testInfo) => {
 async function onOwnTakes(
 	page: Page,
 	{ shell, width }: Cell,
-	flow: () => Promise<void>
+	flow: () => Promise<void>,
+	takeSeedBase?: number
 ): Promise<void> {
 	await page.setViewportSize({ width, height: VIEWPORT_HEIGHT_PX });
 	const headers = await csrfHeaders(page);
@@ -103,7 +106,10 @@ async function onOwnTakes(
 	expect(album.ok()).toBe(true);
 	const { id: albumId } = (await album.json()) as { id: string };
 	try {
-		const songId = await seedTakeStripSong(albumId, SONG_TITLE, TAKE_COUNT);
+		const songId =
+			takeSeedBase === undefined
+				? await seedTakeStripSong(albumId, SONG_TITLE, TAKE_COUNT)
+				: await seedSongPhoneSong(albumId, SONG_TITLE, 1, TAKE_COUNT, takeSeedBase);
 		const song = await page.request.get(`/api/songs/${songId}`);
 		expect(song.ok()).toBe(true);
 		const { slug } = (await song.json()) as { slug: string };
@@ -258,6 +264,36 @@ for (const { ids, position, cell } of GRID) {
 		}
 	);
 }
+
+test.describe('Use seed row', () => {
+	for (const cell of CELLS) {
+		test(
+			`1928 T29: a take with a seed lists Use seed third, with the seed as its hint, at ${cell.width} px`,
+			{ tag: ONLY_IN_SHELL[cell.shell] },
+			async ({ page }) => {
+				await onOwnTakes(
+					page,
+					cell,
+					async () => {
+						for (const index of [0, MIDDLE_TAKE_INDEX, TAKE_COUNT - 1]) {
+							const trigger = takeMenuTriggers(page).nth(index);
+							await trigger.click();
+							const rows = takeMenu(page).getByRole('button');
+							await expect(rows).toHaveCount(ROW_LABELS_IN_ORDER.length + 1);
+							await expect(rows.nth(2)).toContainText(TAKE_USE_SEED_LABEL);
+							await expect(rows.nth(2).locator('.menu-item-hint')).toHaveText(
+								String(FIRST_TAKE_SEED + index)
+							);
+							await expect(rows.nth(2).locator('svg')).toHaveCount(1);
+							await closeWithEscape(page, trigger);
+						}
+					},
+					FIRST_TAKE_SEED
+				);
+			}
+		);
+	}
+});
 
 test(
 	'915_C3 T25: Delete asks first, and Cancel keeps the take',

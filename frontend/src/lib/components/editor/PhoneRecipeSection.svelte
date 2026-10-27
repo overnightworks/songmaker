@@ -11,8 +11,7 @@
 		setDraftBpm,
 		setDraftAudioDuration,
 		setDraftKeyScale,
-		setDraftGenParams,
-		pinnedSeed
+		setDraftGenParams
 	} from '$lib/stores/editor';
 	import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
 	import {
@@ -32,12 +31,8 @@
 		RECIPE_PANEL_LABEL,
 		RECIPE_GROUP_SOUND_LABEL,
 		RECIPE_GROUP_TEXT_LABEL,
-		RECIPE_GROUP_REPRODUCE_LABEL,
 		RECIPE_PRESET_LABEL,
 		RECIPE_PRESET_DEFAULT_OPTION,
-		RECIPE_SEED_RANDOM_LABEL,
-		RECIPE_SEED_PINNED_LABEL,
-		RECIPE_DEFAULT_PINNED_SEED,
 		RECIPE_USES_LABEL,
 		VOICE_PICKER_NONE_LABEL,
 		PHONE_RECIPE_LOADING,
@@ -123,10 +118,6 @@
 					changed: parameterChips.some((chip) => chip.changed)
 				}
 			]
-		},
-		{
-			label: RECIPE_GROUP_REPRODUCE_LABEL,
-			rows: chips.filter((chip) => chip.key === 'seed')
 		}
 	]);
 
@@ -293,27 +284,6 @@
 									maxInferenceSteps={modelData?.capabilities?.max_inference_steps ??
 										RECIPE_MAX_INFERENCE_STEPS_DEFAULT}
 								/>
-							{:else if row.key === 'seed'}
-								<div class="choices">
-									<button
-										type="button"
-										aria-pressed={$pinnedSeed === null}
-										onclick={() => pinnedSeed.set(null)}>{RECIPE_SEED_RANDOM_LABEL}</button
-									>
-									<button
-										type="button"
-										aria-pressed={$pinnedSeed !== null}
-										onclick={() => pinnedSeed.set($pinnedSeed ?? RECIPE_DEFAULT_PINNED_SEED)}
-										>{RECIPE_SEED_PINNED_LABEL}</button
-									>
-								</div>
-								{#if $pinnedSeed !== null}<input
-										type="number"
-										min="0"
-										aria-label={row.label}
-										value={$pinnedSeed}
-										oninput={(event) => pinnedSeed.set(Number(event.currentTarget.value))}
-									/>{/if}
 							{/if}
 						</div>
 					{/if}
@@ -425,13 +395,6 @@
 		color: var(--text);
 		font-size: var(--btn-font-size-sm);
 		cursor: pointer;
-	}
-	.field-editor button[aria-pressed='true'] {
-		border-color: var(--primary);
-	}
-	.choices {
-		display: flex;
-		gap: var(--row-gap);
 	}
 	.footer {
 		margin: 0;

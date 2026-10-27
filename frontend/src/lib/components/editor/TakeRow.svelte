@@ -354,6 +354,7 @@
 				{gen}
 				onrepaint={() => onsource(gen, 'repaint')}
 				oncover={() => onsource(gen, 'cover')}
+				onuseseed={() => actions.useSeed(gen)}
 				onshare={() => actions.share(gen.id)}
 				onunshare={() => actions.unshare(gen.id)}
 				{onaddtoplaylist}

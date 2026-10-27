@@ -10,7 +10,6 @@ import {
 	unpickGeneration
 } from '$lib/api/client';
 import { JOB_TYPE_SCORE, TAKE_RESCORE_QUEUED_TOAST } from '$lib/constants';
-import { pinnedSeed } from '$lib/stores/editor';
 import { activeJobs, trackJob } from '$lib/stores/jobs';
 import { upsertSongInList } from '$lib/stores/libraryData';
 import { addToast } from '$lib/stores/toast';
@@ -117,8 +116,3 @@ export const rescoringTakeIds = derived(
 		return ids;
 	}
 );
-
-export function pinSeed(seed: number): void {
-	pinnedSeed.set(seed);
-	addToast(`Seed ${seed} pinned for next generation`, 'success');
-}

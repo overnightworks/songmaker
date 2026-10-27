@@ -2,12 +2,15 @@ import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
 import { makeGeneration as generation } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
+import { toasts } from '$lib/stores/toast';
 import type { GenerationItem } from '$lib/api/types';
 import {
 	clearSource,
 	coWriterOpen,
 	coverStrength,
-	pendingSource,
+	applyTakeUse,
+	clearSeed,
+	pendingTakeUse,
 	recipeChips,
 	recipeModel,
 	recipeOpen,
@@ -16,11 +19,13 @@ import {
 	repaintMode,
 	repaintStart,
 	resetRecipeSourceForSong,
+	seedFromTake,
 	seedRecipeModel,
 	setSourceFromGeneration,
 	sourceGeneration,
 	sourceMode,
-	takesPerGenerate
+	takesPerGenerate,
+	useSeed
 } from './recipe';
 
 function requestedRecipeDefaults(): Partial<GenerationItem> {
@@ -35,7 +40,7 @@ function requestedRecipeDefaults(): Partial<GenerationItem> {
 }
 
 describe('recipeChips', () => {
-	it('projects the ten labeled chips from editor and recipe state', () => {
+	it('C1: projects the eight labeled chips from editor and recipe state', () => {
 		const chips = recipeChips({
 			model: 'turbo',
 			takes: 2,
@@ -43,7 +48,6 @@ describe('recipeChips', () => {
 			audioDuration: 195,
 			keyScale: 'A major',
 			voiceLabel: 'None',
-			pinnedSeed: null,
 			genParams: null
 		});
 		expect(chips.map((c) => c.key)).toEqual([
@@ -53,7 +57,6 @@ describe('recipeChips', () => {
 			'duration',
 			'key',
 			'voice',
-			'seed',
 			'lm',
 			'dit'
 		]);
@@ -61,10 +64,9 @@ describe('recipeChips', () => {
 		expect(chips.find((c) => c.key === 'takes')?.value).toBe('×2');
 		expect(chips.find((c) => c.key === 'bpm')?.value).toBe('108');
 		expect(chips.find((c) => c.key === 'duration')?.value).toBe('195 s');
-		expect(chips.find((c) => c.key === 'seed')?.value).toBe('Random');
 	});
 
-	it('shows Auto for zero BPM/duration and Pinned for a pinned seed', () => {
+	it('C1: shows Auto for zero BPM/duration', () => {
 		const chips = recipeChips({
 			model: null,
 			takes: 1,
@@ -72,13 +74,11 @@ describe('recipeChips', () => {
 			audioDuration: 0,
 			keyScale: '',
 			voiceLabel: 'None',
-			pinnedSeed: 48113,
 			genParams: null
 		});
 		expect(chips.find((c) => c.key === 'bpm')?.value).toBe('Auto');
 		expect(chips.find((c) => c.key === 'duration')?.value).toBe('Auto');
 		expect(chips.find((c) => c.key === 'key')?.value).toBe('—');
-		expect(chips.find((c) => c.key === 'seed')?.value).toBe('Pinned 48113');
 		expect(chips.find((c) => c.key === 'model')?.value).toBe('—');
 	});
 
@@ -90,7 +90,6 @@ describe('recipeChips', () => {
 			audioDuration: 180,
 			keyScale: 'Am',
 			voiceLabel: 'None',
-			pinnedSeed: null,
 			sourceGeneration: null,
 			sourceMode: 'repaint' as const,
 			repaintMode: 'conservative' as const
@@ -120,7 +119,6 @@ describe('recipeChips', () => {
 			audioDuration: 180,
 			keyScale: 'Am',
 			voiceLabel: 'None',
-			pinnedSeed: null,
 			genParams: null,
 			sourceGeneration: null,
 			sourceMode: 'repaint' as const,
@@ -156,7 +154,8 @@ describe('recipe session state', () => {
 		recipeOpen.set(false);
 		coWriterOpen.set(false);
 		sourceGeneration.set(null);
-		pendingSource.set(null);
+		pendingTakeUse.set(null);
+		seedFromTake.set(null);
 	});
 
 	it('seeds the model only once, from the first active model', () => {
@@ -194,9 +193,58 @@ describe('recipe session state', () => {
 		expect(get(coverStrength)).toBe(0.7);
 		expect(get(recipeOpen)).toBe(false);
 		expect(get(coWriterOpen)).toBe(false);
+		expect(get(seedFromTake)).toBeNull();
 		expect(get(recipeModel)).toBe('turbo');
 		expect(get(takesPerGenerate)).toBe(3);
 	});
+});
+
+describe('seed from a take (C1, #1928 acceptance 1)', () => {
+	beforeEach(() => {
+		seedFromTake.set(null);
+		toasts.set([]);
+		sourceGeneration.set(null);
+		sourceMode.set('repaint');
+	});
+
+	it('is set from the take, says so in a toast and is replaced by the next one', () => {
+		useSeed(generation({ seed: 4127730, generation_number: 11 }));
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ message: 'Seed from take 11', type: 'success' })
+		]);
+		expect(get(seedFromTake)).toEqual({ seed: 4127730, takeNumber: 11 });
+		useSeed(generation({ seed: 9, generation_number: 7 }));
+		expect(get(seedFromTake)).toEqual({ seed: 9, takeNumber: 7 });
+	});
+
+	it('is left unchanged by a take without a seed', () => {
+		useSeed(generation({ seed: 5, generation_number: 2 }));
+		useSeed(generation({ seed: null, generation_number: 3 }));
+		expect(get(seedFromTake)).toEqual({ seed: 5, takeNumber: 2 });
+	});
+
+	it('is cleared by clearSeed', () => {
+		useSeed(generation({ seed: 5, generation_number: 2 }));
+		clearSeed();
+		expect(get(seedFromTake)).toBeNull();
+	});
+
+	it('is applied by a handed-over take and leaves the repaint source alone', () => {
+		applyTakeUse({ generation: generation({ seed: 5, generation_number: 2 }), use: 'seed' });
+		expect(get(seedFromTake)).toEqual({ seed: 5, takeNumber: 2 });
+		expect(get(sourceGeneration)).toBeNull();
+	});
+
+	it.each([
+		{ use: 'seed', opensTaskCard: false },
+		{ use: 'repaint', opensTaskCard: true },
+		{ use: 'cover', opensTaskCard: true }
+	] as const)(
+		'C1: a $use hand-over reports opening a task card: $opensTaskCard',
+		({ use, opensTaskCard }) => {
+			expect(applyTakeUse({ generation: generation({ seed: 5 }), use })).toBe(opensTaskCard);
+		}
+	);
 });
 
 describe('sourceTakeDurationSeconds', () => {

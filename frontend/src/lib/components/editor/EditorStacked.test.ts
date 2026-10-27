@@ -21,7 +21,6 @@ const CHIPS: RecipeChip[] = [
 	chip({ key: 'duration', label: 'Duration', value: '195 s' }),
 	chip({ key: 'key', label: 'Key', value: 'A major' }),
 	chip({ key: 'voice', label: 'Voice', value: 'None' }),
-	chip({ key: 'seed', label: 'Seed', value: 'Random' }),
 	chip({ key: 'lm', label: 'LM', value: 'Default' }),
 	chip({ key: 'dit', label: 'DIT', value: 'Default' })
 ];
@@ -39,13 +38,12 @@ describe('EditorStacked', () => {
 	it('shows one summary row per group with its key values', async () => {
 		const { target } = await render();
 		const rows = Array.from(target.querySelectorAll('.stacked-row'));
-		expect(rows).toHaveLength(3);
+		expect(rows).toHaveLength(2);
 		expect(rows[0].textContent).toContain('Sound');
 		expect(rows[0].textContent).toContain('Model TURBO');
 		expect(rows[0].textContent).toContain('BPM 108');
 		expect(rows[1].textContent).toContain('Text');
 		expect(rows[1].textContent).toContain('LM Default');
-		expect(rows[2].textContent).toContain('Reproduce');
 	});
 
 	it('expands to the full panel on Edit', async () => {

@@ -63,7 +63,6 @@ import {
 	editLyrics,
 	pendingVersionLoad,
 	versionDeleteRequest,
-	pinnedSeed,
 	setDraftLyrics,
 	loadVersionAsDraft,
 	setDraftPrompt,
@@ -85,8 +84,9 @@ import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { clearSelection, toggleSelection } from '$lib/stores/selection';
 import {
-	pendingSource,
+	pendingTakeUse,
 	recipeModel,
+	seedFromTake,
 	recipeOpen,
 	coWriterOpen,
 	setSourceFromGeneration,
@@ -315,8 +315,8 @@ beforeEach(() => {
 	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
 	discardDraft();
 	resetNavigationForTests();
-	pendingSource.set(null);
-	pinnedSeed.set(null);
+	pendingTakeUse.set(null);
+	seedFromTake.set(null);
 	recipeOpen.set(false);
 	coWriterOpen.set(false);
 	recipeModel.set(null);
@@ -359,20 +359,12 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	resetNavigationForTests();
-	pendingSource.set(null);
 	pendingVersionLoad.set(null);
 	versionDeleteRequest.set(null);
-	pinnedSeed.set(null);
-	recipeOpen.set(false);
-	coWriterOpen.set(false);
-	clearSelection();
 	selectedSongId.set(null);
-	selectedGenerationId.set(null);
 	selectedAlbumId.set(null);
 	songList.set([]);
 	albumList.set([]);
-	activeJobs.set([]);
-	generationFailures.set({});
 	clearHitboxStyles();
 	clearPointer();
 	resetConnectivityForTests();
@@ -781,6 +773,13 @@ describe('SongDetailView recipe and takes', () => {
 		['cover', true]
 	] as const;
 
+	it('C6: lands a handed-over seed as the chip once its song is open', async () => {
+		await renderView();
+		pendingTakeUse.set({ generation: generation({ seed: 7, generation_number: 3 }), use: 'seed' });
+		await tick();
+		expect(get(seedFromTake)).toEqual({ seed: 7, takeNumber: 3 });
+	});
+
 	it.each(sourceCases)(
 		'lands a picked-up %s source on its task card (compact: %s)',
 		async (mode, compact) => {
@@ -788,7 +787,7 @@ describe('SongDetailView recipe and takes', () => {
 			const target = await renderView();
 			detailTab.set('edit');
 
-			pendingSource.set({ generation: generation(sourceRecipeDefaults()), mode });
+			pendingTakeUse.set({ generation: generation(sourceRecipeDefaults()), use: mode });
 			await tick();
 			await tick();
 			expect(get(recipeOpen)).toBe(false);
@@ -1220,11 +1219,11 @@ describe('SongDetailView unsaved-draft guard', () => {
 	});
 
 	it.each([
-		{ choice: 'Cancel', button: 'Cancel', saveFails: false },
-		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true }
-	])(
-		'cross-song Repaint/Cover or Open vN: $choice leaves it unapplied and drops what was pending',
-		async ({ button, saveFails }) => {
+		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'repaint' },
+		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true, use: 'seed' }
+	] as const)(
+		'cross-song take use or Open vN: $choice leaves it unapplied and drops what was pending',
+		async ({ button, saveFails, use }) => {
 			if (saveFails) {
 				const { updateSong } = await import('$lib/api/client');
 				vi.mocked(updateSong).mockRejectedValueOnce(new Error('save failed'));
@@ -1239,7 +1238,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 				id: 'g-last',
 				song_id: 's-last'
 			});
-			pendingSource.set({ generation: targetGen, mode: 'repaint' });
+			pendingTakeUse.set({ generation: targetGen, use });
 			pendingVersionLoad.set({ songId: 's-last', versionId: 'v-last' });
 			selectSong(
 				's-last',
@@ -1259,7 +1258,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 			await vi.waitFor(() => expect(get(pendingVersionLoad)).toBeNull());
 			expect(get(selectedSongId)).toBe('s1');
-			expect(get(pendingSource)).toBeNull();
+			expect(get(pendingTakeUse)).toBeNull();
 			expect(get(sourceGeneration)).toBeNull();
 		}
 	);
@@ -1275,7 +1274,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 			id: 'g-last',
 			song_id: 's-last'
 		});
-		pendingSource.set({ generation: targetGen, mode: 'repaint' });
+		pendingTakeUse.set({ generation: targetGen, use: 'repaint' });
 		selectSong(
 			's-last',
 			song({
@@ -1292,7 +1291,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		expect(get(selectedSongId)).toBe('s-last');
 		expect(get(sourceGeneration)).toEqual(targetGen);
-		expect(get(pendingSource)).toBeNull();
+		expect(get(pendingTakeUse)).toBeNull();
 	});
 });
 

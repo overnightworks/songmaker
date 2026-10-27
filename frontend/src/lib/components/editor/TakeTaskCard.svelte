@@ -17,6 +17,7 @@
 		TAKE_TASK_REPAINT_STRENGTH_LABEL,
 		takeTaskCoverClosenessLabel,
 		takeTaskLandingLabel,
+		takeTaskSeedLine,
 		takeTaskRepaintButtonLabel
 	} from '$lib/constants/take-task';
 	import { generateAction, isGenerateBusy, runSourceTask } from '$lib/stores/generateAction';
@@ -28,6 +29,7 @@
 		repaintMode,
 		repaintStart,
 		repaintStrength,
+		seedFromTake,
 		sourceMode,
 		sourceTakeDurationSeconds
 	} from '$lib/stores/recipe';
@@ -139,6 +141,9 @@
 			>
 		{/if}
 		<p class="hint">{TAKE_TASK_PROMPT_HINT}</p>
+		{#if $seedFromTake}<p class="hint seed-line">
+				{takeTaskSeedLine($seedFromTake.takeNumber)}
+			</p>{/if}
 		<div class="task-foot">
 			<span class="foot-note"
 				><span class="hint">{takeTaskLandingLabel(landingVersionNumber)}</span>

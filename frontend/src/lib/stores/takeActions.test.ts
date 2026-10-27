@@ -24,11 +24,10 @@ import {
 	unkeepGeneration,
 	unpickGeneration
 } from '$lib/api/client';
-import { pinnedSeed } from '$lib/stores/editor';
 import { songList } from '$lib/stores/libraryData';
 import { toasts } from '$lib/stores/toast';
 import { activeJobs } from '$lib/stores/jobs';
-import { pinSeed, rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';
+import { rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';
 
 const unreachableServer = () =>
 	new NetworkError('/api/generations/g1', new TypeError('Failed to fetch'));
@@ -78,7 +77,6 @@ function scoreJob(overrides: Partial<JobStatus> = {}): JobStatus {
 beforeEach(() => {
 	songList.set([]);
 	toasts.set([]);
-	pinnedSeed.set(null);
 	activeJobs.set([]);
 	vi.stubGlobal('EventSource', SilentEventSource);
 	vi.clearAllMocks();
@@ -86,7 +84,6 @@ beforeEach(() => {
 
 afterEach(() => {
 	songList.set([]);
-	pinnedSeed.set(null);
 	activeJobs.set([]);
 	vi.unstubAllGlobals();
 });
@@ -198,17 +195,6 @@ describe('rate', () => {
 
 		expect(fetchSong).not.toHaveBeenCalled();
 		expect(get(songList)).toEqual([song(actionSongDefaults())]);
-	});
-});
-
-describe('pinSeed', () => {
-	it('pins the seed for the next generation and confirms via toast', () => {
-		pinSeed(48113);
-
-		expect(get(pinnedSeed)).toBe(48113);
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: 'Seed 48113 pinned for next generation', type: 'success' })
-		]);
 	});
 });
 
