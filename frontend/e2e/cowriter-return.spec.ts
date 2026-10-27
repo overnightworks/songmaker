@@ -272,9 +272,10 @@ test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, 
 		await composer.fill(newer);
 		await composer.press('Enter');
 
-		await expect(
-			page.locator('.message', { hasText: newer }).getByRole('button', { name: 'Try again' })
-		).toHaveCount(1);
+		const errorRowBelow = (text: string) =>
+			page.locator('.message', { hasText: text }).locator('xpath=following-sibling::*[1]');
+		await expect(errorRowBelow(newer).getByRole('button', { name: 'Try again' })).toHaveCount(1);
+		await expect(errorRowBelow(older).getByRole('button', { name: 'Try again' })).toHaveCount(0);
 		await expect(tryAgain).toHaveCount(1);
 	});
 
