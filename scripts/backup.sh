@@ -7,7 +7,7 @@
 #   BACKUP_DIR=/media/usb/songmaker ./scripts/backup.sh
 #
 # Cron (daily at 3am):
-#   0 3 * * * cd /home/felix-hummert/git/songmaker && ./scripts/backup.sh >> /var/log/songmaker-backup.log 2>&1
+#   0 3 * * * cd /home/felix-hummert/srv/songmaker && ./scripts/backup.sh >> /var/log/songmaker-backup.log 2>&1
 
 set -euo pipefail
 

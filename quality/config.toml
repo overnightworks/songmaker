@@ -23,3 +23,9 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 11
 item = "#1784"
 date = 2026-10-22
 reason = "generated API types gain two optional fields (account_console_url, scheduled_hour_utc); the generator's --check gates the file; quality is asked to exempt linguist-generated files (operator question, 22.10.2026)"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1145"
+item = "#1914"
+date = 2026-10-27
+reason = "the co-writer offer response becomes a generated type (CowriterOfferResponse); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"

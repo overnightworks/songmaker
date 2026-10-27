@@ -16,7 +16,7 @@ sudo mount /dev/sdX1 /mnt/backup    # replace sdX1 with your drive
 mkdir -p /mnt/backup/songmaker
 
 # 4. Run your first backup
-cd ~/git/songmaker
+cd ~/srv/songmaker
 ./scripts/backup.sh
 ```
 
@@ -60,7 +60,7 @@ BACKUP_DIR=/mnt/backup/songmaker-cutover RETENTION_DAYS=0 ./scripts/backup.sh
 
 ```bash
 # Add to cron (runs daily at 3am)
-echo '0 3 * * * cd /home/felix-hummert/git/songmaker && BACKUP_DIR=/mnt/backup/songmaker ./scripts/backup.sh >> /var/log/songmaker-backup.log 2>&1' | sudo tee /etc/cron.d/songmaker-backup
+echo '0 3 * * * cd /home/felix-hummert/srv/songmaker && BACKUP_DIR=/mnt/backup/songmaker ./scripts/backup.sh >> /var/log/songmaker-backup.log 2>&1' | sudo tee /etc/cron.d/songmaker-backup
 ```
 
 Make sure your external drive auto-mounts on boot. Add to `/etc/fstab`:

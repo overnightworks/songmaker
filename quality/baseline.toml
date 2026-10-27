@@ -27,7 +27,7 @@
 "frontend/e2e/seed.ts" = 1194
 "frontend/e2e/song-phone.spec.ts" = 865
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1140
+"frontend/src/lib/api/types.ts" = 1145
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1533
@@ -38,18 +38,18 @@
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1109
 "frontend/src/lib/components/PlayerBar.test.ts" = 1642
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
-"frontend/src/lib/components/SongDetailView.svelte" = 1100
-"frontend/src/lib/components/SongDetailView.test.ts" = 2311
+"frontend/src/lib/components/SongDetailView.svelte" = 1094
+"frontend/src/lib/components/SongDetailView.test.ts" = 2305
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
-"frontend/src/lib/constants.ts" = 846
+"frontend/src/lib/constants.ts" = 829
 "frontend/src/lib/history/historyController.test.ts" = 934
 "frontend/src/lib/history/historyController.ts" = 953
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
 "frontend/src/lib/share/sharePlayback.test.ts" = 834
-"frontend/src/lib/stores/generateAction.test.ts" = 872
+"frontend/src/lib/stores/generateAction.test.ts" = 817
 "frontend/src/lib/stores/jobs.test.ts" = 906
 "frontend/src/lib/stores/libraryContext.test.ts" = 2189
 "frontend/src/lib/stores/libraryContext.ts" = 1279
@@ -59,8 +59,8 @@
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1070
 "frontend/src/routes/layout.test.ts" = 1403
-"frontend/src/routes/settings/users/+page.svelte" = 1209
-"frontend/src/routes/settings/users/page.test.ts" = 990
+"frontend/src/routes/settings/users/+page.svelte" = 1200
+"frontend/src/routes/settings/users/page.test.ts" = 987
 "src/acestep_worker/wrapper.py" = 1092
 "src/songmaker_cli/constants.py" = 832
 "src/songmaker_cli/conversation_api.py" = 976
@@ -73,7 +73,7 @@
 "tests/test_acestep_worker_train_lora.py" = 1294
 "tests/test_admin_api.py" = 1055
 "tests/test_api.py" = 4764
-"tests/test_auto_deploy_alerting.py" = 2157
+"tests/test_auto_deploy_alerting.py" = 1389
 "tests/test_client.py" = 870
 "tests/test_conversation_api.py" = 853
 "tests/test_cowriter_providers.py" = 1255
@@ -198,9 +198,6 @@
 "test_s8_live_stream_during_second_take" = 94
 "test_s8_live_stream_during_second_take.drive" = 68
 "test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime" = 81
-
-[function_lines."tests/test_auto_deploy_alerting.py"]
-"Checkout.__init__" = 84
 
 [function_lines."tests/test_backfill_audio_durations.py"]
 "test_apply_survives_an_interruption_after_the_first_commit_batch" = 71

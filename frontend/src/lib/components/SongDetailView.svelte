@@ -77,12 +77,9 @@
 		recipeChips,
 		recipeModel,
 		recipeOpen,
-		repaintMode,
 		resetRecipeSourceForSong,
 		seedRecipeModel,
 		setSourceFromGeneration,
-		sourceGeneration,
-		sourceMode,
 		takesPerGenerate
 	} from '$lib/stores/recipe';
 	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
@@ -376,9 +373,6 @@
 			voiceLabel: resolveVoiceLabel($editGenParams?.user_lora_id ?? null),
 			pinnedSeed: $pinnedSeed,
 			genParams: $editGenParams,
-			sourceGeneration: $sourceGeneration,
-			sourceMode: $sourceMode,
-			repaintMode: $repaintMode,
 			savedBpm: $savedSongData.bpm,
 			savedAudioDuration: $savedSongData.audio_duration,
 			savedKeyScale: $savedSongData.key_scale,

@@ -23,7 +23,7 @@ import {
 	LIBRARY_NEW_MENU_LABEL,
 	LIBRARY_NEW_ALBUM_LABEL,
 	NEW_ALBUM_TITLE_LABEL,
-	EDITOR_GENERATE_MODE_LABELS,
+	EDITOR_GENERATE_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
@@ -113,7 +113,7 @@ function reservedTransportBarRoom(page: Page): Promise<string> {
 function generateButton(page: Page): Locator {
 	return page
 		.getByRole('tabpanel')
-		.getByRole('button', { name: nameStartingWith(EDITOR_GENERATE_MODE_LABELS.generate) });
+		.getByRole('button', { name: nameStartingWith(EDITOR_GENERATE_LABEL) });
 }
 
 // Opens a freshly seeded song from its album row, the way a musician reaches

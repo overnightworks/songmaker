@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import time
 import urllib.parse
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import jwt
@@ -67,6 +68,8 @@ class FakeIssuer:
     refuses_refresh_with: str | None = None
     refuses_workload_grant: bool = False
     grants_seen: list[str] = field(default_factory=list)
+    # Runs when a refresh-token grant arrives, before the realm answers it.
+    before_renewal: Callable[[], None] | None = None
 
     def clock(self) -> float:
         return self.now
@@ -113,6 +116,8 @@ class FakeIssuer:
         return TokenEndpointAnswer(status=200, body=json.dumps(answer).encode())
 
     def _renewal(self) -> TokenEndpointAnswer:
+        if self.before_renewal is not None:
+            self.before_renewal()
         if self.refuses_refresh_with is not None:
             body = json.dumps({"error": self.refuses_refresh_with}).encode()
             return TokenEndpointAnswer(status=400, body=body)

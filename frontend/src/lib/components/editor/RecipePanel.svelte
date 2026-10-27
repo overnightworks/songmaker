@@ -12,22 +12,7 @@
 		setDraftGenParams,
 		pinnedSeed
 	} from '$lib/stores/editor';
-	import {
-		clearSource,
-		coverNoiseStrength,
-		coverStrength,
-		recipeModel,
-		repaintEnd,
-		repaintMode,
-		repaintStart,
-		repaintStrength,
-		sourceGeneration,
-		sourceMode,
-		sourceTakeDurationSeconds,
-		takesPerGenerate,
-		type RepaintMode,
-		type SourceMode
-	} from '$lib/stores/recipe';
+	import { recipeModel, takesPerGenerate } from '$lib/stores/recipe';
 	import {
 		activeModels,
 		builtinDefaults,
@@ -44,7 +29,6 @@
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import { followAppPageLink } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
-	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import {
 		RECIPE_COLLAPSE_LABEL,
 		RECIPE_DEFAULT_PINNED_SEED,
@@ -55,26 +39,20 @@
 		RECIPE_PANEL_LABEL,
 		RECIPE_PRESET_DEFAULT_OPTION,
 		RECIPE_PRESET_LABEL,
-		RECIPE_REPAINT_OFF_LABEL,
 		RECIPE_SAVED_HINT,
 		RECIPE_SAVE_AS_PRESET_LABEL,
 		RECIPE_SEED_PINNED_LABEL,
 		RECIPE_SEED_RANDOM_LABEL,
-		RECIPE_SOURCE_LABEL,
-		RECIPE_SOURCE_MODE_HINT,
 		RECIPE_USES_LABEL
 	} from '$lib/constants';
 	import ParamControls from '../ParamControls.svelte';
 	import VoicePicker from '../VoicePicker.svelte';
-	import WaveformRangePicker from '../WaveformRangePicker.svelte';
 
 	interface Props {
 		onclose: () => void;
 	}
 
 	let { onclose }: Props = $props();
-
-	const REPAINT_MODES: RepaintMode[] = ['conservative', 'balanced', 'aggressive'];
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 	let savingPresetName = $state('');
@@ -157,10 +135,6 @@
 		const { reference_audio_path: _removed, ...rest } = $editGenParams ?? {};
 		setDraftGenParams(Object.keys(rest).length > 0 ? rest : null);
 		referenceFilename = null;
-	}
-
-	function setSourceMode(mode: SourceMode): void {
-		sourceMode.set(mode);
 	}
 
 	onMount(async () => {
@@ -346,114 +320,6 @@
 					/>
 				{/if}
 			</div>
-
-			<div class="repaint-row">
-				<span class="field-label">Repaint</span>
-				<div class="segmented">
-					<button
-						type="button"
-						data-hitbox="frequent"
-						class:active={$sourceGeneration === null}
-						onclick={clearSource}
-					>
-						{RECIPE_REPAINT_OFF_LABEL}
-					</button>
-					{#each REPAINT_MODES as mode (mode)}
-						<button
-							type="button"
-							data-hitbox="frequent"
-							class:active={$sourceGeneration !== null &&
-								$sourceMode === 'repaint' &&
-								$repaintMode === mode}
-							disabled={$sourceGeneration === null}
-							onclick={() => {
-								setSourceMode('repaint');
-								repaintMode.set(mode);
-							}}
-						>
-							{mode.charAt(0).toUpperCase() + mode.slice(1)}
-						</button>
-					{/each}
-				</div>
-			</div>
-
-			{#if $sourceGeneration}
-				{@const gen = $sourceGeneration}
-				<div class="source-bar">
-					<span class="source-label">
-						{RECIPE_SOURCE_LABEL}: {nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
-					</span>
-					<div class="segmented">
-						<button
-							type="button"
-							class:active={$sourceMode === 'repaint'}
-							onclick={() => setSourceMode('repaint')}>Repaint</button
-						>
-						<button
-							type="button"
-							class:active={$sourceMode === 'cover'}
-							onclick={() => setSourceMode('cover')}>Cover</button
-						>
-					</div>
-					<button type="button" class="source-dismiss" onclick={clearSource} title="Clear source"
-						>×</button
-					>
-				</div>
-				<p class="source-mode-hint">{RECIPE_SOURCE_MODE_HINT}</p>
-
-				{#if $sourceMode === 'repaint'}
-					{@const duration = sourceTakeDurationSeconds(gen)}
-					<WaveformRangePicker
-						audioUrl={`/audio/${gen.mp3_path}`}
-						{duration}
-						startPercent={$repaintStart}
-						endPercent={$repaintEnd}
-						onchange={(s, e) => {
-							repaintStart.set(s);
-							repaintEnd.set(e);
-						}}
-					/>
-					{#if $repaintMode === 'balanced'}
-						<label class="field">
-							<span>Repaint Strength</span>
-							<input
-								type="range"
-								min="0"
-								max="100"
-								step="1"
-								value={$repaintStrength * 100}
-								oninput={(e) => repaintStrength.set(Number(e.currentTarget.value) / 100)}
-							/>
-							<span class="range-value">{Math.round($repaintStrength * 100)}%</span>
-						</label>
-					{/if}
-				{:else}
-					<label class="field">
-						<span>Cover Strength (Free ↔ Strict)</span>
-						<input
-							type="range"
-							min="0"
-							max="100"
-							step="1"
-							value={$coverStrength * 100}
-							oninput={(e) => coverStrength.set(Number(e.currentTarget.value) / 100)}
-						/>
-						<span class="range-value">{Math.round($coverStrength * 100)}%</span>
-					</label>
-					<label class="field">
-						<span>Noise Strength</span>
-						<input
-							type="range"
-							min="0"
-							max="100"
-							step="1"
-							value={$coverNoiseStrength * 100}
-							oninput={(e) => coverNoiseStrength.set(Number(e.currentTarget.value) / 100)}
-						/>
-						<span class="range-value">{Math.round($coverNoiseStrength * 100)}%</span>
-					</label>
-				{/if}
-			{/if}
 		</section>
 	</div>
 
@@ -595,8 +461,7 @@
 	}
 
 	.field,
-	.seed-row,
-	.repaint-row {
+	.seed-row {
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
@@ -641,17 +506,6 @@
 		color: #fff;
 	}
 
-	.segmented button:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.range-value {
-		font-size: 0.75rem;
-		color: var(--text);
-		align-self: flex-end;
-	}
-
 	.reference-section {
 		display: flex;
 		align-items: center;
@@ -693,39 +547,6 @@
 
 	.ref-upload input[type='file'] {
 		display: none;
-	}
-
-	.source-bar {
-		display: flex;
-		align-items: center;
-		gap: 0.55rem;
-		padding: 0.4rem 0.6rem;
-		background: var(--bg);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-	}
-
-	.source-mode-hint {
-		margin: -0.35rem 0 0;
-		color: var(--text-muted);
-		font-size: 0.72rem;
-		font-style: italic;
-	}
-
-	.source-label {
-		font-size: 0.78rem;
-		color: var(--text);
-		flex: 1;
-		min-width: 0;
-	}
-
-	.source-dismiss {
-		background: none;
-		border: none;
-		color: var(--text-subtle);
-		font-size: 1rem;
-		cursor: pointer;
-		line-height: 1;
 	}
 
 	.recipe-footer-hint {
