@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "5e61c5bda7b3d1908d61551f12f27c915a3370de"
 branch = "claude/issue-1921-the-history-owner-decides-the-layer-step"
-scope = ["frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/navigationTakeJump.test.ts", "frontend/src/lib/test-utils/library-history.ts"]
+scope = ["frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/navigationTakeJump.test.ts", "frontend/src/lib/test-utils/library-history.ts", "quality/baseline.toml"]
 opened_commit = "3b25f04cfa57a8f8c012489e5bcfb3b87d3c19d3"
 whole_reason = "The step-off merge and the wait-name merge are both duplicate deciders inside the history owner and its one seam; each is a few lines of production code, the rest is renames in tests."
