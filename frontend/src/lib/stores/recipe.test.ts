@@ -5,7 +5,6 @@ import { get } from 'svelte/store';
 import type { GenerationItem } from '$lib/api/types';
 import {
 	clearSource,
-	coWriterOpen,
 	coverStrength,
 	pendingSource,
 	recipeChips,
@@ -154,7 +153,6 @@ describe('recipe session state', () => {
 		recipeModel.set(null);
 		takesPerGenerate.set(1);
 		recipeOpen.set(false);
-		coWriterOpen.set(false);
 		sourceGeneration.set(null);
 		pendingSource.set(null);
 	});
@@ -183,17 +181,15 @@ describe('recipe session state', () => {
 		expect(get(sourceGeneration)).toBeNull();
 	});
 
-	it('resetRecipeSourceForSong clears the source and closes both views but keeps the model', () => {
+	it('resetRecipeSourceForSong clears the source and closes the recipe view but keeps the model', () => {
 		recipeModel.set('turbo');
 		takesPerGenerate.set(3);
 		setSourceFromGeneration(generation(requestedRecipeDefaults()), 'repaint');
-		coWriterOpen.set(true);
 		resetRecipeSourceForSong();
 		expect(get(sourceGeneration)).toBeNull();
 		expect(get(repaintMode)).toBe('conservative');
 		expect(get(coverStrength)).toBe(0.7);
 		expect(get(recipeOpen)).toBe(false);
-		expect(get(coWriterOpen)).toBe(false);
 		expect(get(recipeModel)).toBe('turbo');
 		expect(get(takesPerGenerate)).toBe(3);
 	});

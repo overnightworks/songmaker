@@ -8,7 +8,7 @@ can come from a real generation. Reaching a song already at version 7 through
 ``take_count`` individual saves, or a running job through a real generate
 call with no worker to advance it, would either cost requests the flow never
 needs (the exact mistake issue #344 already found and fixed for the rail's
-filler albums and the kinetic-strip takes) or simply never finish. This
+filler albums and the seeded takes) or simply never finish. This
 writes the same rows a real editor session and a real worker would, through
 the app's own query functions (``update_song``'s ``force_new_version`` path,
 ``create_generation``, ``create_job``, ``update_job_status``) -- never a

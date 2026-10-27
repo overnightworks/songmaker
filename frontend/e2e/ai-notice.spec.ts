@@ -79,11 +79,7 @@ test('1906_E3: the co-writer says Du schreibst mit einer KI under its header', a
 		.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
 		.click();
 	await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
-	await page
-		.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true })
-		.or(page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }))
-		.first()
-		.click();
+	await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 
 	const notice = page.locator('.cowriter').getByText(WRITING_WITH_AI_WORDS, { exact: true });
 	await expect(notice).toBeVisible();

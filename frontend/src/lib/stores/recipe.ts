@@ -18,7 +18,6 @@ export const takesPerGenerate = writable<number>(1);
 
 // The Editor's two independent, stackable views (epic #98 "Views vs. Action").
 export const recipeOpen = writable(false);
-export const coWriterOpen = writable(false);
 
 // Repaint/cover source state — merged from the former stores/source.ts.
 export const sourceGeneration = writable<GenerationItem | null>(null);
@@ -69,7 +68,6 @@ export function resetRecipeSourceForSong(): void {
 	coverStrength.set(0.7);
 	coverNoiseStrength.set(0);
 	recipeOpen.set(false);
-	coWriterOpen.set(false);
 }
 
 const LM_PARAM_KEYS: (keyof VersionGenerationParams)[] = [

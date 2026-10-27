@@ -112,7 +112,7 @@ export const RAIL_FLOW_API_REQUEST_BUDGET = 34;
  * job is failed live over its own open SSE stream. The running-job and
  * failed-job seeding never touch this budget, since both run directly against
  * the database (`seedRunningGenerationJob`, `failGenerationJob` in `seed.ts`),
- * the same way the rail's filler albums and the kinetic-strip takes do.
+ * the same way the rail's filler albums and the seeded takes do.
  * Mobile-only, matching the spec's own project restriction.
  *
  * The count grows with the seeded album, not with this flow: playing a take

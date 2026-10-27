@@ -485,10 +485,6 @@ export const RECIPE_USES_LABEL = 'Generate uses this recipe';
 // A freshly pinned seed with no prior value starts at 0 rather than a random
 // number, so pinning is deterministic and immediately editable.
 export const RECIPE_DEFAULT_PINNED_SEED = 0;
-// Shown instead of the full panel when Co-Writer and Recipe are both open, so
-// the chat column stays above the fold; "Edit" reveals the full panel.
-export const RECIPE_STACKED_LABEL = 'Recipe summary';
-export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const SEARCH_OPEN_LABEL = 'Search';

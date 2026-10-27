@@ -340,7 +340,7 @@ test(
 		await surface
 			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
 			.click();
-		await surface.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+		await surface.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 
 		const ask = surface.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
 		await ask.fill('Write me a second verse.');
