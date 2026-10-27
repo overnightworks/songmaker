@@ -1,30 +1,47 @@
 import type { VersionGenerationParams } from '$lib/api/types';
 import { RECIPE_DURATION_STANDARD_SECONDS, RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
-import {
-	DIT_BOOL_FIELDS,
-	DIT_NUMBER_FIELDS,
-	DIT_SELECT_FIELDS,
-	LM_BOOL_FIELDS,
-	LM_NUMBER_FIELDS,
-	LM_TEXT_FIELDS
-} from '$lib/constants/acestep-param-fields';
-
 // The one owner of "this recipe field differs from its standard". The
 // standard is the model default for every field, never the saved version, so
 // saving does not clear a mark. Pure: surfaces read it, nothing else decides.
 
 export type RecipeTab = 'song' | 'generate' | 'engine';
 
-type EngineParamKey = keyof VersionGenerationParams;
+// Written out, not derived from the param-field registry, so the closed
+// RecipeField union below resolves without the generated API types.
+const ENGINE_PARAM_KEYS = [
+	'inference_steps',
+	'guidance_scale',
+	'shift',
+	'cfg_interval_start',
+	'cfg_interval_end',
+	'velocity_norm_threshold',
+	'velocity_ema_factor',
+	'latent_shift',
+	'latent_rescale',
+	'audio_cover_strength',
+	'infer_method',
+	'sampler_mode',
+	'use_adg',
+	'lm_temperature',
+	'lm_top_k',
+	'lm_top_p',
+	'lm_cfg_scale',
+	'lm_repetition_penalty',
+	'batch_size',
+	'thinking',
+	'use_cot_caption',
+	'use_cot_language',
+	'lm_negative_prompt'
+] as const satisfies readonly (keyof VersionGenerationParams)[];
 
-const ENGINE_PARAM_KEYS: readonly EngineParamKey[] = [
-	...DIT_NUMBER_FIELDS,
-	...DIT_SELECT_FIELDS,
-	...DIT_BOOL_FIELDS,
-	...LM_NUMBER_FIELDS,
-	...LM_TEXT_FIELDS,
-	...LM_BOOL_FIELDS
-].map((field) => field.key);
+type EngineParamKey = (typeof ENGINE_PARAM_KEYS)[number];
+
+const ENGINE_PARAM_KEY_NAMES: ReadonlySet<string> = new Set(ENGINE_PARAM_KEYS);
+
+/** Whether a generation parameter key is one the recipe marks and resets. */
+export function isEngineParamKey(key: string): key is EngineParamKey {
+	return ENGINE_PARAM_KEY_NAMES.has(key);
+}
 
 const SONG_FIELDS = ['bpm', 'duration', 'key', 'voice', 'reference'] as const;
 const GENERATE_FIELDS = ['model', 'takes'] as const;
@@ -167,9 +184,7 @@ export function chooseEnginePreset(
 
 function engineFields(params: VersionGenerationParams | null): VersionGenerationParams {
 	return Object.fromEntries(
-		Object.entries(params ?? {}).filter(
-			([key, value]) => value != null && (ENGINE_PARAM_KEYS as readonly string[]).includes(key)
-		)
+		Object.entries(params ?? {}).filter(([key, value]) => value != null && isEngineParamKey(key))
 	);
 }
 

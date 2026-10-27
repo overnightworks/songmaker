@@ -20,6 +20,7 @@
 		changedRecipeTabs,
 		chooseEnginePreset,
 		engineParams,
+		isEngineParamKey,
 		matchingEnginePreset,
 		resetRecipeField,
 		resetRecipeTab,
@@ -407,7 +408,9 @@
 					maxInferenceSteps={activeModel?.capabilities?.max_inference_steps ??
 						RECIPE_MAX_INFERENCE_STEPS_DEFAULT}
 					changedKeys={changedFields}
-					onresetfield={change}
+					onresetfield={(key) => {
+						if (isEngineParamKey(key)) change(key);
+					}}
 				/>
 				<p class="hint">{RECIPE_ENGINE_EMPTY_HINT}</p>
 			</div>

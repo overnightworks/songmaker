@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import {
+	DIT_BOOL_FIELDS,
+	DIT_NUMBER_FIELDS,
+	DIT_SELECT_FIELDS,
+	LM_BOOL_FIELDS,
+	LM_NUMBER_FIELDS,
+	LM_TEXT_FIELDS
+} from '$lib/constants/acestep-param-fields';
 import { RECIPE_DURATION_STANDARD_SECONDS, RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
 import {
 	changedRecipeFields,
 	changedRecipeTabs,
 	chooseEnginePreset,
 	engineParams,
+	isEngineParamKey,
 	matchingEnginePreset,
 	recipeDiffersFromStandard,
 	resetRecipeField,
@@ -214,5 +223,25 @@ describe('matchingEnginePreset', () => {
 	it('finds none when the draft matches no preset', () => {
 		const draft = values({ model: 'acestep', genParams: { inference_steps: 9 } });
 		expect(matchingEnginePreset(draft, presets)).toBeUndefined();
+	});
+});
+
+describe('every engine field the editor exposes', () => {
+	const registryKeys = [
+		...DIT_NUMBER_FIELDS,
+		...DIT_SELECT_FIELDS,
+		...DIT_BOOL_FIELDS,
+		...LM_NUMBER_FIELDS,
+		...LM_TEXT_FIELDS,
+		...LM_BOOL_FIELDS
+	].map((field) => field.key);
+
+	it.each(registryKeys)('%s is marked when it differs from its standard', (key) => {
+		if (!isEngineParamKey(key)) throw new Error(key);
+		const changed = changedRecipeFields(values({ genParams: { [key]: 'differs' } }), {
+			model: 'xl-turbo',
+			engineDefaults: {}
+		});
+		expect(changed.has(key)).toBe(true);
 	});
 });
