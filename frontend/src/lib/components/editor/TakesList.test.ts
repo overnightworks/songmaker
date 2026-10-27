@@ -192,7 +192,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 let songSequence = 0;
 const pick = vi.fn();
 const keep = vi.fn();
-const pinSeed = vi.fn();
+const useSeed = vi.fn();
 const clickVersion = vi.fn(async () => true);
 
 const addToPlaylist = vi.fn(async () => undefined);
@@ -211,7 +211,7 @@ function mockActions(): GenerationActions {
 		})),
 		unshare: vi.fn(async () => undefined),
 		addToPlaylist,
-		pinSeed,
+		useSeed,
 		clickVersion
 	};
 }
@@ -234,7 +234,7 @@ function voice(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
 	pick.mockReset();
 	keep.mockReset();
-	pinSeed.mockReset();
+	useSeed.mockReset();
 	clickVersion.mockClear();
 	addToPlaylist.mockClear();
 	playlistList.set([{ ...playlist }]);

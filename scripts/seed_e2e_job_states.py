@@ -106,6 +106,7 @@ def add_take(
     song_id: str,
     version_id: str,
     owner_id: str,
+    seed: int | None = None,
 ) -> Generation:
     """Write one take's audio file and its generation row on ``version_id``."""
     generation_id = str(uuid.uuid4())
@@ -120,6 +121,7 @@ def add_take(
             model_mode=MODEL_DEFAULT_MODE,
             generation_id=generation_id,
             audio_dir=audio_dir,
+            seed=seed,
             created_by=owner_id,
         )
     except BaseException:
@@ -137,8 +139,12 @@ def seed_song_at_version(
     version_number: int,
     take_count: int,
     owner_id: str,
+    take_seed_base: int | None = None,
 ) -> str:
     """Create a song whose latest version is ``version_number``, with ``take_count`` takes on it.
+
+    Take *i* (from 0) carries the seed ``take_seed_base + i``; without a base the
+    takes have no seed, like an imported one.
 
     Each version bump beyond the song's first goes through ``update_song``'s
     own ``force_new_version`` path -- the same numbering a real editor save
@@ -159,10 +165,11 @@ def seed_song_at_version(
     for _ in range(version_number - version.version_number):
         version = update_song(session, song.id, force_new_version=True)
 
-    for _ in range(take_count):
+    for index in range(take_count):
         gen = add_take(
             session, audio_dir, mp3_bytes,
             song_id=song.id, version_id=version.id, owner_id=owner_id,
+            seed=None if take_seed_base is None else take_seed_base + index,
         )
         create_generation_created_event(
             session, user_id=owner_id, song_id=song.id, generation_id=gen.id,
@@ -188,6 +195,7 @@ def cmd_create_song(session: Session, args: argparse.Namespace) -> None:
         version_number=args.version_number,
         take_count=args.take_count,
         owner_id=owner.id,
+        take_seed_base=args.take_seed_base,
     )
     print(song_id)
 
@@ -392,6 +400,7 @@ def _add_seed_parsers(sub) -> None:
     p_song.add_argument("--title", required=True)
     p_song.add_argument("--version-number", type=int, required=True)
     p_song.add_argument("--take-count", type=int, required=True)
+    p_song.add_argument("--take-seed-base", type=int, default=None)
     p_song.add_argument("--owner-username", required=True)
     p_song.set_defaults(func=cmd_create_song)
 

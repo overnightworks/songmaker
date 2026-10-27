@@ -1,13 +1,23 @@
 import { writable, get } from 'svelte/store';
 import type { GenerationItem, VersionGenerationParams } from '$lib/api/types';
 import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
+import { takeUseSeedToast } from '$lib/constants/take-task';
+import { addToast } from '$lib/stores/toast';
 
 export type SourceMode = 'repaint' | 'cover';
 export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
 
-interface PendingSource {
+/** What a take is used for: the card's two tasks, or the seed for the next jobs. */
+export type TakeUse = SourceMode | 'seed';
+
+interface PendingTakeUse {
 	generation: GenerationItem;
-	mode: SourceMode;
+	use: TakeUse;
+}
+
+interface SeedFromTake {
+	seed: number;
+	takeNumber: number;
 }
 
 // Model and takes-per-generate are session state (epic #98 decision 1): they
@@ -29,7 +39,32 @@ export const repaintStrength = writable(0.5);
 export const coverStrength = writable(0.7);
 export const coverNoiseStrength = writable(0);
 
-export const pendingSource = writable<PendingSource | null>(null);
+// Now Playing hands a take over before its song is open; the song page applies it.
+export const pendingTakeUse = writable<PendingTakeUse | null>(null);
+
+// The seed Generate, Repaint and Cover send, until the musician clears it or
+// leaves the song. It is session state: a reload shows none.
+export const seedFromTake = writable<SeedFromTake | null>(null);
+
+export function useSeed(gen: GenerationItem): void {
+	if (gen.seed == null) return;
+	seedFromTake.set({ seed: gen.seed, takeNumber: gen.generation_number });
+	addToast(takeUseSeedToast(gen.generation_number), 'success');
+}
+
+export function clearSeed(): void {
+	seedFromTake.set(null);
+}
+
+// Returns whether the use opened a task card.
+export function applyTakeUse({ generation, use }: PendingTakeUse): boolean {
+	if (use === 'seed') {
+		useSeed(generation);
+		return false;
+	}
+	setSourceFromGeneration(generation, use);
+	return true;
+}
 
 export function seedRecipeModel(activeModelIds: readonly string[]): void {
 	if (get(recipeModel) !== null) return;
@@ -57,7 +92,7 @@ export function clearSource(): void {
 
 // Called whenever the editor switches to a different song: the recipe
 // (model, takes-per-generate) is session-wide and stays, but a repaint/cover
-// source picked from the previous song's takes cannot carry over.
+// source or a seed picked from the previous song's takes cannot carry over.
 export function resetRecipeSourceForSong(): void {
 	sourceGeneration.set(null);
 	sourceMode.set('repaint');
@@ -68,6 +103,7 @@ export function resetRecipeSourceForSong(): void {
 	coverStrength.set(0.7);
 	coverNoiseStrength.set(0);
 	recipeOpen.set(false);
+	clearSeed();
 }
 
 const LM_PARAM_KEYS: (keyof VersionGenerationParams)[] = [
@@ -122,7 +158,6 @@ interface RecipeChipInput {
 	audioDuration: number;
 	keyScale: string;
 	voiceLabel: string;
-	pinnedSeed: number | null;
 	genParams: VersionGenerationParams | null;
 	// The last-saved version's values, compared against the draft fields above
 	// to mark a chip "changed". Omitted fields are treated as unchanged.
@@ -189,13 +224,6 @@ export function recipeChips(input: RecipeChipInput): RecipeChip[] {
 				(input.savedGenParams === undefined
 					? (input.genParams?.user_lora_id ?? null)
 					: (input.savedGenParams?.user_lora_id ?? null))
-		},
-		{
-			key: 'seed',
-			label: 'Seed',
-			value: input.pinnedSeed != null ? `Pinned ${input.pinnedSeed}` : 'Random',
-			title: 'A pinned seed reproduces the same noise for A/B testing',
-			changed: false
 		},
 		{
 			key: 'lm',

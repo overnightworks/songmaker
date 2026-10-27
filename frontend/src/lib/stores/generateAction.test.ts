@@ -42,7 +42,6 @@ import {
 	discardDraft,
 	isDirty,
 	loadSongData,
-	pinnedSeed,
 	setDraftLyrics,
 	setDraftPrompt,
 	versions
@@ -58,6 +57,7 @@ import { activeModels } from './presets';
 import {
 	recipeModel,
 	resetRecipeSourceForSong,
+	seedFromTake,
 	sourceGeneration,
 	sourceMode,
 	takesPerGenerate
@@ -97,7 +97,7 @@ beforeEach(async () => {
 	recipeModel.set('turbo');
 	activeModels.set([{ id: 'turbo', is_active: true }]);
 	takesPerGenerate.set(2);
-	pinnedSeed.set(42);
+	seedFromTake.set({ seed: 42, takeNumber: 3 });
 	startHealthPolling();
 	await Promise.resolve();
 });
@@ -701,7 +701,7 @@ describe('generate action execution', () => {
 		await request;
 		expect(generateSong).toHaveBeenCalledExactlyOnceWith('s1', 2, 'turbo', 'v2', 42);
 		expect(get(isDirty)).toBe(false);
-		expect(get(pinnedSeed)).toBeNull();
+		expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
 		expect(get(generateAction)).toMatchObject({ kind: 'queued', jobId: queuedJob.id });
 	});
 
@@ -715,7 +715,7 @@ describe('generate action execution', () => {
 			} else vi.mocked(generateSong).mockRejectedValueOnce(failure);
 			await generate();
 			expect(get(generateAction)).toMatchObject({ kind: 'idle' });
-			expect(get(pinnedSeed)).toBe(42);
+			expect(get(seedFromTake)).toEqual({ seed: 42, takeNumber: 3 });
 			expect(addToast).toHaveBeenCalledExactlyOnceWith('Generation failed', 'error');
 			if (step === 'save') expect(generateSong).not.toHaveBeenCalled();
 			vi.mocked(updateSong).mockResolvedValue(makeSong({ lyrics: 'new verse', prompt: 'folk' }));

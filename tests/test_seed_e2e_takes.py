@@ -265,3 +265,26 @@ def test_an_owner_id_that_is_not_one_directory_name_writes_nothing(
             )
     assert not list(tmp_path.glob("outside/*"))
     assert not list(tmp_path.glob("*.mp3"))
+
+
+@pytest.mark.parametrize(
+    ("take_seed_base", "expected_seeds"),
+    [(40, [40, 41]), (None, [None, None])],
+)
+def test_1928_c10_take_seed_base_numbers_the_takes_and_without_it_they_have_no_seed(
+    tmp_path: Path, take_seed_base: int | None, expected_seeds: list[int | None],
+) -> None:
+    factory = init_test_db(tmp_path / "seed.db")
+    with factory() as session:
+        session.add(User(id=_OWNER_ID, username=_OWNER_ID))
+        session.add(Album(id=_ALBUM_ID, title="A", artist="X"))
+        session.commit()
+
+        song_id = seed_e2e_job_states.seed_song_at_version(
+            session, tmp_path / "audio", b"mp3",
+            album_id=_ALBUM_ID, title="Takes", version_number=1, take_count=2,
+            owner_id=_OWNER_ID, take_seed_base=take_seed_base,
+        )
+
+        seeds = [g.seed for g in session.query(Generation).filter_by(song_id=song_id)]
+        assert sorted(seeds, key=lambda seed: -1 if seed is None else seed) == expected_seeds

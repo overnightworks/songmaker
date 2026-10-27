@@ -636,8 +636,7 @@ export async function queueGenerateForVoiceProof(
 	songId: string,
 	versionId: string
 ): Promise<QueuedJob> {
-	const seed = SeedApi.fromSession(api);
-	return seed.postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
+	return SeedApi.fromSession(api).postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
 		count: 1,
 		model: 'sft',
 		version_id: versionId
@@ -651,8 +650,7 @@ export async function queueVoiceAdapterComparison(
 	versionId: string,
 	seedValue: number
 ): Promise<QueuedJob> {
-	const seed = SeedApi.fromSession(api);
-	return seed.postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
+	return SeedApi.fromSession(api).postJson<QueuedJob>(`/api/songs/${songId}/generate`, {
 		count: 1,
 		model: 'sft',
 		version_id: versionId,
@@ -757,7 +755,8 @@ export async function seedSongPhoneSong(
 	albumId: string,
 	title: string,
 	versionNumber: number,
-	takeCount: number
+	takeCount: number,
+	takeSeedBase?: number
 ): Promise<string> {
 	return requiredSeedId(
 		await seedJobState(
@@ -771,6 +770,7 @@ export async function seedSongPhoneSong(
 				String(versionNumber),
 				'--take-count',
 				String(takeCount),
+				...(takeSeedBase === undefined ? [] : ['--take-seed-base', String(takeSeedBase)]),
 				'--owner-username',
 				requiredEnv('E2E_ADMIN_USERNAME')
 			],
