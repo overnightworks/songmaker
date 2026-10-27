@@ -8,14 +8,15 @@ import type { GenerateState } from '$lib/stores/generateAction';
 const runSourceTask = vi.hoisted(() => vi.fn());
 const state = vi.hoisted(() => ({ current: null as unknown }));
 
-vi.mock('$lib/stores/generateAction', async () => {
+vi.mock('$lib/stores/generateAction', async (importOriginal) => {
 	const { writable: store } = await import('svelte/store');
+	const actual = await importOriginal<typeof import('$lib/stores/generateAction')>();
 	const generateAction = store({ kind: 'idle', mode: 'repaint' });
 	state.current = generateAction;
 	return {
 		generateAction,
 		runSourceTask,
-		isGenerateBusy: (s: { kind: string }) => s.kind === 'queued' || s.kind === 'generating'
+		isGenerateBusy: actual.isGenerateBusy
 	};
 });
 
