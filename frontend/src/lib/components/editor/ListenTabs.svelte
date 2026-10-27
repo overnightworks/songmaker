@@ -114,7 +114,7 @@
 		border-bottom: 1px solid var(--border);
 	}
 
-	button {
+	.tablist button {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
