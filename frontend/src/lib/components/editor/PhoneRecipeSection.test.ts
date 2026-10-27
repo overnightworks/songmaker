@@ -56,6 +56,7 @@ let stopChipsSync: (() => void) | undefined;
 
 beforeEach(async () => {
 	vi.clearAllMocks();
+	seedFromTake.set(null);
 	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 	loadSongData(
 		makeSong({ bpm: 120, audio_duration: 180, key_scale: 'Am', generation_params: null })
