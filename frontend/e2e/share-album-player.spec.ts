@@ -16,7 +16,11 @@ import {
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '../src/lib/constants/now-playing';
-import { SHARE_BACK_TO_PLAYER_LABEL, shareNowPlayingLine } from '../src/lib/constants/share';
+import {
+	SHARE_BACK_TO_PLAYER_LABEL,
+	shareAlbumSubtitle,
+	shareNowPlayingLine
+} from '../src/lib/constants/share';
 import {
 	boundingBoxes,
 	FlowGuard,
@@ -221,11 +225,7 @@ test.describe('before Play', () => {
 			await openMockAlbum(visitor, mockSongs(3), longName);
 			const { page } = visitor;
 			const notice = page.getByText('KI-generiert', { exact: true });
-			const nameText = page
-				.locator('.cover-line')
-				.filter({ has: notice })
-				.locator('> span')
-				.first();
+			const nameText = page.getByText(shareAlbumSubtitle(longName), { exact: true });
 			const nameRows = await nameText.evaluate((text) => {
 				const range = document.createRange();
 				range.selectNodeContents(text);
