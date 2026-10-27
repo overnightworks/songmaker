@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Final
@@ -14,7 +13,6 @@ from songmaker_cli.constants import (
     COVER_DEFAULT_MODEL,
     COVER_DEFAULT_PROVIDER,
     COVER_DEFAULT_ROUTE,
-    COWRITER_DEFAULT_PROVIDER,
     COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
     COWRITER_MAX_TAIL_TOKEN_BUDGET,
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
@@ -25,28 +23,15 @@ from songmaker_cli.constants import (
     SETTING_COVER_MODEL,
     SETTING_COVER_PROVIDER,
     SETTING_COVER_ROUTE,
-    SETTING_COWRITER_MODEL,
-    SETTING_COWRITER_PROVIDER,
-    SETTING_COWRITER_PROVIDER_MODEL_PREFIX,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
     SETTING_JUDGE_MODEL,
     SETTING_JUDGE_PROVIDER,
     SETTING_JUDGE_ROUTE,
-    SETTING_PROVIDER_ROUTES,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
 
-_PROVIDER_ROUTES: Final = frozenset(COWRITER_PROVIDERS)
 _ROUTE_VALUES: Final = frozenset(("cli", "api"))
-
-
-@dataclass(frozen=True)
-class RawStoredCowriterSettings:
-    """The provider and model exactly as stored, without resolving defaults."""
-
-    provider: str | None
-    model: str | None
 
 
 @dataclass(frozen=True)
@@ -64,77 +49,6 @@ class CoverSettings:
     provider: str
     route: str
     model: str
-
-
-def _provider_routes_row(session: Session) -> RateLimitSetting | None:
-    return (
-        session.query(RateLimitSetting)
-        .filter(
-            RateLimitSetting.setting_key == SETTING_PROVIDER_ROUTES,
-            RateLimitSetting.user_id.is_(None),
-        )
-        .first()
-    )
-
-
-def _legacy_default_provider_routes() -> dict[str, str]:
-    """Preserve the pre-route dispatcher selection for an unset setting only."""
-    from agent_providers.process import (
-        AgentCliUnavailableError,
-        codex_cli_access_token_is_present,
-        grok_cli_token_is_present,
-    )
-
-    routes = {"claude": "cli"}
-    for provider, token_is_present in (
-        ("grok", grok_cli_token_is_present),
-        ("codex", codex_cli_access_token_is_present),
-    ):
-        try:
-            routes[provider] = "cli" if token_is_present() else "api"
-        except AgentCliUnavailableError:
-            routes[provider] = "cli"
-    return routes
-
-
-def _parse_provider_routes(value_text: str) -> dict[str, str]:
-    try:
-        routes = json.loads(value_text)
-    except json.JSONDecodeError as exc:
-        raise ValueError("provider_routes must be valid JSON") from exc
-    if not isinstance(routes, dict):
-        raise ValueError("provider_routes must be an object")
-    if set(routes) != _PROVIDER_ROUTES:
-        raise ValueError("provider_routes must contain exactly claude, grok, and codex")
-    if any(route not in _ROUTE_VALUES for route in routes.values()):
-        raise ValueError("provider_routes values must be cli or api")
-    return {provider: routes[provider] for provider in sorted(_PROVIDER_ROUTES)}
-
-
-def get_effective_provider_routes(session: Session) -> dict[str, str]:
-    """Return the persisted map, or the exact old per-provider choice when unset."""
-    row = _provider_routes_row(session)
-    if row is None or not row.value_text:
-        return _legacy_default_provider_routes()
-    return _parse_provider_routes(row.value_text)
-
-
-def set_provider_routes(session: Session, routes: dict[str, str]) -> None:
-    """Persist the complete global route map in its compact text setting."""
-    validated = _parse_provider_routes(json.dumps(routes, separators=(",", ":"), sort_keys=True))
-    encoded = json.dumps(validated, separators=(",", ":"), sort_keys=True)
-    if len(encoded) > 100:
-        raise ValueError("provider_routes exceeds the settings storage limit")
-    row = _provider_routes_row(session)
-    if row is None:
-        session.add(RateLimitSetting(
-            setting_key=SETTING_PROVIDER_ROUTES,
-            value=0,
-            value_text=encoded,
-        ))
-    else:
-        row.value_text = encoded
-    session.flush()
 
 
 def list_active_models(session: Session) -> list[AvailableModel]:
@@ -324,27 +238,6 @@ def _get_claude_model_row(session: Session, setting_key: str) -> str | None:
     return None
 
 
-def get_raw_stored_cowriter_settings(session: Session) -> RawStoredCowriterSettings:
-    """Return the co-writer provider and model values without resolving defaults."""
-    stored_values = {
-        str(setting_key): value_text
-        for setting_key, value_text in (
-            session.query(RateLimitSetting.setting_key, RateLimitSetting.value_text)
-            .filter(
-                RateLimitSetting.setting_key.in_(
-                    (SETTING_COWRITER_PROVIDER, SETTING_COWRITER_MODEL),
-                ),
-                RateLimitSetting.user_id.is_(None),
-            )
-            .all()
-        )
-    }
-    return RawStoredCowriterSettings(
-        provider=stored_values.get(SETTING_COWRITER_PROVIDER),
-        model=stored_values.get(SETTING_COWRITER_MODEL),
-    )
-
-
 def get_raw_stored_judge_settings(session: Session) -> RawStoredJudgeSettings:
     """Return judge provider and model values without resolving defaults."""
     stored_values = {
@@ -366,14 +259,6 @@ def get_raw_stored_judge_settings(session: Session) -> RawStoredJudgeSettings:
     )
 
 
-def stored_provider_is_retired(stored_provider: str | None) -> bool:
-    """Whether a saved provider names one this build no longer supports.
-
-    Nothing saved is not retired: those rows fall back to their named defaults.
-    """
-    return stored_provider not in (None, "") and stored_provider not in COWRITER_PROVIDERS
-
-
 def get_claude_chat_model(session: Session) -> str:
     """Return the configured chat model: DB row override or Settings default."""
     return (
@@ -388,81 +273,6 @@ def get_claude_scoring_model(session: Session) -> str:
         _get_claude_model_row(session, SETTING_CLAUDE_SCORING_MODEL)
         or get_settings().claude_scoring_model
     )
-
-
-def get_cowriter_provider(session: Session) -> str:
-    stored = _get_claude_model_row(session, SETTING_COWRITER_PROVIDER)
-    if stored is None:
-        return COWRITER_DEFAULT_PROVIDER
-    if stored not in COWRITER_PROVIDERS:
-        msg = f"Unknown co-writer provider '{stored}'"
-        raise ValueError(msg)
-    return stored
-
-
-def get_cowriter_model(session: Session, provider: str) -> str:
-    stored = _get_claude_model_row(session, SETTING_COWRITER_MODEL)
-    if stored:
-        return stored
-    return _cowriter_default_model(session, provider)
-
-
-def _cowriter_default_model(session: Session, provider: str) -> str:
-    return get_claude_chat_model(session) if provider == "claude" else ""
-
-
-def get_cowriter_models_by_provider(session: Session) -> dict[str, str]:
-    """Return every provider card's saved model or default.
-
-    The legacy global pair remains authoritative for its active provider until
-    that provider is saved through the per-provider setting.
-    """
-    active_provider = get_cowriter_provider(session)
-    stored_models = {
-        str(setting_key).removeprefix(SETTING_COWRITER_PROVIDER_MODEL_PREFIX): value_text
-        for setting_key, value_text in (
-            session.query(RateLimitSetting.setting_key, RateLimitSetting.value_text)
-            .filter(
-                RateLimitSetting.setting_key.in_(
-                    [
-                        f"{SETTING_COWRITER_PROVIDER_MODEL_PREFIX}{provider}"
-                        for provider in COWRITER_PROVIDERS
-                    ],
-                ),
-                RateLimitSetting.user_id.is_(None),
-            )
-            .all()
-        )
-    }
-    return {
-        provider: (
-            get_cowriter_model(session, provider)
-            if provider == active_provider
-            else stored_models.get(provider) or _cowriter_default_model(session, provider)
-        )
-        for provider in sorted(COWRITER_PROVIDERS)
-    }
-
-
-def set_cowriter_settings(
-    session: Session,
-    provider: str,
-    model: str,
-    routes: dict[str, str] | None = None,
-) -> None:
-    previous_settings = get_raw_stored_cowriter_settings(session)
-    previous_provider = previous_settings.provider or COWRITER_DEFAULT_PROVIDER
-    if previous_provider in COWRITER_PROVIDERS and previous_settings.model:
-        set_claude_model(
-            session,
-            f"{SETTING_COWRITER_PROVIDER_MODEL_PREFIX}{previous_provider}",
-            previous_settings.model,
-        )
-    set_claude_model(session, SETTING_COWRITER_PROVIDER, provider)
-    set_claude_model(session, SETTING_COWRITER_MODEL, model)
-    set_claude_model(session, f"{SETTING_COWRITER_PROVIDER_MODEL_PREFIX}{provider}", model)
-    if routes is not None:
-        set_provider_routes(session, routes)
 
 
 def get_judge_provider(session: Session) -> str:

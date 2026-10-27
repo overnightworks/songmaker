@@ -32,6 +32,9 @@
 			'<path d="M9 17H7A5 5 0 0 1 7 7"/><path d="M15 7h2a5 5 0 0 1 4 8.9"/><path d="M8 12h4"/><path d="m2 2 20 20"/>',
 		'cloud-off':
 			'<path d="M3 3l18 18"/><path d="M9.2 6.3A5.5 5.5 0 0 1 17.3 10a4 4 0 0 1 3 5.7M17 18H7a4 4 0 0 1-.9-7.9 5.4 5.4 0 0 1 .6-1.4"/>',
+		clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+		ban: '<circle cx="12" cy="12" r="9"/><path d="M5.6 18.4L18.4 5.6"/>',
+		'circle-alert': '<circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 16.5v.1"/>',
 		'triangle-alert':
 			'<path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
 		share:

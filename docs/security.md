@@ -190,7 +190,7 @@ Five-layer defense:
 ### History: deliberate changes with webauth v0.19.0 and v0.20.0 (#1765)
 
 - Sign-in moved from a password form to Keycloak; the password hasher, the login-attempt budget and the account lockout left with it, and the migration `7c3e91d0a4b2` dropped `users.password_hash`, `users.is_active`, `login_attempts` and the session origin columns (`ip_address`, `user_agent`), and the unique index on `users.username`. Every session row was deleted, so everyone signed in again once.
-- With v0.20.0 the session row holds the issuer's refresh token in `user_sessions.refresh_token` (added by the same migration; `NULL` when the issuer gave none, for example in seeded e2e sessions). It is a secret at rest: the column holds it as plain text (it is in the database dump), the `UserSession.refresh_token` property hands it out only as a `SecretStr`, the engine hides SQL parameters (`hide_parameters=True`) so a failed insert keeps it out of the traceback, and no response, log line or `/health` carries it; the only session-related response is a count of active sessions. It leaves with the row on logout, expiry, pruning and revocation. Nothing in songmaker renews an access token with it yet (`replace_refresh_token` stores a rotated token for the library's `fresh_access_token`, which no route calls).
+- With v0.20.0 the session row holds the issuer's refresh token in `user_sessions.refresh_token` (added by the same migration; `NULL` when the issuer gave none, for example in seeded e2e sessions). It is a secret at rest: the column holds it as plain text (it is in the database dump), the `UserSession.refresh_token` property hands it out only as a `SecretStr`, the engine hides SQL parameters (`hide_parameters=True`) so a failed insert keeps it out of the traceback, and no response, log line or `/health` carries it; the only session-related response is a count of active sessions. It leaves with the row on logout, expiry, pruning and revocation. The co-writer turn is the one place that renews an access token with it (`fresh_access_token`, which stores a rotated refresh token before the access token is handed out); see "Co-writer turn through the agent service" below.
 - The Host check is songmaker's own `TrustedHostMiddleware` over `ALLOWED_HOSTS` (the library's host lists are Origin allowlists only). A request for another Host is answered 400. Compose always appends `localhost`, `127.0.0.1` and `songmaker-web` to the list, because the container health check, the ACE-Step control plane and Prometheus call the web service by those names; the public host still comes from `ALLOWED_HOSTS`.
 
 ## Rate Limiting
@@ -460,7 +460,7 @@ being in place.
 
 ## Claude Chat Security
 
-- **System prompt**: Hardcoded server-side (`build_cowriter_system_prompt()` in `conversation_api.py`). Clients cannot override it. Song, memory, and mention context is wrapped in XML tags, and `COWRITER_UNTRUSTED_NOTICE` instructs the model to treat everything inside those tags and all tool outputs as untrusted data and never follow instructions found there.
+- **System prompt**: The body of the agent file `agents/cowriter.md`, shipped with the code and sent as the run's system prompt. It holds no user content and clients cannot override it. Song, memory, and mention context is wrapped in XML tags, and the untrusted notice in the agent file instructs the model to treat everything inside those tags and all tool outputs as untrusted data and never follow instructions found there.
 - **Co-writer authorization**: All twelve shared tools require album ownership, including for administrators, through both MCP and in-process dispatch. Lists and searches filter to owned resources; foreign resource IDs return not-found before creating versions, work records, songs, or cover jobs. HTTP administration retains its existing access. User-selected current-song, current-take, and @-mention context also retains admin access: an admin can load foreign context, but tool calls against it return not-found. Residual risk: foreign context or tool output can still steer writes to the admin’s own songs; the untrusted notice is guidance, while owner-only authorization enforces the foreign-resource boundary. [Ownership matrix](../tests/test_cowriter_ownership.py) pins both dispatch paths.
 - **Multi-turn history**: Stored in `chat_messages` and scoped to a conversation; the co-writer applies a token budget with a rolling summary for older messages (`conversation_api.py:477-503`; `cowriter/history.py:65-76,89-144`). Ownership is enforced via `check_song_access()` on every endpoint.
 - **Context built server-side**: Mentioned song/version IDs are sent by the frontend, but the backend resolves them from the DB — the client never sends raw context. Each mentioned song is ownership-checked.
@@ -478,7 +478,7 @@ being in place.
 
 ## Co-writer MCP endpoint
 
-`songmaker-web` serves the co-writer's tools at `/mcp` so the agent service can call them back during a co-writer turn. `cowriter/mcp_endpoint.py` composes it in `run_server`; nothing calls it until the turn runs through the service, so every call is refused until a turn registers its run.
+`songmaker-web` serves the co-writer's tools at `/mcp` so the agent service can call them back during a co-writer turn. `cowriter/mcp_endpoint.py` composes it in `run_server`; a call is accepted only while the co-writer turn that started its run is running.
 
 **What it trusts.** One RSA-3072 public key, exported from the service's signing key and mounted as the compose secret `agent_service_signing_public_key`, and one origin (`AGENT_SERVICE_MCP_ORIGIN`, default `https://songmaker.mcp.internal`). A capability proves a signed run id and the person for at most the run's maximum duration; it is never revoked and does not prove the run is live. A missing or malformed key at the path the container sees (no file, a directory, an unreadable file, a key the verifier refuses, or no valid origin) leaves the web up: the boot log names the setting and the problem, never the bytes, and `/mcp` answers 503 with an empty body, like a drifted Claude tool surface above.
 
@@ -495,6 +495,20 @@ being in place.
 **Named gap: the forwarded address.** With `TRUSTED_PROXIES` at `172.16.0.0/12`, a direct peer can send `X-Forwarded-For` and the per-IP budgets and the access log use the forged address. Sessions, CSRF and the internal token do not depend on the address. Narrowing the range needs the default network's subnet pinned, which recreates the live network. Trigger: a new peer on `hal_mcp_songmaker` or `hal_agent_songmaker`, or an observed budget evasion.
 
 **Accepted availability residue.** `McpServer` has no rate limit, concurrency bound or body-read deadline. An unauthenticated peer is refused before a body is read; only a holder of a valid capability whose run is registered can make a handler run. A defective or compromised trusted peer (the service, traefik-mcp) could hold handler threads and database sessions while a turn runs. Accepted for today's two trusted peers; trigger: a new peer on either network or an observed exhaustion.
+
+## Co-writer turn through the agent service
+
+`POST /chat/turn` starts one run of `agents/cowriter.md` (`model: claude/opus`) at the agent service (`AGENT_SERVICE_URL`, default `http://agent-service:8080`) and reads its event stream to the end; no model runs inside `songmaker-web`. `cowriter/service_turn.py` owns the turn.
+
+**Three tokens per turn.** The person's refresh token (the session row holds it; see "Authentication") becomes a fresh user access token through `fresh_access_token`, which stores a rotated refresh token in its own committed transaction before the token is handed out. Songmaker's workload token comes from the client-credentials grant of the songmaker client. Both travel in plain HTTP on `hal_agent_songmaker` to the service (`Authorization` and `Agent-Workload-Token`), which mints the run capability that `/mcp` receives. None of the three reaches a log line, an error frame, a job record, the chat history or the browser: the job's error holds only a closed problem and detail name, such as `sign_in_again: sign-in-again` or `unavailable: provider_unavailable`. The HTTP client reads no proxy from the environment and follows no redirect.
+
+**The network.** `songmaker-web` joins `hal_agent_songmaker` (external, internal, fixed name), whose only other member is the agent service. The service is a direct peer of `songmaker-web:8080`; "Direct peers" above says what such a peer meets.
+
+**Order and refusals.** The turn reads the `/mcp` verdict first (a missing or malformed capability key means no token is fetched and no request leaves), then the user token, the workload token and the run request. A turn ends in one of four named problems: `unavailable`, `busy` (with the service's `Retry-After`), `not_enabled` (the service does not admit this account) and `sign_in_again` (the session holds no refresh token or the realm refused the renewal; the songmaker session itself and every other route keep working). It never falls back to a local provider.
+
+**The run's life.** The run id from `run_started` is registered for the person and released when the turn's stream ends, on every exit including cancellation and a browser that left (a started turn finishes, #1014); a restart empties the registry. Versions a tool wrote before a failure or a cut stream stay; no partial answer is stored as the answer.
+
+**Retention outside songmaker.** The agent service has no database: messages, tool calls, results and the answer pass through its memory only. It writes the system prompt and the tool relay's connection file into the run's private tree, removed after the run; keeps run records (app, person, timestamps, outcome, no content) in memory for an hour; and its access log carries the caller's address and the path. Anthropic receives the turn's text and tool results through the agent service (agent-runtime `docs/wire.md`, "What a run keeps").
 
 ## Agent-CLI Mounts
 
@@ -789,17 +803,15 @@ only for that image run and adds `web_search="disabled"`; its only permitted Cod
 Mode command is the measured read of the bundled image skill. Each receives the
 runner's secret-scrubbed environment, so `OPENAI_API_KEY` is never inherited.
 
-The Co-Writer JSONL gate refuses every native Codex command, MCP, web-search,
-file-change, or other non-text tool item. Completed assistant text is parsed as
-Songmaker's textual tool protocol; the shared server loop executes the owned
-Songmaker operation and supplies its result in the next CLI resume round. Unknown
-or malformed items are `codex_cli_stream_protocol_error`. Only a completed
-`error` item is a named CLI failure when no completed turn follows; an error item
+The Codex JSONL gate refuses every native Codex command, MCP, web-search,
+file-change, or other non-text tool item. Unknown or malformed items are
+`codex_cli_stream_protocol_error`. Only a completed `error` item is a named CLI
+failure when no completed turn follows; an error item
 that is started or updated remains a protocol failure. Event payloads, prompts,
 and stderr are not logged; failure logging contains only the return code and
 stderr length. `approval_policy="never"` means auto-approval within the sandbox,
-not that tools cannot run, so the transport's reported-event gate and the shared
-tool loop remain the execution boundary.
+not that tools cannot run, so the transport's reported-event gate remains the
+execution boundary.
 
 **The renewal secret never leaves the host.** The mirror publishes the
 short-lived access token and blanks the long-lived one, so whatever eventually
@@ -998,13 +1010,12 @@ mounted; a compromised container cannot add host-side profile settings or hooks.
 `ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY` are configured only
 through the deployment `.env` and become `Settings` secrets. Both
 provider-facing images install the `claude` extra, so `ANTHROPIC_API_KEY`
-serves the Claude judge, model catalog, and API co-writer tool loop. It does
-not replace the web container's Claude CLI mirror: the selected CLI route
-still uses Songmaker's MCP tools. The API and DOM expose only safe readiness
+serves the Claude judge and model catalog. It does not replace the web
+container's Claude CLI mirror, which the judge's CLI route uses. The API and DOM expose only safe readiness
 metadata (`set`/`not set` through route state), never a key value, raw
-provider body, command output, or a secret-derived value. A Co-Writer route
-is administrator-selected; a failed selected route returns its fixed safe
-reason and never retries the sibling CLI/API route. Judge settings are also
+provider body, command output, or a secret-derived value. The co-writer has no
+route to select: it runs at the agent service (see "Co-writer turn through the
+agent service"). Judge settings are also
 admin-only and expose the saved route with safe readiness metadata. The
 [Agent routes contract](architecture.md#agent-routes) describes the startup pin
 and the temporary separation between that saved route and the worker's

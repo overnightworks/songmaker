@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import patch
 
 import pytest
-from agent_providers.events import FinalEvent
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from fake_agent_service import attach_cowriter_service, streams
 from mcp.server.mcpserver.exceptions import ToolError
 
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
@@ -170,30 +169,34 @@ def test_unfiltered_song_listing_still_filters_by_owner(
     assert [song["id"] for song in payload] == ["song-actor"]
 
 
-def test_admin_foreign_context_loads_but_tool_access_is_denied(ownership_factory, tmp_path):
+def test_admin_foreign_context_loads_but_tool_access_is_denied(
+    ownership_factory, tmp_path, monkeypatch,
+):
     """1301-F2-BOUNDARY: user-selected foreign context retains HTTP admin access."""
     with ownership_factory() as session:
         session.get(User, "actor").role = "admin"
         session.commit()
     user = make_authenticated_user("actor", role="admin")
     app = make_router_app(make_router_ctx(tmp_path, db=ownership_factory), user=user)
+    client = web_client(app)
+    service = attach_cowriter_service(client, ownership_factory, monkeypatch, "actor")
     observed = {}
 
-    async def capture_turn(*args, **kwargs):
-        observed["messages"] = kwargs["messages"]
+    async def run_the_tool(_run, script):
+        yield script.started()
         with ownership_factory() as session:
             observed["tool"] = execute_cowriter_tool(
                 session, user, "get_song", {"song_id": "song-foreign"},
             )
-        yield FinalEvent(text="Cannot edit this song")
+        yield script.succeeded("Cannot edit this song")
 
-    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", capture_turn):
-        response = web_client(app).post(
-            "/api/chat/turn",
-            json={"message": "edit this", "current_song_id": "song-foreign"},
-        )
+    service.agent.reply_with(streams(run_the_tool))
+    response = client.post(
+        "/api/chat/turn",
+        json={"message": "edit this", "current_song_id": "song-foreign"},
+    )
     assert response.status_code == 200
-    context = observed["messages"][-1]["content"]
+    context = service.agent.last_run.messages[-1]["text"]
     assert "<current_song>" in context
     assert "Track foreign" in context
     assert "original" in context

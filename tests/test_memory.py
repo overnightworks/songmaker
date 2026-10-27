@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-from agent_providers.events import AssistantTextEvent, FinalEvent
 from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from fake_agent_service import CowriterStack, attach_cowriter_service, streams
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -93,15 +92,10 @@ def stranger_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
     return web_client(app), factory
 
 
-async def _capture_stream(*_args, **kwargs):
-    _capture_stream.captured = kwargs
-    yield AssistantTextEvent(text="ok")
-    yield FinalEvent(text="ok")
-
-
-def _last_user_content() -> str:
-    messages = _capture_stream.captured["messages"]
-    return messages[-1]["content"]
+@pytest.fixture
+def service(client, monkeypatch) -> CowriterStack:
+    c, factory = client
+    return attach_cowriter_service(c, factory, monkeypatch, "u-test")
 
 
 def test_compose_turn_context_keeps_named_scopes_once():
@@ -165,48 +159,40 @@ def test_stranger_memory_is_404(stranger_client):
     assert c.get("/api/memory").json()["user"]["body"] == ""
 
 
-def test_new_conversation_keeps_memory(client):
+def test_new_conversation_keeps_memory(client, service):
     c, _ = client
     c.put("/api/memory/user", json={"body": "standing rule"})
     c.put("/api/memory/songs/s1", json={"body": "open bridge"})
     c.post("/api/conversations/new")
-    with patch(
-        "songmaker_cli.conversation_api.stream_cowriter_turn",
-        _capture_stream,
-    ):
-        resp = c.post(
-            "/api/chat/turn",
-            json={"message": "go", "current_song_id": "s1"},
-        )
+    resp = c.post(
+        "/api/chat/turn",
+        json={"message": "go", "current_song_id": "s1"},
+    )
     assert resp.status_code == 200
     _stream_events(resp)
-    content = _last_user_content()
+    content = service.agent.last_run.messages[-1]["text"]
     assert "<user_memory>\nstanding rule\n</user_memory>" in content
     assert "<song_memory>\nopen bridge\n</song_memory>" in content
 
 
-def test_song_switch_swaps_song_memory_keeps_user_memory(client):
+def test_song_switch_swaps_song_memory_keeps_user_memory(client, service):
     c, _ = client
     c.put("/api/memory/user", json={"body": "taste"})
     c.put("/api/memory/songs/s1", json={"body": "memory A"})
     c.put("/api/memory/songs/s2", json={"body": "memory B"})
-    with patch(
-        "songmaker_cli.conversation_api.stream_cowriter_turn",
-        _capture_stream,
-    ):
-        resp = c.post(
-            "/api/chat/turn",
-            json={"message": "work on rain", "current_song_id": "s2"},
-        )
+    resp = c.post(
+        "/api/chat/turn",
+        json={"message": "work on rain", "current_song_id": "s2"},
+    )
     _stream_events(resp)
-    content = _last_user_content()
+    content = service.agent.last_run.messages[-1]["text"]
     assert "<user_memory>\ntaste\n</user_memory>" in content
     assert "<song_memory>\nmemory B\n</song_memory>" in content
     assert "memory A" not in content
     assert "Thunder" not in content
 
 
-def test_proposal_in_assistant_text_does_not_write_memory(client):
+def test_proposal_in_assistant_text_does_not_write_memory(client, service):
     c, _ = client
     c.put("/api/memory/user", json={"body": "old"})
     proposal = (
@@ -216,15 +202,13 @@ def test_proposal_in_assistant_text_does_not_write_memory(client):
         "</memory_proposal>"
     )
 
-    async def _with_proposal(*_a, **_k):
-        yield AssistantTextEvent(text=proposal)
-        yield FinalEvent(text=proposal)
+    async def _with_proposal(_run, script):
+        yield script.started()
+        yield script.text(proposal)
+        yield script.succeeded(proposal)
 
-    with patch(
-        "songmaker_cli.conversation_api.stream_cowriter_turn",
-        _with_proposal,
-    ):
-        resp = c.post("/api/chat/turn", json={"message": "remember this"})
+    service.agent.reply_with(streams(_with_proposal))
+    resp = c.post("/api/chat/turn", json={"message": "remember this"})
     assert resp.status_code == 200
     _stream_events(resp)
     bundle = c.get("/api/memory").json()

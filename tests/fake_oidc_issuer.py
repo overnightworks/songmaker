@@ -33,6 +33,8 @@ KEY_ID = "test-key"
 RSA_PUBLIC_EXPONENT = 65537
 RSA_KEY_BITS = 2048
 ID_TOKEN_LIFETIME_SECONDS = 300
+USER_ACCESS_TOKEN = "fake-user-access-token"
+WORKLOAD_ACCESS_TOKEN = "fake-workload-access-token"  # noqa: S105
 BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"  # NOSONAR(S5332)
 
 
@@ -58,6 +60,13 @@ class FakeIssuer:
         default_factory=lambda: rsa.generate_private_key(RSA_PUBLIC_EXPONENT, RSA_KEY_BITS),
     )
     _nonce_by_code: dict[str, str] = field(default_factory=dict)
+    # What the next refresh-token grant answers: a new refresh token to rotate to, or the
+    # issuer's error code instead of an access token. A grant the test never configures
+    # answers the access token and keeps the refresh token.
+    rotates_refresh_token_to: str | None = None
+    refuses_refresh_with: str | None = None
+    refuses_workload_grant: bool = False
+    grants_seen: list[str] = field(default_factory=list)
 
     def clock(self) -> float:
         return self.now
@@ -79,6 +88,12 @@ class FakeIssuer:
     def token_answer(self, request: TokenRequest) -> TokenEndpointAnswer:
         if self.unreachable:
             raise TokenEndpointError("the issuer is unreachable")
+        grant = request.form["grant_type"]
+        self.grants_seen.append(grant)
+        if grant == "refresh_token":
+            return self._renewal()
+        if grant == "client_credentials":
+            return self._workload_grant()
         assert self.person is not None, "the test names who signs in"
         nonce = self._nonce_by_code[request.form["code"]]
         claims = {
@@ -95,6 +110,22 @@ class FakeIssuer:
         answer = {"id_token": id_token}
         if self.person.refresh_token is not None:
             answer["refresh_token"] = self.person.refresh_token
+        return TokenEndpointAnswer(status=200, body=json.dumps(answer).encode())
+
+    def _renewal(self) -> TokenEndpointAnswer:
+        if self.refuses_refresh_with is not None:
+            body = json.dumps({"error": self.refuses_refresh_with}).encode()
+            return TokenEndpointAnswer(status=400, body=body)
+        answer = {"access_token": USER_ACCESS_TOKEN, "token_type": "Bearer"}
+        if self.rotates_refresh_token_to is not None:
+            answer["refresh_token"] = self.rotates_refresh_token_to
+        return TokenEndpointAnswer(status=200, body=json.dumps(answer).encode())
+
+    def _workload_grant(self) -> TokenEndpointAnswer:
+        if self.refuses_workload_grant:
+            body = json.dumps({"error": "unauthorized_client"}).encode()
+            return TokenEndpointAnswer(status=401, body=body)
+        answer = {"access_token": WORKLOAD_ACCESS_TOKEN, "token_type": "Bearer"}
         return TokenEndpointAnswer(status=200, body=json.dumps(answer).encode())
 
     def logout_token(self, subject: str, **overrides: object) -> str:

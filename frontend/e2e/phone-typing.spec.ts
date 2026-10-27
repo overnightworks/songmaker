@@ -59,16 +59,15 @@ const LAST_SECTION_LABEL = '[Outro]';
 const SUBPIXEL_ROUNDING_PX = 1;
 const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
 const CONVERSATIONS_PATH = '/api/conversations';
-// The route error frame the server ends a turn with when the provider cannot
-// run; the panel names the provider in front of the library's reason.
+// The problem frame the server ends a turn with when the agent service did not
+// run it; the panel words the named problem.
 const COWRITER_TURN_REFUSAL_FRAME = {
 	type: 'error',
 	status: 503,
-	provider: 'claude',
-	route: null,
-	reason: { code: 'cli_binary_unavailable', message: 'CLI is unavailable.' }
+	problem: 'unavailable',
+	retry_after_seconds: null
 };
-const COWRITER_TURN_REFUSAL = 'Claude: CLI is unavailable.';
+const COWRITER_TURN_REFUSAL = 'The co-writer is unavailable';
 const RUNNING_JOB = {
 	progress: 0.36,
 	takeIndex: 1,

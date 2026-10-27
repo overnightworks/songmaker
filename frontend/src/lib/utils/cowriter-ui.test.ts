@@ -1,11 +1,8 @@
 import { makeSong as song } from '$lib/test-utils/factories';
 import { describe, expect, it } from 'vitest';
 
-import type {
-	ChatTurnFailureFrame,
-	ChatTurnRouteErrorFrame,
-	ConversationItem
-} from '$lib/api/types';
+import { COWRITER_BUSY_WAIT_CEILING_SECONDS } from '$lib/constants';
+import type { ChatTurnFailureFrame, ChatTurnProblemFrame, ConversationItem } from '$lib/api/types';
 import {
 	conversationConfirmLabel,
 	conversationLineLabel,
@@ -15,47 +12,80 @@ import {
 	cowriterHeaderLabel,
 	cowriterThinkingLabel,
 	cowriterToolCallTarget,
-	cowriterTurnFailureLabel,
-	cowriterUnavailableLabel,
-	providerDisplayName
+	cowriterTurnError,
+	cowriterWaitClock,
+	providerDisplayName,
+	type CowriterTurnError
 } from './cowriter-ui';
 
-describe('co-writer provider copy', () => {
-	it('names the active provider by its display name in the header, thinking and unavailable copy', () => {
-		expect(cowriterHeaderLabel('grok', 'grok-4.6')).toBe('Grok · grok-4.6');
-		expect(cowriterThinkingLabel('claude')).toBe('Claude is thinking…');
-		expect(cowriterThinkingLabel('codex')).toBe('Codex is thinking…');
-		expect(cowriterUnavailableLabel('grok')).toBe('Grok is currently unavailable');
+describe('co-writer copy', () => {
+	it('C17 names the model the service runs in the header and the thinking line', () => {
+		expect(cowriterHeaderLabel('opus')).toBe('Claude opus');
+		expect(cowriterThinkingLabel()).toBe('Claude is thinking…');
 	});
 
 	it.each([
 		[
-			'the provider its frame names',
-			{
-				type: 'error',
-				status: 503,
-				provider: 'grok',
-				route: 'cli',
-				reason: { code: 'route_failed', message: 'Route is unavailable.' }
-			},
-			'Grok: Route is unavailable.'
+			'sign in again, with no wait',
+			{ type: 'error', status: 401, problem: 'sign_in_again', retry_after_seconds: null },
+			{ problem: 'sign_in_again', text: 'Sign in again to use the co-writer', waitSeconds: 0 }
 		],
 		[
-			'the panel’s provider in front of the endpoint’s own message',
+			'busy, with the service’s own wait',
+			{ type: 'error', status: 429, problem: 'busy', retry_after_seconds: 40 },
+			{ problem: 'busy', text: 'The co-writer is busy', waitSeconds: 40 }
+		],
+		[
+			'busy without a stated wait',
+			{ type: 'error', status: 429, problem: 'busy', retry_after_seconds: null },
+			{ problem: 'busy', text: 'The co-writer is busy', waitSeconds: 0 }
+		],
+		[
+			'busy with a wait the panel does not promise',
+			{ type: 'error', status: 429, problem: 'busy', retry_after_seconds: 86_400 },
+			{
+				problem: 'busy',
+				text: 'The co-writer is busy',
+				waitSeconds: COWRITER_BUSY_WAIT_CEILING_SECONDS
+			}
+		],
+		[
+			'not enabled, as the account has none',
+			{ type: 'error', status: 403, problem: 'not_enabled', retry_after_seconds: null },
+			{
+				problem: 'not_enabled',
+				text: 'The co-writer is not enabled for your account',
+				waitSeconds: 0
+			}
+		],
+		[
+			'unavailable',
+			{ type: 'error', status: 503, problem: 'unavailable', retry_after_seconds: null },
+			{ problem: 'unavailable', text: 'The co-writer is unavailable', waitSeconds: 0 }
+		],
+		[
+			'the endpoint’s own failure message, with no named problem',
 			{ type: 'error', status: 500, message: 'Chat request failed' },
-			'Claude: Chat request failed'
+			{ problem: null, text: 'Chat request failed', waitSeconds: 0 }
 		]
-	] satisfies Array<[string, ChatTurnRouteErrorFrame | ChatTurnFailureFrame, string]>)(
-		'names %s in front of the reason a turn failed for',
-		(_case, frame, label) => {
-			expect(cowriterTurnFailureLabel(frame, 'claude')).toBe(label);
+	] satisfies Array<[string, ChatTurnProblemFrame | ChatTurnFailureFrame, CowriterTurnError]>)(
+		'C8 words a turn that ended as %s',
+		(_case, frame, error) => {
+			expect(cowriterTurnError(frame)).toEqual(error);
 		}
 	);
 
 	it('defect:#1856: names no failure for a frame that carries an empty message', () => {
-		expect(
-			cowriterTurnFailureLabel({ type: 'error', status: 500, message: '' }, 'claude')
-		).toBeNull();
+		expect(cowriterTurnError({ type: 'error', status: 500, message: '' })).toBeNull();
+	});
+
+	it.each([
+		[0, '0:00'],
+		[40, '0:40'],
+		[65, '1:05'],
+		[COWRITER_BUSY_WAIT_CEILING_SECONDS, '5:00']
+	])('C8 shows a wait of %i seconds as %s', (seconds, clock) => {
+		expect(cowriterWaitClock(seconds)).toBe(clock);
 	});
 
 	it.each([

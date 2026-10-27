@@ -1,30 +1,22 @@
-"""Which provider runs a musician's turn, and with whose permissions.
+"""Which provider route paints a cover: the saved cover selection, resolved once.
 
-The provider layer executes a named route. Songmaker decides which route that
-is and who the turn acts for: it binds the request session and the
-authenticated musician to the tool executor, hands over the tool catalog, and
-resolves the saved cover selection — product decisions the library must not
-make on a host's behalf.
+The provider layer executes a named route. Songmaker decides which route the
+saved cover selection names, a product decision the library must not make on a
+host's behalf.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from agent_providers.catalog import ProviderRoute
 from agent_providers.dispatch import cover_image_capability
-from agent_providers.dispatch import stream_cowriter_turn as stream_provider_turn
 from agent_providers.errors import (
     ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
 )
-from agent_providers.events import StreamEvent
-from agent_providers.tool_loop import ToolExecutor
-from agent_providers.tools import ToolCatalog
 from sqlalchemy.orm import Session
-from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
 from songmaker_cli.db.queries.settings import get_cover_settings
@@ -37,51 +29,6 @@ class CoverImageDispatch:
     provider: str
     route: ProviderRoute
     model: str
-
-
-def stream_cowriter_turn(
-    *,
-    provider: str,
-    route: ProviderRoute,
-    model: str,
-    user_id: str,
-    system: str,
-    messages: list[dict[str, str]],
-    session: Session,
-    user: AuthenticatedUser,
-    correlation_id: str | None = None,
-) -> AsyncIterator[StreamEvent]:
-    """Run one co-writer turn with this musician's tools and permissions."""
-    return stream_provider_turn(
-        provider=provider,
-        route=route,
-        model=model,
-        user_id=user_id,
-        system=system,
-        messages=messages,
-        executor=_cowriter_executor(session, user),
-        catalog=_tool_catalog(),
-        correlation_id=correlation_id,
-    )
-
-
-def _tool_catalog() -> ToolCatalog:
-    """Load songmaker's tool catalog only where a tool-using turn needs it.
-
-    Its module reaches the MCP tool implementations, and the scoring worker
-    installs no ``mcp`` extra, so importing it at module scope would keep
-    that container from importing this module at all.
-    """
-    from songmaker_cli.cowriter.tools import COWRITER_TOOL_CATALOG
-
-    return COWRITER_TOOL_CATALOG
-
-
-def _cowriter_executor(session: Session, user: AuthenticatedUser) -> ToolExecutor:
-    """Bind the requesting musician's session to songmaker's tool executor."""
-    from songmaker_cli.cowriter.tools import execute_cowriter_tool
-
-    return lambda name, arguments: execute_cowriter_tool(session, user, name, arguments)
 
 
 def cover_image_provider_method(session: Session) -> CoverImageDispatch:
