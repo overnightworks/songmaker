@@ -83,6 +83,14 @@ function sessionStorageRefusingWritesAfter(acceptedWrites: number): void {
 	});
 }
 
+async function popstateAfterBack(): Promise<void> {
+	const landed = new Promise((resolve) =>
+		window.addEventListener('popstate', resolve, { once: true })
+	);
+	history.back();
+	await landed;
+}
+
 describe('landing reducer', () => {
 	it('an own step lands on the expected id', () => {
 		const outcome = land(ledger({ stepBacks: [6] }), { id: 6 });
@@ -283,6 +291,20 @@ describe('history adapter', () => {
 		expect(landings[0]).toMatchObject({ settled: [page.id], apply: false });
 	});
 
+	it('steps off a stale layer entry Forward lands on after a reload', async () => {
+		const page = pushEntry('/album/a', {});
+		pushEntry('/album/a', {}, 'album-menu');
+		loadPage();
+		await stepBackTo(page.id);
+
+		const steppedBack = nextLanding().then(nextLanding);
+		history.forward();
+		await steppedBack;
+
+		expect(landings.slice(1).map(({ settled }) => settled)).toEqual([[], [page.id]]);
+		expect(history.state['sveltekit:states'].entry).toEqual(page);
+	});
+
 	it('keeps stamping and pushing entries when session storage refuses writes', () => {
 		sessionStorageRefusingWritesAfter(0);
 		seedForeignEntry('/album/a');
@@ -305,27 +327,21 @@ describe('history adapter', () => {
 		expect(ids).toEqual([1, 2, 3, 4]);
 	});
 
-	it('ids stay above the entry a reload lands on while session storage refuses writes', () => {
-		sessionStorageRefusingWritesAfter(0);
-		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
-		loadPage();
+	it.each([
+		{ after: 'a reload lands on', viaForward: false },
+		{ after: 'Forward lands on after a reload', viaForward: true }
+	])(
+		'ids stay above the entry $after while session storage refuses writes',
+		async ({ viaForward }) => {
+			sessionStorageRefusingWritesAfter(0);
+			['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
+			if (viaForward) await traverse(() => history.back());
+			loadPage();
+			if (viaForward) await traverse(() => history.forward());
 
-		const layer = pushEntry('/album/c', {}, 'now-playing');
-
-		expect(layer.id).toBe(4);
-	});
-
-	it('ids stay above an entry Forward lands on after a reload while session storage refuses writes', async () => {
-		sessionStorageRefusingWritesAfter(0);
-		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
-		await traverse(() => history.back());
-		loadPage();
-		await traverse(() => history.forward());
-
-		const layer = pushEntry('/album/c', {}, 'now-playing');
-
-		expect(layer.id).toBe(4);
-	});
+			expect(pushEntry('/album/c', {}, 'now-playing').id).toBe(4);
+		}
+	);
 
 	const reachingSessionStorage = () => vi.spyOn(window, 'sessionStorage', 'get');
 	const readingSessionStorage = () => vi.spyOn(Storage.prototype, 'getItem');
@@ -439,11 +455,7 @@ describe('history adapter', () => {
 		const album = pushEntry('/album/a', {});
 		pushEntry('/album/b', {});
 		detachLandingHandler();
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await popstateAfterBack();
 
 		const heard: Landing[] = [];
 		detachLandingHandler = attachLandingHandler((landing) => heard.push(landing));
@@ -460,11 +472,7 @@ describe('history adapter', () => {
 		holdLayer('account-menu', () => (menuOpen = false));
 		detachLandingHandler();
 
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await popstateAfterBack();
 
 		expect(menuOpen).toBe(false);
 		expect(stackedLayers()).toEqual([]);
@@ -690,11 +698,7 @@ describe('history adapter', () => {
 		detachLandingHandler();
 		detachLandingHandler = attachLandingHandler(() => heard.push('controller'));
 
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await popstateAfterBack();
 		window.removeEventListener('popstate', routerHears);
 
 		expect(heard).toEqual(['router', 'controller']);
@@ -760,11 +764,7 @@ describe('route convergence after a landing', () => {
 	async function backFromSettings(): Promise<void> {
 		await vi.mocked(goto)('/settings');
 		stampNavigatedEntry('goto');
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await popstateAfterBack();
 	}
 
 	it('Back onto an entry written over another page mounts the route of its own address', async () => {
@@ -859,11 +859,7 @@ describe('route convergence after a landing', () => {
 			to: navigationTo('/album/a'),
 			complete: loading.complete
 		});
-		const landedOnAlbum = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landedOnAlbum;
+		await popstateAfterBack();
 		fakePage.url = new URL('/settings', location.href);
 
 		await loading.abort();
