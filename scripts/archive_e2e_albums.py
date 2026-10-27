@@ -22,7 +22,7 @@ import argparse
 import sys
 from datetime import datetime, timezone
 
-from _repo_path import prepend_own_checkout_src
+from repo_path import prepend_own_checkout_src
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

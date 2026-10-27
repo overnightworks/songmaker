@@ -24,7 +24,7 @@ from fake_agent_service import (
     offered_model,
     offers,
     refuses_offer,
-    trickles_offer_forever,
+    stalls_offer_past_the_deadline,
 )
 from fake_oidc_issuer import USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN
 from fastapi.testclient import TestClient
@@ -161,9 +161,9 @@ def test_an_offer_that_cannot_be_read_reads_as_not_reachable(web, behavior):
     assert web.state() == "not_reachable"
 
 
-def test_a2_an_offer_that_trickles_past_its_deadline_reads_as_not_reachable(web, monkeypatch):
+def test_a2_an_offer_that_stalls_past_its_deadline_reads_as_not_reachable(web, monkeypatch):
     monkeypatch.setattr(service_offer, "OFFER_TIMEOUT_SECONDS", 0.2)
-    web.agent.reply_to_offer_with(trickles_offer_forever())
+    web.agent.reply_to_offer_with(stalls_offer_past_the_deadline())
 
     assert web.state() == "not_reachable"
 

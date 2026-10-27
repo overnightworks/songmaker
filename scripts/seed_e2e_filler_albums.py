@@ -32,7 +32,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from _repo_path import prepend_own_checkout_src
+from repo_path import prepend_own_checkout_src
 from sqlalchemy.orm import Session
 
 prepend_own_checkout_src(__file__)

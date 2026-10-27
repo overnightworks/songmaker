@@ -67,7 +67,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
                 name = name.replace("${{ matrix." + axis + " }}", str(value))
             rendered_names.add(name)
     config = tomllib.loads((ROOT / "quality/config.toml").read_text())
-    assert set(config) == {"gate", "secrets"}
+    assert set(config) == {"gate"}
     assert set(config["gate"]) == {"mandatory_jobs", "loosened"}
     loosened = config["gate"]["loosened"]
     assert isinstance(loosened, list)
@@ -75,6 +75,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
         ("#1734", 'mandatory job "Acceptance evidence (integration)" removed'),
         ("#1856", "size baseline raises file_lines frontend/src/lib/api/types.ts 1125 -> 1159"),
         ("#1784", "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"),
+        ("#1914", "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1145"),
     ]
     for entry in loosened:
         assert set(entry) == {"what", "item", "date", "reason"}

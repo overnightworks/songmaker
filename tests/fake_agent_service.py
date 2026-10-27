@@ -245,7 +245,7 @@ def never_answers_offer(longest_read_seconds: float) -> OfferBehavior:
     return respond
 
 
-def trickles_offer_forever() -> OfferBehavior:
+def stalls_offer_past_the_deadline() -> OfferBehavior:
     """The stand-in never answers and the in-process transport enforces no timeouts.
 
     Only an overall deadline ends the wait.

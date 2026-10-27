@@ -625,7 +625,7 @@ denies the write on its own and the check would still pass with
 the mask section disappearing entirely, never as evidence for the write rule.
 
 An operator installs the AppArmor policy with
-`sudo scripts/apparmor/install.sh` and then recreates the service with
+`sudo scripts/apparmor/install_profile.sh` and then recreates the service with
 `docker compose up -d songmaker-web`. The script stages a copy of the profile
 as a dotfile in `/etc/apparmor.d/`, checks that those staged bytes parse
 (`apparmor_parser -QK`) and declare the `songmaker-web` profile and no other
@@ -673,7 +673,7 @@ in the profile, including its brace lists, so a rename that reaches only one
 of them is a red test instead of a silently refused mount. A project that
 embeds `agent_providers` takes those prefixes and derives its own profile from
 them. The profile *name* is a parameter wherever it is used —
-`sudo scripts/apparmor/install.sh [profile]`,
+`sudo scripts/apparmor/install_profile.sh [profile]`,
 `python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
 `SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
 `tests/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
@@ -754,7 +754,7 @@ the live proof remains the next rollout step.
 An operator runs the rollout and proof in this exact order:
 
 ```sh
-sudo scripts/apparmor/install.sh
+sudo scripts/apparmor/install_profile.sh
 docker compose up -d songmaker-web
 python scripts/prove_codex_image_sandbox.py
 ```
@@ -1249,7 +1249,7 @@ existing guards.
 - `keycloak_client_secret`: the Keycloak client secret, a file owned by the edge (`~/.secrets/keycloak/clients/songmaker`, or `KEYCLOAK_CLIENT_SECRET_FILE` for a throwaway stack), mounted read-only into the web container at `/run/secrets/keycloak_client_secret`. Never an environment variable.
 - `SESSION_SECRET`: HMAC signing key for session cookies. Required at startup (Settings raises ValidationError if missing).
 - `ANTHROPIC_API_KEY`: Optional (for server-side Claude chat). Never logged or returned in responses.
-- `GRAFANA_PASSWORD`: Required, with no default. When it is unset or empty, every `docker compose` command that reads `docker-compose.yml` refuses before it does anything, naming the variable — `up` and `build`, but also the recovery commands `down`, `logs`, and `ps` — so set it in `.env` first. `exec` into an already running service still works, and so do `ps`, `logs`, and `down` when the project is named without a file (`docker compose -p songmaker logs`, the project name being the checkout directory's name). Grafana never falls back to admin/admin. Setting it in the first place is the one command `./scripts/grafana-password`, run from the main checkout: if `.env` has no `GRAFANA_PASSWORD`, an empty one, or a publicly known one (`admin`, anything starting with `CHANGEME`), it writes a fresh random value there, then applies the `.env` value to the running Grafana and prints `set` (fresh value written) or `already set` once an authenticated API login with that value succeeds; if Grafana is not running, it says whether `.env` changed and asks you to start the stack and run it again. The value only seeds Grafana's first start, but the command applies whatever `.env` holds, so it also changes the admin password of an existing Grafana: put the new value in `.env` and run it. Without the command, put the new value in `.env`, run `docker compose up -d grafana`, then `docker compose exec -T grafana sh -c 'printf %s "$GF_SECURITY_ADMIN_PASSWORD" | grafana cli admin reset-admin-password --password-from-stdin'`. The password never appears in an argv (shell history, `ps`): the single quotes keep the host shell from expanding it, and `printf` is a builtin of the container's shell. Never pass it as the positional `<new password>` argument. CI uses a fixed throwaway literal (`.github/workflows/e2e.yml`).
+- `GRAFANA_PASSWORD`: Required, with no default. When it is unset or empty, every `docker compose` command that reads `docker-compose.yml` refuses before it does anything, naming the variable — `up` and `build`, but also the recovery commands `down`, `logs`, and `ps` — so set it in `.env` first. `exec` into an already running service still works, and so do `ps`, `logs`, and `down` when the project is named without a file (`docker compose -p songmaker logs`, the project name being the checkout directory's name). Grafana never falls back to admin/admin. Setting it in the first place is the one command `./scripts/grafana_password.py`, run from the main checkout: if `.env` has no `GRAFANA_PASSWORD`, an empty one, or a publicly known one (`admin`, anything starting with `CHANGEME`), it writes a fresh random value there, then applies the `.env` value to the running Grafana and prints `set` (fresh value written) or `already set` once an authenticated API login with that value succeeds; if Grafana is not running, it says whether `.env` changed and asks you to start the stack and run it again. The value only seeds Grafana's first start, but the command applies whatever `.env` holds, so it also changes the admin password of an existing Grafana: put the new value in `.env` and run it. Without the command, put the new value in `.env`, run `docker compose up -d grafana`, then `docker compose exec -T grafana sh -c 'printf %s "$GF_SECURITY_ADMIN_PASSWORD" | grafana cli admin reset-admin-password --password-from-stdin'`. The password never appears in an argv (shell history, `ps`): the single quotes keep the host shell from expanding it, and `printf` is a builtin of the container's shell. Never pass it as the positional `<new password>` argument. CI uses a fixed throwaway literal (`.github/workflows/e2e.yml`).
 - `.env`: Gitignored. Never committed. Single source for pydantic Settings and
   Docker Compose substitutions except the non-secret
   `SONGMAKER_CLAUDE_CLI`, `SONGMAKER_GROK_CLI`, and `SONGMAKER_CODEX_CLI` path

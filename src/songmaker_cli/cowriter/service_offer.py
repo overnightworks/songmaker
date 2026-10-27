@@ -60,9 +60,7 @@ async def _state_of_the_offer(app: FastAPI, session_id: str | None) -> CowriterO
         # httpx applies its timeout to each network wait, so a trickling answer needs a deadline.
         async with (
             asyncio.timeout(OFFER_TIMEOUT_SECONDS),
-            service_turn.service_client(
-                service_url,
-            ) as client,
+            service_turn.service_client(service_url) as client,
         ):
             response = await client.get(
                 OFFER_PATH,

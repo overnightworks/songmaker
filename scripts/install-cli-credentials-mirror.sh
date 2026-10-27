@@ -74,8 +74,8 @@ if [[ "$INSTALL_USER" = "root" ]]; then
     exit 1
 fi
 
-# shellcheck source=scripts/agent-cli-paths.sh
-source "$SCRIPT_DIR/agent-cli-paths.sh"
+# shellcheck source=scripts/agent_cli_paths.sh
+source "$SCRIPT_DIR/agent_cli_paths.sh"
 require_main_checkout "$PROJECT_ROOT" install-cli-credentials-mirror.sh || exit 1
 
 INSTALL_HOME="$(getent passwd "$INSTALL_USER" | cut -d: -f6)"
