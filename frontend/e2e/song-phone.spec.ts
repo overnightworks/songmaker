@@ -225,7 +225,7 @@ test.describe('song page at phone width', () => {
 				.click();
 			const nowPlaying = page.getByRole('dialog', { name: songTitle });
 			await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
-			await expect(nowPlaying.getByText(SECOND_TAKE_LABEL)).toBeVisible();
+			await expect(nowPlaying.getByText(new RegExp(`^${SECOND_TAKE_LABEL}\\b`))).toBeVisible();
 			await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
 			await expect(nowPlaying).toBeHidden();
 

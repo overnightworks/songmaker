@@ -26,6 +26,7 @@ import {
 } from './helpers';
 import {
 	control,
+	MOCK_ARTIST,
 	MOCK_STREAM_REFUSAL,
 	openMockSharedAlbum,
 	MOCK_ALBUM_TITLE,
@@ -88,10 +89,11 @@ function playingRow(page: Page): Locator {
 
 async function openMockAlbum(
 	{ page, guard, expectedRefusals }: Visitor,
-	albumSongs = mockSongs(3)
+	albumSongs = mockSongs(3),
+	artist = MOCK_ARTIST
 ): Promise<FlowGuard> {
 	expectedRefusals.push(MOCK_STREAM_REFUSAL);
-	await openMockSharedAlbum(page, albumSongs);
+	await openMockSharedAlbum(page, albumSongs, artist);
 	return guard;
 }
 
@@ -212,29 +214,26 @@ test.describe('before Play', () => {
 	});
 
 	test(
-		'1906_P3: at 390 the notice wraps below a long name line, whole',
+		'1906_P3: at 390 the notice wraps onto its own line below a long name, whole',
 		{ tag: ONLY_IN_SHELL.mobile },
 		async ({ visitor }) => {
-			await openMockAlbum(visitor);
+			const longName = Array(12).fill('A very long artist and album name').join(' ');
+			await openMockAlbum(visitor, mockSongs(3), longName);
 			const { page } = visitor;
 			const notice = page.getByText('KI-generiert', { exact: true });
-			const nameLine = page.locator('.cover-line').filter({ has: notice });
-			const longName = Array(12).fill('A very long artist and album name').join(' ');
-			const nameRows = await nameLine.evaluate((line, name) => {
-				const nameText = line.firstChild;
-				if (!nameText) throw new Error('the name line has no text');
-				nameText.textContent = `${name} `;
+			const nameText = page
+				.locator('.cover-line')
+				.filter({ has: notice })
+				.locator('> span')
+				.first();
+			const nameRows = await nameText.evaluate((text) => {
 				const range = document.createRange();
-				range.selectNodeContents(nameText);
-				return Array.from(range.getClientRects(), (rect) => ({
-					top: rect.top,
-					bottom: rect.bottom
-				}));
-			}, longName);
+				range.selectNodeContents(text);
+				return Array.from(range.getClientRects(), (rect) => rect.bottom);
+			});
 			const noticeBox = (await boundingBoxes(notice))[0];
-			const firstRowBottom = Math.min(...nameRows.map((row) => row.bottom));
 			expect(nameRows.length).toBeGreaterThan(1);
-			expect(noticeBox.y).toBeGreaterThanOrEqual(firstRowBottom);
+			expect(noticeBox.y).toBeGreaterThanOrEqual(Math.max(...nameRows) - 1);
 			expect(await notice.evaluate((badge) => badge.scrollWidth <= badge.clientWidth)).toBe(true);
 		}
 	);

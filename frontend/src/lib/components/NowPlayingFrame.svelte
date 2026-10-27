@@ -263,7 +263,7 @@
 				>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
 			>
 		{:else if albumLine}<span class="cover-line">{albumLine}</span>{/if}
-		<span class="cover-line">{showTakeLabel ? `${takeLabel} ` : ''}<AiNotice look="badge" /></span>
+		<span class="cover-line"><AiNotice look="badge" lead={showTakeLabel ? takeLabel : ''} /></span>
 	</div>
 {/snippet}
 
@@ -375,7 +375,7 @@
 	{#if collectionHead}
 		<div class="cover-meta">
 			<h1 class="cover-title">{collectionHead.title}</h1>
-			<span class="cover-line">{collectionHead.subtitle} <AiNotice look="badge" /></span>
+			<span class="cover-line"><AiNotice look="badge" lead={collectionHead.subtitle} /></span>
 			<span class="cover-line now-playing-line">{collectionHead.nowPlaying}</span>
 		</div>
 	{:else}

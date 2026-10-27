@@ -7,14 +7,19 @@
 		writing: 'Du schreibst mit einer KI'
 	} as const;
 
-	let { look }: { look: 'badge' | 'line' } = $props();
+	// A badge's lead text and the badge share one wrapping row: a long lead pushes the badge
+	// onto its own row, whole.
+	let { look, lead = '' }: { look: 'badge' | 'line'; lead?: string } = $props();
 </script>
 
 {#if look === 'badge'}
-	<span class="ai-notice badge" lang="de"
-		><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span
-		>{WORDS.generated}</span
-	>
+	<span class="row">
+		{#if lead}<span class="lead">{lead}</span>{/if}
+		<span class="ai-notice badge" lang="de"
+			><span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span
+			>{WORDS.generated}</span
+		>
+	</span>
 {:else}
 	<p class="ai-notice line" lang="de">
 		<span class="spark" aria-hidden="true"><Icon name="spark" size={14} /></span>{WORDS.writing}
@@ -35,6 +40,12 @@
 		display: inline-flex;
 		flex: none;
 		color: var(--primary);
+	}
+	.row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.2rem 0.6rem;
 	}
 	.badge {
 		padding: 0.1rem 0.6rem 0.1rem 0.5rem;
