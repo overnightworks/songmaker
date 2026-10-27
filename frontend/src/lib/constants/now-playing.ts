@@ -30,6 +30,27 @@ export function nowPlayingTakeLabel(
 	return versionNumber != null ? `v${versionNumber}${META_SEPARATOR}${takePart}` : takePart;
 }
 
+// The line the AI badge stands in: what plays (album and artist, unless the
+// source link names it) and, when asked, the take.
+export function nowPlayingNoticeLead(
+	info: {
+		albumTitle: string;
+		artist: string;
+		generation: { version_number: number | null; generation_number: number };
+	},
+	includeAlbumLine: boolean,
+	includeTake: boolean
+): string {
+	return [
+		...(includeAlbumLine ? [info.albumTitle, info.artist] : []),
+		...(includeTake
+			? [nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)]
+			: [])
+	]
+		.filter((part) => part.length > 0)
+		.join(META_SEPARATOR);
+}
+
 export const TAKE_SELECT_LABEL = 'Select';
 
 export const TAKE_SELECT_ALL_UNKEPT_LABEL = 'Select all unkept';

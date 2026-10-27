@@ -48,7 +48,7 @@ describe('NowPlayingFrame', () => {
 		expect(cover?.querySelector('img')).toHaveAttribute('src', '/cover.webp');
 	});
 	it.each([
-		{ name: 'a song page', props: { surface: 'page' as const }, line: null },
+		{ name: 'a song page', props: { surface: 'page' as const }, line: 'Night Drive' },
 		{
 			name: 'the full player',
 			props: { surface: 'full' as const, showTakeLabel: true },

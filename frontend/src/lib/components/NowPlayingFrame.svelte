@@ -28,9 +28,9 @@
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		NOW_PLAYING_Z_INDEX,
 		nowPlayingFromLabel,
+		nowPlayingNoticeLead,
 		nowPlayingOpenSourceLabel,
 		nowPlayingSheetCloseLabel,
-		nowPlayingTakeLabel,
 		type NowPlayingSource,
 		type NowPlayingSurfaceKind
 	} from '$lib/constants/now-playing';
@@ -171,12 +171,7 @@
 	let mobilePanelSeeded = false;
 	let mobileSheet: HTMLDivElement | undefined = $state();
 
-	const albumLine = $derived(
-		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
-	);
-	const takeLabel = $derived(
-		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
-	);
+	const noticeLead = $derived(nowPlayingNoticeLead(info, !(stacked && source), showTakeLabel));
 
 	// Before the player holds a take, the slider shows where it would start
 	// and how long it runs.
@@ -262,8 +257,8 @@
 				aria-label={nowPlayingOpenSourceLabel(source.kind, source.title)}
 				>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
 			>
-		{:else if albumLine}<span class="cover-line">{albumLine}</span>{/if}
-		<span class="cover-line"><AiNotice look="badge" lead={showTakeLabel ? takeLabel : ''} /></span>
+		{/if}
+		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
 	</div>
 {/snippet}
 
