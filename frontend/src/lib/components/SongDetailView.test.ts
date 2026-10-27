@@ -378,7 +378,7 @@ afterEach(async () => {
 });
 
 describe('SongDetailView header — one row, every state', () => {
-	it('shows the Recipe toggle and Generate alone, no Co-writer button, never a second toolbar row', async () => {
+	it('shows the Recipe toggle and Generate alone, no Co-writer button, never a second toolbar row (S9, #1927 acceptance 1)', async () => {
 		const target = await renderView();
 		const actions = header(target).querySelector<HTMLElement>('.editor-header-actions');
 		if (!actions) throw new Error('Expected header actions');
@@ -399,7 +399,7 @@ describe('SongDetailView header — one row, every state', () => {
 		expect(target.querySelector('.recipe-panel')).not.toBeNull();
 	});
 
-	it('opens the Co-writer in the right column while Style and Lyrics stay the growing document', async () => {
+	it('opens the Co-writer in the right column while Style and Lyrics stay the growing document (S9, #1927 acceptance 2)', async () => {
 		const target = await renderView();
 		expect(target.querySelector('.cowriter')).toBeNull();
 		const tab = target.querySelector<HTMLButtonElement>('[role="tab"][data-tab="cowriter"]');
@@ -433,7 +433,7 @@ describe('SongDetailView share link', () => {
 });
 
 describe('SongDetailView desktop vs compact layout', () => {
-	it('shows Write and the Takes · Co-writer tabs as two simultaneous columns on desktop', async () => {
+	it('shows Write and the Takes · Co-writer tabs as two simultaneous columns on desktop (S9, #1927 acceptance 1)', async () => {
 		const target = await renderView();
 		expect(target.querySelector('.editor-columns')).not.toBeNull();
 		const tabs = target.querySelectorAll('.editor-columns [role="tab"]');
@@ -1301,7 +1301,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 });
 
 describe('SongDetailView Co-writer tab with the Recipe open', () => {
-	it('shows the full recipe on the left and the chat on the right', async () => {
+	it('shows the full recipe on the left and the chat on the right (S9, #1927 acceptance 8)', async () => {
 		const target = await renderView();
 		detailTab.set('cowriter');
 		recipeOpen.set(true);

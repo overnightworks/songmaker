@@ -41,7 +41,9 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		workspace(page).getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true });
 	const composer = (page: Page) => workspace(page).getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
 
-	test('Takes is the default tab and the header holds no Co-writer button', async ({ page }) => {
+	test('Takes is the default tab and the header holds no Co-writer button (S9, #1927 acceptance 1)', async ({
+		page
+	}) => {
 		await openPickedSong(page);
 		await expect(takesTab(page)).toHaveAttribute('aria-selected', 'true');
 		await expect(
@@ -49,7 +51,9 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		).toHaveCount(0);
 	});
 
-	test('a draft typed in the Co-writer survives a visit to Takes', async ({ page }) => {
+	test('a draft typed in the Co-writer survives a visit to Takes (S9, #1927 acceptance 3)', async ({
+		page
+	}) => {
 		await openPickedSong(page);
 		await cowriterTab(page).click();
 		await composer(page).fill(DRAFT);
@@ -60,7 +64,9 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await expect(composer(page)).toHaveValue(DRAFT);
 	});
 
-	test('switching tabs adds no history entry and one Back leaves the song', async ({ page }) => {
+	test('switching tabs adds no history entry and one Back leaves the song (S9, #1927 acceptance 6)', async ({
+		page
+	}) => {
 		const library = await openPickedSong(page);
 		const entries = await page.evaluate(() => window.history.length);
 		await cowriterTab(page).click();
@@ -71,7 +77,7 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}$`));
 	});
 
-	test('a reload keeps the Co-writer tab', async ({ page }) => {
+	test('a reload keeps the Co-writer tab (S9, #1927 acceptance 5)', async ({ page }) => {
 		await openPickedSong(page);
 		await cowriterTab(page).click();
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
