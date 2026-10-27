@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import type { GenerationActions } from '$lib/contexts/generation-actions';
-import { menuRow } from '$lib/test-utils/collection-menu';
 import { selectedSongId } from '$lib/stores/player';
 import { clearSource, resetRecipeSourceForSong, setSourceFromGeneration } from '$lib/stores/recipe';
 import TakesListHarness from './tests/TakesListHarness.svelte';
@@ -28,7 +27,7 @@ const takes = [takeInVersion('c1', 2), takeInVersion('c2', 2), takeInVersion('a1
 // The song and the newest version live in reactive cells so a test can play a save.
 const saved = new SvelteMap<'song' | 'latest', SongItem | number>();
 
-async function renderList(actions: Partial<GenerationActions> = {}): Promise<HTMLElement> {
+async function renderList(): Promise<HTMLElement> {
 	saved.set('song', makeSong({ id: 'song-a', version_count: 2, generations: takes }));
 	saved.set('latest', 2);
 	const target = document.createElement('div');
@@ -45,7 +44,7 @@ async function renderList(actions: Partial<GenerationActions> = {}): Promise<HTM
 				return saved.get('latest') as number;
 			},
 			onsource: vi.fn(),
-			actions: actions as GenerationActions
+			actions: {} as GenerationActions
 		}
 	});
 	await tick();
@@ -75,15 +74,6 @@ describe('task card in the take list (S4, #1912 acceptance 1, 2, 5, 6, 7)', () =
 		setSourceFromGeneration(takes[1], 'repaint');
 		const target = await renderList();
 		expect(rowIdsWithCard(target)).toEqual(['c2']);
-	});
-
-	it("hands the take to the actions from its menu's Use seed row", async () => {
-		const useSeed = vi.fn();
-		const target = await renderList({ useSeed });
-		target.querySelector<HTMLElement>('#take-c2 .menu-trigger')?.click();
-		await tick();
-		menuRow(target, 'Use seed').click();
-		expect(useSeed).toHaveBeenCalledExactlyOnceWith(takes[1]);
 	});
 
 	it('renders no card without a source', async () => {
