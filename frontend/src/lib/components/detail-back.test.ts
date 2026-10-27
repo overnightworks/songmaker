@@ -134,7 +134,6 @@ describe('detail views own no content back', () => {
 		expect(generationTarget.querySelector('.take-label')?.textContent?.trim()).toBe('Take 1');
 		expect(generationTarget.textContent).toContain(EDITOR_STYLE_PROMPT_LABEL);
 		expect(generationTarget.textContent).toContain(EDITOR_LYRICS_LABEL);
-		expect(generationTarget.querySelector('.cowriter-chat')).toBeNull();
 	});
 
 	it('does not render a settings content back beside the shell', async () => {

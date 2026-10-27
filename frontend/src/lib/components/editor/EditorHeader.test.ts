@@ -2,7 +2,7 @@ import { makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EDITOR_VIEW_COWRITER_LABEL, HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -79,9 +79,7 @@ function defaultProps() {
 		onaddtoplaylist: vi.fn(),
 		ondeletesong: vi.fn(),
 		recipeOpen: false,
-		coWriterOpen: false,
 		ontogglerecipe: vi.fn(),
-		ontogglecowriter: vi.fn(),
 		saveDisabled: true,
 		onsave: vi.fn()
 	};
@@ -97,14 +95,13 @@ async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) 
 }
 
 describe('EditorHeader', () => {
-	it('renders one header row with stacked view toggles and Generate alone', async () => {
+	it('renders one header row with the Recipe toggle and Generate alone (S9, #1927 acceptance 1)', async () => {
 		const { target } = await render();
 		const rows = target.querySelectorAll('.detail-header');
 		expect(rows).toHaveLength(1);
 		const toggles = target.querySelectorAll('.view-toggle');
-		expect(toggles).toHaveLength(2);
-		expect(toggles[0].textContent).toContain(EDITOR_VIEW_COWRITER_LABEL);
-		expect(toggles[1].textContent).toContain('Recipe');
+		expect(toggles).toHaveLength(1);
+		expect(toggles[0].textContent).toContain('Recipe');
 		const generateButtons = target.querySelectorAll('.generate-action .primary-button');
 		expect(generateButtons).toHaveLength(1);
 		expect(generateButtons[0].textContent).toContain('Generate');
@@ -154,7 +151,7 @@ describe('EditorHeader', () => {
 	it('reflects toggle state via aria-pressed and calls the right handler', async () => {
 		const ontogglerecipe = vi.fn();
 		const { target } = await render({ ontogglerecipe, recipeOpen: true });
-		const recipeToggle = target.querySelectorAll<HTMLButtonElement>('.view-toggle')[1];
+		const recipeToggle = target.querySelectorAll<HTMLButtonElement>('.view-toggle')[0];
 		expect(recipeToggle.getAttribute('aria-pressed')).toBe('true');
 		recipeToggle.click();
 		expect(ontogglerecipe).toHaveBeenCalledTimes(1);

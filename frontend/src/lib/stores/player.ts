@@ -1336,7 +1336,7 @@ export function escapeNowPlaying(): void {
 
 const PLAYBACK_FAILED_TOAST = 'Playback failed';
 
-// The single playback entry point for a take row (TakesList, TakeStrip):
+// The single playback entry point for a take row (TakesList):
 // toggles pause if the row's take is already playing, otherwise starts a
 // queue from it (its album, else the library pool), reporting any failure as
 // a toast instead of throwing into the caller.
