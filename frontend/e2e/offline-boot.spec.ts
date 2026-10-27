@@ -2,10 +2,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { HOME_PATH, offlineStrip, waitForServiceWorkerControl } from './helpers';
 import { readSeededLibrary } from './seed';
 
-/** The kit's look as the offline page shows it: both faces loaded from the shell cache, the token set. */
+/** The kit's look as the offline page shows it: both faces loadable from the shell cache, the token set. */
 async function offlineLook(page: Page) {
 	return page.evaluate(async () => {
-		await document.fonts.ready;
+		// check() is false for a declared face the page has not used yet, so ask the shell cache to load both.
+		await Promise.all([
+			document.fonts.load('700 16px Oswald'),
+			document.fonts.load('400 16px "Open Sans"')
+		]);
 		return {
 			displayFace: document.fonts.check('700 16px Oswald'),
 			bodyFace: document.fonts.check('400 16px "Open Sans"'),
