@@ -7,6 +7,7 @@ the fake issuer's, so every ID token is verified as in production.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,6 +23,7 @@ from fake_oidc_issuer import Person
 from httpx import Response
 from oidc_world import World
 
+from songmaker_cli.constants import LOGOUT_BUTTON_LABEL
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
 
 MEMBER = "/apps/songmaker"
@@ -29,8 +31,6 @@ ADMIN = "/apps/songmaker/admin"
 SUBJECT = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
 OTHER_SUBJECT = "0a9b8c7d-dddd-4eee-8fff-ba9876543210"
 SESSION_COOKIE = "__Host-session_id"
-CSRF_COOKIE = "__Host-csrf_token"
-HINT_COOKIE = "__Secure-oidc_id_token_hint"
 PENDING_PREFIX = "__Host-oidc_pending_"
 SHELL = "<html>Songmaker</html>"
 SIGN_IN_ROUTES = ("/login/oidc", "/auth/callback", "/auth/logout")
@@ -265,36 +265,71 @@ def _same_origin() -> dict[str, str]:
     return {"origin": TEST_ORIGIN}
 
 
-def test_logging_out_ends_the_session_clears_the_cookies_and_returns_the_hinted_url(
+def _stored_id_token(world: World) -> str:
+    with world.factory() as session:
+        return session.query(UserSession).one().id_token.get_secret_value()
+
+
+def _hidden_fields(page: Response) -> dict[str, str]:
+    return dict(re.findall(r'<input type="hidden" name="([^"]+)" value="([^"]*)">', page.text))
+
+
+def test_logging_out_ends_the_session_and_answers_the_page_that_posts_the_stored_token(
     world: World,
 ) -> None:
     world.sign_in(_member())
     session_cookie = world.client.cookies.get(SESSION_COOKIE)
+    stored_token = _stored_id_token(world)
 
     response = world.client.post("/auth/logout", headers=_same_origin())
 
     assert response.status_code == 200
-    logout_url = response.json()["logout_url"]
-    assert logout_url.startswith("https://issuer.test/realms/test/protocol/openid-connect/logout?")
-    assert "id_token_hint=" in logout_url
-    assert "client_id=songmaker-test" in logout_url
-    assert all(
-        _cleared(response, prefix) for prefix in (SESSION_COOKIE, CSRF_COOKIE, HINT_COOKIE)
+    assert response.headers["content-type"].startswith("text/html")
+    assert (
+        'action="https://issuer.test/realms/test/protocol/openid-connect/logout"' in response.text
     )
+    assert _hidden_fields(response) == {
+        "client_id": "songmaker-test",
+        "post_logout_redirect_uri": "https://songmaker.test/login",
+        "id_token_hint": stored_token,
+    }
+    assert f">{LOGOUT_BUTTON_LABEL}</button>" in response.text
+    assert _cleared(response, SESSION_COOKIE)
     assert world.session_count() == 0
     reused = web_client(world.client.app, cookies={SESSION_COOKIE: session_cookie})
     assert reused.get("/api/auth/me").status_code == 401
 
 
-def test_logging_out_without_a_session_still_clears_cookies_and_returns_the_url(
+def test_logging_out_without_a_session_still_clears_the_cookie_and_posts_no_hint(
     world: World,
 ) -> None:
     response = world.client.post("/auth/logout", headers=_same_origin())
 
     assert response.status_code == 200
-    assert "id_token_hint=" not in response.json()["logout_url"]
-    assert all(
-        _cleared(response, prefix) for prefix in (SESSION_COOKIE, CSRF_COOKIE, HINT_COOKIE)
+    assert "id_token_hint" not in _hidden_fields(response)
+    assert _cleared(response, SESSION_COOKIE)
+
+
+def test_logging_out_a_row_from_before_the_upgrade_posts_no_hint(world: World) -> None:
+    world.sign_in(_member())
+    with world.factory() as session:
+        session.query(UserSession).one().stored_id_token = None
+        session.commit()
+
+    response = world.client.post("/auth/logout", headers=_same_origin())
+
+    assert "id_token_hint" not in _hidden_fields(response)
+    assert world.session_count() == 0
+
+
+def test_the_logout_answer_is_not_stored_and_carries_its_own_policy(world: World) -> None:
+    world.sign_in(_member())
+
+    response = world.client.post("/auth/logout", headers=_same_origin())
+
+    assert response.headers["cache-control"] == "no-store"
+    assert "form-action https://issuer.test https://songmaker.test" in (
+        response.headers["content-security-policy"]
     )
 
 
@@ -311,16 +346,20 @@ def test_logging_out_is_post_only(world: World) -> None:
     assert world.client.get("/auth/logout").status_code == 405
 
 
-def test_the_token_exemption_covers_the_logout_and_the_workers_only(world: World) -> None:
+def test_a_write_needs_the_browser_to_say_it_is_same_origin_and_no_token(world: World) -> None:
     world.seed(SUBJECT, "felix", "admin")
     login_and_csrf(world.client, "felix")
-    del world.client.headers["X-CSRF-Token"]
 
-    refused = world.client.post("/api/albums", json={"title": "A"}, headers=_same_origin())
-    worker = world.client.post("/api/internal/workers/register", json={})
+    same_origin = world.client.post("/api/albums", json={"title": "A"})
+    cross_site = world.client.post(
+        "/api/albums", json={"title": "A"}, headers={"Sec-Fetch-Site": "cross-site"},
+    )
+    no_site = world.client.post(
+        "/api/albums", json={"title": "A"}, headers={"Sec-Fetch-Site": "none"},
+    )
 
-    assert refused.status_code == 403
-    assert worker.status_code != 403
+    assert same_origin.status_code != 403
+    assert (cross_site.status_code, no_site.status_code) == (403, 403)
 
 
 # -- M18: callers without a session ----------------------------------------------
@@ -365,11 +404,7 @@ def test_the_cookies_carry_the_flags_the_library_defines(world: World) -> None:
     cookies = _set_cookies(admitted)
     assert {"Secure", "HttpOnly", "SameSite=lax", "Path=/"} <= _flags(pending)
     assert {"Secure", "HttpOnly", "SameSite=strict", "Path=/"} <= _flags(cookies[SESSION_COOKIE])
-    assert {"Secure", "SameSite=strict", "Path=/"} <= _flags(cookies[CSRF_COOKIE])
-    assert "HttpOnly" not in _flags(cookies[CSRF_COOKIE])
-    assert {"Secure", "HttpOnly", "SameSite=strict", "Path=/auth/logout"} <= _flags(
-        cookies[HINT_COOKIE],
-    )
+    assert not [name for name in cookies if not name.startswith((SESSION_COOKIE, PENDING_PREFIX))]
 
 
 def _flags(set_cookie: str) -> set[str]:
@@ -506,6 +541,36 @@ def test_a_sign_in_keeps_the_issued_refresh_token_in_the_session_row(world: Worl
     assert stored is not None
     assert stored.get_secret_value() == "rt-0123456789-stored"
     assert "rt-0123456789-stored" not in repr(stored)
+
+
+def test_a_sign_in_keeps_the_id_token_in_the_session_row_and_sets_only_the_session_cookie(
+    world: World,
+) -> None:
+    response = world.sign_in(_member())
+
+    with world.factory() as session:
+        stored = session.query(UserSession).one().id_token
+    assert stored is not None
+    assert stored.get_secret_value().count(".") == 2
+    assert "eyJ" not in repr(stored)
+    assert set(_set_cookies(response)) == {SESSION_COOKIE, next(
+        name for name in _set_cookies(response) if name.startswith(PENDING_PREFIX)
+    )}
+
+
+def test_the_id_token_is_in_no_log_and_no_url_of_the_sign_in_and_the_sign_out(
+    world: World, caplog,
+) -> None:
+    with caplog.at_level("DEBUG"):
+        signed_in = world.sign_in(_member())
+        token = _stored_id_token(world)
+        signed_out = world.client.post("/auth/logout", headers=_same_origin())
+
+    assert token not in caplog.text
+    assert token not in str(signed_in.headers)
+    assert token not in str(signed_out.headers)
+    assert token not in str(signed_out.url)
+    assert token in signed_out.text
 
 
 def test_health_carries_neither_the_secret_nor_the_path_it_is_read_from(world: World) -> None:

@@ -58,7 +58,6 @@ def _seed_owner(session) -> None:
 def _authed_app(tmp_path: Path) -> TestClient:
     client, _ = make_test_app(tmp_path, seed_db=_seed_owner)
     login_and_csrf(client, "owner")
-    client.headers["Origin"] = "http://127.0.0.1:8080"
     return client
 
 
@@ -78,7 +77,6 @@ def test_create_app_accepts_2mib_reference_audio(tmp_path: Path) -> None:
 def test_create_app_accepts_2mib_lora_sample(tmp_path: Path) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_owner)
     login_and_csrf(client, "owner")
-    client.headers["Origin"] = "http://127.0.0.1:8080"
     with factory() as session:
         lora = create_user_lora(session, "owner-id", "Voice", "v")
         session.commit()

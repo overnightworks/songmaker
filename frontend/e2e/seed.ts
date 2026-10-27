@@ -27,10 +27,8 @@ const COMPOSE_ARGS = ['compose', '-f', 'docker-compose.yml', '-f', 'docker/docke
 export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
 export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
 
-const CSRF_COOKIE = 'csrf_token';
 // The app's own take address (`audioUrlOf` in `services/audioPlayer.svelte.ts`).
 const AUDIO_PATH_PREFIX = '/audio/';
-const CSRF_HEADER = 'x-csrf-token';
 
 const ALBUM_ARTIST = 'E2E Ensemble';
 // Fixed titles: only one album is ever open at a time, so they stay unique on
@@ -316,17 +314,11 @@ async function archivePreviousE2EAlbums(): Promise<void> {
 }
 
 class SeedApi {
-	constructor(
-		private readonly api: APIRequestContext,
-		private readonly csrfToken: string
-	) {}
+	constructor(private readonly api: APIRequestContext) {}
 
 	/** Seeds from a context that already carries a seeded session (`seedAccount`). */
-	static async fromSession(api: APIRequestContext): Promise<SeedApi> {
-		const { cookies } = await api.storageState();
-		const csrf = cookies.find((cookie) => cookie.name === CSRF_COOKIE);
-		if (!csrf) throw new Error('Context carries no CSRF cookie');
-		return new SeedApi(api, csrf.value);
+	static fromSession(api: APIRequestContext): Promise<SeedApi> {
+		return Promise.resolve(new SeedApi(api));
 	}
 
 	async postJson<T>(url: string, data: unknown): Promise<T> {
@@ -347,7 +339,7 @@ class SeedApi {
 
 	async delete(url: string): Promise<void> {
 		const response = await this.api.delete(url, {
-			headers: { [CSRF_HEADER]: this.csrfToken, origin: BASE_URL }
+			headers: { origin: BASE_URL }
 		});
 		if (!response.ok()) {
 			throw new Error(`DELETE ${url} failed: ${response.status()} ${await response.text()}`);
@@ -359,9 +351,9 @@ class SeedApi {
 		body: { data?: unknown; multipart?: Record<string, MultipartFile> }
 	): Promise<T> {
 		const response = await this.api.post(url, {
-			// The origin header is what the CSRF origin check reads on a form
-			// submission; without it a multipart upload is rejected with 403.
-			headers: { [CSRF_HEADER]: this.csrfToken, origin: BASE_URL },
+			// Playwright's request context sends no fetch metadata, so the origin
+			// header is what the origin check reads; without it a write gets 403.
+			headers: { origin: BASE_URL },
 			...body
 		});
 		if (!response.ok()) {
@@ -948,8 +940,6 @@ interface SeededSessionRow {
 	username: string;
 	session_cookie_name: string;
 	session_cookie_value: string;
-	csrf_cookie_name: string;
-	csrf_cookie_value: string;
 	secure: boolean;
 	same_site: 'strict' | 'lax';
 }
@@ -962,7 +952,7 @@ const SEED_SESSIONS_REQUEST_VARIABLE = 'SEED_SESSIONS_REQUEST';
  * request in the environment) and returns its last stdout line, the JSON result.
  */
 async function runSeedSessions(sessionRequest: {
-	seed?: Array<{ username: string; role?: AccountRole }>;
+	seed?: Array<{ username: string; role?: AccountRole; without_id_token?: boolean }>;
 }): Promise<SeededSessionRow[]> {
 	try {
 		const { stdout } = await execWithStdin(
@@ -1002,22 +992,23 @@ function sessionCookies(row: SeededSessionRow): Cookie[] {
 			name: row.session_cookie_name,
 			value: row.session_cookie_value,
 			httpOnly: true
-		},
-		{ ...shared, name: row.csrf_cookie_name, value: row.csrf_cookie_value, httpOnly: false }
+		}
 	];
 }
 
 /**
  * Signs `username` in without Keycloak: the account is found or
  * created and given a database session straight from the stack's own side, so
- * the app itself signs the cookies. The throwaway stack drops the account
+ * the app itself signs the cookies, and the row holds an ID token unless
+ * `without_id_token` says it predates the upgrade. The throwaway stack drops the account
  * with the run.
  */
 export async function seedAccount(
 	username: string,
-	role: AccountRole = NON_ADMIN_ROLE
+	role: AccountRole = NON_ADMIN_ROLE,
+	without_id_token = false
 ): Promise<SeededAccount> {
-	const [row] = await runSeedSessions({ seed: [{ username, role }] });
+	const [row] = await runSeedSessions({ seed: [{ username, role, without_id_token }] });
 	return { id: row.user_id, username: row.username, cookies: sessionCookies(row) };
 }
 

@@ -56,7 +56,6 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
         rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
         trusted_proxies=ctx.trusted_proxies,
         allowed_hosts_exact=frozenset(allowed_hosts(settings)),
-        allowed_hosts_patterns=(),
         session_lifetime=SessionLifetime(
             idle_seconds=settings.session_idle_seconds,
             absolute_max_age_seconds=settings.session_absolute_max_age_seconds,

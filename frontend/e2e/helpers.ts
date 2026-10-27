@@ -418,13 +418,9 @@ export async function openPlaylistsPage(page: Page, shell: Shell): Promise<void>
 	await expect(page).toHaveURL(/\/playlists$/);
 }
 
-/** Headers a browser session's own out-of-page API write needs past the CSRF guard. */
-export async function csrfHeaders(page: Page): Promise<Record<string, string>> {
-	const csrf = (await page.context().cookies(BASE_URL)).find(
-		(cookie) => cookie.name === 'csrf_token'
-	);
-	if (!csrf) throw new Error('The E2E session has no CSRF token');
-	return { 'x-csrf-token': csrf.value, origin: BASE_URL };
+/** Headers a browser session's own out-of-page API write needs past the origin check. */
+export async function csrfHeaders(_page: Page): Promise<Record<string, string>> {
+	return { origin: BASE_URL };
 }
 
 /** The desktop rail; phone callers use tabs or Search. */

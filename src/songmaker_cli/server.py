@@ -70,7 +70,6 @@ from songmaker_cli.request_policies import (
     SPA_SHELL_HEADERS,
     build_body_size_policy,
     build_csrf_origin_policy,
-    build_csrf_token_policy,
     build_rate_limit_policy,
     build_security_headers_policy,
 )
@@ -241,9 +240,8 @@ def create_app(
     #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
     #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
     #   7. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #   8. CsrfTokenMiddleware        -- verify double-submit CSRF token
-    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #  10. AccessLogMiddleware        -- log all requests (after security checks)
+    #   8. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #   9. AccessLogMiddleware        -- log all requests (after security checks)
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the true outermost layer) and outside everything else, on purpose:
@@ -273,7 +271,6 @@ def create_app(
         body_size=build_body_size_policy(settings),
         rate_limit=build_rate_limit_policy(settings),
         csrf_origin=build_csrf_origin_policy(),
-        csrf_token=build_csrf_token_policy(),
     )
 
     app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
@@ -419,7 +416,7 @@ def _cors_middleware_kwargs(cors_origin: str | None) -> dict:
 
     cors_kwargs: dict = {
         "allow_methods": ["GET", "POST", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Cookie", "X-CSRF-Token"],
+        "allow_headers": ["Content-Type", "Cookie"],
         "allow_credentials": True,
     }
     if cors_origin:

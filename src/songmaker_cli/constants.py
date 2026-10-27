@@ -266,6 +266,8 @@ OIDC_LEEWAY_SECONDS: Final = 30
 OIDC_START_PATH: Final = "/login/oidc"
 OIDC_CALLBACK_PATH: Final = "/auth/callback"
 LOGOUT_PATH: Final = "/auth/logout"
+# Shown on the logout page only where no script runs; the SPA's account menu words the same button.
+LOGOUT_BUTTON_LABEL: Final = "Sign out"
 SIGNED_OUT_PATH: Final = "/login"
 NO_ACCESS_PATH: Final = "/no-access"
 

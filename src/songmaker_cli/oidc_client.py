@@ -20,7 +20,6 @@ from webauth.oidc_transport import post_token_request_over_https
 
 from songmaker_cli.api_helpers import resolve_public_base_url
 from songmaker_cli.constants import (
-    LOGOUT_PATH,
     OIDC_ADMIN_GROUP,
     OIDC_CALLBACK_PATH,
     OIDC_LEEWAY_SECONDS,
@@ -76,7 +75,6 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         client_secret=read_client_secret(settings.oidc_client_secret_file),
         redirect_uri=f"{public_base_url}{OIDC_CALLBACK_PATH}",
         post_logout_redirect_uri=f"{public_base_url}{SIGNED_OUT_PATH}",
-        logout_path=LOGOUT_PATH,
         leeway_seconds=OIDC_LEEWAY_SECONDS,
     )
 

@@ -7,11 +7,12 @@ mounted. The script itself arrives on stdin and the request as JSON in the
     docker compose exec -T -e SEED_SESSIONS_REQUEST='{"seed": [{"username": "e2e-x"}]}' \
         songmaker-web /app/.venv/bin/python - < seed_sessions.py
 
-A request holds ``seed`` (entries ``username`` and optional ``role``).
+A request holds ``seed`` (entries ``username``, optional ``role`` and optional
+``without_id_token``, which opens a session as one from before the upgrade holds it).
 
 ``seed`` finds or creates each account and opens a database session for it,
-printing the signed session cookie and CSRF cookie exactly as the app issues
-them after a Keycloak login. The stack has no admin bootstrap, so this is the
+printing the signed session cookie exactly as the app issues it after a
+Keycloak login; the row holds an ID token unless the entry says otherwise. The stack has no admin bootstrap, so this is the
 only place an e2e admin account comes into being. The helper never ships: it
 lives outside ``scripts/``, which the image copies.
 """
@@ -26,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 from http.cookies import SimpleCookie
 from pathlib import Path
 
+from pydantic import SecretStr
 from starlette.responses import Response
 from webauth.config import WebAuthConfig
 from webauth.cookies import issue_session_cookies
@@ -76,6 +78,7 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
         now=now,
         expires_at=now + timedelta(seconds=config.session_lifetime.idle_seconds),
         refresh_token=None,
+        id_token=None if entry.get("without_id_token") else SecretStr(f"e2e-id-token-{user.username}"),
     )
     cookies = _issued_cookies(record.id, config)
     return {
@@ -83,8 +86,6 @@ def _seed(session, config: WebAuthConfig, entry: dict[str, str]) -> dict[str, st
         "username": user.username,
         "session_cookie_name": config.session_cookie_name,
         "session_cookie_value": cookies[config.session_cookie_name].value,
-        "csrf_cookie_name": config.csrf_cookie_name,
-        "csrf_cookie_value": cookies[config.csrf_cookie_name].value,
         "secure": config.cookie_secure,
         "same_site": config.cookie_samesite,
     }
