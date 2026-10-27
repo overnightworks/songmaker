@@ -183,4 +183,21 @@ describe('ParamControls change marks', () => {
 		resets[0].click();
 		expect(onresetfield).toHaveBeenCalledWith('lm_temperature');
 	});
+
+	it('keeps a changed field labelled by its name, and clicking the name resets nothing', async () => {
+		const onresetfield = vi.fn();
+		const target = await renderControls(false, LOADED_PLACEHOLDERS, {
+			values: { lm_temperature: 0.5 },
+			changedKeys: new Set(['lm_temperature']),
+			onresetfield
+		});
+		const input = [...target.querySelectorAll<HTMLInputElement>('input[type="number"]')].find(
+			(candidate) => candidate.value === '0.5'
+		)!;
+		const label = input.labels?.[0];
+		expect(label?.textContent).toMatch(/temperature/i);
+		label!.click();
+		expect(onresetfield).not.toHaveBeenCalled();
+		expect(input.value).toBe('0.5');
+	});
 });

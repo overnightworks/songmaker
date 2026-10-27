@@ -102,6 +102,12 @@
 		return value;
 	}
 
+	const idPrefix = $props.id();
+
+	function fieldId(key: keyof VersionGenerationParams): string {
+		return `${idPrefix}-${key}`;
+	}
+
 	function fieldErrorMessage(key: keyof VersionGenerationParams): string {
 		return `${DEFAULT_MISSING_PREFIX} ${key}`;
 	}
@@ -114,7 +120,7 @@
 
 {#snippet fieldHead(key: keyof VersionGenerationParams, label: string)}
 	<span class="setting-head"
-		><span>{label}</span>
+		><label for={fieldId(key)}>{label}</label>
 		{#if changedKeys?.has(key)}
 			<i class="changed-dot" data-field-changed aria-hidden="true"></i>
 			<button
@@ -138,9 +144,10 @@
 
 {#snippet numberField(f: NumberParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
-		<label class="setting" title={tooltip(f.key)}>
+		<div class="setting" title={tooltip(f.key)}>
 			{@render fieldHead(f.key, f.label)}
 			<input
+				id={fieldId(f.key)}
 				type="number"
 				min={f.min}
 				max={f.max}
@@ -150,7 +157,7 @@
 				title={tooltip(f.key)}
 				oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
 			/>
-		</label>
+		</div>
 		{#snippet failed()}
 			{@render fieldError(f)}
 		{/snippet}
@@ -159,9 +166,10 @@
 
 {#snippet selectField(f: SelectParamField)}
 	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
-		<label class="setting" title={tooltip(f.key)}>
+		<div class="setting" title={tooltip(f.key)}>
 			{@render fieldHead(f.key, f.label)}
 			<select
+				id={fieldId(f.key)}
 				value={values[f.key] ?? ''}
 				title={tooltip(f.key)}
 				onchange={(e) => setParam(f.key, e.currentTarget.value || undefined)}
@@ -173,7 +181,7 @@
 					<option value={opt}>{opt}</option>
 				{/each}
 			</select>
-		</label>
+		</div>
 		{#snippet failed()}
 			{@render fieldError(f)}
 		{/snippet}
@@ -181,22 +189,24 @@
 {/snippet}
 
 {#snippet textField(f: TextParamField)}
-	<label class="setting full-width" title={tooltip(f.key)}>
+	<div class="setting full-width" title={tooltip(f.key)}>
 		{@render fieldHead(f.key, f.label)}
 		<input
+			id={fieldId(f.key)}
 			type="text"
 			value={(values[f.key] as string | null | undefined) ?? ''}
 			placeholder={f.placeholder}
 			title={tooltip(f.key)}
 			oninput={(e) => setParam(f.key, e.currentTarget.value || undefined)}
 		/>
-	</label>
+	</div>
 {/snippet}
 
 {#snippet boolField(f: BoolParamField)}
-	<label class="setting toggle" title={tooltip(f.key)}>
+	<div class="setting toggle" title={tooltip(f.key)}>
 		{@render fieldHead(f.key, f.label)}
 		<input
+			id={fieldId(f.key)}
 			type="checkbox"
 			checked={(values[f.key] as boolean | null | undefined) ?? f.defaultValue}
 			title={tooltip(f.key)}
@@ -205,7 +215,7 @@
 				setParam(f.key, checked === f.defaultValue ? undefined : checked);
 			}}
 		/>
-	</label>
+	</div>
 {/snippet}
 
 <div class="param-controls" class:compact>
@@ -284,7 +294,8 @@
 		min-width: 0;
 	}
 
-	.setting span {
+	.setting span,
+	.setting label {
 		font-size: var(--label-font-size);
 		color: var(--text-muted);
 		text-transform: uppercase;
