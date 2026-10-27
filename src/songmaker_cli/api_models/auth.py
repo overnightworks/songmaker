@@ -1,4 +1,4 @@
-"""Auth API models — the signed-in account and the sign-out answer."""
+"""Auth API models — the signed-in account."""
 
 from __future__ import annotations
 
@@ -13,7 +13,3 @@ class AuthMeResponse(BaseModel):
     role: Literal["admin", "user"]
     # The identity provider's account console; null where no issuer is configured.
     account_console_url: str | None = None
-
-
-class LogoutResponse(BaseModel):
-    logout_url: str

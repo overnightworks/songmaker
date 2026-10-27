@@ -38,6 +38,7 @@
 	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import AiNotice from './AiNotice.svelte';
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import NowPlayingLyrics from './NowPlayingLyrics.svelte';
@@ -176,7 +177,7 @@
 	const takeLabel = $derived(
 		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
 	);
-
+	const noticeLead = $derived(showTakeLabel ? takeLabel : stacked && source ? '' : albumLine);
 	// Before the player holds a take, the slider shows where it would start
 	// and how long it runs.
 	const duration = $derived(
@@ -261,8 +262,8 @@
 				aria-label={nowPlayingOpenSourceLabel(source.kind, source.title)}
 				>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
 			>
-		{:else if albumLine}<span class="cover-line">{albumLine}</span>{/if}
-		{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
+		{:else if albumLine && showTakeLabel}<span class="cover-line">{albumLine}</span>{/if}
+		<span class="cover-line"><AiNotice look="badge" lead={noticeLead} /></span>
 	</div>
 {/snippet}
 
@@ -295,6 +296,20 @@
 	{/if}
 {/snippet}
 
+{#snippet iconButton(icon: string, label: string, onclick?: () => void, disabled = false)}
+	<button
+		type="button"
+		class="icon-btn"
+		style:min-width="{HITBOX_FREQUENT_PX}px"
+		style:min-height="{HITBOX_FREQUENT_PX}px"
+		{onclick}
+		{disabled}
+		aria-label={label}
+	>
+		<Icon name={icon} size={20} />
+	</button>
+{/snippet}
+
 <!-- Play sits on the column's centre line: two equal sides around it, the
 	right one closed by an empty square where no repeat control is. With no
 	control beside it, Play stands alone. -->
@@ -318,33 +333,13 @@
 					</button>
 				{/if}
 				{#if onprev}
-					<button
-						type="button"
-						class="icon-btn"
-						style:min-width="{HITBOX_FREQUENT_PX}px"
-						style:min-height="{HITBOX_FREQUENT_PX}px"
-						onclick={onprev}
-						disabled={!canPrev}
-						aria-label={SONG_PREVIOUS_LABEL}
-					>
-						<Icon name="skip-back" size={20} />
-					</button>
+					{@render iconButton('skip-back', SONG_PREVIOUS_LABEL, onprev, !canPrev)}
 				{/if}
 			</div>
 			{@render playButton()}
 			<div class="transport-side after">
 				{#if onnext}
-					<button
-						type="button"
-						class="icon-btn"
-						style:min-width="{HITBOX_FREQUENT_PX}px"
-						style:min-height="{HITBOX_FREQUENT_PX}px"
-						onclick={onnext}
-						disabled={!canNext}
-						aria-label={SONG_NEXT_LABEL}
-					>
-						<Icon name="skip-forward" size={20} />
-					</button>
+					{@render iconButton('skip-forward', SONG_NEXT_LABEL, onnext, !canNext)}
 				{/if}
 				<span
 					class="transport-slot"
@@ -375,7 +370,7 @@
 	{#if collectionHead}
 		<div class="cover-meta">
 			<h1 class="cover-title">{collectionHead.title}</h1>
-			<span class="cover-line">{collectionHead.subtitle}</span>
+			<span class="cover-line"><AiNotice look="badge" lead={collectionHead.subtitle} /></span>
 			<span class="cover-line now-playing-line">{collectionHead.nowPlaying}</span>
 		</div>
 	{:else}
@@ -444,16 +439,7 @@
 							>{NOW_PLAYING_COLLAPSE_LABEL}</button
 						>
 					{/if}
-					<button
-						type="button"
-						class="icon-btn"
-						style:min-width="{HITBOX_FREQUENT_PX}px"
-						style:min-height="{HITBOX_FREQUENT_PX}px"
-						onclick={onclose}
-						aria-label={NOW_PLAYING_CLOSE}
-					>
-						<Icon name="x" size={20} />
-					</button>
+					{@render iconButton('x', NOW_PLAYING_CLOSE, onclose)}
 				</div>
 			</header>
 
@@ -945,6 +931,7 @@
 	}
 	.now-playing.page .cover-meta {
 		align-items: flex-start;
+		--ai-row-justify: flex-start;
 		gap: 0.4rem;
 		text-align: left;
 	}
@@ -1020,6 +1007,7 @@
 		.now-playing.page.stacked .np-player-col,
 		.now-playing.page.stacked .cover-meta {
 			align-items: center;
+			--ai-row-justify: center;
 			text-align: center;
 		}
 		.now-playing.page.stacked .transport.solo {

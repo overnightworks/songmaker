@@ -174,6 +174,16 @@ def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path) -> None:
     assert resp.headers["content-type"] == "font/woff2"
 
 
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [("/", "no-cache"), ("/x", "no-cache"), ("/api/x", "no-store"), ("/_app/c.js", None)],
+)
+def test_cache_control_per_response_kind(tmp_path: Path, path: str, expected: str | None) -> None:
+    """defect:#1899 The SPA shell is revalidated at every load; build files keep their caching."""
+    client = _sveltekit_app_client(tmp_path, {"c.js": b"// chunk"})
+    assert client.get(path).headers.get("Cache-Control") == expected
+
+
 def test_get_audio_path_traversal_denied(server_app: TestClient) -> None:
     resp = server_app.get("/audio/admin-user-id/..%2F..%2Fetc%2Fpasswd")
     assert resp.status_code in (403, 404)
@@ -448,29 +458,11 @@ def test_csrf_origin_check_rejects_cross_origin(server_app: TestClient) -> None:
     assert "Cross-origin" in resp.json()["detail"]
 
 
-def test_csrf_rejects_form_submit_without_origin(server_app: TestClient) -> None:
-    resp = server_app.post(
-        "/api/songs",
-        content=b"title=X&album_id=test_album",
-        headers={"content-type": "application/x-www-form-urlencoded"},
-    )
-    assert resp.status_code == 403
-    assert "Missing Origin" in resp.json()["detail"]
-
-
-def test_csrf_allows_json_without_origin(server_app: TestClient) -> None:
-    resp = server_app.post(
-        "/api/songs",
-        json={"title": "X", "album_id": "test_album"},
-    )
-    assert resp.status_code == 200
-
-
 def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
     resp = server_app.post(
         "/api/songs",
         json={"title": "New Song", "album_id": "test_album"},
-        headers={"origin": "http://localhost:8080"},
+        headers={"origin": "https://localhost:8080"},
     )
     assert resp.status_code == 200
 
@@ -478,11 +470,11 @@ def test_csrf_origin_check_allows_same_origin(server_app: TestClient) -> None:
 @pytest.mark.parametrize(
     ("fetch_site", "origin", "expected_status"),
     [
-        ("same-origin", "http://localhost:8080", 200),
+        ("same-origin", "https://localhost:8080", 200),
         ("same-origin", "http://evil.example.com", 200),
-        ("cross-site", "http://localhost:8080", 403),
-        ("none", "http://localhost:8080", 403),
-        ("same-site", "http://localhost:8080", 200),
+        ("cross-site", "https://localhost:8080", 403),
+        ("none", "https://localhost:8080", 403),
+        ("same-site", "https://localhost:8080", 200),
         ("same-site", "http://evil.example.com", 403),
     ],
 )
@@ -557,16 +549,6 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> 
             headers={"origin": "https://evil.com"},
         )
         assert resp.status_code == 403
-
-
-def test_cache_control_on_api_responses(server_app: TestClient) -> None:
-    resp = server_app.get("/api/songs")
-    assert resp.headers.get("Cache-Control") == "no-store"
-
-
-def test_no_cache_control_on_non_api(server_app: TestClient) -> None:
-    resp = server_app.get("/")
-    assert "no-store" not in resp.headers.get("Cache-Control", "")
 
 
 def test_body_size_limit_rejects_large_content_length(server_app: TestClient) -> None:
@@ -967,10 +949,11 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
     assert "Access-Control-Allow-Origin" not in rejected_response.headers
 
 
-# ── Wildcard ALLOWED_HOSTS pattern ─────────────────────────────────
+# ── Wildcard ALLOWED_HOSTS refusal ─────────────────────────────────
 
-
-def test_wildcard_allowed_host_pattern(tmp_path: Path, fresh_settings) -> None:
+@pytest.mark.parametrize("allowed_hosts", ["*.trycloudflare.com,testserver", "*"])
+def test_wildcard_allowed_host_raises_at_startup(tmp_path: Path, fresh_settings, allowed_hosts):
+    """defect:#1891 -- startup refuses a wildcard ALLOWED_HOSTS entry."""
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -980,41 +963,18 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path, fresh_settings) -> None:
     sk_dir.mkdir(parents=True)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
-    factory = init_db(data_dir / "songmaker.db")
-    with factory() as session:
-        admin = User(username="admin4", role="admin")
-        session.add(admin)
-        album = Album(id="a1", title="A", artist="A")
-        session.add(album)
-        session.commit()
+    ctx = AppContext(
+        db=init_db(data_dir / "songmaker.db"),
+        audio_dir=audio_dir,
+        data_dir=data_dir,
+        signing_key=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
 
-    with patch.dict("os.environ", {"ALLOWED_HOSTS": "*.trycloudflare.com,testserver"}):
+    with patch.dict("os.environ", {"ALLOWED_HOSTS": allowed_hosts}):
         get_settings.cache_clear()
-        ctx = AppContext(
-            db=factory,
-            audio_dir=audio_dir,
-            data_dir=data_dir,
-            signing_key=TEST_SECRET,
-            redis=make_fake_redis(),
-        )
-        app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-        client = web_client(app, cookies={})
-        from conftest import login_and_csrf
-        login_and_csrf(client, "admin4")
-
-        resp = client.post(
-            "/api/songs",
-            json={"title": "X", "album_id": "a1"},
-            headers={"origin": "https://abc.trycloudflare.com"},
-        )
-        assert resp.status_code == 200
-
-        resp = client.post(
-            "/api/songs",
-            json={"title": "Y", "album_id": "a1"},
-            headers={"origin": "https://evil.com"},
-        )
-        assert resp.status_code == 403
+        with pytest.raises(ValueError, match=r"ALLOWED_HOSTS.*\*"):
+            create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
 
 
 # ── CSP hashes for the inline scripts of index.html ────────────────

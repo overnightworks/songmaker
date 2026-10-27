@@ -32,8 +32,6 @@ import {
 	fetchCapabilities,
 	fetchGenerationDefaults,
 	updateGenerationDefaults,
-	updateCowriterSettings,
-	logout,
 	fetchMe,
 	ApiError
 } from './client';
@@ -211,25 +209,6 @@ describe('API client', () => {
 		expect(mockFetch.mock.calls[0][1].method).toBe('PUT');
 	});
 
-	it('updateCowriterSettings sends the complete provider route selection', async () => {
-		mockOk({ provider: 'claude', model: 'claude-api' });
-		await updateCowriterSettings('claude', 'claude-api', 8000, {
-			claude: 'api',
-			codex: 'cli',
-			grok: 'api'
-		});
-		const [url, init] = mockFetch.mock.calls[0];
-
-		expect(url).toBe('/api/settings/cowriter');
-		expect(init.method).toBe('PUT');
-		expect(JSON.parse(init.body)).toEqual({
-			provider: 'claude',
-			model: 'claude-api',
-			tail_token_budget: 8000,
-			provider_routes: { claude: 'api', codex: 'cli', grok: 'api' }
-		});
-	});
-
 	it('throws ApiError on non-ok response', async () => {
 		mockError(500, 'Internal server error');
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
@@ -257,15 +236,6 @@ describe('API client', () => {
 });
 
 describe('Auth API', () => {
-	it('logout posts to the same-origin logout route and returns the identity provider address', async () => {
-		mockOk({ logout_url: 'https://auth.example/logout?hint=1' });
-		const logoutUrl = await logout();
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toBe('/auth/logout');
-		expect(init.method).toBe('POST');
-		expect(logoutUrl).toBe('https://auth.example/logout?hint=1');
-	});
-
 	it('fetchMe calls GET /api/auth/me', async () => {
 		mockOk({ id: 'u1', username: 'admin', role: 'admin' });
 		const result = await fetchMe();

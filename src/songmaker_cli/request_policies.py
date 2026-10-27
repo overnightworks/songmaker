@@ -45,6 +45,7 @@ MEDIA_BUDGET_NAME: Final = "media"
 STREAM_BUDGET_NAME: Final = "stream"
 
 API_PATH_PREFIX: Final = "/api/"
+INTERNAL_API_PREFIX: Final = "/api/internal/"
 STATIC_ASSET_PREFIX: Final = "/_app/"
 MEDIA_PATH_PREFIX: Final = "/audio/"
 JOB_STREAM_PATH: Final = PathShape(starts_with="/api/jobs/", ends_with="/stream")
@@ -108,13 +109,6 @@ RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
     "/service-worker.js",
 }) | PWA_ICON_PATHS
 
-# Workers on `/api/internal/*` have no session at all and authenticate with
-# the internal token instead. They still owe the same-origin check. The logout
-# is token-exempt too: its session may already be gone, and the origin check
-# is what protects it.
-CSRF_TOKEN_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({LOGOUT_PATH})
-CSRF_TOKEN_EXEMPT_PREFIXES: Final[tuple[str, ...]] = ("/api/internal/",)
-
 # The sign-in routes answer redirects and refusals that no cache may keep.
 SIGN_IN_PATHS: Final[frozenset[str]] = frozenset({
     OIDC_START_PATH, OIDC_CALLBACK_PATH, LOGOUT_PATH, BACKCHANNEL_LOGOUT_PATH,
@@ -133,6 +127,8 @@ COVER_UPLOAD_METHODS: Final[frozenset[str]] = frozenset({"POST"})
 
 RESOURCE_EVENT_STREAM_CACHE_CONTROL: Final = "no-cache, no-store"
 API_CACHE_CONTROL: Final = "no-store"
+# The shell names the current build's hashed files, which a deploy deletes.
+SPA_SHELL_HEADERS: Final = {"Cache-Control": "no-cache"}
 STYLE_SOURCES_ADDED: Final = {CspDirective.STYLE_SRC: ("'unsafe-inline'",)}
 
 
@@ -165,20 +161,14 @@ def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
 
 
 def build_csrf_origin_policy() -> CsrfPolicy:
-    """Every state-changing request is checked for the same origin.
+    """Every state-changing request is checked for the same origin; it is the only CSRF guard.
 
-    The realm's back-channel call is a server-to-server POST with no Origin and no
-    session; its Logout Token is its proof.
+    The realm's back-channel call and the workers on `/api/internal/*` have no
+    session and no browser: the Logout Token and the internal token are their proof.
     """
-    return CsrfPolicy(exempt=PathRules(exact=frozenset({BACKCHANNEL_LOGOUT_PATH})))
-
-
-def build_csrf_token_policy() -> CsrfPolicy:
-    """Mutating API calls and the logout carry the double-submit token, workers excepted."""
     return CsrfPolicy(
-        protected=PathRules(prefixes=(API_PATH_PREFIX,), exact=frozenset({LOGOUT_PATH})),
-        token_exempt=PathRules(
-            exact=CSRF_TOKEN_EXEMPT_PATHS, prefixes=CSRF_TOKEN_EXEMPT_PREFIXES,
+        exempt=PathRules(
+            exact=frozenset({BACKCHANNEL_LOGOUT_PATH}), prefixes=(INTERNAL_API_PREFIX,),
         ),
     )
 

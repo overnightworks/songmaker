@@ -203,8 +203,7 @@ describe('groupRailSearchResults', () => {
 			settingsPages: [
 				settingsPage('Generation', '/settings/generation'),
 				settingsPage('Voices', '/settings/voices'),
-				settingsPage('Admin', '/settings/users'),
-				settingsPage('Legal', '/settings/legal')
+				settingsPage('Admin', '/settings/users')
 			]
 		},
 		{
@@ -212,8 +211,7 @@ describe('groupRailSearchResults', () => {
 			admin: false,
 			settingsPages: [
 				settingsPage('Generation', '/settings/generation'),
-				settingsPage('Voices', '/settings/voices'),
-				settingsPage('Legal', '/settings/legal')
+				settingsPage('Voices', '/settings/voices')
 			]
 		}
 	])(

@@ -216,6 +216,16 @@ class Settings(BaseSettings):
     oidc_issuer: str | None = None
     oidc_client_id: str | None = None
     oidc_client_secret_file: Path | None = None
+    # The co-writer's MCP endpoint for the agent service: the origin the service
+    # names in each capability and the file holding the service's public signing
+    # key. Both are checked where the endpoint is composed, so workers and the
+    # migrate step start without them, and a missing one leaves only /mcp
+    # unavailable.
+    agent_service_mcp_origin: str | None = None
+    agent_service_capability_key_file: Path | None = None
+    # Where the co-writer turn starts its runs; checked where the turn runs, so workers and the
+    # migrate step start without it.
+    agent_service_url: str | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30

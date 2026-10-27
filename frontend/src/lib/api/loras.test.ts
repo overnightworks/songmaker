@@ -140,14 +140,6 @@ describe('LoRA API client', () => {
 		expect(init.body).not.toBeInstanceOf(FormData);
 	});
 
-	it('addLoraSample attaches CSRF token if cookie present', async () => {
-		document.cookie = 'csrf_token=abc';
-		mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: 's1' }) });
-		await addLoraSample('l1', new File(['x'], 'a.mp3'), 'c', 'l');
-		const headers = mockFetch.mock.calls[0][1].headers as Record<string, string>;
-		expect(headers['X-CSRF-Token']).toBe('abc');
-	});
-
 	it('addLoraSample throws ApiError on non-ok', async () => {
 		mockFetch.mockResolvedValueOnce({
 			ok: false,

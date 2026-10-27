@@ -62,7 +62,9 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   und der Recipe-Karte (geschlossen als eine Zeile „Recipe ›“, geöffnet mit
   den Tabs Song · Generate · Engine) sowie von Repaint und Cover als
   Aufgabenkarte am Take. Seit 23.10.2026 (#1825) auch der Takes pro Version
-  gefaltet in der Listen-Spalte samt Bestätigung „Delete N“.
+  gefaltet in der Listen-Spalte samt Bestätigung „Delete N“; „Takes per
+  version“ überschreibt die flachen Take-Gruppen in `song-versions.html` und
+  den Takes-Kopf in `song-page-phone.html`.
 - `now-playing.html` — Now Playing öffnet auf dem, was zählt (#1816, #1826).
   Freigegeben am 23.10.2026 (Operator: „ok bilder passen“). Besitzer des Tabs,
   auf dem Now Playing öffnet (ein Take in der Schlange: This take, mehrere:
@@ -96,6 +98,33 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   `album-cover.html`. Die 16 gerulten Zeilen von #1374 stehen in der Datei; die
   Vorher-Screenshots sind nicht übernommen (sie bleiben im Artefakt). Offen:
   die Sammlungs-h1, entschieden in Slice 6 gegen dieses Bild.
+- Der Agent-Service (#1895, #1476 „The pictures must show"). Freigegeben am
+  26.10.2026 (Operator: „das Bild ist gut", „alles deine Empfehlung"), mit
+  Q4 b und Q5 a: Die Gesprächszeile der Co-Writer-Spalte lautet „Co-writer ·
+  Claude opus · conversation since Tue" (Q4 a, ohne Modell, ist verworfen);
+  endet ein Zug, weil Keycloak nicht mehr erneuert, steht dort „Sign in again
+  to use the co-writer" mit Sign-in-Link, und der Rest von songmaker arbeitet
+  weiter (Q5 b, die ganze App meldet ab, ist verworfen); Q13 gilt mit ihrem
+  Default a. Besitzer: `admin-models.html` (Abschnitt „Neu · #1895",
+  Zustände w bis z′: fünf Spalten, Co-Writer über den Dienst, Cover und
+  Scoring „not available yet"), `song-page.html` (D5b, D7a–d) und
+  `song-page-phone.html` (7c–7e; die Gesprächszeile in Frame 7 ist ersetzt),
+  `album-cover.html` („Suggest closed", Punkt 8; `album-browsing.html` zeigt
+  C2–C9 als den Zustand, der mit Bildläufen zurückkommt, und I1 liest
+  „upload") und `now-playing.html` („Coherence not available"). Die Gründe
+  geschlossener Einträge in Slice 12 sind Beispielwörter, kein gesegneter
+  Text.
+- KI-Kennzeichnung nach Art. 50 der KI-Verordnung (#1906), gesegnet vom
+  Operator am 27.10.2026 (P1 bis P5). Wortlaut gerult (E3, Operator 19.10.2026):
+  „KI-generiert“ am Song oder Album und „Du schreibst mit einer KI“ im
+  Co-Writer, immer sichtbar, ohne Schalter. Das Abzeichen steht in der Zeile,
+  die nennt, was läuft (hinter „v4 · take 7“ oder dem Namen), und bricht bei 390
+  in eine eigene zentrierte Zeile um, wenn diese Zeile lang ist; die Co-Writer-Zeile
+  steht in einer eigenen Zeile unter der Kopfzeile. Der Vorlesetext ist reiner
+  Text mit `lang="de"`, das Symbol ist verborgen. Die deutschen Worte bleiben in
+  der englischen App. Dateien: `share-player.html` (Abschnitt 8),
+  `now-playing.html` (Abschnitt 5), `song-page.html` (Abschnitt „You write with
+  an AI“) und `song-page-phone.html` (7f).
 - `sign-in.html` — Anmelden und Abgewiesen-Werden (#1715). Quelle:
   overnightworks/ui-console#6, Fassung 2, freigegeben vom Operator am
   19.10.2026, Artefakt https://claude.ai/artifact/6xvoJezFbApz7ygKfCe9we. Die

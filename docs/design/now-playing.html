@@ -56,6 +56,11 @@ figcaption b{color:var(--ink);font-weight:600}
 .slot{width:44px;height:44px;flex:none}
 .circle{width:64px;height:64px;border-radius:50%;background:var(--action);color:var(--on-action);display:inline-flex;align-items:center;justify-content:center;flex:none}
 .circle.c48{width:48px;height:48px}.circle.c44{width:44px;height:44px}
+.ai-badge{display:inline-flex;align-items:center;gap:5px;padding:2px 9px 2px 7px;border:1px solid var(--border);border-radius:999px;font-size:.75rem;line-height:1.4;color:var(--text-muted);white-space:nowrap}
+.np-take.ai{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 8px}
+.np-title.long{font-size:1.45rem}
+.device.crop{height:560px}
+.meta.ai .row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 8px}
 .new{outline:2px dashed var(--mark);outline-offset:2px;border-radius:4px}
 .art-a{background:linear-gradient(135deg,#7a18c0,#2b2545)}
 .art-k{background:linear-gradient(135deg,#d0662c,#5b1d6e 70%)}
@@ -255,6 +260,14 @@ figcaption b{color:var(--ink);font-weight:600}
 
 @media (max-width:1640px){.desk,.shell{zoom:.9}}
 @media (max-width:480px){.device{zoom:.85}.part{padding:14px 8px}}
+/* #1895: a take the coherence judge did not judge (blessed 26.10.2026) */
+.tcrop{background:var(--header-bg);padding:.9rem 1rem 1rem;max-width:100%}
+.tcrop.ph{width:390px}
+.tcrop.dk{width:440px}
+.sc.bad{border-left-color:var(--score-bad)}
+.sc.na{border-left:3px dashed var(--text-disabled);background:transparent;box-shadow:inset 0 0 0 1px var(--border)}
+.sc.na .v{font-family:var(--fb);font-size:.8rem;color:var(--text-muted);line-height:1.6}
+.option{display:inline-block;margin-left:.3rem;padding:0 .4rem;border-radius:3px;font-family:Oswald,Impact,sans-serif;font-size:11px;letter-spacing:.5px;text-transform:uppercase;background:#e0f5e0;color:#1e7a1e}
 </style>
 </head>
 <body>
@@ -512,7 +525,7 @@ figcaption b{color:var(--ink);font-weight:600}
       <span class="menu-anchor"><span class="more-btn pressed" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></span>
         <div class="lmenu floating"><p class="lhead">Album · Nightdrive</p>
           <span class="lmi"><svg class="li"><use href="#i-pencil"/></svg>Edit details</span>
-          <span class="lmi"><svg class="li"><use href="#i-image"/></svg>Cover<span class="lhint">upload · suggest</span></span>
+          <span class="lmi"><svg class="li"><use href="#i-image"/></svg>Cover<span class="lhint">upload</span></span>
           <span class="lmi hover new"><svg class="li"><use href="#i-spark"/></svg>Pick album takes</span>
           <span class="lmi"><svg class="li"><use href="#i-listplus"/></svg>Add to playlist</span>
           <span class="lmi"><svg class="li"><use href="#i-share"/></svg>Share<span class="lhint">off</span></span>
@@ -576,7 +589,7 @@ figcaption b{color:var(--ink);font-weight:600}
       <span class="menu-anchor"><span class="more-btn pressed" aria-label="More"><svg class="ic md"><use href="#i-more"/></svg></span>
         <div class="lmenu floating"><p class="lhead">Album · Nightdrive</p>
           <span class="lmi"><svg class="li"><use href="#i-pencil"/></svg>Edit details</span>
-          <span class="lmi"><svg class="li"><use href="#i-image"/></svg>Cover<span class="lhint">upload · suggest</span></span>
+          <span class="lmi"><svg class="li"><use href="#i-image"/></svg>Cover<span class="lhint">upload</span></span>
           <span class="lmi hover new"><svg class="li"><use href="#i-spark"/></svg>Pick album takes</span>
           <span class="lmi"><svg class="li"><use href="#i-listplus"/></svg>Add to playlist</span>
           <span class="lmi"><svg class="li"><use href="#i-share"/></svg>Share<span class="lhint">off</span></span>
@@ -654,6 +667,80 @@ figcaption b{color:var(--ink);font-weight:600}
 </div>
 </section>
 
+<!-- ═══════════════════════ 4 · coherence not available (#1895) ═══════════════════════ -->
+<section class="part" id="coherence-not-available">
+<h2>4 · Coherence not available <small>#1895 · #1476 point 9 · blessed 26.10.2026 · the This take panel</small></h2>
+<p class="lede">The coherence judge comes back through the agent service; until then a take it did not judge says so instead of showing a number. Dashed outline = new. The album ⋯ hint in P3 and D3 reads <b>upload</b> only, because Suggest is closed (<a href="album-cover.html#suggest-closed">album-cover.html</a>).</p>
+<div class="frames">
+<figure><div class="app tcrop ph"><div class="take"><div class="th-row"><span class="th">v4 · take 7 · 3:02 · xl-turbo</span><span class="badges"><span class="badge" aria-label="Pick"><svg class="ic md"><use href="#i-star"/></svg></span><span class="badge" aria-label="Keep"><svg class="ic md"><use href="#i-heart"/></svg></span></span></div><div class="sec"><span class="st">Scores</span><div class="scores"><div class="sc"><span class="l">Lyrics sung</span><span class="v">86%</span></div><div class="sc ok"><span class="l">Dynamics</span><span class="v">54</span></div><div class="sc"><span class="l">Quality</span><span class="v">7.41</span></div><div class="sc ok"><span class="l">Enjoyment</span><span class="v">6.88</span></div><div class="sc na new"><span class="l">Coherence</span><span class="v">not available</span></div><div class="sc"><span class="l">BPM</span><span class="v">96</span></div></div></div></div></div><figcaption><b>P5 · Phone, a take scored after the switch.</b> Coherence reads <b>not available</b> in a dashed, uncoloured cell: no verdict, so no colour and never 0. The other scores are there as today; Re-score runs them and the judge reports why it judged nothing.</figcaption></figure>
+<figure><div class="app tcrop ph"><div class="take"><div class="th-row"><span class="th">v4 · take 7 · 3:02 · xl-turbo</span><span class="badges"><span class="badge" aria-label="Pick"><svg class="ic md"><use href="#i-star"/></svg></span><span class="badge" aria-label="Keep"><svg class="ic md"><use href="#i-heart"/></svg></span></span></div><div class="sec"><span class="st">Scores</span><div class="scores"><div class="sc"><span class="l">Lyrics sung</span><span class="v">86%</span></div><div class="sc ok"><span class="l">Dynamics</span><span class="v">54</span></div><div class="sc"><span class="l">Quality</span><span class="v">7.41</span></div><div class="sc ok"><span class="l">Enjoyment</span><span class="v">6.88</span></div><div class="sc"><span class="l">Coherence</span><span class="v">8</span></div><div class="sc"><span class="l">BPM</span><span class="v">96</span></div></div></div></div></div><figcaption><b>P5b · A verdict stored before the switch.</b> It stays as it was: “8” with its colour. Re-scoring never overwrites it.</figcaption></figure>
+<figure><div class="app tcrop ph"><div class="take"><div class="th-row"><span class="th">v4 · take 7 · 3:02 · xl-turbo</span><span class="badges"><span class="badge" aria-label="Pick"><svg class="ic md"><use href="#i-star"/></svg></span><span class="badge" aria-label="Keep"><svg class="ic md"><use href="#i-heart"/></svg></span></span></div><div class="sec"><span class="st">Scores</span><div class="scores"><div class="sc"><span class="l">Lyrics sung</span><span class="v">0%</span></div><div class="sc ok"><span class="l">Dynamics</span><span class="v">54</span></div><div class="sc"><span class="l">Quality</span><span class="v">7.41</span></div><div class="sc ok"><span class="l">Enjoyment</span><span class="v">6.88</span></div><div class="sc bad"><span class="l">Coherence</span><span class="v">0</span></div><div class="sc"><span class="l">BPM</span><span class="v">96</span></div></div></div></div></div><figcaption><b>P5c · A take with no vocals (Q13 <span class="option">default a</span>).</b> As today: the judge’s own empty-transcript branch calls no service and writes 0, so the take row keeps its “No vocals” flag. A take with a stored verdict keeps it.</figcaption></figure>
+<figure><div class="app tcrop dk"><div class="take"><div class="th-row"><span class="th">v4 · take 7 · 3:02 · xl-turbo</span><span class="badges"><span class="badge" aria-label="Pick"><svg class="ic md"><use href="#i-star"/></svg></span><span class="badge" aria-label="Keep"><svg class="ic md"><use href="#i-heart"/></svg></span></span></div><div class="sec"><span class="st">Scores</span><div class="scores"><div class="sc"><span class="l">Lyrics sung</span><span class="v">86%</span></div><div class="sc ok"><span class="l">Dynamics</span><span class="v">54</span></div><div class="sc"><span class="l">Quality</span><span class="v">7.41</span></div><div class="sc ok"><span class="l">Enjoyment</span><span class="v">6.88</span></div><div class="sc na new"><span class="l">Coherence</span><span class="v">not available</span></div><div class="sc"><span class="l">BPM</span><span class="v">96</span></div></div></div></div></div><figcaption><b>D5 · Desktop 1440, the This take column.</b> The same cell at the column’s width.</figcaption></figure>
+</div>
+</section>
+
+
+<!-- ═══════════════════════ 5 · AI notice (#1906, blessed) ═══════════════════════ -->
+<section class="part" id="ai-notice">
+<h2>5 · KI-generiert <small>#1906 · Art. 50 AI Act</small></h2>
+<p class="lede">Every take that plays here says it was generated by AI. The words are ruled (E3, operator 19.10.2026): <b>KI-generiert</b>, always on, no switch. Dashed outline = new. The app around it is English, the ruled words stay German (decided, operator 27.10.2026). Placement and look below are blessed (P1 to P5, operator 27.10.2026).</p>
+<ul class="changes">
+<li><b>A small badge on the take line.</b> It sits right after “v4 · take 7”, on the line that already says which take plays, with a spark icon (the app's own spark) and a quiet outline. Same place and same look in the full player and in the docked column.</li>
+<li><b>At 390:</b> the line wraps. The badge never shrinks, never truncates and never leaves the screen; with a long take line it drops to its own centred row under it (P5b).</li>
+<li><b>Screen reader:</b> the badge is plain text, read in order after the take line as “KI-generiert”. The icon is hidden from assistive technology, the element carries <code>lang="de"</code> so it is spoken in German, and there is no tooltip-only meaning.</li>
+</ul>
+<div class="frames">
+<figure>
+<div class="app device crop">
+  <div class="np-top"><span class="icon-btn ink" aria-label="Close"><svg class="ic xl"><use href="#i-chev-down"/></svg></span><span class="np-label">Now playing</span></div>
+  <div class="np-scroll">
+    <div class="cover art-k" aria-hidden="true"></div>
+    <div class="np-title">Feierabend</div>
+    <div class="np-from">from Kaltstart ›</div>
+    <div class="np-take ai"><span>v4 · take 7</span><span class="ai-badge new" lang="de"><svg class="ic xs" aria-hidden="true"><use href="#i-spark"/></svg>KI-generiert</span></div>
+    <div class="seek"><span class="track"><i style="width:40%"></i></span><span class="knob" style="left:calc(40% - 11px)"></span></div>
+    <div class="times"><span>1:12</span><span>3:02</span></div>
+  </div>
+</div>
+<figcaption><b>P5 · Phone, Now Playing.</b> The badge follows the take line. Cropped below the time row; the rest of the sheet is unchanged.</figcaption>
+</figure>
+<figure>
+<div class="app device crop">
+  <div class="np-top"><span class="icon-btn ink" aria-label="Close"><svg class="ic xl"><use href="#i-chev-down"/></svg></span><span class="np-label">Now playing</span></div>
+  <div class="np-scroll">
+    <div class="cover art-k" aria-hidden="true"></div>
+    <div class="np-title  long">Feierabend im Regen über der Stadt</div>
+    <div class="np-from">from Kaltstart ›</div>
+    <div class="np-take ai"><span>v12 · take 114 · xl-turbo · seed 1838245</span><span class="ai-badge new" lang="de"><svg class="ic xs" aria-hidden="true"><use href="#i-spark"/></svg>KI-generiert</span></div>
+    <div class="seek"><span class="track"><i style="width:40%"></i></span><span class="knob" style="left:calc(40% - 11px)"></span></div>
+    <div class="times"><span>1:12</span><span>3:02</span></div>
+  </div>
+</div>
+<figcaption><b>P5b · Phone, long title and take line.</b> The title wraps; the badge drops to its own centred row instead of shrinking.</figcaption>
+</figure>
+</div>
+<div class="frames">
+<figure>
+<div class="scroll"><div class="app desk crop">
+  <div class="npd-head"><div><p class="kicker">Now Playing</p><p class="npd-title">Feierabend</p></div><div class="npd-actions"><span class="surface-btn">Collapse</span><span class="icon-btn" aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></span></div></div>
+  <div class="npd-body">
+    <section class="col cover-col">
+      <div class="cover-d art-k" aria-hidden="true"></div>
+      <div class="meta ai"><span class="t">Feierabend</span><span class="l">Kaltstart · Felix</span><div class="row"><span class="l">v4 · take 7</span><span class="ai-badge new" lang="de"><svg class="ic xs" aria-hidden="true"><use href="#i-spark"/></svg>KI-generiert</span></div></div>
+      <div class="prog"><div class="seek"><span class="track"><i style="width:40%"></i></span><span class="knob" style="left:calc(40% - 7px)"></span></div><div class="times"><span>1:12</span><span>3:02</span></div></div>
+    </section>
+    <section class="col">
+      <div class="np-lyrics lyr"><span class="lyr-h">Lyrics</span>
+        <p>Laptop zu, die Stadt wird leise</p><p class="on">der Kaffee kalt, der Kopf auf Reise</p><p>Fahrrad raus, das Licht wird gelb</p><p>die Woche fällt mir aus der Welt</p>
+      </div>
+    </section>
+    <section class="col"></section>
+  </div>
+</div></div>
+<figcaption class="w"><b>D5 · Desktop 1440, Now Playing expanded.</b> The badge follows the take line under the cover, centred like the lines above it. The lyrics and This take columns are unchanged.</figcaption>
+</figure>
+</div>
+</section>
 </div>
 <script>
 (function () {

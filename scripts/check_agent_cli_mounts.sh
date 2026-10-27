@@ -85,6 +85,7 @@ problems=0
 problem() {
     echo "ERROR: $*" >&2
     problems=$((problems + 1))
+    return 0
 }
 
 check_binary() {

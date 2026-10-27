@@ -36,6 +36,9 @@ data/
 # Docs (not needed in image)
 docs/
 
+# The app's legal section is read from git by edge, not from the image
+legal/
+
 # Environment (secrets)
 .server.env
 .session_secret

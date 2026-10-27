@@ -36,6 +36,7 @@ from typing import Final  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402
 
 import fakeredis  # noqa: E402
+import httpx  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import structlog  # noqa: E402
@@ -43,7 +44,6 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.ports import AuthenticatedUser  # noqa: E402
 from worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
@@ -95,61 +95,46 @@ OTHER_GENERATION_ERROR_TYPES = [
 SONGMAKER_FAILURE_CASES = [
     pytest.param(
         (
-            TimeoutError,
-            "private timeout",
-            "Generation timed out",
-            "Generation timed out",
-            "generation_error",
+            TimeoutError, "private timeout",
+            "Generation timed out", "Generation timed out", "generation_error",
         ),
         id="S5-B-D-timeout",
     ),
     pytest.param(
         (
-            AudioDownloadError,
-            "private download",
-            "Failed to download generated audio",
-            "Failed to download generated audio",
+            AudioDownloadError, "private download",
+            "Failed to download generated audio", "Failed to download generated audio",
             "generation_error",
         ),
         id="S5-B-D-download",
     ),
     pytest.param(
         (
-            ConnectionError,
-            "private connection",
-            "ACE-Step server not reachable",
-            "ACE-Step server not reachable",
-            "generation_error",
+            ConnectionError, "private connection",
+            "ACE-Step server not reachable", "ACE-Step server not reachable", "generation_error",
         ),
         id="S5-B-D-connection",
     ),
     pytest.param(
         (
-            NoCapacityError,
-            "private capacity",
-            "No ACE-Step workers available",
-            "Generating isn't available right now.",
+            NoCapacityError, "private capacity",
+            "No ACE-Step workers available", "Generating isn't available right now.",
             "generation_unavailable",
         ),
         id="S5-B-L10-capacity",
     ),
     pytest.param(
         (
-            RuntimeError,
-            "private runtime",
-            "Internal error during processing",
-            "Internal error during processing",
+            RuntimeError, "private runtime",
+            "Internal error during processing", "Internal error during processing",
             "generation_error",
         ),
         id="S5-B-D-runtime",
     ),
     pytest.param(
         (
-            ValueError,
-            "private unknown",
-            "An unexpected error occurred",
-            "An unexpected error occurred",
-            "generation_error",
+            ValueError, "private unknown",
+            "An unexpected error occurred", "An unexpected error occurred", "generation_error",
         ),
         id="S5-B-D-unknown",
     ),
@@ -211,8 +196,18 @@ def queries_without_session_auth(statements: Sequence[str]) -> list[str]:
 
 
 def web_client(app, **kwargs) -> TestClient:
-    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin."""
-    return TestClient(app, base_url=TEST_ORIGIN, **kwargs)
+    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin.
+
+    A request naming neither `Origin` nor `Sec-Fetch-Site` carries what a same-origin
+    browser sends; one naming either goes out as written."""
+    client = TestClient(app, base_url=TEST_ORIGIN, **kwargs)
+    client.event_hooks = {"request": [_add_same_origin_fetch_metadata]}
+    return client
+
+
+def _add_same_origin_fetch_metadata(request: httpx.Request) -> None:
+    if "origin" not in request.headers and "sec-fetch-site" not in request.headers:
+        request.headers["Sec-Fetch-Site"] = "same-origin"
 
 
 _fake_cli_processes: list[MagicMock] = []
@@ -519,18 +514,8 @@ def install_app_context(app, ctx) -> None:
     install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
 
 
-def apply_csrf_header(client) -> None:
-    """Extract the csrf_token cookie and set it as a default X-CSRF-Token header.
-
-    Call after login/setup to enable CSRF-protected mutating requests in tests.
-    """
-    token = client.cookies.get(DEFAULT_CSRF_COOKIE_NAME)
-    if token:
-        client.headers["X-CSRF-Token"] = token
-
-
 def issued_cookies(session_id: str, config) -> dict[str, str]:
-    """The session and CSRF cookies the library issues for ``session_id``, by name."""
+    """The session cookie the library issues for ``session_id``, by name."""
     from fastapi import Response
     from webauth.cookies import issue_session_cookies
 
@@ -543,7 +528,7 @@ def issued_cookies(session_id: str, config) -> dict[str, str]:
 
 
 def login_and_csrf(client, username: str) -> None:
-    """Open a session for the seeded ``username`` and configure the CSRF header.
+    """Open a session for the seeded ``username``.
 
     Writes the session row straight to the database and issues the cookies the
     callback would, because signing in itself needs the issuer.
@@ -561,13 +546,12 @@ def login_and_csrf(client, username: str) -> None:
         user_id = session.query(User).filter_by(username=username).one().id
         idle = timedelta(seconds=config.session_lifetime.idle_seconds)
         record = DatabaseSessionRecordStore(session).create(
-            user_id, now=now, expires_at=now + idle, refresh_token=None,
+            user_id, now=now, expires_at=now + idle, refresh_token=None, id_token=None,
         )
         session.commit()
         session_id = record.id
     for name, value in issued_cookies(session_id, config).items():
         client.cookies.set(name, value)
-    apply_csrf_header(client)
 
 
 def mock_http_response(data: bytes, status: int = 200) -> MagicMock:

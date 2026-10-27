@@ -50,10 +50,10 @@ chunk, with no buffering, so live streaming latency is unaffected.
 BREACH note: BREACH is a compression-oracle attack that needs a secret and
 attacker-controlled input reflected together in the same compressed
 response, replayed many times while the attacker observes the compressed
-size. It does not apply here: this app's CSRF token lives only in a
-`SameSite=Strict` cookie -- never reflected into a compressed JSON/HTML
-body -- so a cross-site attacker page cannot even trigger the authenticated
-request whose response this middleware would compress. The public
+size. It does not apply here: the one compressed response that carries a
+secret, the logout page (`text/html`, compressed from 1024 bytes) with the
+ID token, reflects no request-controlled input, and a cross-site attacker
+page cannot trigger it (the origin check refuses its POST). The public
 `/shared/*` routes carry no per-request secret to leak, and reflect no
 request-controlled input back into their JSON.
 

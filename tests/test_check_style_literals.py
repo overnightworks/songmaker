@@ -1,7 +1,6 @@
 """Detection and monotone baseline behavior of the frontend style gate."""
 
 import runpy
-import sys
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,7 @@ CHECKER = runpy.run_path(
 
 
 @pytest.fixture
-def gate(tmp_path, monkeypatch, capsys):
+def gate(tmp_path, capsys):
     source = tmp_path / "frontend/src"
     source.mkdir(parents=True)
     baseline = tmp_path / "style-literals.txt"
@@ -24,9 +23,7 @@ def gate(tmp_path, monkeypatch, capsys):
             path.write_text(content)
         if limit is not None:
             baseline.write_text(limit)
-        arguments = ["gate", "--source", str(source), "--baseline", str(baseline)]
-        monkeypatch.setattr(sys, "argv", arguments + (["--update"] if update else []))
-        status = CHECKER["main"]()
+        status = CHECKER["run"](source, baseline, update=update)
         output = capsys.readouterr().out
         return status, output, baseline.read_text() if baseline.exists() else None
 
@@ -216,3 +213,10 @@ def test_empty_source_tree_fails_loudly(gate):
     status, output, _ = gate({})
     assert status == 1
     assert "No frontend source files found" in output
+
+
+def test_gate_takes_no_path_from_the_command_line(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["gate", "--source", "/etc", "--baseline", "/etc/passwd"])
+    with pytest.raises(SystemExit) as exit_info:
+        CHECKER["main"]()
+    assert exit_info.value.code == 2

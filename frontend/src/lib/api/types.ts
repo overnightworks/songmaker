@@ -156,12 +156,11 @@ export interface ChatTurnFinalFrame {
 	assistant_message: ChatMessageItem;
 }
 
-export interface ChatTurnRouteErrorFrame {
+export interface ChatTurnProblemFrame {
 	type: 'error';
 	status: number;
-	provider: string;
-	route: string | null;
-	reason: SafeRouteReason;
+	problem: 'unavailable' | 'busy' | 'not_enabled' | 'sign_in_again';
+	retry_after_seconds?: number | null;
 }
 
 export interface ChatTurnV2Request {
@@ -250,26 +249,12 @@ export interface CoverTaskParams {
 }
 
 export interface CowriterSettings {
-	provider: string;
-	model: string;
-	allowed_providers: string[];
-	allowed_models: string[];
-	models_by_provider: Record<string, string[]>;
-	selected_models_by_provider: Record<string, string>;
-	models_errors: Record<string, string>;
-	models_sources: Record<string, string>;
-	current_models_not_in_catalog: Record<string, string>;
-	probed_at: Record<string, string | null>;
 	tail_token_budget: number;
-	provider_routes?: Record<string, 'cli' | 'api'>;
-	provider_routes_status?: Record<string, Record<'cli' | 'api', ProviderRouteStatusResponse>>;
+	model: string;
 }
 
 export interface CowriterSettingsRequest {
-	provider: string;
-	model: string;
-	tail_token_budget?: number | null;
-	provider_routes?: Record<string, 'cli' | 'api'> | null;
+	tail_token_budget: number;
 }
 
 export interface DefaultConfigRequest {
@@ -535,10 +520,6 @@ export interface LoadModelOnWorkerRequest {
 export interface LoadedModelDetailItem {
 	mode: string;
 	size_gb: number;
-}
-
-export interface LogoutResponse {
-	logout_url: string;
 }
 
 export interface LoraCapacityErrorResponse {

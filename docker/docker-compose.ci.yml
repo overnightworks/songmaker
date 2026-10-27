@@ -71,8 +71,21 @@ services:
     # path ends here explicitly, while production keeps songmaker-web.
     security_opt: !override
       - apparmor=docker-default
+    # The runner has no edge networks: only the default one, which reaches
+    # PostgreSQL and Redis.
+    networks: !override
+      - default
     # !override drops the host Claude-CLI bind mounts — CI has no host
     # Claude credentials and must not depend on the operator's machine.
     volumes: !override
       - audiofiles:/app/data/audio
       - queuestreams:/app/data/queue-streams
+
+# No runner and no local e2e stack has edge's network.
+networks:
+  hal_mcp_songmaker: !reset null
+  hal_agent_songmaker: !reset null
+
+secrets:
+  agent_service_signing_public_key:
+    file: tests/fixtures/agent_service_capability_public_key.pem

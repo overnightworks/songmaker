@@ -1,40 +1,29 @@
-<script module lang="ts">
-	// The legal texts LegalContent shows, in the order every page links them.
-	export const LEGAL_SECTIONS = [
-		{ id: 'impressum', label: 'Impressum' },
-		{ id: 'datenschutz', label: 'Datenschutz' },
-		{ id: 'nutzungsbedingungen', label: 'Nutzungsbedingungen' }
-	] as const;
-
-	export type LegalSection = (typeof LEGAL_SECTIONS)[number]['id'];
-</script>
-
 <script lang="ts">
-	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	/* eslint-disable svelte/no-navigation-without-resolve -- external addresses, not app routes */
 	import type { Snippet } from 'svelte';
+	import { LEGAL_SECTIONS } from '$lib/constants/legal';
 
 	interface Props {
 		// A page that must not be left — a share page keeps playing — opens
-		// the text over itself; without this, each link goes to /legal.
-		onopen?: (section: LegalSection) => void;
+		// the texts in a new tab.
+		newTab?: boolean;
 		// What stands before the links in the same row, such as "Powered by".
 		lead?: Snippet;
 	}
 
-	let { onopen, lead }: Props = $props();
+	let { newTab = false, lead }: Props = $props();
 </script>
 
 <p class="legal-links">
 	{#if lead}<span class="legal-item">{@render lead()}</span>{/if}
-	{#each LEGAL_SECTIONS as section (section.id)}
+	{#each LEGAL_SECTIONS as section (section.label)}
 		<span class="legal-item">
-			{#if onopen}
-				<button type="button" class="legal-link" onclick={() => onopen(section.id)}
-					>{section.label}</button
-				>
-			{:else}
-				<a class="legal-link" href="/legal#{section.id}">{section.label}</a>
-			{/if}
+			<a
+				class="legal-link"
+				href={section.href}
+				target={newTab ? '_blank' : undefined}
+				rel={newTab ? 'noopener' : undefined}>{section.label}</a
+			>
 		</span>
 	{/each}
 </p>
@@ -44,24 +33,21 @@
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: center;
+		column-gap: 0.35em;
 		margin: 0;
 	}
 
-	/* The dot is drawn, not written, and only before an item that follows
-	   another, so a wrapped row never starts or ends on one. */
-	.legal-item:not(:first-child)::before {
+	/* The dot is drawn, not written, and belongs to the item before it, so a
+	   wrapped row never starts on one and the last item has none. */
+	.legal-item:not(:last-child)::after {
 		content: '·';
-		margin: 0 0.35em;
+		margin-left: 0.35em;
 	}
 
 	.legal-link {
-		padding: 0;
-		border: none;
-		background: none;
 		font: inherit;
 		color: var(--text-muted);
 		text-decoration: none;
-		cursor: pointer;
 		transition: color 0.2s;
 	}
 

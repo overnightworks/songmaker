@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from pydantic import SecretStr
-    from sqlalchemy.orm import Session, SessionTransaction
+    from sqlalchemy.orm import Session, SessionTransaction, sessionmaker
     from webauth.ports import AccountEvent
 
     from songmaker_cli.db.models import User, UserSession
@@ -102,8 +102,9 @@ class DatabaseSessionRecordStore:
         now: datetime,
         expires_at: datetime,
         refresh_token: SecretStr | None,
+        id_token: SecretStr | None,
     ) -> UserSession:
-        record = create_session(self.session, user_id, expires_at, refresh_token)
+        record = create_session(self.session, user_id, expires_at, refresh_token, id_token)
         record.created_at = now
         self.session.flush()
         return record
@@ -125,6 +126,24 @@ class DatabaseSessionRecordStore:
 
     def prune_overflow(self, user_id: str, keep_newest: int) -> None:
         prune_overflow_sessions(self.session, user_id, keep_newest)
+
+
+@dataclass(frozen=True)
+class DatabaseSessionTransaction:
+    """The short transaction webauth wraps around its session-store calls.
+
+    Each entry opens its own database session and commits on a clean exit; closing the session
+    rolls back anything else. A rotated refresh token is therefore durable before the library
+    hands out a token.
+    """
+
+    factory: sessionmaker[Session]
+
+    @contextmanager
+    def __call__(self) -> Iterator[DatabaseSessionRecordStore]:
+        with self.factory() as session:
+            yield DatabaseSessionRecordStore(session)
+            session.commit()
 
 
 @dataclass(frozen=True)

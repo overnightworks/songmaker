@@ -47,4 +47,55 @@ describe('NowPlayingFrame', () => {
 		expect(cover).not.toHaveTextContent('Collection mosaic');
 		expect(cover?.querySelector('img')).toHaveAttribute('src', '/cover.webp');
 	});
+	it.each([
+		{
+			name: 'a share song page',
+			props: { surface: 'page' as const, showTakeLabel: false },
+			line: 'Night Drive'
+		},
+		{
+			name: 'the full player',
+			props: { surface: 'full' as const, showTakeLabel: true },
+			line: 'take'
+		},
+		{
+			name: 'a collection page',
+			props: {
+				surface: 'page' as const,
+				collectionHead: { title: 'Night Drive', subtitle: 'Nina · Album', nowPlaying: 'Tide' }
+			},
+			line: 'Nina · Album'
+		}
+	])(
+		'1906_P1: $name carries the KI-generiert badge beside the line that names what plays',
+		async ({ props, line }) => {
+			const target = document.createElement('div');
+			document.body.append(target);
+			mounted = mount(NowPlayingFrame, {
+				target,
+				props: {
+					...props,
+					coverUrl: '/cover.webp',
+					info: {
+						generation: makeGeneration(),
+						songId: 'song-1',
+						songTitle: 'Tide',
+						albumTitle: 'Night Drive',
+						artist: '',
+						lyrics: null
+					}
+				}
+			});
+			await tick();
+			const badges = target.querySelectorAll('.ai-notice');
+			expect(badges).toHaveLength(1);
+			expect(badges[0]).toHaveTextContent('KI-generiert');
+			const row = badges[0].closest('.cover-line');
+			expect(row).not.toBeNull();
+			if (line === 'take') {
+				expect(row).toHaveTextContent(/take/i);
+				expect(row).not.toHaveTextContent('Night Drive');
+			} else if (line) expect(row).toHaveTextContent(line);
+		}
+	);
 });

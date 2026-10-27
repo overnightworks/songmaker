@@ -9,19 +9,16 @@ import {
 	installHistoryController,
 	land,
 	landedEntry,
-	loadAfresh,
 	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
 	navigateTo,
 	pageBelowStandingPage,
 	pageStateOfHistoryState,
 	pushEntry,
-	reloadAfresh,
 	remountOverStandingEntry,
 	replaceEntry,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
-	standInForDocumentLoadsForTests,
 	standingPageEntryId,
 	stepBackOr,
 	stepBackOrGoTo,
@@ -402,9 +399,9 @@ describe('history adapter', () => {
 	});
 
 	it('stepBackTo on the first entry resolves at once', async () => {
-		seedForeignEntry('/legal');
+		seedForeignEntry('/no-access');
 		vi.spyOn(history, 'length', 'get').mockReturnValue(1);
-		const first = replaceEntry('/legal', {});
+		const first = replaceEntry('/no-access', {});
 		vi.restoreAllMocks();
 		const back = vi.spyOn(history, 'back');
 
@@ -491,7 +488,7 @@ describe('history adapter', () => {
 
 	it("a page's own Back steps back onto the page of the tab it was opened from", async () => {
 		const signIn = pushEntry('/login', {});
-		pushEntry('/legal', {});
+		pushEntry('/no-access', {});
 		vi.mocked(goto).mockClear();
 
 		await stepBackOrGoTo('/login');
@@ -545,8 +542,8 @@ describe('history adapter', () => {
 			standing: 'the page the app was entered on from one of its own pages',
 			arrange: () => {
 				seedForeignEntry('/login');
-				history.pushState(null, '', '/legal');
-				enterApp('/legal', 2, addressOf('/login'));
+				history.pushState(null, '', '/no-access');
+				enterApp('/no-access', 2, addressOf('/login'));
 			},
 			lands: '/login',
 			next: null
@@ -578,7 +575,7 @@ describe('history adapter', () => {
 	])(
 		"a page's own Back on the page the app was entered on $opened goes to the fallback, written over it",
 		async ({ tabLength }) => {
-			enterApp('/legal', tabLength);
+			enterApp('/no-access', tabLength);
 			const back = vi.spyOn(history, 'back');
 			vi.mocked(goto).mockClear();
 
@@ -732,172 +729,6 @@ describe('history adapter', () => {
 
 		expect(standingEntry()).toEqual(page);
 		expect(location.pathname).toBe('/settings/voices');
-	});
-});
-
-// Issue #1340, ruling A: a sign-out or a lost session leaves by a fresh
-// document load. Over a layer's entry the load replaces it, so Back finds no
-// copy of the page to step off and nothing steps back meanwhile; over a page
-// entry it keeps the page, so Back loads it afresh.
-describe('leaving for a fresh document', () => {
-	const loads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
-
-	beforeEach(() => {
-		sessionStorage.clear();
-		history.replaceState(null, '', '/settings/voices');
-		resetHistoryControllerForTests();
-		installHistoryController();
-		standInForDocumentLoadsForTests(loads);
-		for (const load of Object.values(loads)) load.mockClear();
-	});
-
-	afterEach(() => {
-		resetHistoryControllerForTests();
-		resetLayersForTests();
-		vi.restoreAllMocks();
-	});
-
-	const origin = window.location.origin;
-
-	// A `#` part reaches the address through a take's provenance link or a
-	// bookmark; a load to an address that differs only in it would scroll to
-	// the anchor and load nothing.
-	it.each([
-		{
-			leave: 'sign-in',
-			over: 'a page entry',
-			standing: '/settings/voices',
-			openLayer: false,
-			go: () => loadAfresh('/login'),
-			load: 'assign',
-			args: [`${origin}/login`]
-		},
-		{
-			leave: 'sign-in',
-			over: "an open layer's entry",
-			standing: '/settings/voices',
-			openLayer: true,
-			go: () => loadAfresh('/login'),
-			load: 'replace',
-			args: [`${origin}/login`]
-		},
-		{
-			leave: 'an address that differs from the standing one only in its `#` part',
-			over: 'a page entry',
-			standing: '/album/a1/song-1#take-12',
-			openLayer: false,
-			go: () => loadAfresh('/album/a1/song-1#take-3'),
-			load: 'assign',
-			args: [`${origin}/album/a1/song-1`]
-		},
-		{
-			leave: 'the standing address',
-			over: 'a page entry',
-			standing: '/settings/voices',
-			openLayer: false,
-			go: reloadAfresh,
-			load: 'reload',
-			args: []
-		},
-		{
-			leave: 'the standing address',
-			over: "an open layer's entry",
-			standing: '/settings/voices',
-			openLayer: true,
-			go: reloadAfresh,
-			load: 'replace',
-			args: [`${origin}/settings/voices`]
-		},
-		{
-			leave: 'the standing address with a `#` part',
-			over: 'a page entry',
-			standing: '/album/a1/song-1#take-12',
-			openLayer: false,
-			go: reloadAfresh,
-			load: 'reload',
-			args: []
-		},
-		{
-			leave: 'the standing address with a `#` part',
-			over: "an open layer's entry",
-			standing: '/album/a1/song-1#take-12',
-			openLayer: true,
-			go: reloadAfresh,
-			load: 'replace',
-			args: [`${origin}/album/a1/song-1`]
-		}
-	] as const)(
-		'loads $leave afresh over $over by $load, and steps back nowhere',
-		async ({ standing, openLayer, go, load, args }) => {
-			pushEntry(standing, {});
-			if (openLayer) holdLayer('account-menu', () => undefined);
-			const backs = vi.spyOn(history, 'back');
-
-			await go();
-
-			expect(loads[load]).toHaveBeenCalledExactlyOnceWith(...args);
-			const others = Object.entries(loads).filter(([name]) => name !== load);
-			for (const [, other] of others) expect(other).not.toHaveBeenCalled();
-			expect(backs).not.toHaveBeenCalled();
-		}
-	);
-
-	// Two library requests refused together each react to the lost session;
-	// every further load would abort the one before it (CI run 38602720334).
-	it.each([
-		{
-			first: 'the standing address',
-			then: 'the standing address',
-			go: [reloadAfresh, reloadAfresh],
-			load: 'reload'
-		},
-		{
-			first: 'sign-in',
-			then: 'the standing address',
-			go: [() => loadAfresh('/login'), reloadAfresh],
-			load: 'assign'
-		},
-		{
-			first: 'the standing address',
-			then: 'sign-in',
-			go: [reloadAfresh, () => loadAfresh('/login')],
-			load: 'reload'
-		}
-	] as const)('leaves once when $first and $then are asked for together', async ({ go, load }) => {
-		pushEntry('/settings/voices', {});
-
-		await Promise.all(go.map((leave) => leave()));
-		await reloadAfresh();
-
-		expect(loads[load]).toHaveBeenCalledOnce();
-		const others = Object.entries(loads).filter(([name]) => name !== load);
-		for (const [, other] of others) expect(other).not.toHaveBeenCalled();
-	});
-
-	// Playwright runs without the back-forward cache, so this row is the guard's
-	// only proof: Back onto the page a sign-out left would otherwise show it
-	// again with the signed-in state still in memory.
-	it.each([
-		{
-			shown: 'restored from the back-forward cache after leaving',
-			left: true,
-			persisted: true,
-			reloads: 1
-		},
-		{
-			shown: 'restored from the back-forward cache without leaving',
-			left: false,
-			persisted: true,
-			reloads: 0
-		},
-		{ shown: 'loaded anew after leaving', left: true, persisted: false, reloads: 0 }
-	])('a page $shown is loaded afresh $reloads time(s)', async ({ left, persisted, reloads }) => {
-		pushEntry('/settings/voices', {});
-		if (left) await loadAfresh('/login');
-
-		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted }));
-
-		expect(loads.reload).toHaveBeenCalledTimes(reloads);
 	});
 });
 

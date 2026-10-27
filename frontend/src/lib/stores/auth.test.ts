@@ -3,14 +3,12 @@ import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
 
 const mockFetchMe = vi.fn();
-const mockApiLogout = vi.fn();
 
 vi.mock('$lib/api/client', async () => {
 	const { ApiError } = await vi.importActual<typeof import('$lib/api/client')>('$lib/api/client');
 	return {
 		ApiError,
-		fetchMe: (...args: unknown[]) => mockFetchMe(...args),
-		logout: (...args: unknown[]) => mockApiLogout(...args)
+		fetchMe: (...args: unknown[]) => mockFetchMe(...args)
 	};
 });
 
@@ -32,7 +30,7 @@ import {
 	signOutFailed
 } from './auth';
 import { offline, resetConnectivityForTests } from './connectivity';
-import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
+import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS, LOGOUT_ADDRESS } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError, apiFetch, installRefusalReactions, sseFetch } from '$lib/api/fetch';
 import {
@@ -67,7 +65,6 @@ function serverRefusesEveryRequest(): () => void {
 
 beforeEach(() => {
 	mockFetchMe.mockReset();
-	mockApiLogout.mockReset();
 	currentUser.set(null);
 	authLoading.set(true);
 	authCheckError.set(null);
@@ -205,82 +202,82 @@ describe('checkAuth with the server out of reach', () => {
 });
 
 describe('logout', () => {
-	const LOGOUT_URL = 'https://auth.example/realms/hallucinai/logout?id_token_hint=h';
-
-	it('ends the session on the server before it loads the identity provider logout afresh', async () => {
+	// K4
+	it('checks that the server answers before it posts the logout form', async () => {
 		const order: string[] = [];
-		mockApiLogout.mockImplementation(async () => {
-			order.push('server');
-			return LOGOUT_URL;
+		mockFetchMe.mockImplementation(async () => {
+			order.push('check');
+			return KNOWN_USER;
 		});
-		documentLoads.assign.mockImplementation((url: string) => order.push(`load ${url}`));
+		documentLoads.submitPost.mockImplementation((action: string) => order.push(`post ${action}`));
 		currentUser.set(KNOWN_USER);
 
 		await logout();
 
-		expect(order).toEqual(['server', `load ${LOGOUT_URL}`]);
+		expect(order).toEqual(['check', `post ${LOGOUT_ADDRESS}`]);
+		expect(documentLoads.assign).not.toHaveBeenCalled();
 		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
-	it('925_M3_S5: stays a sign-out when a request is refused while it ends the session, or after', async () => {
+	it('925_M3_S5: stays a sign-out when a request is refused while it checks, or after', async () => {
 		currentUser.set(KNOWN_USER);
 		const refused = vi
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValue(
 				new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 })
 			);
-		mockApiLogout.mockImplementation(async () => {
+		mockFetchMe.mockImplementation(async () => {
 			await apiFetch('/api/songs/s1').catch(() => undefined);
-			return LOGOUT_URL;
+			return KNOWN_USER;
 		});
 
 		await logout();
 		await apiFetch('/api/songs/s2').catch(() => undefined);
 		refused.mockRestore();
 
-		expect(documentLoads.assign.mock.calls).toEqual([[LOGOUT_URL]]);
+		expect(documentLoads.submitPost.mock.calls).toEqual([[LOGOUT_ADDRESS]]);
 		expect(documentLoads.reload).not.toHaveBeenCalled();
 		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
-	// Only the server's word ends the session: its answer carries the address
-	// to leave for. Any other answer leaves the person signed in, and says so
-	// (#1340, ruling A).
+	// Only an unreachable server keeps the person signed in, and says so: the
+	// check is about reaching the server, so a session already gone (a 401) or
+	// any other answer still leaves, because the identity provider's session
+	// has to end (#1340, ruling A; E2 of #1807).
 	it.each([
-		{ answer: 'a 2xx', reply: () => Promise.resolve(LOGOUT_URL), leaves: true },
+		{ answer: 'a 2xx', reply: () => Promise.resolve(KNOWN_USER), leaves: true },
 		{
-			answer: 'no answer',
-			reply: () =>
-				Promise.reject(new NetworkError('/auth/logout', new TypeError('Failed to fetch'))),
-			leaves: false
+			answer: 'a 401',
+			reply: () => Promise.reject(new ApiError(401, 'Not authenticated', AUTH_ME_PATH)),
+			leaves: true
 		},
 		{
-			answer: 'a 403',
-			reply: () => Promise.reject(new ApiError(403, 'CSRF check failed', '/auth/logout')),
+			answer: 'a 429',
+			reply: () => Promise.reject(new ApiError(429, 'Too many requests', AUTH_ME_PATH)),
+			leaves: true
+		},
+		{
+			answer: 'no answer',
+			reply: () => Promise.reject(new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch'))),
 			leaves: false
 		},
 		{
 			answer: 'a 503',
-			reply: () => Promise.reject(new ApiError(503, 'Unavailable', '/auth/logout')),
-			leaves: false
-		},
-		{
-			answer: 'a 429',
-			reply: () => Promise.reject(new ApiError(429, 'Too many requests', '/auth/logout')),
+			reply: () => Promise.reject(new ApiError(503, 'Unavailable', AUTH_ME_PATH)),
 			leaves: false
 		}
 	])(
-		'925_M3_S6: after $answer to the sign-out, leaves for the logout address: $leaves, and a later refusal loads afresh only if it did not',
+		'925_M3_S6: after $answer to the check, posts the logout form: $leaves, and a later refusal loads afresh only if it did not',
 		async ({ reply, leaves }) => {
 			onTestFinished(serverRefusesEveryRequest());
 			replaceHistoryEntry('/');
 			currentUser.set(KNOWN_USER);
-			mockApiLogout.mockImplementationOnce(reply);
+			mockFetchMe.mockImplementationOnce(reply);
 
 			await logout();
 			await apiFetch('/api/songs/s1').catch(() => undefined);
 
-			expect(documentLoads.assign).toHaveBeenCalledTimes(leaves ? 1 : 0);
+			expect(documentLoads.submitPost).toHaveBeenCalledTimes(leaves ? 1 : 0);
 			expect(get(signOutFailed)).toBe(!leaves);
 			expect(get(currentUser)).toEqual(KNOWN_USER);
 			expect(documentLoads.reload).toHaveBeenCalledTimes(leaves ? 0 : 1);
@@ -486,7 +483,7 @@ describe('the remembered playback across the session', () => {
 	});
 
 	it('logout stops the take that was playing and leaves no take loaded', async () => {
-		mockApiLogout.mockResolvedValueOnce(undefined);
+		mockFetchMe.mockResolvedValueOnce(KNOWN_USER);
 
 		await logout();
 
@@ -495,7 +492,7 @@ describe('the remembered playback across the session', () => {
 	});
 
 	it('logout forgets the record', async () => {
-		mockApiLogout.mockResolvedValueOnce(undefined);
+		mockFetchMe.mockResolvedValueOnce(KNOWN_USER);
 		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 
 		await logout();

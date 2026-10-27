@@ -1,6 +1,7 @@
 import { expect, test as base, type Page, type Locator } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
+import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
 // 1354_65_A4: playlist transport proofs use the shared-player control owner.
 import { control } from './share-album-fixtures';
 import type { SharedPlaylistPayload } from '../src/lib/api/types';
@@ -184,7 +185,7 @@ for (const height of [900, 600]) {
 			if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 			await openMock(page);
 			await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-			await expect(page.locator('.cover-line').first()).toHaveText('Playlist · 3 songs');
+			await expect(page.locator('.cover-line').first()).toHaveText(/^Playlist · 3 songs\b/);
 			await expect(page.locator('.cover-art .playlist-cover-cell img')).toHaveCount(3);
 			await loadedImages(page.locator('.cover-art .playlist-cover-cell img'));
 			await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(1));
@@ -429,7 +430,7 @@ test('1374_rule_14 P10: unplayable entries are neither staged nor listed', async
 	payload.entries[0].audio_url = null;
 	await openMock(page, payload);
 	await expect(page.locator('.queue-title')).toHaveText([songTitle(2), songTitle(3)]);
-	await expect(page.locator('.cover-line').first()).toHaveText('Playlist · 2 songs');
+	await expect(page.locator('.cover-line').first()).toHaveText(/^Playlist · 2 songs\b/);
 	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(2));
 	payload.entries.forEach((entry) => {
 		entry.audio_url = null;
@@ -550,7 +551,7 @@ for (const height of [900, 600]) {
 			await bar(page).getByRole('button', { name: 'Play', exact: true }).click();
 			await expect(bar(page).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
 			const [footer, transport] = await boundingBoxes(
-				page.getByRole('button', { name: 'Impressum' }),
+				page.getByRole('link', { name: 'Impressum' }),
 				bar(page)
 			);
 			expect(footer.y + footer.height).toBeLessThanOrEqual(transport.y);
@@ -576,7 +577,7 @@ async function rights(page: Page, payload: SharedPlaylistPayload) {
 		await page
 			.locator('.shared-page a')
 			.evaluateAll((links) => links.map((link) => link.getAttribute('href')))
-	).toEqual(['/']);
+	).toEqual(['/', ...LEGAL_SECTIONS.map(({ href }) => href)]);
 }
 
 test('1374_rule_10 P14: uploaded cover mosaic revoke legal and signed-out rights', async ({
@@ -591,12 +592,6 @@ test('1374_rule_10 P14: uploaded cover mosaic revoke legal and signed-out rights
 	await rights(page, realPlaylist.payload);
 	await startStream(page, realPlaylist, () => control(page, 'Play').click());
 	await rights(page, realPlaylist.payload);
-	for (const name of ['Impressum', 'Datenschutz', 'Nutzungsbedingungen']) {
-		await page.getByRole('button', { name, exact: true }).click();
-		await expect(page.getByRole('dialog', { name: 'Legal information' })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(page.getByRole('dialog')).toHaveCount(0);
-	}
 	await realPlaylist.setUpload(false);
 	await page.reload();
 	await expect(page.locator('.cover-art .playlist-cover-image')).toHaveCount(0);

@@ -124,7 +124,6 @@ def test_song_write_accepts_owned_reference_and_rejects_foreign(
 ) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_users)
     login_and_csrf(client, "owner")
-    client.headers["Origin"] = "http://127.0.0.1:8080"
     audio_dir = tmp_path / "audio"
     _write_ref(audio_dir, "user-a", "mine.wav")
     _write_ref(audio_dir, "user-b", "secret.wav", b"SECRET")

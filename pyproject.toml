@@ -51,7 +51,7 @@ server = [
     # The auth layer lives in its own repository since #879. The pin is the
     # release wheel of an immutable tag, because the slim images have no git
     # and the acestep-worker installs with --require-hashes.
-    "overnightworks-webauth[redis] @ https://github.com/overnightworks/webauth/releases/download/v0.20.1/overnightworks_webauth-0.20.1-py3-none-any.whl",
+    "overnightworks-webauth[redis] @ https://github.com/overnightworks/webauth/releases/download/v0.23.0/overnightworks_webauth-0.23.0-py3-none-any.whl",
     # The provider layer lives in its own repository since #886. Bare in the
     # server extra so its api/image capabilities do not leak anthropic into the
     # music worker or Pillow into the scoring worker (A8).
@@ -69,6 +69,12 @@ image = [
 ]
 mcp = [
     "mcp>=2.2,<3",
+]
+# The co-writer's MCP endpoint: the agent service calls the
+# tools back over it. The release wheel of an immutable tag, like the other
+# release wheels.
+agent-service = [
+    "overnightworks-agent-runtime-client[mcp-server] @ https://github.com/overnightworks/agent-runtime/releases/download/v0.7.0/overnightworks_agent_runtime_client-0.7.0-py3-none-any.whl#sha256=c404bf89e1eb25ad154143e944b48ab9dadf6b7ebd6bbabf1d329df19e513dbe",
 ]
 acestep-worker = [
     "fastapi>=0.100,<1",

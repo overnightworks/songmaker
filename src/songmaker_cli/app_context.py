@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -41,32 +40,22 @@ def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
 
 
 def allowed_hosts(settings: Settings) -> tuple[str, ...]:
-    """ALLOWED_HOSTS entries: exact hosts and `*.suffix` wildcards, the one list
-    behind both the Host check and the Origin allowlist."""
-    return tuple(entry.strip() for entry in settings.allowed_hosts.split(",") if entry.strip())
-
-
-def parse_allowed_hosts(settings: Settings) -> tuple[frozenset[str], tuple[re.Pattern[str], ...]]:
-    """The Origin allowlist: exact hosts and patterns for the wildcards."""
-    exact: set[str] = set()
-    patterns: list[re.Pattern[str]] = []
-    for host in allowed_hosts(settings):
-        if host.startswith("*."):
-            patterns.append(re.compile(rf"^[^:]+\.{re.escape(host[2:])}(:\d+)?$"))
-        else:
-            exact.add(host)
-    return frozenset(exact), tuple(patterns)
+    """ALLOWED_HOSTS entries: exact host names, the one list behind both the Host
+    check and the Origin allowlist. A `*` entry raises at startup."""
+    hosts = tuple(entry.strip() for entry in settings.allowed_hosts.split(",") if entry.strip())
+    for host in hosts:
+        if "*" in host:
+            raise ValueError(f"ALLOWED_HOSTS takes exact host names only, not {host!r}")
+    return hosts
 
 
 def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
     """The auth library's view of this deployment, assembled from songmaker's."""
-    hosts_exact, hosts_patterns = parse_allowed_hosts(settings)
     return WebAuthConfig(
         session_secret=SecretStr(ctx.signing_key.decode()),
         rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
         trusted_proxies=ctx.trusted_proxies,
-        allowed_hosts_exact=hosts_exact,
-        allowed_hosts_patterns=hosts_patterns,
+        allowed_hosts_exact=frozenset(allowed_hosts(settings)),
         session_lifetime=SessionLifetime(
             idle_seconds=settings.session_idle_seconds,
             absolute_max_age_seconds=settings.session_absolute_max_age_seconds,

@@ -20,30 +20,30 @@
 "test_shared_song_audio_authorization_matches_presented_share_selection" = 17
 
 [file_lines]
-"frontend/e2e/back-closes-overlay.spec.ts" = 1280
-"frontend/e2e/helpers.ts" = 843
+"frontend/e2e/back-closes-overlay.spec.ts" = 1241
+"frontend/e2e/helpers.ts" = 839
 "frontend/e2e/library.spec.ts" = 1305
 "frontend/e2e/offline.spec.ts" = 816
-"frontend/e2e/seed.ts" = 1205
-"frontend/e2e/song-phone.spec.ts" = 866
+"frontend/e2e/seed.ts" = 1194
+"frontend/e2e/song-phone.spec.ts" = 865
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1159
+"frontend/src/lib/api/types.ts" = 1140
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
-"frontend/src/lib/components/CoWriterPanel.svelte" = 1580
-"frontend/src/lib/components/CoWriterPanel.test.ts" = 1892
+"frontend/src/lib/components/CoWriterPanel.svelte" = 1533
+"frontend/src/lib/components/CoWriterPanel.test.ts" = 1857
 "frontend/src/lib/components/LibraryWall.test.ts" = 1134
 "frontend/src/lib/components/LoraDetail.svelte" = 968
 "frontend/src/lib/components/NowPlaying.test.ts" = 1094
-"frontend/src/lib/components/NowPlayingFrame.svelte" = 1121
+"frontend/src/lib/components/NowPlayingFrame.svelte" = 1109
 "frontend/src/lib/components/PlayerBar.test.ts" = 1642
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
 "frontend/src/lib/components/SongDetailView.svelte" = 1104
-"frontend/src/lib/components/SongDetailView.test.ts" = 2314
+"frontend/src/lib/components/SongDetailView.test.ts" = 2312
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
-"frontend/src/lib/components/editor/TakesList.test.ts" = 1311
+"frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/constants.ts" = 846
-"frontend/src/lib/history/historyController.test.ts" = 1103
+"frontend/src/lib/history/historyController.test.ts" = 934
 "frontend/src/lib/history/historyController.ts" = 953
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
@@ -56,28 +56,27 @@
 "frontend/src/lib/stores/navigation.test.ts" = 3045
 "frontend/src/lib/stores/player.test.ts" = 5283
 "frontend/src/lib/stores/player.ts" = 2242
-"frontend/src/lib/stores/resourceSync.test.ts" = 2040
+"frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1070
-"frontend/src/routes/layout.test.ts" = 1416
-"frontend/src/routes/settings/users/+page.svelte" = 1243
-"frontend/src/routes/settings/users/page.test.ts" = 1026
+"frontend/src/routes/layout.test.ts" = 1403
+"frontend/src/routes/settings/users/+page.svelte" = 1209
+"frontend/src/routes/settings/users/page.test.ts" = 990
 "src/acestep_worker/wrapper.py" = 1092
-"src/songmaker_cli/constants.py" = 837
-"src/songmaker_cli/conversation_api.py" = 1109
+"src/songmaker_cli/constants.py" = 832
+"src/songmaker_cli/conversation_api.py" = 976
 "src/songmaker_cli/jobs/generation.py" = 1203
 "src/songmaker_cli/jobs/lora_training.py" = 1552
 "src/songmaker_cli/queue_streams.py" = 976
-"src/songmaker_cli/settings_api.py" = 827
 "src/songmaker_cli/sharing_api.py" = 868
 "tests/acestep_worker/test_wrapper.py" = 1631
-"tests/conftest.py" = 949
+"tests/conftest.py" = 933
 "tests/test_acestep_worker_train_lora.py" = 1294
 "tests/test_admin_api.py" = 1055
-"tests/test_api.py" = 4765
+"tests/test_api.py" = 4764
 "tests/test_auto_deploy_alerting.py" = 1389
 "tests/test_client.py" = 870
-"tests/test_conversation_api.py" = 1142
-"tests/test_cowriter_providers.py" = 2191
+"tests/test_conversation_api.py" = 853
+"tests/test_cowriter_providers.py" = 1255
 "tests/test_db.py" = 3642
 "tests/test_install_cli_credentials_mirror.py" = 1017
 "tests/test_jobs.py" = 3518
@@ -90,7 +89,7 @@
 "tests/test_resource_event_api.py" = 1239
 "tests/test_scheduler.py" = 1310
 "tests/test_scorers_extended.py" = 1035
-"tests/test_server.py" = 1995
+"tests/test_server.py" = 1955
 "tests/test_sharing.py" = 2554
 
 [function_lines."scripts/mirror_agent_cli_credentials.py"]
@@ -173,7 +172,7 @@
 
 [function_lines."src/songmaker_cli/server.py"]
 "_lifespan" = 85
-"create_app" = 182
+"create_app" = 180
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
 "_make_deps" = 64
@@ -203,18 +202,8 @@
 [function_lines."tests/test_backfill_audio_durations.py"]
 "test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
 
-[function_lines."tests/test_conversation_api.py"]
-"test_chat_turn_provider_change_preserves_conversation_context" = 83
-
 [function_lines."tests/test_cover_accounting.py"]
 "test_postgresql_serializes_publication_and_cancellation" = 94
-
-[function_lines."tests/test_cowriter_dispatch.py"]
-"test_cli_dispatch_executes_owned_calls_and_rejects_a_foreign_song" = 94
-
-[function_lines."tests/test_cowriter_providers.py"]
-"test_chat_turn_uses_the_claude_api_sdk_tool_loop_and_persists_the_conversation" = 172
-"test_openai_adapter_allows_final_response_after_last_tool_round" = 63
 
 [function_lines."tests/test_db.py"]
 "test_acestep_canonical_names_migration_renames_json_keys" = 68
@@ -280,3 +269,169 @@
 
 [function_lines."tests/test_song_covers.py"]
 "test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit" = 80
+
+[clones."scripts/archive_e2e_albums.py"]
+main = [["scripts/seed_e2e_filler_albums.py", "main"]]
+
+[clones."src/acestep_worker/task_store.py"]
+"_Task.snapshot" = [["src/songmaker_cli/settings.py", "Settings.lora_training_config"]]
+
+[clones."src/songmaker_cli/album_api.py"]
+api_cleanup_album = [["src/songmaker_cli/song_api.py", "api_cleanup_song"]]
+api_get_album = [["src/songmaker_cli/sharing_api.py", "get_shared_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_playlist_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_queue_stream_audio"], ["src/songmaker_cli/sharing_api.py", "get_shared_song_audio"]]
+api_get_album_cover = [["src/songmaker_cli/playlist_api.py", "api_get_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
+api_upload_album_cover = [["src/songmaker_cli/playlist_api.py", "api_upload_playlist_cover"], ["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
+
+[clones."src/songmaker_cli/api_models/loras.py"]
+"UserLoraSampleResponse.from_orm" = [["src/songmaker_cli/api_models/workers.py", "WorkerIdentity.from_orm"]]
+
+[clones."src/songmaker_cli/api_models/playlists.py"]
+_shared_playlist_cover_urls_at = [["src/songmaker_cli/api_models/songs.py", "public_album_cover_urls_at"]]
+playlist_cover_urls = [["src/songmaker_cli/api_models/songs.py", "album_cover_urls"], ["src/songmaker_cli/api_models/songs.py", "public_song_cover_urls"], ["src/songmaker_cli/api_models/songs.py", "song_cover_urls"]]
+
+[clones."src/songmaker_cli/conversation_api.py"]
+api_list_conversations = [["src/songmaker_cli/lora_api.py", "api_list_own_playable_takes"]]
+api_put_album_memory = [["src/songmaker_cli/generation_api.py", "api_get_generation"]]
+api_put_song_memory = [["src/songmaker_cli/generation_api.py", "api_get_generation"]]
+
+[clones."src/songmaker_cli/db/migrations/versions/2006299a7179_add_playlist_tables.py"]
+downgrade = [["src/songmaker_cli/db/migrations/versions/f2a3b4c5d6e7_add_user_loras.py", "downgrade"]]
+
+[clones."src/songmaker_cli/db/migrations/versions/40a1c2d3e4f5_add_user_resource_events.py"]
+upgrade = [["src/songmaker_cli/db/migrations/versions/f4a5b6c7d8e9_add_resource_event_ledger.py", "downgrade"]]
+
+[clones."src/songmaker_cli/db/migrations/versions/472a8313e095_add_rate_limit_settings_table.py"]
+upgrade = [["src/songmaker_cli/db/migrations/versions/af88e1bd4d6d_add_chat_messages_table.py", "upgrade"]]
+
+[clones."src/songmaker_cli/db/migrations/versions/b8e3f1c07a25_add_slug_to_songs.py"]
+_backfill_song_slugs = [["src/songmaker_cli/db/migrations/versions/c9d4a2f18e37_unique_song_slug_index.py", "_backfill_empty_slugs"]]
+
+[clones."src/songmaker_cli/db/migrations/versions/c3e7a91f5d20_add_playlist_last_played.py"]
+downgrade = [["src/songmaker_cli/db/migrations/versions/e5a9c3d7b2f1_add_generation_created_by.py", "downgrade"]]
+upgrade = [["src/songmaker_cli/db/migrations/versions/e5a9c3d7b2f1_add_generation_created_by.py", "upgrade"]]
+
+[clones."src/songmaker_cli/db/migrations/versions/c9d4a2f18e37_unique_song_slug_index.py"]
+_assert_no_empty_slugs_remain = [["src/songmaker_cli/db/migrations/versions/d5f8a3b21c46_add_slug_to_playlists.py", "_assert_no_empty_slugs_remain"]]
+
+[clones."src/songmaker_cli/db/queries/albums.py"]
+cleanup_album = [["src/songmaker_cli/db/queries/songs.py", "cleanup_song"]]
+count_songs_by_album = [["src/songmaker_cli/db/queries/songs.py", "count_generations_by_song"]]
+get_album_by_slug = [["src/songmaker_cli/db/queries/generations.py", "get_generation_by_slug"], ["src/songmaker_cli/db/queries/playlists.py", "get_playlist_by_slug"], ["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
+set_album_cover_key = [["src/songmaker_cli/db/queries/playlists.py", "set_playlist_cover_key"], ["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]
+
+[clones."src/songmaker_cli/db/queries/auth.py"]
+set_user_role = [["src/songmaker_cli/db/queries/playlists.py", "update_playlist"]]
+
+[clones."src/songmaker_cli/db/queries/conversations.py"]
+delete_conversation = [["src/songmaker_cli/db/queries/playlists.py", "delete_playlist"]]
+
+[clones."src/songmaker_cli/db/queries/generations.py"]
+get_generation = [["src/songmaker_cli/db/queries/playlists.py", "get_playlist"], ["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
+get_generation_by_slug = [["src/songmaker_cli/db/queries/playlists.py", "get_playlist_by_slug"], ["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
+
+[clones."src/songmaker_cli/db/queries/loras.py"]
+soft_delete_user_lora = [["src/songmaker_cli/db/queries/songs.py", "soft_delete_song"]]
+
+[clones."src/songmaker_cli/db/queries/playlists.py"]
+get_playlist_by_slug = [["src/songmaker_cli/db/queries/songs.py", "get_song_by_slug"]]
+set_playlist_cover_key = [["src/songmaker_cli/db/queries/songs.py", "set_song_cover_key"]]
+
+[clones."src/songmaker_cli/generation_api.py"]
+api_share_generation = [["src/songmaker_cli/playlist_api.py", "api_share_playlist"], ["src/songmaker_cli/song_api.py", "api_share_song"]]
+api_unshare_generation = [["src/songmaker_cli/playlist_api.py", "api_delete_playlist"], ["src/songmaker_cli/playlist_api.py", "api_unshare_playlist"], ["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
+
+[clones."src/songmaker_cli/playlist_api.py"]
+api_delete_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
+api_delete_playlist_cover = [["src/songmaker_cli/song_api.py", "api_delete_song_cover"]]
+api_get_playlist = [["src/songmaker_cli/song_api.py", "api_get_song"]]
+api_get_playlist_cover = [["src/songmaker_cli/song_api.py", "api_get_song_cover"]]
+api_share_playlist = [["src/songmaker_cli/song_api.py", "api_share_song"]]
+api_unshare_playlist = [["src/songmaker_cli/song_api.py", "api_delete_song"], ["src/songmaker_cli/song_api.py", "api_unshare_song"]]
+api_upload_playlist_cover = [["src/songmaker_cli/song_api.py", "api_upload_song_cover"]]
+
+[clones."src/songmaker_cli/queue_streams.py"]
+_get_queue_stream_limiter = [["src/songmaker_cli/resource_event_api.py", "_get_open_limiter"]]
+
+[clones."tests/test_album_api.py"]
+_count_queries = [["tests/test_song_api.py", "_count_queries"]]
+"_count_queries._record" = [["tests/test_song_api.py", "_count_queries._record"]]
+"test_archive_other_users_album_is_404._seed" = [["tests/test_upload_limits.py", "_seed_owner"]]
+test_list_albums_picked_count_counts_n_picked_songs = [["tests/test_song_api.py", "test_list_songs_generation_count_counts_archived_take"], ["tests/test_song_api.py", "test_list_songs_generation_count_counts_n_takes"], ["tests/test_song_api.py", "test_list_songs_generation_count_counts_one_take"]]
+test_list_albums_picked_count_counts_one_picked_song = [["tests/test_song_api.py", "test_list_songs_generation_count_counts_archived_take"], ["tests/test_song_api.py", "test_list_songs_generation_count_counts_n_takes"], ["tests/test_song_api.py", "test_list_songs_generation_count_counts_one_take"]]
+test_list_albums_picked_count_excludes_archived_pick = [["tests/test_song_api.py", "test_list_songs_generation_count_counts_archived_take"], ["tests/test_song_api.py", "test_list_songs_generation_count_counts_n_takes"], ["tests/test_song_api.py", "test_list_songs_generation_count_counts_one_take"]]
+test_list_albums_picked_count_zero_when_no_picks = [["tests/test_song_api.py", "test_list_songs_generation_count_zero_when_no_takes"]]
+"test_unarchive_other_users_album_is_404._seed" = [["tests/test_upload_limits.py", "_seed_owner"]]
+"test_update_album_metadata_other_user_blocked._seed" = [["tests/test_upload_limits.py", "_seed_owner"]]
+
+[clones."tests/test_album_covers.py"]
+_assert_escape_markers_survive = [["tests/test_song_covers.py", "_assert_escape_markers_survive"]]
+_authed_app = [["tests/test_song_covers.py", "_authed_app"]]
+_cover_escape_layout = [["tests/test_song_covers.py", "_cover_escape_layout"]]
+_jpeg_bytes = [["tests/test_song_covers.py", "_jpeg_bytes"]]
+_png_bytes = [["tests/test_song_covers.py", "_png_bytes"]]
+"_png_header.chunk" = [["tests/test_song_covers.py", "_png_header.chunk"]]
+test_foreign_album_cover_is_404 = [["tests/test_song_covers.py", "test_foreign_song_cover_is_404"]]
+test_remove_album_cover_files_does_not_rmtree_audio_dir = [["tests/test_song_covers.py", "test_remove_song_cover_files_does_not_rmtree_audio_dir"]]
+test_remove_album_cover_files_rejects_unsafe_album_ids = [["tests/test_song_covers.py", "test_remove_song_cover_files_rejects_unsafe_song_ids"]]
+test_resolve_cover_file_rejects_unsafe_album_ids = [["tests/test_song_covers.py", "test_resolve_song_cover_file_rejects_unsafe_song_ids"]]
+test_soft_delete_album_keeps_cover_files = [["tests/test_song_covers.py", "test_soft_delete_song_keeps_cover_files"]]
+test_unknown_variant_is_422 = [["tests/test_song_covers.py", "test_unknown_variant_is_422"]]
+test_upload_rejects_svg = [["tests/test_song_covers.py", "test_upload_rejects_svg_and_webp"]]
+test_write_album_cover_rejects_unsafe_album_ids = [["tests/test_song_covers.py", "test_write_song_cover_rejects_unsafe_song_ids"]]
+test_write_album_cover_replaces_when_leftover_old_exists = [["tests/test_song_covers.py", "test_write_song_cover_replaces_when_leftover_old_exists"]]
+test_write_album_cover_restores_live_dir_if_publish_rename_fails = [["tests/test_song_covers.py", "test_write_song_cover_restores_live_dir_if_publish_rename_fails"]]
+"test_write_album_cover_restores_live_dir_if_publish_rename_fails.rename_fails_staging_publish" = [["tests/test_song_covers.py", "test_write_song_cover_restores_live_dir_if_publish_rename_fails.rename_fails_staging_publish"]]
+test_write_album_cover_restores_orphaned_old_before_replace = [["tests/test_song_covers.py", "test_write_song_cover_restores_orphaned_old_before_replace"]]
+
+[clones."tests/test_api.py"]
+test_cleanup_album_api = [["tests/test_sharing.py", "test_unshare_album"]]
+test_create_album_duplicate_gets_suffix = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
+test_create_album_slugifies_unicode = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
+test_create_album_slugify_special_chars = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
+test_default_config_set_builtin = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
+test_list_albums = [["tests/test_server.py", "test_api_songs"]]
+test_list_albums_pagination = [["tests/test_server.py", "test_api_songs"]]
+test_list_songs_offset_beyond_total = [["tests/test_server.py", "test_api_songs"]]
+test_list_songs_pagination_offset_limit = [["tests/test_server.py", "test_api_songs"]]
+test_rename_album = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
+test_rename_album_strips_whitespace = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
+test_rename_song_strips_whitespace = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
+test_song_detail_response_uncompressed_without_client_support = [["tests/test_server_middleware.py", "test_tiny_json_response_is_not_gzip_compressed"]]
+
+[clones."tests/test_check_dead_symbols.py"]
+test_gate_takes_no_path_from_the_command_line = [["tests/test_check_style_literals.py", "test_gate_takes_no_path_from_the_command_line"]]
+
+[clones."tests/test_conversation_api.py"]
+_seed_owned = [["tests/test_memory.py", "_seed"], ["tests/test_mentions.py", "_seed"]]
+client = [["tests/test_memory.py", "client"], ["tests/test_takes.py", "client"]]
+stranger_client = [["tests/test_memory.py", "stranger_client"]]
+
+[clones."tests/test_cover_runner.py"]
+_png_bytes = [["tests/test_playlists.py", "_png_bytes"]]
+
+[clones."tests/test_cowriter_mcp_endpoint.py"]
+mcp_environment = [["tests/test_cowriter_service_turn.py", "mcp_key"]]
+
+[clones."tests/test_cowriter_providers.py"]
+_stream_events = [["tests/test_memory.py", "_stream_events"], ["tests/test_mentions.py", "_stream_events"], ["tests/test_takes.py", "_stream_events"]]
+
+[clones."tests/test_db.py"]
+test_delete_album = [["tests/test_soft_delete.py", "test_soft_delete_album_cascades_to_live_songs"], ["tests/test_soft_delete.py", "test_soft_delete_song_hides_single_song"]]
+
+[clones."tests/test_lifecycle_job_reaper.py"]
+ctx = [["tests/test_lifecycle_queue_stream_cleanup.py", "ctx"], ["tests/test_lifecycle_reconciliation.py", "ctx"]]
+
+[clones."tests/test_lifecycle_queue_stream_cleanup.py"]
+ctx = [["tests/test_lifecycle_reconciliation.py", "ctx"]]
+
+[clones."tests/test_memory.py"]
+_seed = [["tests/test_mentions.py", "_seed"]]
+_stream_events = [["tests/test_mentions.py", "_stream_events"], ["tests/test_takes.py", "_stream_events"]]
+client = [["tests/test_takes.py", "client"]]
+
+[clones."tests/test_mentions.py"]
+_stream_events = [["tests/test_takes.py", "_stream_events"]]
+
+[clones."tests/test_music_worker.py"]
+_make_worker = [["tests/test_scoring_worker.py", "_make_worker"]]
+"test_music_worker_functions_registered_under_job_function_names._build_and_inspect" = [["tests/test_scoring_worker.py", "test_scoring_worker_functions_registered_under_job_function_names._build_and_inspect"]]

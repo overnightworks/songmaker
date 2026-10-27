@@ -54,7 +54,7 @@ jobs:
         timeout-minutes: 45 # why: a hung apt mirror must fail, not hold the queued main runs behind it for hours.
 
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra mcp --extra agent-service --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
@@ -155,7 +155,7 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra agent-service --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially

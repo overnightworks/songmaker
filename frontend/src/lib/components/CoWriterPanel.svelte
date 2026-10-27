@@ -23,10 +23,10 @@
 		VersionItem
 	} from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
-	import { health } from '$lib/stores/health';
 	import {
-		COWRITER_CLAUDE_UNVERIFIED_LABEL,
 		COWRITER_CONVERSATION_MENU_LABEL,
+		EDITOR_VIEW_COWRITER_LABEL,
+		COWRITER_UNAVAILABLE_TEXT,
 		COWRITER_DELETE_CONVERSATION_TITLE,
 		COWRITER_DELETE_CONVERSATION_WARNING,
 		COWRITER_MEMORY_LABEL,
@@ -61,14 +61,16 @@
 		conversationMenuOrder,
 		conversationMessageCountLabel,
 		conversationRowLabel,
-		cowriterTurnFailureLabel,
 		cowriterHeaderLabel,
 		cowriterThinkingLabel,
+		cowriterTurnError,
 		cowriterToolCallTarget,
-		cowriterUnavailableLabel,
-		providerDisplayName
+		type CowriterProblem,
+		type CowriterTurnError
 	} from '$lib/utils/cowriter-ui';
 	import ChatInput from './ChatInput.svelte';
+	import CoWriterTurnError from './CoWriterTurnError.svelte';
+	import AiNotice from './AiNotice.svelte';
 	import Icon from './Icon.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
@@ -103,6 +105,8 @@
 		text: string;
 		toolCalls?: ToolCall[];
 		error?: string;
+		problem?: CowriterProblem | null;
+		waitSeconds?: number;
 	}
 
 	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
@@ -141,8 +145,7 @@
 	const showMentions = historyLayerState('cowriter-mention-list', false);
 	let mentionCursorPos = $state(0);
 	let selectedMentionIdx = $state(0);
-	let providerName = $state('claude');
-	let providerModel = $state('');
+	let cowriterModel = $state('');
 	let unmounted = false;
 	let latestTurn: Promise<void> = Promise.resolve();
 
@@ -395,9 +398,16 @@
 		messages = [...messages.slice(0, -1), { ...last, error: INCOMPLETE_TURN_MESSAGE }];
 	}
 
-	function markTurnFailed(assistantIndex: number, failureMessage: string): void {
+	function markTurnFailed(
+		assistantIndex: number,
+		failureMessage: string,
+		problem: CowriterProblem | null = null,
+		waitSeconds = 0
+	): void {
 		messages = messages.map((message, index) =>
-			index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
+			index === assistantIndex - 1
+				? { ...message, error: failureMessage, problem, waitSeconds }
+				: message
 		);
 		const current = messages[assistantIndex];
 		if (current && !current.text) {
@@ -472,10 +482,6 @@
 			addToast('Viewing an archived conversation — start a new one to reply', 'info');
 			return;
 		}
-		if (claudeDrifted) {
-			addToast(cowriterUnavailableLabel(providerName), 'error');
-			return;
-		}
 		latestTurn = runTurn(msg);
 		await latestTurn;
 	}
@@ -494,7 +500,7 @@
 		loading = true;
 		followLatest();
 
-		let streamError: string | null = null;
+		let streamError: CowriterTurnError | null = null;
 		let answeredConversationId: string | null = null;
 		let refusal: ApiError | null = null;
 		try {
@@ -513,7 +519,7 @@
 			})) {
 				applyStreamEvent(assistantIndex, event);
 				if (event.type === 'error') {
-					streamError = streamFailureMessage(event);
+					streamError = streamFailure(event);
 					break;
 				}
 				if (event.type === 'final') {
@@ -536,7 +542,12 @@
 		} else if (refusal) {
 			markTurnFailed(assistantIndex, refusalMessage(refusal));
 		} else if (streamError) {
-			markTurnFailed(assistantIndex, streamError);
+			markTurnFailed(
+				assistantIndex,
+				streamError.text,
+				streamError.problem,
+				streamError.waitSeconds
+			);
 		} else if (answeredConversationId === null) {
 			await reattachDroppedTurn(msg, lastKnownPersistedId, assistantIndex);
 		} else {
@@ -592,12 +603,16 @@
 		messages.findLastIndex((message) => message.role === 'user')
 	);
 
-	function streamFailureMessage(frame: Extract<CoWriterStreamEvent, { type: 'error' }>): string {
-		return cowriterTurnFailureLabel(frame, providerName) ?? INCOMPLETE_TURN_MESSAGE;
+	function streamFailure(
+		frame: Extract<CoWriterStreamEvent, { type: 'error' }>
+	): CowriterTurnError {
+		return (
+			cowriterTurnError(frame) ?? { problem: null, text: INCOMPLETE_TURN_MESSAGE, waitSeconds: 0 }
+		);
 	}
 
 	function refusalMessage(refusal: ApiError): string {
-		if (refusal.status === 503) return refusal.detail || cowriterUnavailableLabel(providerName);
+		if (refusal.status === 503) return refusal.detail || COWRITER_UNAVAILABLE_TEXT;
 		return refusal.message;
 	}
 
@@ -696,8 +711,7 @@
 	async function loadCowriterSettings(): Promise<void> {
 		try {
 			const settings = await fetchCowriterSettings();
-			providerName = settings.provider;
-			providerModel = settings.model;
+			cowriterModel = settings.model;
 		} catch {
 			/* leave last known labels */
 		}
@@ -923,19 +937,6 @@
 	const readOnly = $derived(
 		viewingConversationId !== null && viewingConversationId !== activeConversationId
 	);
-
-	// Grok and Codex have no pre-emptive signal; only Claude's drifted or
-	// unverified tool surface is caught before a turn is sent (ruling 26.09.2026).
-	// Drift is a per-build verdict: the send path itself refuses. Unverified
-	// only warns — the backend gate re-probes on every turn.
-	const claudeDrifted = $derived(
-		providerName === 'claude' && $health !== null && $health.claude_cli_tool_surface === 'drift'
-	);
-	const claudeUnverified = $derived(
-		providerName === 'claude' &&
-			$health !== null &&
-			$health.claude_cli_tool_surface === 'unverified'
-	);
 </script>
 
 {#snippet proposalWaitingMark()}
@@ -945,7 +946,8 @@
 <div class="cowriter">
 	<div class="convo">
 		<span class="convo-line">
-			{#if providerModel}<b>{providerDisplayName(providerName)}</b> ·{/if}
+			<b>{EDITOR_VIEW_COWRITER_LABEL}</b> ·
+			{#if cowriterModel}{cowriterHeaderLabel(cowriterModel)} ·{/if}
 			{conversationLine}
 		</span>
 		<div class="convo-menu-anchor">
@@ -972,8 +974,8 @@
 					onclick={(e) => e.stopPropagation()}
 					onkeydown={(e) => e.stopPropagation()}
 				>
-					{#if providerModel}
-						<p class="menu-heading">{cowriterHeaderLabel(providerName, providerModel)}</p>
+					{#if cowriterModel}
+						<p class="menu-heading">{cowriterHeaderLabel(cowriterModel)}</p>
 					{/if}
 					<button
 						type="button"
@@ -1016,6 +1018,7 @@
 			{/if}
 		</div>
 	</div>
+	<AiNotice look="line" />
 
 	{#if conversationAwaitingDelete}
 		<ConfirmDeleteDialog
@@ -1085,17 +1088,17 @@
 					{#if msg.text}
 						<pre class="message-text">{stripMemoryProposals(msg.text)}</pre>
 					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
-						<span class="typing">{cowriterThinkingLabel(providerName)}</span>
-					{/if}
-					{#if msg.error && i === retryableMessageIndex}
-						<div class="turn-error" role="alert">
-							<span>{msg.error}</span>
-							<button type="button" class="retry-turn" onclick={() => retry(msg.text)}
-								>Try again</button
-							>
-						</div>
+						<span class="typing">{cowriterThinkingLabel()}</span>
 					{/if}
 				</div>
+				{#if msg.error && i === retryableMessageIndex}
+					<CoWriterTurnError
+						text={msg.error}
+						problem={msg.problem ?? null}
+						waitSeconds={msg.waitSeconds ?? 0}
+						onretry={() => retry(msg.text)}
+					/>
+				{/if}
 			{/each}
 		</div>
 	{/if}
@@ -1104,12 +1107,6 @@
 		<div class="readonly-banner">
 			Archived — <button class="link" onclick={startNew}>start a new conversation</button> to reply.
 		</div>
-	{/if}
-
-	{#if claudeDrifted}
-		<div class="unavailable-banner" role="status">{cowriterUnavailableLabel(providerName)}</div>
-	{:else if claudeUnverified}
-		<div class="unverified-banner" role="status">{COWRITER_CLAUDE_UNVERIFIED_LABEL}</div>
 	{/if}
 
 	{#if mentionedSongs.length > 0 || mentionedVersions.length > 0 || mentionedAlbumId}
@@ -1155,7 +1152,7 @@
 		{/if}
 		<ChatInput
 			bind:value={input}
-			disabled={loading || !input.trim() || readOnly || claudeDrifted}
+			disabled={loading || !input.trim() || readOnly}
 			bind:inputRef={inputEl}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
@@ -1292,18 +1289,10 @@
 		vertical-align: middle;
 	}
 
-	.convo-memory:hover {
-		background: var(--bg);
-	}
-
 	.conv-row {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-	}
-
-	.conv-row.active .conv-pick {
-		background: var(--bg);
 	}
 
 	.conv-pick {
@@ -1321,7 +1310,9 @@
 		min-width: 0;
 	}
 
-	.conv-pick:hover {
+	.conv-pick:hover,
+	.conv-row.active .conv-pick,
+	.convo-memory:hover {
 		background: var(--bg);
 	}
 
@@ -1473,48 +1464,10 @@
 		font-weight: 600;
 	}
 
-	.turn-error {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin-top: 6px;
-		font-size: 0.75rem;
-	}
-
-	.retry-turn {
-		border: 1px solid currentColor;
-		border-radius: 4px;
-		background: transparent;
-		color: inherit;
-		cursor: pointer;
-		font: inherit;
-		padding: 2px 6px;
-	}
-
-	.retry-turn:hover {
-		background: color-mix(in srgb, currentColor 15%, transparent);
-	}
-
 	.readonly-banner {
 		padding: 6px 12px;
 		background: var(--surface);
 		color: var(--text-subtle);
-		font-size: 0.8rem;
-		border-top: 1px solid var(--border);
-	}
-
-	.unavailable-banner {
-		padding: 6px 12px;
-		background: var(--surface);
-		color: var(--score-bad);
-		font-size: 0.8rem;
-		border-top: 1px solid var(--border);
-	}
-
-	.unverified-banner {
-		padding: 6px 12px;
-		background: var(--surface);
-		color: var(--score-ok);
 		font-size: 0.8rem;
 		border-top: 1px solid var(--border);
 	}

@@ -58,7 +58,7 @@ The [logic tests](../tests/test_similar_functions.py) use fakes and load no mode
 
 ## Static analysis (SonarCloud)
 
-GitHub CI calls the SHA-pinned `overnightworks/quality` v0.2.1 reusable gate from `.github/workflows/ci.yml`. Its `quality / verdict` check combines hygiene, Sonar findings and the five mandatory job names in [`quality/config.toml`](../quality/config.toml). Failed or skipped dependencies still reach the verdict; cancelled runs do not start the caller. There are no actor or fork exclusions: missing `SONAR_TOKEN` fails closed, including tokenless forks. Dependabot needs the separately configured Dependabot secret.
+GitHub CI calls the SHA-pinned `overnightworks/quality` v0.5.0 reusable gate from `.github/workflows/ci.yml`. Its `quality / verdict` check combines hygiene, Sonar findings and the five mandatory job names in [`quality/config.toml`](../quality/config.toml). Failed or skipped dependencies still reach the verdict; cancelled runs do not start the caller. There are no actor or fork exclusions: missing `SONAR_TOKEN` fails closed, including tokenless forks. Dependabot needs the separately configured Dependabot secret.
 
 The backend and frontend producers retain their separate coverage artifacts. The `coverage` assembly job downloads both, requires nonempty XML and LCOV reports, and uploads exactly those files as `coverage`, replacing the artifact on reruns. The gate restores it into the checkout; [`sonar-project.properties`](../sonar-project.properties) therefore names `coverage.xml` and `frontend-coverage/lcov.info`. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=overnightworks_songmaker) shows the resulting analysis and coverage.
 
@@ -66,9 +66,9 @@ Findings from the run's own analysis block the verdict, including accepted and f
 
 Adoption is complete only after authenticated enforcement checks and the post-merge main run prove the verdict and both reports. The operator enables `quality_gate=true` after a green verdict and verifies the required context is exactly `quality / verdict`; older open PRs must merge main to supply that check. Automatic analysis must be off. Red main blocks deployment; retain the last green deployment and forward-fix. Any temporary enforcement rollback requires an explicit operator ruling.
 
-The scope covers `src` and `frontend/src`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
+The scope covers `src`, `frontend/src` and `scripts`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
-Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci` and `sonar-project.properties`: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
+Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci` and `sonar-project.properties`, except `scripts/**`, which only the Sonar side names because pytest `--cov` never measures `scripts` and its lines would otherwise read as 0 % new code: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
 
 ### Parallel Execution
 
@@ -146,7 +146,10 @@ backend-to-backend protocol rather than a browser surface.
 Run `python scripts/generate_types.py` after changing a routed model, then
 `python scripts/generate_types.py --check`. `tests/test_generate_types.py`
 plants routed response, body, and nested models to prove a stale type file
-fails with the missing model name and a regenerated file passes.
+fails with the missing model name and a regenerated file passes. A routed model
+declared outside `songmaker_cli.api_models` that no named exemption in the
+script holds makes both modes exit 1, naming the model and its module, before
+anything is written.
 
 ### Alert rules (promtool)
 
@@ -215,7 +218,7 @@ request budget per shell.
   this doc the way it did before issue #326.
 - **One seeded session per run.** There is no Keycloak in the CI stack, so no
   flow types a password. `frontend/e2e/support/seed_sessions.py` runs inside the
-  web container and opens database sessions whose cookies the 0.20.1 library
+  web container and opens database sessions whose cookie the 0.23.0 library
   signs, and it creates the e2e admin (`E2E_ADMIN_USERNAME`) because the stack
   has no admin bootstrap. Global setup seeds an album, songs, takes, a pick and
   a share link through the public API with that admin's session and hands it to
@@ -391,7 +394,7 @@ frontend/e2e/
 The auth library's own tests are not in this repository. They moved with
 `webauth` to [overnightworks/webauth](https://github.com/overnightworks/webauth)
 in #879 and run in that repository's CI; songmaker installs the released wheel
-(tag `v0.20.1`) and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
+(tag `v0.23.0`) and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
 `test_auth_api.py`, `test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
 The provider library's own tests likewise left with it. They moved with

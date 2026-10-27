@@ -114,7 +114,7 @@ test('an API request without a session is refused with 401 and nothing redirects
 	expect(response.status()).toBe(401);
 });
 
-for (const address of ['/legal', '/impressum', '/datenschutz', '/share/song/no-such-share']) {
+for (const address of ['/share/song/no-such-share']) {
 	test(`${address} opens without a session and never asks to sign in`, async ({ page }) => {
 		const started: string[] = [];
 		page.on('request', (request) => {
@@ -145,39 +145,16 @@ test('no access offers Sign out and Back, and Back leads to the signed-out page'
 	guard.assertClean();
 });
 
-test('Sign out on no access asks the server for the issuer logout address and leaves for it', async ({
+// Cell 20 (K3, E2).
+test('Sign out on no access posts to the server and the answer sends the browser on to the issuer', async ({
 	page
 }) => {
-	const guard = new FlowGuard(page);
+	// The sign-out first reads the session; this browser has none, and a 401 passes that check.
+	const guard = new FlowGuard(page, { refusalsExpectedOn: SESSION_REFUSED });
 	await page.goto('/no-access');
-	// The page leaves for the issuer as soon as it has the answer, so the server's
-	// answer is taken here, before the navigation, not read from a response afterwards.
-	let answered:
-		| {
-				status: number;
-				headers: Record<string, string>;
-				setCookies: string[];
-				body: { logout_url?: string };
-		  }
-		| undefined;
-	await page.route(
-		(url) => url.pathname === '/auth/logout',
-		async (route) => {
-			const response = await route.fetch();
-			answered = {
-				status: response.status(),
-				headers: response.headers(),
-				setCookies: response
-					.headersArray()
-					.filter(({ name }) => name.toLowerCase() === 'set-cookie')
-					.map(({ value }) => value),
-				body: await response.json()
-			};
-			await route.fulfill({ response });
-		}
-	);
 
-	const [issuerLogout] = await Promise.all([
+	const [answer, issuerLogout] = await Promise.all([
+		page.waitForResponse((response) => new URL(response.url()).pathname === '/auth/logout'),
 		page.waitForRequest((request) => {
 			const address = new URL(request.url());
 			return (
@@ -188,21 +165,24 @@ test('Sign out on no access asks the server for the issuer logout address and le
 		page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click()
 	]);
 
-	expect(answered?.status).toBe(200);
-	expect(answered?.headers['cache-control']).toContain('no-store');
-	for (const cookie of ['session_id', 'csrf_token']) {
-		expect(
-			answered?.setCookies.some((line) => line.includes(`${cookie}=`)),
-			`${cookie} is cleared`
-		).toBe(true);
-	}
-	expect(answered?.body.logout_url, 'the server names the issuer logout address').toBeTruthy();
-	expect(issuerLogout.url()).toBe(answered?.body.logout_url);
+	expect(answer.request().method()).toBe('POST');
+	expect(answer.status()).toBe(200);
+	expect(answer.headers()['cache-control']).toContain('no-store');
+	expect(answer.headers()['content-type']).toContain('text/html');
+	expect(
+		(await answer.headersArray())
+			.filter(({ name }) => name.toLowerCase() === 'set-cookie')
+			.some(({ value }) => value.includes('session_id=')),
+		'the session cookie is cleared'
+	).toBe(true);
+	expect(issuerLogout.method()).toBe('POST');
+	expect(issuerLogout.url(), 'the address carries no field').not.toContain('?');
 	await expect.poll(() => page.url()).toBe(issuerLogout.url());
 	guard.assertClean();
 });
 
-test('a logout from another origin is refused, a same-origin one needs no token', async ({
+// Cell 14.
+test('a logout from another origin is refused, a same-origin one answers the logout page', async ({
 	request
 }) => {
 	const foreign = await request.post('/auth/logout', {
@@ -212,7 +192,22 @@ test('a logout from another origin is refused, a same-origin one needs no token'
 
 	expect(foreign.status()).toBe(403);
 	expect(own.status()).toBe(200);
-	expect(typeof (await own.json()).logout_url).toBe('string');
+	expect(own.headers()['content-type']).toContain('text/html');
+});
+
+// Cell 26
+test('with JavaScript off the logout page shows one button named like the account menu entry', async ({
+	browser,
+	request
+}) => {
+	const page = await (await browser.newContext({ javaScriptEnabled: false })).newPage();
+	const logoutPage = await request.post('/auth/logout', { headers: { origin: BASE_URL } });
+
+	await page.setContent(await logoutPage.text());
+
+	await expect(page.getByRole('button')).toHaveCount(1);
+	await expect(page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL })).toBeVisible();
+	await page.context().close();
 });
 
 for (const [refusal, query] of [
