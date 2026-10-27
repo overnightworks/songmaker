@@ -54,7 +54,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 import CoWriterPanel from './CoWriterPanel.svelte';
 import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
-import { libraryHistoryStepsLanded } from '$lib/stores/libraryContext';
+import { historyComesToRest } from '$lib/history/historyController';
 import {
 	deleteConversation,
 	fetchMemory,
@@ -1825,7 +1825,7 @@ describeBackClosesOverlay({
 	render: () => render(),
 	open: async (target) => {
 		await openMemoryFromMenu(target);
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 	},
 	isShown: (target) => target.querySelector('section[aria-label="Memory"]') !== null,
 	closeWays: [

@@ -3,7 +3,6 @@ import { get, writable } from 'svelte/store';
 import { page } from '$app/state';
 import { fetchAlbum } from '$lib/api/albums';
 import {
-	historyComesToRest,
 	historyMoves,
 	historyStandsStill,
 	historyStateOnLoad,
@@ -340,17 +339,6 @@ function navigateLibraryRoute(
 		keepFocus: true,
 		state: libraryPageState(state)
 	});
-}
-
-// Resolves once history stands still and every library write held while it
-// moved has been written. A navigation that leaves the library (an app page)
-// writes no LibraryHistoryState, so it waits here: a step back still in flight
-// (the unsaved-changes dialog leaving its own entry) would land after its push
-// and take the address back to the song (issue #1143), and a held write would
-// navigate over the page the user went to last. A held write that navigates
-// moves history again, so the wait starts over until nothing is left to land.
-export function libraryHistoryStepsLanded(): Promise<void> {
-	return historyComesToRest();
 }
 
 function pathnameOf(url: string): string {
