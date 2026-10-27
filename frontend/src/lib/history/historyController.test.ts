@@ -33,6 +33,7 @@ import {
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
+import { pressBack, watchBack } from '$lib/test-utils/library-history';
 
 type Ledger = Parameters<typeof land>[0];
 type Landing = ReturnType<typeof land>;
@@ -86,7 +87,7 @@ describe('landing reducer', () => {
 	it('an own step lands on the expected id', () => {
 		const outcome = land(ledger({ stepBacks: [6] }), { id: 6 });
 
-		expect(outcome).toMatchObject({ settled: [6], dropLayers: [], stepOff: false, apply: false });
+		expect(outcome).toMatchObject({ settled: [6], dropLayers: [], apply: false });
 		expect(outcome.ledger.stepBacks).toEqual([]);
 	});
 
@@ -116,7 +117,7 @@ describe('landing reducer', () => {
 		});
 
 		expect(outcome.dropLayers).toEqual([top, middle]);
-		expect(outcome).toMatchObject({ stepOff: false, apply: false });
+		expect(outcome).toMatchObject({ apply: false });
 		expect(outcome.ledger.layers).toEqual([below]);
 	});
 
@@ -131,7 +132,6 @@ describe('landing reducer', () => {
 		expect(outcome).toMatchObject({
 			dropLayers: [...layers].reverse(),
 			settled: [1, 2],
-			stepOff: false,
 			apply: true
 		});
 		expect(outcome.ledger).toEqual({ layers: [], stepBacks: [], current: null });
@@ -140,10 +140,10 @@ describe('landing reducer', () => {
 	it.each([
 		{ after: 'a reload', layers: [] },
 		{ after: 'Forward past an open layer', layers: [{ layer: 'now-playing', entry: 7 }] }
-	])('a stale layer entry after $after is stepped off', ({ layers }) => {
+	])('a stale layer entry after $after lands without applying', ({ layers }) => {
 		const outcome = land(ledger({ layers }), { id: 9, layer: 'album-menu' });
 
-		expect(outcome).toMatchObject({ stepOff: true, apply: false, dropLayers: [] });
+		expect(outcome).toMatchObject({ apply: false, dropLayers: [] });
 		expect(outcome.ledger.current).toEqual({ id: 6 });
 	});
 });
@@ -293,7 +293,7 @@ describe('history adapter', () => {
 		history.forward();
 		await steppedBack;
 
-		expect(landings.slice(1).map(({ stepOff }) => stepOff)).toEqual([true, false]);
+		expect(landings.slice(1).map(({ settled }) => settled)).toEqual([[], [page.id]]);
 		expect(history.state['sveltekit:states'].entry).toEqual(page);
 	});
 
@@ -319,27 +319,21 @@ describe('history adapter', () => {
 		expect(ids).toEqual([1, 2, 3, 4]);
 	});
 
-	it('ids stay above the entry a reload lands on while session storage refuses writes', () => {
-		sessionStorageRefusingWritesAfter(0);
-		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
-		loadPage();
+	it.each([
+		{ after: 'a reload lands on', viaForward: false },
+		{ after: 'Forward lands on after a reload', viaForward: true }
+	])(
+		'ids stay above the entry $after while session storage refuses writes',
+		async ({ viaForward }) => {
+			sessionStorageRefusingWritesAfter(0);
+			['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
+			if (viaForward) await traverse(() => history.back());
+			loadPage();
+			if (viaForward) await traverse(() => history.forward());
 
-		const layer = pushEntry('/album/c', {}, 'now-playing');
-
-		expect(layer.id).toBe(4);
-	});
-
-	it('ids stay above an entry Forward lands on after a reload while session storage refuses writes', async () => {
-		sessionStorageRefusingWritesAfter(0);
-		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
-		await traverse(() => history.back());
-		loadPage();
-		await traverse(() => history.forward());
-
-		const layer = pushEntry('/album/c', {}, 'now-playing');
-
-		expect(layer.id).toBe(4);
-	});
+			expect(pushEntry('/album/c', {}, 'now-playing').id).toBe(4);
+		}
+	);
 
 	const reachingSessionStorage = () => vi.spyOn(window, 'sessionStorage', 'get');
 	const readingSessionStorage = () => vi.spyOn(Storage.prototype, 'getItem');
@@ -388,13 +382,9 @@ describe('history adapter', () => {
 	it('an id-less entry below stamped entries stays foreign', async () => {
 		seedForeignEntry('/album/a');
 		pushEntry('/album/b', {});
-		const landed = nextLanding();
-		history.back();
-		await landed;
+		await traverse(() => history.back());
 
-		const stamped = replaceEntry('/album/a', {});
-
-		expect(stamped).toBeNull();
+		expect(replaceEntry('/album/a', {})).toBeNull();
 		expect(standingEntry()).toBeUndefined();
 	});
 
@@ -453,11 +443,7 @@ describe('history adapter', () => {
 		const album = pushEntry('/album/a', {});
 		pushEntry('/album/b', {});
 		detachLandingHandler();
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await pressBack();
 
 		const heard: Landing[] = [];
 		detachLandingHandler = attachLandingHandler((landing) => heard.push(landing));
@@ -473,12 +459,7 @@ describe('history adapter', () => {
 		let menuOpen = true;
 		holdLayer('account-menu', () => (menuOpen = false));
 		detachLandingHandler();
-
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await pressBack();
 
 		expect(menuOpen).toBe(false);
 		expect(stackedLayers()).toEqual([]);
@@ -639,19 +620,22 @@ describe('history adapter', () => {
 		expect(standingEntry()).toEqual(song);
 	});
 
-	it("Forward onto a closed layer's entry steps off it", async () => {
-		const wall = pushEntry('/', {});
-		const album = pushEntry('/album/a', {});
-		holdLayer('album-menu', () => undefined);
-		await traverse(() => history.back());
-		expect(stackedLayers()).toEqual([]);
-
-		await traverse(() => history.forward());
-		await vi.waitFor(() => expect(standingEntry()).toEqual(album));
-		await traverse(() => history.back());
-
-		expect(standingEntry()).toEqual(wall);
-	});
+	it.each([false, true])(
+		"Forward onto a closed layer's entry steps off it, layer open below: %s",
+		async (open) => {
+			const wall = pushEntry('/', {});
+			const album = pushEntry('/album/a', {});
+			if (open) holdLayer('now-playing', () => undefined);
+			const below = standingEntry();
+			holdLayer('album-menu', () => undefined);
+			await traverse(() => history.back());
+			expect(stackedLayers()).toHaveLength(open ? 1 : 0);
+			await traverse(() => history.forward());
+			await vi.waitFor(() => expect(standingEntry()).toEqual(below));
+			await traverse(() => history.back());
+			expect(standingEntry()).toEqual(open ? album : wall);
+		}
+	);
 
 	it('a router push after a Back gets an id on top, over the page Back landed on', async () => {
 		pushEntry('/album/a', {});
@@ -704,11 +688,7 @@ describe('history adapter', () => {
 		detachLandingHandler();
 		detachLandingHandler = attachLandingHandler(() => heard.push('controller'));
 
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await pressBack();
 		window.removeEventListener('popstate', routerHears);
 
 		expect(heard).toEqual(['router', 'controller']);
@@ -723,12 +703,24 @@ describe('history adapter', () => {
 		installHistoryController();
 		attachRecordingHandler();
 
-		const steppedOff = nextLanding();
-		stampNavigatedEntry('enter');
-		await steppedOff;
+		await traverse(() => stampNavigatedEntry('enter'));
 
 		expect(standingEntry()).toEqual(page);
 		expect(location.pathname).toBe('/settings/voices');
+	});
+
+	it('a second landing on the unowned layer entry presses Back once in total', () => {
+		pushEntry('/settings/voices', {});
+		pushEntry('/settings/voices', {}, 'account-menu');
+		resetHistoryControllerForTests();
+		loadHistoryPageForTests();
+		const back = watchBack();
+		installHistoryController();
+		attachRecordingHandler();
+
+		window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+		expect(back.presses()).toBe(1);
+		back.stop();
 	});
 });
 
@@ -760,11 +752,7 @@ describe('route convergence after a landing', () => {
 	async function backFromSettings(): Promise<void> {
 		await vi.mocked(goto)('/settings');
 		stampNavigatedEntry('goto');
-		const landed = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landed;
+		await pressBack();
 	}
 
 	it('Back onto an entry written over another page mounts the route of its own address', async () => {
@@ -859,11 +847,7 @@ describe('route convergence after a landing', () => {
 			to: navigationTo('/album/a'),
 			complete: loading.complete
 		});
-		const landedOnAlbum = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await landedOnAlbum;
+		await pressBack();
 		fakePage.url = new URL('/settings', location.href);
 
 		await loading.abort();

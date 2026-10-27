@@ -42,7 +42,7 @@
 "frontend/src/lib/components/SongDetailView.test.ts" = 2304
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
-"frontend/src/lib/history/historyController.test.ts" = 934
+"frontend/src/lib/history/historyController.test.ts" = 918
 "frontend/src/lib/history/historyController.ts" = 953
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
@@ -51,7 +51,7 @@
 "frontend/src/lib/stores/generateAction.test.ts" = 817
 "frontend/src/lib/stores/jobs.test.ts" = 906
 "frontend/src/lib/stores/libraryContext.test.ts" = 2189
-"frontend/src/lib/stores/libraryContext.ts" = 1279
+"frontend/src/lib/stores/libraryContext.ts" = 1267
 "frontend/src/lib/stores/navigation.test.ts" = 3045
 "frontend/src/lib/stores/player.test.ts" = 5283
 "frontend/src/lib/stores/player.ts" = 2242

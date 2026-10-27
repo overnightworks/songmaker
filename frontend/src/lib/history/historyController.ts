@@ -47,7 +47,6 @@ interface HistoryLedger {
 export interface Landing {
 	readonly dropLayers: readonly OpenLayerEntry[];
 	readonly settled: readonly number[];
-	readonly stepOff: boolean;
 	readonly apply: boolean;
 	readonly ledger: HistoryLedger;
 }
@@ -78,14 +77,10 @@ export function land(ledger: HistoryLedger, landed: HistoryEntry | null): Landin
 	const rank = rankOf(landed);
 	const layers = ledger.layers.filter((open) => open.entry <= rank);
 	const onLayerEntry = landed?.layer !== undefined;
-	const ownedByOpenLayer = layers.some(
-		(open) => open.entry === rank && open.layer === landed?.layer
-	);
 	const apply = !onLayerEntry && !isSameEntry(landed, ledger.current);
 	return {
 		dropLayers: ledger.layers.filter((open) => open.entry > rank).reverse(),
 		settled: ledger.stepBacks.filter((target) => target >= rank),
-		stepOff: onLayerEntry && !ownedByOpenLayer,
 		apply,
 		ledger: {
 			layers,
@@ -93,6 +88,15 @@ export function land(ledger: HistoryLedger, landed: HistoryEntry | null): Landin
 			current: onLayerEntry ? ledger.current : landed
 		}
 	};
+}
+
+// A layer entry no open layer owns -- one a reload or a Forward came back
+// onto -- is a copy of the page below it, where Back would do nothing.
+function isUnownedLayerEntry(ledger: HistoryLedger, entry: HistoryEntry | null): boolean {
+	return (
+		entry?.layer !== undefined &&
+		!ledger.layers.some((open) => open.entry === entry.id && open.layer === entry.layer)
+	);
 }
 
 // Read and incremented on every allocation, never cached: a reload, a
@@ -732,15 +736,11 @@ function dropLayers(open: readonly OpenLayerEntry[]): void {
 	if (depth !== -1) dropLayersFrom(depth);
 }
 
-// A layer entry history stands on that no open layer owns -- one a reload
-// came back onto -- is a copy of the page below it, where Back would visibly
-// do nothing. A step back off it already underway is not started again.
-function stepOffUnownedLayerEntry(): void {
-	const standing = standingEntry();
-	if (standing?.layer === undefined) return;
-	if (ledger.layers.some((open) => open.entry === standing.id)) return;
-	if (ledger.stepBacks.includes(standing.id - 1)) return;
-	void stepBackTo(standing.id - 1);
+// A step back off the entry already underway is not started again.
+function stepOffUnownedLayerEntry(entry: HistoryEntry | null): void {
+	if (entry === null || !isUnownedLayerEntry(ledger, entry)) return;
+	if (ledger.stepBacks.includes(entry.id - 1)) return;
+	void stepBackTo(entry.id - 1);
 }
 
 // The controller stops owning the open layers' entries -- as a reload leaves
@@ -859,7 +859,7 @@ function onPopstate(event: PopStateEvent): void {
 	lookAtStandingEntry(event.state);
 	dropLayers(landing.dropLayers);
 	for (const target of landing.settled) settleStepBack(target);
-	if (landing.stepOff) void stepBackTo(rankOf(landed) - 1);
+	stepOffUnownedLayerEntry(landed);
 	settleStillness();
 	landingHandler?.(landing, event.state);
 }
@@ -880,7 +880,7 @@ function followRouterStart(): void {
 		if (uninstall !== null) {
 			window.removeEventListener('popstate', onPopstate);
 			window.addEventListener('popstate', onPopstate);
-			stepOffUnownedLayerEntry();
+			stepOffUnownedLayerEntry(standingEntry());
 		}
 		settleStillness();
 	});
@@ -894,7 +894,7 @@ export function installHistoryController(): () => void {
 	window.addEventListener('popstate', onPopstate);
 	window.addEventListener('pageshow', loadAfreshWhenRestored);
 	keepLayerHistory(layerEntries);
-	stepOffUnownedLayerEntry();
+	stepOffUnownedLayerEntry(standingEntry());
 	const uninstallThis = (): void => {
 		window.removeEventListener('popstate', onPopstate);
 		window.removeEventListener('pageshow', loadAfreshWhenRestored);

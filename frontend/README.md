@@ -27,8 +27,10 @@ src/
 The backend must already be running (via `docker compose up -d --build --wait` from the project root). The Vite dev server proxies `/api` and `/static` to `http://localhost:8080`.
 
 ```bash
-# One-time
+# One-time, and after every appkit pin change: copy the family look (tokens and fonts)
+# out of the pinned wheel into frontend/kit-assets/ (from the project root)
 pnpm install
+(cd .. && uv run --frozen --only-group frontend python scripts/copy_kit_assets.py)
 
 # Dev server with HMR (proxies /api to the Docker backend)
 pnpm dev

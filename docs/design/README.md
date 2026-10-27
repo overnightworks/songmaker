@@ -88,7 +88,7 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
 - `vocabulary.html` — das Komponentenvokabular (#924). Freigegeben
   20.09.2026 (Operator: „looks good" / „fine" mit den Rulings in #914 und
   #924). Besitzer jeder Komponentenform; jede UI-Lane zitiert sie, Farbwerte
-  sind Tokens in `app.css`, Bedeutungen sind geregelt.
+  sind Tokens: die Familie in appkit, Farbe und Domäne der App in `app.css`, Bedeutungen sind geregelt.
 - `share-player.html` — die geteilten Seiten (#1374): geteilter Song, Take,
   Album und Playlist. Freigegeben am 15.10.2026 (Operator: „bei shuffle deine
   empfehlung! und dann go!“), eingefroren am 16.10.2026 (#1432). Besitzer

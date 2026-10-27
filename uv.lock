@@ -1060,6 +1060,14 @@ requires-dist = [
 provides-extras = ["mcp-server"]
 
 [[package]]
+name = "overnightworks-appkit"
+version = "0.5.0"
+source = { url = "https://github.com/overnightworks/appkit/releases/download/v0.5.0/overnightworks_appkit-0.5.0-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/overnightworks/appkit/releases/download/v0.5.0/overnightworks_appkit-0.5.0-py3-none-any.whl", hash = "sha256:7539a8a42d3e07aaf71e14fae63db0eb59806eb641c18c87abad5b67ea21ada1" },
+]
+
+[[package]]
 name = "overnightworks-webauth"
 version = "0.23.0"
 source = { url = "https://github.com/overnightworks/webauth/releases/download/v0.23.0/overnightworks_webauth-0.23.0-py3-none-any.whl" }
@@ -1745,6 +1753,11 @@ whisper = [
     { name = "torch", version = "2.14.1+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform != 'darwin'" },
 ]
 
+[package.dev-dependencies]
+frontend = [
+    { name = "overnightworks-appkit" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "alembic", marker = "extra == 'server'", specifier = ">=1.13,<2" },
@@ -1800,6 +1813,9 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.20,<1" },
 ]
 provides-extras = ["similarity", "scoring", "whisper", "server", "api", "image", "mcp", "agent-service", "acestep-worker", "dev"]
+
+[package.metadata.requires-dev]
+frontend = [{ name = "overnightworks-appkit", url = "https://github.com/overnightworks/appkit/releases/download/v0.5.0/overnightworks_appkit-0.5.0-py3-none-any.whl" }]
 
 [[package]]
 name = "sortedcontainers"

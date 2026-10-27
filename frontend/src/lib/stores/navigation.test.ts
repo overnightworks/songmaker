@@ -32,6 +32,7 @@ import {
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
 import {
+	historyComesToRest,
 	installHistoryController,
 	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
@@ -45,7 +46,6 @@ import {
 	captureLibraryScroll,
 	currentLibraryHistoryState,
 	detailTab,
-	libraryHistoryStepsLanded,
 	libraryScrollAnchor,
 	librarySurface,
 	openHomeAddress,
@@ -682,7 +682,7 @@ describe('the library pages opened over a collection', () => {
 
 			await open();
 			await pressBack();
-			await libraryHistoryStepsLanded();
+			await historyComesToRest();
 
 			expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 			expect(get(libraryScrollAnchor)).toBe(640);
@@ -693,19 +693,19 @@ describe('the library pages opened over a collection', () => {
 		it('defect:#1402 1354_37b_71_history: chosen from a sheet leaves no sheet entry behind, so Forward returns to it', async () => {
 			await openAlbum('a1');
 			const sheet = openNavigationSheet();
-			await libraryHistoryStepsLanded();
+			await historyComesToRest();
 
 			closeTopLayer();
 			await openPlaylistsBySearch();
-			await libraryHistoryStepsLanded();
+			await historyComesToRest();
 			expect(get(sheet)).toBe(false);
 
 			await pressBack();
-			await libraryHistoryStepsLanded();
+			await historyComesToRest();
 			expect(location.pathname).toBe('/album/a1');
 
 			await pressForward();
-			await libraryHistoryStepsLanded();
+			await historyComesToRest();
 			expect(location.pathname).toBe('/playlists');
 		});
 	});
@@ -766,7 +766,7 @@ describe('the library pages opened over a collection', () => {
 				vi.mocked(goto).mockClear();
 
 				await pressBack();
-				await libraryHistoryStepsLanded();
+				await historyComesToRest();
 
 				await vi.waitFor(() => expect(get(librarySurface)).toBe('home'));
 				expect(location.pathname).toBe(HOME_ROUTE_PATH);
@@ -1110,7 +1110,7 @@ describe('Back and Forward across an app page', () => {
 
 		await applyLibraryHistory(historyEntry());
 		stopNavigation = initNavigation();
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(fetchAlbums).toHaveBeenCalledOnce();
@@ -2044,7 +2044,7 @@ describe.each([
 	async function editTheSongOpenedFrom(open: () => Promise<unknown>): Promise<void> {
 		await open();
 		await selectSong('s1');
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 		await tick();
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
@@ -2057,7 +2057,7 @@ describe.each([
 	async function pressBackAndSeeTheQuestion(): Promise<void> {
 		await leave();
 		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 	}
 
 	function answer(label: string): void {
@@ -2707,7 +2707,7 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		stepBack.stop();
 		await pressBack();
 		await opening;
-		await libraryHistoryStepsLanded();
+		await historyComesToRest();
 
 		expect(historyEntry()).toMatchObject({
 			index: below + 1,

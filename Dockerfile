@@ -1,4 +1,12 @@
-# Stage 1: Build frontend
+# Stage 1: Copy the appkit look (tokens and fonts) out of its pinned wheel
+FROM python:3.12-slim AS kit-assets
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+COPY scripts/copy_kit_assets.py scripts/
+RUN uv run --frozen --only-group frontend python scripts/copy_kit_assets.py
+
+# Stage 2: Build frontend
 FROM node:22-slim AS frontend-builder
 WORKDIR /app/frontend
 
@@ -8,9 +16,10 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml 
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
+COPY --from=kit-assets /app/frontend/kit-assets ./kit-assets
 RUN pnpm build
 
-# Stage 2: Python backend
+# Stage 3: Python backend
 FROM python:3.12-slim AS backend
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
