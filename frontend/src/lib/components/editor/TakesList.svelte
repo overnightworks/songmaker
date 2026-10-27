@@ -113,8 +113,10 @@
 
 	$effect.pre(() => settleTakeFolds(groups));
 
-	// A card opened from Now Playing may sit under a folded version.
+	// A card opened from Now Playing may sit under a folded version, and a press
+	// that saves a draft folds the source's version: the card stays open.
 	$effect(() => {
+		void groups.current?.key;
 		if ($sourceGeneration) revealTakeGroup(takeGroupKey($sourceGeneration));
 	});
 

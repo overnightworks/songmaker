@@ -1,7 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
+import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import type { GenerationItem } from '$lib/api/types';
+import type { GenerationItem, SongItem } from '$lib/api/types';
 import type { GenerationActions } from '$lib/contexts/generation-actions';
 import { selectedSongId } from '$lib/stores/player';
 import { clearSource, resetRecipeSourceForSong, setSourceFromGeneration } from '$lib/stores/recipe';
@@ -23,16 +24,25 @@ function takeInVersion(id: string, versionNumber: number): GenerationItem {
 
 const takes = [takeInVersion('c1', 2), takeInVersion('c2', 2), takeInVersion('a1', 1)];
 
+// The song and the newest version live in reactive cells so a test can play a save.
+const saved = new SvelteMap<'song' | 'latest', SongItem | number>();
+
 async function renderList(): Promise<HTMLElement> {
+	saved.set('song', makeSong({ id: 'song-a', version_count: 2, generations: takes }));
+	saved.set('latest', 2);
 	const target = document.createElement('div');
 	document.body.append(target);
 	list = mount(TakesListHarness, {
 		target,
 		props: {
-			song: makeSong({ id: 'song-a', version_count: 2, generations: takes }),
+			get song() {
+				return saved.get('song') as SongItem;
+			},
 			dirty: false,
 			draftVersionNumber: 3,
-			latestVersionNumber: 2,
+			get latestVersionNumber() {
+				return saved.get('latest') as number;
+			},
 			onsource: vi.fn(),
 			actions: {} as GenerationActions
 		}
@@ -98,6 +108,17 @@ describe('task card in the take list (S4, #1912 acceptance 1, 2, 6, 7)', () => {
 		setSourceFromGeneration(takes[2], 'repaint');
 		await tick();
 		expect(rowIdsWithCard(target)).toEqual(['a1']);
+	});
+
+	it('keeps the card open when saving a draft makes the source take an earlier version', async () => {
+		const target = await renderList();
+		setSourceFromGeneration(takes[0], 'repaint');
+		await tick();
+		expect(rowIdsWithCard(target)).toEqual(['c1']);
+		saved.set('song', makeSong({ id: 'song-a', version_count: 3, generations: takes }));
+		saved.set('latest', 3);
+		await tick();
+		expect(rowIdsWithCard(target)).toEqual(['c1']);
 	});
 
 	it('names the version the take will land in', async () => {
