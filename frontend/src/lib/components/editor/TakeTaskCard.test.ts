@@ -2,7 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { get, writable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeGeneration } from '$lib/test-utils/factories';
-import { RECIPE_SOURCE_MODE_HINT } from '$lib/constants';
+import { TAKE_TASK_PROMPT_HINT } from '$lib/constants/take-task';
 import type { GenerateState } from '$lib/stores/generateAction';
 
 const runSourceTask = vi.hoisted(() => vi.fn());
@@ -55,7 +55,11 @@ function setGenerateState(next: GenerateState): void {
 	(state.current as ReturnType<typeof writable<GenerateState>>).set(next);
 }
 
+const scrollIntoView = vi.fn();
+
 beforeEach(() => {
+	Element.prototype.scrollIntoView = scrollIntoView;
+	scrollIntoView.mockReset();
 	resetRecipeSourceForSong();
 	runSourceTask.mockReset();
 	setGenerateState({ kind: 'idle' });
@@ -79,7 +83,7 @@ describe('Repaint card (S4, #1912 acceptance 2)', () => {
 		for (const name of ['Conservative', 'Balanced', 'Aggressive']) {
 			expect(cardButton(target, name)).toBeDefined();
 		}
-		expect(flatText(target)).toContain(RECIPE_SOURCE_MODE_HINT);
+		expect(flatText(target)).toContain(TAKE_TASK_PROMPT_HINT);
 		expect(flatText(target)).toContain('New take in v7');
 		expect(target.querySelector('input[type="range"]')).toBeNull();
 	});
@@ -112,10 +116,44 @@ describe('Cover card (S4, #1912 acceptance 3)', () => {
 		const sliders = target.querySelectorAll<HTMLInputElement>('input[type="range"]');
 		expect(sliders).toHaveLength(2);
 		expect(sliders[1].max).toBe('1');
-		expect(flatText(target)).toContain(RECIPE_SOURCE_MODE_HINT);
+		expect(flatText(target)).toContain(TAKE_TASK_PROMPT_HINT);
 		expect(flatText(target)).toContain('New take in v7');
 		expect(cardButton(target, 'Cover')).toBeDefined();
 		expect(target.querySelector('.waveform-picker')).toBeNull();
+	});
+});
+
+describe('the card reaches the frames (#1923 acceptance 5, 6)', () => {
+	it('captions the repaint waveform Range and the foot says the header Generate stays', async () => {
+		const target = await renderCard('repaint');
+		expect(target.querySelector('.range-caption')?.textContent).toBe('Range');
+		expect(flatText(target)).toContain('New take in v7 · the header Generate stays what it is');
+	});
+
+	it('captions Noise with what it does', async () => {
+		const target = await renderCard('cover');
+		expect(flatText(target)).toContain('Noise');
+		expect(flatText(target)).toContain('more noise, more surprise');
+		expect(flatText(target)).toContain('the header Generate stays what it is');
+	});
+
+	it('scrolls into view when it opens and again when the verb swaps', async () => {
+		const target = await renderCard('repaint');
+		expect(scrollIntoView).toHaveBeenCalledTimes(1);
+		expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+		expect(scrollIntoView.mock.contexts[0]).toBe(target.querySelector('.task'));
+		setSourceFromGeneration(get(sourceGeneration)!, 'cover');
+		await tick();
+		expect(scrollIntoView).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not scroll again while a slider moves', async () => {
+		const target = await renderCard('cover');
+		const slider = target.querySelector<HTMLInputElement>('input[type="range"]')!;
+		slider.value = '0.4';
+		slider.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		expect(scrollIntoView).toHaveBeenCalledTimes(1);
 	});
 });
 

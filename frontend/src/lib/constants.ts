@@ -1,5 +1,4 @@
 import type { JobItem } from '$lib/api/types';
-import type { RepaintMode } from '$lib/stores/recipe';
 
 export const APP_NAME = 'Hallucinai';
 
@@ -461,14 +460,6 @@ export const PHONE_RECIPE_UPLOAD = 'Upload audio';
 export const PHONE_RECIPE_UPLOAD_ERROR = 'Upload failed';
 export const PHONE_RECIPE_REMOVE = 'Remove';
 export const PHONE_RECIPE_DEFAULTS_ERROR = 'Failed to load generation defaults';
-export const PHONE_RECIPE_REPAINT_STRENGTH = 'Repaint strength';
-export const PHONE_RECIPE_COVER_STRENGTH = 'Cover strength';
-export const PHONE_RECIPE_NOISE_STRENGTH = 'Noise strength';
-export const PHONE_RECIPE_REPAINT_MODES: { value: RepaintMode; label: string }[] = [
-	{ value: 'conservative', label: 'Conservative' },
-	{ value: 'balanced', label: 'Balanced' },
-	{ value: 'aggressive', label: 'Aggressive' }
-];
 
 // Shared with RecipePanel.svelte's own copy of these same limits (#924 tracks
 // unifying the two into one owner).
@@ -490,10 +481,6 @@ export const RECIPE_SAVE_AS_PRESET_LABEL = 'Save as preset';
 export const RECIPE_MANAGE_PRESETS_LABEL = 'Manage in Settings → Generation';
 export const RECIPE_SEED_RANDOM_LABEL = 'Random';
 export const RECIPE_SEED_PINNED_LABEL = 'Pinned';
-export const RECIPE_REPAINT_OFF_LABEL = 'Off';
-export const RECIPE_SOURCE_LABEL = 'Source';
-export const RECIPE_SOURCE_MODE_HINT =
-	"Paints using the lyrics and style currently in the editor — not the source take's own.";
 export const RECIPE_USES_LABEL = 'Generate uses this recipe';
 // A freshly pinned seed with no prior value starts at 0 rather than a random
 // number, so pinning is deterministic and immediately editable.

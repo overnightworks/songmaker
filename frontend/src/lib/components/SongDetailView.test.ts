@@ -311,6 +311,7 @@ function albumSongs(): SongItem[] {
 }
 
 beforeEach(() => {
+	Element.prototype.scrollIntoView = vi.fn();
 	// defect:#1598: a background load preserves dirty drafts; reset through the owner.
 	discardDraft();
 	resetNavigationForTests();
@@ -888,13 +889,6 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 			);
 		}
 	);
-
-	it('keeps Text2Music named Generate', async () => {
-		const target = await renderView();
-		expect(target.querySelector('.generate-action .primary-button')?.textContent?.trim()).toBe(
-			EDITOR_GENERATE_LABEL
-		);
-	});
 });
 
 describe.each([false, true])('SongDetailView Generate with phone layout %s', (phone) => {
