@@ -1,0 +1,8 @@
+claim_id = "7b8326bef7a7422c983a1c11b81eae4c"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "8e9ad3603f359fb8b7e4276b197fddf08c9f70f4"
+branch = "claude/issue-1931-seed-e2e-own-takes"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/seed-chip.spec.ts", "frontend/e2e/seed.ts", "frontend/e2e/take-menu.spec.ts", "scripts/seed_e2e_job_states.py", "tests/test_seed_e2e_takes.py"]
+opened_commit = "083bd6268be5cfb04ead3724803a535614ef0def"
+whole_reason = "Two e2e specs and the shared e2e seeding they read: the fault is in which takes the fixture gives them, so the specs and the seed script change together."
