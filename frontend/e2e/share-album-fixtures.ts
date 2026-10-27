@@ -50,10 +50,10 @@ function longAudio(): Buffer {
 	return Buffer.concat(Array(COPIES_OF_THE_TAKE).fill(take.subarray(firstAudioFrame)));
 }
 
-function albumPayload(songs: MockSong[]) {
+function albumPayload(songs: MockSong[], artist: string) {
 	return {
 		title: MOCK_ALBUM_TITLE,
-		artist: MOCK_ARTIST,
+		artist,
 		subtitle: '',
 		year: '',
 		cover: null,
@@ -70,10 +70,14 @@ function albumPayload(songs: MockSong[]) {
 	};
 }
 
-export async function mockSharedAlbum(page: Page, songs: MockSong[]): Promise<void> {
+export async function mockSharedAlbum(
+	page: Page,
+	songs: MockSong[],
+	artist = MOCK_ARTIST
+): Promise<void> {
 	const audio = longAudio();
 	await page.route(`**/shared/${MOCK_SLUG}`, (route) =>
-		route.fulfill({ json: albumPayload(songs) })
+		route.fulfill({ json: albumPayload(songs, artist) })
 	);
 	await page.route(`**/shared/${MOCK_SLUG}/stream`, (route) =>
 		route.fulfill({ status: 404, json: { detail: 'Stream unavailable' } })
@@ -98,8 +102,12 @@ export function control(page: Page, name: string): Locator {
 	return page.locator('.now-playing.page').getByRole('button', { name, exact: true });
 }
 
-export async function openMockSharedAlbum(page: Page, songs = mockSongs(3)): Promise<void> {
-	await mockSharedAlbum(page, songs);
+export async function openMockSharedAlbum(
+	page: Page,
+	songs = mockSongs(3),
+	artist = MOCK_ARTIST
+): Promise<void> {
+	await mockSharedAlbum(page, songs, artist);
 	await page.goto(MOCK_URL);
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(MOCK_ALBUM_TITLE);
 }

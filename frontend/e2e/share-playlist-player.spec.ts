@@ -185,7 +185,7 @@ for (const height of [900, 600]) {
 			if (info.project.name === 'desktop') await page.setViewportSize({ width: 1440, height });
 			await openMock(page);
 			await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-			await expect(page.locator('.cover-line').first()).toHaveText('Playlist · 3 songs');
+			await expect(page.locator('.cover-line').first()).toHaveText(/^Playlist · 3 songs\b/);
 			await expect(page.locator('.cover-art .playlist-cover-cell img')).toHaveCount(3);
 			await loadedImages(page.locator('.cover-art .playlist-cover-cell img'));
 			await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(1));
@@ -430,7 +430,7 @@ test('1374_rule_14 P10: unplayable entries are neither staged nor listed', async
 	payload.entries[0].audio_url = null;
 	await openMock(page, payload);
 	await expect(page.locator('.queue-title')).toHaveText([songTitle(2), songTitle(3)]);
-	await expect(page.locator('.cover-line').first()).toHaveText('Playlist · 2 songs');
+	await expect(page.locator('.cover-line').first()).toHaveText(/^Playlist · 2 songs\b/);
 	await expect(page.locator('.np-page-lyrics')).toContainText(songLyrics(2));
 	payload.entries.forEach((entry) => {
 		entry.audio_url = null;

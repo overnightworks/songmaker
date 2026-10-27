@@ -16,7 +16,11 @@ import {
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '../src/lib/constants/now-playing';
-import { SHARE_BACK_TO_PLAYER_LABEL, shareNowPlayingLine } from '../src/lib/constants/share';
+import {
+	SHARE_BACK_TO_PLAYER_LABEL,
+	shareAlbumSubtitle,
+	shareNowPlayingLine
+} from '../src/lib/constants/share';
 import {
 	boundingBoxes,
 	FlowGuard,
@@ -26,6 +30,7 @@ import {
 } from './helpers';
 import {
 	control,
+	MOCK_ARTIST,
 	MOCK_STREAM_REFUSAL,
 	openMockSharedAlbum,
 	MOCK_ALBUM_TITLE,
@@ -88,10 +93,11 @@ function playingRow(page: Page): Locator {
 
 async function openMockAlbum(
 	{ page, guard, expectedRefusals }: Visitor,
-	albumSongs = mockSongs(3)
+	albumSongs = mockSongs(3),
+	artist = MOCK_ARTIST
 ): Promise<FlowGuard> {
 	expectedRefusals.push(MOCK_STREAM_REFUSAL);
-	await openMockSharedAlbum(page, albumSongs);
+	await openMockSharedAlbum(page, albumSongs, artist);
 	return guard;
 }
 
@@ -201,6 +207,36 @@ test.describe('before Play', () => {
 		await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 		await expectNowPlayingLine(page, mockSongTitle(1), 1, 3);
 	});
+
+	test('1906_P1: the album page says KI-generiert, wholly in view', async ({ visitor }) => {
+		await openMockAlbum(visitor);
+		const { page } = visitor;
+
+		const notice = page.getByText('KI-generiert', { exact: true });
+		await expect(notice).toHaveAttribute('lang', 'de');
+		await expect(notice).toBeInViewport({ ratio: 1 });
+	});
+
+	test(
+		'1906_P3: at 390 the notice wraps onto its own line below a long name, whole',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ visitor }) => {
+			const longName = Array(12).fill('A very long artist and album name').join(' ');
+			await openMockAlbum(visitor, mockSongs(3), longName);
+			const { page } = visitor;
+			const notice = page.getByText('KI-generiert', { exact: true });
+			const nameText = page.getByText(shareAlbumSubtitle(longName), { exact: true });
+			const nameRows = await nameText.evaluate((text) => {
+				const range = document.createRange();
+				range.selectNodeContents(text);
+				return Array.from(range.getClientRects(), (rect) => rect.bottom);
+			});
+			const noticeBox = (await boundingBoxes(notice))[0];
+			expect(nameRows.length).toBeGreaterThan(1);
+			expect(noticeBox.y).toBeGreaterThanOrEqual(Math.max(...nameRows) - 1);
+			expect(await notice.evaluate((badge) => badge.scrollWidth <= badge.clientWidth)).toBe(true);
+		}
+	);
 
 	test('1374_rule_2 A4: Previous song is disabled and Next song enabled', async ({ visitor }) => {
 		await openMockAlbum(visitor);

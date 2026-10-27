@@ -351,6 +351,9 @@ table.map td b{font-weight:600;color:var(--violet)}
 .agd .colframe{display:flex;flex-direction:column}
 .agd .convo{display:flex;align-items:center;gap:8px;min-height:40px;margin:0 -14px;padding:0 6px 0 14px;border-bottom:1px solid var(--border);font-size:.8rem;color:var(--muted);background:var(--surface)}
 .agd .convo b{color:var(--light);font-weight:600}
+.agd .ai-note{display:flex;align-items:center;gap:6px;margin:0 -14px;padding:7px 14px;font-size:.78rem;line-height:1.35;color:var(--muted);border-bottom:1px solid var(--border);background:var(--tint2)}
+.agd .ai-note .ai-ic{width:14px;height:14px;color:var(--action);flex:none}
+.agd .ai-note b{color:var(--light);font-weight:600}
 .agd .new{outline:2px dashed var(--action);outline-offset:-2px;border-radius:3px}
 .agd .option{display:inline-block;margin-left:.3rem;padding:0 .4rem;border-radius:3px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;background:#e8e2ef;color:#4a4552;font-family:Oswald,Impact,sans-serif}
 .agd .option.rec{background:#e0f5e0;color:#1e7a1e}
@@ -756,6 +759,19 @@ ein Stick im Homeoffice, und Texas hat mich gebucht.</div>
   <div class="turn-error wait new" role="alert"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><path d="M12 16.5v.1"/></svg><span class="text">The co-writer is unavailable</span><button class="act">Try again</button></div>
 </div>
 <div class="composer"><div class="box grow">Message the co-writer… <span class="muted">@take 11 for context</span></div><button class="btn-primary">Send</button></div></div></div></div><figcaption><b>D7d · Unavailable.</b> The service, Keycloak, the MCP route or the stream is not there. ! in a circle, amber; <b>Try again</b> with the message kept. No local provider steps in.</figcaption></figure>
+</div>
+</section>
+<section class="part agd" id="ai-notice"><h2>You write with an AI <small>#1906 · Art. 50 AI Act</small></h2>
+<p class="lede">The ruled words (E3, operator 19.10.2026) are <b>Du schreibst mit einer KI</b>, always on, no switch. The app around them is English; the German words stay (decided, operator 27.10.2026). Dashed outline = new. The phone frame is <a href="song-page-phone.html">song-page-phone.html</a> 7f.</p>
+<ul class="changes"><li><b>Placement (blessed, operator 27.10.2026):</b> directly under the conversation line, own row, so the header is not crowded at any width.</li>
+<li><b>Screen reader:</b> plain text read in order right after the header (“Co-writer, Claude opus, conversation since Tuesday”, then “Du schreibst mit einer KI”). Not a live region, because it never changes. The icon is hidden from assistive technology and the line carries <code>lang="de"</code> so it is spoken in German.</li>
+<li><b>At 390:</b> see 7f. The line wraps to two lines before it would ever truncate.</li></ul>
+<div class="frames">
+<figure><div class="scroll"><div class="app colframe" style="width:452px"><div class="rtabs"><button>Takes <span class="cnt">11</span></button><button class="on">Co-writer</button></div><div class="convo"><span class="grow"><b>Co-writer</b> · Claude opus · conversation since Tue</span><button class="icon-btn" aria-label="Conversation menu"><svg class="ic f" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div><p class="ai-note new" lang="de"><svg class="ic ai-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>Du schreibst mit einer KI</p><div class="sticky"><div class="chat">
+  <div class="msg me">mach den chorus härter, mehr courtroom</div>
+  <div class="msg ai"><b>Co-writer · Claude</b>Zwei Zeilen für den Chorus, Reim auf „cooked“ bleibt:<br>„Richter schaut, Jury lacht, ich bin cooked,<br>Beweis liegt im Stick, und Texas hat mich gebucht.“<br><span class="chip-row"><button class="btn-sec">Put into lyrics</button><button class="btn-sec">Another one</button></span></div>
+</div>
+<div class="composer"><div class="box grow">Message the co-writer… <span class="muted">@take 11 for context</span></div><button class="btn-primary">Send</button></div></div></div></div><figcaption><b>D5c · Notice under the header.</b> A quiet line, full width, directly under “Co-writer · Claude opus · conversation since Tue”; the header keeps its own row and its ⋯ and is not touched. It is a sentence, so it is a line and not a badge. Always on, no switch.</figcaption></figure>
 </div>
 </section>
 <section class="part"><h2>Phone 390 <small>the blessed three tabs Edit · Co-writer · Takes; the same card, the same task</small></h2><div class="frames">
