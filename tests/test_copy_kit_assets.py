@@ -38,6 +38,32 @@ def test_frontend_group_is_not_a_default_group() -> None:
     assert "default-groups" not in pyproject["tool"]["uv"]
 
 
+def kit_installing_instructions(dockerfile_text: str) -> list[str]:
+    logical_text = re.sub(r"\\\n\s*", " ", dockerfile_text)
+    return [
+        line
+        for line in logical_text.splitlines()
+        if re.search(r"uv (sync|export)", line) and KIT_GROUP_FLAGS.search(line)
+    ]
+
+
+@pytest.mark.parametrize(
+    "instruction",
+    [
+        "RUN uv sync --group frontend",
+        "RUN uv export --all-groups",
+        "RUN uv sync --extra server \\\n    --extra image --group frontend # why",
+        "RUN uv export --frozen \\\n    --all-groups",
+    ],
+)
+def test_a_frontend_group_flag_is_found_on_a_continuation_line(instruction: str) -> None:
+    assert kit_installing_instructions(instruction)
+
+
+def test_a_sync_without_the_frontend_group_is_not_flagged() -> None:
+    assert not kit_installing_instructions("RUN uv sync --extra server \\\n    --extra image")
+
+
 @pytest.mark.parametrize(
     "dockerfile",
     sorted(REPOSITORY_ROOT.glob("**/*Dockerfile"))
@@ -47,8 +73,5 @@ def test_frontend_group_is_not_a_default_group() -> None:
 def test_no_image_sync_or_export_includes_the_frontend_group(dockerfile: Path) -> None:
     if "vendor" in dockerfile.parts or "node_modules" in dockerfile.parts:
         pytest.skip("third-party tree")
-    lines = [
-        line for line in dockerfile.read_text().splitlines() if re.search(r"uv (sync|export)", line)
-    ]
 
-    assert not [line for line in lines if KIT_GROUP_FLAGS.search(line)]
+    assert not kit_installing_instructions(dockerfile.read_text())

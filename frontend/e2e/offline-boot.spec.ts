@@ -15,7 +15,7 @@ async function offlineLook(page: Page) {
 }
 
 for (const address of ['root', 'album'] as const) {
-	test(`1160-F42-boot: an offline reload at the ${address} address shows the app's offline strip`, async ({
+	test(`1160-F42-boot: an offline reload at the ${address} address shows the app's offline strip in the kit's faces and colours`, async ({
 		page,
 		context
 	}) => {
