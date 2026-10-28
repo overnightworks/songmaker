@@ -25,8 +25,6 @@ JOB_ERROR_GENERATION_FAILED: Final[str] = "Generating failed — try again."
 JOB_ERROR_WORKER_TRAINING_FAILED: Final[str] = "Worker training failed"
 JOB_ERROR_WORKER_STREAM_SILENT: Final[str] = "Worker stream went silent"
 JOB_ERROR_INTERNAL: Final[str] = "Internal error during processing"
-# 0 asks ACE-Step to choose the song length.
-AUTO_LENGTH_SECONDS: Final[int] = 0
 JOB_ERROR_UNEXPECTED: Final[str] = "An unexpected error occurred"
 JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
@@ -77,6 +75,8 @@ LORA_TRAINING_MODEL_MODES: Final[frozenset[str]] = frozenset({"sft", "turbo"})
 
 GENERATION_WAITING_FOR_LORA_QUEUE_REASON: Final[str] = "Waiting for LoRA training on this GPU."
 GENERATION_ETA_MIN_PROGRESS: Final[float] = 0.05
+# 0 asks ACE-Step to choose the song length.
+AUTO_LENGTH_SECONDS: Final[int] = 0
 LORA_WAITING_FOR_GENERATION_QUEUE_REASON: Final[str] = "Waiting for queued generations on this GPU."
 
 DEFAULT_ARTIST = "Flex0r"
