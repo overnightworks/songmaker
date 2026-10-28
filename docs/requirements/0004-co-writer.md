@@ -126,8 +126,8 @@ Quelle: OPERATOR — Issue #35, “Verhalten” and Acceptance.
   or tail budget.
 - Exact tail-budget numbers, token-count algorithm, SSE event types, and the
   agent-service and `/mcp` transport.
-- Scoring provider and scoring model (remain Claude per Issue #34; out of
-  Co-Writer).
+- Scoring: a scoring run has no provider and no model; the Co-Writer judges a
+  take only when asked (REQ-COWRITER-27).
 - Legacy per-song chat endpoints and user-applied songmaker blocks.
 - Vector RAG and automatic copying of take facts into memory.
 - This document does not prescribe database, API, or provider-adapter mechanisms.

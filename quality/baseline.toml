@@ -27,7 +27,7 @@
 "frontend/e2e/seed.ts" = 1180
 "frontend/e2e/song-phone.spec.ts" = 865
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1141
+"frontend/src/lib/api/types.ts" = 1140
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -61,7 +61,7 @@
 "frontend/src/routes/settings/users/+page.svelte" = 1118
 "frontend/src/routes/settings/users/page.test.ts" = 858
 "src/acestep_worker/wrapper.py" = 1092
-"src/songmaker_cli/constants.py" = 832
+"src/songmaker_cli/constants.py" = 831
 "src/songmaker_cli/conversation_api.py" = 975
 "src/songmaker_cli/jobs/generation.py" = 1201
 "src/songmaker_cli/jobs/lora_training.py" = 1552
@@ -70,7 +70,7 @@
 "tests/acestep_engine/test_client.py" = 870
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
-"tests/conftest.py" = 933
+"tests/conftest.py" = 932
 "tests/test_admin_api.py" = 1055
 "tests/test_api.py" = 4758
 "tests/test_auto_deploy_alerting.py" = 1389
@@ -78,7 +78,7 @@
 "tests/test_cowriter_providers.py" = 1253
 "tests/test_db.py" = 3624
 "tests/test_install_cli_credentials_mirror.py" = 1017
-"tests/test_jobs.py" = 3517
+"tests/test_jobs.py" = 3341
 "tests/test_jobs_lora_training.py" = 1933
 "tests/test_library_api.py" = 1627
 "tests/test_lora_api.py" = 1297
@@ -87,7 +87,6 @@
 "tests/test_queue_streams.py" = 2422
 "tests/test_resource_event_api.py" = 1239
 "tests/test_scheduler.py" = 1310
-"tests/test_scorers_extended.py" = 1035
 "tests/test_server.py" = 1955
 "tests/test_sharing.py" = 2554
 
@@ -153,7 +152,7 @@
 "load_model_on_worker" = 64
 
 [function_lines."src/songmaker_cli/jobs/scoring.py"]
-"run_scoring_job" = 119
+"run_scoring_job" = 105
 
 [function_lines."src/songmaker_cli/lora_api.py"]
 "api_add_sample" = 65
@@ -233,7 +232,7 @@
 "test_startup_recovers_music_job_types_and_reconciles_lora_once" = 70
 
 [function_lines."tests/test_packaging_boundary.py"]
-"test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles" = 114
+"test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles" = 106
 
 [function_lines."tests/test_postgresql.py"]
 "test_alembic_migrations_on_postgresql" = 149

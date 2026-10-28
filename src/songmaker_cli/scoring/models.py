@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, fields
 from enum import StrEnum
-from typing import cast
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from songmaker_cli.scoring.registry import SCORERS, ScorerHost
+from songmaker_cli.scoring.registry import SCORERS
 from songmaker_cli.whisper_cues import WhisperCue
 
 
@@ -75,8 +74,7 @@ class TextAccuracyScore:
 
     @property
     def transcript(self) -> str:
-        """What Whisper heard, as one text — the form the coherence judge
-        reads and the generation stores."""
+        """What Whisper heard, as one text — the form the generation stores."""
         return "\n".join(self.transcribed_line_texts)
 
     def to_dict(self) -> dict[str, object]:
@@ -142,21 +140,6 @@ class SpectralQualityScore:
 
 
 @dataclass(frozen=True)
-class LyricalCoherenceScore:
-    """Claude LLM judge — rates lyrical coherence 1-10 with issues."""
-
-    score: int
-    issues: tuple[str, ...]
-    summary: str
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "lyrical_coherence": self.score,
-            "lyrical_summary": self.summary,
-        }
-
-
-@dataclass(frozen=True)
 class BpmAccuracyScore:
     """Detected vs requested BPM. Informational — not a quality indicator."""
 
@@ -203,33 +186,15 @@ class SongScores:
     - text_accuracy: quality signal (did the model sing the right words?)
     - audiobox: quality signal (production quality from Meta's model)
     - spectral_quality: pass/fail flag (noise artifacts?)
-    - lyrical_coherence: LLM judge (do the sung lyrics make sense?)
     """
 
     text_accuracy: TextAccuracyScore | None = None
-    lyrical_coherence: LyricalCoherenceScore | None = None
     emotional_dynamics: EmotionalDynamicsScore | None = None
     audiobox: AudioBoxScore | None = None
     bpm_accuracy: BpmAccuracyScore | None = None
     silence: SilenceScore | None = None
     spectral_quality: SpectralQualityScore | None = None
     runs: tuple[ScorerRun, ...] = ()
-
-    def including(self, execution: ScorerExecution) -> SongScores:
-        """These scores plus one more scorer's run.
-
-        The value lands only when that scorer produced one, so a failed,
-        skipped, or timed-out run contributes its reason alone and leaves
-        whatever the generation already scored untouched.
-        """
-        produced = (
-            {execution.run.scorer: execution.value}
-            if execution.run.produced_value else {}
-        )
-        return cast(
-            SongScores,
-            replace(self, runs=(*self.runs, execution.run), **produced),
-        )
 
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {}
@@ -257,14 +222,9 @@ class SongScores:
         """True when a scorer inside the scorer child blew its budget.
 
         Its call was abandoned, not stopped, so that child still runs it and
-        is no longer clean. A parent-hosted scorer over budget leaves its
-        thread here instead — killing the child would reclaim nothing.
+        is no longer clean.
         """
-        return any(
-            run.outcome is ScorerOutcome.TIMED_OUT
-            and SCORERS[run.scorer].host is ScorerHost.CHILD
-            for run in self.runs
-        )
+        return any(run.outcome is ScorerOutcome.TIMED_OUT for run in self.runs)
 
     def outcome_summary(self) -> str:
         """Every scorer's outcome in one line, for the job log."""
@@ -278,7 +238,6 @@ _TO_DICT_ORDER: tuple[str, ...] = (
     "bpm_accuracy",
     "silence",
     "spectral_quality",
-    "lyrical_coherence",
 )
 
 assert frozenset(_TO_DICT_ORDER) == frozenset(SCORERS.keys()), (
@@ -287,7 +246,6 @@ assert frozenset(_TO_DICT_ORDER) == frozenset(SCORERS.keys()), (
 
 SCORE_TYPES: dict[str, type] = {
     "text_accuracy": TextAccuracyScore,
-    "lyrical_coherence": LyricalCoherenceScore,
     "emotional_dynamics": EmotionalDynamicsScore,
     "audiobox": AudioBoxScore,
     "bpm_accuracy": BpmAccuracyScore,

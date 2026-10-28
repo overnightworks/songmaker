@@ -1,9 +1,8 @@
-"""Extended tests for spectral_quality, audiobox_aesthetics, text_accuracy, lyrical_coherence."""
+"""Extended tests for spectral_quality, audiobox_aesthetics, text_accuracy."""
 
 from __future__ import annotations
 
 import os
-import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -12,14 +11,11 @@ import pytest
 
 librosa = pytest.importorskip("librosa")
 
-from conftest import override_provider_runtime, read_wav, write_wav
+from conftest import read_wav, write_wav
 from songmaker_cli.whisper_cues import WhisperCue, WhisperWordCue
-from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.models import (
     AudioBoxScore,
-    ScorerOutcome,
-    ScorerRun,
     SongScores,
     SpectralQualityScore,
     TextAccuracyScore,
@@ -622,227 +618,6 @@ def test_text_accuracy_score_detected_language_default() -> None:
     assert score.detected_language is None
 
 
-# ── lyrical_coherence — judged in the worker parent ────────────────
-
-_LYRICS = "[verse]\nhello world\ngoodbye moon"
-
-
-def _child_result(*transcribed: str) -> SongScores:
-    """What the scorer child sends back: a text_accuracy value and its run."""
-    return SongScores(
-        text_accuracy=TextAccuracyScore(
-            similarity_ratio=0.9,
-            intended_line_texts=("hello world", "goodbye moon"),
-            transcribed_line_texts=transcribed,
-        ),
-        runs=(ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.OK),),
-    )
-
-
-def _judge(scores: SongScores, meta: SongMeta | None, **overrides: object) -> SongScores:
-    from songmaker_cli.scoring.lyrical_coherence import (
-        CoherenceJudgeConfig,
-        judge_lyrical_coherence,
-    )
-
-    config = CoherenceJudgeConfig(
-        **{"provider": "claude", "model": "claude-test", "timeout": 60, **overrides},
-    )
-    return judge_lyrical_coherence(scores, meta, config)
-
-
-def _claude_answers(text: str) -> object:
-    from agent_providers.claude.provider import ClaudeResponse
-
-    return patch(
-        "agent_providers.claude.adapter.call_claude",
-        return_value=ClaudeResponse(text=text),
-    )
-
-
-def test_the_judge_reads_the_same_transcript_the_generation_stores() -> None:
-    """One owner for the text: TextAccuracyScore.transcript. The judge sees
-    exactly what ends up in Generation.whisper_text."""
-    child_result = _child_result("hello world", "goodbye moon")
-
-    with _claude_answers('{"score": 9, "issues": [], "summary": "great"}') as claude:
-        _judge(child_result, SongMeta(prompt="test", lyrics=_LYRICS))
-
-    assert child_result.text_accuracy.transcript in claude.call_args.args[0]
-    assert child_result.text_accuracy.transcript == "hello world\ngoodbye moon"
-
-
-def test_judge_is_skipped_when_the_song_has_no_lyrics() -> None:
-    judged = _judge(_child_result("hello world"), None)
-
-    assert judged.lyrical_coherence is None
-    assert judged.runs[-1].outcome is ScorerOutcome.SKIPPED
-    assert "No lyrics" in judged.runs[-1].detail
-
-
-def test_judge_is_skipped_when_the_run_produced_no_transcription() -> None:
-    """text_accuracy runs in the child; without its value there is nothing
-    for the judge to read, so lyrical_coherence keeps its stored score."""
-    child_result = SongScores(
-        runs=(ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.TIMED_OUT),),
-    )
-
-    judged = _judge(child_result, SongMeta(prompt="test", lyrics=_LYRICS))
-
-    assert judged.lyrical_coherence is None
-    assert judged.runs[-1].outcome is ScorerOutcome.SKIPPED
-    assert "No Whisper transcription" in judged.runs[-1].detail
-    assert judged.refreshed_output_keys() == frozenset()
-
-
-def test_judge_scores_zero_when_no_vocals_were_transcribed() -> None:
-    judged = _judge(_child_result(), SongMeta(prompt="test", lyrics=_LYRICS))
-
-    assert judged.lyrical_coherence.score == 0
-    assert "No vocals" in judged.lyrical_coherence.issues[0]
-    assert judged.runs[-1].outcome is ScorerOutcome.OK
-
-
-def test_judge_records_claudes_verdict_alongside_the_childs_scores() -> None:
-    with _claude_answers('{"score": 9, "issues": [], "summary": "great"}'):
-        judged = _judge(
-            _child_result("hello world", "goodbye moon"),
-            SongMeta(prompt="test", lyrics=_LYRICS),
-        )
-
-    assert judged.lyrical_coherence.score == 9
-    assert judged.lyrical_coherence.summary == "great"
-    assert judged.text_accuracy is not None
-    assert [run.scorer for run in judged.runs] == ["text_accuracy", "lyrical_coherence"]
-    assert "lyrical_coherence" in judged.refreshed_output_keys()
-
-
-def test_judge_failure_leaves_the_stored_coherence_score_alone() -> None:
-    with patch(
-        "agent_providers.claude.adapter.call_claude",
-        side_effect=RuntimeError("Claude unreachable"),
-    ):
-        judged = _judge(
-            _child_result("hello world"), SongMeta(prompt="test", lyrics=_LYRICS),
-        )
-
-    assert judged.lyrical_coherence is None
-    assert judged.runs[-1].outcome is ScorerOutcome.FAILED
-    assert judged.runs[-1].detail == "Selected route failed."
-    assert "lyrical_coherence" not in judged.refreshed_output_keys()
-
-
-def test_judge_config_rejects_a_timeout_shorter_than_the_cli_preflight() -> None:
-    from songmaker_cli.scoring.lyrical_coherence import CoherenceJudgeConfig
-
-    with pytest.raises(ValueError, match="at least 5 seconds"):
-        CoherenceJudgeConfig(provider="claude", model="claude-test", timeout=4)
-
-
-def test_judge_watchdog_is_the_last_safety_for_a_provider_that_ignores_its_budget() -> None:
-    provider_release = threading.Event()
-    provider_stopped = threading.Event()
-
-    def ignores_timeout(*_args: object, **_kwargs: object) -> None:
-        try:
-            provider_release.wait()
-        finally:
-            provider_stopped.set()
-
-    with (
-        patch(
-            "agent_providers.claude.adapter.call_claude",
-            side_effect=ignores_timeout,
-        ),
-        patch(
-            "songmaker_cli.scoring.lyrical_coherence.judge_watchdog_timeout",
-            return_value=0.01,
-        ),
-    ):
-        judged = _judge(
-            _child_result("hello world"),
-            SongMeta(prompt="test", lyrics=_LYRICS),
-            timeout=5,
-        )
-        provider_release.set()
-
-    assert judged.runs[-1].outcome is ScorerOutcome.TIMED_OUT
-    assert judged.runs[-1].detail == JUDGE_FAILURE_TIMEOUT
-    assert judged.lyrical_coherence is None
-    assert provider_stopped.wait(timeout=1)
-
-
-def test_judge_uses_the_model_from_its_config_not_a_hardcoded_default() -> None:
-    """Which model judges a song is a configured decision (#315) — the DB
-    setting the caller resolved, never a value the judge picks itself."""
-    with _claude_answers('{"score": 7, "issues": [], "summary": "ok"}') as mock_call_claude:
-        _judge(
-            _child_result("hello world"),
-            SongMeta(prompt="test", lyrics=_LYRICS),
-            model="test-model",
-        )
-
-    assert mock_call_claude.call_args.kwargs["model"] == "test-model"
-
-
-def test_judge_claude_call_gets_its_credential_from_the_provider_runtime() -> None:
-    """The Claude path still resolves its credential through the injected
-    provider runtime (#315), not something the adapter invents — ``call_claude``
-    must always receive the configured key explicitly rather than pick one up
-    itself."""
-    override_provider_runtime(anthropic_api_key="runtime-key")
-
-    with _claude_answers('{"score": 7, "issues": [], "summary": "ok"}') as mock_call_claude:
-        _judge(_child_result("hello world"), SongMeta(prompt="test", lyrics=_LYRICS))
-
-    assert mock_call_claude.call_args.kwargs["api_key"] == "runtime-key"
-
-
-def test_judge_routes_to_the_configured_provider_and_no_other() -> None:
-    """The judge is provider-neutral (#315): a grok judge must call grok's
-    adapter with grok's own credential, never fall back to Claude."""
-    override_provider_runtime(xai_api_key="grok-key")
-
-    with (
-        patch(
-            "agent_providers.dispatch.call_openai_compatible_once",
-            return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
-        ) as grok_call,
-        patch("agent_providers.claude.adapter.call_claude") as claude_call,
-    ):
-        judged = _judge(
-            _child_result("hello world"),
-            SongMeta(prompt="test", lyrics=_LYRICS),
-            provider="grok",
-            model="grok-4.6",
-        )
-
-    assert judged.lyrical_coherence.score == 8
-    assert judged.lyrical_coherence.summary == "grok verdict"
-    assert grok_call.call_args.kwargs["provider"] == "grok"
-    assert grok_call.call_args.kwargs["model"] == "grok-4.6"
-    claude_call.assert_not_called()
-
-
-def test_judge_fails_loud_and_named_when_its_provider_is_unconfigured() -> None:
-    """An unset credential for the chosen provider is a named failure, never
-    a silent fallback to Claude (#315)."""
-    override_provider_runtime(xai_api_key=None)
-
-    with patch("agent_providers.claude.adapter.call_claude") as claude_call:
-        judged = _judge(
-            _child_result("hello world"),
-            SongMeta(prompt="test", lyrics=_LYRICS),
-            provider="grok",
-            model="grok-4.6",
-        )
-
-    assert judged.lyrical_coherence is None
-    assert judged.runs[-1].outcome is ScorerOutcome.FAILED
-    assert judged.runs[-1].detail == "API key is not set."
-    claude_call.assert_not_called()
-
-
 def test_score_text_accuracy_hallucination(tmp_path: Path) -> None:
     from songmaker_cli.scoring.pipeline import PipelineConfig
     from songmaker_cli.scoring.text_accuracy import score_text_accuracy
@@ -957,25 +732,8 @@ def test_spectral_has_artifacts() -> None:
     assert s2.has_artifacts is False
 
 
-def test_song_scores_to_dict_with_coherence() -> None:
-    from songmaker_cli.scoring.models import LyricalCoherenceScore, SongScores, SpectralQualityScore
-
-    scores = SongScores(
-        spectral_quality=SpectralQualityScore(
-            mean_flatness=0.1, max_flatness=0.2, artifact_count=1, artifact_windows=(),
-        ),
-        lyrical_coherence=LyricalCoherenceScore(
-            score=8, issues=(), summary="good",
-        ),
-    )
-    d = scores.to_dict()
-    assert d["spectral_artifacts"] == 1
-    assert d["lyrical_coherence"] == 8
-    assert d["lyrical_summary"] == "good"
-
-
 def test_song_scores_to_dict_with_detected_language() -> None:
-    from songmaker_cli.scoring.models import SongScores, TextAccuracyScore
+    from songmaker_cli.scoring.models import TextAccuracyScore
 
     scores = SongScores(
         text_accuracy=TextAccuracyScore(
@@ -991,7 +749,7 @@ def test_song_scores_to_dict_with_detected_language() -> None:
 
 
 def test_song_scores_to_dict_no_detected_language() -> None:
-    from songmaker_cli.scoring.models import SongScores, TextAccuracyScore
+    from songmaker_cli.scoring.models import TextAccuracyScore
 
     scores = SongScores(
         text_accuracy=TextAccuracyScore(

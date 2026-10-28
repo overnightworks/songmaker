@@ -17,8 +17,8 @@
                     └──┬─────────┬──────────┬─────────────┘
                        │         │          │
                        ▼         ▼          ▼
-                 PostgreSQL    Redis    Co-writer / judge providers
-                 (all data)   (queues,  (selected provider per surface)
+                 PostgreSQL    Redis    Agent service / cover provider
+                 (all data)   (queues,  (co-writer turns; cover image)
                               sessions,
                               rate limits)
 ```
@@ -107,7 +107,6 @@ User clicks "Generate"                    User clicks "Score"
   │   for Lua admission, hold defer, config   ├── Whisper transcription
   │   build, worker HTTP, and persistence      ├── AudioBox aesthetics
   │                                              ├── BPM, dynamics, silence, spectral
-  │                                              ├── lyrical coherence (configured judge provider)
   │                                              ├── save scores to DB
   │                                              └── Job status: completed
   ├── post_process_generation (to_thread):
@@ -975,7 +974,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Generation post-process | Decode worker WAV → splice → master → MP3 | `generate.py`, `jobs/generation.py:post_process_generation` |
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
-| Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics, coherence | `scoring/` |
+| Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
 | Co-writer | The turn as a run at the agent service: its agent file, its tokens and run binding, the tools it calls back at `/mcp`; the cover selection's route is resolved by `cowriter/routing.py` and the judge is configured separately | `agents/cowriter.md`, `cowriter/service_turn.py`, `cowriter/service_runs.py`, `cowriter/mcp_endpoint.py`, `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | MCP | Claude's stdio tool server, the `/mcp` endpoint for the agent service, and the shared tool declarations and execution | `mcp_server/`, `cowriter/mcp_endpoint.py`, `cowriter/tools.py` |
@@ -1014,13 +1013,13 @@ Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the
 
 `db/queries/settings.py` owns the independent Cover and Judge selections. Cover captures its provider,
 model, and explicit `cli` or `api` route before work begins. The Judge has its
-own saved route, while its worker call still captures only provider and model.
+own saved route, which no scoring run reads; the Judge settings and the `/settings/judge` endpoints
+stay until a later item removes them.
 The Co-Writer has no selection here: the agent service's configuration chooses the turn's model
 (the agent file names none), and the rows once saved for it stay in the table unread.
 `agent_providers/dispatch.py`
-owns the resulting adapter decision for the Judge and the Cover (the Co-Writer
-turn no longer executes a route): the Judge retains its existing
-`call_provider_once` path in the scoring worker, and Cover asks `cover_image_capability(provider, route)`,
+owns the resulting adapter decision for the Cover (the Co-Writer
+turn no longer executes a route; a scoring run calls no provider): Cover asks `cover_image_capability(provider, route)`,
 the one answer to whether a route carries an image tool and what blocks it
 today. Nothing else answers that: the cover job resolves its saved row through
 it, `/api/settings/providers` projects it per route as `cover_routes`, and no
@@ -1039,16 +1038,14 @@ shared provider runtime configuration: Claude (also the unset provider) uses
 API when `ANTHROPIC_API_KEY` is set, otherwise CLI; Grok, Codex, and retired
 providers pin API. Existing route rows are preserved. Reads without a valid
 route return 422. An omitted or null route in a Judge update keeps the saved
-route. The settings contract is ahead of the call: until #844's runtime handoff,
-a newly selected route can report ready while the worker still takes its
-existing path. The Models page has no Scoring control: the judge runs on its
-stored setting. Saving a Models row is a question of
+route. The Models page has no Scoring control, and no scoring run reads the
+Judge settings. Saving a Models row is a question of
 form — a known provider, a known route, and a model the provider lists, the one
 the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
 unusable one stays saved until its next turn or job fails with the named reason.
 
-Cover and the scoring Judge are what ask that one dispatch; the Co-Writer runs at
+The Cover is what asks that one dispatch; the Co-Writer runs at
 the agent service. Settings › Admin › **Models** shows the Co-Writer and Cover: one table, one
 row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
 read-only (`ModelsCowriterRow.svelte`): "Set by the agent service" in the Provider
@@ -1074,8 +1071,8 @@ one card per task with the same labelled lines;
 `frontend/e2e/admin-models.spec.ts` drives the surface at both widths.
 
 The co-writer turn does not use these routes: it runs at the agent service
-(see "The co-writer turn" below). The routes above keep serving the judge and
-the cover until their own moves.
+(see "The co-writer turn" below). The routes above keep serving the cover
+until its own move.
 
 ### Engine packages (`src/`)
 
@@ -1619,20 +1616,8 @@ The job stream emits on every change of status, progress, `phase`, take counters
 
 ## Scoring Flow
 
-The parent-hosted lyrical-coherence judge owns one provider budget and carries
-it through the configured judge-provider call. Every configuration enforces a
-minimum five-second timeout because the Claude one-shot path may need that
-much for its tool-free CLI preflight; only that Claude path performs the
-tool-surface probe. Grok and Codex use the compatible API path directly.
-The five-second timeout is the provider floor; the bounded cleanup margin
-(SIGTERM grace plus post-SIGKILL wait) belongs only to the
-`agent_providers.process.run_cli_bounded` probe, while Grok/Codex use HTTP timeouts, the
-Claude API uses its SDK timeout, the Claude-CLI judge uses
-`subprocess.run(timeout)`, and the outer judge boundary is the Thread-Watchdog
-`timeout+1s` (`pipeline.py:223-229`). The scorer watchdog has only a small
-final-safety headroom. A provider timeout is a judge failure:
-child scores are retained, but the scoring job ends `partial` with
-`judge_error`, never `completed`.
+A scoring run calls no provider: the scorer child runs every requested scorer
+and the worker stores what came back; no scoring run makes a coherence verdict.
 
 ```
 POST /api/generations/{id}/score
@@ -1648,36 +1633,25 @@ POST /api/generations/{id}/score
           bpm_accuracy, silence_detection, spectral_quality) run concurrently
         Each scorer fault-isolated: one failure does not block others
       Parent kills subprocess on timeout (SIGKILL), freeing GPU memory
-    → parent judges lyrical_coherence on the returned result, through the
-      configured judge provider (Claude/Grok/Codex, #315), reading the
-      transcript from its text_accuracy value
     → merge scores + whisper_text + whisper_cues into DB
-  → Job status: completed, or partial when the judge itself failed
-    (e.g. its provider has no credential) — never a silent completed
+  → Job status: completed, failed or cancelled
 ```
 
 **Every scorer reports its own outcome.** `SongScores.runs` carries one
 `ScorerRun` per requested scorer — `ok`, `failed`, `timed_out`, or `skipped`
-(with the reason, e.g. lyrical_coherence when text_accuracy produced no
-transcript). Persisting replaces exactly the `output_keys` of the scorers that
+(with the reason, e.g. a scorer module that could not be imported). Persisting replaces exactly the `output_keys` of the scorers that
 came back `ok`, so a scorer that timed out or failed leaves the value it stored
 in an earlier run untouched; a whole run of failures changes nothing. The job
 log line names every scorer's outcome. Before #161 the run replaced the entire
 score blob, so one slow scorer erased the previous result.
 
-**Scorers that call an external service run in the parent.** `ScorerSpec.host`
-says which process owns a scorer. The scorer child loads third-party model
-weights and is spawned with `SECRET_ENV_KEYS` scrubbed, so it never holds a
-credential: `lyrical_coherence` is `ScorerHost.PARENT`, the child's registry
-refuses to register it, and `jobs/scoring.py` asks the child only for the
-child-hosted scorers and then calls `judge_lyrical_coherence()` itself on the
-`SongScores` that came back. `TextAccuracyScore.transcript` is the single owner
-of the transcribed text — the judge reads it and `Generation.whisper_text`
-stores it. The judge produces an ordinary `ScorerRun` under its own
-`SCORER_TIMEOUT_SECONDS` budget, so `ok` / `failed` / `skipped` / `timed_out`
-and the merge rules apply to it exactly as to a child scorer: a judge-provider outage
-leaves the stored `lyrical_coherence` untouched. `PipelineConfig` therefore
-carries no secret (issue #176; see docs/security.md).
+**The scorer child holds no credential.** It loads third-party model weights and
+is spawned with `SECRET_ENV_KEYS` scrubbed, and no scorer calls an external
+service, so `PipelineConfig` carries no secret (issue #176; see
+docs/security.md). `TextAccuracyScore.transcript` is the single owner of the
+transcribed text; `Generation.whisper_text` stores it. The stored keys
+`lyrical_coherence` and `lyrical_summary` are no
+scorer's output: a scoring run leaves them as they are.
 
 **Timeouts are per scorer.** `SCORER_TIMEOUT_SECONDS` (120) is the default
 budget; `TEXT_ACCURACY_TIMEOUT_SECONDS` (300) gives Whisper its own, because a
@@ -1685,19 +1659,16 @@ cold model load counts against it. Each budget is a ceiling, not a target: a
 scorer that blows it is abandoned, not waited for, so the run keeps moving with
 that scorer's stored value. Abandoned is not stopped, though — that scorer's
 thread still holds the child's models and GPU memory, so a run in which a
-*child-hosted* scorer timed out recycles the scorer subprocess once its values
+scorer timed out recycles the scorer subprocess once its values
 are persisted (`ScorerProcess.recycle()`), and the next request pays a model
-reload for a clean child. A parent-hosted scorer over budget leaves its thread
-in the worker parent instead, where recycling the child would reclaim nothing.
-The recycle is prompt GPU reclaim, not the guarantee: `ScorerProcess` marks
+reload for a clean child. The recycle is prompt GPU reclaim, not the guarantee: `ScorerProcess` marks
 such a child tainted under its request lock and never hands it to another
 request, so a job cancelled before it could recycle changes nothing. The outer
 subprocess watchdog covers the child's single concurrent phase — its slowest
 scorer budget plus headroom — and never drops below
 `SCORING_PIPELINE_TIMEOUT_SECONDS`. If it fired first the subprocess would be
 SIGKILLed and even the values the run did produce would be lost.
-`ARQ_JOB_TIMEOUT` must stay above the whole job: the child watchdog plus the
-parent's coherence budget, which is spent after the child returns.
+`ARQ_JOB_TIMEOUT` must stay above the whole job: the child watchdog plus its margin.
 
 `whisper_cues` is a JSON list of `{start, end, text}` from faster-whisper segments (start/end in seconds), each optionally carrying `words`, the same shape one level finer, from `word_timestamps=True` (#142). `null` means never scored or a legacy row; a list (including `[]`) means text_accuracy ran and stored whatever usable cues it produced. A cue without `words` was scored before word timestamps existed and gets them only through a re-score (#132) — the key is omitted rather than stored as `null`, so those rows keep their original shape. `whisper_text` is the same cue texts joined with newlines. Missing timings are not invented.
 
@@ -1725,8 +1696,9 @@ parent's coherence budget, which is spent after the child returns.
 - Post-processes worker WAV → mastered MP3 → DB row in `asyncio.to_thread`
 
 **Scoring worker** (`scoring_worker.py`):
-- Owns scorer subprocess (Whisper, AudioBox, audio scorers); judges lyrical
-  coherence itself through the configured judge provider, so no secret enters the subprocess
+- Owns scorer subprocess (Whisper, AudioBox, audio scorers); calls no provider,
+  so the worker holds no provider credential; the subprocess is spawned with
+  `SECRET_ENV_KEYS` scrubbed
 - Handles `score` tasks
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
 - `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)

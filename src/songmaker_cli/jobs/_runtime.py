@@ -15,7 +15,6 @@ from agent_providers.codex.image import (
     CodexImageQuotaError,
     ImageToolBlockedError,
 )
-from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from agent_providers.errors import CodexProcessPoolSaturatedError
 from sqlalchemy.orm import Session
 
@@ -34,7 +33,6 @@ from songmaker_cli.constants import (
     JOB_ERROR_COVER_IMAGE_TOOL_BLOCKED,
     JOB_ERROR_GENERATION_TIMED_OUT,
     JOB_ERROR_INTERNAL,
-    JOB_ERROR_JUDGE_FAILED,
     JOB_ERROR_NO_WORKERS,
     JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
     JOB_ERROR_SERVER_UNREACHABLE,
@@ -89,10 +87,6 @@ class GenerationSetupError(Exception):
     pass
 
 
-class JudgeFailureError(Exception):
-    pass
-
-
 def _sanitize_error(exc: Exception, job_id: str) -> str:
     """Return the musician-facing message and log the raw failure in full."""
     log.error("Job %s failed: %s", job_id, exc, exc_info=exc)
@@ -105,10 +99,6 @@ def _sanitize_error(exc: Exception, job_id: str) -> str:
 def _sanitize_generation_setup_error(exc: Exception) -> str:
     message = str(exc)
     return message if message in _GENERATION_SETUP_MESSAGES else JOB_ERROR_UNEXPECTED
-
-
-def _sanitize_judge_failure_error(exc: Exception) -> str:
-    return str(exc) if str(exc) == JUDGE_FAILURE_TIMEOUT else JOB_ERROR_JUDGE_FAILED
 
 
 def _sanitize_codex_image_quota_error(exc: CodexImageQuotaError) -> str:
@@ -135,7 +125,6 @@ def _default_error_message(exc: Exception) -> str:
 _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = (
     (WorkerTaskFailed, str),
     (GenerationSetupError, _sanitize_generation_setup_error),
-    (JudgeFailureError, _sanitize_judge_failure_error),
     (
         CoverImageToolUnavailableError,
         lambda exc: COVER_IMAGE_TOOL_UNAVAILABLE_ERROR.format(provider=exc.provider.title()),

@@ -27,9 +27,7 @@ from songmaker_cli.scoring.pipeline import (
     SCORERS,
     AudioData,
     PipelineConfig,
-    ScorerDependencyUnavailable,
     ScorerRegistry,
-    judge_watchdog_timeout,
     run_scoring_pipeline,
 )
 
@@ -126,7 +124,6 @@ def test_emotional_dynamics_expressiveness_capped() -> None:
 def test_to_dict_keys_match_scorer_output_keys_exactly() -> None:
     from songmaker_cli.scoring.models import (
         BpmAccuracyScore,
-        LyricalCoherenceScore,
         SilenceScore,
         SpectralQualityScore,
     )
@@ -139,7 +136,6 @@ def test_to_dict_keys_match_scorer_output_keys_exactly() -> None:
             transcribed_line_texts=("a",),
             detected_language="en",
         ),
-        lyrical_coherence=LyricalCoherenceScore(score=5, issues=(), summary="ok"),
         emotional_dynamics=EmotionalDynamicsScore(
             pitch_cv=0.1, rms_contrast=0.2, onset_rate_cv=0.3,
             overall_expressiveness=0.4,
@@ -197,24 +193,6 @@ def test_register_invalid_name_raises(clean_registry: ScorerRegistry) -> None:
             audio_data: object = None, config: object = None,
         ) -> None:
             pass
-
-
-def test_register_refuses_a_parent_hosted_scorer(clean_registry: ScorerRegistry) -> None:
-    """lyrical_coherence calls Claude — it runs in the worker parent, so the
-    child must not be able to register it and pull the secret into itself."""
-    with pytest.raises(ValueError, match="not a scorer this process runs"):
-        @clean_registry.register("lyrical_coherence")
-        def judge(
-            mp3_path: Path, meta: object = None,
-            audio_data: object = None, config: object = None,
-        ) -> None:
-            pass
-
-
-def test_the_scorer_child_does_not_load_the_claude_judge() -> None:
-    from songmaker_cli.scoring.pipeline import default_registry
-
-    assert "lyrical_coherence" not in default_registry.available()
 
 
 # ── Pipeline runner tests ────────────────────────────────────────────
@@ -597,24 +575,6 @@ def test_failed_scorer_reports_failure_with_reason(
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
-def test_scorer_with_unavailable_dependency_is_skipped_not_failed(
-    mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
-) -> None:
-    @clean_registry.register("text_accuracy")
-    def needs_vocals(
-        mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
-    ) -> object:
-        raise ScorerDependencyUnavailable("no transcript")
-
-    scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
-
-    run = scores.runs[0]
-    assert run.outcome is ScorerOutcome.SKIPPED
-    assert run.detail == "no transcript"
-
-
-@patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
 def test_wrong_return_type_counts_as_failure(
     mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
 ) -> None:
@@ -657,10 +617,6 @@ def test_explicit_pipeline_timeout_is_kept() -> None:
     assert PipelineConfig(pipeline_timeout=42).pipeline_timeout == 42
 
 
-def test_judge_watchdog_outlives_the_provider_budget() -> None:
-    assert judge_watchdog_timeout(120) > 120
-
-
 # ── Outcome reporting ────────────────────────────────────────────
 
 
@@ -669,7 +625,7 @@ def test_refreshed_output_keys_covers_only_successful_scorers() -> None:
         runs=(
             ScorerRun(scorer="silence", outcome=ScorerOutcome.OK),
             ScorerRun(scorer="text_accuracy", outcome=ScorerOutcome.TIMED_OUT),
-            ScorerRun(scorer="lyrical_coherence", outcome=ScorerOutcome.SKIPPED),
+            ScorerRun(scorer="audiobox", outcome=ScorerOutcome.SKIPPED),
             ScorerRun(scorer="bpm_accuracy", outcome=ScorerOutcome.FAILED),
         ),
     )
