@@ -495,7 +495,7 @@
 	}
 	.rsw button.on {
 		background: var(--accent);
-		color: var(--bg);
+		color: var(--on-accent);
 	}
 	.rsw button.dead {
 		color: var(--text-muted);

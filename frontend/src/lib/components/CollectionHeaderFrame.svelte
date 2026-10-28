@@ -230,7 +230,7 @@
 		border-radius: 50%;
 		border: none;
 		background: var(--accent);
-		color: #fff;
+		color: var(--on-accent);
 		margin-right: 0.2rem;
 	}
 

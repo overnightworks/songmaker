@@ -10,15 +10,15 @@
 
 :root {
 	--primary: #ff3220;
-	--accent: #a020f0;
+	--accent: #b45cf5;
 	/* The ink that reads on the action colour, --accent (#924). */
-	--on-accent: #fff;
+	--on-accent: #111111;
 	--text-subtle: #888;
 	--text-disabled: #555;
 	--text-decoration: #444;
 	--text-dim: #444;
 	--text-light: #ccc;
-	--glow-accent: rgba(160, 32, 240, 0.03);
+	--glow-accent: color-mix(in srgb, var(--accent) 3%, transparent);
 	--score-good-bg: #1a3a1a;
 	--score-good: #4f4;
 	--score-ok-bg: #2a1f10;
@@ -30,9 +30,9 @@
 	--viz-primary-r: 255;
 	--viz-primary-g: 50;
 	--viz-primary-b: 32;
-	--viz-accent-r: 160;
-	--viz-accent-g: 32;
-	--viz-accent-b: 240;
+	--viz-accent-r: 180;
+	--viz-accent-g: 92;
+	--viz-accent-b: 245;
 	--phone-tabs-height: 54px;
 	--phone-tabs-room: calc(var(--phone-tabs-height) + env(safe-area-inset-bottom, 0px));
 	--transport-safe-area-bottom: env(safe-area-inset-bottom, 0px);
@@ -132,12 +132,13 @@ html[data-transport-bar='hidden'] {
 [data-theme='light'] {
 	--primary: #d41a0a;
 	--accent: #7a18c0;
+	--on-accent: #fff;
 	--text-subtle: #555;
 	--text-disabled: #9a9a9a;
 	--text-decoration: #999;
 	--text-dim: #999;
 	--text-light: #333;
-	--glow-accent: rgba(122, 24, 192, 0.04);
+	--glow-accent: color-mix(in srgb, var(--accent) 4%, transparent);
 	--score-good-bg: #e0f5e0;
 	--score-good: #1e7a1e;
 	--score-ok-bg: #fef3e0;

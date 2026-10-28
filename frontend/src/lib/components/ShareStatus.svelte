@@ -108,7 +108,7 @@
 		padding: 0.55rem 1.1rem;
 		border-radius: 8px;
 		background: var(--accent);
-		color: white;
+		color: var(--on-accent);
 		text-decoration: none;
 		border: none;
 		font: inherit;

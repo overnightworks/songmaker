@@ -978,7 +978,7 @@
 	.save-btn.dirty {
 		border-color: var(--primary);
 		color: var(--primary);
-		background: rgba(160, 32, 240, 0.08);
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
 	.save-btn:hover:not(:disabled) {

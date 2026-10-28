@@ -1078,7 +1078,7 @@
 	.save-btn {
 		display: inline-block;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
+		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		padding: 0.4rem 1rem;
@@ -1091,7 +1091,7 @@
 	}
 
 	.save-btn:hover:not(.disabled):not(:disabled) {
-		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
+		box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	.save-btn.disabled,
@@ -1146,7 +1146,7 @@
 	.gen-model-tab.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.gen-defaults-controls {
@@ -1185,7 +1185,7 @@
 	.model-toggle.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.model-toggle:hover:not(.active) {

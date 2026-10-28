@@ -145,7 +145,7 @@
 	}
 	.check.kept {
 		background: var(--accent);
-		color: var(--bg);
+		color: var(--on-accent);
 		border-color: var(--accent);
 	}
 	.unload {
