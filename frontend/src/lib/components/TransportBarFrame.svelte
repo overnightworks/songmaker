@@ -97,7 +97,7 @@
 	let waveformData: Uint8Array<ArrayBuffer> | undefined;
 	let bassLevel = $state(0);
 	let energyLevel = $state(0);
-	let vizColors: VizColors = $state({ pr: 255, pg: 50, pb: 32, ar: 160, ag: 32, ab: 240 });
+	let vizColors: VizColors = $state(readVizColors());
 
 	// Previous and next are frequent phone targets; the desktop row keeps
 	// its own press feedback.
@@ -165,12 +165,12 @@
 	}
 
 	function startVisualizerLoop(): void {
+		vizColors = readVizColors();
 		if (!vizCanvas) return;
 		if (!playbackVisualizerAllowed()) return;
 		connectAnalyser();
 		if (!analyser || !frequencyData || !waveformData) return;
 		audioPlayer.resumeAudioGraph();
-		vizColors = readVizColors();
 		viz.startLoop(vizCanvas, analyser, frequencyData, waveformData, vizColors, (bass, energy) => {
 			bassLevel = bass;
 			energyLevel = energy;
