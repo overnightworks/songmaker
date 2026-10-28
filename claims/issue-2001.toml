@@ -1,7 +1,0 @@
-claim_id = "f36698a39a754cf5a26f95bb55d04a92"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6c9ef935b72c9e14cb69d9d9c5a8d15d5ae75454"
-branch = "claude/issue-2001-the-credentials-mirror-keeps-grok-s-two"
-scope = ["scripts/mirror_agent_cli_credentials.py", "tests/scripts/test_mirror_agent_cli_credentials.py", "tests/test_install_cli_credentials_mirror.py"]
-opened_commit = "4e65fb776f2bc2fee0236572b09541697b443e89"
