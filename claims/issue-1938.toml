@@ -1,0 +1,7 @@
+claim_id = "335b1b5db4ad4b2b800c1975a98d7a20"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d3c4d26e6f7c9b8b03e7bb0155609a506ccd6710"
+branch = "claude/issue-1938-pnpm-dev-explicit-target"
+scope = ["frontend/README.md", "frontend/e2e/seed.ts", "frontend/vite.config.ts"]
+opened_commit = "846a1ed295a2da5061a5f514d06280d216a8eed3"
