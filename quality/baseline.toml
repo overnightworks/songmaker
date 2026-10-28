@@ -67,13 +67,13 @@
 "src/songmaker_cli/jobs/lora_training.py" = 1552
 "src/songmaker_cli/queue_streams.py" = 976
 "src/songmaker_cli/sharing_api.py" = 868
+"tests/acestep_engine/test_client.py" = 870
+"tests/acestep_worker/test_train_lora.py" = 1294
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/conftest.py" = 933
-"tests/test_acestep_worker_train_lora.py" = 1294
 "tests/test_admin_api.py" = 1055
 "tests/test_api.py" = 4758
 "tests/test_auto_deploy_alerting.py" = 1389
-"tests/test_client.py" = 870
 "tests/test_conversation_api.py" = 853
 "tests/test_cowriter_providers.py" = 1254
 "tests/test_db.py" = 3642
@@ -179,7 +179,7 @@
 [function_lines."tests/test_acestep_state.py"]
 "test_heartbeat_payload_keys_match_admin_reader" = 66
 
-[function_lines."tests/test_acestep_worker_train_lora.py"]
+[function_lines."tests/acestep_worker/test_train_lora.py"]
 "_make_deps" = 76
 "test_default_train_lora_runner_dispatches" = 140
 "test_default_train_lora_runner_fails_on_preprocess_error" = 63

@@ -333,17 +333,21 @@ tests/
 │                                  internal, LoRA, playlist, reimport, sharing, server
 ├── test_*_queries.py              DB query coverage for workers and LoRAs
 ├── test_jobs*.py                  Generation, scoring, model lifecycle, LoRA training jobs
-├── test_*worker*.py               Music/scoring worker classes and ACE-Step worker package tests
+├── test_*worker*.py               Music/scoring worker classes
 ├── test_scoring*.py               Scorer registry, pipeline, subprocess, and scorer modules
-├── test_*client*.py               CLI client, ACE-Step client, and training client tests
+├── test_*client*.py               CLI client tests
 ├── test_auth*.py                  Auth utilities and auth endpoints
 ├── test_config.py                 ACE-Step config building, defaults, path resolution
 ├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
 ├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
 ├── test_resource_event_api.py      Authenticated SSE replay, gaps, limits, headers, isolation
 ├── test_generation*.py            Generation params, retention, LoRA integration
-└── test_*                         Audio I/O, lifecycle, middleware, parser, Redis, scheduler,
-                                   soft delete, constants, MCP server, mastering
+└── test_*                         Lifecycle, middleware, parser, Redis, scheduler,
+                                   soft delete, constants, MCP server
+
+tests/acestep_engine/              ACE-Step client, progress and training client
+tests/audio_engine/                Audio I/O and mastering
+tests/support/                     Shared test helpers (the ACE-Step HTTP boundary)
 
 tests/acestep_worker/
 ├── test_downloads.py
@@ -351,9 +355,12 @@ tests/acestep_worker/
 ├── test_main.py
 ├── test_model_cache.py
 ├── test_registry_client.py
+├── test_settings_startup_timeout.py
 ├── test_subprocess_runner.py
 ├── test_task_store.py
-└── test_wrapper.py
+├── test_train_lora.py
+├── test_wrapper.py
+└── test_wrapper_training_child_stop.py
 
 frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
