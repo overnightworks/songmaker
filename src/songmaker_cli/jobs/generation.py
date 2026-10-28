@@ -872,7 +872,6 @@ def _apply_repaint_overrides(
         overrides["repaint_latent_crossfade_frames"] = params.repaint_latent_crossfade_frames
     if params.repaint_wav_crossfade_sec is not None:
         overrides["repaint_wav_crossfade_sec"] = params.repaint_wav_crossfade_sec
-
     new_ctx = _with_generation_context_overrides(
         ctx,
         ace_config=_with_ace_config_overrides(ctx.ace_config, **overrides),
@@ -880,7 +879,8 @@ def _apply_repaint_overrides(
     )
     if raw_wav:
         new_ctx = _with_generation_context_overrides(
-            new_ctx, raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir),
+            new_ctx,
+            raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir),
         )
     return new_ctx
 

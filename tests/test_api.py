@@ -267,6 +267,14 @@ def test_update_song_as_new_version_keeps_a_takeless_latest_version(client: Test
     ]
 
 
+def test_update_song_without_any_version_records_auto_duration(client: TestClient) -> None:
+    assert client.delete("/api/versions/v1").status_code == 200
+
+    resp = client.put("/api/songs/s1", json={"lyrics": "after the only version is gone"})
+
+    assert (resp.status_code, resp.json()["audio_duration"]) == (200, 0)
+
+
 def test_rename_song(client: TestClient) -> None:
     resp = client.put("/api/songs/s1/title", json={"title": "Storm"})
     assert resp.status_code == 200
@@ -1182,23 +1190,9 @@ def test_get_generation_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_pick_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/pick")
-    assert resp.status_code == 404
-
-
-def test_unpick_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/unpick")
-    assert resp.status_code == 404
-
-
-def test_keep_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/keep")
-    assert resp.status_code == 404
-
-
-def test_unkeep_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/unkeep")
+@pytest.mark.parametrize("action", ["pick", "unpick", "keep", "unkeep"])
+def test_generation_flag_action_not_found(client: TestClient, action: str) -> None:
+    resp = client.post(f"/api/generations/nonexistent/{action}")
     assert resp.status_code == 404
 
 

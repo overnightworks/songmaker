@@ -61,9 +61,9 @@ const songDefaults = {
 } satisfies Partial<SongItem>;
 
 beforeEach(discardDraft);
-
 describe('editGenParams dirty tracking', () => {
 	it('loads a song without a duration as Auto and not dirty', () => {
+		expect(get(editAudioDuration)).toBe(0);
 		loadSongData(makeSong({ ...songDefaults, audio_duration: null }));
 		expect(get(editAudioDuration)).toBe(0);
 		expect(get(isDirty)).toBe(false);
