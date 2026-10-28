@@ -33,9 +33,7 @@
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 	import TakeRetentionPanel from '$lib/components/TakeRetentionPanel.svelte';
-	import ModelsTaskRow, {
-		routeReasonSentence
-	} from '$lib/components/ModelsTaskRow.svelte';
+	import ModelsTaskRow, { routeReasonSentence } from '$lib/components/ModelsTaskRow.svelte';
 	import ModelsCowriterRow from '$lib/components/ModelsCowriterRow.svelte';
 	import type {
 		ModelsRouteKey,
