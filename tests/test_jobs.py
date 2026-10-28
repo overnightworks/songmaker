@@ -2814,9 +2814,9 @@ def test_repaint_of_an_unreadable_source_take_fails_loud(tmp_path: Path) -> None
     src_wav = tmp_path / "src.wav"
     src_wav.write_bytes(b"RIFF" + b"\x00" * 100)
     ctx = _override_context(tmp_path)
-
+    params = _repaint_params(src_wav, 0.3, 0.8)
     with pytest.raises(ValueError, match="Cannot measure"):
-        _apply_repaint_overrides(ctx, _repaint_params(src_wav, 0.3, 0.8))
+        _apply_repaint_overrides(ctx, params)
 
 
 def test_repaint_range_is_a_fraction_of_the_source_take(tmp_path: Path, make_wav_bytes) -> None:
