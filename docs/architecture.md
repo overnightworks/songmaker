@@ -995,9 +995,9 @@ through `cowriter/service_turn.py`:
    (`fresh_access_token` through `DatabaseSessionTransaction` in
    `auth_stores.py`) and takes songmaker's workload token from the same
    relying party.
-3. It posts the `RunRequest` of `agents/cowriter.md` (`model: claude/opus`, the
-   twelve tools of `cowriter_tool_declarations()`, the agent file's body as the
-   system prompt, everything else in the messages) to `AGENT_SERVICE_URL`.
+3. It posts the `RunRequest` of `agents/cowriter.md` (the twelve tools of
+   `cowriter_tool_declarations()`, the agent file's body as the system prompt,
+   everything else in the messages; no model) to `AGENT_SERVICE_URL`.
 4. It reads the event stream through agent-runtime-client's decoder and
    registers the run id from `run_started` in `service_runs` for the person;
    `/mcp` accepts a tool call only for a registered run. The run is released
@@ -1015,8 +1015,8 @@ Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the
 `db/queries/settings.py` owns the independent Cover and Judge selections. Cover captures its provider,
 model, and explicit `cli` or `api` route before work begins. The Judge has its
 own saved route, while its worker call still captures only provider and model.
-The Co-Writer has no selection here: the turn takes its model from the agent file, and the rows
-once saved for it stay in the table unread.
+The Co-Writer has no selection here: the agent service's configuration chooses the turn's model
+(the agent file names none), and the rows once saved for it stay in the table unread.
 `agent_providers/dispatch.py`
 owns the resulting adapter decision for the Judge and the Cover (the Co-Writer
 turn no longer executes a route): the Judge retains its existing

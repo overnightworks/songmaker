@@ -16,7 +16,7 @@ Two flags on generations: **pick** is THE one for this song on the album (one pe
 
 **Scoring** is purely informational auto-rating: BPM accuracy, spectral quality, silence, emotional dynamics, text accuracy (Whisper transcript of what was sung vs the lyrics, which the user also sees).
 
-**Co-writer** is one active multi-turn conversation per musician, not per song (`chat_messages`, scoped via `conversations`); each turn is one run of `agents/cowriter.md` at the agent service (the model songmaker sends, `claude/opus` by default) that reads and writes songs through the tools songmaker serves at `/mcp`, with no local provider fallback. Memory, tools and @-mentions: [architecture](docs/architecture.md). Co-writer expansion (more memory or mention features) is frozen until organically needed (operator ruling 2026-08-24). There is no per-song chat; the co-writer runs only through `POST /chat/turn` in `conversation_api.py`.
+**Co-writer** is one active multi-turn conversation per musician, not per song (`chat_messages`, scoped via `conversations`); each turn is one run of `agents/cowriter.md` at the agent service (the model the agent service's configuration names) that reads and writes songs through the tools songmaker serves at `/mcp`, with no local provider fallback. Memory, tools and @-mentions: [architecture](docs/architecture.md). Co-writer expansion (more memory or mention features) is frozen until organically needed (operator ruling 2026-08-24). There is no per-song chat; the co-writer runs only through `POST /chat/turn` in `conversation_api.py`.
 
 **Seed pinning** reproduces a generation (pin a previous seed, regenerate with tweaked params).
 

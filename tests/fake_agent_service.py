@@ -20,12 +20,14 @@ import httpx
 from agent_runtime_client.sse import encode_event
 from agent_runtime_client.tools import ToolEffect
 from agent_runtime_client.wire import (
+    PROTOCOL_VERSION,
     AssistantText,
     Cancelled,
     Failed,
     FailureCode,
     Heartbeat,
     RejectionCode,
+    RouteKind,
     RunRejection,
     RunStarted,
     Succeeded,
@@ -43,8 +45,8 @@ if TYPE_CHECKING:
 
 SERVICE_URL = "http://agent-service.test:8080"
 A_REFRESH_TOKEN = "fake-refresh-token"  # noqa: S105
-PROTOCOL_VERSION = 2
 HEARTBEAT_SECONDS = 15
+STARTED_MODEL = "anthropic/opus"
 
 
 @dataclass(frozen=True)
@@ -76,7 +78,12 @@ class RunScript:
         return {"v": PROTOCOL_VERSION, "run_id": self.run_id, "seq": seq}
 
     def started(self) -> bytes:
-        return encode_event(RunStarted(**self._common(), heartbeat_interval_s=HEARTBEAT_SECONDS))
+        return encode_event(RunStarted(
+            **self._common(),
+            model=STARTED_MODEL,
+            route=RouteKind.CLI,
+            heartbeat_interval_s=HEARTBEAT_SECONDS,
+        ))
 
     def text(self, text: str) -> bytes:
         return encode_event(AssistantText(**self._common(), text=text))
