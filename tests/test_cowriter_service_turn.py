@@ -20,6 +20,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from agent_runtime_client.agents import AgentFileError, load_agent
+from agent_runtime_client.run_stream import ViolationKind
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
     FailureCode,
@@ -293,6 +294,9 @@ def test_c3_the_runs_events_become_todays_frames_and_the_answer_is_stored(web):
     assert web.job().status == "completed"
     assert STARTED_MODEL not in json.dumps(relayed)
     assert all(STARTED_MODEL not in content for _, content in web.messages())
+    job = web.job()
+    assert STARTED_MODEL not in json.dumps([job.error, job.phase, job.queue_reason])
+    assert "cli" not in json.dumps(relayed)
 
 
 def test_c3_a_run_started_without_a_model_ends_unavailable(web):
@@ -302,7 +306,9 @@ def test_c3_a_run_started_without_a_model_ends_unavailable(web):
 
     web.agent.reply_with(streams(frames))
 
-    assert_ended_with(web, web.turn(), "unavailable", status=503)
+    assert_ended_with(
+        web, web.turn(), "unavailable", status=503, detail=ViolationKind.SCHEMA_MISMATCH.value,
+    )
 
 
 # ── C4, C5: the run is bound to the running turn ─────────────────────
