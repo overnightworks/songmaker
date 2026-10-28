@@ -9,8 +9,11 @@
 		TAKE_TASK_COVER_STRICT_LABEL,
 		TAKE_TASK_HEADER_GENERATE_NOTE,
 		TAKE_TASK_NOISE_CAPTION,
+		TAKE_TASK_NOISE_MAX_LABEL,
+		TAKE_TASK_NOISE_MIN_LABEL,
 		TAKE_TASK_NOISE_LABEL,
 		TAKE_TASK_PROMPT_HINT,
+		TAKE_TASK_RANGE_CAPTION,
 		TAKE_TASK_RANGE_LABEL,
 		TAKE_TASK_REPAINT_AMOUNT_LABEL,
 		TAKE_TASK_REPAINT_MODES,
@@ -86,7 +89,9 @@
 	</div>
 	<div class="task-body">
 		{#if repainting}
-			<div class="field-label range-caption">{TAKE_TASK_RANGE_LABEL}</div>
+			<div class="field-label range-caption">
+				{TAKE_TASK_RANGE_LABEL} <small>{TAKE_TASK_RANGE_CAPTION}</small>
+			</div>
 			<WaveformRangePicker
 				audioUrl={`/audio/${gen.mp3_path}`}
 				{duration}
@@ -135,9 +140,13 @@
 			<label class="slider"
 				><span class="field-label"
 					>{TAKE_TASK_NOISE_LABEL} <small>{TAKE_TASK_NOISE_CAPTION}</small></span
-				><input type="range" min="0" max="1" step="0.01" bind:value={$coverNoiseStrength} /><output
-					>{$coverNoiseStrength}</output
-				></label
+				><span class="end">{TAKE_TASK_NOISE_MIN_LABEL}</span><input
+					type="range"
+					min="0"
+					max="1"
+					step="0.01"
+					bind:value={$coverNoiseStrength}
+				/><span class="end">{TAKE_TASK_NOISE_MAX_LABEL}</span></label
 			>
 		{/if}
 		<p class="hint">{TAKE_TASK_PROMPT_HINT}</p>

@@ -2,8 +2,6 @@
 	import type { ShareResult, SongItem } from '$lib/api/types';
 	import {
 		ALBUM_COVER_ACCEPT,
-		EDITOR_VIEW_RECIPE_LABEL,
-		EDITOR_VIEWS_LABEL,
 		SONG_COVER_REMOVE_LABEL,
 		SONG_NEXT_LABEL,
 		SONG_PREVIOUS_LABEL
@@ -51,8 +49,6 @@
 		onunshare: () => Promise<void>;
 		onaddtoplaylist: () => void;
 		ondeletesong: () => void;
-		recipeOpen: boolean;
-		ontogglerecipe: () => void;
 		saveDisabled: boolean;
 		onsave: () => void;
 	}
@@ -88,8 +84,6 @@
 		onunshare,
 		onaddtoplaylist,
 		ondeletesong,
-		recipeOpen,
-		ontogglerecipe,
 		saveDisabled,
 		onsave
 	}: Props = $props();
@@ -200,18 +194,6 @@
 	</div>
 
 	<div class="editor-header-actions">
-		<div class="editor-views" role="group" aria-label={EDITOR_VIEWS_LABEL}>
-			<button
-				type="button"
-				class="view-toggle"
-				data-hitbox="text"
-				aria-pressed={recipeOpen}
-				onclick={ontogglerecipe}
-			>
-				{EDITOR_VIEW_RECIPE_LABEL}
-			</button>
-		</div>
-		<span class="editor-header-divider" aria-hidden="true"></span>
 		<GenerateButton />
 	</div>
 </div>
@@ -395,41 +377,6 @@
 		align-items: center;
 		gap: 0.7rem;
 		flex-shrink: 0;
-	}
-
-	.editor-views {
-		display: flex;
-		gap: 0.4rem;
-	}
-
-	.view-toggle {
-		padding: 0.4rem 0.8rem;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-pill);
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: var(--label-font-size);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		cursor: pointer;
-	}
-
-	.view-toggle:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.view-toggle[aria-pressed='true'] {
-		border-color: var(--primary);
-		color: var(--primary);
-		background: rgba(160, 32, 240, 0.08);
-	}
-
-	.editor-header-divider {
-		width: 1px;
-		align-self: stretch;
-		background: var(--border);
 	}
 
 	@media (max-width: 768px) {

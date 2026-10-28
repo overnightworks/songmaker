@@ -31,7 +31,7 @@ const EMPTY_SONG_DATA: SongData = {
 	lyrics: '',
 	prompt: '',
 	bpm: 0,
-	audio_duration: 180,
+	audio_duration: 0,
 	key_scale: '',
 	genParams: null
 };
@@ -88,8 +88,6 @@ function draftAwaitsSave(s: EditorState | null): boolean {
 }
 
 export const isDirty = derived(editorState, draftAwaitsSave);
-
-export const savedSongData = derived(editorState, (s) => s?.saved ?? EMPTY_SONG_DATA);
 
 /** Which older version the draft came from, until it is saved; see {@link draftAwaitsSave}. */
 export const draftLoadedFrom = derived(editorState, (s) => s?.provenance?.version ?? null);
@@ -214,7 +212,7 @@ function songDataFromSong(s: SongItem): SongData {
 		lyrics: s.lyrics,
 		prompt: s.prompt,
 		bpm: s.bpm ?? 0,
-		audio_duration: s.audio_duration ?? 180,
+		audio_duration: s.audio_duration ?? 0,
 		key_scale: s.key_scale ?? '',
 		genParams: s.generation_params ?? null
 	};

@@ -1,11 +1,9 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
-	import type { RecipeChip } from '$lib/stores/recipe';
 	import { detailTab } from '$lib/stores/navigation';
 	import { typingOnPhone } from '$lib/stores/ui';
 	import DetailTabs from './DetailTabs.svelte';
 	import GenerateButton from './GenerateButton.svelte';
-	import PhoneRecipeSection from './PhoneRecipeSection.svelte';
 	import TakesList from './TakesList.svelte';
 
 	interface Props {
@@ -14,10 +12,9 @@
 		cowriter: Snippet;
 		expiryDigest: Snippet;
 		takeListProps: ComponentProps<typeof TakesList>;
-		chips: RecipeChip[];
 	}
 
-	let { sharedLink, edit, cowriter, expiryDigest, takeListProps, chips }: Props = $props();
+	let { sharedLink, edit, cowriter, expiryDigest, takeListProps }: Props = $props();
 
 	const DOCKED_ACTION_BAR_HEIGHT_VAR = '--docked-action-bar-height';
 
@@ -76,7 +73,6 @@
 >
 	{#if $detailTab === 'edit'}
 		{@render sharedLink()}
-		<PhoneRecipeSection {chips} />
 		<div
 			class="edit-scroll"
 			style:--generate-bar-height={generateBarHeight !== undefined

@@ -390,6 +390,7 @@ export interface HealthResponse {
 	db: 'ok' | 'error';
 	redis: 'ok' | 'error';
 	acestep: 'healthy' | 'unknown' | 'unhealthy';
+	acestep_reason: 'lm_init_failed' | null;
 	acestep_workers_total: number;
 	acestep_workers_online: number;
 	queue_depth_cap_reached: boolean;

@@ -2,17 +2,44 @@
 // of #1804): Takes first, the co-writer keeps its draft across a visit to
 // Takes, the tab writes no history entry and survives a reload.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test as base, type Page } from '@playwright/test';
 import {
 	COWRITER_COMPOSER_PLACEHOLDER,
+	NEW_PLACE_CREATE_LABEL,
+	NEW_SONG_ROW_LABEL,
+	NEW_SONG_TITLE_LABEL,
+	newSongCardLabel,
 	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
-	EDITOR_VIEW_RECIPE_LABEL,
-	EDITOR_VIEWS_LABEL,
+	RECIPE_PANEL_LABEL,
+	LIBRARY_SHARES_COPY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
-import { readSeededLibrary } from './seed';
+import { csrfHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
+import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
+
+interface OwnedAlbum {
+	id: string;
+	title: string;
+}
+
+const test = base.extend<{ ownedAlbum: OwnedAlbum }>({
+	ownedAlbum: async ({ page }, use) => {
+		await page.goto(HOME_PATH);
+		const title = `E2E Recipe ${runMarker()}`;
+		const response = await page.request.post('/api/albums', {
+			headers: await csrfHeaders(page),
+			data: { title, artist: '' }
+		});
+		expect(response.ok()).toBe(true);
+		const album = (await response.json()) as { id: string };
+		try {
+			await use({ id: album.id, title });
+		} finally {
+			await archiveOwnedAlbum(page.request, album.id);
+		}
+	}
+});
 
 const DRAFT = 'mach den Chorus härter';
 
@@ -104,20 +131,77 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 		await expect(cowriterTab(page)).toHaveAttribute('aria-selected', 'true');
 	});
 
-	test('with the Recipe open the full panel is on the left and the composer is on screen (S9, #1927 acceptance 8 and 9)', async ({
+	for (const height of [900, 600]) {
+		test(`with the Recipe open at 1440x${height} the card is on the left and the composer is on screen (C6, #1935 acceptance 8)`, async ({
+			page
+		}) => {
+			await page.setViewportSize({ width: 1440, height });
+			await openPickedSong(page);
+			await cowriterTab(page).click();
+			await workspace(page).locator('.recipe-line').click();
+			const composerBox = await composer(page).boundingBox();
+			const panelBox = await workspace(page)
+				.getByRole('region', { name: RECIPE_PANEL_LABEL, exact: true })
+				.boundingBox();
+			if (!composerBox || !panelBox) throw new Error('Expected both laid out');
+			await expect(composer(page)).toBeInViewport({ ratio: 1 });
+			expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(composerBox.x);
+		});
+	}
+
+	test('the composer is on screen at 1440x600 with the Recipe closed (C6, #1935 acceptance 8)', async ({
 		page
 	}) => {
+		await page.setViewportSize({ width: 1440, height: 600 });
 		await openPickedSong(page);
 		await cowriterTab(page).click();
-		await workspace(page)
-			.getByRole('group', { name: EDITOR_VIEWS_LABEL })
-			.getByRole('button', { name: EDITOR_VIEW_RECIPE_LABEL, exact: true })
-			.click();
-		const viewport = page.viewportSize();
-		const composerBox = await composer(page).boundingBox();
-		const panelBox = await workspace(page).locator('.recipe-panel').boundingBox();
-		if (!viewport || !composerBox || !panelBox) throw new Error('Expected both laid out');
-		expect(composerBox.y + composerBox.height).toBeLessThanOrEqual(viewport.height);
-		expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(composerBox.x);
+		await expect(composer(page)).toBeInViewport({ ratio: 1 });
+	});
+
+	async function createSongInUi(page: Page, album: OwnedAlbum): Promise<string> {
+		await page.goto(`/album/${album.id}`);
+		const surface = workspace(page);
+		await surface.getByRole('button', { name: NEW_SONG_ROW_LABEL, exact: true }).click();
+		const card = surface.getByRole('form', { name: newSongCardLabel(album.title) });
+		await card.getByLabel(NEW_SONG_TITLE_LABEL).fill('Fresh recipe song');
+		const created = page.waitForResponse(
+			(response) => response.url().endsWith('/api/songs') && response.request().method() === 'POST'
+		);
+		await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
+		const song = (await (await created).json()) as { id: string };
+		await expect(surface.getByRole('heading', { name: 'Fresh recipe song' })).toBeVisible();
+		return song.id;
+	}
+
+	test('a song made in the UI shows the closed Recipe line without a dot (C1, #1935 acceptance 2)', async ({
+		page,
+		ownedAlbum
+	}) => {
+		await createSongInUi(page, ownedAlbum);
+		// The line's name gains ", changed" when its dot shows.
+		await expect(
+			workspace(page).getByRole('button', { name: RECIPE_PANEL_LABEL, exact: true })
+		).toBeVisible();
+	});
+
+	test('the composer stays on screen beside a shared-link line at 900, 700 and 600 high (C6, #1935 acceptance 8)', async ({
+		page,
+		ownedAlbum
+	}) => {
+		const songId = await createSongInUi(page, ownedAlbum);
+		const shared = await page.request.post(`/api/songs/${songId}/share`, {
+			headers: await csrfHeaders(page),
+			data: {}
+		});
+		expect(shared.ok()).toBe(true);
+		await page.reload();
+		await expect(
+			workspace(page).getByRole('button', { name: LIBRARY_SHARES_COPY_LABEL })
+		).toBeVisible();
+		for (const height of [900, 700, 600]) {
+			await page.setViewportSize({ width: 1440, height });
+			await cowriterTab(page).click();
+			await expect(composer(page)).toBeInViewport({ ratio: 1 });
+		}
 	});
 });

@@ -1,6 +1,6 @@
 // The take's Repaint and Cover open a task card under that take (#1912, S4 of
 // #1804): it sends one repaint or cover request with the card's values, stays
-// open until its cross removes it, never opens the Recipe panel, and the page
+// open until its cross removes it, never opens the Recipe, and the page
 // scrolls as one. The job endpoints are answered here, so no worker is needed.
 // With a card open the Recipe has no Repaint row and the header Generate stays
 // plain (#1923, S4 and S8). Both projects run it: 390 px (Takes tab) and 1440 px.
@@ -70,7 +70,7 @@ test('Repaint opens a card under the take and its button sends the range (S4, #1
 		await openVerb(page, TAKE_REPAINT_LABEL);
 		await expect(card(page)).toHaveCount(1);
 		await expect(page.locator('.take-row').first().locator('+ .task')).toBeVisible();
-		await expect(page.locator('.recipe-panel, #phone-recipe-fields')).toHaveCount(0);
+		await expect(page.getByRole('region', { name: 'Recipe', exact: true })).toHaveCount(0);
 
 		const request = page.waitForRequest(/\/api\/generations\/[^/]+\/repaint$/);
 		await page.route(/\/api\/generations\/[^/]+\/repaint$/, (route) =>
@@ -132,15 +132,12 @@ test('With a card open the Recipe holds no Repaint row, no Off and no Source bar
 		await openVerb(page, TAKE_REPAINT_LABEL);
 		await expect(card(page)).toHaveCount(1);
 		if (mobile) await page.getByRole('tab', { name: new RegExp(EDITOR_TAB_EDIT_LABEL) }).click();
-		await page.locator('.recipe-chips, .recipe-heading').click();
-		const recipe = page.locator('.recipe-panel, #phone-recipe-fields');
+		await page.locator('.recipe-line').click();
+		const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
 		await expect(recipe).toBeVisible();
 		await expect(recipe).not.toContainText(TAKE_REPAINT_LABEL);
 		await expect(recipe).not.toContainText('Off');
 		await expect(recipe).not.toContainText('Source');
-		await expect(page.locator('.recipe-chips, .phone-recipe').first()).not.toContainText(
-			TAKE_REPAINT_LABEL
-		);
 	});
 });
 

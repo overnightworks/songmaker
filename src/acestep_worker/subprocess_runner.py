@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
@@ -38,6 +39,10 @@ LogLineSink = Callable[[str], None]
 
 
 class SubprocessStartError(RuntimeError):
+    pass
+
+
+class LmInitFailedError(SubprocessStartError):
     pass
 
 
@@ -111,6 +116,27 @@ def is_acestep_healthy(port: int, timeout: float = 5.0) -> bool:
             return resp.status == 200
     except OSError:
         return False
+
+
+def _read_llm_initialized(port: int, timeout: float = 5.0) -> bool | None:
+    """The child's own report of its LM; None when the body gives no verdict."""
+    try:
+        req = Request(f"http://127.0.0.1:{port}/health", method="GET")
+        with urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            body = json.loads(resp.read())
+        flag = body["data"]["llm_initialized"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return flag if isinstance(flag, bool) else None
+
+
+def verify_requested_lm_is_up(handle: SubprocessHandle) -> None:
+    if not get_worker_settings().acestep_init_llm:
+        return
+    if _read_llm_initialized(handle.port) is False:
+        tail = _read_stderr_tail(handle.stderr_path, max_chars=2000)
+        suffix = f"\n--- last log lines ---\n{tail}" if tail else ""
+        raise LmInitFailedError(f"ACE-Step came up without its language model{suffix}")
 
 
 def wait_for_health(
@@ -243,6 +269,7 @@ def start_acestep_subprocess(
     handle.log_thread = log_thread
     try:
         wait_for_health(handle)
+        verify_requested_lm_is_up(handle)
     except Exception:
         stop_acestep_subprocess(handle)
         raise

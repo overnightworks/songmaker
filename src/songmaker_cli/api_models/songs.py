@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from songmaker_cli.api_models.fields import ComputedTimestamp
 from songmaker_cli.constants import (
+    AUTO_LENGTH_SECONDS,
     COVER_VARIANT_CARD,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
@@ -560,7 +561,7 @@ class SongCreateRequest(BaseModel):
     lyrics: str = Field("", max_length=50_000)
     prompt: str = Field("", max_length=5_000)
     bpm: int = Field(0, ge=0, le=999)
-    audio_duration: int = Field(180, ge=0, le=600)
+    audio_duration: int = Field(AUTO_LENGTH_SECONDS, ge=0, le=600)
     key_scale: str = Field("", max_length=10)
     vocal_language: str = Field("", max_length=10)
     generation_params: GenerationParams | None = None

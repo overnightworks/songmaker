@@ -2,7 +2,6 @@ import { failed } from '$lib/test-utils/generate-states';
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detailTab, type DetailTab } from '$lib/stores/navigation';
-import type { RecipeChip } from '$lib/stores/recipe';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection, toggleSelection } from '$lib/stores/selection';
@@ -59,8 +58,6 @@ afterEach(async () => {
 	clearComponentStyles();
 });
 
-const NO_CHIPS: RecipeChip[] = [];
-
 async function render(
 	overrides: Partial<ComponentProps<typeof SongPhoneView>['takeListProps']> = {}
 ) {
@@ -71,7 +68,6 @@ async function render(
 			target,
 			props: {
 				...snippets,
-				chips: NO_CHIPS,
 				takeListProps: {
 					song: makeSong({ generations: [], generation_count: 0 }),
 					dirty: false,
@@ -109,7 +105,6 @@ describe('SongPhoneView', () => {
 		const takes = [makeGeneration(), makeGeneration({ id: 'g2', generation_number: 2 })];
 		const target = await render({ song: makeSong({ generations: takes, generation_count: 2 }) });
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
-		expect(target.querySelector('section[aria-label="Recipe"]')).not.toBeNull();
 		expectGenerateAsPrimaryAction(target);
 		showTab(target, 'takes');
 		await tick();
@@ -117,7 +112,6 @@ describe('SongPhoneView', () => {
 			'song-tab-takes'
 		);
 		expect(target.querySelector('textarea')).toBeNull();
-		expect(target.querySelector('section[aria-label="Recipe"]')).toBeNull();
 		expect(target.querySelector('.generate-action')).toBeNull();
 		expect(target.querySelector('header')).toBeNull();
 		expect(target.textContent).toContain('Expiry digest');

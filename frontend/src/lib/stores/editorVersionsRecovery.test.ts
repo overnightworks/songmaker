@@ -9,14 +9,30 @@ import { toasts } from '$lib/stores/toast';
 import {
 	discardDraft,
 	draftLoadedFrom,
+	editAudioDuration,
+	editBpm,
+	editGenParams,
+	editKeyScale,
 	editLyrics,
+	editPrompt,
 	isDirty,
 	loadSongData,
 	loadVersionAsDraft,
-	savedSongData,
 	setDraftLyrics,
 	versions
 } from './editor';
+
+function revertedDraft() {
+	discardDraft();
+	return {
+		lyrics: get(editLyrics),
+		prompt: get(editPrompt),
+		bpm: get(editBpm),
+		audioDuration: get(editAudioDuration),
+		keyScale: get(editKeyScale),
+		genParams: get(editGenParams)
+	};
+}
 
 describe('versions recovery', () => {
 	beforeEach(() => {
@@ -44,11 +60,15 @@ describe('versions recovery', () => {
 			);
 			loadSongData(makeSong({ id: 's1' }));
 			await Promise.resolve();
-			if (draft === 'loaded') {
-				versions.set([latest, older]);
-				loadVersionAsDraft(older);
-			} else setDraftLyrics('typed lyrics');
-			const saved = get(savedSongData);
+			const startDraft = () => {
+				if (draft === 'loaded') {
+					versions.set([latest, older]);
+					loadVersionAsDraft(older);
+				} else setDraftLyrics('typed lyrics');
+			};
+			startDraft();
+			const savedBefore = revertedDraft();
+			startDraft();
 			expect(get(toasts)).toEqual([]);
 			vi.mocked(fetchVersions).mockResolvedValueOnce([latest, older]);
 			reportResourceStreamReachable(true);
@@ -56,8 +76,8 @@ describe('versions recovery', () => {
 			expect(get(versions)).toEqual([latest, older]);
 			expect(get(editLyrics)).toBe(draft === 'loaded' ? 'older lyrics' : 'typed lyrics');
 			expect(get(draftLoadedFrom)).toBe(draft === 'loaded' ? 1 : null);
-			expect(get(savedSongData)).toEqual(saved);
 			expect(get(isDirty)).toBe(true);
+			expect(revertedDraft()).toEqual(savedBefore);
 		}
 	);
 

@@ -196,6 +196,7 @@ Operators need to know what's in Redis to debug stuck state. Keys to know:
 | `songmaker:acestep:worker:{worker_id}` | `acestep-worker` heartbeat loop (every 5 s) | `admin_api` `/admin/workers`, `scheduler.pick_worker`, `/health`, `/metrics` | 15 s | Ephemeral worker state — JSON object with `loaded`, `target_loading`, `vram_used_gb`, `vram_total_gb`, `vram_measured`, `available_modes`, `queue_depth`, `training_hold_seconds`, `last_heartbeat_at` |
 | `songmaker:acestep:queue:{worker_id}` | Scheduler generation admission / cleanup | `admin_api`, `scheduler.pick_worker`, `/metrics` | none | Per-worker generation queue depth (atomic counter) |
 | `songmaker:acestep:hold:{worker_id}` | Worker `/gpu_hold/*` endpoints | Scheduler admission and worker `/generate` | 15 s | Token-bound LoRA training hold; renews every 5 s and prevents generation admission. |
+| `songmaker:acestep:lm-failure:{worker_id}` | `acestep-worker` when a load comes up without its LM | `acestep-worker` at start, `/health` (existence only) | none | The mode whose LM failed to initialise; the restarted worker loads it before registering, then clears the key |
 | `songmaker:acestep:download:{mode}` | `download_model_on_worker` arq job (atomic SET-NX) | admin endpoint pre-check, arq job duplicate guard | 1800 s | Download-in-progress flag; value is the job_id of the arq job that owns it |
 
 The Worker Pool panel mirrors a live hold as Training with the remaining hold lease; this projection never owns, renews, or releases the hold.
@@ -221,7 +222,8 @@ The flag's 30-minute TTL is the automatic safety net for crashed arq workers.
 
 When an `acestep-worker` container starts:
 
-1. The FastAPI server comes up immediately and binds `0.0.0.0:8001`.
+1. The FastAPI server binds `0.0.0.0:8001`.
+   If the key `songmaker:acestep:lm-failure:{id}` exists, the worker first loads the mode it names (see [LM failure](#restart-procedure)). That retry runs before the server binds, so steps 1 to 6 follow it: until it has finished the port refuses connections, and the worker neither registers nor publishes a heartbeat.
 2. `/health` returns **503** with detail `"awaiting control plane registration"`.
 3. A background task tries to register with the control plane (`POST /api/internal/workers/register`). Backoff schedule: **1s → 2s → 5s → 10s → 30s → 60s ± 20% jitter forever**. The worker does not give up.
 4. Container logs show one startup banner (`"acestep-worker {id} starting; awaiting control plane at {url}"`) plus per-attempt warnings on each failed registration.
@@ -245,6 +247,8 @@ The container is already running when the SIGTERM lands, so the Docker daemon's 
 **In-flight generations fail.** Restarting kills the worker process, including any subprocess holding a generate task. Affected jobs surface as `error_type=worker_unreachable` in the user's job list. Restart only when the operator is willing to lose the in-flight work.
 
 To verify the restart cycle from the admin UI: the Worker Pool card flips `online → offline → loading → online` over the cycle. The transitions are visible because the heartbeat TTL (15 s) outlasts the brief downtime.
+
+**LM failure.** The worker ends itself a second way. A load whose child came up without its LM (with `ACESTEP_INIT_LLM` on) is stopped and answered with 502 carrying the child's log tail; the worker writes `songmaker:acestep:lm-failure:{id}` = the mode, asks its own server to shut down (no signal, so the code survives; takes still running end with the server's streams, and the process is forced out after 30 s however long a take's polling lasts) and exits with code **75**, so `restart: unless-stopped` starts it again. At start the worker loads that mode before it registers: on success it clears the key and comes online with the mode resident; if the LM fails again the start fails (uvicorn's exit code 3) with the key kept, so the container keeps restarting and publishes no heartbeat meanwhile (the admin card reads offline); any other failure (unknown mode, capacity, a deleted checkpoint, a start error) clears the key, is kept as the worker's last error and the worker starts empty. A manual `POST /restart` writes no key and ends by SIGTERM, which uvicorn re-raises, so the container reads 143. There is no pacing between attempts beyond Docker's own backoff. `/health` names the loop first: while a registered worker carries the key it answers `acestep_reason: "lm_init_failed"` next to `acestep: "unhealthy"` when no other registered worker is online (with one online it reads `healthy` and still names the reason), and `null` again once the restarted worker has cleared the key. Read a loop further with `docker inspect --format '{{.State.ExitCode}} {{.RestartCount}}' <container>` (75 after a load, 3 after a failed retry) and the container log for the child's tail.
 
 ### Restart-policy limits and boot autostart
 
@@ -341,6 +345,8 @@ On this Docker 29 host, the legacy `--gpus all` / Compose `deploy.resources.rese
 
 **"Worker won't register"** — `/health` returns 503. Check container logs for `"Registration attempt N failed: ..."`. Verify the control plane URL is reachable from inside the worker container with `docker compose exec songmaker-acestep-worker-0 curl -v http://songmaker-web:8080/health`. Verify `SONGMAKER_INTERNAL_TOKEN` matches between worker and web. The retry loop never gives up — fix the root cause and the next backoff tick will succeed.
 
+**"Jobs fail with an init error"** — a child without its LM no longer stays up serving that error: the worker exits with code 75 and retries the failed load when Docker restarts it (see [Restart procedure](#restart-procedure)). If takes keep failing, the LM cannot initialise (VRAM held by another process, a missing LM checkpoint): read `acestep_reason` in `GET /health` first (`lm_init_failed` means this loop), then check the key with `redis-cli GET 'songmaker:acestep:lm-failure:{worker_id}'`, the restart count above and the container log's last lines, fix the cause, and the next restart comes online by itself.
+
 **"Download stalls"** — check the download flag: `docker compose exec redis redis-cli GET 'songmaker:acestep:download:{mode}'`. Cross-reference the value (a job_id) with the job's status in the admin UI. If the job is gone but the flag remains, it's stale — `redis-cli DEL` it and retry. The 30-minute TTL is the automatic safety net.
 
 **"Load fails with CapacityError"** — two distinct messages, both actionable. If the worker has models loaded, the message names the loaded/pinned/in-use sets and how much VRAM is already in use (measured or, without a reader, estimated from declared sizes); if the in-use set is non-empty, wait for those generations to finish; if it's all pinned, unpin one explicitly. If the worker has **nothing** loaded and still can't fit the request, the message says so explicitly — VRAM outside this cache's tracking (a stray process, an unreleased subprocess) is holding the GPU; check `nvidia-smi` on the worker host before retrying. The Worker Pool card's per-mode buttons make the first case directly actionable; the second needs a host-level check.
@@ -389,7 +395,7 @@ Top-level song/version fields:
 
 | Field | Range | Default | Effect |
 |-------|-------|---------|--------|
-| `audio_duration` | 0-600 | 180 | Output length in seconds; 0 lets ACE-Step decide |
+| `audio_duration` | 0-600 | 0 (Auto) | Output length in seconds; 0 lets ACE-Step decide |
 | `bpm` | 0-999 | 0 | Target BPM; 0 lets ACE-Step decide |
 | `key_scale` | string | empty | Target key |
 | `vocal_language` | string | empty | Vocal language hint |
