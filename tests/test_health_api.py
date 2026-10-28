@@ -365,8 +365,13 @@ def _get_health(
         lm_failure_key(worker_id): value
         for worker_id, value in (lm_failure_values or {}).items()
     }
-    arq_mod._pool.get = AsyncMock(side_effect=lambda key: failure_values.get(key, heartbeat_bytes))
-    arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(key in failure_values))
+    def text(key: str | bytes) -> str:
+        return key.decode() if isinstance(key, bytes) else key
+
+    arq_mod._pool.get = AsyncMock(
+        side_effect=lambda key: failure_values.get(text(key), heartbeat_bytes)
+    )
+    arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(text(key) in failure_values))
     arq_mod._pool.keys = AsyncMock(
         side_effect=lambda pattern: [
             key.encode() for key in failure_values if fnmatchcase(key, pattern)
@@ -515,7 +520,10 @@ def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> N
 
 
 def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+
     body = _get_health(health_client, heartbeat=None, lm_failure_values=_LM_FAILED)
+    arq_mod._pool.exists.assert_awaited()
     assert body["acestep_reason"] == "lm_init_failed"
     serialized = json.dumps(body)
     assert "acestep-worker-0" not in serialized
