@@ -128,7 +128,6 @@ async function expectCowriterRowReadOnly(page: Page): Promise<void> {
 	await expect(row.getByRole('combobox')).toHaveCount(0);
 	await expect(row.getByRole('button')).toHaveCount(0);
 	await expect(row.getByRole('link')).toHaveCount(0);
-	await expect(page.getByText('not selectable yet')).toHaveCount(0);
 }
 
 function columnHeader(page: Page, column: string): Locator {

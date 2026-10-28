@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Final
 
 from agent_providers.claude.provider import is_available as is_claude_cli_available
 from agent_providers.constants import COWRITER_PROVIDERS
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
