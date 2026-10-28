@@ -447,6 +447,73 @@ def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
         assert "lyrical_coherence" not in stored.value
 
 
+@pytest.mark.parametrize(
+    ("provider", "route", "model"),
+    [("grok", "api", "grok-4.6"), ("claude", "api", "claude-sonnet-4-6")],
+)
+def test_scoring_run_calls_no_provider_and_writes_no_verdict_key(
+    tmp_path: Path, provider: str, route: str, model: str,
+) -> None:
+    """Whatever the judge settings hold, a scoring run completes without
+    reaching a provider and leaves a stored verdict pair exactly as it is
+    (#1976, the operator's ruling of 28.10.2026)."""
+    from songmaker_cli.db.models import Score
+
+    factory, audio_dir = _seeded_generation(tmp_path)
+    stored_pair = {"lyrical_coherence": 8, "lyrical_summary": "stored verdict"}
+    with factory() as session:
+        set_judge_settings(session, provider, route, model)
+        session.add(Score(generation_id="g1", scorer="batch", value=dict(stored_pair)))
+        session.commit()
+    override_provider_runtime(anthropic_api_key=None, xai_api_key=None)
+
+    with (
+        patch(
+            "songmaker_cli.jobs.get_scorer_process",
+            return_value=MagicMock(score=MagicMock(
+                return_value=_scoring_result_with_transcript(),
+            )),
+        ),
+        patch(
+            "agent_providers.dispatch.call_openai_compatible_once",
+            side_effect=AssertionError("a scoring run reached a provider"),
+        ),
+        patch(
+            "agent_providers.claude.adapter.call_claude",
+            side_effect=AssertionError("a scoring run reached a provider"),
+        ),
+    ):
+        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
+
+    with factory() as session:
+        job = session.query(Job).filter_by(id="j-score").one()
+        stored = session.query(Score).filter_by(generation_id="g1").one()
+        assert job.status == "completed"
+        assert job.error_type is None
+        assert {key: stored.value[key] for key in stored_pair} == stored_pair
+        assert "text_accuracy" in stored.value
+
+
+def test_scoring_run_for_a_take_without_a_score_row_writes_no_verdict_key(
+    tmp_path: Path,
+) -> None:
+    from songmaker_cli.db.models import Score
+
+    factory, audio_dir = _seeded_generation(tmp_path)
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=MagicMock(score=MagicMock(
+            return_value=_scoring_result_with_transcript(),
+        )),
+    ):
+        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
+
+    with factory() as session:
+        stored = session.query(Score).filter_by(generation_id="g1").one()
+        assert "lyrical_coherence" not in stored.value
+        assert "lyrical_summary" not in stored.value
+
+
 def test_child_scorer_timeout_leaves_the_job_completed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
