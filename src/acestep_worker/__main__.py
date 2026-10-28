@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -162,6 +163,8 @@ def main() -> None:
         port=settings.worker_port,
         log_config=None,
     )
+    if deps.exit_code:
+        sys.exit(deps.exit_code)
 
 
 if __name__ == "__main__":  # pragma: no cover

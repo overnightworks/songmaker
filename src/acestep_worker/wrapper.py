@@ -4,9 +4,7 @@ import asyncio
 import hmac
 import json
 import logging
-import os
 import shutil
-import signal
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -41,6 +39,7 @@ from acestep_worker.heartbeat import (
     reserve_gpu_hold,
 )
 from acestep_worker.last_error import LastError
+from acestep_worker.lm_failure import leave_if_lm_failed, retry_failed_load, schedule_sigterm
 from acestep_worker.model_cache import (
     CapacityError,
     ModelCache,
@@ -101,6 +100,7 @@ class WorkerDeps:
     training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
     train_lora_runner: TrainLoraRunner | None = None
     last_error: LastError | None = None
+    exit_code: int = 0
     registered: bool = False
     registration_task: asyncio.Task[None] | None = None
     gpu_hold_handover_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -268,6 +268,7 @@ class _WorkerRoutes:
         except SubprocessStartError as exc:
             self._deps.last_error = LastError(str(exc), utcnow())
             log.exception("ACE-Step subprocess failed to start for %s", req.mode)
+            await leave_if_lm_failed(self._deps, req.mode, exc)
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return LoadModelResponse(
             loaded=result.loaded,
@@ -297,10 +298,8 @@ class _WorkerRoutes:
 
     async def restart(self) -> RestartResponse:
         log.info("Restart requested via /restart endpoint")
-        pid = os.getpid()
         await asyncio.sleep(0)
-        asyncio.get_running_loop().call_later(0.1, lambda: os.kill(pid, signal.SIGTERM))
-        return RestartResponse(status="restarting", pid=pid)
+        return RestartResponse(status="restarting", pid=schedule_sigterm())
 
     async def generate(self, req: GenerateRequest) -> TaskCreatedResponse:
         task_id, loaded = await _reserve_generation_task(self._deps, req)
@@ -708,6 +707,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         deps.worker_id,
         control_plane,
     )
+    await retry_failed_load(deps)
 
     async def _register_and_flag() -> None:
         if deps.registry_client is not None and deps.registration is not None:
