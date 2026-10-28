@@ -1,0 +1,8 @@
+claim_id = "db6c58248a124120bc553369d8ccf90b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6c9ef935b72c9e14cb69d9d9c5a8d15d5ae75454"
+branch = "claude/issue-1999-the-judge-s-settings-endpoints-and-boot"
+scope = ["docker/.env.docker.example", "docs/architecture.md", "docs/design/README.md", "docs/security.md", "frontend/src/lib/api/types.ts", "quality/baseline.toml", "scripts/dead-symbols.allow", "scripts/generate_types.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/settings.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/settings.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/provider_status.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "src/songmaker_cli/settings_api.py", "tests/conftest.py", "tests/test_api.py", "tests/test_cowriter_catalog.py", "tests/test_cowriter_providers.py", "tests/test_lifecycle_background_loop_health.py", "tests/test_lifecycle_judge_route.py", "tests/test_scoring_jobs.py", "tests/test_settings.py"]
+opened_commit = "f11d1a87bd4acd057cc8e9c572d489814586e839"
+whole_reason = "Slice 5 step 3 of #1476: the judge's endpoints, boot pin, queries, constants, API models and generated types reference each other, so removing any one alone leaves imports, dead symbols or a constants-table test red; about 330 production lines go and about 10 are added, almost all deletion."
