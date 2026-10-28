@@ -559,7 +559,7 @@ def test_train_lora_releases_handover_claim_after_setup_failure(
         assert response.task_id
         await spawned[0]
         assert not deps.gpu_hold_handover_tokens
-
+        await deps.cache.load("sft")
         assert await reserve_gpu_hold(deps.redis, deps.worker_id, "renew-token", 15)
         renewal_attempts = 0
 

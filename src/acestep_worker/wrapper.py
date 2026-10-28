@@ -598,10 +598,10 @@ async def _clean_up_train_lora_run(
 
 async def _release_train_lora_resources(deps: WorkerDeps, request: TrainLoraRequest) -> None:
     try:
-        await release_gpu_hold(deps.redis, deps.worker_id, request.hold_token)
+        await deps.cache.release_and_stop(request.mode)
     finally:
         try:
-            await deps.cache.release(request.mode)
+            await release_gpu_hold(deps.redis, deps.worker_id, request.hold_token)
         finally:
             await _release_gpu_hold_handover(deps, request.hold_token)
 
