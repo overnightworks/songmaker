@@ -1,0 +1,8 @@
+claim_id = "c21bff4d89f048c797108e8d150b895a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2aa1e62358e37943d4834164350e3fc557b0e935"
+branch = "claude/issue-1960-training-child-stop"
+scope = ["docs/acestep.md", "src/acestep_worker/model_cache.py", "src/acestep_worker/wrapper.py", "tests/acestep_worker/conftest.py", "tests/acestep_worker/test_lm_failure.py", "tests/acestep_worker/test_model_cache.py", "tests/acestep_worker/test_subprocess_runner_lm.py", "tests/acestep_worker/test_training_child_stop.py", "tests/acestep_worker/test_wrapper.py", "tests/test_acestep_worker_train_lora.py"]
+opened_commit = "01b72f9a101e10ec366c6452b0e36b27a1fd9a49"
+whole_reason = "The cache method, the reordered cleanup and the shared test helper are one behaviour: the method without the reorder is dead code, and the reorder without the method would evict while the training still holds its use."
