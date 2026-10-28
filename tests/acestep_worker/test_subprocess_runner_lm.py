@@ -6,8 +6,9 @@ from acestep_worker.subprocess_runner import LmInitFailedError, stop_acestep_sub
 
 
 def test_start_stops_the_child_when_its_lm_is_missing(fake_uv) -> None:
+    health = fake_uv.health(llm_initialized=False)
     with pytest.raises(LmInitFailedError):
-        fake_uv.start(fake_uv.health(llm_initialized=False))
+        fake_uv.start(health)
 
     assert not fake_uv.is_alive()
 

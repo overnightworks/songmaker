@@ -792,8 +792,8 @@ def test_release_and_stop_drops_the_mode_keeps_the_pin_and_raises_when_the_unloa
     _run(cache.load("sft"))
     _run(cache.pin("sft"))
     _run(cache.acquire_for_use("sft"))
-    with pytest.raises(RuntimeError, match="child would not stop"), caplog.at_level("ERROR"):
-        _run(cache.release_and_stop("sft"))
+    release = cache.release_and_stop("sft")
+    with pytest.raises(RuntimeError, match="child would not stop"):
+        _run(release)
     assert (cache.loaded_modes(), cache.in_use_count("sft")) == ([], 0)
-    assert cache.is_pinned("sft")
-    assert "child would not stop" in caplog.text
+    assert cache.is_pinned("sft") and "child would not stop" in caplog.text
