@@ -995,9 +995,9 @@ through `cowriter/service_turn.py`:
    (`fresh_access_token` through `DatabaseSessionTransaction` in
    `auth_stores.py`) and takes songmaker's workload token from the same
    relying party.
-3. It posts the `RunRequest` of `agents/cowriter.md` (`model: claude/opus`, the
-   twelve tools of `cowriter_tool_declarations()`, the agent file's body as the
-   system prompt, everything else in the messages) to `AGENT_SERVICE_URL`.
+3. It posts the `RunRequest` of `agents/cowriter.md` (the twelve tools of
+   `cowriter_tool_declarations()`, the agent file's body as the system prompt,
+   everything else in the messages; no model) to `AGENT_SERVICE_URL`.
 4. It reads the event stream through agent-runtime-client's decoder and
    registers the run id from `run_started` in `service_runs` for the person;
    `/mcp` accepts a tool call only for a registered run. The run is released

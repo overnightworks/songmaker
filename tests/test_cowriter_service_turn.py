@@ -19,6 +19,7 @@ from unittest.mock import patch
 
 import httpx
 import pytest
+from agent_runtime_client.agents import AgentFileError, load_agent
 from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
     FailureCode,
@@ -29,8 +30,8 @@ from conftest import make_authenticated_user, make_test_app, seed_user
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fake_agent_service import (
     A_REFRESH_TOKEN,
-    STARTED_MODEL,
     SERVICE_URL,
+    STARTED_MODEL,
     CowriterStack,
     RecordedRun,
     RunScript,
@@ -42,7 +43,6 @@ from fake_agent_service import (
     streams,
 )
 from fake_oidc_issuer import USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN
-from agent_runtime_client.agents import AgentFileError, load_agent
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from test_cowriter_mcp_endpoint import (
@@ -232,7 +232,7 @@ def test_c21_the_shipped_agent_file_loads_and_one_with_a_model_key_is_refused(tm
     declarations = cowriter_tool_declarations()
     load_agent(AGENT_FILE, declarations)
     (tmp_path / "cowriter.md").write_text(
-        shipped.replace("appRoles:", "model: claude/opus\nappRoles:", 1), encoding="utf-8",
+        shipped.replace("appRoles:", "model: some/model\nappRoles:", 1), encoding="utf-8",
     )
 
     with pytest.raises(AgentFileError, match="model"):
