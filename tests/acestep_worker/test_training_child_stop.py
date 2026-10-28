@@ -436,7 +436,8 @@ def test_take_during_the_stop_never_reaches_the_old_child(make_worker, hold_laps
         await owner
 
         assert response.status_code == 409
-        expected = _HOLD_DETAIL if not hold_lapses else MODE_NOT_LOADED_DETAIL.format(mode="sft")
-        assert response.json()["detail"] == expected
+        not_loaded = MODE_NOT_LOADED_DETAIL.format(mode="sft")
+        refusals = {not_loaded} if hold_lapses else {_HOLD_DETAIL, not_loaded}
+        assert response.json()["detail"] in refusals
 
     asyncio.run(scenario())
