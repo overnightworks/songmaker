@@ -1,0 +1,8 @@
+claim_id = "57f62fd81f9947d5b6908d1eb0fb2f03"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2aa1e62358e37943d4834164350e3fc557b0e935"
+branch = "claude/issue-1962-cover-row-waits-for-providers"
+scope = ["frontend/e2e/admin-models.spec.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts"]
+opened_commit = "ff4ec6a1c454e567811c9c461bb03dfd2593342c"
+whole_reason = "One race and its knock-on: the Cover row's gate, the spec that reads it, and its component test belong together; the C3 poll is the other first-attempt failure of the same red runs and touches only its own spec."
