@@ -7,7 +7,7 @@ import {
 	LM_NUMBER_FIELDS,
 	LM_TEXT_FIELDS
 } from '$lib/constants/acestep-param-fields';
-import { RECIPE_DURATION_STANDARD_SECONDS, RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
+import { RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
 import {
 	changedRecipeFields,
 	changedRecipeTabs,
@@ -30,7 +30,7 @@ const standard: RecipeStandard = {
 function values(overrides: Partial<RecipeValues> = {}): RecipeValues {
 	return {
 		bpm: 0,
-		audioDuration: RECIPE_DURATION_STANDARD_SECONDS,
+		audioDuration: 0,
 		keyScale: '',
 		genParams: null,
 		model: 'xl-turbo',
@@ -99,7 +99,7 @@ describe('resetRecipeField', () => {
 	it('puts a scalar back to its standard and touches no other field', () => {
 		const start = values({ bpm: 145, keyScale: 'C', model: 'sft', takes: 3 });
 		expect(resetRecipeField(start, 'bpm', standard)).toEqual({ ...start, bpm: 0 });
-		expect(resetRecipeField({ ...start, audioDuration: 0 }, 'duration', standard)).toEqual(start);
+		expect(resetRecipeField({ ...start, audioDuration: 180 }, 'duration', standard)).toEqual(start);
 		expect(resetRecipeField(start, 'model', standard)).toEqual({ ...start, model: 'xl-turbo' });
 		expect(resetRecipeField(start, 'takes', standard)).toEqual({ ...start, takes: 1 });
 	});
@@ -152,7 +152,7 @@ describe('resetRecipeTab', () => {
 		expect(resetRecipeTab(start, 'song', standard)).toEqual({
 			...start,
 			bpm: 0,
-			audioDuration: RECIPE_DURATION_STANDARD_SECONDS,
+			audioDuration: 0,
 			keyScale: '',
 			genParams: { shift: 5 }
 		});

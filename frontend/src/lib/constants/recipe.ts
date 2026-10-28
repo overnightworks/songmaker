@@ -2,8 +2,6 @@ import type { RecipeField, RecipeTab } from '$lib/utils/recipe-standard';
 
 /** The Takes-per-Generate value the page starts with: the recipe's standard for that field. */
 export const RECIPE_TAKES_STANDARD = 1;
-/** Mirrors the server default of a new song's length (api_models/songs.py SongCreateRequest.audio_duration). */
-export const RECIPE_DURATION_STANDARD_SECONDS = 180;
 export const RECIPE_TAKES_OPTIONS = [1, 2, 3, 5, 10] as const;
 
 export const RECIPE_BPM_MAX = 999;
@@ -50,7 +48,7 @@ export const RECIPE_MANAGE_PRESETS_LABEL = 'Manage in Settings → Generation';
 /** What each row's ↺ says it returns to. */
 export const RECIPE_FIELD_RESET_TITLES: Partial<Record<RecipeField, string>> = {
 	bpm: 'Back to Auto',
-	duration: `Back to ${RECIPE_DURATION_STANDARD_SECONDS} s`,
+	duration: 'Back to Auto',
 	key: 'Back to empty',
 	voice: 'Back to None',
 	reference: 'Remove the reference',

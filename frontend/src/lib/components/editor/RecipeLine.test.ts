@@ -11,7 +11,6 @@ import {
 	setDraftBpm,
 	setDraftGenParams
 } from '$lib/stores/editor';
-import { RECIPE_DURATION_STANDARD_SECONDS } from '$lib/constants/recipe';
 import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
 import { activeModels, loadActiveModels } from '$lib/stores/presets';
 import { loras } from '$lib/stores/loras';
@@ -35,7 +34,7 @@ beforeEach(async () => {
 	loadSongData(
 		makeSong({
 			bpm: 0,
-			audio_duration: RECIPE_DURATION_STANDARD_SECONDS,
+			audio_duration: 0,
 			key_scale: '',
 			generation_params: null
 		})
@@ -116,7 +115,7 @@ describe('RecipeLine', () => {
 		(target.querySelector('[data-field-reset="bpm"]') as HTMLButtonElement).click();
 		await tick();
 		expect(get(editBpm)).toBe(0);
-		expect(get(editAudioDuration)).toBe(RECIPE_DURATION_STANDARD_SECONDS);
+		expect(get(editAudioDuration)).toBe(0);
 		expect(target.querySelector('[data-field-reset]')).toBeNull();
 	});
 

@@ -1,5 +1,5 @@
 import type { VersionGenerationParams } from '$lib/api/types';
-import { RECIPE_DURATION_STANDARD_SECONDS, RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
+import { RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
 // The one owner of "this recipe field differs from its standard". The
 // standard is the model default for every field, never the saved version, so
 // saving does not clear a mark. Pure: surfaces read it, nothing else decides.
@@ -81,7 +81,7 @@ export function changedRecipeFields(
 ): Set<RecipeField> {
 	const changed = new Set<RecipeField>();
 	if (values.bpm !== 0) changed.add('bpm');
-	if (values.audioDuration !== RECIPE_DURATION_STANDARD_SECONDS) changed.add('duration');
+	if (values.audioDuration !== 0) changed.add('duration');
 	if (values.keyScale !== '') changed.add('key');
 	if (values.genParams?.user_lora_id) changed.add('voice');
 	if (values.genParams?.reference_audio_path) changed.add('reference');
@@ -136,7 +136,7 @@ export function resetRecipeField(
 		case 'bpm':
 			return { ...values, bpm: 0 };
 		case 'duration':
-			return { ...values, audioDuration: RECIPE_DURATION_STANDARD_SECONDS };
+			return { ...values, audioDuration: 0 };
 		case 'key':
 			return { ...values, keyScale: '' };
 		case 'model':

@@ -11,7 +11,6 @@ import {
 	generationDefaultsError,
 	presets
 } from '$lib/stores/presets';
-import { RECIPE_DURATION_STANDARD_SECONDS } from '$lib/constants/recipe';
 import { recipeModel } from '$lib/stores/recipe';
 import { loras } from '$lib/stores/loras';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
@@ -47,7 +46,7 @@ const onclose = vi.fn();
 function atStandard(overrides: Partial<RecipeValues> = {}): RecipeValues {
 	return {
 		bpm: 0,
-		audioDuration: RECIPE_DURATION_STANDARD_SECONDS,
+		audioDuration: 0,
 		keyScale: '',
 		genParams: null,
 		model: 'turbo',
@@ -116,9 +115,9 @@ describe('RecipeTabs', () => {
 		).toBeNull();
 	});
 
-	it('returns a changed Duration to the length a new song starts with', async () => {
-		const target = await renderTabs(atStandard({ audioDuration: 0 }));
-		expect(resetButton(target, 'duration')?.title).toBe('Back to 180 s');
+	it('returns a changed Duration to Auto', async () => {
+		const target = await renderTabs(atStandard({ audioDuration: 180 }));
+		expect(resetButton(target, 'duration')?.title).toBe('Back to Auto');
 		await clickSettled(resetButton(target, 'duration') as HTMLElement);
 		expect(props.values).toEqual(atStandard());
 	});
