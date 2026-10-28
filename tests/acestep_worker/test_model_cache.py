@@ -767,7 +767,7 @@ def test_release_and_stop_stops_only_with_the_last_use(caplog: pytest.LogCapture
     with caplog.at_level("WARNING"):
         _run(cache.release_and_stop("sft"))
     assert (unloaded, cache.in_use_count("sft")) == ([], 1)
-    assert [r.levelname for r in caplog.records if r.name.endswith("model_cache")] == ["WARNING"]
+    assert [r.levelname for r in caplog.records if r.name == "acestep_worker.model_cache"] == ["WARNING"]
     _run(cache.release_and_stop("sft"))
     assert (unloaded, cache.loaded_modes()) == ([loaded], [])
 
