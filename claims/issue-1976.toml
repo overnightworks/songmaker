@@ -1,8 +1,0 @@
-claim_id = "dc7884d0b8ad47aa8fef564188f3e946"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5200debde6fee34403af9c3460fbe2353c11c072"
-branch = "claude/issue-1976-scoring-stops-calling-the-judge-the-old"
-scope = [".github/workflows/coveragerc-ci.ini", "AGENTS.md", "docker-compose.yml", "docker/.env.docker.example", "docker/scoring-worker.Dockerfile", "docs/architecture.md", "docs/design/admin-models.html", "docs/design/now-playing.html", "docs/requirements/0004-co-writer.md", "docs/security.md", "docs/testing.md", "frontend/src/lib/api/types.ts", "legal/datenschutz.html", "quality/baseline.toml", "scripts/generate_types.py", "scripts/install-autostart.sh", "sonar-project.properties", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/_runtime.py", "src/songmaker_cli/jobs/scoring.py", "src/songmaker_cli/provider_status.py", "src/songmaker_cli/scoring/lyrical_coherence.py", "src/songmaker_cli/scoring/models.py", "src/songmaker_cli/scoring/pipeline.py", "src/songmaker_cli/scoring/registry.py", "src/songmaker_cli/scoring/text_accuracy.py", "tests/conftest.py", "tests/test_api.py", "tests/test_cowriter_dispatch.py", "tests/test_jobs.py", "tests/test_packaging_boundary.py", "tests/test_scorers_extended.py", "tests/test_scoring_jobs.py", "tests/test_scoring_persistence.py", "tests/test_scoring_pipeline.py"]
-opened_commit = "e8938eab6b593476758f7f34b6ae9ca8c8620f11"
-whole_reason = "Slice 5 step 2c of #1476: the automatic coherence judge stops and its code, scorer host, failure status, coverage exclusions, privacy text, documents and the scoring worker's provider keys and Claude mounts leave in one landing, so the privacy text and the documents are true at the merge."
