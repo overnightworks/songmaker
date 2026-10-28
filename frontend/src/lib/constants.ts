@@ -619,7 +619,7 @@ export const ADMIN_TABS_LABEL = 'Admin sections';
 export const ACCOUNT_MENU_LABEL = 'Account';
 export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
 export const ACCOUNT_MENU_LOGOUT_LABEL = 'Sign out';
-// A sign-out the server did not confirm leaves the session standing (#1340).
+// Shown when the sign-out could not reach the server; the session stands.
 export const SIGN_OUT_FAILED_MESSAGE = "Couldn't sign out. Check your connection and try again.";
 export const THEME_SWITCH_TO_LIGHT_LABEL = 'Light theme';
 export const THEME_SWITCH_TO_DARK_LABEL = 'Dark theme';
