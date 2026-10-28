@@ -496,10 +496,11 @@ def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> N
 def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
     import songmaker_cli.arq_pool as arq_mod
 
-    _set_lm_failure_keys("acestep-worker-0")
-    body = _get_health(
-        health_client, heartbeat=None, lm_failure_values={"acestep-worker-0": b"sft"},
+    stored = {"acestep-worker-0": b"sft"}
+    arq_mod._pool.exists = AsyncMock(
+        side_effect=lambda key: int(key in {lm_failure_key(worker) for worker in stored}),
     )
+    body = _get_health(health_client, heartbeat=None, lm_failure_values=stored)
     arq_mod._pool.exists.assert_awaited()
     assert body["acestep_reason"] == "lm_init_failed"
     serialized = json.dumps(body)
