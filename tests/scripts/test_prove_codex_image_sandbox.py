@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-_REPOSITORY_ROOT = Path(__file__).parents[1]
+_REPOSITORY_ROOT = Path(__file__).parents[2]
 _SCRIPT_PATH = _REPOSITORY_ROOT / "scripts" / "prove_codex_image_sandbox.py"
 _SPEC = importlib.util.spec_from_file_location("prove_codex_image_sandbox", _SCRIPT_PATH)
 assert _SPEC is not None
@@ -260,7 +260,7 @@ def test_the_profile_name_defaults_agree_across_the_deployment() -> None:
     profile it declares. A rename that reaches only some of them either leaves
     the service unconfined-by-typo or makes the installer load a profile the
     service never asks for. That the installer installs this same profile
-    when given no name is driven in tests/test_apparmor_install.py.
+    when given no name is driven in tests/scripts/test_apparmor_install.py.
     """
     compose = (_REPOSITORY_ROOT / "docker-compose.yml").read_text()
 
