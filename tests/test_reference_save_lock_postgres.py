@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -12,11 +13,10 @@ from postgres_lock_harness import (
     CommitPause,
     has_written,
     in_thread,
+    race,
     stop_workers,
     wait_until_blocked_behind,
 )
-from sqlalchemy import event
-
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.songs import create_song
@@ -73,7 +73,7 @@ class _World:
         with self.pg_factory() as session:
             return sorted(title for (title,) in session.query(Song.title))
 
-    def holder(self, pause: CommitPause, answers: dict, *, delete_reference: bool):
+    def holder(self, pause: CommitPause | None, *, delete_reference: bool) -> Callable[[], list[str]]:
         """A sweep stand-in: takes the owner lock, reads the attached set, may delete, commits."""
         def run() -> list[str]:
             with self.pg_factory() as session:
@@ -81,18 +81,12 @@ class _World:
                 attached = _attached_references(session)
                 if delete_reference:
                     self.reference_file.unlink()
-                pause.hold(session)
+                if pause is not None:
+                    pause.hold(session)
                 session.commit()
                 return attached
 
-        return in_thread(answers, "holder", run)
-
-
-def _await_answers(answers: dict, *names: str) -> None:
-    for name in names:
-        assert name in answers, f"{name} never answered"
-        if isinstance(answers[name], BaseException):
-            raise answers[name]
+        return run
 
 
 @pytest.mark.parametrize("route", ["create", "update"])
@@ -100,24 +94,16 @@ def test_a_save_waits_for_the_owner_lock_and_then_finds_the_deleted_reference_go
     pg_factory, tmp_path, route,
 ) -> None:
     world = _World(pg_factory, tmp_path)
-    answers: dict = {}
-    holder_pause = CommitPause()
-    holder = world.holder(holder_pause, answers, delete_reference=True)
-    save = in_thread(answers, "save", lambda: world.save(route, REFERENCE))
-    try:
-        holder.start()
-        assert holder_pause.reached.wait(WAIT_SECONDS), "The holder never paused"
-        save.start()
-        wait_until_blocked_behind(pg_factory, holder_pause.backend_pid)
-        assert "save" not in answers
-    finally:
-        holder_pause.release.set()
-        stuck = stop_workers(pg_factory, (holder, save), (holder_pause.backend_pid,))
-    assert not stuck
-    _await_answers(answers, "holder", "save")
-    assert answers["holder"] == []
-    assert answers["save"].status_code == 404
-    assert answers["save"].json() == NOT_FOUND
+    holder_pause = CommitPause(lambda _session: False)
+    answers = race(
+        pg_factory,
+        world.holder(holder_pause, delete_reference=True),
+        lambda: world.save(route, REFERENCE),
+        holder_pause,
+    )
+    assert answers["first"] == []
+    assert answers["second"].status_code == 404
+    assert answers["second"].json() == NOT_FOUND
     assert world.attached() == []
     assert world.titles() == ["Existing"]
 
@@ -127,27 +113,13 @@ def test_a_sweep_waits_for_a_save_that_names_the_reference_and_then_sees_it_atta
     pg_factory, tmp_path, route,
 ) -> None:
     world = _World(pg_factory, tmp_path)
-    answers: dict = {}
-    save_pause = CommitPause(has_written)
-    holder_pause = CommitPause()
-    holder_pause.release.set()
-    save = in_thread(answers, "save", lambda: world.save(route, REFERENCE))
-    holder = world.holder(holder_pause, answers, delete_reference=False)
-    event.listen(pg_factory, "before_commit", save_pause)
-    try:
-        save.start()
-        assert save_pause.reached.wait(WAIT_SECONDS), "The save never reached its commit"
-        holder.start()
-        wait_until_blocked_behind(pg_factory, save_pause.backend_pid)
-        assert "holder" not in answers
-    finally:
-        save_pause.release.set()
-        stuck = stop_workers(pg_factory, (save, holder), (save_pause.backend_pid,))
-        event.remove(pg_factory, "before_commit", save_pause)
-    assert not stuck
-    _await_answers(answers, "holder", "save")
-    assert answers["save"].status_code == 200
-    assert answers["holder"] == [REFERENCE]
+    answers = race(
+        pg_factory,
+        lambda: world.save(route, REFERENCE),
+        world.holder(None, delete_reference=False),
+    )
+    assert answers["first"].status_code == 200
+    assert answers["second"] == [REFERENCE]
     assert world.attached() == [REFERENCE]
 
 
@@ -158,7 +130,7 @@ def test_a_save_that_names_no_reference_does_not_wait_for_the_owner_lock(
     world = _World(pg_factory, tmp_path)
     answers: dict = {}
     holder_pause = CommitPause()
-    holder = world.holder(holder_pause, answers, delete_reference=False)
+    holder = in_thread(answers, "holder", world.holder(holder_pause, delete_reference=False))
     save = in_thread(answers, "save", lambda: world.save(route, None))
     try:
         holder.start()
@@ -170,5 +142,4 @@ def test_a_save_that_names_no_reference_does_not_wait_for_the_owner_lock(
         holder_pause.release.set()
         stuck = stop_workers(pg_factory, (holder, save), (holder_pause.backend_pid,))
     assert not stuck
-    _await_answers(answers, "holder", "save")
     assert answers["save"].status_code == 200

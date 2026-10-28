@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 WAIT_SECONDS = 10
@@ -111,3 +111,35 @@ def stop_workers(
         for thread in threads:
             thread.join(WAIT_SECONDS)
     return [thread.name for thread in threads if thread.is_alive()]
+
+
+def race(
+    pg_factory: sessionmaker[Session],
+    first: Callable[[], Any],
+    second: Callable[[], Any],
+    pause: CommitPause | None = None,
+) -> dict[str, Any]:
+    """Runs ``first`` until ``pause`` holds it, starts ``second``, requires that it waits
+    behind the first, releases the first and returns both answers as ``{"first", "second"}``.
+
+    Without a ``pause`` the first writer is held at its first commit that wrote.
+    """
+    pause = pause or CommitPause(has_written)
+    answers: dict[str, Any] = {}
+    threads = (in_thread(answers, "first", first), in_thread(answers, "second", second))
+    event.listen(pg_factory, "before_commit", pause)
+    try:
+        threads[0].start()
+        assert pause.reached.wait(WAIT_SECONDS), "The first writer never reached its pause"
+        threads[1].start()
+        wait_until_blocked_behind(pg_factory, pause.backend_pid)
+        assert "second" not in answers
+    finally:
+        pause.release.set()
+        stuck = stop_workers(pg_factory, threads, (pause.backend_pid,))
+        event.remove(pg_factory, "before_commit", pause)
+    assert not stuck, f"Writer threads never stopped: {', '.join(stuck)}"
+    for answer in answers.values():
+        if isinstance(answer, BaseException):
+            raise answer
+    return answers
