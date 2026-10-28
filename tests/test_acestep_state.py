@@ -13,6 +13,7 @@ from songmaker_cli.acestep_state import (
     ADMIT_GENERATION_SCRIPT,
     DOWNLOAD_KEY_PREFIX,
     GPU_HOLD_KEY_PREFIX,
+    LM_FAILURE_KEY_PREFIX,
     QUEUE_KEY_PREFIX,
     WORKER_KEY_PREFIX,
     admit_generation,
@@ -20,6 +21,7 @@ from songmaker_cli.acestep_state import (
     decr_queue_depth,
     download_key,
     gpu_hold_key,
+    lm_failure_key,
     queue_depth_key,
     read_download_in_progress,
     read_queue_depth,
@@ -60,6 +62,14 @@ def test_key_prefixes_match_worker_heartbeat() -> None:
     assert QUEUE_KEY_PREFIX == WORKER_QUEUE_PREFIX
     assert GPU_HOLD_KEY_PREFIX == WORKER_GPU_HOLD_PREFIX
     assert ADMIT_GENERATION_SCRIPT == WORKER_ADMIT_GENERATION_SCRIPT
+
+
+def test_lm_failure_key_matches_the_workers_key() -> None:
+    from acestep_worker.lm_failure import LM_FAILURE_KEY_PREFIX as WORKER_PREFIX
+    from acestep_worker.lm_failure import lm_failure_key as worker_lm_failure_key
+
+    assert LM_FAILURE_KEY_PREFIX == WORKER_PREFIX
+    assert lm_failure_key("acestep-worker-0") == worker_lm_failure_key("acestep-worker-0")
 
 
 def test_heartbeat_payload_keys_match_admin_reader() -> None:

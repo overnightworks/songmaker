@@ -336,10 +336,12 @@ async def health_check(request: Request) -> HealthResponse:
     queue_depth_cap_reached = active_jobs_count >= config.max_queue_depth
     workers_total = len(acestep_workers)
     workers_online = 0
+    workers_lm_failed = False
     for w in acestep_workers:
         state = await acestep_state.read_worker_state(pool, w.id)
         if acestep_state.worker_is_online(state):
             workers_online += 1
+        workers_lm_failed |= await acestep_state.worker_lm_failed(pool, w.id)
 
     redis_ok = redis_client.redis_health(ctx.redis)
     return HealthResponse.from_signals(HealthSignals(
@@ -351,6 +353,7 @@ async def health_check(request: Request) -> HealthResponse:
         scoring_queue_depth=scoring_queue_depth,
         workers_total=workers_total,
         workers_online=workers_online,
+        workers_lm_failed=workers_lm_failed,
         queue_depth_cap_reached=queue_depth_cap_reached,
         uptime_seconds=uptime,
         claude_cli_tool_surface=provider.claude_cli_tool_surface_health(),

@@ -73,6 +73,9 @@ const newButton = (page: Page) =>
 const listenRegion = (page: Page) => workspace(page).getByRole('region', LISTEN_REGION);
 const wall = (page: Page) => workspace(page).locator(WALL_SELECTOR);
 const historyLength = (page: Page) => page.evaluate(() => history.length);
+// A navigation in flight destroys the execution context; undefined is no length, so a poll retries.
+const settledHistoryLength = (page: Page): Promise<number | undefined> =>
+	historyLength(page).catch(() => undefined);
 
 function albumAddress(library: SeededLibrary): RegExp {
 	return new RegExp(`/album/${library.albumId}$`);
@@ -357,7 +360,7 @@ test(
 		expect(start.requested.search).toBe('');
 		expect(start.location.origin).not.toBe(start.requested.origin);
 		expect(documentRequests[0]).toBe('/login/oidc');
-		await expect.poll(() => historyLength(page), "one entry, the issuer's").toBe(length + 1);
+		await expect.poll(() => settledHistoryLength(page), "one entry, the issuer's").toBe(length + 1);
 		await expect.poll(() => guard.forgivenIssuerNavigations).toEqual([start.location.href]);
 		guard.assertClean();
 	}
