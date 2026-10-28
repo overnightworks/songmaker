@@ -435,7 +435,10 @@ describe('RecipeTabs', () => {
 		props.values = atStandard({ genParams: { lm_temperature: 0.5 } });
 		await tick();
 		expect(select.selectedOptions[0].textContent).toBe('Custom');
-		await clickSettled(getByRoleButton(target, 'Reset all'));
+		const resetAll = getByRoleButton(target, 'Reset all') as HTMLButtonElement;
+		expect(resetAll.disabled).toBe(false);
+		await clickSettled(resetAll);
+		expect(props.values.genParams).toBeNull();
 		expect(select.selectedOptions[0].textContent).toBe('Default');
 	});
 
