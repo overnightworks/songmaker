@@ -1015,8 +1015,8 @@ Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the
 `db/queries/settings.py` owns the independent Cover and Judge selections. Cover captures its provider,
 model, and explicit `cli` or `api` route before work begins. The Judge has its
 own saved route, while its worker call still captures only provider and model.
-The Co-Writer has no selection here: the turn takes its model from the agent file, and the rows
-once saved for it stay in the table unread.
+The Co-Writer has no selection here: the agent service's configuration chooses the turn's model
+(the agent file names none), and the rows once saved for it stay in the table unread.
 `agent_providers/dispatch.py`
 owns the resulting adapter decision for the Judge and the Cover (the Co-Writer
 turn no longer executes a route): the Judge retains its existing
