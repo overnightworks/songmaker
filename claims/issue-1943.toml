@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d3c4d26e6f7c9b8b03e7bb0155609a506ccd6710"
 branch = "claude/issue-1943-new-song-auto-duration"
-scope = ["docs/acestep.md", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts", "quality/baseline.toml", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/jobs/generation.py", "tests/test_api.py", "tests/test_jobs.py", "tests/test_mcp_server.py"]
+scope = ["docs/acestep.md", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/editorInitialState.test.ts", "quality/baseline.toml", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/jobs/generation.py", "tests/test_api.py", "tests/test_jobs.py", "tests/test_mcp_server.py"]
 opened_commit = "eb5b7d129b144e7ba743011b292c774106928e3c"
 whole_reason = "One default moved from 180 to Auto across the server, the editor and the repaint arithmetic that depends on it; splitting would leave Auto songs with a broken repaint or an editor that shows a length the server does not hold."
