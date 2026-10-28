@@ -1,8 +1,0 @@
-claim_id = "f907609e9e354b67891d0917d6ecb219"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "723f7de49716ba92381c522b0897037eaf67a6a5"
-branch = "claude/issue-1983-script-tests-lie-in-tests-scripts-beside"
-scope = ["docs/security.md", "docs/testing.md", "quality/baseline.toml", "tests/scripts", "tests/test_apparmor_install.py", "tests/test_audit_generation_audio_paths.py", "tests/test_backfill_audio_durations.py", "tests/test_check_dead_symbols.py", "tests/test_check_no_silent_fallbacks.py", "tests/test_check_style_literals.py", "tests/test_copy_kit_assets.py", "tests/test_e2e_rate_window.py", "tests/test_generate_types.py", "tests/test_grafana_password.py", "tests/test_install_cli_credentials_mirror.py", "tests/test_lyric_alignment_golden.py", "tests/test_main_checkout.py", "tests/test_migrate_generation_params.py", "tests/test_mirror_agent_cli_credentials.py", "tests/test_prove_codex_image_sandbox.py", "tests/test_similar_functions.py", "tests/test_switch_deploy_checkout.py", "tests/test_test_helper_ratchet.py"]
-opened_commit = "9583fd9290ced73a8d7e966ac09d1f55423aafcd"
-whole_reason = "One sub-lane of #1813 slice 3: eighteen script tests move into tests/scripts/ with every file that names them, so the old paths leave in one landing."
