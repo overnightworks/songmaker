@@ -1,15 +1,18 @@
 import { flushSync, mount, unmount } from 'svelte';
+import { get } from 'svelte/store';
 import { theme } from '$lib/stores/ui';
 import { afterEach, expect, it, vi } from 'vitest';
 import WaveformRangePicker from './WaveformRangePicker.svelte';
 
 let picker: ReturnType<typeof mount> | undefined;
+const initialTheme = get(theme);
 
 afterEach(async () => {
 	if (picker) await unmount(picker);
 	picker = undefined;
 	document.body.replaceChildren();
 	document.documentElement.removeAttribute('style');
+	theme.set(initialTheme);
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 });
