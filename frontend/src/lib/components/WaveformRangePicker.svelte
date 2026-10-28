@@ -71,7 +71,8 @@
 	}
 
 	$effect(() => {
-		if (peaks.length > 0 && $theme) {
+		const redrawOnThemeSwitch = $theme;
+		if (peaks.length > 0 && redrawOnThemeSwitch) {
 			drawWaveform();
 		}
 	});
