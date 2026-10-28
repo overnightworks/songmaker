@@ -25,7 +25,7 @@ const REPO_ROOT = path.join(E2E_DIR, '..', '..');
 const COMPOSE_ARGS = ['compose', '-f', 'docker-compose.yml', '-f', 'docker/docker-compose.ci.yml'];
 
 export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
-export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
+export const BASE_URL = requiredEnv('E2E_BASE_URL', 'a probe stack, not the live 8080');
 
 // The app's own take address (`audioUrlOf` in `services/audioPlayer.svelte.ts`).
 const AUDIO_PATH_PREFIX = '/audio/';
@@ -208,9 +208,9 @@ interface ShareLink {
 
 type MultipartFile = { name: string; mimeType: string; buffer: Buffer };
 
-export function requiredEnv(name: string): string {
+export function requiredEnv(name: string, target = "the e2e admin's username"): string {
 	const value = process.env[name];
-	if (!value) throw new Error(`${name} must be set to the e2e admin's username`);
+	if (!value) throw new Error(`${name} must be set to ${target}`);
 	return value;
 }
 
