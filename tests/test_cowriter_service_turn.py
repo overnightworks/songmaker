@@ -19,11 +19,17 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-from agent_runtime_client.wire import FailureCode, RejectionCode, TurnMessage
+from agent_runtime_client.wire import (
+    PROTOCOL_VERSION,
+    FailureCode,
+    RejectionCode,
+    TurnMessage,
+)
 from conftest import make_authenticated_user, make_test_app, seed_user
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fake_agent_service import (
     A_REFRESH_TOKEN,
+    STARTED_MODEL,
     SERVICE_URL,
     CowriterStack,
     RecordedRun,
@@ -36,6 +42,7 @@ from fake_agent_service import (
     streams,
 )
 from fake_oidc_issuer import USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN
+from agent_runtime_client.agents import AgentFileError, load_agent
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from test_cowriter_mcp_endpoint import (
@@ -52,7 +59,12 @@ from test_cowriter_mcp_endpoint import (
 from songmaker_cli.api_models import AssistantTextEvent
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE, GET_SONG_ONLY_FOR_OTHER_SONGS
 from songmaker_cli.cowriter import service_runs
-from songmaker_cli.cowriter.mcp_endpoint import AVAILABILITY_ATTRIBUTE, compose_mcp_endpoint
+from songmaker_cli.cowriter.mcp_endpoint import (
+    AVAILABILITY_ATTRIBUTE,
+    CAPABILITY_AGENT,
+    compose_mcp_endpoint,
+    cowriter_tool_declarations,
+)
 from songmaker_cli.cowriter.service_turn import TurnCaller, run_cowriter_turn
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS
 from songmaker_cli.db.models import (
@@ -195,8 +207,9 @@ def test_c1_a_turn_starts_a_cowriter_run_with_the_agent_files_roles_tools_and_bo
 
     run = web.agent.last_run
     assert run.url == f"{SERVICE_URL}/runs"
-    assert run.body["v"] == 2
-    assert run.body["purpose"] == "cowriter"
+    assert run.body["v"] == PROTOCOL_VERSION
+    assert run.body["agent"] == CAPABILITY_AGENT
+    assert "purpose" not in run.body
     assert run.body["roles"] == ["admin", "user"]
     assert run.body["tools"] == {
         tool.name: "side_effecting" if tool.write else "read_only" for tool in COWRITER_TOOLS
@@ -205,11 +218,25 @@ def test_c1_a_turn_starts_a_cowriter_run_with_the_agent_files_roles_tools_and_bo
     assert run.headers["agent-workload-token"] == WORKLOAD_ACCESS_TOKEN
 
 
-def test_c21_the_run_asks_for_the_model_the_agent_file_names(web):
+def test_c21_the_run_names_no_model_and_the_agent_file_has_no_model_key(web):
     web.turn()
 
-    assert web.agent.last_run.body["model"] == "claude/opus"
-    assert "model: claude/opus" in AGENT_FILE.read_text(encoding="utf-8")
+    assert "model" not in web.agent.last_run.body
+    assert not any(
+        line.startswith("model:") for line in AGENT_FILE.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def test_c21_the_shipped_agent_file_loads_and_one_with_a_model_key_is_refused(tmp_path):
+    shipped = AGENT_FILE.read_text(encoding="utf-8")
+    declarations = cowriter_tool_declarations()
+    load_agent(AGENT_FILE, declarations)
+    (tmp_path / "cowriter.md").write_text(
+        shipped.replace("appRoles:", "model: claude/opus\nappRoles:", 1), encoding="utf-8",
+    )
+
+    with pytest.raises(AgentFileError, match="model"):
+        load_agent(tmp_path / "cowriter.md", declarations)
 
 
 def test_c2_the_system_prompt_is_the_agent_files_body_and_the_context_travels_in_messages(web):
@@ -264,6 +291,18 @@ def test_c3_the_runs_events_become_todays_frames_and_the_answer_is_stored(web):
     assert relayed[-1]["assistant_message"]["content"] == "Here is the shorter chorus."
     assert web.messages()[-1] == ("assistant", "Here is the shorter chorus.")
     assert web.job().status == "completed"
+    assert STARTED_MODEL not in json.dumps(relayed)
+    assert all(STARTED_MODEL not in content for _, content in web.messages())
+
+
+def test_c3_a_run_started_without_a_model_ends_unavailable(web):
+    async def frames(_run: RecordedRun, script: RunScript) -> AsyncIterator[bytes]:
+        yield script.started().replace(f'"model":"{STARTED_MODEL}",'.encode(), b"")
+        yield script.succeeded("Never stored.")
+
+    web.agent.reply_with(streams(frames))
+
+    assert_ended_with(web, web.turn(), "unavailable", status=503)
 
 
 # ── C4, C5: the run is bound to the running turn ─────────────────────
