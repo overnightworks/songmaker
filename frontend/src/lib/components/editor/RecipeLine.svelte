@@ -17,7 +17,11 @@
 		loadPresets
 	} from '$lib/stores/presets';
 	import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
-	import { recipeDiffersFromStandard, type RecipeValues } from '$lib/utils/recipe-standard';
+	import {
+		engineParams,
+		recipeDiffersFromStandard,
+		type RecipeValues
+	} from '$lib/utils/recipe-standard';
 	import { RECIPE_PANEL_LABEL } from '$lib/constants';
 	import { RECIPE_CHANGED_LABEL } from '$lib/constants/recipe';
 	import RecipeTabs from './RecipeTabs.svelte';
@@ -49,9 +53,7 @@
 
 	// A closed line costs no request unless the draft holds engine values, whose
 	// dot needs the defaults; the card's own lists load when it first opens.
-	const holdsEngineValues = $derived(
-		Object.values($editGenParams ?? {}).some((value) => value !== null && value !== undefined)
-	);
+	const holdsEngineValues = $derived(Object.keys(engineParams(values)).length > 0);
 	let defaultsRequested = false;
 	let listsRequested = false;
 

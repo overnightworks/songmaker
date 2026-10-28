@@ -12,7 +12,7 @@ import {
 	setDraftGenParams
 } from '$lib/stores/editor';
 import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
-import { activeModels, loadActiveModels } from '$lib/stores/presets';
+import { activeModels, builtinDefaults, loadActiveModels, presets } from '$lib/stores/presets';
 import { loras } from '$lib/stores/loras';
 import { fetchBuiltinDefaults, fetchGenerationDefaults, fetchPresets } from '$lib/api/client';
 import RecipeLine from './RecipeLine.svelte';
@@ -48,6 +48,8 @@ beforeEach(async () => {
 	recipeModel.set('turbo');
 	takesPerGenerate.set(1);
 	loras.set([]);
+	builtinDefaults.set({});
+	presets.set([]);
 	await loadActiveModels();
 });
 
@@ -106,6 +108,19 @@ describe('RecipeLine', () => {
 		await tick();
 		await tick();
 		expect(requests()).toEqual([1, 1, 1]);
+	});
+
+	it.each([
+		['a voice', { user_lora_id: 'mara' }],
+		['a reference', { reference_audio_path: 'ref.wav' }]
+	])('requests no list for a closed line whose draft holds only %s', async (_name, genParams) => {
+		setDraftGenParams(genParams);
+		await renderLine();
+		await tick();
+		await tick();
+		for (const fetcher of [fetchBuiltinDefaults, fetchPresets, fetchGenerationDefaults]) {
+			expect(vi.mocked(fetcher)).not.toHaveBeenCalled();
+		}
 	});
 
 	it('opens into the tabs and closes back to the line', async () => {
