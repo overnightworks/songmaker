@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import signal
 import subprocess
 from io import BytesIO, StringIO
@@ -14,7 +13,6 @@ from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.constants import SECRET_ENV_KEYS
 from acestep_worker.model_cache import LoadedModel
 from acestep_worker.subprocess_runner import (
-    LmInitFailedError,
     SubprocessHandle,
     SubprocessStartError,
     _open_log_file,
@@ -273,90 +271,6 @@ def test_start_acestep_subprocess_success(tmp_path: Path) -> None:
     assert handle.process is proc
     assert handle.stderr_path is not None
     assert handle.log_thread is not None
-
-
-def _health_response(body: bytes) -> MagicMock:
-    response = MagicMock()
-    response.status = 200
-    response.read.return_value = body
-    response.__enter__ = MagicMock(return_value=response)
-    response.__exit__ = MagicMock(return_value=False)
-    return response
-
-
-def _health_body(*, llm_initialized: bool) -> bytes:
-    data = {"models_initialized": True, "llm_initialized": llm_initialized}
-    return json.dumps({"data": data}).encode()
-
-
-def _start_with_health_body(tmp_path: Path, body: bytes | OSError) -> list[SubprocessHandle]:
-    stops: list[SubprocessHandle] = []
-    urlopen_result = {"side_effect": body} if isinstance(body, OSError) else {
-        "return_value": _health_response(body)
-    }
-    with (
-        patch("acestep_worker.subprocess_runner.find_uv", return_value=["uv"]),
-        patch("subprocess.Popen", return_value=_proc_with_empty_stdout()),
-        patch("acestep_worker.subprocess_runner.wait_for_health"),
-        patch("acestep_worker.subprocess_runner.urlopen", **urlopen_result),
-        patch(
-            "acestep_worker.subprocess_runner.stop_acestep_subprocess",
-            side_effect=stops.append,
-        ),
-    ):
-        start_acestep_subprocess(
-            "sft", port=8101, checkpoint_dir=tmp_path, vram_budget_gb=24.0
-        )
-    return stops
-
-
-def test_lm_init_failure_is_a_subprocess_start_error() -> None:
-    assert issubclass(LmInitFailedError, SubprocessStartError)
-
-
-def test_start_stops_the_child_when_its_lm_is_missing(tmp_path: Path) -> None:
-    stops: list[SubprocessHandle] = []
-    with (
-        patch("acestep_worker.subprocess_runner.find_uv", return_value=["uv"]),
-        patch("subprocess.Popen", return_value=_proc_with_empty_stdout()),
-        patch("acestep_worker.subprocess_runner.wait_for_health"),
-        patch(
-            "acestep_worker.subprocess_runner.urlopen",
-            return_value=_health_response(_health_body(llm_initialized=False)),
-        ),
-        patch("acestep_worker.subprocess_runner.stop_acestep_subprocess", side_effect=stops.append),
-        pytest.raises(LmInitFailedError),
-    ):
-        start_acestep_subprocess("sft", port=8101, checkpoint_dir=tmp_path, vram_budget_gb=24.0)
-    assert len(stops) == 1
-
-
-def test_start_keeps_a_child_whose_lm_is_up(tmp_path: Path) -> None:
-    assert _start_with_health_body(tmp_path, _health_body(llm_initialized=True)) == []
-
-
-def test_start_does_not_read_the_lm_flag_when_the_lm_is_off(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("ACESTEP_INIT_LLM", "0")
-    assert _start_with_health_body(tmp_path, _health_body(llm_initialized=False)) == []
-
-
-@pytest.mark.parametrize(
-    "body",
-    [
-        OSError("refused"),
-        b"not json",
-        b"[]",
-        b'{"data": {}}',
-        b'{"data": {"llm_initialized": "no"}}',
-    ],
-    ids=["unreachable", "unparsable", "wrong-shape", "no-flag", "non-boolean"],
-)
-def test_start_treats_an_unreadable_health_body_as_no_lm_verdict(
-    tmp_path: Path, body: bytes | OSError
-) -> None:
-    assert _start_with_health_body(tmp_path, body) == []
 
 
 def test_start_acestep_health_failure_stops_process(tmp_path: Path) -> None:

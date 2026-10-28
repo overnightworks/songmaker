@@ -100,7 +100,7 @@ class WorkerDeps:
     training_workspace_dirname: str = DEFAULT_TRAINING_WORKSPACE_DIRNAME
     train_lora_runner: TrainLoraRunner | None = None
     last_error: LastError | None = None
-    exit_code: int = 0
+    request_shutdown: Callable[[int], None] = lambda exit_code: None
     registered: bool = False
     registration_task: asyncio.Task[None] | None = None
     gpu_hold_handover_lock: asyncio.Lock = field(default_factory=asyncio.Lock)

@@ -17,7 +17,6 @@ from acestep_worker.__main__ import (
     main,
 )
 from acestep_worker.gpu_util import GpuHealth
-from acestep_worker.lm_failure import LM_FAILURE_EXIT_CODE
 from acestep_worker.model_cache import CapacityError, LoadedModel, VramStats
 from acestep_worker.settings import DEFAULT_CONTAINER_BIND_HOST, WorkerSettings
 
@@ -98,49 +97,14 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) ->
             "acestep_worker.__main__.make_acestep_runner",
             return_value=(MagicMock(), MagicMock()),
         ),
-        patch("acestep_worker.__main__.uvicorn.run") as run_mock,
+        patch("acestep_worker.__main__.uvicorn.Server") as server_class,
     ):
         main()
 
-    run_mock.assert_called_once()
-    _, kwargs = run_mock.call_args
-    assert kwargs["host"] == "127.0.0.1"
-    assert kwargs["port"] == 8765
-
-
-def test_main_exits_with_the_code_the_worker_asked_for(
-    monkeypatch: pytest.MonkeyPatch, isolated_logging
-) -> None:
-    monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
-    monkeypatch.setenv("REDIS_URL", "redis://fake")
-    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
-    from acestep_worker.settings import get_worker_settings
-
-    get_worker_settings.cache_clear()
-    deps = build_deps_with_fake_redis()
-
-    def serve_until_the_lm_fails(app, **_kwargs) -> None:
-        app.state.deps.exit_code = LM_FAILURE_EXIT_CODE
-
-    with (
-        patch("acestep_worker.__main__.build_deps", return_value=deps),
-        patch("acestep_worker.__main__.uvicorn.run", side_effect=serve_until_the_lm_fails),
-        pytest.raises(SystemExit) as exit_info,
-    ):
-        main()
-
-    assert exit_info.value.code == LM_FAILURE_EXIT_CODE
-
-
-def build_deps_with_fake_redis():
-    with (
-        patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
-        patch(
-            "acestep_worker.__main__.make_acestep_runner",
-            return_value=(MagicMock(), MagicMock()),
-        ),
-    ):
-        return build_deps()
+    server_class.return_value.run.assert_called_once()
+    (config,) = server_class.call_args.args
+    assert config.host == "127.0.0.1"
+    assert config.port == 8765
 
 
 def test_configure_logging_emits_common_json_fields(

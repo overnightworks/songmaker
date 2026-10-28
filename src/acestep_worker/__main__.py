@@ -9,6 +9,7 @@ from pathlib import Path
 
 import uvicorn
 from redis.asyncio import Redis
+from uvicorn.main import STARTUP_FAILURE
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS
 from acestep_worker.gpu_util import check_gpu_health, read_gpu_vram_stats
@@ -25,6 +26,9 @@ from acestep_worker.wrapper import (
     default_generate_runner,
     default_train_lora_runner,
 )
+
+# Bounds the wait for open responses once the server was asked to stop.
+GRACEFUL_SHUTDOWN_SECONDS = 10
 
 DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
     "turbo": 6.0,
@@ -152,19 +156,37 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     return deps
 
 
+def serve(deps: WorkerDeps, host: str, port: int) -> int:
+    """Run the server until it stops; returns the exit code the process owes."""
+    server = uvicorn.Server(
+        uvicorn.Config(
+            create_app(deps),
+            host=host,
+            port=port,
+            log_config=None,
+            timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
+        )
+    )
+    exit_codes: list[int] = []
+
+    def request_shutdown(exit_code: int) -> None:
+        # A signal would make uvicorn re-raise it after the shutdown and lose the exit code.
+        exit_codes.append(exit_code)
+        server.should_exit = True
+
+    deps.request_shutdown = request_shutdown
+    server.run()
+    if not server.started:
+        return STARTUP_FAILURE
+    return exit_codes[0] if exit_codes else 0
+
+
 def main() -> None:
     settings = get_worker_settings()
     configure_logging(settings.log_level)
-    deps = build_deps(settings)
-    app = create_app(deps)
-    uvicorn.run(
-        app,
-        host=settings.worker_bind_host,
-        port=settings.worker_port,
-        log_config=None,
-    )
-    if deps.exit_code:
-        sys.exit(deps.exit_code)
+    exit_code = serve(build_deps(settings), settings.worker_bind_host, settings.worker_port)
+    if exit_code:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":  # pragma: no cover

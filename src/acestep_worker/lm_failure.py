@@ -43,8 +43,9 @@ async def leave_if_lm_failed(deps: WorkerDeps, mode: str, error: SubprocessStart
     except Exception:
         log.exception("Could not record the LM failure for %s; leaving anyway", mode)
     log.error("ACE-Step LM did not initialise for %s; ending the worker to retry", mode)
-    deps.exit_code = LM_FAILURE_EXIT_CODE
-    schedule_sigterm()
+    # Stopping the children ends running takes now instead of when their streams finish.
+    await deps.cache.evict_all()
+    deps.request_shutdown(LM_FAILURE_EXIT_CODE)
 
 
 async def retry_failed_load(deps: WorkerDeps) -> None:
@@ -63,7 +64,7 @@ async def retry_failed_load(deps: WorkerDeps) -> None:
     except LmInitFailedError:
         log.exception("ACE-Step LM failed again for %s; the start fails", mode)
         raise
-    except (SubprocessStartError, CapacityError, UnknownModeError) as exc:
+    except (SubprocessStartError, CapacityError, UnknownModeError, OSError) as exc:
         deps.last_error = LastError(str(exc), utcnow())
         log.exception("Retry of the failed %s load failed for another reason; starting empty", mode)
     await deps.redis.delete(key)

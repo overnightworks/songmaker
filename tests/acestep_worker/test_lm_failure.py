@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import asyncio
-import signal
+import socket
 import threading
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import fakeredis
 import fakeredis.aioredis
+import httpx
 import pytest
 from fastapi.testclient import TestClient
+from redis.exceptions import ConnectionError as RedisConnectionError
+from uvicorn.main import STARTUP_FAILURE
 
+from acestep_worker.__main__ import serve
 from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.lm_failure import LM_FAILURE_EXIT_CODE, lm_failure_key
 from acestep_worker.model_cache import CapacityError, LoadedModel, ModelCache, UnknownModeError
@@ -25,19 +30,22 @@ _TAIL = "ValueError: LM weights missing"
 Loader = Callable[[str], Awaitable[LoadedModel]]
 
 
+def _free_port() -> int:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
 class _Worker:
-    def __init__(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def __init__(self, tmp_path: Path) -> None:
         self._server = fakeredis.FakeServer()
         self.redis = fakeredis.aioredis.FakeRedis(server=self._server)
         self.loader: Loader = self._load_ok
         self.loaded_modes: list[str] = []
-        self.kills: list[tuple[int, int]] = []
-        self._killed = threading.Event()
-        monkeypatch.setattr("acestep_worker.lm_failure.os.kill", self._record_kill)
-        monkeypatch.setattr("acestep_worker.lm_failure.EXIT_DELAY_SECONDS", 0)
+        self.shutdown_requests: list[int] = []
         cache = ModelCache(
             vram_budget_gb=24.0,
-            model_sizes={"sft": 6.0, "xl-sft": 30.0},
+            model_sizes={"sft": 6.0, "turbo": 6.0, "xl-sft": 30.0},
             loader=self._load_through,
             unloader=self._unload,
         )
@@ -53,6 +61,7 @@ class _Worker:
             audio_output_dir=tmp_path / "audio",
             internal_token="test-internal-token",
             generate_runner=None,
+            request_shutdown=self._record_shutdown_request,
         )
         self.deps.heartbeat = HeartbeatLoop(
             redis=self.redis,
@@ -60,9 +69,8 @@ class _Worker:
             state_provider=lambda: build_state_payload(self.deps),
         )
 
-    def _record_kill(self, pid: int, sig: int) -> None:
-        self.kills.append((pid, sig))
-        self._killed.set()
+    def _record_shutdown_request(self, exit_code: int) -> None:
+        self.shutdown_requests.append(exit_code)
 
     async def _load_ok(self, mode: str) -> LoadedModel:
         self.loaded_modes.append(mode)
@@ -77,8 +85,34 @@ class _Worker:
     def client(self) -> TestClient:
         return TestClient(create_app(self.deps), headers=_HEADERS)
 
-    def wait_for_sigterm(self) -> None:
-        assert self._killed.wait(timeout=5)
+    def serve_until_it_stops(self, request: Callable[[httpx.Client], object]) -> int:
+        """Run the real server; `request` runs once it answers and returns the exit code owed."""
+        port = _free_port()
+        deps = self.deps
+        outcome: list[object] = []
+
+        def drive() -> None:
+            with httpx.Client(base_url=f"http://127.0.0.1:{port}", headers=_HEADERS) as client:
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    try:
+                        client.get("/health")
+                        break
+                    except httpx.TransportError:
+                        time.sleep(0.05)
+                outcome.append(request(client))
+
+        driver = threading.Thread(target=drive)
+        driver.start()
+        try:
+            exit_code = serve(deps, "127.0.0.1", port)
+        finally:
+            driver.join(timeout=10)
+        self.driven = outcome
+        return exit_code
+
+    def redis_is_down(self, down: bool) -> None:
+        self._server.connected = not down
 
     def key(self) -> bytes | None:
         return asyncio.run(self._inspector_call("get"))
@@ -93,8 +127,8 @@ class _Worker:
 
 
 @pytest.fixture
-def worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Worker:
-    return _Worker(tmp_path, monkeypatch)
+def worker(tmp_path: Path) -> _Worker:
+    return _Worker(tmp_path)
 
 
 def _raise(error: Exception) -> Loader:
@@ -115,37 +149,43 @@ def test_load_without_the_lm_answers_502_remembers_the_mode_and_ends_the_worker(
 
     with worker.client() as client:
         response = client.post("/load_model", json={"mode": "sft"})
-        worker.wait_for_sigterm()
         loaded = client.get("/loaded_models").json()["loaded"]
 
     assert response.status_code == 502
     assert _TAIL in response.json()["detail"]
     assert loaded == []
     assert worker.key() == b"sft"
-    assert worker.kills[0][1] == signal.SIGTERM
-    assert worker.deps.exit_code == LM_FAILURE_EXIT_CODE
+    assert worker.shutdown_requests == [LM_FAILURE_EXIT_CODE]
 
 
-def test_exit_code_is_none_of_the_codes_the_worker_already_uses() -> None:
-    assert LM_FAILURE_EXIT_CODE not in {0, 1, 2, 3}
-
-
-def test_worker_still_leaves_when_the_key_cannot_be_written(
-    worker: _Worker, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_worker_still_leaves_when_the_key_cannot_be_written(worker: _Worker) -> None:
     _fail_the_lm(worker)
 
-    async def broken_set(*_args: object, **_kwargs: object) -> None:
-        raise ConnectionError("redis down")
-
-    monkeypatch.setattr(worker.redis, "set", broken_set)
-
     with worker.client() as client:
+        worker.redis_is_down(True)
         response = client.post("/load_model", json={"mode": "sft"})
-        worker.wait_for_sigterm()
+        worker.redis_is_down(False)
 
     assert response.status_code == 502
-    assert worker.deps.exit_code == LM_FAILURE_EXIT_CODE
+    assert worker.shutdown_requests == [LM_FAILURE_EXIT_CODE]
+
+
+def test_lm_failure_stops_the_models_already_loaded_so_their_takes_end(worker: _Worker) -> None:
+    async def fail_only_turbo(mode: str) -> LoadedModel:
+        if mode == "turbo":
+            raise LmInitFailedError(_TAIL)
+        return await worker._load_ok(mode)
+
+    worker.loader = fail_only_turbo
+
+    with worker.client() as client:
+        client.post("/load_model", json={"mode": "sft"})
+        loaded_before = client.get("/loaded_models").json()["loaded"]
+        client.post("/load_model", json={"mode": "turbo"})
+        loaded_after = client.get("/loaded_models").json()["loaded"]
+
+    assert [model["mode"] for model in loaded_before] == ["sft"]
+    assert loaded_after == []
 
 
 def test_load_that_fails_for_another_reason_keeps_the_worker_and_writes_no_key(
@@ -158,8 +198,7 @@ def test_load_that_fails_for_another_reason_keeps_the_worker_and_writes_no_key(
 
     assert response.status_code == 502
     assert worker.key() is None
-    assert worker.deps.exit_code == 0
-    assert worker.kills == []
+    assert worker.shutdown_requests == []
 
 
 def test_load_with_an_initialised_lm_writes_no_key_and_keeps_the_worker(worker: _Worker) -> None:
@@ -168,18 +207,33 @@ def test_load_with_an_initialised_lm_writes_no_key_and_keeps_the_worker(worker: 
 
     assert response.status_code == 200
     assert worker.key() is None
-    assert worker.deps.exit_code == 0
-    assert worker.kills == []
+    assert worker.shutdown_requests == []
 
 
-def test_manual_restart_exits_cleanly_and_writes_no_key(worker: _Worker) -> None:
-    with worker.client() as client:
-        response = client.post("/restart")
-        worker.wait_for_sigterm()
+def test_served_worker_exits_75_after_an_lm_failure_and_answers_the_load_first(
+    worker: _Worker,
+) -> None:
+    _fail_the_lm(worker)
 
-    assert response.status_code == 200
-    assert worker.key() is None
-    assert worker.deps.exit_code == 0
+    exit_code = worker.serve_until_it_stops(
+        lambda client: client.post("/load_model", json={"mode": "sft"}).status_code
+    )
+
+    assert exit_code == LM_FAILURE_EXIT_CODE
+    assert worker.driven == [502]
+    assert worker.key() == b"sft"
+
+
+def test_served_worker_with_a_failing_retry_exits_with_uvicorns_startup_failure(
+    worker: _Worker,
+) -> None:
+    worker.plant_key("sft")
+    _fail_the_lm(worker)
+
+    exit_code = serve(worker.deps, "127.0.0.1", _free_port())
+
+    assert exit_code == STARTUP_FAILURE
+    assert worker.key() == b"sft"
 
 
 def test_start_without_the_key_loads_nothing(worker: _Worker) -> None:
@@ -207,8 +261,8 @@ def test_retry_that_fails_on_the_lm_fails_the_start_and_keeps_the_key(worker: _W
     worker.plant_key("sft")
     _fail_the_lm(worker)
 
-    with pytest.raises(LmInitFailedError):
-        worker.client().__enter__()
+    with pytest.raises(LmInitFailedError), worker.client():
+        pass
 
     assert worker.key() == b"sft"
     assert worker.deps.registration_task is None
@@ -221,6 +275,7 @@ def test_retry_that_fails_on_the_lm_fails_the_start_and_keeps_the_key(worker: _W
         pytest.param(SubprocessStartError("checkpoint deleted"), id="start-error"),
         pytest.param(CapacityError("no room"), id="capacity"),
         pytest.param(UnknownModeError("sft"), id="unknown-mode"),
+        pytest.param(FileNotFoundError("checkpoint dir"), id="process-start-os-error"),
     ],
 )
 def test_retry_that_fails_otherwise_clears_the_key_and_starts_empty(
@@ -238,13 +293,8 @@ def test_retry_that_fails_otherwise_clears_the_key_and_starts_empty(
     assert worker.deps.last_error is not None
 
 
-def test_start_fails_as_before_when_redis_is_down(
-    worker: _Worker, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    async def broken_get(*_args: object, **_kwargs: object) -> None:
-        raise ConnectionError("redis down")
+def test_start_fails_as_before_when_redis_is_down(worker: _Worker) -> None:
+    worker.redis_is_down(True)
 
-    monkeypatch.setattr(worker.redis, "get", broken_get)
-
-    with pytest.raises(ConnectionError):
-        worker.client().__enter__()
+    with pytest.raises(RedisConnectionError), worker.client():
+        pass
