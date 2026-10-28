@@ -383,12 +383,13 @@ def disable_generation_sharing(session: Session, generation_id: str) -> Generati
 
 
 def delete_generation_files(audio_dir: Path, mp3_rel: str) -> None:
+    audio_root = audio_dir.resolve()
     mp3 = (audio_dir / mp3_rel).resolve()
-    if not mp3.is_relative_to(audio_dir.resolve()):
+    if not mp3.is_relative_to(audio_root):
         log.warning("Path traversal blocked in delete: %s", mp3_rel)
         return
-    for owned in generation_file_set(mp3_rel):
-        path = audio_dir / owned
+    for owned in generation_file_set(mp3.relative_to(audio_root).as_posix()):
+        path = audio_root / owned
         if path.exists():
             path.unlink()
             log.info("Deleted: %s", path)
