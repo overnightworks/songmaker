@@ -1,0 +1,8 @@
+claim_id = "6cb259498280404c8ac14e17e692b17e"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "23d1ed6e9a6e67c9c96d8cd8a290e2e601ed11c7"
+branch = "claude/issue-1991-every-take-records-the-reference-audio-i"
+scope = ["docs/acestep.md", "frontend/src/lib/utils/recipe-summary.test.ts", "frontend/src/lib/utils/recipe-summary.ts", "src/songmaker_cli/generation_params.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/reimport.py", "tests/test_jobs.py", "tests/test_reimport.py"]
+opened_commit = "552b371a9c8687a5219bdbaea85bcd35e9e7c531"
+whole_reason = "Job takes and reimported takes are the two writers of a take's params; both must record a reference marker, or a missing key could not mean 'recorded before this slice'. The recipe row lands with the key, or the path would show."
