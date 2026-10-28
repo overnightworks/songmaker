@@ -6,13 +6,10 @@ import json
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from agent_providers.catalog import ProviderRoute
 from agent_providers.errors import (
-    ProviderModelCatalogUnavailableError,
-    ProviderUnavailableError,
     SafeRouteReasonCode,
     normalize_route_failure,
 )
@@ -22,9 +19,10 @@ from conftest import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
+    make_test_app,
     override_provider_runtime,
     refresh_provider_snapshots,
-    seed_judge_route,
+    seed_user,
     web_client,
 )
 from fake_agent_service import attach_cowriter_service
@@ -35,9 +33,6 @@ from songmaker_cli.constants import (
     SETTING_COVER_MODEL,
     SETTING_COVER_PROVIDER,
     SETTING_COVER_ROUTE,
-    SETTING_JUDGE_MODEL,
-    SETTING_JUDGE_PROVIDER,
-    SETTING_JUDGE_ROUTE,
 )
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -49,14 +44,10 @@ from songmaker_cli.db.models import (
     Job,
     RateLimitSetting,
     Song,
-    User,
     Version,
 )
 from songmaker_cli.db.queries.settings import (
     get_cover_settings,
-    get_judge_model,
-    get_judge_provider,
-    get_raw_stored_judge_settings,
     set_claude_model,
 )
 from songmaker_cli.mcp_server.tools import tool_create_song
@@ -93,11 +84,7 @@ def _stream_events(response) -> list[dict]:
 
 
 def _seed(session, user_id: str) -> None:
-    seed_judge_route(session)
-    session.add(User(
-        id=user_id, username=f"user-{user_id}", role="admin",
-    ))
-    session.flush()
+    seed_user(session, f"user-{user_id}", "admin", user_id=user_id)
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
     session.add(Song(id="s1", title="Thunder", album_id="alb1", track_number=1))
     session.query(AvailableModel).filter(
@@ -209,84 +196,6 @@ def test_c15_put_cowriter_settings_refuses_a_budget_out_of_range(admin_client):
     response = client.put("/api/settings/cowriter", json={"tail_token_budget": 1_000_000})
 
     assert response.status_code == 422
-
-
-def _save_removed_judge_provider(factory) -> None:
-    with factory() as session:
-        set_claude_model(session, SETTING_JUDGE_PROVIDER, "retired-provider")
-        set_claude_model(session, SETTING_JUDGE_MODEL, "retired-model")
-        session.commit()
-
-
-def test_raw_stored_judge_settings_preserve_the_unresolved_pair(admin_client):
-    _, factory = admin_client
-    _save_removed_judge_provider(factory)
-
-    with factory() as session:
-        stored = get_raw_stored_judge_settings(session)
-
-    assert stored.provider == "retired-provider"
-    assert stored.model == "retired-model"
-
-
-def test_valid_judge_put_replaces_a_removed_saved_provider(
-    admin_client, every_provider_is_configured,
-):
-    client, factory = admin_client
-    _save_removed_judge_provider(factory)
-
-    resp = client.put(
-        "/api/settings/judge",
-        json={"provider": "grok", "model": "grok-4.6"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.json()["provider"] == "grok"
-    with factory() as session:
-        assert get_raw_stored_judge_settings(session).provider == "grok"
-
-
-def test_judge_put_keeps_a_replacement_whose_provider_is_not_configured(admin_client):
-    """Ruled line 8: the unusable choice is stored, the row names the reason."""
-    client, factory = admin_client
-    _save_removed_judge_provider(factory)
-    override_provider_runtime(xai_api_key=None)
-    refresh_provider_snapshots()
-
-    response = client.put("/api/settings/judge", json={"provider": "grok", "model": ""})
-
-    assert response.status_code == 200
-    assert response.json()["provider"] == "grok"
-    assert response.json()["models_by_provider"]["grok"] == []
-    with factory() as session:
-        stored = get_raw_stored_judge_settings(session)
-    assert (stored.provider, stored.model) == ("grok", "")
-
-
-def test_claude_api_catalog_is_ready_for_the_judge(
-    admin_client, every_provider_is_configured,
-):
-    client, _ = admin_client
-
-    refresh_provider_snapshots()
-    judge = client.get("/api/settings/judge").json()
-    claude_api = judge["provider_routes_status"]["claude"]["api"]
-    assert claude_api["models"] == LIVE_CATALOG["claude"]
-    assert claude_api["readiness"]["state"] == "ready"
-    assert claude_api["readiness"]["capability"] == "tools_available"
-    assert claude_api["readiness"]["reason"] is None
-    assert judge["models_by_provider"]["claude"] == LIVE_CATALOG["claude"]
-    saved = client.put(
-        "/api/settings/judge",
-        json={"provider": "claude", "model": "claude-sonnet-4-6"},
-    )
-    assert saved.status_code == 200
-
-    providers = {
-        item["provider"]: item
-        for item in client.get("/api/settings/providers").json()
-    }
-    assert providers["claude"]["cowriter_routes"]["api"]["readiness"]["state"] == "ready"
 
 
 def test_cowriter_put_requires_an_admin(admin_client):
@@ -589,25 +498,6 @@ def test_grok_cli_token_readies_the_cli_route_but_not_the_api_route_without_an_a
     assert grok_routes["api"]["readiness"]["state"] == "not_configured"
     assert grok_routes["api"]["readiness"]["reason"]["code"] == "api_key_not_set"
 
-    judge_saved = client.put(
-        "/api/settings/judge",
-        json={"provider": "grok", "model": ""},
-    )
-
-    assert judge_saved.status_code == 200
-    assert judge_saved.json()["models_by_provider"]["grok"] == []
-    assert judge_saved.json()["provider_routes_status"]["grok"]["api"]["readiness"]["reason"] == {
-        "code": "api_key_not_set", "message": "API key is not set.",
-    }
-    cli_saved = client.put(
-        "/api/settings/judge",
-        json={"provider": "grok", "route": "cli", "model": "grok-4.6"},
-    )
-    assert cli_saved.status_code == 200
-    assert cli_saved.json()["route"] == "cli"
-    grok_cli = cli_saved.json()["provider_routes_status"]["grok"]["cli"]
-    assert grok_cli["readiness"]["state"] == "ready"
-
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
 def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
@@ -623,10 +513,9 @@ def test_refresh_records_unparseable_cli_output_without_claiming_readiness(
     refresh_provider_snapshots()
     from agent_providers.catalog import ProviderRouteReadinessState
 
-    from songmaker_cli.provider_status import provider_snapshot
+    from songmaker_cli.provider_status import provider_snapshots
 
-    snapshot = provider_snapshot(provider)
-    assert snapshot is not None
+    snapshot = provider_snapshots()[provider]
     expected_cli_state = (
         ProviderRouteReadinessState.NOT_CONFIGURED
         if provider == "claude" else ProviderRouteReadinessState.DISTURBED
@@ -655,7 +544,7 @@ def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
     from agent_providers.catalog import ProviderRoute, ProviderRouteReadinessState
     from agent_providers.process import AgentCliUnavailableError
 
-    from songmaker_cli.provider_status import provider_snapshot, refresh_provider_snapshot
+    from songmaker_cli.provider_status import provider_snapshots, refresh_provider_snapshot
 
     def unavailable_cli(_provider: str) -> bool:
         raise AgentCliUnavailableError("unavailable")
@@ -671,7 +560,7 @@ def test_refresh_preserves_an_api_key_provider_when_its_cli_probe_fails(
 
     snapshot = refresh_provider_snapshot(provider)
 
-    assert snapshot == provider_snapshot(provider)
+    assert snapshot == provider_snapshots()[provider]
     assert snapshot.routes[ProviderRoute.CLI].readiness is ProviderRouteReadinessState.DISTURBED
 
 
@@ -679,15 +568,9 @@ def test_settings_responses_project_one_snapshot_generation_per_provider(
     admin_client, monkeypatch,
 ):
     refresh_provider_snapshots()
-    monkeypatch.setattr(
-        "songmaker_cli.provider_status.provider_snapshot",
-        lambda _provider: (_ for _ in ()).throw(AssertionError("individual snapshot read")),
-    )
-
     client, _ = admin_client
 
     assert client.get("/api/settings/providers").status_code == 200
-    assert client.get("/api/settings/judge").status_code == 200
 
 
 @pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
@@ -910,94 +793,14 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
     monkeypatch.setattr("agent_providers.process.subprocess.Popen", _counting_popen)
     client, _ = admin_client
 
-    judge = client.get("/api/settings/judge")
     providers = client.get("/api/settings/providers")
 
-    assert judge.status_code == 200
     assert providers.status_code == 200
-    assert set(judge.json()["probed_at"].values()) == {None}
-    grok_cli = judge.json()["provider_routes_status"]["grok"]["cli"]["readiness"]
-    assert grok_cli["state"] == "unverified"
-    assert grok_cli["capability"] == "tools_available"
-    assert grok_cli["reason"] is None
     for provider in providers.json():
         for route_status in provider["cowriter_routes"].values():
             assert route_status["readiness"]["state"] == "unverified"
             assert route_status["readiness"]["probed_at"] is None
-    response = client.put(
-        "/api/settings/judge",
-        json={"provider": "grok", "model": ""},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["model"] == ""
     assert calls == 0
-
-
-def test_judge_models_errors_cover_every_provider_not_only_the_saved_one(
-    admin_client, monkeypatch, every_provider_is_configured,
-):
-    client, _ = admin_client
-    client.put("/api/settings/judge", json={"provider": "codex", "model": "gpt-5.4"})
-
-    def _list_provider_models(provider: str, _route: ProviderRoute) -> list[str]:
-        if provider == "grok":
-            raise ProviderUnavailableError(
-                "grok", "grok is not configured: missing XAI_API_KEY",
-            )
-        return list(LIVE_CATALOG[provider])
-
-    monkeypatch.setattr(
-        "agent_providers.catalog.list_provider_models", _list_provider_models,
-    )
-    refresh_provider_snapshots()
-    settings = client.get("/api/settings/judge").json()
-    assert settings["provider"] == "codex"
-    assert settings["models_by_provider"]["grok"] == []
-    assert "codex" not in settings["models_errors"]
-    assert settings["models_errors"]["grok"] == "Selected route failed."
-
-
-def test_judge_save_keeps_its_default_pair_while_nothing_is_probed(admin_client):
-    client, factory = admin_client
-    with factory() as session:
-        provider = get_judge_provider(session)
-        model = get_judge_model(session, provider)
-
-    response = client.put(
-        "/api/settings/judge",
-        json={"provider": provider, "model": model},
-    )
-
-    assert response.status_code == 200
-    assert response.json()["model"] == model
-    with factory() as session:
-        stored = get_raw_stored_judge_settings(session)
-    assert (stored.provider, stored.model) == (provider, model)
-
-
-def test_judge_save_keeps_its_persisted_model_while_the_catalogue_is_down(
-    admin_client, every_provider_is_configured,
-):
-    client, factory = admin_client
-    request = {"provider": "grok", "model": "grok-4.6"}
-    assert client.put("/api/settings/judge", json=request).status_code == 200
-
-    def _down(provider: str, _route: ProviderRoute) -> list[str]:
-        raise ProviderModelCatalogUnavailableError(
-            provider, f"could not list {provider} models",
-        )
-
-    with patch("agent_providers.catalog.list_provider_models", side_effect=_down):
-        refresh_provider_snapshots()
-        again = client.put("/api/settings/judge", json=request)
-        unknown = client.put("/api/settings/judge", json={"provider": "grok", "model": "grok-4.5"})
-
-    assert again.status_code == 200
-    assert unknown.status_code == 422
-    assert unknown.json()["detail"] == "Unknown grok model 'grok-4.5'"
-    with factory() as session:
-        assert get_raw_stored_judge_settings(session).model == "grok-4.6"
 
 
 # ── Provider-status response pin (A9, #873) ─────────────────────────
@@ -1122,132 +925,58 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
     assert response.content == _pinned_response_body(case)
 
 
-@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
-@pytest.mark.parametrize("route,other_route", [("cli", "api"), ("api", "cli")])
-def test_judge_saves_only_models_from_its_selected_route(
-    admin_client, monkeypatch, every_provider_is_configured, provider, route, other_route,
-):
-    client, factory = admin_client
-    monkeypatch.setattr(
-        "agent_providers.catalog.list_provider_models",
-        lambda name, selected: [f"{name}-{selected.value}-model"],
-    )
-    refresh_provider_snapshots()
-    request = {"provider": provider, "route": route, "model": f"{provider}-{route}-model"}
-    rejected = client.put(
-        "/api/settings/judge", json={**request, "model": f"{provider}-{other_route}-model"},
-    )
-    assert rejected.status_code == 422
-    saved = client.put("/api/settings/judge", json=request)
-    assert saved.status_code == 200
-    body = saved.json()
-    assert {key: body[key] for key in request} == request
-    assert body["allowed_models"] == [request["model"]]
-    assert body["models_by_provider"] == {
-        name: [f"{name}-{route}-model"] for name in LIVE_CATALOG
-    }
-    assert body["provider_routes_status"][provider][other_route]["retained_model_id"] == request[
-        "model"
-    ]
-    assert client.get("/api/settings/judge").json() == body
+@pytest.mark.parametrize("role", ["admin", "user"])
+@pytest.mark.parametrize("method", ["GET", "PUT"])
+def test_removed_judge_endpoint_answers_ordinary_not_found(tmp_path, mock_arq_pool, method, role):
+    overrides = (client := make_test_app(tmp_path)[0]).app.dependency_overrides
+    overrides[get_current_user] = lambda: make_authenticated_user("u", role=role)
+    with client:
+        unknown, removed = [client.request(method, f"/api/settings/{n}") for n in ("nope", "judge")]
+    assert removed.status_code == unknown.status_code == 404
+    assert removed.content == unknown.content
+
+
+_LEFTOVER_JUDGE_ROWS = {
+    "judge_provider": "grok",
+    "judge_route": "bogus",
+    "judge_model": "x",
+    "claude_scoring_model": "y",
+}
+
+
+def _leftover_judge_rows(factory) -> dict[str, str | None]:
     with factory() as session:
-        audit = session.query(AuditLog).filter_by(resource_type="judge").one()
-        assert f"route={route}" in audit.detail
-
-    retained = client.put("/api/settings/judge", json={**request, "route": other_route})
-    assert retained.status_code == 200
-    assert retained.json()["provider_routes_status"][provider][other_route][
-        "retained_model_id"
-    ] == request["model"]
+        return {
+            row.setting_key: row.value_text
+            for row in session.query(RateLimitSetting).filter(
+                RateLimitSetting.setting_key.in_(list(_LEFTOVER_JUDGE_ROWS)),
+            )
+        }
 
 
-@pytest.mark.parametrize("route", ["cli", "api"])
-@pytest.mark.parametrize("route_field", [{}, {"route": None}])
-def test_judge_save_without_route_preserves_its_saved_route(
-    admin_client, every_provider_is_configured, route, route_field,
+def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool):
+    client, factory = make_test_app(tmp_path)
+
+    with client:
+        pass
+
+    assert _leftover_judge_rows(factory) == {}
+
+
+def test_startup_and_settings_reads_leave_stored_judge_rows_unread_and_unchanged(
+    tmp_path, mock_arq_pool,
 ):
-    client, _ = admin_client
-    request = {"provider": "grok", "route": route, "model": "grok-4.6"}
-    assert client.put("/api/settings/judge", json=request).status_code == 200
-    saved = client.put(
-        "/api/settings/judge", json={"provider": "grok", "model": "grok-4.5", **route_field},
-    )
-    assert saved.status_code == 200
-    assert saved.json()["route"] == route
+    def seed_leftover_rows(session) -> None:
+        for key, value in _LEFTOVER_JUDGE_ROWS.items():
+            set_claude_model(session, key, value)
 
-
-@pytest.mark.parametrize("route", ["cli", "api"])
-@pytest.mark.parametrize("provider", ["claude", "grok", "codex"])
-def test_judge_saves_an_empty_model_on_an_unavailable_route(admin_client, route, provider):
-    client, _ = admin_client
-    default = client.get("/api/settings/judge").json()["model"]
-    request = {"provider": provider, "route": route, "model": ""}
-    response = client.put("/api/settings/judge", json=request)
-    assert response.status_code == 200
-    body = client.get("/api/settings/judge").json()
-    assert {key: body[key] for key in request} == {
-        **request, "model": default if provider == "claude" else "",
-    }
-    assert body["allowed_models"] == []
-    assert body["provider_routes_status"][provider][route]["readiness"]["state"] == "unverified"
-
-
-@pytest.mark.parametrize("method", ["get", "put"])
-def test_judge_settings_require_an_admin(admin_client, method):
-    client, _ = admin_client
+    client, factory = make_test_app(tmp_path, seed_db=seed_leftover_rows)
     client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-        "u-test", username="u-u-test"
+        "u-admin", role="admin", username="admin",
     )
-    response = client.request(
-        method, "/api/settings/judge", json={"provider": "grok", "route": "api", "model": ""},
-    )
-    assert response.status_code == 403
 
+    with client:
+        for path in ("/api/settings/providers", "/api/settings/cover", "/api/capabilities"):
+            assert client.get(path).status_code == 200
 
-MISSING_OR_INVALID_JUDGE_ROUTES = [None, "unknown", ""]
-
-
-def _store_judge_route(factory, route: str | None) -> None:
-    with factory() as session:
-        session.query(RateLimitSetting).filter_by(setting_key=SETTING_JUDGE_ROUTE).delete()
-        if route is not None:
-            set_claude_model(session, SETTING_JUDGE_ROUTE, route)
-        session.commit()
-
-
-@pytest.mark.parametrize("route", MISSING_OR_INVALID_JUDGE_ROUTES)
-@pytest.mark.parametrize("path,method", [
-    ("/api/settings/judge", "get"),
-    ("/api/settings/judge", "put"),
-])
-def test_missing_or_invalid_judge_route_is_rejected_without_a_default(
-    admin_client, route, path, method,
-):
-    client, factory = admin_client
-    _store_judge_route(factory, route)
-
-    response = client.request(method, path, json={"provider": "grok", "model": ""})
-
-    assert response.status_code == 422
-    assert "Judge route" in response.json()["detail"]
-
-
-@pytest.mark.parametrize("route", MISSING_OR_INVALID_JUDGE_ROUTES)
-def test_provider_status_is_served_whatever_judge_route_is_stored(admin_client, route):
-    client, factory = admin_client
-    _store_judge_route(factory, route)
-
-    response = client.get("/api/settings/providers")
-
-    assert response.status_code == 200
-    assert {item["provider"] for item in response.json()} == set(LIVE_CATALOG)
-
-
-def test_unknown_judge_route_leaves_the_selection_unchanged(admin_client):
-    client, _ = admin_client
-    before = client.get("/api/settings/judge").json()
-    rejected = client.put(
-        "/api/settings/judge", json={"provider": "codex", "route": "automatic", "model": ""},
-    )
-    assert rejected.status_code == 422
-    assert client.get("/api/settings/judge").json() == before
+    assert _leftover_judge_rows(factory) == _LEFTOVER_JUDGE_ROWS

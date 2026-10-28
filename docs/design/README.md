@@ -38,7 +38,7 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
   Auswahl und Status. Die Scoring-CLI/API-Zeile (10.09.2026, #844) ist am
   28.10.2026 mit den Zuständen (b) und (x) entfernt worden (#1974): der
-  automatische Judge verlässt die App, die Tabelle hat zwei Zeilen.
+  automatische Judge hat die App verlassen, die Tabelle hat zwei Zeilen.
   Backend-Voraussetzungen: #316 (echter Provider-Status) und #315 (Judge
   providerneutral). Der Abschnitt „#1500 — VRAM und Kapazität" wurde am
   17.10.2026 freigegeben: die Worker-Karte mit VRAM-Zeile und der Liste der

@@ -1,8 +1,7 @@
 """Songmaker's two provider surfaces and the last thing we know about them.
 
 The provider layer answers per provider and per route. Songmaker projects
-these snapshots onto the co-writer's and judge's saved routes. No scoring
-run calls a provider.
+these snapshots onto the co-writer's catalog and the cover's capability.
 
 Probing is expensive, so a background loop refreshes one snapshot per provider
 and every reader — the settings API, the admin "Models" table — projects that
@@ -30,12 +29,6 @@ class ProviderSnapshot:
 
 _provider_snapshots_lock = threading.Lock()
 _provider_snapshots: dict[str, ProviderSnapshot] = {}
-
-
-def provider_snapshot(provider: str) -> ProviderSnapshot | None:
-    """Return a provider's last background refresh without probing."""
-    with _provider_snapshots_lock:
-        return _provider_snapshots.get(provider)
 
 
 def provider_snapshots() -> dict[str, ProviderSnapshot]:

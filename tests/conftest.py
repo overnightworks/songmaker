@@ -652,14 +652,6 @@ def read_wav(path: Path) -> tuple[np.ndarray, int]:
         return int16.astype(np.float32) / 32768.0, sr
 
 
-def seed_judge_route(session) -> None:
-    """Settings-only TestClients skip the startup pin and retain the old API route."""
-    from songmaker_cli.constants import SETTING_JUDGE_ROUTE
-    from songmaker_cli.db.queries.settings import set_claude_model
-
-    set_claude_model(session, SETTING_JUDGE_ROUTE, "api")
-
-
 def make_authenticated_user(
     user_id: str,
     *,
@@ -755,7 +747,6 @@ def make_test_app(
 
     factory = factory or init_db(data_dir / "songmaker.db")
     with factory() as session:
-        seed_judge_route(session)
         if seed_db is not None:
             seed_db(session)
         session.commit()

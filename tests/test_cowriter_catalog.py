@@ -118,7 +118,7 @@ def test_codex_cli_catalog_rejects_an_invalid_catalog(monkeypatch, payload):
     assert raised.value.reason.code is SafeRouteReasonCode.CATALOGUE_PROTOCOL_ERROR
 
 
-def test_claude_api_catalog_remains_available_for_the_judge_api_route(monkeypatch):
+def test_claude_api_catalog_remains_available_for_the_api_route(monkeypatch):
     override_provider_runtime(anthropic_api_key="test-key")
     response = MagicMock(status_code=200)
     response.json.return_value = _models_payload("claude-sonnet-4-6")

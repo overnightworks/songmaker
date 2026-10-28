@@ -70,7 +70,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "CowriterSettingsResponse": "CowriterSettings",
     "GenerationResponse": "GenerationItem",
     "JobResponse": "JobItem",
-    "JudgeSettingsResponse": "JudgeSettings",
     "LastFailedGenerationResponse": "LastFailedGenerationResult",
     "LibraryPoolQueueResponse": "LibraryPoolQueue",
     "LibraryPoolTakeResponse": "LibraryPoolTakeItem",

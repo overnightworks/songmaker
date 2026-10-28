@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Final
 
-from agent_providers.constants import COWRITER_PROVIDERS
 from sqlalchemy.orm import Session
 
 from songmaker_cli.constants import (
@@ -16,30 +14,15 @@ from songmaker_cli.constants import (
     COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
     COWRITER_MAX_TAIL_TOKEN_BUDGET,
     COWRITER_MIN_TAIL_TOKEN_BUDGET,
-    JUDGE_DEFAULT_PROVIDER,
     PRESET_GLOBAL_DEFAULTS_NAME,
     SETTING_CLAUDE_CHAT_MODEL,
-    SETTING_CLAUDE_SCORING_MODEL,
     SETTING_COVER_MODEL,
     SETTING_COVER_PROVIDER,
     SETTING_COVER_ROUTE,
     SETTING_COWRITER_TAIL_TOKEN_BUDGET,
-    SETTING_JUDGE_MODEL,
-    SETTING_JUDGE_PROVIDER,
-    SETTING_JUDGE_ROUTE,
 )
 from songmaker_cli.db.models import AvailableModel, GenerationPreset, RateLimitSetting
 from songmaker_cli.settings import get_settings
-
-_ROUTE_VALUES: Final = frozenset(("cli", "api"))
-
-
-@dataclass(frozen=True)
-class RawStoredJudgeSettings:
-    """The judge provider and model exactly as stored, without defaults."""
-
-    provider: str | None
-    model: str | None
 
 
 @dataclass(frozen=True)
@@ -238,112 +221,12 @@ def _get_claude_model_row(session: Session, setting_key: str) -> str | None:
     return None
 
 
-def get_raw_stored_judge_settings(session: Session) -> RawStoredJudgeSettings:
-    """Return judge provider and model values without resolving defaults."""
-    stored_values = {
-        str(setting_key): value_text
-        for setting_key, value_text in (
-            session.query(RateLimitSetting.setting_key, RateLimitSetting.value_text)
-            .filter(
-                RateLimitSetting.setting_key.in_(
-                    (SETTING_JUDGE_PROVIDER, SETTING_JUDGE_MODEL),
-                ),
-                RateLimitSetting.user_id.is_(None),
-            )
-            .all()
-        )
-    }
-    return RawStoredJudgeSettings(
-        provider=stored_values.get(SETTING_JUDGE_PROVIDER),
-        model=stored_values.get(SETTING_JUDGE_MODEL),
-    )
-
-
 def get_claude_chat_model(session: Session) -> str:
     """Return the configured chat model: DB row override or Settings default."""
     return (
         _get_claude_model_row(session, SETTING_CLAUDE_CHAT_MODEL)
         or get_settings().claude_chat_model
     )
-
-
-def get_claude_scoring_model(session: Session) -> str:
-    """Return the configured scoring model: DB row override or Settings default."""
-    return (
-        _get_claude_model_row(session, SETTING_CLAUDE_SCORING_MODEL)
-        or get_settings().claude_scoring_model
-    )
-
-
-def get_judge_provider(session: Session) -> str:
-    stored = _get_claude_model_row(session, SETTING_JUDGE_PROVIDER)
-    if stored is None:
-        return JUDGE_DEFAULT_PROVIDER
-    if stored not in COWRITER_PROVIDERS:
-        msg = f"Unknown judge provider '{stored}'"
-        raise ValueError(msg)
-    return stored
-
-
-def get_judge_model(session: Session, provider: str) -> str:
-    """Return the configured judge model: DB row override, or — on the
-    default provider — the pre-existing scoring-model setting, so a musician
-    who never touches the new judge settings keeps today's behavior (#315).
-
-    The stored model only counts when it was set for this same ``provider``
-    — ``set_judge_settings`` writes both together, but the two are still
-    separate rows, so a stored model left over from a different provider (or
-    with no provider ever stored) is treated as unset rather than handed to
-    a provider it was never configured for.
-    """
-    stored_provider = _get_claude_model_row(session, SETTING_JUDGE_PROVIDER)
-    stored_model = _get_claude_model_row(session, SETTING_JUDGE_MODEL)
-    if stored_model and stored_provider == provider:
-        return stored_model
-    if provider == "claude":
-        return get_claude_scoring_model(session)
-    return ""
-
-
-def get_judge_route(session: Session) -> str:
-    route = _get_claude_model_row(session, SETTING_JUDGE_ROUTE)
-    if route not in _ROUTE_VALUES:
-        raise ValueError("Judge route must be configured as cli or api")
-    return route
-
-
-def pin_judge_route_if_unset(session: Session, anthropic_key_is_set: bool) -> str | None:
-    """Pin the legacy call path once, before settings requests can read it.
-
-    A fixed row ID arbitrates concurrent boots: the settings unique key
-    includes nullable user_id and therefore does not exclude duplicate globals.
-    """
-    row = (
-        session.query(RateLimitSetting)
-        .filter(
-            RateLimitSetting.setting_key == SETTING_JUDGE_ROUTE,
-            RateLimitSetting.user_id.is_(None),
-        )
-        .first()
-    )
-    if row is not None:
-        return None
-    provider = get_raw_stored_judge_settings(session).provider
-    route = "cli" if provider in (None, "", "claude") and not anthropic_key_is_set else "api"
-    session.add(RateLimitSetting(
-        id=SETTING_JUDGE_ROUTE,
-        setting_key=SETTING_JUDGE_ROUTE,
-        value=0,
-        value_text=route,
-    ))
-    session.flush()
-    return route
-
-
-def set_judge_settings(session: Session, provider: str, route: str, model: str) -> None:
-    set_claude_model(session, SETTING_JUDGE_PROVIDER, provider)
-    set_claude_model(session, SETTING_JUDGE_ROUTE, route)
-    set_claude_model(session, SETTING_JUDGE_MODEL, model)
 
 
 def get_cover_settings(session: Session) -> CoverSettings:
