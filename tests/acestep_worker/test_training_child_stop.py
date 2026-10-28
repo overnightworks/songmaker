@@ -427,17 +427,19 @@ def test_take_during_the_stop_never_reaches_the_old_child(make_worker, hold_laps
 
         async with worker.app_client() as client:
             take = asyncio.create_task(client.post("/generate", json=_GENERATE_BODY))
-            for _ in range(20):
-                await asyncio.sleep(0)
             if hold_lapses:
+                for _ in range(20):
+                    await asyncio.sleep(0)
                 assert not take.done()
-            holder["proceed"].set()
-            response = await _within(take)
+                holder["proceed"].set()
+                response = await _within(take)
+            else:
+                response = await _within(take)
+                holder["proceed"].set()
         await owner
 
         assert response.status_code == 409
-        not_loaded = MODE_NOT_LOADED_DETAIL.format(mode="sft")
-        refusals = {not_loaded} if hold_lapses else {_HOLD_DETAIL, not_loaded}
-        assert response.json()["detail"] in refusals
+        expected = MODE_NOT_LOADED_DETAIL.format(mode="sft") if hold_lapses else _HOLD_DETAIL
+        assert response.json()["detail"] == expected
 
     asyncio.run(scenario())
