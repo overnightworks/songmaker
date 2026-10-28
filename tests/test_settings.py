@@ -128,6 +128,7 @@ def test_a_dotenv_with_the_retired_scoring_model_key_still_validates(tmp_path) -
 def test_a_dotenv_with_a_misspelt_key_still_raises(tmp_path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("CLAUDE_SCORING_MODLE=claude-opus-4-6\n")
+    required_settings = _required_settings()
 
     with pytest.raises(ValidationError):
-        Settings(_env_file=env_file, **_required_settings())
+        Settings(_env_file=env_file, **required_settings)

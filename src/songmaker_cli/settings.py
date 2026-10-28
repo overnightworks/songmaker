@@ -398,6 +398,7 @@ class Settings(BaseSettings):
     grafana_user: str | None = None
     grafana_password: SecretStr | None = None
     hf_token: SecretStr | None = None
+    # Retired key: declared and unread so an old .env still validates.
     claude_scoring_model: str | None = None
 
     # ── Alert channel (issue #333) ─────────────────────────────────────
