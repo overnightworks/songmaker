@@ -6,6 +6,7 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Any
 
 import fakeredis
 import fakeredis.aioredis
@@ -26,6 +27,8 @@ from acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app
 _HEADERS = {"X-Internal-Token": "test-internal-token"}
 _WORKER_ID = "acestep-worker-0"
 _TAIL = "ValueError: LM weights missing"
+_STOP_WITHIN_SECONDS = 5
+_NOT_STOPPED_EXIT_CODE = 99
 
 Loader = Callable[[str], Awaitable[LoadedModel]]
 
@@ -85,28 +88,42 @@ class _Worker:
     def client(self) -> TestClient:
         return TestClient(create_app(self.deps), headers=_HEADERS)
 
-    def serve_until_it_stops(self, request: Callable[[httpx.Client], object]) -> int:
-        """Run the real server; `request` runs once it answers and returns the exit code owed."""
+    def serve_until_it_stops(
+        self,
+        request: Callable[[httpx.Client], object],
+        **serve_options: Any,
+    ) -> int:
+        """Run the real server; `request` runs once it answers and returns the exit code owed.
+
+        A server that is still up `_STOP_WITHIN_SECONDS` after the request is stopped with
+        `_NOT_STOPPED_EXIT_CODE`, so a missing shutdown fails the test instead of hanging it.
+        """
         port = _free_port()
         deps = self.deps
         outcome: list[object] = []
+        served = threading.Event()
 
         def drive() -> None:
-            with httpx.Client(base_url=f"http://127.0.0.1:{port}", headers=_HEADERS) as client:
-                deadline = time.monotonic() + 10
-                while time.monotonic() < deadline:
-                    try:
-                        client.get("/health")
-                        break
-                    except httpx.TransportError:
-                        time.sleep(0.05)
-                outcome.append(request(client))
+            try:
+                with httpx.Client(base_url=f"http://127.0.0.1:{port}", headers=_HEADERS) as client:
+                    deadline = time.monotonic() + 10
+                    while time.monotonic() < deadline and not served.is_set():
+                        try:
+                            client.get("/health")
+                            break
+                        except httpx.TransportError:
+                            time.sleep(0.05)
+                    outcome.append(request(client))
+            finally:
+                if not served.wait(_STOP_WITHIN_SECONDS):
+                    deps.request_shutdown(_NOT_STOPPED_EXIT_CODE)
 
         driver = threading.Thread(target=drive)
         driver.start()
         try:
-            exit_code = serve(deps, "127.0.0.1", port)
+            exit_code = serve(deps, "127.0.0.1", port, **serve_options)
         finally:
+            served.set()
             driver.join(timeout=10)
         self.driven = outcome
         return exit_code
@@ -170,7 +187,7 @@ def test_worker_still_leaves_when_the_key_cannot_be_written(worker: _Worker) -> 
     assert worker.shutdown_requests == [LM_FAILURE_EXIT_CODE]
 
 
-def test_lm_failure_stops_the_models_already_loaded_so_their_takes_end(worker: _Worker) -> None:
+def test_lm_failure_leaves_the_other_loaded_models_to_the_shutdown(worker: _Worker) -> None:
     async def fail_only_turbo(mode: str) -> LoadedModel:
         if mode == "turbo":
             raise LmInitFailedError(_TAIL)
@@ -185,7 +202,7 @@ def test_lm_failure_stops_the_models_already_loaded_so_their_takes_end(worker: _
         loaded_after = client.get("/loaded_models").json()["loaded"]
 
     assert [model["mode"] for model in loaded_before] == ["sft"]
-    assert loaded_after == []
+    assert [model["mode"] for model in loaded_after] == ["sft"]
 
 
 def test_load_that_fails_for_another_reason_keeps_the_worker_and_writes_no_key(
@@ -230,10 +247,35 @@ def test_served_worker_with_a_failing_retry_exits_with_uvicorns_startup_failure(
     worker.plant_key("sft")
     _fail_the_lm(worker)
 
-    exit_code = serve(worker.deps, "127.0.0.1", _free_port())
+    exit_code = worker.serve_until_it_stops(lambda client: None)
 
     assert exit_code == STARTUP_FAILURE
     assert worker.key() == b"sft"
+
+
+def test_served_worker_is_forced_out_when_a_running_take_holds_the_shutdown(
+    worker: _Worker,
+) -> None:
+    take_still_polling = threading.Event()
+    forced_exits: list[int] = []
+
+    async def fail_while_a_take_polls(_: str) -> LoadedModel:
+        asyncio.get_running_loop().run_in_executor(None, take_still_polling.wait, 30)
+        raise LmInitFailedError(_TAIL)
+
+    def force_exit(exit_code: int) -> None:
+        forced_exits.append(exit_code)
+        take_still_polling.set()
+
+    worker.loader = fail_while_a_take_polls
+
+    worker.serve_until_it_stops(
+        lambda client: client.post("/load_model", json={"mode": "sft"}),
+        force_exit=force_exit,
+        forced_exit_seconds=0.5,
+    )
+
+    assert forced_exits == [LM_FAILURE_EXIT_CODE]
 
 
 def test_start_without_the_key_loads_nothing(worker: _Worker) -> None:

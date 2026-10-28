@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +31,9 @@ from acestep_worker.wrapper import (
 
 # Bounds the wait for open responses once the server was asked to stop.
 GRACEFUL_SHUTDOWN_SECONDS = 10
+# A running take's polling thread outlives its cancelled coroutine and holds the interpreter
+# open for the poll timeout, so a requested exit is forced after this long.
+FORCED_EXIT_SECONDS = GRACEFUL_SHUTDOWN_SECONDS + 20.0
 
 DEFAULT_MODEL_SIZES_GB: dict[str, float] = {
     "turbo": 6.0,
@@ -156,8 +161,19 @@ def build_deps(settings: WorkerSettings | None = None) -> WorkerDeps:
     return deps
 
 
-def serve(deps: WorkerDeps, host: str, port: int) -> int:
-    """Run the server until it stops; returns the exit code the process owes."""
+def serve(
+    deps: WorkerDeps,
+    host: str,
+    port: int,
+    *,
+    force_exit: Callable[[int], object] = os._exit,
+    forced_exit_seconds: float = FORCED_EXIT_SECONDS,
+) -> int:
+    """Run the server until it stops; returns the exit code the process owes.
+
+    A requested exit that the shutdown does not finish within `forced_exit_seconds` ends the
+    process through `force_exit`, so a running take cannot delay the restart.
+    """
     server = uvicorn.Server(
         uvicorn.Config(
             create_app(deps),
@@ -173,6 +189,9 @@ def serve(deps: WorkerDeps, host: str, port: int) -> int:
         # A signal would make uvicorn re-raise it after the shutdown and lose the exit code.
         exit_codes.append(exit_code)
         server.should_exit = True
+        watchdog = threading.Timer(forced_exit_seconds, force_exit, args=(exit_code,))
+        watchdog.daemon = True
+        watchdog.start()
 
     deps.request_shutdown = request_shutdown
     server.run()
@@ -181,10 +200,10 @@ def serve(deps: WorkerDeps, host: str, port: int) -> int:
     return exit_codes[0] if exit_codes else 0
 
 
-def main() -> None:
+def main(serve_deps: Callable[[WorkerDeps, str, int], int] = serve) -> None:
     settings = get_worker_settings()
     configure_logging(settings.log_level)
-    exit_code = serve(build_deps(settings), settings.worker_bind_host, settings.worker_port)
+    exit_code = serve_deps(build_deps(settings), settings.worker_bind_host, settings.worker_port)
     if exit_code:
         sys.exit(exit_code)
 

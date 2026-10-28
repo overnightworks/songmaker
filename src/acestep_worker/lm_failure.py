@@ -27,6 +27,11 @@ def lm_failure_key(worker_id: str) -> str:
     return f"{LM_FAILURE_KEY_PREFIX}:{worker_id}"
 
 
+def shutdown_not_wired(exit_code: int) -> None:
+    """Default for a WorkerDeps that no `serve()` wired, so a missing exit path is loud."""
+    raise RuntimeError(f"Shutdown with exit code {exit_code} requested, but serve() wired none")
+
+
 def schedule_sigterm() -> int:
     """Ask this process to shut down once the current response is out; returns its pid."""
     pid = os.getpid()
@@ -43,8 +48,6 @@ async def leave_if_lm_failed(deps: WorkerDeps, mode: str, error: SubprocessStart
     except Exception:
         log.exception("Could not record the LM failure for %s; leaving anyway", mode)
     log.error("ACE-Step LM did not initialise for %s; ending the worker to retry", mode)
-    # Stopping the children ends running takes now instead of when their streams finish.
-    await deps.cache.evict_all()
     deps.request_shutdown(LM_FAILURE_EXIT_CODE)
 
 

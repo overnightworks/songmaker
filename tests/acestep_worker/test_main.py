@@ -90,6 +90,7 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) ->
     from acestep_worker.settings import get_worker_settings
 
     get_worker_settings.cache_clear()
+    served: list[tuple[str, int]] = []
 
     with (
         patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
@@ -97,14 +98,10 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) ->
             "acestep_worker.__main__.make_acestep_runner",
             return_value=(MagicMock(), MagicMock()),
         ),
-        patch("acestep_worker.__main__.uvicorn.Server") as server_class,
     ):
-        main()
+        main(serve_deps=lambda deps, host, port: served.append((host, port)) or 0)
 
-    server_class.return_value.run.assert_called_once()
-    (config,) = server_class.call_args.args
-    assert config.host == "127.0.0.1"
-    assert config.port == 8765
+    assert served == [("127.0.0.1", 8765)]
 
 
 def test_configure_logging_emits_common_json_fields(
