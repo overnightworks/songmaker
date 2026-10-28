@@ -767,8 +767,7 @@ def test_release_and_stop_stops_only_with_the_last_use(caplog: pytest.LogCapture
     with caplog.at_level("WARNING"):
         _run(cache.release_and_stop("sft"))
     assert (unloaded, cache.in_use_count("sft")) == ([], 1)
-    warning_loggers = {r.name for r in caplog.records if r.levelname == "WARNING"}
-    assert "acestep_worker.model_cache" in warning_loggers
+    assert any(r.name == "acestep_worker.model_cache" for r in caplog.records)
     _run(cache.release_and_stop("sft"))
     assert (unloaded, cache.loaded_modes()) == ([loaded], [])
 
@@ -792,8 +791,9 @@ def test_release_and_stop_drops_the_mode_keeps_the_pin_and_raises_when_the_unloa
     _run(cache.load("sft"))
     _run(cache.pin("sft"))
     _run(cache.acquire_for_use("sft"))
-    release = cache.release_and_stop("sft")
     with pytest.raises(RuntimeError, match="child would not stop"):
-        _run(release)
-    assert (cache.loaded_modes(), cache.in_use_count("sft")) == ([], 0)
-    assert cache.is_pinned("sft") and "child would not stop" in caplog.text
+        _run(cache.release_and_stop("sft"))
+    assert cache.loaded_modes() == []
+    assert cache.in_use_count("sft") == 0
+    assert cache.is_pinned("sft")
+    assert "child would not stop" in caplog.text

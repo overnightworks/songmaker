@@ -76,9 +76,9 @@ When a training ends, whether it succeeded, failed or was cancelled, the worker
 stops that mode's ACE-Step child before it releases the GPU hold, because the
 Fork does not put the LM back after a training. The scheduler loads the
 mode again before the next take (or after one "not loaded" answer when its view
-was stale), and the new child passes the same LM check as any load. The price is one warm reload per training
-(under 30 seconds with a warm page cache). A kept (pinned) mode stays pinned but
-is not resident until that reload.
+was stale), and the new child passes the same LM check as any load. The price is
+one warm reload per training (under 30 seconds with a warm page cache). A kept
+(pinned) mode stays pinned but is not resident until that reload.
 
 **Auto-scoring (issue #222).** Every successfully persisted generation gets a
 score job automatically — `jobs.generation._auto_score_generation`, called
