@@ -2586,7 +2586,7 @@
 			<h3>Was offen bleibt</h3>
 			<p>
 				Eine Scoring-Zeile gibt es nicht mehr (#1974): der automatische Kohärenz-Judge
-				wird ausgebaut, die Co-Writer-Bewertung ersetzt ihn auf Anfrage.
+				ist ausgebaut, die Co-Writer-Bewertung ersetzt ihn auf Anfrage.
 			</p>
 			<p>
 				Woher „ready" seine Wahrheit nimmt, entscheidet das Backend (#316): eine Live-Probe bei
@@ -2671,14 +2671,6 @@
 						<li>
 							<span class="num">3</span>
 							<span class="claim">
-								„Scoring Model" ist echt: Es steuert das Claude-Richter-Modell des
-								<code>lyrical_coherence</code>-Scorers.
-							</span>
-							<code class="loc">src/songmaker_cli/jobs/scoring.py:95 (get_claude_scoring_model)</code>
-						</li>
-						<li>
-							<span class="num">4</span>
-							<span class="claim">
 								Grok und Codex sind in dieser Umgebung wirklich nicht eingerichtet — beide API-Keys
 								sind leer.
 							</span>
@@ -2716,13 +2708,6 @@
 							<code class="loc">src/songmaker_cli/constants.py:155-159 (MODEL_ALLOWED_CLAUDE)</code>
 						</li>
 					</ol>
-					<p>
-						Die Providerneutralität des Scoring-Judges gibt es im Code heute nicht — der
-						<code>lyrical_coherence</code>-Judge ruft Claude direkt auf
-						(<code>src/songmaker_cli/jobs/scoring.py:95</code>). Der Scoring-Block unten zeigt einen
-						Zielzustand, der voraussetzt, dass der Judge über dieselbe Provider-Abstraktion läuft wie der
-						Co-Writer; das ist Backend-Arbeit, die dieser Entwurf nicht vorwegnimmt.
-					</p>
 				</div>
 			</section>
 
@@ -2778,63 +2763,6 @@
 						</div>
 					</div>
 				</div>
-			</section>
-
-			<section class="decisions">
-				<h2>Scoring — same shape, its own provider<span class="proposed-tag">Proposed — not implemented yet, see #315</span></h2>
-				<p class="state-note" style="min-height:auto">
-					Structurally identical to Co-Writer (Provider → Model), because the judge is a separate task
-					from the co-writer and deserves its own choice — but today the <code>lyrical_coherence</code>
-					judge only ever calls Claude. This block is the target this design points to, not what runs now;
-					landing it is Issue #315.
-				</p>
-
-				<div class="mini-page" style="max-width:460px;">
-					<div>
-						<p class="card-title">Scoring — Text Accuracy Judge</p>
-						<p class="card-sub">Provider and model that judge how closely the sung lyrics match what you wrote.</p>
-
-						<div class="active-banner ok">
-							<span class="dot"></span>
-							<span>
-								<b>Active</b>
-								<span class="model">Claude · claude-opus-4-6</span>
-								<span class="caption">Judges every new generation with this model.</span>
-							</span>
-						</div>
-
-						<div class="field-row">
-							<span class="field-label">Provider</span>
-							<div class="provider-picker">
-								<div class="provider-pill selected">
-									<span class="name">Claude</span>
-									<span class="pill-status status-ok">configured</span>
-								</div>
-								<div class="provider-pill disabled">
-									<span class="name">Grok</span>
-									<span class="pill-status status-bad">not configured</span>
-									<span class="pill-reason">Missing XAI_API_KEY</span>
-								</div>
-								<div class="provider-pill disabled">
-									<span class="name">Codex</span>
-									<span class="pill-status status-bad">not configured</span>
-									<span class="pill-reason">Missing OPENAI_API_KEY</span>
-								</div>
-							</div>
-						</div>
-
-						<div class="field-row">
-							<span class="field-label">Model</span>
-							<select class="mock"><option>claude-opus-4-6</option></select>
-						</div>
-
-						<div class="btn-row">
-							<button class="mock-save disabled">Save</button>
-							<span class="save-reason">Nothing changed.</span>
-						</div>
-					</div>
-				</div>
-
 				<div class="gone-block" style="max-width:460px;">
 					The old "Chat Model" field is gone, not hidden. It controlled an endpoint nothing calls
 					(finding 2) — there is no honest name for it inside either task block, so it does not
@@ -2858,11 +2786,6 @@
 						exakt so in <code>.env</code> heißen, ist aus den Feldnamen in <code>settings.py</code> und
 						dem pydantic-settings-Standard abgeleitet, nicht aus einer dokumentierten Liste bestätigt —
 						<code>docker/.env.docker.example</code> nennt namentlich nur <code>ANTHROPIC_API_KEY</code>.
-					</p>
-					<p>
-						Der Umbau des <code>lyrical_coherence</code>-Judges auf eine echte Provider-Abstraktion
-						(damit der Scoring-Block unten nicht nur ein Mockup bleibt) ist nicht untersucht — nur
-						belegt, dass er heute Claude-fest ist.
 					</p>
 				</div>
 			</section>
