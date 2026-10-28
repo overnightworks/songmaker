@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import {
 		editAudioDuration,
 		editBpm,
@@ -48,10 +47,24 @@
 		if (next.takes !== values.takes) takesPerGenerate.set(next.takes);
 	}
 
-	onMount(() => {
-		void loadBuiltins();
-		void loadPresets();
-		void loadGenerationDefaults();
+	// A closed line costs no request unless the draft holds engine values, whose
+	// dot needs the defaults; the card's own lists load when it first opens.
+	const holdsEngineValues = $derived(
+		Object.values($editGenParams ?? {}).some((value) => value !== null && value !== undefined)
+	);
+	let defaultsRequested = false;
+	let listsRequested = false;
+
+	$effect(() => {
+		if (($recipeOpen || holdsEngineValues) && !defaultsRequested) {
+			defaultsRequested = true;
+			void loadBuiltins();
+			void loadGenerationDefaults();
+		}
+		if ($recipeOpen && !listsRequested) {
+			listsRequested = true;
+			void loadPresets();
+		}
 	});
 </script>
 

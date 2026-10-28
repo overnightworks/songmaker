@@ -14,6 +14,7 @@ import {
 import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
 import { activeModels, loadActiveModels } from '$lib/stores/presets';
 import { loras } from '$lib/stores/loras';
+import { fetchBuiltinDefaults, fetchGenerationDefaults, fetchPresets } from '$lib/api/client';
 import RecipeLine from './RecipeLine.svelte';
 
 vi.mock('$lib/api/client', async (importOriginal) => ({
@@ -31,6 +32,9 @@ vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 let mounted: ReturnType<typeof mount>;
 
 beforeEach(async () => {
+	vi.mocked(fetchBuiltinDefaults).mockClear();
+	vi.mocked(fetchPresets).mockClear();
+	vi.mocked(fetchGenerationDefaults).mockClear();
 	loadSongData(
 		makeSong({
 			bpm: 0,
@@ -89,6 +93,19 @@ describe('RecipeLine', () => {
 		const target = await renderLine();
 		setDraftGenParams({ lm_temperature: 0.85 });
 		await vi.waitFor(() => expect(changedDot(target)).toBeNull());
+	});
+
+	it('requests the settings lists only once the card opens', async () => {
+		const target = await renderLine();
+		const requests = () =>
+			[fetchBuiltinDefaults, fetchPresets, fetchGenerationDefaults].map(
+				(fetcher) => vi.mocked(fetcher).mock.calls.length
+			);
+		expect(requests()).toEqual([0, 0, 0]);
+		closedLine(target).click();
+		await tick();
+		await tick();
+		expect(requests()).toEqual([1, 1, 1]);
 	});
 
 	it('opens into the tabs and closes back to the line', async () => {
