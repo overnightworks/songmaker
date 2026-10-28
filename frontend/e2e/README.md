@@ -157,10 +157,8 @@ number. The measured count is printed on every run.
 `admin-models.spec.ts` carries its own file-wide ceiling,
 `MODELS_FLOW_API_REQUEST_BUDGET` (local to the spec): 11 for the table at four
 desktop widths, 24 for the Cover row's save, reload and restore, 46 for the
-co-writer turn, 9 for the phone cards and 24 (20 on the phone) for the Scoring
-row's save, reload and restore, against a shared 60. Its four desktop tests
-run on **desktop only** and its card test and the Scoring row's phone test on
-**mobile only** — the table and the cards are two different surfaces, so each
+co-writer turn and 9 for the phone cards, against a shared 60. Its desktop
+tests run on **desktop only** and its card test on **mobile only** — the table and the cards are two different surfaces, so each
 is driven where it exists rather than skipped in the other shell.
 
 `song-phone.spec.ts` carries `SONG_PHONE_FLOW_API_REQUEST_BUDGET`
