@@ -179,6 +179,7 @@ export function makeHealthResponse(overrides: Partial<HealthResponse> = {}): Hea
 		db: 'ok',
 		redis: 'ok',
 		acestep: 'healthy',
+		acestep_reason: null,
 		uptime_seconds: 60,
 		claude_cli_tool_surface: 'ok',
 		codex_image_sandbox_runtime: 'ready',
