@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
+from typing import Final, NamedTuple
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 from acestep_engine.settings import get_engine_settings
@@ -26,7 +26,6 @@ JOB_ERROR_WORKER_TRAINING_FAILED: Final[str] = "Worker training failed"
 JOB_ERROR_WORKER_STREAM_SILENT: Final[str] = "Worker stream went silent"
 JOB_ERROR_INTERNAL: Final[str] = "Internal error during processing"
 JOB_ERROR_UNEXPECTED: Final[str] = "An unexpected error occurred"
-JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
@@ -125,6 +124,16 @@ class SongWorkKind(StrEnum):
 
 
 # Scoring pipeline
+class CoherenceVerdictKeys(NamedTuple):
+    """The stored keys of a take's coherence verdict, written by the co-writer."""
+
+    score: str
+    summary: str
+
+
+COHERENCE_VERDICT_KEYS: Final = CoherenceVerdictKeys(
+    score="lyrical_coherence", summary="lyrical_summary",
+)
 SILENCE_TOP_DB = 40
 SILENCE_MIN_GAP_SECONDS = 2.0
 SILENCE_TRIM_SECONDS = 2.0
@@ -670,7 +679,7 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
         heartbeat_seconds=SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
         liveness_signal=WorkerLivenessSignal.SCORING,
         restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
-    ),  # 300 s scorer + 120 s judge, then safety margin (#331 F20)
+    ),  # 300 s scorer, then safety margin (#331 F20)
     JobType.GENERATE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,

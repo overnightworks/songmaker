@@ -378,11 +378,10 @@ def _isolate_codex_process_pool():
 def _no_claude_cli_tool_surface_probe():
     """Never let a test spawn the real Claude CLI to read its tool surface.
 
-    Server startup, every co-writer turn, the legacy per-song chat endpoint,
-    and the lyrical-coherence judge each ask the mounted binary which tools
-    it offers before running it (#351); on a developer machine that binary
-    exists, so without this a lifespan, co-writer, chat, or scoring test
-    would start a real CLI session. Each probe's own behaviour is pinned in
+    Server startup and every co-writer turn each ask the mounted binary which
+    tools it offers before running it (#351); on a developer machine that
+    binary exists, so without this a lifespan or co-writer test would start a
+    real CLI session. Each probe's own behaviour is pinned in
     ``test_claude_provider.py``.
     """
     from unittest.mock import AsyncMock

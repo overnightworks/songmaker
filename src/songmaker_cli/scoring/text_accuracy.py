@@ -41,8 +41,8 @@ def score_text_accuracy(
     """Transcribe with Whisper and compare to intended lyrics.
 
     The transcription travels on the returned score (see
-    ``TextAccuracyScore.transcript``), which is what the generation stores
-    and what the coherence judge reads. When no intended lyrics are
+    ``TextAccuracyScore.transcript``), which is what the generation stores.
+    When no intended lyrics are
     available, transcription still runs and the similarity ratio is
     reported as 0.0.
     """

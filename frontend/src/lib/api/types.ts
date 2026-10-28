@@ -18,8 +18,6 @@ export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
 export interface TrackScores {
 	text_accuracy?: number;
 	detected_language?: string;
-	lyrical_coherence?: number;
-	lyrical_summary?: string;
 	dynamics?: number;
 	dynamics_pitch_cv?: number;
 	dynamics_rms_contrast?: number;
@@ -33,6 +31,8 @@ export interface TrackScores {
 	silence_gaps?: number;
 	silence_longest?: number;
 	spectral_artifacts?: number;
+	lyrical_coherence?: number;
+	lyrical_summary?: string;
 	user_rating?: number;
 	user_notes?: string;
 }
@@ -805,7 +805,6 @@ export interface ScorerSchemaItem {
 	output_keys: string[];
 	needs_audio: boolean;
 	device: string;
-	host: string;
 }
 
 export interface ScoringSchemaResponse {

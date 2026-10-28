@@ -119,7 +119,7 @@ FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
 TYPE_ALIASES: dict[str, str] = {
     "RepaintMode": "'conservative' | 'balanced' | 'aggressive'",
 }
-STRING_OUTPUT_KEYS = frozenset({"lyrical_summary", "detected_language"})
+STRING_OUTPUT_KEYS = frozenset({"detected_language"})
 
 
 @dataclass(frozen=True)
@@ -515,6 +515,7 @@ def _model_to_interface(model: type[BaseModel]) -> str:
 
 
 def _build_track_scores_interface() -> str:
+    from songmaker_cli.constants import COHERENCE_VERDICT_KEYS
     from songmaker_cli.scoring.registry import SCORERS
 
     fields = [
@@ -522,7 +523,12 @@ def _build_track_scores_interface() -> str:
         for spec in SCORERS.values()
         for key in spec.output_keys
     ]
-    fields.extend((("user_rating", "number"), ("user_notes", "string")))
+    fields.extend((
+        (COHERENCE_VERDICT_KEYS.score, "number"),
+        (COHERENCE_VERDICT_KEYS.summary, "string"),
+        ("user_rating", "number"),
+        ("user_notes", "string"),
+    ))
     lines = ["export interface TrackScores {"]
     lines.extend(f"\t{name}?: {ts_type};" for name, ts_type in fields)
     lines.append("}")

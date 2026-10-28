@@ -8,7 +8,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Final
+from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     import numpy as np
@@ -28,7 +28,6 @@ from songmaker_cli.scoring.models import (
     SongScores,
 )
 from songmaker_cli.scoring.registry import (
-    CHILD_SCORER_NAMES,
     DEVICE_CPU,
     DEVICE_GPU,
     SCORERS,
@@ -38,14 +37,11 @@ from songmaker_cli.scoring.registry import (
 
 log = logging.getLogger(__name__)
 
-JUDGE_OUTER_WATCHDOG_HEADROOM_SECONDS: Final[int] = 1
-
 __all__ = [
     "DEVICE_CPU",
     "DEVICE_GPU",
     "SCORERS",
     "VALID_SCORER_NAMES",
-    "ScorerDependencyUnavailable",
 ]
 
 
@@ -66,7 +62,7 @@ class PipelineConfig:
     Settings and fills these fields before sending a ``ScoreRequest`` across
     the pipe to the child, whose own ``os.environ`` has had
     ``SECRET_ENV_KEYS`` scrubbed at spawn. No field here is a secret — every
-    scorer that needs one runs in the parent (see ``ScorerHost``).
+    scorer here needs one.
     """
 
     whisper_model: str = "large-v3"  # turbo is faster but hallucinates on ~5% of songs
@@ -111,7 +107,7 @@ class ScorerRegistry:
     """Registry of the scorer functions this child runs. Supports lazy
     loading and test isolation.
 
-    Metadata (needs_audio, device, host, output_keys) lives in the SCORERS
+    Metadata (needs_audio, device, output_keys) lives in the SCORERS
     table in scoring/registry.py — this class only holds the function refs
     populated at module-import time by @register.
     """
@@ -124,15 +120,14 @@ class ScorerRegistry:
     def register(self, name: str) -> Callable[[ScorerFunc], ScorerFunc]:
         """Decorator to register a scorer function.
 
-        The name must be a child-hosted scorer in SCORERS
-        (scoring/registry.py) — a parent-hosted one never runs here.
+        The name must be a scorer in SCORERS (scoring/registry.py).
         """
 
         def decorator(func: ScorerFunc) -> ScorerFunc:
-            if name not in CHILD_SCORER_NAMES:
+            if name not in VALID_SCORER_NAMES:
                 raise ValueError(
                     f"Scorer name '{name}' is not a scorer this process runs. "
-                    f"Valid names: {sorted(CHILD_SCORER_NAMES)}"
+                    f"Valid names: {sorted(VALID_SCORER_NAMES)}"
                 )
             self._scorers[name] = func
             return func
@@ -212,23 +207,6 @@ class _ScorerTimeout(Exception):
     """Raised when a scorer exceeds its time limit."""
 
 
-class ScorerDependencyUnavailable(Exception):
-    """Raised by a scorer whose input another scorer did not produce.
-
-    Not a failure: the scorer is reported as skipped with this reason, and
-    whatever the generation already scored for it stays untouched.
-    """
-
-
-def judge_watchdog_timeout(timeout: int) -> int:
-    """Give the outer scorer watchdog room for the Judge to stop itself.
-
-    The provider SDK's httpx timeout applies to individual phases rather than
-    one whole request, so the watchdog is only a final safety boundary.
-    """
-    return timeout + JUDGE_OUTER_WATCHDOG_HEADROOM_SECONDS
-
-
 def _call_with_timeout(call: Callable[[], object], timeout: int, name: str) -> object:
     """Run a scorer call with a thread-based timeout.
 
@@ -258,8 +236,7 @@ def run_scorer(name: str, call: Callable[[], object], timeout: int) -> ScorerExe
     """Run one scorer under its own time budget and classify how it ended.
 
     Never raises — a scorer's fate is data, so one scorer cannot abort the
-    run and only a successful one may overwrite a stored score. Used for
-    both the child's own scorers and the parent-hosted ones.
+    run and only a successful one may overwrite a stored score.
     """
     log.info("Running scorer: %s (budget %ds)", name, timeout)
     try:
@@ -267,9 +244,6 @@ def run_scorer(name: str, call: Callable[[], object], timeout: int) -> ScorerExe
     except _ScorerTimeout as exc:
         log.error("Scorer '%s' timed out after %ds — keeping its stored score", name, timeout)
         return _ended(name, ScorerOutcome.TIMED_OUT, str(exc))
-    except ScorerDependencyUnavailable as exc:
-        log.info("Scorer '%s' skipped: %s", name, exc)
-        return _ended(name, ScorerOutcome.SKIPPED, str(exc))
     except Exception as exc:  # noqa: BLE001 — scorer failures must not block others
         log.exception("Scorer '%s' failed", name)
         return _ended(name, ScorerOutcome.FAILED, str(exc))
@@ -293,7 +267,7 @@ def _unrunnable(name: str, reg: ScorerRegistry) -> ScorerExecution | None:
     A child scorer whose module could not be imported is skipped; a name this
     process does not run at all is a caller mistake and only warns.
     """
-    if name in CHILD_SCORER_NAMES:
+    if name in VALID_SCORER_NAMES:
         log.warning("Scorer '%s' is not registered — skipping", name)
         return _ended(name, ScorerOutcome.SKIPPED, "scorer not registered")
     log.warning("Unknown scorer: %s (available: %s)", name, ", ".join(reg.all_names()))

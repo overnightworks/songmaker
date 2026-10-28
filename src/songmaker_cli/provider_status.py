@@ -1,8 +1,8 @@
 """Songmaker's two provider surfaces and the last thing we know about them.
 
 The provider layer answers per provider and per route. Songmaker projects
-these snapshots onto the co-writer's and judge's saved routes. The judge's
-actual call path remains owned by the scoring worker until #844's handoff.
+these snapshots onto the co-writer's and judge's saved routes. No scoring
+run calls a provider.
 
 Probing is expensive, so a background loop refreshes one snapshot per provider
 and every reader — the settings API, the admin "Models" table — projects that

@@ -18,18 +18,12 @@ from songmaker_cli.db.queries.generations import (
     set_generation_transcript,
 )
 from songmaker_cli.db.queries.jobs import lock_active_job
-from songmaker_cli.db.queries.settings import get_judge_model, get_judge_provider
 from songmaker_cli.parser import SongMeta
-from songmaker_cli.scoring.lyrical_coherence import (
-    CoherenceJudgeConfig,
-    judge_lyrical_coherence,
-)
-from songmaker_cli.scoring.models import ScorerOutcome, SongScores
+from songmaker_cli.scoring.models import SongScores
 from songmaker_cli.scoring.pipeline import PipelineConfig
-from songmaker_cli.scoring.registry import CHILD_SCORER_NAMES, LYRICAL_COHERENCE_SCORER
 from songmaker_cli.settings import get_settings
 
-from ._runtime import JudgeFailureError, _job_is_terminal, _sanitize_error, _update_job
+from ._runtime import _job_is_terminal, _sanitize_error, _update_job
 
 log = logging.getLogger(__name__)
 
@@ -40,37 +34,6 @@ SCORING_JOB_TERMINAL_LOG: Final = "Scoring job %s stopping because job is termin
 class ScoringInput:
     mp3_path_rel: str
     meta: SongMeta | None
-    judge_provider: str | None
-    judge_model: str | None
-
-
-def _split_by_host(scorers: list[str] | None) -> tuple[list[str] | None, bool]:
-    """The scorers the child runs, and whether the parent judges coherence.
-
-    ``None`` means "everything this process runs" on both sides.
-    """
-    if scorers is None:
-        return None, True
-    return (
-        [name for name in scorers if name in CHILD_SCORER_NAMES],
-        LYRICAL_COHERENCE_SCORER in scorers,
-    )
-
-
-def _judge_failure_reason(scores: SongScores) -> str | None:
-    """Why the lyrical-coherence judge itself failed this run, if it did.
-
-    Never for a legitimate skip (no lyrics, no transcript). A provider
-    failure or a timeout means this run has no judge verdict, so the job must
-    not look green even though the child scores remain useful data.
-    """
-    for run in scores.runs:
-        if run.scorer == LYRICAL_COHERENCE_SCORER and run.outcome in (
-            ScorerOutcome.FAILED,
-            ScorerOutcome.TIMED_OUT,
-        ):
-            return run.detail
-    return None
 
 
 def run_scoring_job(
@@ -130,8 +93,6 @@ def run_scoring_job(
             scorer_timeout=settings.scorer_timeout_seconds,
             text_accuracy_timeout=settings.text_accuracy_timeout_seconds,
         )
-        child_scorers, judge_coherence = _split_by_host(scorers)
-
         def _score_progress(completed: int, total: int, scorer_name: str) -> None:
             _update_job(db_factory, job_id, JobStatus.RUNNING, progress=completed / total)
 
@@ -142,7 +103,7 @@ def run_scoring_job(
         song_scores = scorer.score(
             mp3_full,
             meta=scoring_input.meta,
-            scorers=child_scorers,
+            scorers=scorers,
             config=config,
             job_id=job_id,
             on_progress=_score_progress,
@@ -150,18 +111,6 @@ def run_scoring_job(
         if _job_is_terminal(db_factory, job_id):
             log.info(SCORING_JOB_TERMINAL_LOG, job_id)
             return
-
-        if judge_coherence:
-            song_scores = judge_lyrical_coherence(
-                song_scores,
-                scoring_input.meta,
-                CoherenceJudgeConfig(
-                    provider=scoring_input.judge_provider,
-                    model=scoring_input.judge_model,
-                    timeout=settings.scorer_timeout_seconds,
-                ),
-            )
-        judge_failure = _judge_failure_reason(song_scores) if judge_coherence else None
 
         if not _persist_scores(db_factory, job_id, gen_id, song_scores):
             return
@@ -172,7 +121,7 @@ def run_scoring_job(
             len(song_scores.to_dict()),
             song_scores.outcome_summary(),
         )
-        _finish_scoring_job(db_factory, job_id, scorer, song_scores, judge_failure)
+        _finish_scoring_job(db_factory, job_id, scorer, song_scores)
 
     except TimeoutError as exc:
         log.exception("Scoring job timed out: %s", exc)
@@ -213,13 +162,7 @@ def _load_scoring_input(
         song = gen.song
         version = gen.version
         meta = _score_meta(song, version)
-        judge_provider = get_judge_provider(session)
-        return ScoringInput(
-            mp3_path_rel=gen.mp3_path,
-            meta=meta,
-            judge_provider=judge_provider,
-            judge_model=get_judge_model(session, judge_provider),
-        )
+        return ScoringInput(mp3_path_rel=gen.mp3_path, meta=meta)
 
 
 def _score_meta(song, version) -> SongMeta | None:
@@ -262,7 +205,6 @@ def _finish_scoring_job(
     job_id: str,
     scorer,
     song_scores: SongScores,
-    judge_failure: str | None,
 ) -> None:
     if song_scores.any_child_scorer_timed_out:
         log.warning(
@@ -270,14 +212,4 @@ def _finish_scoring_job(
             job_id,
         )
         scorer.recycle()
-    if judge_failure is not None:
-        _update_job(
-            db_factory,
-            job_id,
-            JobStatus.PARTIAL,
-            progress=1.0,
-            error=_sanitize_error(JudgeFailureError(judge_failure), job_id),
-            error_type="judge_error",
-        )
-        return
     _update_job(db_factory, job_id, JobStatus.COMPLETED, progress=1.0)
