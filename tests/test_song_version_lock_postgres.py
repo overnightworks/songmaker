@@ -159,5 +159,5 @@ def test_b6_a_second_delete_of_one_version_waits_and_then_answers_not_found(
     answers = race(pg_factory, world.delete_version(2), world.delete_version(2))
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 404
-    assert answers["second"].json() == {"detail": "Version not found"}
+    assert answers["second"].json() == {"detail": "Not Found"}
     assert world.versions() == {1: ("", FILES["H"])}

@@ -168,7 +168,8 @@ def _apply_song_filters(
 
 
 def get_song(
-    session: Session, song_id: str, *, include_deleted_rows: bool = False,
+    session: Session, song_id: str, *,
+    include_deleted_rows: bool = False, populate_existing: bool = False,
 ) -> Song | None:
     # versions, generations, and generations.scores are all sibling/nested
     # collections off one Song -- joinedload()ing more than one of them
@@ -203,7 +204,23 @@ def get_song(
     )
     if include_deleted_rows:
         query = query.execution_options(include_deleted=True)
+    if populate_existing:
+        query = query.execution_options(populate_existing=True)
     return query.filter_by(id=song_id).first()
+
+
+def lock_song_row(session: Session, song_id: str) -> Song:
+    """Lock the song row until the transaction ends, then reload the song with committed values.
+
+    A caller that already loaded the song holds stale versions once another writer
+    committed while it waited; the reload overwrites them. The lock is a separate
+    statement because FOR UPDATE cannot cover ``get_song``'s outer-joined loads.
+    """
+    if session.query(Song).filter_by(id=song_id).with_for_update().first() is None:
+        raise ValueError(f"Song not found: {song_id}")
+    song = get_song(session, song_id, populate_existing=True)
+    assert song is not None
+    return song
 
 
 def set_song_cover_key(session: Session, song_id: str, cover_key: str | None) -> Song:
@@ -311,9 +328,7 @@ def update_song(
     counts as ``edited_by``'s own work on the song: a lyrics edit when the
     lyrics changed, a style edit otherwise. One that changes nothing does not.
     """
-    song = get_song(session, song_id)
-    if not song:
-        raise ValueError(f"Song not found: {song_id}")
+    song = lock_song_row(session, song_id)
 
     song.updated_at = datetime.now(timezone.utc)
 
@@ -477,9 +492,7 @@ def rename_song(
     ``update_song`` too. A new title counts as ``edited_by``'s own work on
     the song; the same title again does not.
     """
-    song = session.query(Song).filter_by(id=song_id).first()
-    if not song:
-        raise ValueError(f"Song not found: {song_id}")
+    song = lock_song_row(session, song_id)
     if edited_by is not None and title != song.title:
         record_song_edit(
             session, user_id=edited_by, song_id=song_id, kind=SongWorkKind.RENAMED,

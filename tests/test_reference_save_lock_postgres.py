@@ -11,12 +11,11 @@ from httpx import Response
 from postgres_lock_harness import (
     WAIT_SECONDS,
     CommitPause,
-    has_written,
     in_thread,
     race,
     stop_workers,
-    wait_until_blocked_behind,
 )
+
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.db.queries.songs import create_song
@@ -73,7 +72,9 @@ class _World:
         with self.pg_factory() as session:
             return sorted(title for (title,) in session.query(Song.title))
 
-    def holder(self, pause: CommitPause | None, *, delete_reference: bool) -> Callable[[], list[str]]:
+    def holder(
+        self, pause: CommitPause | None, *, delete_reference: bool,
+    ) -> Callable[[], list[str]]:
         """A sweep stand-in: takes the owner lock, reads the attached set, may delete, commits."""
         def run() -> list[str]:
             with self.pg_factory() as session:

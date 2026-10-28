@@ -1,7 +1,7 @@
 # Measured by `quality baseline write`. Entries only ever go down.
 
 [ccn."src/songmaker_cli/db/queries/songs.py"]
-"update_song" = 18
+"update_song" = 17
 
 [ccn."src/songmaker_cli/scoring/pipeline.py"]
 "run_scoring_pipeline" = 16
@@ -129,7 +129,7 @@
 "_shared_pick_take_stored_path" = 63
 
 [function_lines."src/songmaker_cli/db/queries/songs.py"]
-"update_song" = 80
+"update_song" = 78
 
 [function_lines."src/songmaker_cli/generation_api.py"]
 "api_repaint_generation" = 60

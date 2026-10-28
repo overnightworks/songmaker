@@ -25,9 +25,14 @@ _ADVISORY_WAITERS = text("""
 """)
 
 
-def has_written(session: Session) -> bool:
-    """True once the session's transaction wrote something (it was assigned a transaction id)."""
-    return session.execute(text("SELECT pg_current_xact_id_if_assigned() IS NOT NULL")).scalar_one()
+def wrote_song_data(session: Session) -> bool:
+    """True once the session's transaction inserted, updated or deleted a song or a version."""
+    return session.execute(text("""
+        SELECT coalesce(bool_or(true), false)
+        FROM pg_locks AS held JOIN pg_class AS locked_table ON locked_table.oid = held.relation
+        WHERE held.pid = pg_backend_pid() AND held.granted AND held.mode = 'RowExclusiveLock'
+          AND locked_table.relname IN ('songs', 'versions')
+    """)).scalar_one()
 
 
 class CommitPause:
@@ -124,7 +129,7 @@ def race(
 
     Without a ``pause`` the first writer is held at its first commit that wrote.
     """
-    pause = pause or CommitPause(has_written)
+    pause = pause or CommitPause(wrote_song_data)
     answers: dict[str, Any] = {}
     threads = (in_thread(answers, "first", first), in_thread(answers, "second", second))
     event.listen(pg_factory, "before_commit", pause)
