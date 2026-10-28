@@ -97,7 +97,9 @@ class _Worker:
 
         A server that is still up `_STOP_WITHIN_SECONDS` after the request is stopped with
         `_NOT_STOPPED_EXIT_CODE`, so a missing shutdown fails the test instead of hanging it.
+        The forced exit never ends the test process unless a test passes its own.
         """
+        serve_options.setdefault("force_exit", lambda _: None)
         port = _free_port()
         deps = self.deps
         outcome: list[object] = []
@@ -239,6 +241,7 @@ def test_served_worker_exits_75_after_an_lm_failure_and_answers_the_load_first(
     assert exit_code == LM_FAILURE_EXIT_CODE
     assert worker.driven == [502]
     assert worker.key() == b"sft"
+    assert not [thread for thread in threading.enumerate() if isinstance(thread, threading.Timer)]
 
 
 def test_served_worker_with_a_failing_retry_exits_with_uvicorns_startup_failure(

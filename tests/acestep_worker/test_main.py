@@ -17,6 +17,7 @@ from acestep_worker.__main__ import (
     main,
 )
 from acestep_worker.gpu_util import GpuHealth
+from acestep_worker.lm_failure import LM_FAILURE_EXIT_CODE
 from acestep_worker.model_cache import CapacityError, LoadedModel, VramStats
 from acestep_worker.settings import DEFAULT_CONTAINER_BIND_HOST, WorkerSettings
 
@@ -37,6 +38,7 @@ def test_build_deps_minimal(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("CONTROL_PLANE_URL", raising=False)
     monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
     from acestep_worker.settings import get_worker_settings
+
     get_worker_settings.cache_clear()
 
     fake_redis = MagicMock()
@@ -64,6 +66,7 @@ def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GPU_ID", "1")
     monkeypatch.setenv("VRAM_BUDGET_GB", "16")
     from acestep_worker.settings import get_worker_settings
+
     get_worker_settings.cache_clear()
 
     with (
@@ -81,7 +84,9 @@ def test_build_deps_with_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert deps.registration.vram_total_gb == 16.0
 
 
-def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) -> None:
+def test_main_serves_on_the_configured_host_and_port(
+    monkeypatch: pytest.MonkeyPatch, isolated_logging
+) -> None:
     monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
     monkeypatch.setenv("REDIS_URL", "redis://fake")
     monkeypatch.setenv("WORKER_BIND_HOST", "127.0.0.1")
@@ -104,6 +109,29 @@ def test_main_runs_uvicorn(monkeypatch: pytest.MonkeyPatch, isolated_logging) ->
     assert served == [("127.0.0.1", 8765)]
 
 
+def test_main_exits_with_the_code_serve_owes(
+    monkeypatch: pytest.MonkeyPatch, isolated_logging
+) -> None:
+    monkeypatch.setenv("WORKER_ID", "acestep-worker-0")
+    monkeypatch.setenv("REDIS_URL", "redis://fake")
+    monkeypatch.setenv("SONGMAKER_INTERNAL_TOKEN", "secret")
+    from acestep_worker.settings import get_worker_settings
+
+    get_worker_settings.cache_clear()
+
+    with (
+        patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
+        patch(
+            "acestep_worker.__main__.make_acestep_runner",
+            return_value=(MagicMock(), MagicMock()),
+        ),
+        pytest.raises(SystemExit) as exit_info,
+    ):
+        main(serve_deps=lambda *_: LM_FAILURE_EXIT_CODE)
+
+    assert exit_info.value.code == LM_FAILURE_EXIT_CODE
+
+
 def test_configure_logging_emits_common_json_fields(
     caplog: pytest.LogCaptureFixture,
     capsys: pytest.CaptureFixture[str],
@@ -116,9 +144,7 @@ def test_configure_logging_emits_common_json_fields(
 
     root = logging.getLogger()
     assert caplog.handler in root.handlers
-    assert sum(
-        isinstance(handler, _AcestepWorkerLogHandler) for handler in root.handlers
-    ) == 1
+    assert sum(isinstance(handler, _AcestepWorkerLogHandler) for handler in root.handlers) == 1
     payload = json.loads(capsys.readouterr().err)
     assert payload == {
         "event": "worker ready",
@@ -155,7 +181,9 @@ def _settings(*, init_llm: bool = True, budget_gb: float = 24.0) -> WorkerSettin
 
 
 def _cache_for(
-    monkeypatch: pytest.MonkeyPatch, settings: WorkerSettings, measured_used_gb: float = 0.0,
+    monkeypatch: pytest.MonkeyPatch,
+    settings: WorkerSettings,
+    measured_used_gb: float = 0.0,
 ):
     loaded: list[str] = []
 
@@ -188,7 +216,8 @@ def test_declared_sizes_add_the_language_model_to_every_mode_when_it_is_on() -> 
 
 @pytest.mark.parametrize("budget_gb", [24.0, 22.0])
 def test_loading_another_mode_evicts_an_idle_xl_turbo_that_holds_the_card(
-    budget_gb: float, monkeypatch: pytest.MonkeyPatch,
+    budget_gb: float,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cache, loaded = _cache_for(monkeypatch, _settings(budget_gb=budget_gb))
     asyncio.run(cache.load("xl-turbo"))
@@ -201,7 +230,8 @@ def test_loading_another_mode_evicts_an_idle_xl_turbo_that_holds_the_card(
 
 @pytest.mark.parametrize("hold", ["pin", "in-use"])
 def test_loading_another_mode_is_refused_while_xl_turbo_is_pinned_or_in_use(
-    hold: str, monkeypatch: pytest.MonkeyPatch,
+    hold: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cache, loaded = _cache_for(monkeypatch, _settings())
     asyncio.run(cache.load("xl-turbo"))

@@ -184,6 +184,7 @@ def serve(
         )
     )
     exit_codes: list[int] = []
+    watchdogs: list[threading.Timer] = []
 
     def request_shutdown(exit_code: int) -> None:
         # A signal would make uvicorn re-raise it after the shutdown and lose the exit code.
@@ -191,10 +192,16 @@ def serve(
         server.should_exit = True
         watchdog = threading.Timer(forced_exit_seconds, force_exit, args=(exit_code,))
         watchdog.daemon = True
+        watchdogs.append(watchdog)
         watchdog.start()
 
     deps.request_shutdown = request_shutdown
-    server.run()
+    try:
+        server.run()
+    finally:
+        # Once run() has returned no executor thread is left to hold the process.
+        for watchdog in watchdogs:
+            watchdog.cancel()
     if not server.started:
         return STARTUP_FAILURE
     return exit_codes[0] if exit_codes else 0
