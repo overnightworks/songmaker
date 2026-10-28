@@ -419,7 +419,7 @@ export async function openPlaylistsPage(page: Page, shell: Shell): Promise<void>
 }
 
 /** Headers a browser session's own out-of-page API write needs past the origin check. */
-export async function csrfHeaders(_page: Page): Promise<Record<string, string>> {
+export async function sameOriginHeaders(_page: Page): Promise<Record<string, string>> {
 	return { origin: BASE_URL };
 }
 

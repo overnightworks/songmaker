@@ -527,7 +527,7 @@ def issued_cookies(session_id: str, config) -> dict[str, str]:
     }
 
 
-def login_and_csrf(client, username: str) -> None:
+def seed_session(client, username: str) -> None:
     """Open a session for the seeded ``username``.
 
     Writes the session row straight to the database and issues the cookies the

@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 from conftest import (
-    login_and_csrf,
     make_authenticated_user,
     make_test_app,
     queries_without_session_auth,
+    seed_session,
     web_client,
 )
 from fastapi import HTTPException
@@ -282,7 +282,7 @@ def test_queue_stream_track_uses_generation_version_lyrics(
     audio_root.mkdir(parents=True, exist_ok=True)
     for name in ("g-old.mp3", "g-empty.mp3", "g-none.mp3"):
         (audio_root / name).write_bytes(b"source")
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g-old"])
     assert resp.status_code == 200
@@ -312,7 +312,7 @@ def test_queue_stream_missing_version_lyrics_are_null(
     audio_root.mkdir(parents=True, exist_ok=True)
     for name in ("g-old.mp3", "g-empty.mp3", "g-none.mp3"):
         (audio_root / name).write_bytes(b"source")
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g-empty", "g-none"])
     assert resp.status_code == 200
@@ -335,7 +335,7 @@ def test_queue_stream_audio_reports_missing_snapshot_audio(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     stream = _shared_playlist_snapshot(client, ["g1"])
     snapshot_id = stream.json()["snapshot_id"]
@@ -382,7 +382,7 @@ def test_queue_stream_build_closes_db_session_before_ffmpeg_runs(
 
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     share_path = "/api/albums/a1/share" if kind == "album" else "/api/playlists/pl1/share"
     slug = client.post(share_path).json()["share_slug"]
@@ -403,7 +403,7 @@ def test_queue_stream_request_no_longer_sweeps_expired_snapshots(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     stream_dir = tmp_path / "data" / "queue-streams"
     stream_dir.mkdir(parents=True, exist_ok=True)
@@ -538,7 +538,7 @@ def test_shared_playlist_queue_stream_snapshot_and_audio(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
     share = client.post("/api/playlists/pl1/share")
     slug = share.json()["share_slug"]
     public = web_client(client.app, cookies={})
@@ -577,7 +577,7 @@ def test_shared_stream_manifests_only_playable_takes(
     _patch_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     with factory() as session:
         archived = session.get(Generation, "g1")
@@ -614,7 +614,7 @@ def test_shared_stream_manifests_skip_noncanonical_audio_paths(
     _patch_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     with factory() as session:
         generation = session.get(Generation, "g1")
@@ -649,7 +649,7 @@ def test_shared_queue_stream_skips_path_traversal_like_a_missing_take(
     _patch_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
     slug = client.post(share_endpoint).json()["share_slug"]
     public = web_client(client.app, cookies={})
 
@@ -700,7 +700,7 @@ def test_shared_queue_stream_revalidates_tracks(
     _patch_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
     share = client.post(share_endpoint)
     slug = share.json()["share_slug"]
     public = web_client(client.app, cookies={})
@@ -740,7 +740,7 @@ def test_shared_playlist_queue_stream_revalidates_archived_takes(
     _patch_audio_build(monkeypatch)
     client, factory = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
     slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
     public = web_client(client.app, cookies={})
 
@@ -768,7 +768,7 @@ def test_queue_stream_cache_quota_keeps_new_snapshot(
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_CACHE_BYTES", 1)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g1"])
 
@@ -785,7 +785,7 @@ def test_queue_stream_windowed_by_track_count(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g1", "g2"])
 
@@ -803,7 +803,7 @@ def test_queue_stream_accepts_duration_at_cap(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 10)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g1"])
 
@@ -826,7 +826,7 @@ def test_queue_stream_rejects_duration_above_cap_before_ffmpeg(
     )
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     response = _shared_playlist_snapshot(client, ["g1", "g2"])
 
@@ -849,7 +849,7 @@ def test_queue_stream_cache_identity_includes_count_windowing(tmp_path: Path, mo
 
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
     windowed = _shared_playlist_snapshot(client, ["g1", "g2"])
@@ -867,7 +867,7 @@ def test_queue_stream_not_windowed_when_within_limits(tmp_path: Path, monkeypatc
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g1", "g2"])
 
@@ -881,7 +881,7 @@ def test_legacy_manifest_without_windowed_field_loads_as_unwindowed(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     first = _shared_playlist_snapshot(client, ["g1"])
     assert first.status_code == 200
@@ -905,7 +905,7 @@ def test_queue_stream_first_track_too_long_raises_422(tmp_path: Path, monkeypatc
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_DURATION_SECONDS", 5)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g1"])
 
@@ -1047,7 +1047,7 @@ def test_library_pool_queue_order_and_tracks(tmp_path: Path, monkeypatch) -> Non
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={})
 
@@ -1065,7 +1065,7 @@ def test_library_pool_queue_picks_picked_over_first(tmp_path: Path, monkeypatch)
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={})
 
@@ -1079,7 +1079,7 @@ def test_library_pool_queue_excludes_archived_generations(tmp_path: Path, monkey
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={})
 
@@ -1095,7 +1095,7 @@ def test_library_pool_queue_skips_songs_without_playable_generations(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={})
 
@@ -1108,7 +1108,7 @@ def test_library_pool_queue_rotation_via_start_generation_id(tmp_path: Path, mon
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g2"})
 
@@ -1125,7 +1125,7 @@ def test_library_pool_queue_start_take_is_the_clicked_generation(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g1"})
 
@@ -1155,7 +1155,7 @@ def test_library_scan_skips_a_take_escaping_the_audio_root_as_missing(
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
     _write_library_audio_files(tmp_path)
     (tmp_path / "outside.mp3").write_bytes(b"outside")
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     response = client.get("/api/library/pool-queue")
 
@@ -1171,7 +1171,7 @@ def test_library_scan_refuses_a_start_take_escaping_the_audio_root(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_with_escaping_take)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     response = client.get("/api/library/pool-queue", params={"start_generation_id": "g2"})
 
@@ -1186,7 +1186,7 @@ def test_library_pool_queue_start_generation_id_not_found_returns_404(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"start_generation_id": "nonexistent-id"})
 
@@ -1200,7 +1200,7 @@ def test_library_pool_queue_start_generation_id_owned_by_other_user_returns_404(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g5"})
 
@@ -1214,7 +1214,7 @@ def test_library_pool_queue_archived_start_generation_returns_422(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"start_generation_id": "g3"})
 
@@ -1229,7 +1229,7 @@ def test_library_pool_queue_returns_one_more_than_track_limit(tmp_path: Path, mo
     monkeypatch.setattr(qs, "QUEUE_STREAM_MAX_TRACKS", 1)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={})
 
@@ -1278,7 +1278,7 @@ def test_library_pool_queue_query_count_is_constant_not_per_song(
         tmp_path, seed_db=lambda s: _seed_large_library(s, song_count=song_count),
     )
     _write_large_library_audio_files(tmp_path, song_count=song_count)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     with factory() as probe_session:
         engine = probe_session.get_bind()
@@ -1330,7 +1330,7 @@ def test_library_pool_queue_empty_playable_library_is_422(tmp_path: Path, monkey
 
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=seed_unplayable)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={})
 
@@ -1341,7 +1341,7 @@ def test_library_pool_queue_cross_user_isolation(tmp_path: Path, monkeypatch) ->
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp_a = client.get("/api/library/pool-queue", params={})
     assert resp_a.status_code == 200
@@ -1350,7 +1350,7 @@ def test_library_pool_queue_cross_user_isolation(tmp_path: Path, monkeypatch) ->
     assert gen_ids_a == {"g1b", "g2"}
 
     client_b = web_client(client.app, cookies={})
-    login_and_csrf(client_b, "userb")
+    seed_session(client_b, "userb")
 
     resp_b = client_b.get("/api/library/pool-queue", params={})
     assert resp_b.status_code == 200
@@ -1364,7 +1364,7 @@ def test_expired_queue_stream_snapshot_is_rejected(tmp_path: Path, monkeypatch) 
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
     resp = _shared_playlist_snapshot(client, ["g1"])
     data = resp.json()
     manifest_path = tmp_path / "data" / "queue-streams" / f"{data['snapshot_id']}.json"
@@ -1390,7 +1390,7 @@ def test_queue_stream_audio_rejects_unknown_snapshot_ids(
     snapshot_id: str,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     audio = client.get(f"/shared/queue-streams/{snapshot_id}/audio")
 
@@ -1470,7 +1470,7 @@ def test_corrupt_manifest_file_returns_404_not_500(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
 
     resp = _shared_playlist_snapshot(client, ["g1"])
     assert resp.status_code == 200
@@ -1506,7 +1506,7 @@ def _expired_shared_snapshot_with_pin(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
     slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
     public = web_client(client.app, cookies={})
     stream = public.post(f"/shared/playlist/{slug}/stream")
@@ -1553,7 +1553,7 @@ def test_the_pin_routes_are_gone(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     _write_audio_files(tmp_path)
-    login_and_csrf(client, "owner")
+    seed_session(client, "owner")
     snapshot_id = "opaque-snapshot"
 
     pin = getattr(client, method)(f"/api/queue-streams/{snapshot_id}/pin")
@@ -1650,7 +1650,7 @@ def test_library_pool_queue_without_shuffle_keeps_album_track_order(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"shuffle": False})
 
@@ -1668,7 +1668,7 @@ def test_library_pool_queue_shuffle_uses_injected_rng(tmp_path: Path, monkeypatc
     monkeypatch.setattr("songmaker_cli.queue_streams.random.shuffle", _reverse_in_place)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get(
         "/api/library/pool-queue", params={"shuffle": True, "start_generation_id": "g2"},
@@ -1701,7 +1701,7 @@ def test_library_pool_queue_scan_is_bounded_and_marks_unscanned_tail(
     monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"shuffle": False})
 
@@ -1721,7 +1721,7 @@ def test_library_pool_queue_default_scan_limit_is_explicitly_partial(
 
     assert queue_streams.LIBRARY_QUEUE_STREAM_SCAN_LIMIT == 1_000
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
     album = Album(id="scan-album", title="Scan", artist="A", created_by="user-a")
     songs: list[Song] = []
     for index in range(1, 1_002):
@@ -1791,7 +1791,7 @@ def test_library_pool_queue_scan_stops_after_one_more_than_track_limit(
     monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"shuffle": False})
 
@@ -1818,7 +1818,7 @@ def test_library_pool_queue_shuffles_before_bounded_scan(tmp_path: Path, monkeyp
     monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"shuffle": True})
 
@@ -1846,7 +1846,7 @@ def test_library_pool_queue_start_is_first_and_scanned_once_with_small_budget(
     monkeypatch.setattr(queue_streams, "_library_skip", recording_skip)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get(
         "/api/library/pool-queue", params={"shuffle": False, "start_generation_id": "g4"},
@@ -1877,7 +1877,7 @@ def test_library_pool_queue_unplayable_start_is_scanned_once_with_small_budget(
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_shuffle_data)
     _write_shuffle_audio_files(tmp_path)
     (tmp_path / "audio" / "user-a" / "g4.mp3").unlink()
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get(
         "/api/library/pool-queue", params={"shuffle": False, "start_generation_id": "g4"},
@@ -1892,7 +1892,7 @@ def test_library_pool_queue_unknown_pool_is_422(tmp_path: Path, monkeypatch) -> 
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"pool": "favorites"})
 
@@ -2095,7 +2095,7 @@ def test_library_pool_queue_pool_sets(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"pool": pool})
 
@@ -2107,7 +2107,7 @@ def test_library_pool_queue_default_pool_is_mix(tmp_path: Path, monkeypatch) -> 
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={})
 
@@ -2152,7 +2152,7 @@ def test_library_pool_queue_reports_every_unplayable_reason(tmp_path: Path, monk
     client, _ = make_test_app(tmp_path, seed_db=seed_with_unplayable)
     _write_pool_audio_files(tmp_path)
     (tmp_path / "audio" / "user-a" / "directory.mp3").mkdir()
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"pool": "all"})
 
@@ -2263,7 +2263,7 @@ def test_library_pool_queue_out_of_pool_start_is_temporary(tmp_path: Path, monke
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_pool_data)
     _write_pool_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get(
         "/api/library/pool-queue", params={"pool": "mix", "start_generation_id": "g-old"},
@@ -2297,7 +2297,7 @@ def test_library_pool_queue_matches_collect_without_ffmpeg(tmp_path: Path, monke
     )
     client, factory = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"pool": "mix"})
 
@@ -2332,7 +2332,7 @@ def test_library_pool_queue_foreign_start_generation_is_404(
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get(
         "/api/library/pool-queue",
@@ -2353,7 +2353,7 @@ def test_library_pool_queue_empty_pool_is_422(tmp_path: Path, monkeypatch) -> No
 
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=seed_unplayable)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     resp = client.get("/api/library/pool-queue", params={"pool": "mix"})
 
@@ -2368,7 +2368,7 @@ def test_library_pool_queue_rate_limited(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(consts, "QUEUE_STREAM_AUTH_RATE_LIMIT", 1)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
     _write_library_audio_files(tmp_path)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
 
     first = client.get("/api/library/pool-queue", params={"pool": "mix"})
     second = client.get("/api/library/pool-queue", params={"pool": "mix"})
@@ -2387,7 +2387,7 @@ def test_library_pool_queue_rate_limiter_failure_is_503(
 
     _patch_audio_build(monkeypatch)
     client, _ = make_test_app(tmp_path, seed_db=_seed_library_data)
-    login_and_csrf(client, "usera")
+    seed_session(client, "usera")
     monkeypatch.setattr(
         "songmaker_cli.queue_streams._get_queue_stream_limiter",
         lambda _request: BrokenLimiter(),
@@ -2415,7 +2415,7 @@ def test_removed_queue_stream_routes_are_unknown(
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_queue_data)
     if authenticated:
-        login_and_csrf(client, "owner")
+        seed_session(client, "owner")
     response = client.request(method, path)
     unknown = client.request(method, "/api/no-such-route")
     assert (response.status_code, response.json()) == (unknown.status_code, unknown.json())

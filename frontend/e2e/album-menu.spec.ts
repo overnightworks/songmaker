@@ -21,7 +21,7 @@ import {
 	NEW_ALBUM_TITLE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
-import { boundingBoxes, csrfHeaders, FlowGuard, shellOf, workspace } from './helpers';
+import { boundingBoxes, sameOriginHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { bottomOf, expectMenuInsideViewport, rightOf } from './menu-viewport';
 import { archiveOwnedAlbum, readSeededLibrary, seedPlaylist } from './seed';
 
@@ -188,7 +188,7 @@ async function onOwnAlbum(
 ): Promise<void> {
 	const title = `E2E Nightdrive ${shellOf(testInfo)} ${Date.now()}`;
 	const created = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title, artist: '' }
 	});
 	expect(created.ok()).toBe(true);

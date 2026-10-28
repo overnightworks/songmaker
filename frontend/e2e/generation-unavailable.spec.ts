@@ -11,7 +11,7 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
-import { csrfHeaders, ONLY_IN_SHELL } from './helpers';
+import { sameOriginHeaders, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveOwnedAlbum,
 	failGenerationJob,
@@ -23,7 +23,7 @@ import {
 const test = base.extend<{ albumId: string }>({
 	albumId: async ({ page }, use) => {
 		const response = await page.request.post('/api/albums', {
-			headers: await csrfHeaders(page),
+			headers: await sameOriginHeaders(page),
 			data: { title: `E2E Generation Unavailable ${runMarker()}` }
 		});
 		expect(response.ok()).toBe(true);

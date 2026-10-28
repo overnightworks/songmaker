@@ -17,7 +17,7 @@ import {
 import { songRoutePath } from '../src/lib/routes/addresses';
 import {
 	appBar,
-	csrfHeaders,
+	sameOriginHeaders,
 	HOME_PATH,
 	leftTheApp,
 	loseNetwork,
@@ -54,7 +54,7 @@ async function signInWriter(page: Page, account: SeededAccount): Promise<void> {
 	await expect(writeRegion(page)).toBeVisible();
 }
 async function writerPost(page: Page, path: string, data: unknown = {}): Promise<{ id: string }> {
-	const response = await page.request.post(path, { headers: await csrfHeaders(page), data });
+	const response = await page.request.post(path, { headers: await sameOriginHeaders(page), data });
 	expect(response.ok(), `${path}: ${response.status()}`).toBe(true);
 	return response.json();
 }
@@ -147,7 +147,7 @@ test('1354_37a_A1 1354_rule_14 1354_rule_16 1354_rule_18 1354_rule_19 1354_rule_
 		}
 		for (const title of ['E2E Write revised', 'E2E Write final']) {
 			const response = await page.request.put(`/api/songs/${created[1]}/title`, {
-				headers: await csrfHeaders(page),
+				headers: await sameOriginHeaders(page),
 				data: { title }
 			});
 			expect(response.ok()).toBe(true);

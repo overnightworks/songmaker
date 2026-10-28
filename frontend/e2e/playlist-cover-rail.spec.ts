@@ -9,7 +9,7 @@ import {
 	PLAYLISTS_PAGE_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL
 } from '../src/lib/constants';
-import { csrfHeaders, openPlaylistsPage, openRailNav } from './helpers';
+import { sameOriginHeaders, openPlaylistsPage, openRailNav } from './helpers';
 import { archiveOwnedAlbum } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +22,7 @@ interface CreatedResource {
 }
 
 async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
-	const response = await page.request.post(url, { headers: await csrfHeaders(page), data });
+	const response = await page.request.post(url, { headers: await sameOriginHeaders(page), data });
 	expect(response.ok(), `POST ${url} failed: ${await response.text()}`).toBeTruthy();
 	return (await response.json()) as T;
 }
@@ -39,7 +39,7 @@ async function railPlaylistRow(page: Page, title: string) {
 
 async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void> {
 	const response = await page.request.delete(`/api/playlists/${playlistId}`, {
-		headers: await csrfHeaders(page)
+		headers: await sameOriginHeaders(page)
 	});
 	expect(
 		response.ok(),
@@ -66,7 +66,7 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 		prompt: 'quiet test song'
 	});
 	const reimport = await page.request.post(`/api/songs/${song.id}/reimport`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		multipart: {
 			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
 		}
@@ -74,7 +74,7 @@ test('1354_37b_71_rail 1354_65_C4 1354_37a_A6: playlist wall, detail and desktop
 	expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
 	const take = (await reimport.json()) as CreatedResource;
 	const cover = await page.request.post(`/api/albums/${album.id}/cover`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		multipart: {
 			file: { name: 'cover.png', mimeType: 'image/png', buffer: COVER_PNG }
 		}

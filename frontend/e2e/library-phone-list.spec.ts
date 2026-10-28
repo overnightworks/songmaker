@@ -9,7 +9,7 @@ import {
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import {
-	csrfHeaders,
+	sameOriginHeaders,
 	expectLibraryWallLoaded,
 	FlowGuard,
 	LIBRARY_PATH,
@@ -572,14 +572,14 @@ async function firstSongOf(page: Page, albumId: string): Promise<string> {
 
 async function listenIn(page: Page, songId: string, playlistId?: string): Promise<void> {
 	const listen = await page.request.post(`/api/songs/${songId}/listen`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: playlistId ? { playlist_id: playlistId } : undefined
 	});
 	expect(listen.ok()).toBe(true);
 }
 
 async function seedPlaylistHolding(page: Page, title: string, songId: string): Promise<string> {
-	const headers = await csrfHeaders(page);
+	const headers = await sameOriginHeaders(page);
 	const created = await page.request.post('/api/playlists', { headers, data: { title } });
 	expect(created.ok()).toBe(true);
 	const { id } = (await created.json()) as { id: string };
