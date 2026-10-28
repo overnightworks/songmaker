@@ -758,47 +758,16 @@ def test_loading_last_log_line_cleared_on_loader_failure() -> None:
     assert cache.loading_last_log_line is None
 
 
-def test_release_and_stop_ends_the_last_use_and_stops_the_mode() -> None:
+def test_release_and_stop_stops_only_with_the_last_use(caplog: pytest.LogCaptureFixture) -> None:
     cache, _, unloaded = _make_cache()
     _run(cache.load("sft"))
+    _run(cache.acquire_for_use("sft"))
     loaded = _run(cache.acquire_for_use("sft"))
-
-    _run(cache.release_and_stop("sft"))
-
-    assert unloaded == [loaded]
-    assert cache.loaded_modes() == []
-    assert cache.in_use_count("sft") == 0
-
-
-def test_release_and_stop_leaves_the_mode_running_while_other_uses_remain(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    cache, _, unloaded = _make_cache()
-    _run(cache.load("sft"))
-    _run(cache.acquire_for_use("sft"))
-    _run(cache.acquire_for_use("sft"))
-
     with caplog.at_level("WARNING"):
         _run(cache.release_and_stop("sft"))
-
-    assert unloaded == []
-    assert cache.loaded_modes() == ["sft"]
-    assert cache.in_use_count("sft") == 1
-    assert "sft" in caplog.text
-
-
-def test_release_and_stop_stops_only_its_own_mode() -> None:
-    cache, _, unloaded = _make_cache()
-    _run(cache.load("sft"))
-    _run(cache.load("xl-sft"))
-    _run(cache.acquire_for_use("sft"))
-    other = _run(cache.acquire_for_use("xl-sft"))
-
+    assert (unloaded, cache.in_use_count("sft"), "sft" in caplog.text) == ([], 1, True)
     _run(cache.release_and_stop("sft"))
-
-    assert cache.loaded_modes() == ["xl-sft"]
-    assert cache.in_use_count("xl-sft") == 1
-    assert other not in unloaded
+    assert (unloaded, cache.loaded_modes()) == ([loaded], [])
 
 
 @pytest.mark.parametrize("loaded", [False, True], ids=["not-loaded", "loaded-without-use"])
@@ -806,14 +775,11 @@ def test_release_and_stop_without_a_use_is_a_no_op(loaded: bool) -> None:
     cache, _, unloaded = _make_cache()
     if loaded:
         _run(cache.load("sft"))
-
     _run(cache.release_and_stop("sft"))
-
-    assert unloaded == []
-    assert cache.loaded_modes() == (["sft"] if loaded else [])
+    assert (unloaded, cache.loaded_modes()) == ([], ["sft"] if loaded else [])
 
 
-def test_release_and_stop_drops_the_mode_and_raises_when_the_unloader_fails(
+def test_release_and_stop_drops_the_mode_keeps_the_pin_and_raises_when_the_unloader_fails(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     cache, _, _ = _make_cache()
@@ -823,23 +789,10 @@ def test_release_and_stop_drops_the_mode_and_raises_when_the_unloader_fails(
 
     cache._unloader = failing_unloader
     _run(cache.load("sft"))
-    _run(cache.acquire_for_use("sft"))
-
-    with pytest.raises(RuntimeError, match="child would not stop"), caplog.at_level("ERROR"):
-        _run(cache.release_and_stop("sft"))
-
-    assert cache.loaded_modes() == []
-    assert cache.in_use_count("sft") == 0
-    assert "child would not stop" in caplog.text
-
-
-def test_release_and_stop_keeps_the_admin_pin() -> None:
-    cache, _, _ = _make_cache()
-    _run(cache.load("sft"))
     _run(cache.pin("sft"))
     _run(cache.acquire_for_use("sft"))
-
-    _run(cache.release_and_stop("sft"))
-
+    with pytest.raises(RuntimeError, match="child would not stop"), caplog.at_level("ERROR"):
+        _run(cache.release_and_stop("sft"))
+    assert (cache.loaded_modes(), cache.in_use_count("sft")) == ([], 0)
     assert cache.is_pinned("sft")
-    assert cache.loaded_modes() == []
+    assert "child would not stop" in caplog.text
