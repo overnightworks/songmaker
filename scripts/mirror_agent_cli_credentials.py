@@ -105,13 +105,15 @@ CLAUDE_ALLOWED_FIELDS: Final = ("accessToken", "expiresAt", "scopes")
 # cannot drive the CLI must not replace the last one that could.
 CLAUDE_REQUIRED_FIELDS: Final = frozenset({"accessToken", "scopes"})
 
-# Kept because the CLI needs them, blanked because they renew or authorise on
+# Kept because the CLI needs them (the team data-retention flags are policy,
+# neither renewing nor authorising), blanked because they renew or authorise on
 # their own, dropped because they are the operator's person and no CLI misses
 # them (all three measured).
 GROK_ALLOWED_FIELDS: Final = frozenset({
     "key", "auth_mode", "create_time", "expires_at", "user_id", "team_id",
     "principal_type", "principal_id", "oidc_issuer", "oidc_client_id",
-    "coding_data_retention_opt_out",
+    "coding_data_retention_opt_out", "coding_data_team",
+    "team_zero_data_retention",
 })
 GROK_BLANKED_FIELDS: Final = frozenset({"refresh_token"})
 GROK_DROPPED_FIELDS: Final = frozenset({
