@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 from agent_providers.catalog import ProviderRoute
+from agent_providers.constants import COWRITER_PROVIDERS
 from agent_providers.errors import (
     ProviderModelCatalogUnavailableError,
     ProviderUnavailableError,
@@ -782,6 +783,7 @@ def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
 
     assert client.get("/api/settings/cover").json() == {
         "provider": "codex", "route": "cli", "model": "",
+        "allowed_providers": ["claude", "codex", "grok"],
     }
     response = client.put(
         "/api/settings/cover",
@@ -791,6 +793,7 @@ def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
     assert response.status_code == 200
     assert response.json() == {
         "provider": "claude", "route": "api", "model": "claude-sonnet-4-6",
+        "allowed_providers": ["claude", "codex", "grok"],
     }
     assert TEST_SECRET.decode() not in response.text
     with factory() as session:
@@ -827,6 +830,20 @@ def test_cover_settings_reject_an_unknown_provider_or_route(admin_client, payloa
     with factory() as session:
         assert get_cover_settings(session).provider == "codex"
         assert get_cover_settings(session).route == "cli"
+
+
+def test_cover_allowed_providers_are_exactly_the_providers_a_save_accepts(admin_client):
+    client, _factory = admin_client
+
+    allowed = client.get("/api/settings/cover").json()["allowed_providers"]
+
+    assert allowed == sorted(COWRITER_PROVIDERS)
+    for provider in allowed:
+        response = client.put(
+            "/api/settings/cover", json={"provider": provider, "route": "cli", "model": ""},
+        )
+        assert response.status_code == 200
+        assert response.json()["allowed_providers"] == allowed
 
 
 def test_cover_settings_accept_an_empty_model(admin_client):

@@ -221,6 +221,7 @@ export interface CoverSettingsResponse {
 	provider: string;
 	route: 'cli' | 'api';
 	model: string;
+	allowed_providers: string[];
 }
 
 export interface CoverSuggestionResponse {
