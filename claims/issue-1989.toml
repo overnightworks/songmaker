@@ -1,0 +1,8 @@
+claim_id = "e6d12f9e57f34fb296b04646280b929a"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "23d1ed6e9a6e67c9c96d8cd8a290e2e601ed11c7"
+branch = "claude/issue-1989-backup-restore-and-ci-take-their-images"
+scope = [".github/workflows/ci.yml", "docs/security.md", "scripts/backup.sh", "scripts/check_pinned_images_match.py", "scripts/restore.sh", "scripts/static_checks.sh", "tests/scripts/test_check_pinned_images_match.py", "tests/test_restore_script.py"]
+opened_commit = "3b82cfe00ba0d41e285bacc213fcbc641eb4caf9"
+whole_reason = "The helper image and the CI pin are the two image references #1981 left outside its rule; one landing closes F7."
