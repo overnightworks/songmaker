@@ -222,7 +222,11 @@ def test_audit_reports_only_files_no_take_owns(
         session.commit()
     audio_dir = tmp_path / "audio"
     (audio_dir / "u1").mkdir(parents=True)
-    for name in ("g1.mp3", "g1.wav", "g1.raw.wav", "g1.pre-remaster.wav", "g1.pre-remaster.mp3", "g9.raw.wav"):
+    names = (
+        "g1.mp3", "g1.wav", "g1.raw.wav",
+        "g1.pre-remaster.wav", "g1.pre-remaster.mp3", "g9.raw.wav",
+    )
+    for name in names:
         (audio_dir / "u1" / name).write_bytes(b"fake")
     worker = _DummyWorker()
     worker.audio_dir = lambda: audio_dir
