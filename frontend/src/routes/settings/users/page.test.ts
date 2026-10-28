@@ -18,6 +18,7 @@ import {
 	ADMIN_TABS_LABEL,
 	ADMIN_VOICES_EMPTY,
 	COMPACT_LAYOUT_MEDIA,
+	MODELS_LOADING_LABEL,
 	MODELS_SAVE_FAILED_FALLBACK,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
@@ -616,6 +617,30 @@ describe('admin models tab', () => {
 			'Codex ✓ ready',
 			'Grok · no image tool'
 		]);
+	});
+
+	it('keeps the cover row on the loading hint until the judge settings arrive', async () => {
+		let arrive: (settings: ReturnType<typeof judgeSettings>) => void = () => {};
+		api.fetchJudgeSettings.mockReturnValue(new Promise((resolve) => (arrive = resolve)));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(target.querySelector('select[aria-label="Cover provider"]')).toBeNull();
+		expect(target.textContent).toContain(MODELS_LOADING_LABEL);
+
+		arrive(judgeSettings('claude', 'claude-opus'));
+		await flush();
+
+		expect(optionLabels(providerSelect(target, 'Cover')).length).toBeGreaterThan(0);
+	});
+
+	it('shows the load error and no empty cover select when the judge settings fail', async () => {
+		api.fetchJudgeSettings.mockRejectedValue(serverRefusal('scoring unavailable'));
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+
+		expect(target.textContent).toContain('scoring unavailable');
+		expect(target.querySelector('select[aria-label="Cover provider"]')).toBeNull();
 	});
 
 	it('saves the cover row with its own provider, route and model', async () => {
