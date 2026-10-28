@@ -1014,9 +1014,9 @@ mounted; a compromised container cannot add host-side profile settings or hooks.
 ### Provider API keys
 
 `ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `OPENAI_API_KEY` are configured only
-through the deployment `.env` and become `Settings` secrets. Both
-provider-facing images install the `claude` extra, so `ANTHROPIC_API_KEY`
-serves the model catalog. It does not replace the web
+through the deployment `.env` and become `Settings` secrets. Only
+the web image installs the `api` extra (the Anthropic SDK), so
+`ANTHROPIC_API_KEY` serves the model catalog there. It does not replace the web
 container's Claude CLI mirror. The API and DOM expose only safe readiness
 metadata (`set`/`not set` through route state), never a key value, raw
 provider body, command output, or a secret-derived value. The co-writer has no

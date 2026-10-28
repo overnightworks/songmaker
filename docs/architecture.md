@@ -1697,7 +1697,8 @@ SIGKILLed and even the values the run did produce would be lost.
 
 **Scoring worker** (`scoring_worker.py`):
 - Owns scorer subprocess (Whisper, AudioBox, audio scorers); calls no provider,
-  so no secret enters the worker or the subprocess
+  so the worker holds no provider credential; the subprocess is spawned with
+  `SECRET_ENV_KEYS` scrubbed
 - Handles `score` tasks
 - Device configurable via `SCORING_DEVICE` env var (`cpu` or `cuda`)
 - `max_jobs=1` (default, configurable via `SCORING_MAX_JOBS`)

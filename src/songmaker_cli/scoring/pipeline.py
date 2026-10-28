@@ -61,7 +61,7 @@ class PipelineConfig:
     this object, never from ``get_settings()``. The parent process resolves
     Settings and fills these fields before sending a ``ScoreRequest`` across
     the pipe to the child, whose own ``os.environ`` has had
-    ``SECRET_ENV_KEYS`` scrubbed at spawn. No field here is a secret — every
+    ``SECRET_ENV_KEYS`` scrubbed at spawn. No field here is a secret, and no
     scorer here needs one.
     """
 
