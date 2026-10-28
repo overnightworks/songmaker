@@ -25,7 +25,7 @@ import {
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
-	EDITOR_VIEW_RECIPE_LABEL,
+	RECIPE_PANEL_LABEL,
 	LIBRARY_NARROW_MEDIA,
 	SONG_COVER_ALT_TYPE,
 	SONG_COVER_REMOVE_LABEL,
@@ -63,6 +63,7 @@ import {
 	editLyrics,
 	pendingVersionLoad,
 	versionDeleteRequest,
+	setDraftBpm,
 	setDraftLyrics,
 	loadVersionAsDraft,
 	setDraftPrompt,
@@ -188,7 +189,8 @@ vi.mock('$lib/stores/toast', () => ({
 import SongDetailView from './SongDetailView.svelte';
 import songDetailViewSource from './SongDetailView.svelte?raw';
 import editorHeaderSource from './editor/EditorHeader.svelte?raw';
-import recipePanelSource from './editor/RecipePanel.svelte?raw';
+import recipeLineSource from './editor/RecipeLine.svelte?raw';
+import recipeTabsSource from './editor/RecipeTabs.svelte?raw';
 import takesListSource from './editor/TakesList.svelte?raw';
 import writeColumnSource from './editor/WriteColumn.svelte?raw';
 import {
@@ -372,25 +374,26 @@ afterEach(async () => {
 });
 
 describe('SongDetailView header — one row, every state', () => {
-	it('shows the Recipe toggle and Generate alone, no Co-writer button, never a second toolbar row (S9, #1927 acceptance 1)', async () => {
+	it('shows Generate alone, no Recipe toggle or Co-writer button, never a second toolbar row (C4, #1935 acceptance 6)', async () => {
 		const target = await renderView();
 		const actions = header(target).querySelector<HTMLElement>('.editor-header-actions');
 		if (!actions) throw new Error('Expected header actions');
 		expect(visibleText(actions)).not.toContain(EDITOR_VIEW_COWRITER_LABEL);
-		expect(visibleText(actions)).toContain(EDITOR_VIEW_RECIPE_LABEL);
+		expect(visibleText(actions)).not.toContain(RECIPE_PANEL_LABEL);
 		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
 		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
 			EDITOR_GENERATE_LABEL
 		);
 	});
 
-	it('toggles the Recipe panel independently of the Edit/Takes content', async () => {
+	it('opens the Recipe from its closed line first in the Write column (C4, #1935 acceptance 1)', async () => {
 		const target = await renderView();
-		expect(target.querySelector('.recipe-panel')).toBeNull();
-		clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
+		const writeColumn = target.querySelector<HTMLElement>('.write-column') as HTMLElement;
+		expect(target.querySelector('[role="region"][aria-label="Recipe"]')).toBeNull();
+		clickNamed(writeColumn, RECIPE_PANEL_LABEL + ' ›');
 		await tick();
 		expect(get(recipeOpen)).toBe(true);
-		expect(target.querySelector('.recipe-panel')).not.toBeNull();
+		expect(writeColumn.querySelector('[role="region"][aria-label="Recipe"]')).not.toBeNull();
 	});
 
 	it('opens the Co-writer in the right column while Style and Lyrics stay the growing document (S9, #1927 acceptance 2)', async () => {
@@ -710,20 +713,16 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView({ widthPx: 390 });
 		detailTab.set('edit');
 		await tick();
-		const recipe = target.querySelector<HTMLElement>('.phone-recipe') as HTMLElement;
-		getByRoleButton(recipe, 'Recipe').click();
+		(target.querySelector('.recipe-line') as HTMLButtonElement).click();
 		await tick();
-		getByRoleButton(recipe, 'BPM').click();
-		await tick();
-		const input = recipe.querySelector<HTMLInputElement>(
+		const input = target.querySelector<HTMLInputElement>(
 			'input[aria-label="BPM"]'
 		) as HTMLInputElement;
 		input.value = '96';
 		input.dispatchEvent(new Event('input', { bubbles: true }));
 		await tick();
-		expect(recipe.textContent).toContain('96 BPM');
+		expect(target.querySelector('[data-field="bpm"] [data-field-changed]')).not.toBeNull();
 		expect(target.querySelector('[role="dialog"]')).toBeNull();
-		expect(target.querySelector('.recipe-panel')).toBeNull();
 	});
 
 	it('loads deleted voices once and names their existing takes', async () => {
@@ -1052,23 +1051,18 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 	});
 });
 
-describe('SongDetailView recipe chips read the draft', () => {
-	it('updates the BPM chip live as the Recipe panel edits it, and marks it changed', async () => {
-		const target = await renderView();
-		clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
-		await tick();
-
-		const bpmInput = target.querySelector<HTMLInputElement>('.recipe-groups input[type="number"]');
-		if (!bpmInput) throw new Error('Expected the BPM input');
-		bpmInput.value = '140';
-		bpmInput.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-
-		const bpmChip = Array.from(target.querySelectorAll('.chip')).find((el) =>
-			el.textContent?.includes('BPM')
+describe('SongDetailView recipe line reads the draft', () => {
+	it('keeps the changed dot after Save version (C4, #1935 acceptance 2)', async () => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(
+			song({ ...editableSongDefaults(), bpm: 145, version_count: 2 })
 		);
-		expect(bpmChip?.textContent).toContain('140');
-		expect(bpmChip?.querySelector('.chip-changed-dot')).not.toBeNull();
+		const target = await renderView();
+		setDraftBpm(145);
+		await tick();
+		writeSaveButton(target).click();
+		await vi.waitFor(() => expect(writeSaveButton(target).disabled).toBe(true));
+		expect(target.querySelector('.recipe-line [data-recipe-changed]')).not.toBeNull();
 	});
 });
 
@@ -1226,9 +1220,11 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 	it.each([
 		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'repaint' },
+		{ choice: 'Cancel', button: 'Cancel', saveFails: false, use: 'seed' },
+		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true, use: 'repaint' },
 		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true, use: 'seed' }
 	] as const)(
-		'cross-song take use or Open vN: $choice leaves it unapplied and drops what was pending',
+		'C4: cross-song $use or Open vN: $choice leaves it unapplied, the seed unset, and drops what was pending',
 		async ({ button, saveFails, use }) => {
 			if (saveFails) {
 				const { updateSong } = await import('$lib/api/client');
@@ -1266,6 +1262,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 			expect(get(selectedSongId)).toBe('s1');
 			expect(get(pendingTakeUse)).toBeNull();
 			expect(get(sourceGeneration)).toBeNull();
+			expect(get(seedFromTake)).toBeNull();
 		}
 	);
 
@@ -1308,7 +1305,9 @@ describe('SongDetailView Co-writer tab with the Recipe open', () => {
 		recipeOpen.set(true);
 		await tick();
 
-		expect(target.querySelector('.editor-columns > .write-column .recipe-panel')).not.toBeNull();
+		expect(
+			target.querySelector('.editor-columns > .write-column [role="region"][aria-label="Recipe"]')
+		).not.toBeNull();
 		expect(target.querySelector('.editor-columns > .listen-tabs .cowriter')).not.toBeNull();
 	});
 });
@@ -1649,10 +1648,10 @@ describe('the editor answers to its own width, not the viewport', () => {
 	// jsdom computes no layout, so these pin the stylesheet; the browser gate
 	// on #185 — 1100 and 1280 with Now Playing docked — is the real proof.
 	it('makes the body under the header the size container its columns query', () => {
-		expect(songDetailViewSource).toMatch(/\.editor-body \{[^}]*container: editor \/ inline-size;/);
-		// The header is deliberately left outside it: a size container is also
-		// the containing block for the fixed overlays the header carries.
+		expect(songDetailViewSource).toMatch(/\.editor-body \{[^}]*container: editor \/ size;/);
+		// Header and shared-link line stay outside it: it contains fixed overlays and sizes the Co-writer column.
 		expect(songDetailViewSource).not.toMatch(/\.detail-panel \{[^}]*container:/);
+		expect(songDetailViewSource).toMatch(/\{@render sharedLink\(\)\}\s*<div class="editor-body">/);
 	});
 
 	it('stacks Write and Takes until the editor itself has room for both', () => {
@@ -1678,7 +1677,8 @@ describe('the editor answers to its own width, not the viewport', () => {
 		const editorStylesheets = {
 			SongDetailView: songDetailViewSource,
 			EditorHeader: editorHeaderSource,
-			RecipePanel: recipePanelSource,
+			RecipeLine: recipeLineSource,
+			RecipeTabs: recipeTabsSource,
 			TakesList: takesListSource,
 			WriteColumn: writeColumnSource
 		};

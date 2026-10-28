@@ -276,27 +276,17 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await expect(page.getByRole('heading', { name: /E2E With Voice/ })).toBeVisible();
 		if (isMobile) {
 			await page.getByRole('tab', { name: 'Edit', exact: true }).click();
-			const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
 			await test.info().attach('phone-recipe-collapsed', {
-				body: await recipe.screenshot(),
+				body: await page.locator('.recipe-line').screenshot(),
 				contentType: 'image/png'
 			});
-			await recipe.getByRole('button', { name: 'Recipe', exact: true }).click();
+		}
+		await page.locator('.recipe-line').click();
+		if (isMobile) {
 			await test.info().attach('phone-recipe-expanded', {
-				body: await recipe.screenshot(),
+				body: await page.getByRole('region', { name: 'Recipe', exact: true }).screenshot(),
 				contentType: 'image/png'
 			});
-			await recipe.getByRole('button', { name: 'Voice', exact: true }).click();
-			await test.info().attach('phone-recipe-voice', {
-				body: await recipe.screenshot(),
-				contentType: 'image/png'
-			});
-			await expect(page.getByRole('dialog')).toHaveCount(0);
-		} else {
-			await page
-				.getByRole('group', { name: 'Editor views', exact: true })
-				.getByRole('button', { name: 'Recipe', exact: true })
-				.click();
 		}
 		const picker = page.locator('.voice-picker .picker');
 		await picker.click();
@@ -324,16 +314,8 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		if (isMobile) {
 			await page.getByRole('tab', { name: 'Edit', exact: true }).click();
-			const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
-			await recipe.getByRole('button', { name: 'Recipe', exact: true }).click();
-			await recipe.getByRole('button', { name: 'Voice', exact: true }).click();
-			await expect(page.getByRole('dialog')).toHaveCount(0);
-		} else {
-			await page
-				.getByRole('group', { name: 'Editor views', exact: true })
-				.getByRole('button', { name: 'Recipe', exact: true })
-				.click();
 		}
+		await page.locator('.recipe-line').click();
 		if (isMobile) {
 			await expect(page.locator('.voice-picker .mobile-label')).toHaveText(
 				'Your Voice · sft model'

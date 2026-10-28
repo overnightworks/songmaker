@@ -37,7 +37,6 @@ import {
 	offerSetAsideVersionLoadUndoAgain,
 	retireVersionLoadUndo,
 	setAsideVersionLoadUndo,
-	savedSongData,
 	handleSave,
 	handleDeleteVersion,
 	discardDraft,
@@ -105,11 +104,10 @@ describe('editGenParams dirty tracking', () => {
 
 describe('loadSongData', () => {
 	it.each([
-		{ scenario: 'same song clean', dirty: false, songId: 's1', late: false, discard: false },
-		{ scenario: 'different song dirty', dirty: true, songId: 's2', late: false, discard: false },
-		{ scenario: 'load after typing', dirty: true, songId: 's1', late: true, discard: false },
-		{ scenario: 'discard after late load', dirty: true, songId: 's1', late: true, discard: true }
-	])('defect:#1598 load preserves typing: $scenario', async ({ dirty, songId, late, discard }) => {
+		{ scenario: 'same song clean', dirty: false, songId: 's1', late: false },
+		{ scenario: 'different song dirty', dirty: true, songId: 's2', late: false },
+		{ scenario: 'load after typing', dirty: true, songId: 's1', late: true }
+	])('defect:#1598 load preserves typing: $scenario', async ({ dirty, songId, late }) => {
 		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
 		const serverSong = makeSong({ ...songDefaults, id: songId, lyrics: 'newer server text' });
 		let finishLoad!: (song: SongItem) => void;
@@ -127,13 +125,10 @@ describe('loadSongData', () => {
 		}
 		const preserved = dirty && songId === 's1';
 		expect(get(editLyrics)).toBe(preserved ? 'typed draft' : 'newer server text');
-		expect(get(savedSongData).lyrics).toBe('newer server text');
 		expect(get(isDirty)).toBe(preserved);
-		if (discard) {
-			discardDraft();
-			expect(get(editLyrics)).toBe('newer server text');
-			expect(get(isDirty)).toBe(false);
-		}
+		discardDraft();
+		expect(get(editLyrics)).toBe('newer server text');
+		expect(get(isDirty)).toBe(false);
 	});
 
 	it.each([
@@ -151,9 +146,11 @@ describe('loadSongData', () => {
 			if (typed) setDraftLyrics('typed draft');
 			loadSongData(makeSong({ ...songDefaults, id: 's1', lyrics: 'server text' }));
 			expect(get(editLyrics)).toBe(preserved ? (typed ? 'typed draft' : lyrics) : 'server text');
-			expect(get(savedSongData).lyrics).toBe('server text');
 			expect(get(draftLoadedFrom)).toBe(preserved ? 1 : null);
 			expect(get(isDirty)).toBe(preserved);
+			discardDraft();
+			expect(get(editLyrics)).toBe('server text');
+			expect(get(isDirty)).toBe(false);
 		}
 	);
 
@@ -219,9 +216,10 @@ describe('loadVersionAsDraft', () => {
 		expect(get(editAudioDuration)).toBe(210);
 		expect(get(editKeyScale)).toBe('F minor');
 		expect(get(editGenParams)).toEqual({ inference_steps: 40 });
-		expect(get(savedSongData).lyrics).toBe('hello');
 		expect(get(isDirty)).toBe(true);
 		expect(get(draftLoadedFrom)).toBe(1);
+		discardDraft();
+		expect(get(editLyrics)).toBe('hello');
 	});
 
 	it('takes the current version as the way back to the saved state', () => {
@@ -329,8 +327,9 @@ describe('loadVersionAsDraft', () => {
 		loadVersionAsDraft(older)?.undo();
 		expect(get(editLyrics)).toBe('an unsaved line');
 		expect(get(editGenParams)).toEqual({ shift: 3 });
-		expect(get(savedSongData).lyrics).toBe('hello');
 		expect(get(draftLoadedFrom)).toBeNull();
+		discardDraft();
+		expect(get(editLyrics)).toBe('hello');
 	});
 
 	it('undo of a second load brings back the first load and its hint', () => {
@@ -603,94 +602,6 @@ describe('versionDeleteEditorLoss', () => {
 		versions.set([latest]);
 		change();
 		expect(versionDeleteEditorLoss(latest)).toEqual(loss);
-	});
-});
-
-describe('handleSave', () => {
-	const version = (number: number) =>
-		makeVersion({ id: 'v' + number, version_number: number, lyrics: 'loaded version' });
-
-	it.each`
-		scenario                                | from    | editBefore | action           | nextFrom | expectedLyrics         | dirty
-		${'no intervening edit'}                | ${null} | ${true}    | ${'none'}        | ${null}  | ${'sent draft'}        | ${false}
-		${'typing during save'}                 | ${null} | ${true}    | ${'type'}        | ${null}  | ${'typed during save'} | ${true}
-		${'typing after loaded version'}        | ${1}    | ${true}    | ${'type'}        | ${null}  | ${'typed during save'} | ${true}
-		${'another version loaded during save'} | ${1}    | ${true}    | ${'load v2'}     | ${2}     | ${'loaded version'}    | ${true}
-		${'same version reloaded during save'}  | ${1}    | ${true}    | ${'load v1'}     | ${1}     | ${'loaded version'}    | ${true}
-		${'unchanged-version no-op load'}       | ${1}    | ${false}   | ${'load v1'}     | ${null}  | ${'loaded version'}    | ${false}
-		${'load latest then Undo during save'}  | ${1}    | ${true}    | ${'undo latest'} | ${null}  | ${'sent draft'}        | ${false}
-		${'load v2, load v3, Save, then Undo'}  | ${2}    | ${false}   | ${'undo v3'}     | ${2}     | ${'loaded version'}    | ${true}
-	`(
-		'defect:#1598 save records only the sent draft and provenance: $scenario',
-		async ({ from, editBefore, action, nextFrom, expectedLyrics, dirty }) => {
-			const { updateSong } = await import('$lib/api/client');
-			let finishSave!: (song: SongItem) => void;
-			vi.mocked(updateSong).mockReturnValueOnce(
-				new Promise((resolve) => {
-					finishSave = resolve;
-				})
-			);
-			selectedSongId.set('s1');
-			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
-			await Promise.resolve();
-			const latest = version(4);
-			versions.set([latest, version(3), version(2), version(1)]);
-			if (from !== null) loadVersionAsDraft(version(from));
-			if (editBefore) setDraftLyrics('sent draft');
-			const undo = action === 'undo v3' ? loadVersionAsDraft(version(3)) : null;
-			const sentLyrics = get(editLyrics);
-			const saving = handleSave('s1');
-			if (action === 'type') setDraftLyrics('typed during save');
-			if (action === 'load v1') loadVersionAsDraft(version(1));
-			if (action === 'load v2') loadVersionAsDraft(version(2));
-			if (action === 'undo latest') loadVersionAsDraft(latest)?.undo();
-			if (action === 'undo v3') undo?.undo();
-			finishSave(makeSong({ ...songDefaults, id: 's1', lyrics: sentLyrics }));
-			await saving;
-			expect(get(savedSongData).lyrics).toBe(sentLyrics);
-			expect(get(editLyrics)).toBe(expectedLyrics);
-			expect(get(draftLoadedFrom)).toBe(nextFrom);
-			expect(get(isDirty)).toBe(dirty);
-			vi.mocked(updateSong).mockResolvedValueOnce(
-				makeSong({ ...songDefaults, lyrics: expectedLyrics })
-			);
-			await handleSave('s1');
-			expect(updateSong).toHaveBeenLastCalledWith(
-				's1',
-				expect.objectContaining({ new_version: nextFrom !== null })
-			);
-			expect(get(savedSongData).lyrics).toBe(expectedLyrics);
-			expect(get(isDirty)).toBe(false);
-		}
-	);
-
-	it('calls updateSong, resets dirty state, and returns the saved song', async () => {
-		vi.clearAllMocks();
-		const { updateSong } = await import('$lib/api/client');
-		const mockUpdate = vi.mocked(updateSong);
-		const saved = makeSong({ ...songDefaults, version_count: 2 });
-		mockUpdate.mockResolvedValueOnce(saved);
-
-		loadSongData(makeSong(songDefaults));
-		setDraftLyrics('new lyrics');
-		expect(get(isDirty)).toBe(true);
-
-		const result = await handleSave('s1');
-
-		expect(mockUpdate).toHaveBeenCalled();
-		expect(get(isDirty)).toBe(false);
-		expect(result).toBe(saved);
-	});
-
-	it('fails loud: rejects instead of swallowing the error', async () => {
-		const { updateSong } = await import('$lib/api/client');
-		vi.mocked(updateSong).mockRejectedValueOnce(new Error('Network error'));
-
-		loadSongData(makeSong(songDefaults));
-		setDraftLyrics('new lyrics');
-
-		await expect(handleSave('s1')).rejects.toThrow('Network error');
-		expect(get(isDirty)).toBe(true);
 	});
 });
 

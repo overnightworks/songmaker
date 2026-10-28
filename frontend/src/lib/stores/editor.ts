@@ -89,8 +89,6 @@ function draftAwaitsSave(s: EditorState | null): boolean {
 
 export const isDirty = derived(editorState, draftAwaitsSave);
 
-export const savedSongData = derived(editorState, (s) => s?.saved ?? EMPTY_SONG_DATA);
-
 /** Which older version the draft came from, until it is saved; see {@link draftAwaitsSave}. */
 export const draftLoadedFrom = derived(editorState, (s) => s?.provenance?.version ?? null);
 

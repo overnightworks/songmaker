@@ -277,9 +277,7 @@ export const COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE = 'Archived · {day} {t
 export const COWRITER_MESSAGE_COUNT_TEMPLATE = '{count} msgs';
 export const COWRITER_SINGLE_MESSAGE_COUNT = '1 msg';
 export const COWRITER_CONVERSATION_CONFIRM_TEMPLATE = '{name} · {count}';
-export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
-export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
 
 export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailable';
 export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';
@@ -448,36 +446,11 @@ export const SONG_MENU_RENAME_LABEL = 'Rename';
 export const SONG_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const SONG_MENU_DELETE_LABEL = 'Delete song';
 
-export const PHONE_RECIPE_LOADING = 'Loading…';
-export const PHONE_RECIPE_LOADED = 'Loaded';
 export const MODELS_LOAD_ERROR = 'Failed to load models';
-export const PHONE_RECIPE_RETRY = 'Retry';
-export const PHONE_RECIPE_PARAMETERS = 'LM / DiT';
-export const PHONE_RECIPE_CUSTOM = 'Custom';
-export const PHONE_RECIPE_REFERENCE = 'Reference';
-export const PHONE_RECIPE_UPLOAD = 'Upload audio';
-export const PHONE_RECIPE_UPLOAD_ERROR = 'Upload failed';
-export const PHONE_RECIPE_REMOVE = 'Remove';
-export const PHONE_RECIPE_DEFAULTS_ERROR = 'Failed to load generation defaults';
 
-// Shared with RecipePanel.svelte's own copy of these same limits (#924 tracks
-// unifying the two into one owner).
-export const RECIPE_BPM_MAX = 999;
-export const RECIPE_DURATION_MAX_SECONDS = 600;
-export const RECIPE_TAKES_PER_GENERATE_OPTIONS = [1, 2, 3, 5, 10] as const;
-export const RECIPE_MAX_INFERENCE_STEPS_DEFAULT = 200;
 export const RECIPE_SOURCE_DURATION_DEFAULT_SECONDS = 180;
 
 export const RECIPE_PANEL_LABEL = 'Recipe';
-export const RECIPE_SAVED_HINT = 'Saved with the version. Changes mark the draft.';
-export const RECIPE_COLLAPSE_LABEL = 'Collapse';
-export const RECIPE_GROUP_SOUND_LABEL = 'Sound';
-export const RECIPE_GROUP_TEXT_LABEL = 'Text';
-export const RECIPE_PRESET_LABEL = 'Preset';
-export const RECIPE_PRESET_DEFAULT_OPTION = 'Default';
-export const RECIPE_SAVE_AS_PRESET_LABEL = 'Save as preset';
-export const RECIPE_MANAGE_PRESETS_LABEL = 'Manage in Settings → Generation';
-export const RECIPE_USES_LABEL = 'Generate uses this recipe';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const SEARCH_OPEN_LABEL = 'Search';
