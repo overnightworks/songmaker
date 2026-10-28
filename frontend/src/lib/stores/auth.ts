@@ -31,7 +31,8 @@ export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 // server error) -- worth another try, not offline (#1099).
 export type AuthFailureKind = 'unauthorized' | 'unreachable' | 'retryable';
 
-// A sign-out the server did not confirm: the person is still signed in.
+// The sign-out could not reach the server (a network error or a 502, 503 or 504),
+// so the person is still signed in.
 export const signOutFailed = writable(false);
 
 export function classifyAuthFailure(error: unknown): AuthFailureKind {
