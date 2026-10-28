@@ -1,8 +1,0 @@
-claim_id = "d9ba4bcc35814f0cba3a07d7a0b5e11d"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "723f7de49716ba92381c522b0897037eaf67a6a5"
-branch = "claude/issue-1981-every-external-image-is-pinned-by-versio"
-scope = [".github/dependabot.yml", ".github/workflows/ci.yml", "Dockerfile", "docker-compose.yml", "docker/base/gpu-torch-base.Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "docs/security.md", "docs/testing.md", "monitoring/alert.rules.test.yml"]
-opened_commit = "44618cb5fdc47b38575826f7486d04ac88e0c269"
-whole_reason = "One supply-chain rule over every external image reference and its updater, plus the bundled #1982 security.md correction; a partial pin leaves the same hole open."
