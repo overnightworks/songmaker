@@ -52,7 +52,7 @@ def test_generation_worker_peer_body_deadline_ignores_slow_startup(generation_wo
     async def exercise():
         peer_context = generation_worker_peer(
             WorkerScenario(loaded_modes=("sft",), model_loader=load_after_body_deadline),
-            deadline_seconds=body_deadline_seconds
+            deadline_seconds=body_deadline_seconds,
         )
         stalled = asyncio.Event()
         with pytest.raises(TimeoutError, match="Worker peer timed out during proof body"):
@@ -72,7 +72,7 @@ def test_generation_worker_peer_startup_stall_names_startup(generation_worker_pe
     async def exercise():
         peer_context = generation_worker_peer(
             WorkerScenario(loaded_modes=("sft",), model_loader=load_never),
-            startup_deadline_seconds=0.05
+            startup_deadline_seconds=0.05,
         )
         with pytest.raises(TimeoutError, match="Worker peer timed out during startup"):
             async with peer_context:
