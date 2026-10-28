@@ -1,0 +1,8 @@
+claim_id = "a62f5af8b387457b80f68320cd9c2bd6"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "78a762c647e8c937925a21172fc7651019d0b116"
+branch = "claude/issue-1994-explicit-version-saves-validate-and-comm"
+scope = [".github/workflows/ci.yml", "docs/security.md", "docs/testing.md", "quality/baseline.toml", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/db/queries/versions.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/song_api.py", "tests/postgres_lock_harness.py", "tests/test_auth_write_lock_postgres.py", "tests/test_reference_save_lock_postgres.py", "tests/test_song_version_lock_postgres.py"]
+opened_commit = "936ccabef38e2107b43d8672ace8b1951733f472"
+whole_reason = "The S2 bundle of #1988 (S2a lead, S2b) closes every writer that could attach a reference unseen by the coming sweep, except presets and defaults (S2c, held back); the two cards share the lock-test harness and the CI PostgreSQL proof step and land together under this item."
