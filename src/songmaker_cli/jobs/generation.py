@@ -63,6 +63,7 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.parser import AlbumMeta, SongMeta
+from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_owned_reference_audio
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
     GenerationProgressCallback,
@@ -245,6 +246,7 @@ class GenerationContext:
     audio_dir: Path
     user_id: str
     model_name: str
+    reference_audio_path: str
     base_params: dict = field(default_factory=dict)
     src_generation_id: str | None = None
     raw_src_audio: str | None = None
@@ -414,17 +416,11 @@ def _build_generation_context(
     )
     ace_config = replace(ace_config, model=model_name)
 
+    recorded_reference_path = ace_config.reference_audio_path
     if ace_config.reference_audio_path:
-        from songmaker_cli.reference_audio import (
-            ReferenceAudioRejected,
-            resolve_owned_reference_audio,
-        )
-
         try:
             abs_ref = resolve_owned_reference_audio(
-                audio_dir,
-                user_id,
-                ace_config.reference_audio_path,
+                audio_dir, user_id, ace_config.reference_audio_path
             )
         except ReferenceAudioRejected as exc:
             raise GenerationSetupError(JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND) from exc
@@ -448,6 +444,7 @@ def _build_generation_context(
         audio_dir=audio_dir,
         user_id=user_id,
         model_name=model_name,
+        reference_audio_path=recorded_reference_path,
         base_params=meta.generation_params,
     )
 
@@ -607,6 +604,7 @@ def _stored_generation_params(
         cot_lyrics=cot_lyrics or None,
         user_lora_id=_extract_user_lora_id(ctx.base_params),
         **_stored_batch_options(config, delivered_batch_size),
+        reference_audio_path=ctx.reference_audio_path,
     )
     return stored.model_dump(exclude_none=True)
 

@@ -24,6 +24,10 @@ if [[ -n "${FAKE_DOCKER_FAIL_ON:-}" && "$*" == *"$FAKE_DOCKER_FAIL_ON"* ]]; then
     echo "fake docker: refused" >&2
     exit 1
 fi
+if [[ "$*" == "compose config --images postgres" ]]; then
+    echo "helper-image:pinned"
+    exit 0
+fi
 if [[ "$*" == *"find /data -type f"* ]]; then
     seq 1 "${FAKE_VOLUME_FILES:-2}"
 fi
@@ -94,7 +98,12 @@ def _index(lines: list[str], needle: str) -> int:
     return next(i for i, line in enumerate(lines) if needle in line)
 
 
-DESTRUCTIVE_STEPS = ["compose stop", "DROP DATABASE", "--single-transaction", "alpine sh -c"]
+DESTRUCTIVE_STEPS = [
+    "compose stop",
+    "DROP DATABASE",
+    "--single-transaction",
+    "helper-image:pinned sh -c",
+]
 
 
 def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snapshot: Path) -> None:
@@ -113,7 +122,7 @@ def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snap
     validate = _index(lines, "pg_restore --list")
     recreate = _index(lines, "DROP DATABASE")
     restore = _index(lines, "--single-transaction")
-    audio = _index(lines, "alpine sh -c")
+    audio = _index(lines, "helper-image:pinned sh -c")
     assert validate < stop < recreate < restore < audio
     assert "--exit-on-error" in lines[restore]
     assert "WITH (FORCE)" in lines[recreate]
@@ -132,6 +141,7 @@ def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snap
         pytest.param({"FAKE_LOCK_BUSY": "1"}, [], id="deployment_lock_held"),
         pytest.param({"FAKE_DOCKER_FAIL_ON": "volume inspect"}, [], id="volume_missing"),
         pytest.param({"FAKE_DOCKER_FAIL_ON": "pg_restore --list"}, [], id="dump_unreadable"),
+        pytest.param({"FAKE_DOCKER_FAIL_ON": "config --images"}, [], id="helper_image_unknown"),
         pytest.param({"FAKE_DOCKER_FAIL_ON": "compose stop"}, DESTRUCTIVE_STEPS[:1], id="stop"),
         pytest.param(
             {"FAKE_DOCKER_FAIL_ON": "DROP DATABASE"}, DESTRUCTIVE_STEPS[:2], id="database_recreate"
@@ -140,7 +150,9 @@ def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snap
             {"FAKE_DOCKER_FAIL_ON": "--single-transaction"}, DESTRUCTIVE_STEPS[:3], id="import"
         ),
         pytest.param(
-            {"FAKE_DOCKER_FAIL_ON": "alpine sh -c"}, DESTRUCTIVE_STEPS[:4], id="audio_replace"
+            {"FAKE_DOCKER_FAIL_ON": "helper-image:pinned sh -c"},
+            DESTRUCTIVE_STEPS[:4],
+            id="audio_replace",
         ),
         pytest.param({"FAKE_VOLUME_FILES": "1"}, DESTRUCTIVE_STEPS[:4], id="final_count"),
     ],
@@ -243,6 +255,26 @@ def test_backup_with_zero_retention_prunes_nothing(docker_log: Path, tmp_path: P
 
     assert result.returncode == 0, result.stderr
     assert old.is_dir()
+    copy_line = next(line for line in _logged(docker_log) if "cp -a" in line)
+    assert "helper-image:pinned sh -c" in copy_line
+
+
+def test_backup_fails_when_compose_names_no_helper_image(docker_log: Path, tmp_path: Path) -> None:
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+
+    result = _run(
+        BACKUP_SCRIPT,
+        docker_log,
+        [],
+        BACKUP_DIR=str(backup_dir),
+        FAKE_DOCKER_FAIL_ON="config --images",
+    )
+
+    logged = _logged(docker_log)
+    assert result.returncode != 0
+    assert any("config --images" in line for line in logged)
+    assert not any(line.startswith("run") or " run " in line for line in logged)
 
 
 def test_backup_with_a_missing_volume_fails_before_any_snapshot_work(

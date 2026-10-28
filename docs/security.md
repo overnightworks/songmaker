@@ -1123,11 +1123,14 @@ change a workflow.
 The container images in the Dockerfiles and `docker-compose.yml` (Python, Node,
 `uv`, PostgreSQL, Redis) and the CI references (the promtool image, CI's PostgreSQL
 service) are pinned by exact version and digest, as `<name>:<version>@sha256:<digest>`,
-so a rebuild cannot pull a different binary than CI tested. The frozen monitoring
-stack and the unpinned `alpine` image in `scripts/backup.sh` and `scripts/restore.sh`
-are not pinned. Dependabot moves the Dockerfile and compose pins, patch releases
+so a rebuild cannot pull a different binary than CI tested. `scripts/backup.sh` and `scripts/restore.sh`
+copy audio through the digest-pinned `postgres` image compose names (Alpine-based:
+`sh`, `cp -a`, `find`), so no helper image is pulled unpinned. The frozen monitoring
+stack is not pinned. Dependabot moves the Dockerfile and compose pins, patch releases
 only (PostgreSQL within 16); a major or minor move of an image is its own change,
-for PostgreSQL 17 a data migration. The CI pins are moved by hand. Project tooling in CI and application dependencies in worker
+for PostgreSQL 17 a data migration. The CI pins are moved by hand; `scripts/check_pinned_images_match.py` fails while
+CI's PostgreSQL service differs from compose's, so a Dependabot PostgreSQL bump
+needs the same edit in `.github/workflows/ci.yml`. Project tooling in CI and application dependencies in worker
 images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All
