@@ -24,7 +24,7 @@ src/
 
 ## Local development
 
-The backend must already be running (via `docker compose up -d --build --wait` from the project root). The Vite dev server proxies `/api` and `/static` to `http://localhost:8080`.
+The dev server needs a backend: boot a probe stack as [`e2e/README.md`](e2e/README.md#running-it-locally) describes (never the live stack on 8080) and name it in `SONGMAKER_API_TARGET`; without it `pnpm dev` refuses to start. It proxies `/api`, `/ws`, `/audio`, `/shared`, `/login/oidc` and `/auth/logout` there.
 
 ```bash
 # One-time, and after every appkit pin change: copy the family look (tokens and fonts)
@@ -32,8 +32,8 @@ The backend must already be running (via `docker compose up -d --build --wait` f
 pnpm install
 (cd .. && uv run --frozen --only-group frontend python scripts/copy_kit_assets.py)
 
-# Dev server with HMR (proxies /api to the Docker backend)
-pnpm dev
+# Dev server with HMR, proxying to the probe stack
+SONGMAKER_API_TARGET=http://localhost:18080 pnpm dev
 
 # Build the production SPA bundle (FastAPI serves it from frontend/build/)
 pnpm build

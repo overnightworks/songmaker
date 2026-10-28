@@ -95,8 +95,6 @@ test('Add cover asks for nothing until Suggest, whose one suggestion ends in a n
 });
 
 test.describe('cover suggestions retry', () => {
-	test.use({ serviceWorkers: 'block' });
-
 	test('keeps a quiet touch target and reloads suggestions after bounded failures (1160-F8-hitbox)', async ({
 		page,
 		isMobile

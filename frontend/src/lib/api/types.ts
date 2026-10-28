@@ -248,14 +248,8 @@ export interface CoverTaskParams {
 	cover_noise_strength?: number | null;
 }
 
-export interface CowriterOfferResponse {
-	state: 'ready' | 'not_built' | 'no_longer_offered' | 'not_reachable' | 'not_available' | 'sign_in_again';
-	model: string;
-}
-
 export interface CowriterSettings {
 	tail_token_budget: number;
-	model: string;
 }
 
 export interface CowriterSettingsRequest {

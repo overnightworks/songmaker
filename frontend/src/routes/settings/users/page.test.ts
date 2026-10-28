@@ -34,7 +34,6 @@ const api = vi.hoisted(() => ({
 	fetchAllModels: vi.fn(),
 	toggleModel: vi.fn(),
 	fetchCowriterSettings: vi.fn(),
-	fetchCowriterOffer: vi.fn(),
 	updateCowriterSettings: vi.fn(),
 	fetchJudgeSettings: vi.fn(),
 	updateJudgeSettings: vi.fn(),
@@ -130,7 +129,6 @@ const PROVIDER_STATUSES: ProviderStatus[] = [
 
 function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSettings {
 	return {
-		model: 'claude-sonnet',
 		tail_token_budget: 8000,
 		...overrides
 	};
@@ -296,7 +294,6 @@ beforeEach(() => {
 	api.fetchBuiltinDefaults.mockResolvedValue({});
 	api.fetchProviderStatus.mockResolvedValue(PROVIDER_STATUSES);
 	api.fetchCowriterSettings.mockResolvedValue(cowriterSettings());
-	api.fetchCowriterOffer.mockResolvedValue({ state: 'ready', model: 'opus' });
 	api.updateCowriterSettings.mockImplementation(async (tailTokenBudget: number) =>
 		cowriterSettings({ tail_token_budget: tailTokenBudget })
 	);
@@ -600,15 +597,13 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Claude · Provider probe failed');
 	});
 
-	it('C16 reads the co-writer row once the Models tab opens, without a choice', async () => {
+	it('C16 shows the co-writer row as set by the agent service, without a choice', async () => {
 		const target = await renderPage(true);
-		expect(api.fetchCowriterOffer).not.toHaveBeenCalled();
 		await selectTab(target, 'models');
 
 		const row = rowNamed(target, 'Co-Writer');
-		await vi.waitFor(() => expect(row.textContent).toContain('✓Ready'));
+		expect(row.textContent).toContain('Set by the agent service');
 		expect(row.querySelector('select, [role="group"]')).toBeNull();
-		expect(api.fetchCowriterOffer).toHaveBeenCalledTimes(1);
 	});
 
 	it('lists the cover row providers from the judge settings when the co-writer settings do not load', async () => {

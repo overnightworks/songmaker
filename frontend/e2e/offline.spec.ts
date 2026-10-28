@@ -359,9 +359,6 @@ test.describe(
 // From the tap it shows the album header start's waiting transport, Pause
 // with its spinner (#1312), on the phone and the desktop alike.
 test.describe('tapping a take row Play while the network is gone', () => {
-	// The take must come over the network, not from the service worker's cache.
-	test.use({ serviceWorkers: 'block' });
-
 	test('waits with Pause and its spinner from the tap and no Retry, and plays the take by itself once the network is back (#1161 R2, #1312)', async ({
 		page,
 		context,
@@ -417,9 +414,6 @@ test.describe('tapping a take row Play while the network is gone', () => {
 // waiting transport with no toast, and the album starts by itself once the
 // network is back.
 test.describe('pressing the album header Play while the network is gone', () => {
-	// The takes must come over the network, not from the service worker's cache.
-	test.use({ serviceWorkers: 'block' });
-
 	function headerStartControls(page: Page) {
 		const transport = page.getByRole('contentinfo');
 		return {
@@ -583,9 +577,6 @@ test.describe(
 	'losing the network while a take generates on the phone',
 	{ tag: ONLY_IN_SHELL.mobile },
 	() => {
-		// Route the returning loads through the network, not the service worker.
-		test.use({ serviceWorkers: 'block' });
-
 		// Cover terminal events both after reconnect and on a stream left open offline.
 		for (const { endArrives, keepOpenStreams } of [
 			{ endArrives: 'once the network is back', keepOpenStreams: false },

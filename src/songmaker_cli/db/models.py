@@ -28,6 +28,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
 from songmaker_cli.constants import (
+    AUTO_LENGTH_SECONDS,
     LORA_TRAINING_MODEL_MODES,
     MODEL_DEFAULT_MODE,
     JobStatus,
@@ -194,7 +195,7 @@ class Version(Base):
     lyrics: Mapped[str] = mapped_column(Text, default="")
     prompt: Mapped[str] = mapped_column(Text, default="")
     bpm: Mapped[int] = mapped_column(Integer, default=0)
-    audio_duration: Mapped[int] = mapped_column(Integer, default=0)
+    audio_duration: Mapped[int] = mapped_column(Integer, default=AUTO_LENGTH_SECONDS)
     key_scale: Mapped[str] = mapped_column(String(10), default="")
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)

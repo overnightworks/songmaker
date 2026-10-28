@@ -27,7 +27,6 @@ import { archiveOwnedAlbum, runMarker, seedAccount, seedOwnTakeAddress, signedIn
 
 // The gate runs both configured shells: 390×844 and 1440×900. No synthetic
 // playing/ended events: the same short fixture as queue-continuity really ends.
-test.use({ serviceWorkers: 'block' });
 // Account seeding and the two naturally advancing tabs share this allowance.
 test.setTimeout(90_000);
 const END_TIMEOUT_MS = 15_000;

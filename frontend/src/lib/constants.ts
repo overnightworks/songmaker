@@ -256,7 +256,6 @@ export const EDITOR_TABS_LABEL = 'Editor tabs';
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const COWRITER_RUNNING_TURN_POLL_MS = 2_000;
 export const COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT = 3;
-export const COWRITER_PROVIDER_LABEL = 'Claude';
 export const COWRITER_UNAVAILABLE_TEXT = 'The co-writer is unavailable';
 export const COWRITER_BUSY_WAIT_CEILING_SECONDS = 300;
 export const COWRITER_CONVERSATION_MENU_LABEL = 'Conversation menu';
@@ -294,6 +293,7 @@ export const MODELS_COLUMN_PROVIDER_LABEL = 'Provider';
 export const MODELS_COLUMN_ROUTE_LABEL = 'Route';
 export const MODELS_COLUMN_MODEL_LABEL = 'Model';
 export const MODELS_COLUMN_STATUS_LABEL = 'Status';
+export const MODELS_SET_BY_AGENT_SERVICE_LABEL = 'Set by the agent service';
 export const MODELS_STATUS_CHECKING_LABEL = 'Checking…';
 export const MODELS_STATUS_READY_CLI_LABEL = 'Ready · CLI login';
 export const MODELS_STATUS_READY_KEY_LABEL = 'Ready · key set';
@@ -592,7 +592,7 @@ export const ADMIN_TABS_LABEL = 'Admin sections';
 export const ACCOUNT_MENU_LABEL = 'Account';
 export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
 export const ACCOUNT_MENU_LOGOUT_LABEL = 'Sign out';
-// A sign-out the server did not confirm leaves the session standing (#1340).
+// Shown when the sign-out could not reach the server; the session stands.
 export const SIGN_OUT_FAILED_MESSAGE = "Couldn't sign out. Check your connection and try again.";
 export const THEME_SWITCH_TO_LIGHT_LABEL = 'Light theme';
 export const THEME_SWITCH_TO_DARK_LABEL = 'Dark theme';

@@ -10,7 +10,7 @@ from typing import Final
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from songmaker_cli.constants import SongWorkKind
+from songmaker_cli.constants import AUTO_LENGTH_SECONDS, SongWorkKind
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -236,7 +236,7 @@ def create_song(
     lyrics: str = "",
     prompt: str = "",
     bpm: int = 0,
-    audio_duration: int = 180,
+    audio_duration: int = AUTO_LENGTH_SECONDS,
     key_scale: str = "",
     vocal_language: str = "",
     generation_params: dict | None = None,
@@ -322,7 +322,7 @@ def update_song(
     new_lyrics = _version_value(lyrics, prev, "lyrics", "")
     new_prompt = _version_value(prompt, prev, "prompt", "")
     new_bpm = _version_value(bpm, prev, "bpm", 0)
-    new_audio_duration = _version_value(audio_duration, prev, "audio_duration", 180)
+    new_audio_duration = _version_value(audio_duration, prev, "audio_duration", AUTO_LENGTH_SECONDS)
     new_key_scale = _version_value(key_scale, prev, "key_scale", "")
 
     creative_changed = prev is None or (

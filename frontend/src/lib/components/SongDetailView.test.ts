@@ -162,7 +162,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 			has_more: false
 		}),
 		fetchConversations: vi.fn().mockResolvedValue([]),
-		fetchCowriterSettings: vi.fn().mockResolvedValue({ tail_token_budget: 24000, model: '' }),
 		fetchMemory: vi.fn().mockResolvedValue(null),
 		fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
 		fetchActiveModels: vi.fn().mockResolvedValue([]),

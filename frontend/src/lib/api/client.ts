@@ -92,7 +92,6 @@ export {
 	fetchActiveModels,
 	fetchAllModels,
 	toggleModel,
-	fetchCowriterOffer,
 	fetchCowriterSettings,
 	updateCowriterSettings,
 	fetchJudgeSettings,

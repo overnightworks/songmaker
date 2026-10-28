@@ -273,6 +273,15 @@ def test_create_song_persists_and_returns_state(db_session: Session):
     assert stored.slug == "second-song"
 
 
+def test_cowriter_created_song_stays_on_auto_after_a_lyrics_edit(db_session: Session):
+    owner_id, _, album_id, _, _ = _seed(db_session)
+    owner = _owner(db_session, owner_id)
+    created = tools.tool_create_song(db_session, owner, album_id=album_id, title="Auto")
+    assert created.song.current_audio_duration == 0
+    edited = tools.tool_update_song_lyrics(db_session, owner, song_id=created.song_id, lyrics="la")
+    assert edited.song.current_audio_duration == 0
+
+
 def test_create_song_dedupes_slug_against_sibling_in_same_album(db_session: Session):
     owner_id, _, album_id, _, _ = _seed(db_session)
     owner = _owner(db_session, owner_id)

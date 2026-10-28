@@ -9,7 +9,6 @@ import { replaceSongInList } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { addToast } from '$lib/stores/toast';
-import { RECIPE_DURATION_STANDARD_SECONDS } from '$lib/constants/recipe';
 import type {
 	GenerationItem,
 	SongItem,
@@ -32,7 +31,7 @@ const EMPTY_SONG_DATA: SongData = {
 	lyrics: '',
 	prompt: '',
 	bpm: 0,
-	audio_duration: RECIPE_DURATION_STANDARD_SECONDS,
+	audio_duration: 0,
 	key_scale: '',
 	genParams: null
 };
@@ -213,7 +212,7 @@ function songDataFromSong(s: SongItem): SongData {
 		lyrics: s.lyrics,
 		prompt: s.prompt,
 		bpm: s.bpm ?? 0,
-		audio_duration: s.audio_duration ?? RECIPE_DURATION_STANDARD_SECONDS,
+		audio_duration: s.audio_duration ?? 0,
 		key_scale: s.key_scale ?? '',
 		genParams: s.generation_params ?? null
 	};
