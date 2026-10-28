@@ -121,10 +121,10 @@ class _Worker:
 
 
 def _worker_deps(
-    cache: ModelCache, redis: fakeredis.aioredis.FakeRedis, tmp_path: Path
+    cache: ModelCache, redis: fakeredis.aioredis.FakeRedis, tmp_path: Path, worker_id: str
 ) -> WorkerDeps:
     deps = WorkerDeps(
-        worker_id="acestep-worker-0",
+        worker_id=worker_id,
         cache=cache,
         task_store=TaskStore(),
         heartbeat=None,  # type: ignore[arg-type]
@@ -161,7 +161,8 @@ def make_worker(
         )
         body = fake_uv.health(llm_initialized=init_llm)
         children: list[SubprocessHandle] = []
-        hold = _GpuHold(redis, gpu_hold_key("acestep-worker-0"))
+        worker_id = "acestep-worker-0"
+        hold = _GpuHold(redis, gpu_hold_key(worker_id))
         hold_existed_when_child_stopped: list[bool] = []
 
         async def observing(model: LoadedModel) -> None:
@@ -180,7 +181,7 @@ def make_worker(
             loader=loader,
             unloader=unloader_wrapper(hold, observing) if unloader_wrapper else observing,
         )
-        deps = _worker_deps(cache, redis, tmp_path)
+        deps = _worker_deps(cache, redis, tmp_path, worker_id)
         return _Worker(
             deps=deps,
             children=children,
@@ -302,7 +303,6 @@ def test_failing_stop_still_releases_everything_and_is_logged(
         assert worker.hold_existed_when_child_stopped == [True]
         await worker.assert_everything_released()
         assert worker.deps.cache.is_pinned("sft")
-        worker.children[0].process.kill()
 
     with caplog.at_level("ERROR"):
         asyncio.run(scenario())
