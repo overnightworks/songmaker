@@ -63,6 +63,7 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.parser import AlbumMeta, SongMeta
+from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_owned_reference_audio
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
     GenerationProgressCallback,
@@ -417,16 +418,9 @@ def _build_generation_context(
 
     recorded_reference_path = ace_config.reference_audio_path
     if ace_config.reference_audio_path:
-        from songmaker_cli.reference_audio import (
-            ReferenceAudioRejected,
-            resolve_owned_reference_audio,
-        )
-
         try:
             abs_ref = resolve_owned_reference_audio(
-                audio_dir,
-                user_id,
-                ace_config.reference_audio_path,
+                audio_dir, user_id, ace_config.reference_audio_path
             )
         except ReferenceAudioRejected as exc:
             raise GenerationSetupError(JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND) from exc

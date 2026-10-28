@@ -241,7 +241,7 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 
 describe('buildTakeRecipe reference', () => {
 	const recordedPath = 'u1/refs/x.wav';
-	const buildRecipe = async (params: Record<string, string>) => {
+	const buildRecipe = async (params: Record<string, string | undefined>) => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		return buildTakeRecipe(
 			generation({ seed: null, model_mode: '', generation_params: params }),

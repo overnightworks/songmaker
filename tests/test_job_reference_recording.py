@@ -7,18 +7,18 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from test_jobs import (
-    _make_dto,
-    _patch_dispatch_and_post_process,
-    _run,
-    db_factory,  # noqa: F401  (fixture)
-    seeded_db,  # noqa: F401  (fixture)
-)
+import test_jobs
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.db.models import Generation, GenerationPreset, Version
 from songmaker_cli.db.queries.songs import update_song
 from songmaker_cli.jobs import run_generation_job
+
+db_factory = test_jobs.db_factory
+seeded_db = test_jobs.seeded_db
+_make_dto = test_jobs._make_dto
+_patch_dispatch_and_post_process = test_jobs._patch_dispatch_and_post_process
+_run = test_jobs._run
 
 REFERENCE_A = "u1/refs/aaaaaaaa-0000-0000-0000-000000000001.wav"
 REFERENCE_B = "u1/refs/bbbbbbbb-0000-0000-0000-000000000002.wav"
@@ -41,7 +41,11 @@ def _run_job(seeded_db, tmp_path: Path, *, count: int = 1, **task) -> None:
     with dispatch, post_process, defaults:
         _run(
             run_generation_job(
-                "j1", "s1", "v1", count, "u1",
+                "j1",
+                "s1",
+                "v1",
+                count,
+                "u1",
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
@@ -54,7 +58,11 @@ def _run_job(seeded_db, tmp_path: Path, *, count: int = 1, **task) -> None:
 
 def _recorded_references(seeded_db) -> list[str | None]:
     with seeded_db() as session:
-        takes = session.query(Generation).filter(Generation.song_id == "s1", Generation.id != "g0").all()
+        takes = (
+            session.query(Generation)
+            .filter(Generation.song_id == "s1", Generation.id != "g0")
+            .all()
+        )
         return [take.generation_params.get("reference_audio_path") for take in takes]
 
 
@@ -86,7 +94,10 @@ def test_take_records_the_reference_the_job_resolved(
         with seeded_db() as session:
             session.add(
                 GenerationPreset(
-                    name="p", model_mode="sft", is_default=True, created_by="u1",
+                    name="p",
+                    model_mode="sft",
+                    is_default=True,
+                    created_by="u1",
                     params={"reference_audio_path": REFERENCE_C},
                 )
             )
@@ -128,12 +139,12 @@ def test_every_take_of_a_batch_records_the_reference(seeded_db, tmp_path: Path) 
 
 
 @pytest.mark.parametrize("task", ["repaint", "cover"])
-def test_repaint_and_cover_takes_record_the_reference(
-    seeded_db, tmp_path: Path, task: str
-) -> None:
+def test_repaint_and_cover_takes_record_the_reference(seeded_db, tmp_path: Path, task: str) -> None:
     _write_reference(tmp_path, REFERENCE_A)
     with seeded_db() as session:
-        session.add(Generation(id="g0", song_id="s1", mp3_path="u1/g0.mp3", model_mode="sft", seed=1))
+        session.add(
+            Generation(id="g0", song_id="s1", mp3_path="u1/g0.mp3", model_mode="sft", seed=1)
+        )
         session.commit()
     _name_version_reference(seeded_db, REFERENCE_A)
     source_wav = tmp_path / "source.wav"
