@@ -60,9 +60,10 @@ class HealthResponse(BaseModel):
     redis: Literal["ok", "error"]
     acestep: Literal["healthy", "unknown", "unhealthy"]
     acestep_reason: Literal["lm_init_failed"] | None = Field(description=(
-        "Why ACE-Step is not healthy when the cause is known: lm_init_failed while a "
-        "registered worker's language model cannot start, otherwise null. A fixed code; "
-        "the worker, the mode and the vendor's error text stay in the worker log."
+        "lm_init_failed while a registered worker's language model cannot start, "
+        "otherwise null; it can accompany a healthy aggregate when other workers are "
+        "online. A fixed code; the worker, the mode and the vendor's error text stay in "
+        "the worker log."
     ))
     acestep_workers_total: int
     acestep_workers_online: int
