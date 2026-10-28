@@ -82,7 +82,9 @@ def test_drifting_pins_fail_and_name_both_values(
     assert workflow_image in message
 
 
-def test_missing_ci_postgres_service_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_missing_ci_postgres_service_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     compose = _write_compose(tmp_path, COMPOSE_PIN)
     workflow = tmp_path / "ci.yml"
     workflow.write_text("on: push\njobs:\n  backend:\n    runs-on: ubuntu-latest\n")

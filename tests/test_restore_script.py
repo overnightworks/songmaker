@@ -98,7 +98,12 @@ def _index(lines: list[str], needle: str) -> int:
     return next(i for i, line in enumerate(lines) if needle in line)
 
 
-DESTRUCTIVE_STEPS = ["compose stop", "DROP DATABASE", "--single-transaction", "helper-image:pinned sh -c"]
+DESTRUCTIVE_STEPS = [
+    "compose stop",
+    "DROP DATABASE",
+    "--single-transaction",
+    "helper-image:pinned sh -c",
+]
 
 
 def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snapshot: Path) -> None:
@@ -145,7 +150,9 @@ def test_restore_runs_in_order_and_leaves_writers_stopped(docker_log: Path, snap
             {"FAKE_DOCKER_FAIL_ON": "--single-transaction"}, DESTRUCTIVE_STEPS[:3], id="import"
         ),
         pytest.param(
-            {"FAKE_DOCKER_FAIL_ON": "helper-image:pinned sh -c"}, DESTRUCTIVE_STEPS[:4], id="audio_replace"
+            {"FAKE_DOCKER_FAIL_ON": "helper-image:pinned sh -c"},
+            DESTRUCTIVE_STEPS[:4],
+            id="audio_replace",
         ),
         pytest.param({"FAKE_VOLUME_FILES": "1"}, DESTRUCTIVE_STEPS[:4], id="final_count"),
     ],
