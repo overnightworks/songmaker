@@ -1,8 +1,0 @@
-claim_id = "4eb10826005d4aba80497adb767b90f4"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "1eb8c15c5e1bd02e969ff0963cd56949d0df31c6"
-branch = "claude/issue-1997-the-worker-peer-s-proof-deadline-starts"
-scope = ["quality/baseline.toml", "tests/test_scheduler.py", "tests/test_worker_http_peer.py", "tests/worker_http_peer.py"]
-opened_commit = "3e12c96d8e04c5153fc308af0dea8137cbec9947"
-whole_reason = "One test helper, its tests moved beside it, and the lowered size entry for the module they left: one flake fix."
