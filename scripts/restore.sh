@@ -29,6 +29,12 @@ AUTODEPLOY_TIMER="songmaker-autodeploy.timer"
 # $1 is the snapshot's audio directory, $2 the volume's mount point.
 AUDIO_REPLACE_SCRIPT='find "$2" -mindepth 1 -delete && cp -a "$1"/. "$2"/'
 
+# why: the postgres service's image is Alpine-based (busybox sh, cp, find) and
+# compose pins it by digest, so Dependabot moves this helper with compose.
+audio_helper_image() {
+    docker compose config --images postgres
+}
+
 fail() {
     echo "ERROR: $*" >&2
     exit 1
@@ -68,6 +74,8 @@ require_complete_snapshot() {
     [[ "$snapshot_audio_count" -eq "$EXPECTED_AUDIO_COUNT" ]] \
         || fail "snapshot holds $snapshot_audio_count audio files, its manifest records $EXPECTED_AUDIO_COUNT"
     docker volume inspect "$VOLUME_NAME" > /dev/null || fail "audio volume $VOLUME_NAME not found"
+    AUDIO_HELPER_IMAGE="$(audio_helper_image)"
+    [[ -n "$AUDIO_HELPER_IMAGE" ]] || fail "compose names no image for the postgres service"
     docker compose exec -T postgres pg_restore --list < "$SNAPSHOT_DIR/db.dump" > /dev/null \
         || fail "$SNAPSHOT_DIR/db.dump is not a readable dump"
 }
@@ -109,10 +117,10 @@ main() {
     docker run --rm \
         -v "$VOLUME_NAME:/dest" \
         -v "$SNAPSHOT_DIR/audio:/source:ro" \
-        alpine sh -c "$AUDIO_REPLACE_SCRIPT" _ /source /dest
+        "$AUDIO_HELPER_IMAGE" sh -c "$AUDIO_REPLACE_SCRIPT" _ /source /dest
 
     local restored_audio_count
-    restored_audio_count="$(docker run --rm -v "$VOLUME_NAME:/data:ro" alpine find /data -type f | wc -l)"
+    restored_audio_count="$(docker run --rm -v "$VOLUME_NAME:/data:ro" "$AUDIO_HELPER_IMAGE" find /data -type f | wc -l)"
     [[ "$restored_audio_count" -eq "$EXPECTED_AUDIO_COUNT" ]] \
         || fail "volume holds $restored_audio_count audio files after the copy, the manifest records $EXPECTED_AUDIO_COUNT. Writers stay stopped."
 

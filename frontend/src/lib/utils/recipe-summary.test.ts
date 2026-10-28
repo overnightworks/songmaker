@@ -1,6 +1,7 @@
 import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
 import { describe, expect, it, vi } from 'vitest';
 import type { GenerationItem } from '$lib/api/types';
+import { RECIPE_REFERENCE_LABEL } from '$lib/constants/recipe';
 
 describe('buildTakeRecipe', () => {
 	it.each([
@@ -235,5 +236,31 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 		expect(groups).toEqual([
 			{ label: 'Model & Sampling', entries: [{ label: 'Batch Size', value: '2' }] }
 		]);
+	});
+});
+
+describe('buildTakeRecipe reference', () => {
+	const recordedPath = 'u1/refs/x.wav';
+	const buildRecipe = async (params: Record<string, string | undefined>) => {
+		const { buildTakeRecipe } = await import('./recipe-summary');
+		return buildTakeRecipe(
+			generation({ seed: null, model_mode: '', generation_params: params }),
+			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
+		);
+	};
+
+	it('shows a recorded reference as used in the Version group without its path', async () => {
+		const groups = await buildRecipe({ reference_audio_path: recordedPath });
+		expect(groups).toEqual([
+			{ label: 'Version', entries: [{ label: RECIPE_REFERENCE_LABEL, value: 'used' }] }
+		]);
+		expect(JSON.stringify(groups)).not.toContain(recordedPath);
+	});
+
+	it.each([
+		{ name: 'an empty reference', params: { reference_audio_path: '' } },
+		{ name: 'no reference key', params: {} }
+	])('shows no reference row for $name', async ({ params }) => {
+		expect(await buildRecipe(params)).toEqual([]);
 	});
 });

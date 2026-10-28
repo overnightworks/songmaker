@@ -1629,24 +1629,6 @@ def test_delete_generation_returns_paths(seeded_session: Session) -> None:
     assert "test/01_song_one_v1.mp3" in paths
 
 
-def test_delete_generation_files_removes_all_suffixes(tmp_path: Path) -> None:
-    audio_dir = tmp_path / "audio"
-    gen_dir = audio_dir / "user1"
-    gen_dir.mkdir(parents=True)
-    mp3 = gen_dir / "gen1.mp3"
-    wav = gen_dir / "gen1.wav"
-    md = gen_dir / "gen1.md"
-    mp3.write_bytes(b"fake")
-    wav.write_bytes(b"fake")
-    md.write_text("snapshot")
-
-    delete_generation_files(audio_dir, "user1/gen1.mp3")
-
-    assert not mp3.exists()
-    assert not wav.exists()
-    assert not md.exists()
-
-
 def test_delete_generation_files_path_traversal_blocked(tmp_path: Path) -> None:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()

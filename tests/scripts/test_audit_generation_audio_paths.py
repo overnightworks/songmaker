@@ -8,7 +8,7 @@ from pathlib import Path
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Song
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import audit_generation_audio_paths as audit  # noqa: E402
 

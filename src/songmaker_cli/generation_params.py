@@ -76,6 +76,10 @@ class StoredGenerationParams(BaseGenerationParams):
     Adds resolved/output fields that BaseGenerationParams omits because they
     are decided by the worker, not the user (model id, COT outputs, the
     actual task knobs that were applied).
+
+    ``reference_audio_path`` is the reference the job resolved and uploaded (from
+    the version, the user preset or the global default), ``""`` when it used
+    none; a take persisted earlier has no such key.
     """
 
     seed: int | None = None

@@ -6,7 +6,7 @@ x-logging: &service-logging
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
     restart: unless-stopped
     logging: *service-logging
     environment:
@@ -30,7 +30,7 @@ services:
       - DAC_READ_SEARCH
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.12-alpine@sha256:338fbfc036dc5517ac0b04d6de21521085935336e565f223406180e9d84166e2
     restart: unless-stopped
     logging: *service-logging
     volumes:

@@ -666,7 +666,7 @@ The three prefixes those private homes carry — the cover turn's, the
 Co-Writer turn's, and the proof's — live in `agent_providers/sandbox/paths.py`
 and nowhere else. The provider layer creates the directories, this profile is
 the only thing that permits their mounts, and
-`tests/test_prove_codex_image_sandbox.py` reads the module and every rule form
+`tests/scripts/test_prove_codex_image_sandbox.py` reads the module and every rule form
 in the profile, including its brace lists, so a rename that reaches only one
 of them is a red test instead of a silently refused mount. A project that
 embeds `agent_providers` takes those prefixes and derives its own profile from
@@ -674,9 +674,9 @@ them. The profile *name* is a parameter wherever it is used —
 `sudo scripts/apparmor/install_profile.sh [profile]`,
 `python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
 `SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
-`tests/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
+`tests/scripts/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
 defaults and the profile file's own declaration to that one name, and
-`tests/test_apparmor_install.py` drives the installer without an argument and
+`tests/scripts/test_apparmor_install.py` drives the installer without an argument and
 requires it to install the profile of that name. The installer refuses a name
 that is not a regular profile file beside it, a symlink included, so a typo or
 a link to another host file never reaches `apparmor_parser`.
@@ -1091,15 +1091,16 @@ A compromised acestep-worker container has:
 
 - The shared internal token (it needs it to register and to receive scheduler calls).
 - The model-weights volume mount (read/write, but only its own checkpoints directory).
-- Network access to the web container, music-worker container, and Redis.
+- The `audiofiles` volume, read-write at `/app/data/audio`: every musician's audio files.
+- The default compose network, so network access to every service on it, including Redis, the web container and the music-worker container.
+- Redis without authentication, through the same `REDIS_URL` every service uses: every key is readable and writable, arq queues and rate-limit state included.
 
 It does **not** have:
 
-- Database credentials (the worker has no `DATABASE_URL`; it only calls `/api/internal/workers/register`, which writes a single identity row).
-- Auth tables, user data, or audio files (no DB connection, no audio volume).
-- The session secret (only the web container has it).
+- A direct database connection (the worker has no `DATABASE_URL`; it only calls `/api/internal/workers/register`, which writes a single identity row).
+- The session secret (the acestep worker has no `SESSION_SECRET`).
 
-The most a compromised worker can do is publish bogus state to Redis, register with a wrong host/port, or refuse to load models. None of these affect user data integrity. The blast radius is "denial of generation," not data exfiltration.
+A compromised worker can overwrite or delete any stored audio file, enqueue or alter arq jobs, rewrite rate-limit state, publish bogus state to Redis, register with a wrong host/port, or refuse to load models. User audio integrity and queue contents are within its reach. It has no direct database connection, but the jobs it forges or alters run in workers that hold `DATABASE_URL` (for example, a scoring job for a chosen generation writes that generation's scores), so database rows are reachable indirectly. The session secret is not.
 
 ### Trust model and accepted risks
 
@@ -1115,7 +1116,18 @@ If exposure to untrusted traffic becomes a concern, the next step is to bind `/a
 
 Every third-party GitHub Action is pinned to the full commit SHA of its reviewed
 release tag (with the release series recorded beside it), so a moved tag cannot
-change a workflow. Project tooling in CI and application dependencies in worker
+change a workflow.
+The container images in the Dockerfiles and `docker-compose.yml` (Python, Node,
+`uv`, PostgreSQL, Redis) and the CI references (the promtool image, CI's PostgreSQL
+service) are pinned by exact version and digest, as `<name>:<version>@sha256:<digest>`,
+so a rebuild cannot pull a different binary than CI tested. `scripts/backup.sh` and `scripts/restore.sh`
+copy audio through the digest-pinned `postgres` image compose names (Alpine-based:
+`sh`, `cp -a`, `find`), so no helper image is pulled unpinned. The frozen monitoring
+stack is not pinned. Dependabot moves the Dockerfile and compose pins, patch releases
+only (PostgreSQL within 16); a major or minor move of an image is its own change,
+for PostgreSQL 17 a data migration. The CI pins are moved by hand; `scripts/check_pinned_images_match.py` fails while
+CI's PostgreSQL service differs from compose's, so a Dependabot PostgreSQL bump
+needs the same edit in `.github/workflows/ci.yml`. Project tooling in CI and application dependencies in worker
 images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All

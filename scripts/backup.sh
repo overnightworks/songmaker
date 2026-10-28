@@ -46,11 +46,18 @@ DB_SIZE=$(stat -c%s "$SNAPSHOT_DIR/db.dump")
 echo "  DB dump: $(numfmt --to=iec "$DB_SIZE")"
 
 echo "Syncing audio files..."
+# why: the postgres service's image is Alpine-based (busybox sh, cp) and compose
+# pins it by digest, so Dependabot moves this helper with compose.
+HELPER_IMAGE="$(docker compose config --images postgres)"
+if [[ -z "$HELPER_IMAGE" ]]; then
+    echo "ERROR: compose names no image for the postgres service." >&2
+    exit 1
+fi
 mkdir -p "$SNAPSHOT_DIR/audio"
 docker run --rm \
     -v "$VOLUME_NAME:/source:ro" \
     -v "$SNAPSHOT_DIR/audio:/dest" \
-    alpine sh -c 'cp -a /source/. /dest/'
+    "$HELPER_IMAGE" sh -c 'cp -a /source/. /dest/'
 
 AUDIO_COUNT=$(find "$SNAPSHOT_DIR/audio" -type f | wc -l)
 AUDIO_SIZE=$(du -sb "$SNAPSHOT_DIR/audio" 2>/dev/null | cut -f1)

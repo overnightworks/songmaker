@@ -2618,7 +2618,7 @@ def _override_context(tmp_path: Path, config: AceStepConfig | None = None, model
         album_meta=AlbumMeta(title="a", artist="b"),
         ace_config=config or AceStepConfig(prompt="test", lyrics="la la", audio_duration=0),
         audio_dir=tmp_path,
-        user_id="u1",
+        user_id="u1", reference_audio_path="",
         model_name=model_name,
     )
 
@@ -2696,7 +2696,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
         album_meta=AlbumMeta(title="a", artist="b"),
         ace_config=config,
         audio_dir=tmp_path,
-        user_id="u1",
+        user_id="u1", reference_audio_path="",
         model_name="turbo",
     )
     params = CoverTaskParams(

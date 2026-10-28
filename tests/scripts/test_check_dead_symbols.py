@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-CHECKER = runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts/check_dead_symbols.py"))
+CHECKER = runpy.run_path(str(Path(__file__).resolve().parents[2] / "scripts/check_dead_symbols.py"))
 
 
 @pytest.fixture

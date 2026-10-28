@@ -32,7 +32,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 COMMAND_FILES = ("grafana_password.py", "dotenv_file.py", "main_checkout.py")
 
 ADMIN_USER = "grafana-admin"
