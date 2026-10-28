@@ -55,7 +55,7 @@ limits concurrent Claude calls (default 4). The ignored content-hash cache at
 an unchanged repeat run needs neither Claude nor a model startup.
 `--no-summaries` explicitly disables the second signal. Otherwise unavailable
 models or Claude failures produce named errors (exit status 2).
-The [logic tests](../tests/test_similar_functions.py) use fakes and load no model.
+The [logic tests](../tests/scripts/test_similar_functions.py) use fakes and load no model.
 
 ## Static analysis (SonarCloud)
 
@@ -128,7 +128,7 @@ file's job:
   argument models is a multi-file rework, tracked as a follow-up (#332,
   finding F15), not something this checker fixes by itself.
 
-`tests/test_check_no_silent_fallbacks.py` runs the checker over the real
+`tests/scripts/test_check_no_silent_fallbacks.py` runs the checker over the real
 `src/` tree, over a table of read and write statements that pins that
 boundary, and over seeded files at every path that used to be exempt.
 
@@ -145,7 +145,7 @@ N API models`. The only route role excluded is
 backend-to-backend protocol rather than a browser surface.
 
 Run `python scripts/generate_types.py` after changing a routed model, then
-`python scripts/generate_types.py --check`. `tests/test_generate_types.py`
+`python scripts/generate_types.py --check`. `tests/scripts/test_generate_types.py`
 plants routed response, body, and nested models to prove a stale type file
 fails with the missing model name and a regenerated file passes. A routed model
 declared outside `songmaker_cli.api_models` that no named exemption in the
@@ -429,7 +429,7 @@ with `--update`; use that flag after replacing literals with tokens to lower
 the baseline. Ordinary checks never rewrite it. Output includes per-file counts;
 growth prints all current locations because a count-only baseline cannot
 distinguish new locations from existing ones. The file fixtures in
-`tests/test_check_style_literals.py` prove detection and ratchet behavior.
+`tests/scripts/test_check_style_literals.py` prove detection and ratchet behavior.
 
 `scripts/test_helper_ratchet.sh` checks how many helper names are defined in more
 than one test module: module-level private Python functions in `tests/`, and

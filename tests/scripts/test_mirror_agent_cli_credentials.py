@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 MIRROR_SCRIPT = SCRIPTS / "mirror_agent_cli_credentials.py"
 sys.path.insert(0, str(SCRIPTS))
 import mirror_agent_cli_credentials as mirror  # noqa: E402

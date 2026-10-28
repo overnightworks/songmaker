@@ -666,7 +666,7 @@ The three prefixes those private homes carry — the cover turn's, the
 Co-Writer turn's, and the proof's — live in `agent_providers/sandbox/paths.py`
 and nowhere else. The provider layer creates the directories, this profile is
 the only thing that permits their mounts, and
-`tests/test_prove_codex_image_sandbox.py` reads the module and every rule form
+`tests/scripts/test_prove_codex_image_sandbox.py` reads the module and every rule form
 in the profile, including its brace lists, so a rename that reaches only one
 of them is a red test instead of a silently refused mount. A project that
 embeds `agent_providers` takes those prefixes and derives its own profile from
@@ -674,9 +674,9 @@ them. The profile *name* is a parameter wherever it is used —
 `sudo scripts/apparmor/install_profile.sh [profile]`,
 `python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
 `SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
-`tests/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
+`tests/scripts/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
 defaults and the profile file's own declaration to that one name, and
-`tests/test_apparmor_install.py` drives the installer without an argument and
+`tests/scripts/test_apparmor_install.py` drives the installer without an argument and
 requires it to install the profile of that name. The installer refuses a name
 that is not a regular profile file beside it, a symlink included, so a typo or
 a link to another host file never reaches `apparmor_parser`.
