@@ -4,7 +4,8 @@ Workers publish their loaded models, queue depth, and VRAM usage to Redis
 with a 15s TTL via ``acestep_worker.heartbeat``. The web container reads
 that state through these helpers when assembling the admin Worker Pool view.
 
-The key prefixes here MUST stay in sync with ``acestep_worker.heartbeat``;
+The key prefixes here MUST stay in sync with ``acestep_worker.heartbeat`` and
+``acestep_worker.lm_failure``;
 see ``tests/test_acestep_state.py`` for the cross-package assertion.
 """
 
@@ -20,6 +21,7 @@ WORKER_KEY_PREFIX = "songmaker:acestep:worker"
 QUEUE_KEY_PREFIX = "songmaker:acestep:queue"
 GPU_HOLD_KEY_PREFIX = "songmaker:acestep:hold"
 DOWNLOAD_KEY_PREFIX = "songmaker:acestep:download"
+LM_FAILURE_KEY_PREFIX = "songmaker:acestep:lm-failure"
 DOWNLOAD_TTL_SECONDS = 1800
 
 ADMIT_GENERATION_SCRIPT = """
@@ -45,6 +47,10 @@ def download_key(mode: str) -> str:
     return f"{DOWNLOAD_KEY_PREFIX}:{mode}"
 
 
+def lm_failure_key(worker_id: str) -> str:
+    return f"{LM_FAILURE_KEY_PREFIX}:{worker_id}"
+
+
 def decode_redis_text(raw: Any) -> str | None:
     if raw is None:
         return None
@@ -59,6 +65,11 @@ async def read_worker_state(pool: ArqRedis, worker_id: str) -> dict[str, Any] | 
     if text is None:
         return None
     return json.loads(text)
+
+
+async def worker_lm_failed(pool: ArqRedis, worker_id: str) -> bool:
+    """Whether the worker's last start failed on the LM; only the key's existence counts."""
+    return bool(await pool.exists(lm_failure_key(worker_id)))
 
 
 def worker_is_online(state: Mapping[str, Any] | None) -> bool:

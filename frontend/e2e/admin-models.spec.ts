@@ -294,7 +294,12 @@ test(
 		// do (#820, lines 2, 3 and 8), so this is where a real save can be driven
 		// end to end against a stack where nothing is set up.
 		const cover = providerSelect(page, MODELS_TASK_COVER_LABEL);
+		// The row's providers come from a separate load: a select read before they arrive is empty,
+		// and restoring that empty value is impossible.
+		await expect(cover.locator('option')).not.toHaveCount(0);
+		await expect(cover).not.toHaveValue('');
 		const before = await cover.inputValue();
+		expect(before, 'the value the finally block restores').not.toBe('');
 		const options = await cover
 			.locator('option')
 			.evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value));
