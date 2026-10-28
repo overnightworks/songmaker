@@ -287,7 +287,6 @@ export const MODELS_HEADING = 'Models';
 export const MODELS_LOADING_LABEL = 'Loading…';
 export const MODELS_TASK_COWRITER_LABEL = 'Co-Writer';
 export const MODELS_TASK_COVER_LABEL = 'Cover';
-export const MODELS_TASK_SCORING_LABEL = 'Scoring';
 export const MODELS_COLUMN_TASK_LABEL = 'Task';
 export const MODELS_COLUMN_PROVIDER_LABEL = 'Provider';
 export const MODELS_COLUMN_ROUTE_LABEL = 'Route';
