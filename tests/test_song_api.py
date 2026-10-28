@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 from conftest import (
-    login_and_csrf,
     make_test_app,
     queries_without_session_auth,
+    seed_session,
 )
 from sqlalchemy import event
 
@@ -83,7 +83,7 @@ def _seed_generation_count_scenarios(session) -> None:
 @pytest.fixture
 def generation_count_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_generation_count_scenarios)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     return client, factory
 
 
@@ -206,7 +206,7 @@ def _seed_worked_through_song(session) -> None:
 @pytest.fixture
 def worked_through_song_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_worked_through_song)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     return client, factory
 
 

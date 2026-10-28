@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 from conftest import (
-    login_and_csrf,
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
     make_test_app,
+    seed_session,
     web_client,
 )
 from fastapi.testclient import TestClient
@@ -71,7 +71,7 @@ def _seed_albums(session) -> None:
 @pytest.fixture
 def alice_app(tmp_path: Path) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
-    login_and_csrf(client, "alice")
+    seed_session(client, "alice")
     return client, factory
 
 
@@ -571,7 +571,7 @@ def test_foreign_cover_suggestion_routes_are_not_found(
 ) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     _add_suggestion(factory, tmp_path / "audio")
-    login_and_csrf(client, "bob")
+    seed_session(client, "bob")
 
     foreign = getattr(client, method)(path, **kwargs)
 
@@ -692,7 +692,7 @@ def test_discarding_suggestions_with_a_path_outside_the_audio_root_leaves_that_f
 def test_admin_can_list_and_read_another_users_suggestion(tmp_path: Path) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
 
     listed = client.get("/api/albums/alice-album/cover-suggestions")
     fetched = client.get(

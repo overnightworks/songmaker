@@ -20,21 +20,21 @@ def client(tmp_path: Path) -> TestClient:
 
 
 def _login_as_admin(client: TestClient) -> None:
-    from conftest import login_and_csrf
+    from conftest import seed_session
     factory = client.app.state.ctx.db
     with factory() as session:
         seed_user(session, "admin", "admin")
         session.commit()
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
 
 
 def _login_as_user(client: TestClient) -> None:
-    from conftest import login_and_csrf
+    from conftest import seed_session
     factory = client.app.state.ctx.db
     with factory() as session:
         seed_user(session, "regular", "user")
         session.commit()
-    login_and_csrf(client, "regular")
+    seed_session(client, "regular")
 
 
 # -- Access control -----------------------------------------------------------

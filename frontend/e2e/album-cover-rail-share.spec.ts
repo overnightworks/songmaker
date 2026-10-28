@@ -5,7 +5,13 @@ import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import { LIBRARY_PAGE_LABEL, RAIL_LIBRARY_NAV_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
 import { archiveOwnedAlbum, BASE_URL } from './seed';
-import { boundingBoxes, csrfHeaders, FlowGuard, LIBRARY_PATH, ONLY_IN_SHELL } from './helpers';
+import {
+	boundingBoxes,
+	sameOriginHeaders,
+	FlowGuard,
+	LIBRARY_PATH,
+	ONLY_IN_SHELL
+} from './helpers';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -20,7 +26,7 @@ interface ShareResult {
 }
 
 async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
-	const response = await page.request.post(url, { headers: await csrfHeaders(page), data });
+	const response = await page.request.post(url, { headers: await sameOriginHeaders(page), data });
 	expect(response.ok(), `POST ${url} failed: ${await response.text()}`).toBeTruthy();
 	return (await response.json()) as T;
 }
@@ -37,7 +43,7 @@ async function createSongWithTake(
 		prompt: 'quiet test song'
 	});
 	const reimport = await page.request.post(`/api/songs/${created.id}/reimport`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		multipart: {
 			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
 		}
@@ -48,7 +54,7 @@ async function createSongWithTake(
 
 async function postCover(page: Page, albumId: string): Promise<void> {
 	const response = await page.request.post(`/api/albums/${albumId}/cover`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		multipart: {
 			file: { name: 'cover.png', mimeType: 'image/png', buffer: COVER_PNG }
 		}
@@ -58,7 +64,7 @@ async function postCover(page: Page, albumId: string): Promise<void> {
 
 async function putPlaylistCover(page: Page, playlistId: string): Promise<void> {
 	const response = await page.request.put(`/api/playlists/${playlistId}/cover`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		multipart: {
 			file: { name: 'playlist-cover.png', mimeType: 'image/png', buffer: COVER_PNG }
 		}
@@ -68,14 +74,14 @@ async function putPlaylistCover(page: Page, playlistId: string): Promise<void> {
 
 async function deletePlaylistCover(page: Page, playlistId: string): Promise<void> {
 	const response = await page.request.delete(`/api/playlists/${playlistId}/cover`, {
-		headers: await csrfHeaders(page)
+		headers: await sameOriginHeaders(page)
 	});
 	expect(response.ok(), `Playlist cover removal failed: ${await response.text()}`).toBeTruthy();
 }
 
 async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void> {
 	const response = await page.request.delete(`/api/playlists/${playlistId}`, {
-		headers: await csrfHeaders(page)
+		headers: await sameOriginHeaders(page)
 	});
 	expect(
 		response.ok(),
@@ -222,7 +228,7 @@ test('1354_65_C2 1354_37b_62_A: a shared playlist replaces its upload with the c
 			await expect(publicPage.locator('.cover-art .playlist-cover-cell img')).toHaveCount(1);
 
 			const unshare = await page.request.delete(`/api/playlists/${playlist.id}/share`, {
-				headers: await csrfHeaders(page)
+				headers: await sameOriginHeaders(page)
 			});
 			expect(unshare.ok(), `Playlist unshare failed: ${await unshare.text()}`).toBeTruthy();
 			await publicPage.reload();

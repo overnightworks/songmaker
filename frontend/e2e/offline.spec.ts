@@ -22,7 +22,7 @@ import {
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	loseNetwork,
 	offlineStrip, // 1354_65_A3: shared status locator for the offline proofs.
@@ -699,7 +699,7 @@ test.describe(
 				try {
 					await regainNetwork(page, context);
 					const cancelled = await page.request.post(`/api/jobs/${jobId}/cancel`, {
-						headers: await csrfHeaders(page)
+						headers: await sameOriginHeaders(page)
 					});
 					expect(cancelled.ok()).toBeTruthy();
 				} catch (error) {

@@ -20,7 +20,7 @@ import {
 import { TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
 import {
 	boundingBoxes,
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	nameStartingWith,
 	ONLY_IN_SHELL,
@@ -98,7 +98,7 @@ async function onOwnTakes(
 	takeSeedBase?: number
 ): Promise<void> {
 	await page.setViewportSize({ width, height: VIEWPORT_HEIGHT_PX });
-	const headers = await csrfHeaders(page);
+	const headers = await sameOriginHeaders(page);
 	const album = await page.request.post('/api/albums', {
 		headers,
 		data: { title: `E2E Take menu ${Date.now()}`, artist: '' }

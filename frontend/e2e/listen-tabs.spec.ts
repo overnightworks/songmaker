@@ -15,7 +15,7 @@ import {
 	LIBRARY_SHARES_COPY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { csrfHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
+import { sameOriginHeaders, FlowGuard, HOME_PATH, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, readSeededLibrary, runMarker } from './seed';
 
 interface OwnedAlbum {
@@ -28,7 +28,7 @@ const test = base.extend<{ ownedAlbum: OwnedAlbum }>({
 		await page.goto(HOME_PATH);
 		const title = `E2E Recipe ${runMarker()}`;
 		const response = await page.request.post('/api/albums', {
-			headers: await csrfHeaders(page),
+			headers: await sameOriginHeaders(page),
 			data: { title, artist: '' }
 		});
 		expect(response.ok()).toBe(true);
@@ -190,7 +190,7 @@ test.describe('the song page listen tabs', { tag: ONLY_IN_SHELL.desktop }, () =>
 	}) => {
 		const songId = await createSongInUi(page, ownedAlbum);
 		const shared = await page.request.post(`/api/songs/${songId}/share`, {
-			headers: await csrfHeaders(page),
+			headers: await sameOriginHeaders(page),
 			data: {}
 		});
 		expect(shared.ok()).toBe(true);

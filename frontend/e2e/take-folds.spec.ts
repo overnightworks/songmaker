@@ -28,7 +28,7 @@ import {
 	selectedCountLabel,
 	TAKE_SELECT_ALL_UNKEPT_LABEL
 } from '../src/lib/constants/now-playing';
-import { appBar, csrfHeaders, ONLY_IN_SHELL, workspace } from './helpers';
+import { appBar, sameOriginHeaders, ONLY_IN_SHELL, workspace } from './helpers';
 import {
 	createAlbum,
 	FIRST_VERSION_TAKE_COUNT,
@@ -134,7 +134,7 @@ const bulkDeleteRequest = (...ids: string[]) =>
 // Another client removes a take; this page learns of it only through the next reload of the song.
 async function deleteAsAnotherClient(page: Page, id: string): Promise<void> {
 	const response = await page.request.delete(`/api/generations/${id}`, {
-		headers: await csrfHeaders(page)
+		headers: await sameOriginHeaders(page)
 	});
 	expect(response.ok()).toBe(true);
 }

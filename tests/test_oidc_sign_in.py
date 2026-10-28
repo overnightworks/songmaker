@@ -15,8 +15,8 @@ import pytest
 from conftest import (
     TEST_CLIENT_SECRET,
     TEST_ORIGIN,
-    login_and_csrf,
     make_test_app,
+    seed_session,
     web_client,
 )
 from fake_oidc_issuer import Person
@@ -353,7 +353,7 @@ def test_logging_out_is_post_only(world: World) -> None:
 def test_a_write_needs_the_browser_to_say_it_is_same_origin_and_no_token(world: World) -> None:
     """Cell 11 through the whole app: a real session and route, not the middleware probe."""
     world.seed(SUBJECT, "felix", "admin")
-    login_and_csrf(world.client, "felix")
+    seed_session(world.client, "felix")
 
     same_origin = world.client.post("/api/albums", json={"title": "A"})
     cross_site = world.client.post(
@@ -396,7 +396,7 @@ def test_a_same_origin_admin_write_is_refused_by_the_auth_check_not_the_job_pool
     403, never a server error; the admin check runs before the job pool."""
     if role:
         world.seed(SUBJECT, "felix", role)
-        login_and_csrf(world.client, "felix")
+        seed_session(world.client, "felix")
 
     response = world.client.post(
         "/api/admin/registry/sft/download", headers={"Sec-Fetch-Site": "same-origin"},
