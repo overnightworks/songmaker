@@ -155,9 +155,9 @@ round trips is a regression — find the extra requests instead of raising the
 number. The measured count is printed on every run.
 
 `admin-models.spec.ts` carries its own file-wide ceiling,
-`MODELS_FLOW_API_REQUEST_BUDGET` (local to the spec): 11 for the table at four
-desktop widths, 24 for the Cover row's save, reload and restore, 46 for the
-co-writer turn and 9 for the phone cards, against a shared 60. Its desktop
+`MODELS_FLOW_API_REQUEST_BUDGET` (local to the spec): 8 for the table at four
+desktop widths, 18 for the Cover row's save, reload and restore, 32 for the
+co-writer turn and 6 for the phone cards, against a shared 60. Its desktop
 tests run on **desktop only** and its card test on **mobile only** — the table and the cards are two different surfaces, so each
 is driven where it exists rather than skipped in the other shell.
 
