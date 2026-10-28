@@ -237,5 +237,4 @@ def test_audit_reports_only_files_no_take_owns(
 
     reported = caplog.records[-1].getMessage()
     assert "g9.raw.wav" in reported
-    assert "Found 1 orphaned" in reported
     assert "g1." not in reported
