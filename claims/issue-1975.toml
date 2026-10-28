@@ -1,8 +1,0 @@
-claim_id = "bb152c1dae604809b055e736b0c03bbd"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5200debde6fee34403af9c3460fbe2353c11c072"
-branch = "claude/issue-1975-engine-tests-and-six-vitest-files-lie-be"
-scope = ["docs/acestep.md", "docs/architecture.md", "docs/testing.md", "frontend/src/lib/components/CoWriterAiNotice.test.ts", "frontend/src/lib/components/CoWriterPanelAiNotice.test.ts", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/components/share/share-import-boundary.test.ts", "frontend/src/lib/history/historyControllerLeavingForFreshDocument.test.ts", "frontend/src/lib/history/leavingForFreshDocument.test.ts", "frontend/src/lib/share/sharePlayback.svelte.ts", "frontend/src/lib/stores/libraryContextPlaceShown.test.ts", "frontend/src/lib/stores/placeShown.test.ts", "prompts/prompt-coverage-and-logging.md", "quality/baseline.toml", "tests/acestep_engine", "tests/acestep_http.py", "tests/acestep_worker", "tests/audio_engine", "tests/support", "tests/test_acestep_client_lora.py", "tests/test_acestep_contract.py", "tests/test_acestep_engine_progress.py", "tests/test_acestep_engine_training_client.py", "tests/test_acestep_startup_timeout.py", "tests/test_acestep_worker_train_lora.py", "tests/test_audio_io.py", "tests/test_client.py", "tests/test_mastering.py"]
-opened_commit = "c208cf0c47e8a38ecc237e2da3f6eafe3d93baef"
-whole_reason = "One sub-lane of #1813 slice 3: renames of the engine packages' tests and six Vitest files, with every file that names them, so the old names leave in one landing."
