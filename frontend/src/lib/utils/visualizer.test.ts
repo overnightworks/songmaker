@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AudioVisualizer, playbackVisualizerAllowed, type VizColors } from './visualizer';
 
-const colors: VizColors = { pr: 255, pg: 50, pb: 32, ar: 160, ag: 32, ab: 240 };
+const colors: VizColors = { pr: 255, pg: 50, pb: 32, ar: 180, ag: 92, ab: 245 };
 const initialDevicePixelRatio = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
 
 interface DrawnPath {
