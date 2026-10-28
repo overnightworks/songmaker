@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d3c4d26e6f7c9b8b03e7bb0155609a506ccd6710"
 branch = "claude/issue-1938-pnpm-dev-explicit-target"
-scope = ["frontend/README.md", "frontend/e2e/seed.ts", "frontend/vite.config.ts"]
+scope = ["frontend/README.md", "frontend/e2e/required-env.ts", "frontend/e2e/seed-cover.ts", "frontend/e2e/seed.ts", "frontend/vite.config.ts", "quality/baseline.toml"]
 opened_commit = "846a1ed295a2da5061a5f514d06280d216a8eed3"
+whole_reason = "Two refusals of a silent live-stack default with their shared env helper, its callers, the README and the generated size entry."
