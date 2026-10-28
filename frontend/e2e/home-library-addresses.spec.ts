@@ -736,33 +736,39 @@ test(
 	}
 );
 
-test(
-	'1354_rule_19 1354_rule_31 R6 row 12: with the network gone Home keeps its rows and the word Library still opens the wall',
-	{ tag: ONLY_IN_SHELL.desktop },
-	async ({ page, context }) => {
-		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
-		await page.goto(HOME_PATH);
-		await expectHomeShown(page);
-		await expect(listenRegion(page).getByRole('status')).toHaveCount(0);
-		const rows = await listenRegion(page).locator('.library-row').count();
-		await waitForServiceWorkerControl(page);
-		await loseNetwork(page, context);
+// The wall opens offline only from what the worker precached. The one stub,
+// loseNetwork's refusal of the event stream, is a request the worker never answers.
+test.describe('with the service worker in control', () => {
+	test.use({ serviceWorkers: 'allow' });
 
-		await openHome(page, 'desktop');
-		await openLibraryWall(page, 'desktop');
-		await expectWallShown(page);
-		await openHome(page, 'desktop');
+	test(
+		'1354_rule_19 1354_rule_31 R6 row 12: with the network gone Home keeps its rows and the word Library still opens the wall',
+		{ tag: ONLY_IN_SHELL.desktop },
+		async ({ page, context }) => {
+			const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+			await page.goto(HOME_PATH);
+			await expectHomeShown(page);
+			await expect(listenRegion(page).getByRole('status')).toHaveCount(0);
+			const rows = await listenRegion(page).locator('.library-row').count();
+			await waitForServiceWorkerControl(page);
+			await loseNetwork(page, context);
 
-		await expect(homeHeading(page)).toBeVisible();
-		await expect(listenRegion(page)).toBeVisible();
-		await expect(listenRegion(page).locator('.library-row')).toHaveCount(rows);
-		await expect(wall(page)).toHaveCount(0);
-		await openLibraryWall(page, 'desktop');
-		await expectWallShown(page);
-		await regainNetwork(page, context);
-		guard.assertClean();
-	}
-);
+			await openHome(page, 'desktop');
+			await openLibraryWall(page, 'desktop');
+			await expectWallShown(page);
+			await openHome(page, 'desktop');
+
+			await expect(homeHeading(page)).toBeVisible();
+			await expect(listenRegion(page)).toBeVisible();
+			await expect(listenRegion(page).locator('.library-row')).toHaveCount(rows);
+			await expect(wall(page)).toHaveCount(0);
+			await openLibraryWall(page, 'desktop');
+			await expectWallShown(page);
+			await regainNetwork(page, context);
+			guard.assertClean();
+		}
+	);
+});
 
 for (const [row, path, current, retainAlbum] of [
 	['1354_rule_31 row 1', HOME_PATH, HOME_PAGE_LABEL, false],
