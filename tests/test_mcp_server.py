@@ -22,7 +22,7 @@ from songmaker_cli.constants import (
     JobType,
     SongWorkKind,
 )
-from songmaker_cli.cowriter.tools import COWRITER_TOOLS
+from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
     Album,
@@ -202,27 +202,50 @@ def test_get_version_blocks_other_user(db_session: Session):
         )
 
 
-def test_get_generation_returns_scores(db_session: Session):
+BATCH_SCORES = {
+    "text_accuracy": 86.2,
+    "lyrical_coherence": 8,
+    "lyrical_summary": "Coherent verses.",
+    "bpm_detected": 96.0,
+}
+
+
+def _seed_take(db_session: Session, batch_value: dict | None):
     owner_id, _, _, song_id, version_id = _seed(db_session)
-    gen = Generation(
+    db_session.add(Generation(
         id="gen1", song_id=song_id, version_id=version_id, generation_number=1,
         mp3_path="p/g1.mp3", seed=42, is_picked=True, is_kept=True,
-    )
-    db_session.add(gen)
-    db_session.add(
-        Score(id="sc1", generation_id="gen1", scorer="dynamics", value={"score": 71.0}),
-    )
-    db_session.add(
-        Score(id="sc2", generation_id="gen1", scorer="silence", value={"other": 0}),
-    )
+    ))
+    if batch_value is not None:
+        db_session.add(
+            Score(id="sc1", generation_id="gen1", scorer="batch", value=batch_value),
+        )
     db_session.commit()
+    return _owner(db_session, owner_id)
 
-    owner = _owner(db_session, owner_id)
+
+def test_get_generation_returns_stored_batch_keys_flat(db_session: Session):
+    owner = _seed_take(db_session, BATCH_SCORES)
     detail = tools.tool_get_generation(db_session, owner, generation_id="gen1")
-    assert detail.id == "gen1"
     assert detail.is_picked is True
-    assert detail.scores["dynamics"] == 71.0
-    assert detail.scores["silence"] is None
+    assert detail.scores == BATCH_SCORES
+    assert isinstance(detail.scores["lyrical_coherence"], int)
+
+
+def test_cowriter_get_generation_keeps_integer_score_in_json(db_session: Session):
+    owner = _seed_take(db_session, BATCH_SCORES)
+    outcome = execute_cowriter_tool(
+        db_session, owner, "get_generation", {"generation_id": "gen1"},
+    )
+    assert not outcome.is_error
+    assert json.loads(outcome.content)["scores"]["lyrical_coherence"] == 8
+    assert "8.0" not in outcome.content.split("lyrical_coherence")[1].split(",")[0]
+
+
+def test_get_generation_without_score_row_has_no_scores(db_session: Session):
+    owner = _seed_take(db_session, None)
+    detail = tools.tool_get_generation(db_session, owner, generation_id="gen1")
+    assert detail.scores == {}
 
 
 def test_get_generation_blocks_other_user(db_session: Session):

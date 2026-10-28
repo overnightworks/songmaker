@@ -51,6 +51,7 @@ from songmaker_cli.api_models import (
     MemoryUpdateRequest,
     StatusResponse,
 )
+from songmaker_cli.api_models.songs import score_values
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -352,11 +353,9 @@ def _format_take(generation: Generation) -> str:
         f"is_picked: {str(generation.is_picked).lower()}",
         f"is_kept: {str(generation.is_kept).lower()}",
     ]
-    score_lines = []
-    for score in generation.scores:
-        value = score.value
-        if isinstance(value, dict) and "score" in value:
-            score_lines.append(f"{score.scorer}: {value['score']}")
+    score_lines = [
+        f"{key}: {value}" for key, value in sorted(score_values(generation).items())
+    ]
     if score_lines:
         parts.append("scores:\n" + "\n".join(score_lines))
     return "\n".join(parts)

@@ -10,6 +10,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from songmaker_cli.api_models.songs import score_values
 from songmaker_cli.db.models import Album, Generation, Song, Version
 
 
@@ -142,17 +143,10 @@ class GenerationDetail(BaseModel):
     whisper_text: str | None
     rating: float | None
     created_at: datetime
-    scores: dict[str, float | None]
+    scores: dict[str, int | float | str]
 
     @classmethod
     def from_orm(cls, gen: Generation) -> GenerationDetail:
-        scores: dict[str, float | None] = {}
-        for score in gen.scores:
-            value = score.value
-            if isinstance(value, dict) and "score" in value:
-                scores[score.scorer] = value["score"]
-            else:
-                scores[score.scorer] = None
         return cls(
             id=gen.id,
             song_id=gen.song_id,
@@ -167,7 +161,7 @@ class GenerationDetail(BaseModel):
             whisper_text=gen.whisper_text,
             rating=gen.rating.rating if gen.rating else None,
             created_at=gen.created_at,
-            scores=scores,
+            scores=score_values(gen),
         )
 
 
