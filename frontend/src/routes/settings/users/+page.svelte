@@ -732,7 +732,7 @@
 					{:else}
 						<p class="hint">{MODELS_LOADING_LABEL}</p>
 					{/if}
-					{#if coverSettings}
+					{#if coverSettings && judgeSettings}
 						<ModelsTaskRow
 							task={MODELS_TASK_COVER_LABEL}
 							providers={coverProviders}
