@@ -25,6 +25,7 @@ from agent_runtime_client.wire import (
     PROTOCOL_VERSION,
     FailureCode,
     RejectionCode,
+    RouteKind,
     TurnMessage,
 )
 from conftest import make_authenticated_user, make_test_app, seed_user
@@ -296,7 +297,7 @@ def test_c3_the_runs_events_become_todays_frames_and_the_answer_is_stored(web):
     assert all(STARTED_MODEL not in content for _, content in web.messages())
     job = web.job()
     assert STARTED_MODEL not in json.dumps([job.error, job.phase, job.queue_reason])
-    assert "cli" not in json.dumps(relayed)
+    assert RouteKind.CLI.value not in json.dumps(relayed)
 
 
 def test_c3_a_run_started_without_a_model_ends_unavailable(web):
