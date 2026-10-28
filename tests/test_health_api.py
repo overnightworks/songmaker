@@ -13,9 +13,12 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from fnmatch import fnmatchcase
 from pathlib import Path
+from types import MappingProxyType
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -332,11 +335,14 @@ def _seed_one_worker(session) -> None:
     )
 
 
+_EMPTY_HEARTBEAT: Mapping[str, object] = MappingProxyType({"loaded": []})
+
+
 def _get_health(
     client,
     *,
     gpu_healthy: bool | None = None,
-    heartbeat: dict | None = {"loaded": []},
+    heartbeat: Mapping[str, object] | None = _EMPTY_HEARTBEAT,
     lm_failure_values: dict[str, bytes] | None = None,
 ) -> dict:
     """``heartbeat=None`` means the worker publishes no heartbeat at all;
@@ -471,6 +477,9 @@ def _set_lm_failure_keys(*worker_ids: str) -> None:
 
     present = {lm_failure_key(worker_id) for worker_id in worker_ids}
     arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(key in present))
+    arq_mod._pool.keys = AsyncMock(
+        side_effect=lambda pattern: [key.encode() for key in present if fnmatchcase(key, pattern)]
+    )
 
 
 def test_registered_worker_with_lm_failure_key_names_the_reason(health_client) -> None:
