@@ -126,10 +126,6 @@ test.describe(
 	'a take that finished while the phone was offline',
 	{ tag: ONLY_IN_SHELL.mobile },
 	() => {
-		// The job stream is cut off with a route; a service worker would take the
-		// request out of the page's own routing.
-		test.use({ serviceWorkers: 'block' });
-
 		test('is in the Takes list within 10 seconds of the network coming back, and the card stops generating', async ({
 			page,
 			context

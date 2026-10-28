@@ -393,9 +393,6 @@ test('reload mid-take shows the same take at the same position, paused', async (
 });
 
 test.describe('a slow network holds the restored take back', () => {
-	// The take must come over the network, not from the service worker's cache.
-	test.use({ serviceWorkers: 'block' });
-
 	test('while the restored take still loads, Play reads Pause with its spinner, Pause withdraws, and Play again plays from the saved position (#1312)', async ({
 		page
 	}, testInfo) => {

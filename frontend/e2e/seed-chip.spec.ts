@@ -35,11 +35,6 @@ interface Songs {
 	otherTitle: string;
 }
 
-// The job endpoints are answered with page.route, which a service worker that
-// controls the page can take the request out of: the press then reaches the real
-// server past the stub (a real 429 once the hour's job count is full).
-test.use({ serviceWorkers: 'block' });
-
 let albumId: string;
 
 test.beforeEach(async ({ page }) => {

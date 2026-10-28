@@ -119,6 +119,12 @@ ffmpeg -y -f lavfi -i "sine=frequency=440:sample_rate=22050:duration=3" \
   -ac 1 -c:a libmp3lame -b:a 32k e2e/fixtures/take.mp3
 ```
 
+**The service worker is blocked.** `playwright.config.ts` sets `serviceWorkers: 'block'` for both
+shells, so a spec's `page.route` stub is the only thing that answers its request. A spec that proves
+worker behaviour (the offline shell, the precache, a controlled page) opts back in with
+`test.use({ serviceWorkers: 'allow' })` and says in one comment line why any stub it also sets still
+holds.
+
 ## Guard rails
 
 `FlowGuard` (see `helpers.ts`) fails a flow on any 429 or 5xx response, on any
