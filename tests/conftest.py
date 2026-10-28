@@ -457,12 +457,11 @@ def mock_arq_pool():
     saved = arq_mod._pool
 
     async def _fake_init():
-        arq_mod._pool = AsyncMock()
-        arq_mod._pool.zcard = AsyncMock(return_value=0)
-        arq_mod._pool.keys = AsyncMock(return_value=[])
-        arq_mod._pool.get = AsyncMock(return_value=None)
-        arq_mod._pool.exists = AsyncMock(return_value=0)
-        arq_mod._pool.aclose = AsyncMock()
+        arq_mod._pool = AsyncMock(
+            zcard=AsyncMock(return_value=0), keys=AsyncMock(return_value=[]),
+            get=AsyncMock(return_value=None), exists=AsyncMock(return_value=0),
+            aclose=AsyncMock(),
+        )
         return arq_mod._pool
 
     async def _fake_close():
