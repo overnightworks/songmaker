@@ -279,12 +279,11 @@ def home(tmp_path: Path) -> Path:
         ),
         (
             ".grok/auth.json",
-            '{"realm": {"key": "k", "auth_mode": "oidc", "create_time": "t", '
-            '"expires_at": "t", "user_id": "u", "team_id": "t", '
-            '"principal_type": "User", "principal_id": "p", '
-            '"oidc_issuer": "i", "oidc_client_id": "c", '
-            '"coding_data_retention_opt_out": true, "coding_data_team": true, '
-            '"team_zero_data_retention": true, "refresh_token": "secret"}}',
+            '{"realm": {"key": "k", "auth_mode": "oidc", "create_time": "t", "expires_at": "t", '
+            '"user_id": "u", "team_id": "t", "principal_type": "User", "principal_id": "p", '
+            '"oidc_issuer": "i", "oidc_client_id": "c", "coding_data_retention_opt_out": true, '
+            '"coding_data_team": true, "team_zero_data_retention": true, '
+            '"refresh_token": "secret"}}',
         ),
         (
             ".codex/auth.json",
