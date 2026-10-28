@@ -37,7 +37,8 @@ LOGOUT_BUTTON_LABEL: Final[str] = "Sign out"
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-class BackchannelHostMismatch(Exception):  # noqa: N818 -- answered by a handler, never an error
+# A handler answers it; it is never an error to name.
+class BackchannelHostMismatch(Exception):  # noqa: N818
     """The back-channel call carries a Host other than the private network's."""
 
 
