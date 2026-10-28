@@ -94,8 +94,10 @@ def _child_is_alive(tmp_path: Path) -> bool:
 def test_start_stops_the_child_when_its_lm_is_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    health_body = _health_body(llm_initialized=False)
+
     with pytest.raises(LmInitFailedError):
-        _start_against_fake_uv(tmp_path, monkeypatch, _health_body(llm_initialized=False))
+        _start_against_fake_uv(tmp_path, monkeypatch, health_body)
 
     assert not _child_is_alive(tmp_path)
 
