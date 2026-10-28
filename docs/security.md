@@ -1094,15 +1094,16 @@ A compromised acestep-worker container has:
 
 - The shared internal token (it needs it to register and to receive scheduler calls).
 - The model-weights volume mount (read/write, but only its own checkpoints directory).
-- Network access to the web container, music-worker container, and Redis.
+- The `audiofiles` volume, read-write at `/app/data/audio`: every musician's audio files.
+- The default compose network, so network access to every service on it, including Redis, the web container and the music-worker container.
+- Redis without authentication, through the same `REDIS_URL` every service uses: every key is readable and writable, arq queues and rate-limit state included.
 
 It does **not** have:
 
 - Database credentials (the worker has no `DATABASE_URL`; it only calls `/api/internal/workers/register`, which writes a single identity row).
-- Auth tables, user data, or audio files (no DB connection, no audio volume).
 - The session secret (only the web container has it).
 
-The most a compromised worker can do is publish bogus state to Redis, register with a wrong host/port, or refuse to load models. None of these affect user data integrity. The blast radius is "denial of generation," not data exfiltration.
+A compromised worker can overwrite or delete any stored audio file, enqueue or alter arq jobs, rewrite rate-limit state, publish bogus state to Redis, register with a wrong host/port, or refuse to load models. User audio integrity and queue contents are within its reach; the database and the session secret are not.
 
 ### Trust model and accepted risks
 
@@ -1118,7 +1119,13 @@ If exposure to untrusted traffic becomes a concern, the next step is to bind `/a
 
 Every third-party GitHub Action is pinned to the full commit SHA of its reviewed
 release tag (with the release series recorded beside it), so a moved tag cannot
-change a workflow. Project tooling in CI and application dependencies in worker
+change a workflow.
+Every external container image outside the frozen monitoring stack (Python, Node,
+`uv`, PostgreSQL, Redis and the promtool image) is pinned by exact version and
+digest, as `<name>:<version>@sha256:<digest>`, so a rebuild cannot pull a different
+binary than CI tested. Dependabot moves these pins, patch releases only, grouped
+into one pull request per ecosystem; a major or minor move of an image is its own
+change, for PostgreSQL a data migration. Project tooling in CI and application dependencies in worker
 images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All

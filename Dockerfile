@@ -1,13 +1,14 @@
 # Stage 1: Copy the appkit look (tokens and fonts) out of its pinned wheel
-FROM python:3.12-slim AS kit-assets
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
+FROM python:3.12.16-slim@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07 AS kit-assets
+COPY --from=uv /uv /uvx /usr/local/bin/
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY scripts/copy_kit_assets.py scripts/
 RUN uv run --frozen --only-group frontend python scripts/copy_kit_assets.py
 
 # Stage 2: Build frontend
-FROM node:22-slim AS frontend-builder
+FROM node:22.23.4-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
 WORKDIR /app/frontend
 
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
@@ -20,14 +21,14 @@ COPY --from=kit-assets /app/frontend/kit-assets ./kit-assets
 RUN pnpm build
 
 # Stage 3: Python backend
-FROM python:3.12-slim AS backend
+FROM python:3.12.16-slim@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07 AS backend
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bubblewrap \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 

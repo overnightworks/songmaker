@@ -47,3 +47,36 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
+  # A major or minor move of an image (postgres 17, python 3.13) is its own change;
+  # for postgres it is a data migration.
+  - package-ecosystem: docker
+    directories:
+      - /
+      - /docker
+      - /docker/base
+    schedule:
+      interval: weekly
+    groups:
+      docker-images:
+        patterns: ["*"]
+        update-types: ["patch"]
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      compose-images:
+        patterns: ["*"]
+        update-types: ["patch"]
+    open-pull-requests-limit: 5
+    ignore:
+      # frozen until the monitoring stack is removed
+      - dependency-name: "prom/prometheus"
+      - dependency-name: "prom/alertmanager"
+      - dependency-name: "grafana/grafana"
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
