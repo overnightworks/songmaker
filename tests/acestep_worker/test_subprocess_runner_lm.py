@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import pytest
-from fake_uv_child import FakeUvChild
 
 from acestep_worker.subprocess_runner import LmInitFailedError, stop_acestep_subprocess
 
 
-def test_start_stops_the_child_when_its_lm_is_missing(fake_uv: FakeUvChild) -> None:
+def test_start_stops_the_child_when_its_lm_is_missing(fake_uv) -> None:
     with pytest.raises(LmInitFailedError):
         fake_uv.start(fake_uv.health(llm_initialized=False))
 
     assert not fake_uv.is_alive()
 
 
-def test_start_keeps_a_child_whose_lm_is_up(fake_uv: FakeUvChild) -> None:
+def test_start_keeps_a_child_whose_lm_is_up(fake_uv) -> None:
     handle = fake_uv.start(fake_uv.health(llm_initialized=True))
     try:
         assert fake_uv.is_alive()
@@ -21,7 +20,7 @@ def test_start_keeps_a_child_whose_lm_is_up(fake_uv: FakeUvChild) -> None:
         stop_acestep_subprocess(handle)
 
 
-def test_start_does_not_read_the_lm_flag_when_the_lm_is_off(fake_uv: FakeUvChild) -> None:
+def test_start_does_not_read_the_lm_flag_when_the_lm_is_off(fake_uv) -> None:
     handle = fake_uv.start(fake_uv.health(llm_initialized=False), init_llm=False)
     try:
         assert fake_uv.is_alive()
@@ -32,7 +31,7 @@ def test_start_does_not_read_the_lm_flag_when_the_lm_is_off(fake_uv: FakeUvChild
 @pytest.mark.parametrize(
     ("body", "answer_once"),
     [
-        pytest.param(FakeUvChild.health(llm_initialized=True), True, id="unreachable"),
+        pytest.param(b'{"data": {"llm_initialized": true}}', True, id="unreachable"),
         pytest.param(b"not json", False, id="unparsable"),
         pytest.param(b"[]", False, id="wrong-shape"),
         pytest.param(b'{"data": {}}', False, id="no-flag"),
@@ -40,7 +39,7 @@ def test_start_does_not_read_the_lm_flag_when_the_lm_is_off(fake_uv: FakeUvChild
     ],
 )
 def test_start_treats_an_unreadable_health_body_as_no_lm_verdict(
-    fake_uv: FakeUvChild, body: bytes, answer_once: bool
+    fake_uv, body: bytes, answer_once: bool
 ) -> None:
     handle = fake_uv.start(body, answer_once=answer_once)
     stop_acestep_subprocess(handle)
