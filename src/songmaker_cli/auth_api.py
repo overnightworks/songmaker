@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Annotated, Final
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
@@ -98,7 +98,7 @@ def _account_console_url() -> str | None:
 
 @router.get("/me")
 def me(
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> AuthMeResponse:
     return AuthMeResponse(
         id=current_user.id,
