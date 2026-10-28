@@ -323,7 +323,7 @@
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 		cursor: pointer;
 		font-family: var(--font-display);
 		text-transform: uppercase;
@@ -410,7 +410,7 @@
 
 	.status-badge.active {
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.status-badge.neutral {

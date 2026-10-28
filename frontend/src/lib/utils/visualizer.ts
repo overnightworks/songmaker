@@ -47,9 +47,9 @@ export function readVizColors(): VizColors {
 		pr: Number.parseInt(s.getPropertyValue('--viz-primary-r')) || 255,
 		pg: Number.parseInt(s.getPropertyValue('--viz-primary-g')) || 50,
 		pb: Number.parseInt(s.getPropertyValue('--viz-primary-b')) || 32,
-		ar: Number.parseInt(s.getPropertyValue('--viz-accent-r')) || 160,
-		ag: Number.parseInt(s.getPropertyValue('--viz-accent-g')) || 32,
-		ab: Number.parseInt(s.getPropertyValue('--viz-accent-b')) || 240
+		ar: Number.parseInt(s.getPropertyValue('--viz-accent-r')) || 180,
+		ag: Number.parseInt(s.getPropertyValue('--viz-accent-g')) || 92,
+		ab: Number.parseInt(s.getPropertyValue('--viz-accent-b')) || 245
 	};
 }
 
