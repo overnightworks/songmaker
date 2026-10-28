@@ -2,7 +2,6 @@ import type {
 	AvailableModel,
 	Capabilities,
 	CoverSettingsResponse,
-	CowriterOfferResponse,
 	CowriterSettings,
 	DefaultConfigResponse,
 	JudgeSettings,
@@ -48,10 +47,6 @@ export async function toggleModel(modelId: string, active: boolean): Promise<Ava
 
 export async function fetchCowriterSettings(): Promise<CowriterSettings> {
 	return apiFetch<CowriterSettings>('/api/settings/cowriter');
-}
-
-export async function fetchCowriterOffer(): Promise<CowriterOfferResponse> {
-	return apiFetch<CowriterOfferResponse>('/api/settings/cowriter/offer');
 }
 
 export async function updateCowriterSettings(tailTokenBudget: number): Promise<CowriterSettings> {

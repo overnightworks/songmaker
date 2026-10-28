@@ -9,7 +9,6 @@ import {
 	conversationMenuOrder,
 	conversationMessageCountLabel,
 	conversationRowLabel,
-	cowriterHeaderLabel,
 	cowriterThinkingLabel,
 	cowriterToolCallTarget,
 	cowriterTurnError,
@@ -19,9 +18,8 @@ import {
 } from './cowriter-ui';
 
 describe('co-writer copy', () => {
-	it('C17 names the model the service runs in the header and the thinking line', () => {
-		expect(cowriterHeaderLabel('opus')).toBe('Claude opus');
-		expect(cowriterThinkingLabel()).toBe('Claude is thinking…');
+	it('A-thinking names no vendor in the thinking line', () => {
+		expect(cowriterThinkingLabel()).toBe('Co-writer is thinking…');
 	});
 
 	it.each([
