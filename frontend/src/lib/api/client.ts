@@ -94,8 +94,6 @@ export {
 	toggleModel,
 	fetchCowriterSettings,
 	updateCowriterSettings,
-	fetchJudgeSettings,
-	updateJudgeSettings,
 	fetchCoverSettings,
 	updateCoverSettings,
 	fetchProviderStatus,

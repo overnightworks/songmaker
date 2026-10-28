@@ -149,6 +149,7 @@ class CoverSettingsResponse(BaseModel):
     provider: str
     route: Literal["cli", "api"]
     model: str
+    allowed_providers: list[str]
 
 
 class ProviderStatusResponse(BaseModel):
