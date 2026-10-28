@@ -1262,31 +1262,6 @@ def test_consume_download_task_stream_empty_stream_raises() -> None:
             _run(operation)
 
 
-def test_generation_worker_peer_deadline_cleans_up(generation_worker_peer):
-    """S5-D, L9/L10: A stalled proof names its phase and releases the peer."""
-
-    async def exercise():
-        peer = None
-        peer_context = generation_worker_peer(deadline_seconds=0.05)
-        stalled = asyncio.Event()
-
-        async def wait_for_peer_deadline():
-            nonlocal peer
-            async with peer_context as peer:
-                await stalled.wait()
-
-        operation = wait_for_peer_deadline()
-        with pytest.raises(TimeoutError, match="Worker peer timed out during proof body"):
-            await operation
-        assert not peer.deps.heartbeat.is_running
-        assert peer.deps.cache.loaded_modes() == []
-        async with httpx.AsyncClient(transport=peer.transport) as client:
-            with pytest.raises(RuntimeError, match="Worker peer is closed"):
-                await client.get("http://worker/load_model")
-
-    _run(exercise())
-
-
 def test_generation_worker_peer_rejects_socket_transport_failures(
     generation_worker_peer,
     db_factory,

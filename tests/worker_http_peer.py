@@ -6,7 +6,7 @@ import asyncio
 import json
 import socket
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
 from functools import partial
@@ -67,6 +67,7 @@ class WorkerScenario:
     load_answers: tuple[WorkerAnswer, ...] = ()
     submit_answers: tuple[WorkerAnswer, ...] = ()
     stream_answers: tuple[WorkerAnswer, ...] = ()
+    model_loader: Callable[[str], Awaitable[LoadedModel]] | None = None
 
 
 class BorrowedWorkerTransport(httpx.AsyncBaseTransport):
@@ -181,7 +182,7 @@ class GenerationWorkerPeer:
         self.deps.cache = ModelCache(
             vram_budget_gb=1.0,
             model_sizes={"sft": 1.0, "turbo": 1.0},
-            loader=load_peer_model,
+            loader=scenario.model_loader or load_peer_model,
             unloader=unload_peer_model,
         )
         self.generation_tasks: set[asyncio.Task] = set()
@@ -307,6 +308,7 @@ async def open_generation_worker_peer(
     *,
     db_factory=None,
     deadline_seconds: float = PEER_DEADLINE_SECONDS,
+    startup_deadline_seconds: float = PEER_DEADLINE_SECONDS,
 ) -> AsyncIterator[GenerationWorkerPeer]:
     peer = GenerationWorkerPeer(tmp_path, scenario)
     stack = AsyncExitStack()
@@ -329,7 +331,8 @@ async def open_generation_worker_peer(
 
     stack.push_async_callback(cleanup, "Redis shutdown", peer.redis.aclose)
     stack.push_async_callback(cleanup, "transport shutdown", peer.transport.close_owner)
-    deadline = asyncio.timeout(deadline_seconds)
+    # Startup keeps its own bound; deadline_seconds bounds only the proof body.
+    deadline = asyncio.timeout(startup_deadline_seconds)
     try:
         async with deadline:
             lifespan = peer.worker_app.router.lifespan_context(peer.worker_app)
@@ -344,6 +347,7 @@ async def open_generation_worker_peer(
                 stack.push_async_callback(cleanup, "server shutdown", peer.stop_server)
                 await peer.start_server(db_factory)
             peer.phase = "proof body"
+            deadline.reschedule(asyncio.get_running_loop().time() + deadline_seconds)
             yield peer
             await stack.aclose()
     except TimeoutError as exc:
