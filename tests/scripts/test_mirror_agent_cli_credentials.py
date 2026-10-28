@@ -44,6 +44,8 @@ GROK = {
         "oidc_issuer": "https://auth.x.ai",
         "oidc_client_id": "client-1",
         "coding_data_retention_opt_out": True,
+        "coding_data_team": True,
+        "team_zero_data_retention": True,
         "email": "someone@example.com",
         "first_name": "Some",
         "last_name": "One",
@@ -117,6 +119,8 @@ def test_grok_keeps_its_shape_but_drops_the_operators_person(
     (entry,) = _published(mirror_dir, "grok.json").values()
 
     assert entry["refresh_token"] == ""
+    for policy_flag in ("coding_data_team", "team_zero_data_retention"):
+        assert entry[policy_flag] == GROK["https://auth.x.ai::realm"][policy_flag]
     assert entry["create_time"] == GROK["https://auth.x.ai::realm"]["create_time"]
     assert not {"email", "first_name", "last_name", "profile_image_asset_id"} & set(entry)
 
@@ -607,7 +611,8 @@ MEASURED_REQUIRED_FIELDS = {
     "grok": {
         "key", "auth_mode", "create_time", "expires_at", "user_id", "team_id",
         "principal_type", "principal_id", "oidc_issuer", "oidc_client_id",
-        "coding_data_retention_opt_out", "refresh_token",
+        "coding_data_retention_opt_out", "coding_data_team",
+        "team_zero_data_retention", "refresh_token",
     },
     "codex": {"auth_mode", "tokens"},
     "codex-tokens": {"id_token", "access_token", "account_id", "refresh_token"},
