@@ -22,6 +22,7 @@ from conftest import (
     make_test_app,
     override_provider_runtime,
     refresh_provider_snapshots,
+    seed_user,
     web_client,
 )
 from fake_agent_service import attach_cowriter_service
@@ -43,7 +44,6 @@ from songmaker_cli.db.models import (
     Job,
     RateLimitSetting,
     Song,
-    User,
     Version,
 )
 from songmaker_cli.db.queries.settings import (
@@ -84,10 +84,7 @@ def _stream_events(response) -> list[dict]:
 
 
 def _seed(session, user_id: str) -> None:
-    session.add(User(
-        id=user_id, username=f"user-{user_id}", role="admin",
-    ))
-    session.flush()
+    seed_user(session, f"user-{user_id}", "admin", user_id=user_id)
     session.add(Album(id="alb1", title="Rock", artist="B", created_by=user_id))
     session.add(Song(id="s1", title="Thunder", album_id="alb1", track_number=1))
     session.query(AvailableModel).filter(
