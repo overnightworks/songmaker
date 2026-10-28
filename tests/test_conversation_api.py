@@ -583,7 +583,7 @@ def test_chat_turn_reuses_active_conversation_across_turns(client, service):
 
 
 def test_chat_turn_carries_history_memory_mentions_and_take_into_the_next_turn(client, service):
-    """Spec: REQ-COWRITER-09 -- every turn of the active conversation reaches the run with its
+    """Spec: REQ-COWRITER-05 -- every turn of the active conversation reaches the run with its
     history, memory, mentions, and take context."""
     c, factory = client
     with factory() as session:

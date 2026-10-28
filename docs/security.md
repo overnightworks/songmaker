@@ -494,7 +494,7 @@ being in place.
 
 **What bypasses the middleware, and why.** `McpServer` is the outermost ASGI app, so TrustedHost, the session gate, CSRF, the rate limit and the security headers do not run for `/mcp`; the endpoint runs its own checks in this order: exact Host, no Origin, exactly one Bearer capability, path, method, body at most 1 MiB. A request without a capability is refused before any body is read. Every other path keeps the middleware, and the MCP host name opens nothing else (the Host check answers 400).
 
-**The run binding (Q8).** A handler accepts a call only when the capability names `app` songmaker, purpose `cowriter` and the configured OIDC issuer, and its run id is registered in `cowriter/service_runs.py` for that person's running turn. A capability of an earlier turn, even the same person's, is refused, as is a replay after the turn ended or a restart (the registry is per process and empty at start). A call arriving before songmaker has read `run_started` is refused too: it fails closed. Refusals are tool errors with a fixed text naming nothing from the capability. Each handler loads the person from the database with a fresh session and applies today's owner-only checks.
+**The run binding (Q8).** A handler accepts a call only when the capability names `app` songmaker, agent `cowriter` and the configured OIDC issuer, and its run id is registered in `cowriter/service_runs.py` for that person's running turn. A capability of an earlier turn, even the same person's, is refused, as is a replay after the turn ended or a restart (the registry is per process and empty at start). A call arriving before songmaker has read `run_started` is refused too: it fails closed. Refusals are tool errors with a fixed text naming nothing from the capability. Each handler loads the person from the database with a fresh session and applies today's owner-only checks.
 
 **Arguments.** `execute_cowriter_tool` checks the arguments against the tool's own declaration before any handler runs: an unknown key, a missing required key or a value of another JSON type is a tool error naming the field, with no commit.
 
@@ -506,7 +506,7 @@ being in place.
 
 ## Co-writer turn through the agent service
 
-`POST /chat/turn` starts one run of `agents/cowriter.md` (`model: claude/opus`) at the agent service (`AGENT_SERVICE_URL`, default `http://agent-service:8080`) and reads its event stream to the end; no model runs inside `songmaker-web`. `cowriter/service_turn.py` owns the turn.
+`POST /chat/turn` starts one run of `agents/cowriter.md` at the agent service (`AGENT_SERVICE_URL`, default `http://agent-service:8080`) and reads its event stream to the end; no model runs inside `songmaker-web`. `cowriter/service_turn.py` owns the turn.
 
 **Three tokens per turn.** The person's refresh token (the session row holds it; see "Authentication") becomes a fresh user access token through `fresh_access_token`, which stores a rotated refresh token in its own committed transaction before the token is handed out. Songmaker's workload token comes from the client-credentials grant of the songmaker client. Both travel in plain HTTP on `hal_agent_songmaker` to the service (`Authorization` and `Agent-Workload-Token`), which mints the run capability that `/mcp` receives. None of the three reaches a log line, an error frame, a job record, the chat history or the browser: the job's error holds only a closed problem and detail name, such as `sign_in_again: sign-in-again` or `unavailable: provider_unavailable`. The HTTP client reads no proxy from the environment and follows no redirect.
 
@@ -516,7 +516,7 @@ being in place.
 
 **The run's life.** The run id from `run_started` is registered for the person and released when the turn's stream ends, on every exit including cancellation and a browser that left (a started turn finishes, #1014); a restart empties the registry. Versions a tool wrote before a failure or a cut stream stay; no partial answer is stored as the answer.
 
-**Retention outside songmaker.** The agent service has no database: messages, tool calls, results and the answer pass through its memory only. It writes the system prompt and the tool relay's connection file into the run's private tree, removed after the run; keeps run records (app, person, timestamps, outcome, no content) in memory for an hour; and its access log carries the caller's address and the path. Anthropic receives the turn's text and tool results through the agent service (agent-runtime `docs/wire.md`, "What a run keeps").
+**Retention outside songmaker.** The agent service has no database: messages, tool calls, results and the answer pass through its memory only. It writes the system prompt and the tool relay's connection file into the run's private tree, removed after the run; keeps run records (app, person, timestamps, outcome, no content) in memory for an hour; and its access log carries the caller's address and the path. The provider the agent service's configuration names (Anthropic today; edge `service.toml`) receives the turn's text and tool results through the agent service (agent-runtime `docs/wire.md`, "What a run keeps").
 
 ## Agent-CLI Mounts
 

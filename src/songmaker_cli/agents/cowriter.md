@@ -1,7 +1,6 @@
 ---
 name: cowriter
 description: The musician's songwriting partner, with read and write access to their own songs.
-model: claude/opus
 appRoles: [admin, user]
 tools:
   - list_albums
