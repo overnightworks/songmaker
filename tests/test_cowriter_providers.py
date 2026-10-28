@@ -780,22 +780,21 @@ def test_cover_settings_keep_an_unusable_combination_without_exposing_secrets(
     client, factory = admin_client
     override_provider_runtime(anthropic_api_key=TEST_SECRET.decode())
 
-    assert client.get("/api/settings/cover").json().items() >= {
-        "provider": "codex", "route": "cli", "model": "",
-    }.items()
+    allowed = ["claude", "codex", "grok"]
+    read = client.get("/api/settings/cover")
+    assert read.json() == dict(provider="codex", route="cli", model="", allowed_providers=allowed)
+    assert TEST_SECRET.decode() not in read.text
     response = client.put(
         "/api/settings/cover",
         json={"provider": "claude", "route": "api", "model": "claude-sonnet-4-6"},
     )
 
     assert response.status_code == 200
-    assert response.json().items() >= {
-        "provider": "claude", "route": "api", "model": "claude-sonnet-4-6",
-    }.items()
+    assert response.json() == dict(
+        provider="claude", route="api", model="claude-sonnet-4-6", allowed_providers=allowed,
+    )
     assert TEST_SECRET.decode() not in response.text
     with factory() as session:
-        assert get_cover_settings(session).provider == "claude"
-        assert get_cover_settings(session).route == "api"
         assert get_cover_settings(session).model == "claude-sonnet-4-6"
         stored = {
             setting.setting_key: setting.value_text
