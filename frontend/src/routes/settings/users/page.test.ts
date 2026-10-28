@@ -596,6 +596,7 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 		expect(target.textContent).toContain('cover unavailable');
+		expect(target.textContent).not.toContain('Loading…');
 		expect(target.querySelector(selectFor('Cover', 'provider'))).toBeNull();
 	});
 

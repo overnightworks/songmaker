@@ -41,3 +41,9 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 11
 item = "#1974"
 date = 2026-10-28
 reason = "the cover settings response gains the generated allowed_providers field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/routes/settings/users/page.test.ts 856 -> 857"
+item = "#1974"
+date = 2026-10-28
+reason = "the cover failure test also pins that the row stops claiming to load; one assertion line"

@@ -60,7 +60,7 @@
 		MODELS_HEADING,
 		MODELS_HISTORY_TAIL_LABEL,
 		MODELS_RETRY_LABEL,
-		MODELS_LOADING_LABEL,
+		modelsRowStatus,
 		MODELS_SAVED_LABEL,
 		MODELS_SAVE_FAILED_FALLBACK,
 		MODELS_TASK_COVER_LABEL,
@@ -658,7 +658,7 @@
 					{#if cowriterSettings}
 						<ModelsCowriterRow advanced={cowriterAdvanced} />
 					{:else}
-						<p class="hint">{MODELS_LOADING_LABEL}</p>
+						<p class="hint">{modelsRowStatus($loadFailures.cowriter)}</p>
 					{/if}
 					{#if coverSettings}
 						<ModelsTaskRow
@@ -668,7 +668,7 @@
 							save={saveCover}
 						/>
 					{:else}
-						<p class="hint">{MODELS_LOADING_LABEL}</p>
+						<p class="hint">{modelsRowStatus($loadFailures.cover)}</p>
 					{/if}
 				</div>
 			</section>
