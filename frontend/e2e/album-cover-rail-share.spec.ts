@@ -10,6 +10,7 @@ import {
 	sameOriginHeaders,
 	FlowGuard,
 	LIBRARY_PATH,
+	loadedImages,
 	ONLY_IN_SHELL
 } from './helpers';
 
@@ -220,12 +221,14 @@ test('1354_65_C2 1354_37b_62_A: a shared playlist replaces its upload with the c
 				'src',
 				/\/shared\/playlist\/[^/]+\/cover\?variant=card&v=/
 			);
+			await loadedImages(publicPage.locator('.cover-art .playlist-cover-image'));
 
 			await deletePlaylistCover(page, playlist.id);
 			await publicPage.reload();
 			await expect(publicPage.locator('.cover-art .playlist-cover-image')).toHaveCount(0);
 			await expect(publicPage.locator('.cover-art .playlist-cover-cell')).toHaveCount(4);
 			await expect(publicPage.locator('.cover-art .playlist-cover-cell img')).toHaveCount(1);
+			await loadedImages(publicPage.locator('.cover-art .playlist-cover-cell img'));
 
 			const unshare = await page.request.delete(`/api/playlists/${playlist.id}/share`, {
 				headers: await sameOriginHeaders(page)

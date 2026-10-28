@@ -1,4 +1,4 @@
-import { expect, test as base, type Page, type Locator } from '@playwright/test';
+import { expect, test as base, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { LEGAL_SECTIONS } from '../src/lib/constants/legal';
@@ -8,6 +8,7 @@ import type { SharedPlaylistPayload } from '../src/lib/api/types';
 import {
 	FlowGuard,
 	boundingBoxes,
+	loadedImages,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	type ExpectedRefusal
@@ -109,14 +110,6 @@ function realCover(playlist: RealPlaylist, position: number): string {
 	const cover = playlist.payload.entries[position - 1].album_cover;
 	if (!cover) throw new Error(`Fixture song ${position} needs its member album cover`);
 	return cover.card;
-}
-
-async function loadedImages(images: Locator) {
-	for (const image of await images.all()) {
-		await expect
-			.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
-			.toBeGreaterThan(0);
-	}
 }
 
 async function currentCover(page: Page, cover: string) {
