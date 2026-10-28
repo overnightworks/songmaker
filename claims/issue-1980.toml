@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "723f7de49716ba92381c522b0897037eaf67a6a5"
 branch = "claude/issue-1980-a-deleted-take-leaves-no-file-behind"
-scope = ["src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/worker_base.py", "tests/test_db.py", "tests/test_worker_base.py"]
+scope = ["src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/worker_base.py", "tests/test_db.py", "tests/test_delete_generation_files.py", "tests/test_worker_base.py"]
 opened_commit = "1923b9fa3e52748f523de8f05a1538c9db3ebfa5"
 whole_reason = "One file set per take with its two readers (deletion and the orphan audit) and their two tests; splitting leaves the readers disagreeing."
