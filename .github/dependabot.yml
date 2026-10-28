@@ -62,6 +62,9 @@ updates:
         update-types: ["patch"]
     open-pull-requests-limit: 5
     ignore:
+      # local tags built on the host, not on a registry
+      - dependency-name: "songmaker/acestep-base"
+      - dependency-name: "songmaker/gpu-torch-base"
       - dependency-name: "*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: docker-compose
@@ -71,12 +74,16 @@ updates:
     groups:
       compose-images:
         patterns: ["*"]
-        update-types: ["patch"]
+        update-types: ["minor", "patch"]
     open-pull-requests-limit: 5
     ignore:
       # frozen until the monitoring stack is removed
       - dependency-name: "prom/prometheus"
       - dependency-name: "prom/alertmanager"
       - dependency-name: "grafana/grafana"
-      - dependency-name: "*"
+      # Dependabot reads 16.15 as major.minor, so the 16.x security releases are
+      # its minor step: postgres moves within 16 (same data format), never to 17.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "redis"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
