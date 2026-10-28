@@ -25,7 +25,8 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	]),
 	fetchBuiltinDefaults: vi.fn().mockResolvedValue({ turbo: { lm_temperature: 0.85 } }),
 	fetchPresets: vi.fn().mockResolvedValue([]),
-	fetchGenerationDefaults: vi.fn().mockResolvedValue({})
+	fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
+	fetchVersions: vi.fn().mockResolvedValue([])
 }));
 vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 

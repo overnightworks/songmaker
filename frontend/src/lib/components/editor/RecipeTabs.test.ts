@@ -1,6 +1,12 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createPreset, uploadReferenceAudio } from '$lib/api/client';
+import {
+	createPreset,
+	fetchActiveModels,
+	fetchGenerationDefaults,
+	uploadReferenceAudio
+} from '$lib/api/client';
+import { goto } from '$app/navigation';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import type { PresetItem } from '$lib/api/types';
 import {
@@ -26,12 +32,10 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
 	fetchActiveModels: vi.fn().mockResolvedValue([{ id: 'turbo', is_active: true }]),
 	fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
+	fetchVersions: vi.fn().mockResolvedValue([]),
 	uploadReferenceAudio: vi.fn(),
 	createPreset: vi.fn()
 }));
-vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
-);
 vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 
 const modelStandard: RecipeStandard = {
@@ -270,7 +274,32 @@ describe('RecipeTabs', () => {
 		const target = await renderTabs();
 		await clickSettled(recipeTabNamed(target, 'Generate'));
 		expect(target.querySelector('[role="alert"]')?.textContent).toBe('Failed to load models');
-		expect(getByRoleButton(target, 'Retry')).not.toBeNull();
+		vi.mocked(fetchActiveModels).mockResolvedValueOnce([{ id: 'turbo', is_active: true }]);
+		await clickSettled(getByRoleButton(target, 'Retry'));
+		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
+	});
+
+	it('shows Loading with the Model select disabled while the models load', async () => {
+		activeModels.set([]);
+		activeModelsLoading.set(true);
+		const target = await renderTabs(atStandard({ model: null }));
+		await clickSettled(recipeTabNamed(target, 'Generate'));
+		const select = target.querySelector<HTMLSelectElement>(
+			'select[aria-label="Model"]'
+		) as HTMLSelectElement;
+		expect(select.selectedOptions[0].textContent).toBe('Loading…');
+		expect(select.disabled).toBe(true);
+	});
+
+	it('shows None with the Model select disabled when no model is active', async () => {
+		activeModels.set([]);
+		const target = await renderTabs(atStandard({ model: null }));
+		await clickSettled(recipeTabNamed(target, 'Generate'));
+		const select = target.querySelector<HTMLSelectElement>(
+			'select[aria-label="Model"]'
+		) as HTMLSelectElement;
+		expect(select.selectedOptions[0].textContent).toBe('None');
+		expect(select.disabled).toBe(true);
 	});
 
 	it('shows the model as loaded once the models are in', async () => {
@@ -286,7 +315,24 @@ describe('RecipeTabs', () => {
 		expect(target.querySelector('[role="alert"]')?.textContent).toBe(
 			'Failed to load generation defaults'
 		);
-		expect(getByRoleButton(target, 'Retry')).not.toBeNull();
+		await clickSettled(getByRoleButton(target, 'Retry'));
+		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
+		expect(fetchGenerationDefaults).toHaveBeenCalled();
+	});
+
+	it('puts the uploaded reference path into the draft, with the input disabled while uploading', async () => {
+		const response = Promise.withResolvers<{ path: string; filename: string }>();
+		vi.mocked(uploadReferenceAudio).mockReturnValueOnce(response.promise);
+		const target = await renderTabs();
+		const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
+		Object.defineProperty(input, 'files', { value: [new File(['x'], 'ref.wav')] });
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+		await tick();
+		expect(input.disabled).toBe(true);
+		response.resolve({ path: '/reference.wav', filename: 'ref.wav' });
+		await vi.waitFor(() =>
+			expect(props.values.genParams?.reference_audio_path).toBe('/reference.wav')
+		);
 	});
 
 	it.each([
@@ -322,6 +368,7 @@ describe('RecipeTabs', () => {
 					Array.from(target.querySelectorAll('[role="alert"]')).map((el) => el.textContent)
 				).toEqual([shown])
 			);
+			expect(input.disabled).toBe(false);
 			expect(props.values).toEqual(start);
 		}
 	);
@@ -371,6 +418,7 @@ describe('RecipeTabs', () => {
 		manage.click();
 		await tick();
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 	});
 
 	it('shows Default, with no dot and no undo, for an empty engine beside a preset saved with empty engine fields', async () => {
@@ -384,6 +432,9 @@ describe('RecipeTabs', () => {
 		expect(select.selectedOptions[0].textContent).toBe('Default');
 		expect(target.querySelector('[data-field="preset"] [data-field-changed]')).toBeNull();
 		expect(resetButton(target, 'preset')).toBeNull();
+		props.values = atStandard({ genParams: { lm_temperature: 0.5 } });
+		await tick();
+		expect(select.selectedOptions[0].textContent).toBe('Custom');
 		await clickSettled(getByRoleButton(target, 'Reset all'));
 		expect(select.selectedOptions[0].textContent).toBe('Default');
 	});
