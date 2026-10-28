@@ -23,6 +23,7 @@ from agent_providers.claude import provider
 from agent_providers.claude.provider import verify_cli_tool_surface as _real_verify_cli_tool_surface
 from conftest import fake_cli_process, make_test_app
 
+from songmaker_cli.acestep_state import lm_failure_key
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.db.models import AceStepWorker
@@ -347,7 +348,7 @@ def _get_health(
         state["gpu_healthy"] = gpu_healthy
     heartbeat_bytes = None if state is None else json.dumps(state).encode()
     failure_values = {
-        f"songmaker:acestep:lm-failure:{worker_id}": value
+        lm_failure_key(worker_id): value
         for worker_id, value in (lm_failure_values or {}).items()
     }
     arq_mod._pool.get = AsyncMock(side_effect=lambda key: failure_values.get(key, heartbeat_bytes))
@@ -468,7 +469,7 @@ def test_worker_without_gpu_healthy_field_is_treated_as_not_online(health_client
 def _set_lm_failure_keys(*worker_ids: str) -> None:
     import songmaker_cli.arq_pool as arq_mod
 
-    present = {f"songmaker:acestep:lm-failure:{worker_id}" for worker_id in worker_ids}
+    present = {lm_failure_key(worker_id) for worker_id in worker_ids}
     arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(key in present))
 
 
@@ -493,10 +494,13 @@ def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> N
 
 
 def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+
     _set_lm_failure_keys("acestep-worker-0")
     body = _get_health(
         health_client, heartbeat=None, lm_failure_values={"acestep-worker-0": b"sft"},
     )
+    arq_mod._pool.exists.assert_awaited()
     assert body["acestep_reason"] == "lm_init_failed"
     serialized = json.dumps(body)
     assert "acestep-worker-0" not in serialized
