@@ -332,17 +332,25 @@ def _seed_one_worker(session) -> None:
 
 
 def _get_health(
-    client, *, gpu_healthy: bool | None = None, heartbeat: dict | None = {"loaded": []},
+    client,
+    *,
+    gpu_healthy: bool | None = None,
+    heartbeat: dict | None = {"loaded": []},
+    lm_failure_values: dict[str, bytes] | None = None,
 ) -> dict:
-    """``heartbeat=None`` means the worker publishes no heartbeat at all."""
+    """``heartbeat=None`` means the worker publishes no heartbeat at all;
+    ``lm_failure_values`` maps a worker id to the value stored at its failure key."""
     import songmaker_cli.arq_pool as arq_mod
 
     state = None if heartbeat is None else dict(heartbeat)
     if state is not None and gpu_healthy is not None:
         state["gpu_healthy"] = gpu_healthy
-    arq_mod._pool.get = AsyncMock(
-        return_value=None if state is None else json.dumps(state).encode(),
-    )
+    heartbeat_bytes = None if state is None else json.dumps(state).encode()
+    failure_values = {
+        f"songmaker:acestep:lm-failure:{worker_id}": value
+        for worker_id, value in (lm_failure_values or {}).items()
+    }
+    arq_mod._pool.get = AsyncMock(side_effect=lambda key: failure_values.get(key, heartbeat_bytes))
 
     with (
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
@@ -485,14 +493,14 @@ def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> N
 
 
 def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
-    import songmaker_cli.arq_pool as arq_mod
-
     _set_lm_failure_keys("acestep-worker-0")
-    body = _get_health(health_client, heartbeat=None)
-    # the key's value ("sft") is never fetched, so it cannot reach the body
-    arq_mod._pool.exists.assert_awaited()
+    body = _get_health(
+        health_client, heartbeat=None, lm_failure_values={"acestep-worker-0": b"sft"},
+    )
     assert body["acestep_reason"] == "lm_init_failed"
-    assert "acestep-worker-0" not in json.dumps(body)
+    serialized = json.dumps(body)
+    assert "acestep-worker-0" not in serialized
+    assert "sft" not in serialized
 
 
 def test_reason_follows_the_key_when_the_worker_recovers(health_client) -> None:
