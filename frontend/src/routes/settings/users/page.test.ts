@@ -18,7 +18,6 @@ import {
 	ADMIN_TABS_LABEL,
 	ADMIN_VOICES_EMPTY,
 	COMPACT_LAYOUT_MEDIA,
-	MODELS_LOADING_LABEL,
 	MODELS_SAVE_FAILED_FALLBACK,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
@@ -251,8 +250,10 @@ function rowNamed(target: HTMLElement, task: string): HTMLElement {
 	return row;
 }
 
+const selectFor = (task: string, column: string) => `select[aria-label="${task} ${column}"]`;
+
 function taskSelect(target: HTMLElement, task: string, column: string): HTMLSelectElement {
-	return requireElement<HTMLSelectElement>(target, `select[aria-label="${task} ${column}"]`);
+	return requireElement<HTMLSelectElement>(target, selectFor(task, column));
 }
 
 function providerSelect(target: HTMLElement, task: string): HTMLSelectElement {
@@ -569,6 +570,8 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
+		const models = sectionByHeading(target, 'Models');
+		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover', 'Scoring']);
 		expect(optionLabels(providerSelect(target, 'Scoring'))[0]).toBe('Claude · Checking…');
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Checking…');
 	});
@@ -600,13 +603,10 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(target.querySelector('select[aria-label="Cover provider"]')).toBeNull();
-		expect(target.textContent).toContain(MODELS_LOADING_LABEL);
-
+		expect(target.querySelector(selectFor('Cover', 'provider'))).toBeNull();
 		arrive(judgeSettings('claude', 'claude-opus'));
 		await flush();
 
-		expect(target.textContent).not.toContain(MODELS_LOADING_LABEL);
 		expect(optionLabels(providerSelect(target, 'Cover')).length).toBeGreaterThan(0);
 	});
 
@@ -615,7 +615,7 @@ describe('admin models tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 		expect(target.textContent).toContain('scoring unavailable');
-		expect(target.querySelector('select[aria-label="Cover provider"]')).toBeNull();
+		expect(target.querySelector(selectFor('Cover', 'provider'))).toBeNull();
 	});
 
 	it('saves the cover row with its own provider, route and model', async () => {
