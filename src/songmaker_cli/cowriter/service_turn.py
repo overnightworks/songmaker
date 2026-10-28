@@ -101,7 +101,7 @@ class TurnCaller:
 
 
 @dataclass(frozen=True)
-class RunTokens:
+class _RunTokens:
     user: SecretStr
     workload: SecretStr
 
@@ -135,7 +135,7 @@ async def run_cowriter_turn(
         yield unusable
         return
     agent, service_url = unusable
-    tokens = await asyncio.to_thread(fetch_tokens, caller.app, caller.session_id)
+    tokens = await asyncio.to_thread(_fetch_tokens, caller.app, caller.session_id)
     if isinstance(tokens, TurnProblem):
         yield tokens
         return
@@ -162,7 +162,7 @@ def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "agent file refused")
 
 
-def fetch_tokens(app: FastAPI, session_id: str | None) -> RunTokens | TurnProblem:
+def _fetch_tokens(app: FastAPI, session_id: str | None) -> _RunTokens | TurnProblem:
     """The person's fresh access token, then songmaker's workload token; never both unchecked."""
     if session_id is None:
         return TurnProblem(ChatTurnProblem.SIGN_IN_AGAIN, "no session")
@@ -178,7 +178,7 @@ def fetch_tokens(app: FastAPI, session_id: str | None) -> RunTokens | TurnProble
     workload = relying_party.workload_access_token()
     if isinstance(workload, OidcRefusal):
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "workload token refused")
-    return RunTokens(user, workload)
+    return _RunTokens(user, workload)
 
 
 def _problem_of_refusal(refusal: AccessTokenRefusal) -> TurnProblem:
@@ -188,7 +188,7 @@ def _problem_of_refusal(refusal: AccessTokenRefusal) -> TurnProblem:
 
 
 async def _stream_run(
-    service_url: str, request, tokens: RunTokens, person: RunPerson,
+    service_url: str, request, tokens: _RunTokens, person: RunPerson,
 ) -> AsyncIterator[TurnOutcome]:
     run_id: str | None = None
     decoder = RunStreamDecoder()

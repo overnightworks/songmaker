@@ -35,7 +35,7 @@ function cellTexts(target: HTMLElement): string[] {
 }
 
 describe('C16 ModelsServiceRow', () => {
-	it('says task, provider, route, model and as words in the four columns', () => {
+	it('says task, provider, route and model as words in the four columns', () => {
 		const target = renderRow();
 
 		expect(cellTexts(target)).toEqual([
