@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fetchMediaBytes } from '$lib/api/fetch';
+	import { readVizColors } from '$lib/utils/visualizer';
 
 	interface Props {
 		audioUrl: string;
@@ -89,6 +90,8 @@
 		const ch = canvas.clientHeight;
 		ctx.clearRect(0, 0, cw, ch);
 
+		const { ar, ag, ab } = readVizColors();
+		const accent = `${ar}, ${ag}, ${ab}`;
 		const barWidth = cw / BAR_COUNT;
 		const startX = startPercent * cw;
 		const endX = endPercent * cw;
@@ -99,7 +102,7 @@
 			const y = (ch - barH) / 2;
 			const inRange = x >= startX && x <= endX;
 
-			ctx.fillStyle = inRange ? 'rgba(160, 32, 240, 0.8)' : 'rgba(160, 32, 240, 0.2)';
+			ctx.fillStyle = `rgba(${accent}, ${inRange ? 0.8 : 0.2})`;
 			ctx.fillRect(x + 0.5, y, Math.max(1, barWidth - 1), barH);
 		}
 	}
@@ -240,7 +243,7 @@
 		height: 100%;
 		background: #fff;
 		border-radius: 2px;
-		box-shadow: 0 0 6px rgba(160, 32, 240, 0.8);
+		box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 80%, transparent);
 	}
 
 	.handle::after {
@@ -259,7 +262,7 @@
 	.handle:hover::before,
 	.handle:active::before {
 		width: 5px;
-		box-shadow: 0 0 12px rgba(160, 32, 240, 1);
+		box-shadow: 0 0 12px var(--accent);
 	}
 
 	@media (pointer: coarse) {

@@ -101,7 +101,7 @@
 	}
 
 	.editable-title-display:focus-visible {
-		outline: 2px solid var(--accent, #a020f0);
+		outline: 2px solid var(--accent);
 		outline-offset: 2px;
 	}
 
@@ -109,7 +109,7 @@
 		font: inherit;
 		color: inherit;
 		background: var(--surface, transparent);
-		border: 1px solid var(--accent, #a020f0);
+		border: 1px solid var(--accent);
 		border-radius: 4px;
 		padding: 2px 4px;
 		margin: -3px -5px;

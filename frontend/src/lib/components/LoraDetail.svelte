@@ -666,7 +666,7 @@
 	textarea:focus {
 		outline: none;
 		border-color: var(--accent);
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
+		box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent);
 	}
 
 	textarea:disabled {
@@ -691,7 +691,7 @@
 
 	.drop-zone.drag-over {
 		border-color: var(--accent);
-		background: rgba(160, 32, 240, 0.08);
+		background: color-mix(in srgb, var(--accent) 8%, transparent);
 	}
 
 	.drop-head {
