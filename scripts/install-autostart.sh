@@ -100,7 +100,7 @@ if [[ "$INSTALL_USER" = "root" ]]; then
     echo "ERROR: refusing to install a unit that runs as root." >&2
     echo "You're running this as root directly (no SUDO_USER set), so the unit" >&2
     echo "would get User=root and HOME=/root — that silently breaks the Claude" >&2
-    echo "CLI bind mounts co-writer/lyrical_coherence depend on (docker-compose.yml" >&2
+    echo "CLI bind mounts the web container depends on (docker-compose.yml" >&2
     echo "expects them under the stack owner's home, not /root)." >&2
     echo "Log in as the user the stack belongs to and run:" >&2
     echo "  sudo ./scripts/install-autostart.sh" >&2
