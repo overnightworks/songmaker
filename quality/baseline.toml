@@ -198,7 +198,7 @@
 "test_s8_live_stream_during_second_take.drive" = 68
 "test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime" = 81
 
-[function_lines."tests/test_backfill_audio_durations.py"]
+[function_lines."tests/scripts/test_backfill_audio_durations.py"]
 "test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
 
 [function_lines."tests/test_cover_accounting.py"]
@@ -397,8 +397,8 @@ test_rename_album_strips_whitespace = [["tests/test_lora_api.py", "test_create_l
 test_rename_song_strips_whitespace = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_song_detail_response_uncompressed_without_client_support = [["tests/test_server_middleware.py", "test_tiny_json_response_is_not_gzip_compressed"]]
 
-[clones."tests/test_check_dead_symbols.py"]
-test_gate_takes_no_path_from_the_command_line = [["tests/test_check_style_literals.py", "test_gate_takes_no_path_from_the_command_line"]]
+[clones."tests/scripts/test_check_dead_symbols.py"]
+test_gate_takes_no_path_from_the_command_line = [["tests/scripts/test_check_style_literals.py", "test_gate_takes_no_path_from_the_command_line"]]
 
 [clones."tests/test_conversation_api.py"]
 _seed_owned = [["tests/test_memory.py", "_seed"], ["tests/test_mentions.py", "_seed"]]

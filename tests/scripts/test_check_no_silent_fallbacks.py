@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import check_no_silent_fallbacks as checker  # noqa: E402
 
@@ -333,7 +333,7 @@ def test_real_codebase_passes(
     a quiet stdout. A future real violation must fail this test, not only
     print louder; checked-site counts must be non-zero per rule too, so a
     rule that silently stopped running would fail it as well."""
-    project_root = Path(__file__).resolve().parents[1]
+    project_root = Path(__file__).resolve().parents[2]
     monkeypatch.chdir(project_root)
     rc = checker.main(["src/"])
     out = capsys.readouterr().out
