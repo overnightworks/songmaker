@@ -285,7 +285,8 @@ def _health_response(body: bytes) -> MagicMock:
 
 
 def _health_body(*, llm_initialized: bool) -> bytes:
-    return json.dumps({"data": {"models_initialized": True, "llm_initialized": llm_initialized}}).encode()
+    data = {"models_initialized": True, "llm_initialized": llm_initialized}
+    return json.dumps({"data": data}).encode()
 
 
 def _start_with_health_body(tmp_path: Path, body: bytes | OSError) -> list[SubprocessHandle]:
@@ -343,7 +344,13 @@ def test_start_does_not_read_the_lm_flag_when_the_lm_is_off(
 
 @pytest.mark.parametrize(
     "body",
-    [OSError("refused"), b"not json", b"[]", b'{"data": {}}', b'{"data": {"llm_initialized": "no"}}'],
+    [
+        OSError("refused"),
+        b"not json",
+        b"[]",
+        b'{"data": {}}',
+        b'{"data": {"llm_initialized": "no"}}',
+    ],
     ids=["unreachable", "unparsable", "wrong-shape", "no-flag", "non-boolean"],
 )
 def test_start_treats_an_unreadable_health_body_as_no_lm_verdict(

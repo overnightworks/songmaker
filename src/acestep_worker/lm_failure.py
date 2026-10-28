@@ -35,7 +35,7 @@ def schedule_sigterm() -> int:
 
 
 async def leave_if_lm_failed(deps: WorkerDeps, mode: str, error: SubprocessStartError) -> None:
-    """After an LM failure, remember the mode and end the process so its restart retries the load."""
+    """After an LM failure, remember the mode and end the process so a restart retries it."""
     if not isinstance(error, LmInitFailedError):
         return
     try:

@@ -11,13 +11,12 @@ import fakeredis.aioredis
 import pytest
 from fastapi.testclient import TestClient
 
+from acestep_worker.heartbeat import HeartbeatLoop
 from acestep_worker.lm_failure import LM_FAILURE_EXIT_CODE, lm_failure_key
 from acestep_worker.model_cache import CapacityError, LoadedModel, ModelCache, UnknownModeError
 from acestep_worker.subprocess_runner import LmInitFailedError, SubprocessStartError
 from acestep_worker.task_store import TaskStore
 from acestep_worker.wrapper import WorkerDeps, build_state_payload, create_app
-
-from acestep_worker.heartbeat import HeartbeatLoop
 
 _HEADERS = {"X-Internal-Token": "test-internal-token"}
 _WORKER_ID = "acestep-worker-0"
@@ -196,7 +195,7 @@ def test_start_with_the_key_loads_the_failed_mode_clears_the_key_and_then_regist
 ) -> None:
     worker.plant_key("sft")
 
-    with worker.client() as client:
+    with worker.client():
         assert worker.deps.heartbeat.is_running
         assert worker.deps.registration_task is not None
 
