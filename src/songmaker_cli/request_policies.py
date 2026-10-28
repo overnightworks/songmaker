@@ -92,8 +92,9 @@ BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
 
 # Static PWA root assets are fetched by the browser and the service worker
 # outside of user-driven navigation, so they must not compete with `/api/*`
-# calls for any class's budget. No API path belongs in this allowlist, except the
-# realm's back-channel call, which a throttled caller must not be able to starve.
+# calls for any class's budget. The set holds static assets only; the realm's
+# back-channel call, which a throttled caller must not be able to starve, is exempted in
+# `build_rate_limit_policy` from `SIGN_IN_PATHS`.
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
 # endpoint (a DB query plus ~6 Redis round trips for worker/queue state),

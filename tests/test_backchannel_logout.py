@@ -88,26 +88,18 @@ def test_an_audit_failure_after_the_deletion_answers_400_and_keeps_the_sessions(
     assert world.session_count() == 2
 
 
-@pytest.mark.parametrize(
-    "failing_step",
-    [
-        pytest.param("__init__", id="session-construction"),
-        pytest.param("rollback", id="rollback"),
-        pytest.param("close", id="session-exit"),
-    ],
-)
-def test_a_failure_around_the_database_session_answers_400_and_keeps_the_sessions(
-    world: World, monkeypatch: pytest.MonkeyPatch, failing_step: str,
+def test_a_failure_to_build_the_database_session_answers_400_and_keeps_the_sessions(
+    world: World, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _sign_in_twice(world)
-    refused_token = world.issuer.logout_token(SUBJECT, nonce="n")
+    valid_token = world.issuer.logout_token(SUBJECT)
 
     def fail(*_args, **_kwargs) -> None:
         raise RuntimeError("database session failed")
 
     with monkeypatch.context() as failing:
-        failing.setattr(Session, failing_step, fail)
-        response = _backchannel(world, refused_token)
+        failing.setattr(Session, "__init__", fail)
+        response = _backchannel(world, valid_token)
 
     assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2

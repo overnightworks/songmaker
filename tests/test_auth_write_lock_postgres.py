@@ -74,6 +74,8 @@ class _CallbackPause:
     """Holds the sign-in callback at its pending commit once its new session is flushed,
     and names the backend that asks for the write lock while the callback waits there."""
 
+    _FLUSHED_SIGN_IN = "flushed_sign_in"
+
     def __init__(self) -> None:
         self.reached = threading.Event()
         self.release = threading.Event()
@@ -85,9 +87,12 @@ class _CallbackPause:
         if self.reached.is_set() and self.logout_pid is None and asks_for_the_lock:
             self.logout_pid = connection.connection.dbapi_connection.info.backend_pid
 
+    def note_flush(self, session: Session, _flush_context) -> None:
+        if any(isinstance(row, UserSession) for row in session.new):
+            session.info[self._FLUSHED_SIGN_IN] = True
+
     def __call__(self, session: Session) -> None:
-        rows = session.identity_map.values()
-        if self.reached.is_set() or not any(isinstance(row, UserSession) for row in rows):
+        if self.reached.is_set() or not session.info.get(self._FLUSHED_SIGN_IN):
             return
         self.backend_pid = session.execute(text("SELECT pg_backend_pid()")).scalar_one()
         self.reached.set()
@@ -165,6 +170,7 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
     ))
     pause = _CallbackPause()
     engine = pg_factory.kw["bind"]
+    event.listen(pg_factory, "after_flush", pause.note_flush)
     event.listen(pg_factory, "before_commit", pause)
     event.listen(engine, "before_cursor_execute", pause.note_lock_request)
     try:
@@ -176,6 +182,7 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
     finally:
         pause.release.set()
         stuck = _stop_workers(pg_factory, (callback, logout), (pause.backend_pid, pause.logout_pid))
+        event.remove(pg_factory, "after_flush", pause.note_flush)
         event.remove(pg_factory, "before_commit", pause)
         event.remove(engine, "before_cursor_execute", pause.note_lock_request)
         if stuck:
