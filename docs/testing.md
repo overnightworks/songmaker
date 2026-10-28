@@ -164,7 +164,7 @@ sample of the series already carries it (issue #333). CI runs this as the
 
 ```bash
 docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
-  --entrypoint promtool prom/prometheus:latest test rules alert.rules.test.yml
+  --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 test rules alert.rules.test.yml
 ```
 
 ## End-to-end flows
