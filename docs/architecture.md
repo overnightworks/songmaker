@@ -1650,7 +1650,7 @@ is spawned with `SECRET_ENV_KEYS` scrubbed, and no scorer calls an external
 service, so `PipelineConfig` carries no secret (issue #176; see
 docs/security.md). `TextAccuracyScore.transcript` is the single owner of the
 transcribed text; `Generation.whisper_text` stores it. The stored keys
-`lyrical_coherence` and `lyrical_summary` (`COHERENCE_VERDICT_KEYS`) are no
+`lyrical_coherence` and `lyrical_summary` are no
 scorer's output: a scoring run leaves them as they are.
 
 **Timeouts are per scorer.** `SCORER_TIMEOUT_SECONDS` (120) is the default

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from types import UnionType
-from typing import Annotated, Any, Literal, TypeAliasType, Union, cast, get_args, get_origin
+from typing import Annotated, Any, Final, Literal, TypeAliasType, Union, cast, get_args, get_origin
 
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
@@ -514,8 +514,11 @@ def _model_to_interface(model: type[BaseModel]) -> str:
     return "\n".join(lines)
 
 
+# Stored verdict keys no scorer outputs: score, summary
+COHERENCE_VERDICT_KEYS: Final = ("lyrical_coherence", "lyrical_summary")
+
+
 def _build_track_scores_interface() -> str:
-    from songmaker_cli.constants import COHERENCE_VERDICT_KEYS
     from songmaker_cli.scoring.registry import SCORERS
 
     fields = [

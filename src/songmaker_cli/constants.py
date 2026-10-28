@@ -124,7 +124,6 @@ class SongWorkKind(StrEnum):
 
 
 # Scoring pipeline
-COHERENCE_VERDICT_KEYS: Final = ("lyrical_coherence", "lyrical_summary")  # score, summary
 SILENCE_TOP_DB = 40
 SILENCE_MIN_GAP_SECONDS = 2.0
 SILENCE_TRIM_SECONDS = 2.0
