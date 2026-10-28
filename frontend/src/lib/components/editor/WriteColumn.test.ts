@@ -39,6 +39,13 @@ async function render() {
 }
 
 describe('WriteColumn write mode', () => {
+	it('hosts the closed Recipe line above Style (C4, #1935 acceptance 1)', async () => {
+		const { target } = await render();
+		const first = target.querySelector('.write-mode')?.firstElementChild;
+		expect(first?.classList.contains('recipe-line')).toBe(true);
+		expect(first?.nextElementSibling?.querySelector('textarea')).not.toBeNull();
+	});
+
 	it('edits Style and Lyrics against the shared editor draft', async () => {
 		const { target } = await render();
 		const lyrics = target.querySelector<HTMLTextAreaElement>('.lyrics-area');

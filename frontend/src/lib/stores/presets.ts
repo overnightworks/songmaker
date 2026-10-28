@@ -14,7 +14,6 @@ import {
 	deletePresetApi,
 	setPresetDefault as setPresetDefaultApi
 } from '$lib/api/client';
-import { editGenParams } from '$lib/stores/editor';
 import { recipeModel } from '$lib/stores/recipe';
 
 export const presets = writable<PresetItem[]>([]);
@@ -136,20 +135,4 @@ export const effectiveGenerationDefaults = derived(
 			...$builtinDefaults[$recipeModel ?? ''],
 			...$generationDefaults[$recipeModel ?? '']
 		}) as Required<VersionGenerationParams>
-);
-
-function presetParamsEqual(a: VersionGenerationParams, b: VersionGenerationParams): boolean {
-	const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-	for (const key of keys) {
-		if ((a as Record<string, unknown>)[key] !== (b as Record<string, unknown>)[key]) return false;
-	}
-	return true;
-}
-
-export const currentPreset = derived(
-	[presets, recipeModel, editGenParams],
-	([$presets, $recipeModel, $editGenParams]) =>
-		$presets.find(
-			(p) => p.model_mode === $recipeModel && presetParamsEqual(p.params, $editGenParams ?? {})
-		)
 );

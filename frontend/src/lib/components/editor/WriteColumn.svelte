@@ -15,6 +15,7 @@
 	} from '$lib/constants';
 	import Icon from '../Icon.svelte';
 	import GrowingTextarea from './GrowingTextarea.svelte';
+	import RecipeLine from './RecipeLine.svelte';
 	import VersionsSheet from './VersionsSheet.svelte';
 
 	interface Props {
@@ -32,6 +33,7 @@
 </script>
 
 <div class="write-mode">
+	<RecipeLine />
 	<label class="edit-field">
 		<span>{EDITOR_STYLE_PROMPT_LABEL}</span>
 		<GrowingTextarea value={$editPrompt} oninput={setDraftPrompt} minimumLines={4} />

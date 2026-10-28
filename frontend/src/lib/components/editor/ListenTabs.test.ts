@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detailTab, type DetailTab } from '$lib/stores/navigation';
 import { makeSong } from '$lib/test-utils/factories';
 import ListenTabs from './ListenTabs.svelte';
+import listenTabsSource from './ListenTabs.svelte?raw';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 const paneSnippets = {
@@ -118,6 +119,22 @@ describe('ListenTabs', () => {
 		expect(listenTab(target, 'cowriter').tabIndex).toBe(-1);
 		const panel = document.getElementById(takes.getAttribute('aria-controls') ?? '');
 		expect(panel?.getAttribute('role')).toBe('tabpanel');
+	});
+
+	it('names a panel in aria-controls only while that panel is in the page (C5, #1935 acceptance 10)', async () => {
+		const target = await render();
+		expect(listenTab(target, 'cowriter').hasAttribute('aria-controls')).toBe(false);
+		for (const tab of ['takes', 'cowriter'] as const) {
+			listenTab(target, tab).click();
+			await tick();
+			const controls = listenTab(target, tab).getAttribute('aria-controls') ?? '';
+			expect(document.getElementById(controls)?.getAttribute('role')).toBe('tabpanel');
+		}
+		expect(listenTab(target, 'takes').hasAttribute('aria-controls')).toBe(false);
+	});
+
+	it('sums no pixel chrome height for the Co-writer pane (C5, #1935 acceptance 8)', () => {
+		expect(listenTabsSource).not.toMatch(/calc\(100dvh - \d+px\)/);
 	});
 
 	it('mounts the Takes pane only while Takes is selected (S9, #1927 acceptance 4)', async () => {

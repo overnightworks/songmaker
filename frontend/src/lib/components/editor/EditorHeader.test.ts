@@ -2,14 +2,7 @@ import { makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
-import {
-	clearHitboxStyles,
-	clearPointer,
-	injectHitboxStyles,
-	minHeightPx,
-	setPointer
-} from '$lib/test-utils/hitbox';
+import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
 import EditorHeader from './EditorHeader.svelte';
 import editorHeaderSource from './EditorHeader.svelte?raw';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
@@ -78,8 +71,6 @@ function defaultProps() {
 		onunshare: vi.fn(async () => undefined),
 		onaddtoplaylist: vi.fn(),
 		ondeletesong: vi.fn(),
-		recipeOpen: false,
-		ontogglerecipe: vi.fn(),
 		saveDisabled: true,
 		onsave: vi.fn()
 	};
@@ -95,13 +86,12 @@ async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) 
 }
 
 describe('EditorHeader', () => {
-	it('renders one header row with the Recipe toggle and Generate alone (S9, #1927 acceptance 1)', async () => {
+	it('renders one header row with Generate alone and no Recipe toggle (C4, #1935 acceptance 6)', async () => {
 		const { target } = await render();
 		const rows = target.querySelectorAll('.detail-header');
 		expect(rows).toHaveLength(1);
-		const toggles = target.querySelectorAll('.view-toggle');
-		expect(toggles).toHaveLength(1);
-		expect(toggles[0].textContent).toContain('Recipe');
+		expect(target.querySelector('.view-toggle')).toBeNull();
+		expect(target.querySelector('.editor-views')).toBeNull();
 		const generateButtons = target.querySelectorAll('.generate-action .primary-button');
 		expect(generateButtons).toHaveLength(1);
 		expect(generateButtons[0].textContent).toContain('Generate');
@@ -148,15 +138,6 @@ describe('EditorHeader', () => {
 		expect(onselectnext).toHaveBeenCalledTimes(1);
 	});
 
-	it('reflects toggle state via aria-pressed and calls the right handler', async () => {
-		const ontogglerecipe = vi.fn();
-		const { target } = await render({ ontogglerecipe, recipeOpen: true });
-		const recipeToggle = target.querySelectorAll<HTMLButtonElement>('.view-toggle')[0];
-		expect(recipeToggle.getAttribute('aria-pressed')).toBe('true');
-		recipeToggle.click();
-		expect(ontogglerecipe).toHaveBeenCalledTimes(1);
-	});
-
 	it('opens the song menu whose first row names the song', async () => {
 		const { target } = await render();
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
@@ -164,23 +145,11 @@ describe('EditorHeader', () => {
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Song · Sommerlicht');
 	});
 
-	it('grows the view toggles to the touch height on a coarse pointer, keeping their label width', async () => {
-		const { target } = await render();
-		const toggle = target.querySelector<HTMLButtonElement>('.view-toggle');
-		if (!toggle) throw new Error('Expected a view toggle button');
-		setPointer('coarse');
-		expect(minHeightPx(toggle, 'view toggle')).toBe(HITBOX_FREQUENT_PX);
-		setPointer('fine');
-		expect(minHeightPx(toggle, 'view toggle')).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
-	});
-
 	it('draws no hitbox face across a labelled control', async () => {
 		// #163/1: the face is a fixed 24/44px box, so on a text label it cuts
 		// straight through the word. Labelled buttons carry their own border.
 		const { target } = await render();
-		for (const labelled of target.querySelectorAll(
-			'.view-toggle, .generate-action .primary-button'
-		)) {
+		for (const labelled of target.querySelectorAll('.generate-action .primary-button')) {
 			expect(
 				labelled.hasAttribute('data-hitbox-face'),
 				`${labelled.textContent?.trim()} draws a face over its label`
