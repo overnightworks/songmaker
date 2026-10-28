@@ -1,4 +1,4 @@
-"""#1949 A3: songmaker reads no offer, so the old route answers 404 and the agent service is not asked."""
+"""#1949 A3: songmaker reads no offer, so the old route answers 404 and sends no request."""
 
 from __future__ import annotations
 
