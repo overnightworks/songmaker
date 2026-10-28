@@ -1,4 +1,4 @@
-import type { TrackScores } from '$lib/api/types';
+import type { GenerationItem, TrackScores } from '$lib/api/types';
 
 interface ScoreThreshold {
 	good: number;
@@ -102,31 +102,24 @@ export function scoreReadings(scores: TrackScores | null): ScoreReading[] {
 // runs this long (issue #222).
 const QUALITY_FLAG_SILENCE_SECONDS = 15;
 
-// lyrical_coherence lands on exactly 0 in the clear no-vocals case —
-// Whisper's transcript came back empty — and, as a defensive fallback, when
-// the judge's own response couldn't be parsed (scoring/lyrical_coherence.py).
-// Either way it is a hard failure worth flagging, unlike merely weak or
-// garbled singing (score 1+), which already shows through the score badge's
-// own color.
-const QUALITY_FLAG_VOCAL_FAILURE_COHERENCE = 0;
-
 interface QualityFlag {
 	label: string;
 	title: string;
 }
 
-// The one hard-failure flag a take can carry, read off the same score table
-// as the headline pill but independent of it — a take can carry a good
-// headline score (e.g. a listener's own rating) while still having produced
-// no vocals or gone silent partway through.
-export function qualityFlag(scores: TrackScores | null): QualityFlag | null {
-	if (!scores) return null;
-	if (scores.lyrical_coherence === QUALITY_FLAG_VOCAL_FAILURE_COHERENCE) {
-		return {
-			label: 'No vocals',
-			title: scores.lyrical_summary || 'No vocals detected in this take'
-		};
+// The hard-failure flags a take can carry, independent of the headline pill —
+// a take can carry a good headline score (e.g. a listener's own rating) while
+// still having produced no vocals or gone silent partway through. "No vocals"
+// is the take's own transcript coming back empty ("" — null means not yet
+// transcribed) for a version that has lyrics.
+export function qualityFlag(
+	take: Pick<GenerationItem, 'scores' | 'whisper_text' | 'version_lyrics'>
+): QualityFlag | null {
+	if (take.whisper_text === '' && take.version_lyrics?.trim()) {
+		return { label: 'No vocals', title: 'No vocals detected in this take' };
 	}
+	const scores = take.scores;
+	if (!scores) return null;
 	if (
 		scores.silence_longest !== undefined &&
 		scores.silence_longest >= QUALITY_FLAG_SILENCE_SECONDS

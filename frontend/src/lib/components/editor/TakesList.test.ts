@@ -583,21 +583,21 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('flags a take with no vocals detected', async () => {
+	const LYRICS = 'Night current';
+	it.each([
+		['lyrics and an empty transcript', LYRICS, '', undefined, '⚠ No vocals'],
+		['a stored coherence of 7', LYRICS, '', { lyrical_coherence: 7 }, '⚠ No vocals'],
+		['a transcript not yet made', LYRICS, null, undefined, null],
+		['no lyrics (an instrumental)', '  ', '', undefined, null],
+		['a transcript, stored coherence 0', LYRICS, 'night', { lyrical_coherence: 0 }, null]
+	])('shows the flag for %s as %s', async (_name, version_lyrics, whisper_text, scores, label) => {
+		const take = { ...measuredTakeDefaults(), version_lyrics, whisper_text, scores };
 		const { target } = await render({
-			song: song({
-				...versionedSongDefaults(),
-				generations: [
-					generation({
-						...measuredTakeDefaults(),
-						scores: { lyrical_coherence: 0, lyrical_summary: 'Whisper found no vocals' }
-					})
-				]
-			})
+			song: song({ ...versionedSongDefaults(), generations: [generation(take)] })
 		});
 		const badge = target.querySelector<HTMLElement>('.quality-flag-badge');
-		expect(badge?.textContent?.trim()).toBe('⚠ No vocals');
-		expect(badge?.title).toBe('Whisper found no vocals');
+		expect(badge?.textContent?.trim() ?? null).toBe(label);
+		if (label) expect(badge?.title).toBe('No vocals detected in this take');
 	});
 
 	it('flags a take with a long silent gap', async () => {

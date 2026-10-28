@@ -181,7 +181,7 @@
 	const duration = $derived(formatDuration(gen));
 	const provenance = $derived(compact ? null : takeProvenance(gen));
 	const headline = $derived(compact ? null : headlineScore(gen));
-	const flag = $derived(compact ? null : qualityFlag(gen.scores));
+	const flag = $derived(compact ? null : qualityFlag(gen));
 	const batchNotice = $derived(compact ? null : takeBatchReductionLabel(gen.generation_params));
 	const voice = $derived(compact ? undefined : voiceForGeneration(gen));
 	// A plain click on a link to another take unfolds the version holding it,
