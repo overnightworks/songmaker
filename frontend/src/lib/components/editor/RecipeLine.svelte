@@ -58,12 +58,21 @@
 	let defaultsRequested = false;
 	let listsRequested = false;
 
+	let lineButton: HTMLButtonElement | undefined = $state();
+
 	// Opening and closing replace the focused button, so focus follows the
 	// control that took its place.
-	async function toggle(open: boolean, focusSelector: string): Promise<void> {
-		recipeOpen.set(open);
+	async function open(): Promise<void> {
+		const host = lineButton?.parentElement;
+		recipeOpen.set(true);
 		await tick();
-		document.querySelector<HTMLElement>(focusSelector)?.focus();
+		host?.querySelector<HTMLElement>('[data-tab="song"]')?.focus();
+	}
+
+	async function close(): Promise<void> {
+		recipeOpen.set(false);
+		await tick();
+		lineButton?.focus();
 	}
 
 	$effect(() => {
@@ -80,14 +89,15 @@
 </script>
 
 {#if $recipeOpen}
-	<RecipeTabs {values} {standard} onchange={apply} onclose={() => toggle(false, '.recipe-line')} />
+	<RecipeTabs {values} {standard} onchange={apply} onclose={close} />
 {:else}
 	<button
 		type="button"
 		class="recipe-line"
+		bind:this={lineButton}
 		aria-expanded="false"
 		aria-label={differs ? `${RECIPE_PANEL_LABEL}, ${RECIPE_CHANGED_LABEL}` : RECIPE_PANEL_LABEL}
-		onclick={() => toggle(true, '[data-tab="song"]')}
+		onclick={open}
 	>
 		<span class="label">{RECIPE_PANEL_LABEL}</span>
 		{#if differs}<i class="dot" data-recipe-changed aria-hidden="true"></i>{/if}
