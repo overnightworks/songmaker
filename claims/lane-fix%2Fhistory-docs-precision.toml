@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d3c4d26e6f7c9b8b03e7bb0155609a506ccd6710"
 branch = "fix/history-docs-precision"
-scope = ["docs/architecture.md", "frontend/src/lib/stores/auth.ts"]
+scope = ["docs/architecture.md", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/auth.ts"]
 opened_commit = "769306fcb8d877bb30522728515b6322381d088a"
