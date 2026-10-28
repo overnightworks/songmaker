@@ -358,8 +358,8 @@ tests/acestep_worker/
 ├── test_settings_startup_timeout.py
 ├── test_subprocess_runner.py
 ├── test_task_store.py
-├── test_train_lora.py
 ├── test_wrapper.py
+├── test_wrapper_train_lora.py
 └── test_wrapper_training_child_stop.py
 
 frontend/src/
