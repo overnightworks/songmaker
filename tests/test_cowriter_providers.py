@@ -925,13 +925,13 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
     assert response.content == _pinned_response_body(case)
 
 
-@pytest.mark.parametrize("role", ["admin", "member"])
+@pytest.mark.parametrize("role", ["admin", "user"])
 @pytest.mark.parametrize("method", ["GET", "PUT"])
-def test_removed_judge_endpoint_answers_ordinary_not_found(admin_client, method, role):
-    client = admin_client[0]
-    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-        "u-test", role=role, username="u-u-test")
-    unknown, removed = [client.request(method, f"/api/settings/{n}") for n in ("nope", "judge")]
+def test_removed_judge_endpoint_answers_ordinary_not_found(tmp_path, mock_arq_pool, method, role):
+    overrides = (client := make_test_app(tmp_path)[0]).app.dependency_overrides
+    overrides[get_current_user] = lambda: make_authenticated_user("u", role=role)
+    with client:
+        unknown, removed = [client.request(method, f"/api/settings/{n}") for n in ("nope", "judge")]
     assert removed.status_code == unknown.status_code == 404
     assert removed.content == unknown.content
 
