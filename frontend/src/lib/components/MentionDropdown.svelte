@@ -73,7 +73,7 @@
 	.mention-option:hover,
 	.mention-option.selected {
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.mention-title {

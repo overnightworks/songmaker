@@ -331,7 +331,7 @@
 	.default-chip.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.default-chip.shared {
@@ -351,7 +351,7 @@
 
 	.save-btn {
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
+		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		padding: var(--btn-padding-pill);
@@ -365,7 +365,7 @@
 	}
 
 	.save-btn:hover:not(:disabled) {
-		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
+		box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	.save-btn:disabled {
@@ -453,7 +453,7 @@
 	.preset-name-input:focus {
 		border-color: var(--accent);
 		outline: none;
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
+		box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent);
 	}
 
 	.model-select {
@@ -469,7 +469,7 @@
 	.model-select:focus {
 		border-color: var(--accent);
 		outline: none;
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
+		box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent);
 	}
 
 	.model-badge {
@@ -519,7 +519,7 @@
 		padding: 1px 6px;
 		border-radius: 3px;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 		letter-spacing: 0.5px;
 	}
 

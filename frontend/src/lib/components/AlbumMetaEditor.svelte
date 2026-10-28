@@ -215,7 +215,7 @@
 		border: 1px solid var(--accent);
 		border-radius: var(--btn-radius-sm);
 		background: var(--accent);
-		color: #fff;
+		color: var(--on-accent);
 		font-family: var(--font-display);
 		font-size: 0.78rem;
 		font-weight: 500;

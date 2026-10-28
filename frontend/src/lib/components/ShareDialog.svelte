@@ -153,6 +153,6 @@
 	}
 
 	.confirm-btn:hover {
-		box-shadow: 0 0 12px rgba(160, 32, 240, 0.3);
+		box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 </style>

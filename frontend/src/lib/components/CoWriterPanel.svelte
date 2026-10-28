@@ -1364,7 +1364,7 @@
 
 	.message.user {
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 		align-self: flex-end;
 		border-bottom-right-radius: 2px;
 	}

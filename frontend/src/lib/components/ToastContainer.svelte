@@ -63,9 +63,9 @@
 
 	.toast-info {
 		background: rgba(26, 12, 46, 0.9);
-		border: 1px solid var(--accent, #a020f0);
+		border: 1px solid var(--accent);
 		color: #ce93d8;
-		box-shadow: 0 4px 16px rgba(160, 32, 240, 0.15);
+		box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 15%, transparent);
 	}
 
 	.toast-message {
