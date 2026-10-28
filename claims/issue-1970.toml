@@ -1,0 +1,7 @@
+claim_id = "b0a86780567c4fbabd21c3cfc9c6ba3c"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "eb1014ecd0e53da201e72f241533831ae6cd9418"
+branch = "claude/issue-1970-no-vocals-reads-transcript"
+scope = ["frontend/src/lib/components/editor/TakeRow.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/utils/scores.ts"]
+opened_commit = "09bccc8cbf5b8638e56b472683d4bebf4dcae385"
