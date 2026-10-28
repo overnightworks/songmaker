@@ -14,10 +14,10 @@ import {
 	COWRITER_NEW_CONVERSATION_LABEL,
 	COWRITER_MESSAGE_COUNT_TEMPLATE,
 	COWRITER_NEW_CONVERSATION_LINE,
-	COWRITER_PROVIDER_LABEL,
 	COWRITER_SINGLE_MESSAGE_COUNT,
 	COWRITER_UNAVAILABLE_TEXT,
-	DAY_LABEL_TODAY
+	DAY_LABEL_TODAY,
+	EDITOR_VIEW_COWRITER_LABEL
 } from '$lib/constants';
 import {
 	DAY_LABEL_LOCALE,
@@ -66,7 +66,7 @@ export function cowriterToolCallTarget(
 }
 
 export function cowriterThinkingLabel(): string {
-	return `${COWRITER_PROVIDER_LABEL} is thinking…`;
+	return `${EDITOR_VIEW_COWRITER_LABEL} is thinking…`;
 }
 
 export type CowriterProblem = ChatTurnProblemFrame['problem'];
@@ -114,10 +114,6 @@ export function cowriterWaitClock(seconds: number): string {
 
 export function providerDisplayName(provider: string): string {
 	return provider.charAt(0).toUpperCase() + provider.slice(1);
-}
-
-export function cowriterHeaderLabel(model: string): string {
-	return `${COWRITER_PROVIDER_LABEL} ${model}`;
 }
 
 /** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */

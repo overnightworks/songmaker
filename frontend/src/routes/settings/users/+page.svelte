@@ -728,7 +728,7 @@
 						<span>{MODELS_COLUMN_STATUS_LABEL}</span>
 					</div>
 					{#if cowriterSettings}
-						<ModelsCowriterRow model={cowriterSettings.model} advanced={cowriterAdvanced} />
+						<ModelsCowriterRow advanced={cowriterAdvanced} />
 					{:else}
 						<p class="hint">{MODELS_LOADING_LABEL}</p>
 					{/if}

@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { expect, request, type APIRequestContext, type Cookie } from '@playwright/test';
 import type { JobItem } from '../src/lib/api/types';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
+import { PROBE_STACK_TARGET, requiredAdminUsername, requiredEnv } from './required-env';
 
 const execFileAsync = promisify(execFile);
 
@@ -25,7 +26,7 @@ const REPO_ROOT = path.join(E2E_DIR, '..', '..');
 const COMPOSE_ARGS = ['compose', '-f', 'docker-compose.yml', '-f', 'docker/docker-compose.ci.yml'];
 
 export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
-export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
+export const BASE_URL = requiredEnv('E2E_BASE_URL', PROBE_STACK_TARGET);
 
 // The app's own take address (`audioUrlOf` in `services/audioPlayer.svelte.ts`).
 const AUDIO_PATH_PREFIX = '/audio/';
@@ -208,12 +209,6 @@ interface ShareLink {
 
 type MultipartFile = { name: string; mimeType: string; buffer: Buffer };
 
-export function requiredEnv(name: string): string {
-	const value = process.env[name];
-	if (!value) throw new Error(`${name} must be set to the e2e admin's username`);
-	return value;
-}
-
 function seededSong(songIdByTitle: Map<string, string>, title: string): SeededSong {
 	const id = songIdByTitle.get(title);
 	if (!id) throw new Error(`Missing seeded song ${title}`);
@@ -271,7 +266,7 @@ async function seedFillerAlbums(titlePrefix: string): Promise<void> {
 				'--title-prefix',
 				titlePrefix,
 				'--owner-username',
-				requiredEnv('E2E_ADMIN_USERNAME')
+				requiredAdminUsername()
 			],
 			{ cwd: REPO_ROOT }
 		);
@@ -300,7 +295,7 @@ async function archivePreviousE2EAlbums(): Promise<void> {
 				'--title-prefix',
 				E2E_ALBUM_TITLE_PREFIX,
 				'--owner-username',
-				requiredEnv('E2E_ADMIN_USERNAME')
+				requiredAdminUsername()
 			],
 			{ cwd: REPO_ROOT }
 		);
@@ -497,7 +492,7 @@ export async function seedVoiceTake(api: APIRequestContext): Promise<SeededVoice
 				'--take-count',
 				'1',
 				'--owner-username',
-				requiredEnv('E2E_ADMIN_USERNAME'),
+				requiredAdminUsername(),
 				'--lyrics',
 				lyrics,
 				'--prompt',
@@ -700,7 +695,7 @@ export async function seedTakeStripSong(
 				'--take-count',
 				String(takeCount),
 				'--owner-username',
-				requiredEnv('E2E_ADMIN_USERNAME')
+				requiredAdminUsername()
 			],
 			{ cwd: REPO_ROOT },
 			readFileSync(TAKE_FIXTURE)
@@ -772,7 +767,7 @@ export async function seedSongPhoneSong(
 				String(takeCount),
 				...(takeSeedBase === undefined ? [] : ['--take-seed-base', String(takeSeedBase)]),
 				'--owner-username',
-				requiredEnv('E2E_ADMIN_USERNAME')
+				requiredAdminUsername()
 			],
 			readFileSync(TAKE_FIXTURE)
 		)
@@ -785,7 +780,7 @@ export async function seedQueuedGenerationJob(songId: string): Promise<string> {
 			'--song-id',
 			songId,
 			'--owner-username',
-			requiredEnv('E2E_ADMIN_USERNAME')
+			requiredAdminUsername()
 		])
 	);
 }
@@ -840,7 +835,7 @@ export async function seedRunningGenerationJob(
 			String(options.takeCount),
 			...phaseArgs(options),
 			'--owner-username',
-			requiredEnv('E2E_ADMIN_USERNAME')
+			requiredAdminUsername()
 		])
 	);
 }
@@ -1003,7 +998,7 @@ export async function seedAccount(
 
 /** The run's one admin: the stack has no admin bootstrap, so the seeding helper makes the account. */
 export function seedAdminAccount(): Promise<SeededAccount> {
-	return seedAccount(requiredEnv('E2E_ADMIN_USERNAME'), 'admin');
+	return seedAccount(requiredAdminUsername(), 'admin');
 }
 
 /** An API context that carries the account's session. */

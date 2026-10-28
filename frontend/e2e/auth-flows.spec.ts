@@ -30,10 +30,7 @@ import {
 } from './helpers';
 import { BASE_URL, runMarker, seedAccount, signedInApi, type SeededAccount } from './seed';
 
-// The service worker answers a navigation on the page's behalf, and Playwright
-// then reports the server's redirect only until the worker has taken the page
-// over; these flows watch that redirect, and none of them is about offline use.
-test.use({ storageState: { cookies: [], origins: [] }, serviceWorkers: 'block' });
+test.use({ storageState: { cookies: [], origins: [] } });
 
 const SESSION_REFUSED = [{ path: '/api/auth/me', statuses: [401] }];
 const FAILED_SIGN_IN_REFUSED = [{ path: '/auth/callback', statuses: [403] }];

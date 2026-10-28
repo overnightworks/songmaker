@@ -23,6 +23,10 @@ export default defineConfig({
 	use: {
 		baseURL: BASE_URL,
 		storageState: STORAGE_STATE_FILE,
+		// The worker would answer a stubbed request from its own cache or the real
+		// server; a spec that proves worker behaviour opts back in with
+		// test.use({ serviceWorkers: 'allow' }).
+		serviceWorkers: 'block',
 		trace: 'on-first-retry',
 		screenshot: 'only-on-failure',
 		video: 'off'

@@ -2,6 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { HOME_PATH, offlineStrip, waitForServiceWorkerControl } from './helpers';
 import { readSeededLibrary } from './seed';
 
+// Every flow here proves what the service worker answers offline.
+test.use({ serviceWorkers: 'allow' });
+
 /** The kit's look as the offline page shows it: both faces loadable from the shell cache, the token set. */
 async function offlineLook(page: Page) {
 	return page.evaluate(async () => {
