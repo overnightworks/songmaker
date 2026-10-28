@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { requiredEnv, requiredSeedId, seedJobState } from './seed';
+import { requiredAdminUsername } from './required-env';
+import { requiredSeedId, seedJobState } from './seed';
 
 const COVER_FIXTURE = path.join(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -29,7 +30,7 @@ export async function seedRunningCoverJob(
 			albumId,
 			...offsetArgs,
 			'--owner-username',
-			requiredEnv('E2E_ADMIN_USERNAME')
+			requiredAdminUsername()
 		])
 	);
 }

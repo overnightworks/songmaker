@@ -1,15 +1,29 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 
-const API_TARGET = 'http://localhost:8080';
+const API_TARGET = process.env.SONGMAKER_API_TARGET;
 const FONT_FILE_PATTERN = /\.woff2?$/;
 
 function keepFontsAsFiles(filePath: string): false | undefined {
 	return FONT_FILE_PATTERN.test(filePath) ? false : undefined;
 }
 
+// Only the dev server proxies; build, preview, check and install load this file without a target.
+function requireApiTargetForDevServer(): Plugin {
+	return {
+		name: 'require-api-target-for-dev-server',
+		configureServer() {
+			if (!API_TARGET) {
+				throw new Error(
+					'SONGMAKER_API_TARGET is not set: point it at a probe stack (frontend/e2e/README.md, "Running it locally"), never the live stack on 8080'
+				);
+			}
+		}
+	};
+}
+
 export default defineConfig({
-	plugins: [sveltekit()],
+	plugins: [requireApiTargetForDevServer(), sveltekit()],
 	build: {
 		assetsInlineLimit: keepFontsAsFiles
 	},
