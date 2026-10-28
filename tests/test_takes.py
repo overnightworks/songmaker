@@ -75,8 +75,8 @@ def _seed(session, user_id: str) -> None:
         mp3_path="u/g2.mp3", is_picked=True, whisper_text="other song",
     ))
     session.add(Score(
-        id="scA", generation_id="gA", scorer="text_accuracy",
-        value={"score": 81.0},
+        id="scA", generation_id="gA", scorer="batch",
+        value={"text_accuracy": 81.0, "lyrical_coherence": 8, "bpm_detected": 96.0},
     ))
     session.query(AvailableModel).filter(
         AvailableModel.id.in_(["turbo", "sft"]),
@@ -152,7 +152,8 @@ def test_without_player_uses_playable_pick(client, service):
     assert "whisper_text:\nsung A" in body
     assert "is_picked: true" in body
     assert "is_kept: true" in body
-    assert "text_accuracy: 81.0" in body
+    assert "scores:\nbpm_detected: 96.0\nlyrical_coherence: 8\ntext_accuracy: 81.0" in body
+    assert "batch:" not in body
 
 
 def test_without_pick_uses_newest_playable(client, service):

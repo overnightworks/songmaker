@@ -357,7 +357,7 @@ class GenerationResponse(BaseModel):
 
 def _generation_scores(gen: Generation) -> dict[str, object]:
     try:
-        scores = _score_values(gen)
+        scores = score_values(gen)
         _add_user_rating(scores, gen)
         return scores
     except (TypeError, AttributeError, KeyError):
@@ -365,7 +365,7 @@ def _generation_scores(gen: Generation) -> dict[str, object]:
         return {}
 
 
-def _score_values(gen: Generation) -> dict[str, object]:
+def score_values(gen: Generation) -> dict[str, object]:
     scores: dict[str, object] = {}
     for score in gen.scores:
         if not isinstance(score.value, dict):
