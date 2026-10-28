@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatTime } from '$lib/utils/format';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { laidOutSeekLine, pointerOnSeekLine, shownSeekTime } from '$lib/test-utils/seek-line';
-import { followingGlowSnippet, reactiveProps } from '../../tests/reactive-fixtures.svelte';
+import { followingGlowSnippet } from '$lib/test-utils/glow-snippet.svelte';
+import { reactiveProps } from '../../tests/reactive-fixtures.svelte';
 import TransportBarFrame from './TransportBarFrame.svelte';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 
