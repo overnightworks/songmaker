@@ -523,9 +523,10 @@ def _build_track_scores_interface() -> str:
         for spec in SCORERS.values()
         for key in spec.output_keys
     ]
+    coherence_score, coherence_summary = COHERENCE_VERDICT_KEYS
     fields.extend((
-        (COHERENCE_VERDICT_KEYS.score, "number"),
-        (COHERENCE_VERDICT_KEYS.summary, "string"),
+        (coherence_score, "number"),
+        (coherence_summary, "string"),
         ("user_rating", "number"),
         ("user_notes", "string"),
     ))

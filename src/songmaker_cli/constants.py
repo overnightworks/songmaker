@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final, NamedTuple
+from typing import Final
 
 from acestep_engine.constants import MODEL_CONFIG_PATHS as MODEL_CONFIG_PATHS
 from acestep_engine.settings import get_engine_settings
@@ -124,16 +124,7 @@ class SongWorkKind(StrEnum):
 
 
 # Scoring pipeline
-class CoherenceVerdictKeys(NamedTuple):
-    """The stored keys of a take's coherence verdict, written by the co-writer."""
-
-    score: str
-    summary: str
-
-
-COHERENCE_VERDICT_KEYS: Final = CoherenceVerdictKeys(
-    score="lyrical_coherence", summary="lyrical_summary",
-)
+COHERENCE_VERDICT_KEYS: Final = ("lyrical_coherence", "lyrical_summary")  # score, summary
 SILENCE_TOP_DB = 40
 SILENCE_MIN_GAP_SECONDS = 2.0
 SILENCE_TRIM_SECONDS = 2.0

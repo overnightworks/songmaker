@@ -2310,15 +2310,6 @@ def test_score_generation_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_score_generation_rejects_the_removed_coherence_scorer(client: TestClient) -> None:
-    resp = client.post(
-        "/api/generations/g1/score",
-        json={"scorers": ["lyrical_coherence"]},
-    )
-    assert resp.status_code == 422
-    assert "Unknown scorers: lyrical_coherence" in resp.text
-
-
 def test_score_generation_submits_job(client: TestClient) -> None:
     with _mock_worker() as mock_pool:
         resp = client.post(
@@ -3580,8 +3571,8 @@ def test_score_request_invalid_scorer_direct() -> None:
 
     from songmaker_cli.api_models import ScoreRequest
 
-    with pytest.raises(ValidationError, match="Unknown scorers"):
-        ScoreRequest(scorers=["fake_scorer"])
+    with pytest.raises(ValidationError, match="Unknown scorers: lyrical_coherence"):
+        ScoreRequest(scorers=["lyrical_coherence"])
 
 
 def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
