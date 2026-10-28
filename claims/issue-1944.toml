@@ -1,7 +1,0 @@
-claim_id = "e01be565e890498db1ca2128708c3cc2"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d3c4d26e6f7c9b8b03e7bb0155609a506ccd6710"
-branch = "claude/issue-1944-seed-chip-stub-mobile"
-scope = ["frontend/e2e/seed-chip.spec.ts"]
-opened_commit = "e3149289ba9c1e6d8a8a6544338ff78cc1e0d7a5"
