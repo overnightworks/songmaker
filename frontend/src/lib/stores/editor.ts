@@ -31,7 +31,7 @@ const EMPTY_SONG_DATA: SongData = {
 	lyrics: '',
 	prompt: '',
 	bpm: 0,
-	audio_duration: 180,
+	audio_duration: 0,
 	key_scale: '',
 	genParams: null
 };
@@ -214,7 +214,7 @@ function songDataFromSong(s: SongItem): SongData {
 		lyrics: s.lyrics,
 		prompt: s.prompt,
 		bpm: s.bpm ?? 0,
-		audio_duration: s.audio_duration ?? 180,
+		audio_duration: s.audio_duration ?? 0,
 		key_scale: s.key_scale ?? '',
 		genParams: s.generation_params ?? null
 	};

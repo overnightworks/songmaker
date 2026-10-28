@@ -2784,13 +2784,13 @@ def test_job_duration_stats_no_completed(db_factory) -> None:
 # ── _apply_task_overrides ──────────────────────────────────────────
 
 
-def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
+def test_repaint_range_is_a_fraction_of_the_source_take(tmp_path: Path, make_wav_bytes) -> None:
     from songmaker_cli.parser import AlbumMeta, SongMeta
 
     src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
+    src_wav.write_bytes(make_wav_bytes(b"\x80" * 2000, sampwidth=1, sample_rate=10))
 
-    config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=180)
+    config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=0)
     ctx = GenerationContext(
         song_id="s1",
         version_id="v1",
@@ -2810,8 +2810,8 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
         prompt="test",
     )
     result = _apply_repaint_overrides(ctx, params)
-    assert result.ace_config.repainting_start == pytest.approx(54.0)
-    assert result.ace_config.repainting_end == pytest.approx(144.0)
+    assert result.ace_config.repainting_start == pytest.approx(60.0)
+    assert result.ace_config.repainting_end == pytest.approx(160.0)
     assert result.ace_config.task_type == "repaint"
     assert result.ace_config.thinking is True
     assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))
@@ -2819,11 +2819,11 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
     assert result.src_generation_id == "g0"
 
 
-def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
+def test_repaint_inherits_generation_settings(tmp_path: Path, make_wav_bytes) -> None:
     from songmaker_cli.parser import AlbumMeta, SongMeta
 
     src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
+    src_wav.write_bytes(make_wav_bytes(b"\x80" * 2000, sampwidth=1, sample_rate=10))
 
     config = AceStepConfig(
         prompt="test",

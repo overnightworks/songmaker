@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import NOT_STARTED, AceStepPhase
-from songmaker_cli import jobs
+from songmaker_cli import audio_files, jobs
 from songmaker_cli.acestep_state import decr_queue_depth
 from songmaker_cli.api_models import (
     CoverTaskParams,
@@ -853,15 +853,16 @@ def _apply_repaint_overrides(
     params: RepaintTaskParams,
 ) -> GenerationContext:
     raw_wav = _resolve_raw_wav(params.src_wav_path)
-    audio_duration = ctx.ace_config.audio_duration
-
+    source_duration = audio_files.read_audio_duration(Path(params.src_wav_path))
+    if source_duration is None:
+        raise ValueError(f"Cannot measure the repaint source take {params.src_wav_path}")
     overrides: dict[str, Any] = {
         "task_type": "repaint",
         "src_audio_path": _copy_to_shared_tmp(params.src_wav_path, ctx.audio_dir),
         "prompt": params.prompt or ctx.ace_config.prompt,
         "lyrics": params.lyrics or ctx.ace_config.lyrics,
-        "repainting_start": params.repainting_start * audio_duration,
-        "repainting_end": params.repainting_end * audio_duration,
+        "repainting_start": params.repainting_start * source_duration,
+        "repainting_end": params.repainting_end * source_duration,
     }
     if params.repaint_mode is not None:
         overrides["repaint_mode"] = params.repaint_mode
@@ -879,8 +880,7 @@ def _apply_repaint_overrides(
     )
     if raw_wav:
         new_ctx = _with_generation_context_overrides(
-            new_ctx,
-            raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir),
+            new_ctx, raw_src_audio=_copy_to_shared_tmp(raw_wav, ctx.audio_dir),
         )
     return new_ctx
 

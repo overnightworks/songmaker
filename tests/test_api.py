@@ -245,8 +245,8 @@ def test_create_song(client: TestClient) -> None:
     resp = client.post("/api/songs", json={
         "title": "Lightning", "album_id": "rock", "lyrics": "flash", "bpm": 160,
     })
-    assert resp.status_code == 200
-    assert resp.json()["title"] == "Lightning"
+    body = resp.json()
+    assert (resp.status_code, body["title"], body["audio_duration"]) == (200, "Lightning", 0)
 
 
 def test_update_song(client: TestClient) -> None:

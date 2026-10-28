@@ -236,7 +236,7 @@ def create_song(
     lyrics: str = "",
     prompt: str = "",
     bpm: int = 0,
-    audio_duration: int = 180,
+    audio_duration: int = 0,
     key_scale: str = "",
     vocal_language: str = "",
     generation_params: dict | None = None,
@@ -322,7 +322,7 @@ def update_song(
     new_lyrics = _version_value(lyrics, prev, "lyrics", "")
     new_prompt = _version_value(prompt, prev, "prompt", "")
     new_bpm = _version_value(bpm, prev, "bpm", 0)
-    new_audio_duration = _version_value(audio_duration, prev, "audio_duration", 180)
+    new_audio_duration = _version_value(audio_duration, prev, "audio_duration", 0)
     new_key_scale = _version_value(key_scale, prev, "key_scale", "")
 
     creative_changed = prev is None or (

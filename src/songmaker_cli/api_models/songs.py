@@ -560,7 +560,7 @@ class SongCreateRequest(BaseModel):
     lyrics: str = Field("", max_length=50_000)
     prompt: str = Field("", max_length=5_000)
     bpm: int = Field(0, ge=0, le=999)
-    audio_duration: int = Field(180, ge=0, le=600)
+    audio_duration: int = Field(0, ge=0, le=600)
     key_scale: str = Field("", max_length=10)
     vocal_language: str = Field("", max_length=10)
     generation_params: GenerationParams | None = None
