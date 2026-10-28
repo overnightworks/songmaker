@@ -136,11 +136,7 @@ def lock_lora_capacity(session: Session) -> None:
     renewal/audit mutations before taking the lock; callers must not have
     made application mutations yet.
     """
-    assert not session.new and not session.dirty and not session.deleted, (
-        "lock_lora_capacity: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
-    session.commit()
+    commit_auth_state_before_lock(session, "lock_lora_capacity")
     _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
 
 
@@ -325,11 +321,7 @@ def _acquire_unique_slug(
     mutations besides auth-layer session renewal, because the commit() below
     would persist them unconditionally.
     """
-    assert not session.new and not session.dirty and not session.deleted, (
-        f"{caller}: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
-    session.commit()
+    commit_auth_state_before_lock(session, caller)
     _begin_exclusive(session, lock_id)
     candidate = base_slug
     counter = 1
