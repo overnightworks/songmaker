@@ -75,7 +75,7 @@
 "tests/test_auto_deploy_alerting.py" = 1389
 "tests/test_client.py" = 870
 "tests/test_conversation_api.py" = 853
-"tests/test_cowriter_providers.py" = 1271
+"tests/test_cowriter_providers.py" = 1254
 "tests/test_db.py" = 3642
 "tests/test_install_cli_credentials_mirror.py" = 1017
 "tests/test_jobs.py" = 3517
