@@ -220,6 +220,11 @@ describe('matchingEnginePreset', () => {
 		expect(matchingEnginePreset(draft, presets)?.id).toBe('match');
 	});
 
+	it('finds none for an empty engine, even beside a preset with empty engine fields', () => {
+		const empty = [{ id: 'empty', model_mode: 'acestep', params: { user_lora_id: 'mara' } }];
+		expect(matchingEnginePreset(values({ model: 'acestep' }), empty)).toBeUndefined();
+	});
+
 	it('finds none when the draft matches no preset', () => {
 		const draft = values({ model: 'acestep', genParams: { inference_steps: 9 } });
 		expect(matchingEnginePreset(draft, presets)).toBeUndefined();

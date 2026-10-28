@@ -193,11 +193,12 @@ export function engineParams(values: RecipeValues): VersionGenerationParams {
 	return engineFields(values.genParams);
 }
 
-/** The preset of the recipe's model whose engine fields are the recipe's; Voice and Reference do not count. */
+/** The preset of the recipe's model whose engine fields are the recipe's; Voice and Reference do not count. An empty engine is Default, never a preset. */
 export function matchingEnginePreset<
 	Preset extends { model_mode: string; params: VersionGenerationParams }
 >(values: RecipeValues, presets: readonly Preset[]): Preset | undefined {
 	const current = Object.entries(engineParams(values));
+	if (current.length === 0) return undefined;
 	return presets.find((preset) => {
 		if (preset.model_mode !== values.model) return false;
 		const stored = engineFields(preset.params);

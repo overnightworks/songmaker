@@ -1,7 +1,7 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { uploadReferenceAudio } from '$lib/api/client';
-import { ApiError } from '$lib/api/fetch';
+import { createPreset, uploadReferenceAudio } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import type { PresetItem } from '$lib/api/types';
 import {
 	activeModels,
@@ -11,7 +11,11 @@ import {
 	generationDefaultsError,
 	presets
 } from '$lib/stores/presets';
+import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { recipeModel } from '$lib/stores/recipe';
+import { makeSong } from '$lib/test-utils/factories';
+import { get } from 'svelte/store';
 import { loras } from '$lib/stores/loras';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import type { RecipeStandard, RecipeValues } from '$lib/utils/recipe-standard';
@@ -22,8 +26,12 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
 	fetchActiveModels: vi.fn().mockResolvedValue([{ id: 'turbo', is_active: true }]),
 	fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
-	uploadReferenceAudio: vi.fn()
+	uploadReferenceAudio: vi.fn(),
+	createPreset: vi.fn()
 }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 
 const modelStandard: RecipeStandard = {
@@ -94,6 +102,8 @@ beforeEach(() => {
 afterEach(async () => {
 	await unmount(mounted);
 	document.body.replaceChildren();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
 });
 
 describe('RecipeTabs', () => {
@@ -279,16 +289,103 @@ describe('RecipeTabs', () => {
 		expect(getByRoleButton(target, 'Retry')).not.toBeNull();
 	});
 
-	it('shows a failed reference upload in the Reference row', async () => {
-		vi.mocked(uploadReferenceAudio).mockRejectedValueOnce(
-			new ApiError(413, 'Too large', '/upload')
-		);
+	it.each([
+		{
+			failure: 'with no network answer',
+			error: new NetworkError('/api/audio/upload', new TypeError('Failed to fetch')),
+			shown: 'Upload failed'
+		},
+		{
+			failure: 'refused by the server',
+			error: new ApiError(413, 'That file is too large', '/api/audio/upload'),
+			shown: 'That file is too large'
+		},
+		{
+			failure: 'over the storage quota',
+			error: new ApiError(409, 'Reference audio storage limit reached.', '/api/audio/upload'),
+			shown: 'Reference audio storage limit reached.'
+		}
+	])(
+		'says $shown in the Reference row when the upload fails $failure and keeps the draft',
+		async ({ error, shown }) => {
+			vi.mocked(uploadReferenceAudio).mockRejectedValueOnce(error);
+			const start = atStandard({ genParams: { user_lora_id: 'mara' } });
+			const target = await renderTabs(start);
+			const file = new File(['x'], 'ref.wav', { type: 'audio/wav' });
+			const input = target.querySelector<HTMLInputElement>(
+				'input[type="file"]'
+			) as HTMLInputElement;
+			Object.defineProperty(input, 'files', { value: [file] });
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+			await vi.waitFor(() =>
+				expect(
+					Array.from(target.querySelectorAll('[role="alert"]')).map((el) => el.textContent)
+				).toEqual([shown])
+			);
+			expect(props.values).toEqual(start);
+		}
+	);
+
+	it.each([
+		{
+			failure: 'with no network answer',
+			error: new NetworkError('/api/presets', new TypeError('Failed to fetch')),
+			shown: 'Failed to save preset'
+		},
+		{
+			failure: 'refused by the server',
+			error: new ApiError(409, 'That preset name is taken', '/api/presets'),
+			shown: 'That preset name is taken'
+		}
+	])(
+		'says $shown on the Preset row when saving a preset fails $failure and keeps the draft',
+		async ({ error, shown }) => {
+			vi.mocked(createPreset).mockRejectedValueOnce(error);
+			const start = atStandard({ genParams: { lm_temperature: 0.5 } });
+			const target = await renderTabs(start);
+			await clickSettled(recipeTabNamed(target, 'Engine'));
+			await clickSettled(getByRoleButton(target, 'Save as preset'));
+			const name = target.querySelector<HTMLInputElement>(
+				'input[aria-label="Preset name"]'
+			) as HTMLInputElement;
+			name.value = 'Night drive';
+			name.dispatchEvent(new Event('input', { bubbles: true }));
+			await clickSettled(getByRoleButton(target, 'Save'));
+			await vi.waitFor(() =>
+				expect(
+					Array.from(target.querySelectorAll('[role="alert"]')).map((el) => el.textContent)
+				).toEqual([shown])
+			);
+			expect(props.values).toEqual(start);
+		}
+	);
+
+	it('holds Manage presets for the unsaved-changes dialog while the song has a dirty draft', async () => {
+		loadSongData(makeSong({ slug: 'test', lyrics: 'hello' }));
+		setDraftLyrics('unsaved edit');
 		const target = await renderTabs();
-		const file = new File(['x'], 'ref.wav', { type: 'audio/wav' });
-		const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
-		Object.defineProperty(input, 'files', { value: [file] });
-		input.dispatchEvent(new Event('change', { bubbles: true }));
-		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).not.toBeNull());
+		await clickSettled(recipeTabNamed(target, 'Engine'));
+		const manage = Array.from(target.querySelectorAll<HTMLAnchorElement>('a')).find((link) =>
+			link.textContent?.includes('Manage')
+		) as HTMLAnchorElement;
+		manage.click();
+		await tick();
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it('shows Default, with no dot and no undo, for an empty engine beside a preset saved with empty engine fields', async () => {
+		presets.set([{ ...warmPreset, id: 'bare', name: 'Bare', params: {} } as PresetItem]);
+		const target = await renderTabs(atStandard({ genParams: { lm_temperature: 0.5 } }));
+		await clickSettled(recipeTabNamed(target, 'Engine'));
+		const select = target.querySelector<HTMLSelectElement>(
+			'select[aria-label="Preset"]'
+		) as HTMLSelectElement;
+		await clickSettled(resetButton(target, 'preset') as HTMLElement);
+		expect(select.selectedOptions[0].textContent).toBe('Default');
+		expect(target.querySelector('[data-field="preset"] [data-field-changed]')).toBeNull();
+		expect(resetButton(target, 'preset')).toBeNull();
+		await clickSettled(getByRoleButton(target, 'Reset all'));
+		expect(select.selectedOptions[0].textContent).toBe('Default');
 	});
 
 	it('removes the reference with its reset and keeps the voice', async () => {
