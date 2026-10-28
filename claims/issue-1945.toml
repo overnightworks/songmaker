@@ -1,0 +1,8 @@
+claim_id = "6b664c0367984649b00408d4eaa1d016"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d3c4d26e6f7c9b8b03e7bb0155609a506ccd6710"
+branch = "claude/issue-1945-acestep-lm-failure-exit"
+scope = ["docs/acestep.md", "src/acestep_worker/__main__.py", "src/acestep_worker/lm_failure.py", "src/acestep_worker/subprocess_runner.py", "src/acestep_worker/wrapper.py", "tests/acestep_worker/test_lm_failure.py", "tests/acestep_worker/test_main.py", "tests/acestep_worker/test_subprocess_runner.py", "tests/acestep_worker/test_wrapper.py"]
+opened_commit = "a58da5a2e84420bce3963b1cdf9efdb4b940507a"
+whole_reason = "Detection, key, exit and start retry are one behaviour: the key without the exit never fires, the exit without the key restarts empty (the symptom), and the detection alone is code reached only by tests."
