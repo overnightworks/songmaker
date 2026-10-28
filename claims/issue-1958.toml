@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "2aa1e62358e37943d4834164350e3fc557b0e935"
 branch = "claude/issue-1958-health-names-lm-init-failed"
-scope = ["docs/acestep.md", "docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/test-utils/factories.ts", "quality/baseline.toml", "quality/config.toml", "src/songmaker_cli/acestep_state.py", "src/songmaker_cli/api_models/health.py", "src/songmaker_cli/health_api.py", "tests/conftest.py", "tests/test_acestep_state.py", "tests/test_health_api.py"]
+scope = ["docs/acestep.md", "docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/test-utils/factories.ts", "quality/baseline.toml", "quality/config.toml", "src/songmaker_cli/acestep_state.py", "src/songmaker_cli/api_models/health.py", "src/songmaker_cli/health_api.py", "tests/conftest.py", "tests/test_acestep_state.py", "tests/test_health_api.py", "tests/test_quality_workflow.py"]
 opened_commit = "490980a03c855a98f0f2181aaa05af5f52c8635c"
 whole_reason = "The key mirror, the signal, the response field and the generated type are one public-contract change: a field without its reader returns null forever, a reader without its field has nowhere to answer, and the generated type and typed factory fail CI the moment the field exists."
