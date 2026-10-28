@@ -132,16 +132,17 @@ def race(
     pause = pause or CommitPause(wrote_song_data)
     answers: dict[str, Any] = {}
     threads = (in_thread(answers, "first", first), in_thread(answers, "second", second))
+    waiter_pid = None
     event.listen(pg_factory, "before_commit", pause)
     try:
         threads[0].start()
         assert pause.reached.wait(WAIT_SECONDS), "The first writer never reached its pause"
         threads[1].start()
-        wait_until_blocked_behind(pg_factory, pause.backend_pid)
+        waiter_pid = wait_until_blocked_behind(pg_factory, pause.backend_pid)
         assert "second" not in answers
     finally:
         pause.release.set()
-        stuck = stop_workers(pg_factory, threads, (pause.backend_pid,))
+        stuck = stop_workers(pg_factory, threads, (pause.backend_pid, waiter_pid))
         event.remove(pg_factory, "before_commit", pause)
     assert not stuck, f"Writer threads never stopped: {', '.join(stuck)}"
     for answer in answers.values():
