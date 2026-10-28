@@ -10,7 +10,6 @@
 		saveUserMemory,
 		saveSongMemory,
 		saveAlbumMemory,
-		fetchCowriterSettings,
 		ApiError
 	} from '$lib/api/client';
 	import type { CoWriterStreamEvent } from '$lib/api/client';
@@ -61,7 +60,6 @@
 		conversationMenuOrder,
 		conversationMessageCountLabel,
 		conversationRowLabel,
-		cowriterHeaderLabel,
 		cowriterThinkingLabel,
 		cowriterTurnError,
 		cowriterToolCallTarget,
@@ -145,7 +143,6 @@
 	const showMentions = historyLayerState('cowriter-mention-list', false);
 	let mentionCursorPos = $state(0);
 	let selectedMentionIdx = $state(0);
-	let cowriterModel = $state('');
 	let unmounted = false;
 	let latestTurn: Promise<void> = Promise.resolve();
 
@@ -163,7 +160,6 @@
 
 	$effect(() => {
 		void loadConversations();
-		void loadCowriterSettings();
 	});
 
 	$effect(() => {
@@ -708,15 +704,6 @@
 		return () => area.removeEventListener('mousedown', keepComposerFocus);
 	});
 
-	async function loadCowriterSettings(): Promise<void> {
-		try {
-			const settings = await fetchCowriterSettings();
-			cowriterModel = settings.model;
-		} catch {
-			/* leave last known labels */
-		}
-	}
-
 	async function loadMemory(songId: string | null): Promise<void> {
 		const requestId = ++memoryRequestId;
 		memoryLoading = true;
@@ -947,7 +934,6 @@
 	<div class="convo">
 		<span class="convo-line">
 			<b>{EDITOR_VIEW_COWRITER_LABEL}</b> ·
-			{#if cowriterModel}{cowriterHeaderLabel(cowriterModel)} ·{/if}
 			{conversationLine}
 		</span>
 		<div class="convo-menu-anchor">
@@ -974,9 +960,6 @@
 					onclick={(e) => e.stopPropagation()}
 					onkeydown={(e) => e.stopPropagation()}
 				>
-					{#if cowriterModel}
-						<p class="menu-heading">{cowriterHeaderLabel(cowriterModel)}</p>
-					{/if}
 					<button
 						type="button"
 						role="menuitem"
@@ -1228,17 +1211,6 @@
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
-	}
-
-	.menu-heading {
-		margin: 0 0 0.25rem;
-		padding: 0.3rem 0.55rem 0.4rem;
-		font-size: var(--label-font-size);
-		color: var(--text-subtle);
-		border-bottom: 1px solid var(--border);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
 	}
 
 	.convo-new {

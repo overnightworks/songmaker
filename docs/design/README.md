@@ -100,20 +100,19 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   die Sammlungs-h1, entschieden in Slice 6 gegen dieses Bild.
 - Der Agent-Service (#1895, #1476 „The pictures must show"). Freigegeben am
   26.10.2026 (Operator: „das Bild ist gut", „alles deine Empfehlung"), mit
-  Q4 b und Q5 a: Die Gesprächszeile der Co-Writer-Spalte lautet „Co-writer ·
-  Claude opus · conversation since Tue" (Q4 a, ohne Modell, ist verworfen);
+  Q4 b und Q5 a; der Operator hat Q4 b am 27.10.2026 überholt (agent-runtime#494,
+  #1949): Die Gesprächszeile der Co-Writer-Spalte lautet „Co-writer ·
+  conversation since Tue", ohne Modell;
   endet ein Zug, weil Keycloak nicht mehr erneuert, steht dort „Sign in again
   to use the co-writer" mit Sign-in-Link, und der Rest von songmaker arbeitet
   weiter (Q5 b, die ganze App meldet ab, ist verworfen); Q13 gilt mit ihrem
   Default a. Besitzer: `admin-models.html` (Abschnitt „Neu · #1895",
-  Zustände w bis z′: fünf Spalten, Co-Writer über den Dienst, Cover und
-  Scoring „not available yet"), `song-page.html` (D5b, D7a–d) und
+  Zustände w bis y′: fünf Spalten, Co-Writer-Zeile „Set by the agent service"
+  ohne Status, Cover und Scoring „not available yet"), `song-page.html` (D5b, D7a–d) und
   `song-page-phone.html` (7c–7e; die Gesprächszeile in Frame 7 ist ersetzt),
   `album-cover.html` („Suggest closed", Punkt 8; `album-browsing.html` zeigt
   C2–C9 als den Zustand, der mit Bildläufen zurückkommt, und I1 liest
-  „upload") und `now-playing.html` („Coherence not available"). Die Gründe
-  geschlossener Einträge in Slice 12 sind Beispielwörter, kein gesegneter
-  Text.
+  „upload") und `now-playing.html` („Coherence not available").
 - KI-Kennzeichnung nach Art. 50 der KI-Verordnung (#1906), gesegnet vom
   Operator am 27.10.2026 (P1 bis P5). Wortlaut gerult (E3, Operator 19.10.2026):
   „KI-generiert“ am Song oder Album und „Du schreibst mit einer KI“ im

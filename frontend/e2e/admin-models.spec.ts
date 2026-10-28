@@ -74,12 +74,9 @@ const DESKTOP_HEIGHT = 900;
 const NAMED_TURN_FAILURES =
 	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Sign in again to use the co-writer/;
 
-// The co-writer row of the Models table: words, no control (#1476, lines 1 and 2). This stack's
-// seeded session holds no refresh token, so the offer cannot be read for the admin and the row
-// asks to sign in again (#1914, A5).
-const COWRITER_ROW_WORDS = ['Claude', 'Agent service', 'opus'];
-const COWRITER_STATUS = 'Sign in again to check the offer';
-const COWRITER_NOT_SELECTABLE = 'Grok, Codex: not selectable yet';
+// The co-writer row of the Models table: words, no control, no model and no status (#1949):
+// the agent service decides the model, so the row says so.
+const COWRITER_ROW_WORDS = ['Set by the agent service', 'Agent service'];
 const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL, MODELS_TASK_SCORING_LABEL];
 
 async function openModelsTab(page: Page): Promise<void> {
@@ -124,14 +121,13 @@ function taskRow(page: Page, task: string): Locator {
 
 async function expectCowriterRowReadOnly(page: Page): Promise<void> {
 	const row = taskRow(page, MODELS_TASK_COWRITER_LABEL);
-	for (const word of [...COWRITER_ROW_WORDS, COWRITER_STATUS]) {
+	for (const word of COWRITER_ROW_WORDS) {
 		await expect(row).toContainText(word);
 	}
-	await expect(row).not.toContainText('claude/opus');
+	await expect(row).not.toContainText(/opus|Claude|Ready|offer/);
 	await expect(row.getByRole('combobox')).toHaveCount(0);
 	await expect(row.getByRole('button')).toHaveCount(0);
-	await expect(row.getByRole('link', { name: 'Sign in' })).toBeVisible();
-	await expect(page.getByText(COWRITER_NOT_SELECTABLE)).toBeVisible();
+	await expect(row.getByRole('link')).toHaveCount(0);
 }
 
 function columnHeader(page: Page, column: string): Locator {
@@ -277,7 +273,6 @@ test(
 				await expect(columnHeader(page, column)).toBeInViewport();
 			}
 			await expect(scoringStatus).toBeInViewport();
-			await expect(taskStatus(page, MODELS_TASK_COWRITER_LABEL)).toBeInViewport();
 			for (const task of SELECTABLE_TASKS) {
 				await expectProviderNameShownWhole(page, task);
 				await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
@@ -375,12 +370,14 @@ test(
 			MODELS_TASK_SCORING_LABEL
 		]) {
 			const card = taskRow(page, task);
-			for (const column of [
+			// The Co-Writer card has no Status line: nothing is checked for it (#1949).
+			const columns = [
 				MODELS_COLUMN_PROVIDER_LABEL,
 				MODELS_COLUMN_ROUTE_LABEL,
-				MODELS_COLUMN_MODEL_LABEL,
-				MODELS_COLUMN_STATUS_LABEL
-			]) {
+				MODELS_COLUMN_MODEL_LABEL
+			];
+			if (task !== MODELS_TASK_COWRITER_LABEL) columns.push(MODELS_COLUMN_STATUS_LABEL);
+			for (const column of columns) {
 				await expect(card.getByText(column, { exact: true })).toBeVisible();
 			}
 		}

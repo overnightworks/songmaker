@@ -4,7 +4,6 @@ import { makeHealthResponse } from '$lib/test-utils/factories';
 
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
-const fetchCowriterSettings = vi.hoisted(() => vi.fn());
 const fetchHealth = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -15,8 +14,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 			fetchConversations(...args),
 		fetchConversationMessages: (...args: Parameters<typeof fetchConversationMessages>) =>
 			fetchConversationMessages(...args),
-		fetchCowriterSettings: (...args: Parameters<typeof fetchCowriterSettings>) =>
-			fetchCowriterSettings(...args),
 		fetchHealth: (...args: Parameters<typeof fetchHealth>) => fetchHealth(...args)
 	};
 });
@@ -29,7 +26,6 @@ let mounted: ReturnType<typeof mount> | undefined;
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
 	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
-	fetchCowriterSettings.mockReset().mockResolvedValue({ tail_token_budget: 24000, model: 'opus' });
 	fetchHealth.mockReset().mockResolvedValue(makeHealthResponse());
 });
 

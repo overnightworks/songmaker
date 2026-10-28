@@ -4,44 +4,18 @@
 		MODELS_ADVANCED_LABEL,
 		MODELS_COLUMN_MODEL_LABEL,
 		MODELS_COLUMN_PROVIDER_LABEL,
-		MODELS_COLUMN_ROUTE_LABEL,
-		MODELS_COLUMN_STATUS_LABEL
+		MODELS_COLUMN_ROUTE_LABEL
 	} from '$lib/constants';
-
-	type StatusTone = 'ok' | 'plain' | 'off' | 'warn';
-
-	const STATUS_MARKS: Record<StatusTone, string | null> = {
-		ok: '✓',
-		plain: null,
-		off: '○',
-		warn: '!'
-	};
 
 	interface Props {
 		task: string;
 		provider: string;
 		route: string;
 		model: string;
-		status: string;
-		statusTone: StatusTone;
-		statusLink?: { href: string; text: string };
-		modelWarning?: string;
-		note?: string;
 		advanced?: Snippet;
 	}
 
-	let {
-		task,
-		provider,
-		route,
-		model,
-		status,
-		statusTone,
-		statusLink,
-		modelWarning,
-		note,
-		advanced
-	}: Props = $props();
+	let { task, provider, route, model, advanced }: Props = $props();
 </script>
 
 <div class="tt-row">
@@ -57,26 +31,8 @@
 	<div class="cell">
 		<span class="k" aria-hidden="true">{MODELS_COLUMN_MODEL_LABEL}</span>
 		<span class="ro">{model}</span>
-		{#if modelWarning}<small class="why warn">{modelWarning}</small>{/if}
-	</div>
-	<div class="cell">
-		<span class="k" aria-hidden="true">{MODELS_COLUMN_STATUS_LABEL}</span>
-		{#if status}
-			<span class="st {statusTone}">
-				{#if STATUS_MARKS[statusTone]}<span class="mark">{STATUS_MARKS[statusTone]}</span
-					>{/if}{status}
-				{#if statusLink}
-					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA, no base path; the server answers the sign-in address with a redirect -->
-					<a href={statusLink.href} data-sveltekit-reload>{statusLink.text}</a>
-				{/if}
-			</span>
-		{/if}
 	</div>
 </div>
-
-{#if note}
-	<div class="tt-sub"><p class="note">{note}</p></div>
-{/if}
 
 {#if advanced}
 	<div class="tt-sub">
@@ -123,65 +79,10 @@
 		font-size: 0.8rem;
 		color: var(--text);
 	}
-	.why {
-		font-size: 0.68rem;
-		line-height: 1.35;
-		color: var(--text-muted);
-	}
-	.why.warn {
-		color: var(--score-ok);
-	}
-	.st {
-		display: flex;
-		align-items: flex-start;
-		flex-wrap: wrap;
-		gap: 0.2rem 0.42rem;
-		padding-top: 0.34rem;
-		font-size: 0.8rem;
-		color: var(--text-muted);
-	}
-	.st .mark {
-		flex: 0 0 auto;
-		width: 1.05rem;
-		height: 1.05rem;
-		border-radius: 50%;
-		display: inline-grid;
-		place-items: center;
-		font-size: 0.66rem;
-		font-weight: 700;
-		line-height: 1;
-		margin-top: 0.12rem;
-	}
-	.st.ok {
-		color: var(--score-good);
-	}
-	.st.ok .mark {
-		background: var(--score-good);
-		color: var(--bg);
-	}
-	.st.warn {
-		color: var(--score-ok);
-	}
-	.st.warn .mark {
-		background: var(--score-ok);
-		color: var(--bg);
-	}
-	.st.off .mark {
-		border: 1px solid var(--border);
-		color: transparent;
-	}
-	.st a {
-		color: var(--accent);
-	}
 
 	.tt-sub {
 		padding: 0 0.85rem 0.6rem var(--models-sub-indent);
 		border-left: 3px solid transparent;
-	}
-	.note {
-		margin: 0;
-		font-size: 0.76rem;
-		color: var(--text-muted);
 	}
 
 	details.adv summary {

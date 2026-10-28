@@ -139,7 +139,7 @@ def _stored_choice_rows(factory) -> dict[str, str | None]:
         }
 
 
-def test_c15_get_cowriter_settings_answers_the_budget_and_the_agent_files_model(admin_client):
+def test_c15_get_cowriter_settings_answers_the_budget_alone(admin_client):
     client, _ = admin_client
 
     response = client.get("/api/settings/cowriter")
@@ -147,7 +147,6 @@ def test_c15_get_cowriter_settings_answers_the_budget_and_the_agent_files_model(
     assert response.status_code == 200
     assert response.json() == {
         "tail_token_budget": COWRITER_DEFAULT_TAIL_TOKEN_BUDGET,
-        "model": "opus",
     }
 
 

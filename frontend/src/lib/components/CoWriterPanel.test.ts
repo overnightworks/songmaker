@@ -18,7 +18,6 @@ import { ApiError } from '$lib/api/fetch';
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
-const fetchCowriterSettings = vi.hoisted(() => vi.fn());
 const fetchHealth = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/api/client', async (importOriginal) => {
@@ -43,8 +42,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 			target_id: 'u1',
 			body
 		})),
-		fetchCowriterSettings: (...args: Parameters<typeof fetchCowriterSettings>) =>
-			fetchCowriterSettings(...args),
 		fetchHealth: (...args: Parameters<typeof fetchHealth>) => fetchHealth(...args),
 		streamCoWriterTurn: (...args: Parameters<typeof streamCoWriterTurn>) =>
 			streamCoWriterTurn(...args)
@@ -68,7 +65,6 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
 	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
-	fetchCowriterSettings.mockReset().mockResolvedValue({ tail_token_budget: 24000, model: 'opus' });
 	fetchHealth.mockReset().mockResolvedValue(makeHealthResponse());
 });
 
@@ -266,28 +262,28 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 	});
 
 	it.each([
-		['no conversation yet', [], 'Co-writer · Claude opus · new conversation'],
+		['no conversation yet', [], 'Co-writer · new conversation'],
 		[
 			'one started today',
 			[conversationStartedAt('2026-09-27T08:00:00')],
-			'Co-writer · Claude opus · conversation since today'
+			'Co-writer · conversation since today'
 		],
 		[
 			'one started this week',
 			[conversationStartedAt('2026-09-22T10:00:00')],
-			'Co-writer · Claude opus · conversation since Tue'
+			'Co-writer · conversation since Tue'
 		],
 		[
 			'one started earlier this year',
 			[conversationStartedAt('2026-09-12T10:00:00')],
-			'Co-writer · Claude opus · conversation since Sep 12'
+			'Co-writer · conversation since Sep 12'
 		],
 		[
 			'one started last year',
 			[conversationStartedAt('2025-09-12T10:00:00')],
-			'Co-writer · Claude opus · conversation since Sep 12, 2025'
+			'Co-writer · conversation since Sep 12, 2025'
 		]
-	])('names the co-writer, its model and %s in one line', async (_case, conversations, line) => {
+	])('names the co-writer and %s in one line', async (_case, conversations, line) => {
 		fetchConversations.mockResolvedValue(conversations);
 		const target = await render();
 
@@ -306,7 +302,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		).toEqual([COWRITER_CONVERSATION_MENU_LABEL]);
 	});
 
-	it('keeps the model, a new conversation and switching conversations in its ⋯ menu', async () => {
+	it('keeps a new conversation and switching conversations in its ⋯ menu', async () => {
 		const older = {
 			...activeConversation('c0'),
 			created_at: '2026-09-20T10:00:00',
@@ -316,7 +312,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		const target = await render();
 
 		const menu = await openConversationMenu(target);
-		expect(menu.textContent).toContain('Claude opus');
+		expect(menu.textContent).not.toContain('Claude');
 		const conversationRows = menu.querySelectorAll<HTMLButtonElement>('.conv-pick');
 		expect(conversationRows).toHaveLength(2);
 
@@ -324,18 +320,14 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenLastCalledWith('c0'));
 		await tick();
 		expect(target.querySelector('[role="menu"]')).toBeNull();
-		expect(conversationLine(target)).toBe(
-			'Co-writer · Claude opus · archived conversation from Sep 20'
-		);
+		expect(conversationLine(target)).toBe('Co-writer · archived conversation from Sep 20');
 
 		const reopened = await openConversationMenu(target);
 		reopened.querySelector<HTMLButtonElement>('.convo-new')?.click();
 		await tick();
 		expect(startNewConversation).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('[role="menu"]')).toBeNull();
-		await vi.waitFor(() =>
-			expect(conversationLine(target)).toBe('Co-writer · Claude opus · new conversation')
-		);
+		await vi.waitFor(() => expect(conversationLine(target)).toBe('Co-writer · new conversation'));
 	});
 
 	it('names each conversation in its ⋯ menu with the line’s day form', async () => {
@@ -437,14 +429,12 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			})()
 		);
 		const target = await render();
-		await vi.waitFor(() =>
-			expect(conversationLine(target)).toBe('Co-writer · Claude opus · new conversation')
-		);
+		await vi.waitFor(() => expect(conversationLine(target)).toBe('Co-writer · new conversation'));
 
 		await sendTurn(target, 'write a chorus');
 
 		await vi.waitFor(() =>
-			expect(conversationLine(target)).toBe('Co-writer · Claude opus · conversation since today')
+			expect(conversationLine(target)).toBe('Co-writer · conversation since today')
 		);
 		fetchConversations.mockResolvedValue([
 			conversationStartedAt(new Date('2026-09-27T11:59:00').toISOString())
@@ -452,7 +442,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		fetchConversationMessages.mockResolvedValue(conversation(false, ask, answer));
 		deliverReply();
 		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
-		expect(conversationLine(target)).toBe('Co-writer · Claude opus · conversation since today');
+		expect(conversationLine(target)).toBe('Co-writer · conversation since today');
 	});
 
 	it('counts an earlier failed message the server stored once the answered turn is read back', async () => {
