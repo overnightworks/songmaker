@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import contextlib
 import wave
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import test_jobs
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
+from songmaker_cli.config import save_generation_defaults
 from songmaker_cli.db.models import Generation, GenerationPreset, Version
 from songmaker_cli.db.queries.songs import update_song
 from songmaker_cli.jobs import run_generation_job
@@ -31,13 +33,17 @@ def _write_reference(tmp_path: Path, relative: str) -> None:
     path.write_bytes(b"RIFF" + b"\x00" * 40)
 
 
-def _run_job(seeded_db, tmp_path: Path, *, count: int = 1, **task) -> None:
+def _run_job(
+    seeded_db,
+    tmp_path: Path,
+    *,
+    count: int = 1,
+    stored_global_defaults: bool = False,
+    **task,
+) -> None:
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
-    if "global_defaults" in task:
-        defaults = patch(
-            "songmaker_cli.jobs.load_generation_defaults",
-            return_value=task.pop("global_defaults"),
-        )
+    if stored_global_defaults:
+        defaults = contextlib.nullcontext()
     with dispatch, post_process, defaults:
         _run(
             run_generation_job(
@@ -87,7 +93,6 @@ def test_take_records_the_reference_the_job_resolved(
 ) -> None:
     _write_reference(tmp_path, REFERENCE_A)
     _write_reference(tmp_path, REFERENCE_C)
-    options = {}
     if source == "version":
         _name_version_reference(seeded_db, REFERENCE_A)
     if source == "preset":
@@ -103,9 +108,9 @@ def test_take_records_the_reference_the_job_resolved(
             )
             session.commit()
     if source == "global default":
-        options["global_defaults"] = {"sft": {"reference_audio_path": REFERENCE_C}}
+        save_generation_defaults(seeded_db, {"sft": {"reference_audio_path": REFERENCE_C}})
 
-    _run_job(seeded_db, tmp_path, **options)
+    _run_job(seeded_db, tmp_path, stored_global_defaults=source == "global default")
 
     assert _recorded_references(seeded_db) == [expected]
 
