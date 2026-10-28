@@ -229,19 +229,27 @@ def test_load_with_an_initialised_lm_writes_no_key_and_keeps_the_worker(worker: 
     assert worker.shutdown_requests == []
 
 
+def _timer_threads() -> set[threading.Thread]:
+    return {thread for thread in threading.enumerate() if isinstance(thread, threading.Timer)}
+
+
 def test_served_worker_exits_75_after_an_lm_failure_and_answers_the_load_first(
     worker: _Worker,
 ) -> None:
     _fail_the_lm(worker)
+    timers_before = _timer_threads()
 
     exit_code = worker.serve_until_it_stops(
         lambda client: client.post("/load_model", json={"mode": "sft"}).status_code
     )
+    watchdogs = _timer_threads() - timers_before
+    for watchdog in watchdogs:
+        watchdog.join(timeout=1)
 
     assert exit_code == LM_FAILURE_EXIT_CODE
     assert worker.driven == [502]
     assert worker.key() == b"sft"
-    assert not [thread for thread in threading.enumerate() if isinstance(thread, threading.Timer)]
+    assert not [watchdog for watchdog in watchdogs if watchdog.is_alive()]
 
 
 def test_served_worker_with_a_failing_retry_exits_with_uvicorns_startup_failure(

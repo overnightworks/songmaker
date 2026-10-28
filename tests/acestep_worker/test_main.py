@@ -119,14 +119,7 @@ def test_main_exits_with_the_code_serve_owes(
 
     get_worker_settings.cache_clear()
 
-    with (
-        patch("acestep_worker.__main__.Redis.from_url", return_value=MagicMock()),
-        patch(
-            "acestep_worker.__main__.make_acestep_runner",
-            return_value=(MagicMock(), MagicMock()),
-        ),
-        pytest.raises(SystemExit) as exit_info,
-    ):
+    with pytest.raises(SystemExit) as exit_info:
         main(serve_deps=lambda *_: LM_FAILURE_EXIT_CODE)
 
     assert exit_info.value.code == LM_FAILURE_EXIT_CODE
