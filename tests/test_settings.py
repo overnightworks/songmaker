@@ -116,3 +116,18 @@ def test_default_settings_values() -> None:
     assert settings.max_queue_depth == 100
     assert settings.max_user_active_jobs == 10
     assert settings.max_concurrent_sessions_per_user == 10
+
+
+def test_a_dotenv_with_the_retired_scoring_model_key_still_validates(tmp_path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("CLAUDE_SCORING_MODEL=claude-opus-4-6\n")
+
+    Settings(_env_file=env_file, **_required_settings())
+
+
+def test_a_dotenv_with_a_misspelt_key_still_raises(tmp_path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text("CLAUDE_SCORING_MODLE=claude-opus-4-6\n")
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=env_file, **_required_settings())

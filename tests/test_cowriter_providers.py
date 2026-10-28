@@ -22,6 +22,7 @@ from conftest import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
+    make_test_app,
     override_provider_runtime,
     refresh_provider_snapshots,
     seed_judge_route,
@@ -1251,3 +1252,60 @@ def test_unknown_judge_route_leaves_the_selection_unchanged(admin_client):
     )
     assert rejected.status_code == 422
     assert client.get("/api/settings/judge").json() == before
+
+
+@pytest.mark.parametrize("method", ["get", "put"])
+def test_the_removed_judge_settings_endpoint_answers_not_found(admin_client, method):
+    client, _ = admin_client
+
+    response = getattr(client, method)("/api/settings/judge", **(
+        {"json": {"provider": "grok", "model": "grok-4.6"}} if method == "put" else {}
+    ))
+
+    assert response.status_code == 404
+
+
+_LEFTOVER_JUDGE_ROWS = {
+    "judge_provider": "grok",
+    "judge_route": "bogus",
+    "judge_model": "x",
+    "claude_scoring_model": "y",
+}
+
+
+def _leftover_judge_rows(factory) -> dict[str, str | None]:
+    with factory() as session:
+        return {
+            row.setting_key: row.value_text
+            for row in session.query(RateLimitSetting).filter(
+                RateLimitSetting.setting_key.in_(list(_LEFTOVER_JUDGE_ROWS)),
+            )
+        }
+
+
+def test_startup_writes_no_judge_row_on_a_fresh_database(tmp_path, mock_arq_pool):
+    client, factory = make_test_app(tmp_path)
+
+    with client:
+        pass
+
+    assert _leftover_judge_rows(factory) == {}
+
+
+def test_startup_and_settings_reads_leave_stored_judge_rows_unread_and_unchanged(
+    tmp_path, mock_arq_pool,
+):
+    def seed_leftover_rows(session) -> None:
+        for key, value in _LEFTOVER_JUDGE_ROWS.items():
+            set_claude_model(session, key, value)
+
+    client, factory = make_test_app(tmp_path, seed_db=seed_leftover_rows)
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u-admin", role="admin", username="admin",
+    )
+
+    with client:
+        for path in ("/api/settings/providers", "/api/settings/cover", "/api/capabilities"):
+            assert client.get(path).status_code == 200
+
+    assert _leftover_judge_rows(factory) == _LEFTOVER_JUDGE_ROWS
