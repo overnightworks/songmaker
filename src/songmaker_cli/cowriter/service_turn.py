@@ -126,16 +126,6 @@ def _cowriter_agent() -> AgentDefinition:
     return load_agent(files("songmaker_cli") / "agents" / _AGENT_FILE, cowriter_tool_declarations())
 
 
-def cowriter_model_id() -> str:
-    """The agent file's model as the service names it, provider prefix included."""
-    return _cowriter_agent().model
-
-
-def cowriter_model() -> str:
-    """The model the person sees: the agent file's wire id without its provider prefix."""
-    return cowriter_model_id().rpartition("/")[2]
-
-
 async def run_cowriter_turn(
     caller: TurnCaller, messages: list[TurnMessage],
 ) -> AsyncIterator[TurnOutcome]:

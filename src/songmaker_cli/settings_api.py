@@ -9,8 +9,6 @@ from agent_providers.constants import COWRITER_PROVIDERS
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from webauth.config import installed_web_auth_config
-from webauth.dependencies import session_id_from_request
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.api_helpers import gen_params_to_json
@@ -29,7 +27,6 @@ from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
     CoverSettingsRequest,
     CoverSettingsResponse,
-    CowriterOfferResponse,
     CowriterSettingsRequest,
     CowriterSettingsResponse,
     DefaultConfigRequest,
@@ -51,8 +48,6 @@ from songmaker_cli.constants import (
     AuditAction,
     ResourceType,
 )
-from songmaker_cli.cowriter.service_offer import read_offer
-from songmaker_cli.cowriter.service_turn import cowriter_model
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.rate_limits import (
     get_all_global_rate_limits,
@@ -454,7 +449,6 @@ def _provider_probe_times(
 def _cowriter_response(session: Session) -> CowriterSettingsResponse:
     return CowriterSettingsResponse(
         tail_token_budget=get_cowriter_tail_token_budget(session),
-        model=cowriter_model(),
     )
 
 
@@ -513,17 +507,6 @@ def api_get_cowriter_settings(
     session: Session = Depends(get_db_session),
 ) -> CowriterSettingsResponse:
     return _cowriter_response(session)
-
-
-@router.get("/settings/cowriter/offer")
-async def api_get_cowriter_offer(
-    request: Request,
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> CowriterOfferResponse:
-    session_id = session_id_from_request(request, installed_web_auth_config(request.app))
-    return CowriterOfferResponse(
-        state=await read_offer(request.app, session_id), model=cowriter_model(),
-    )
 
 
 def _require_selectable_model(

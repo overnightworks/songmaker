@@ -119,7 +119,6 @@ songmaker_cli/settings_api.py:api_delete_preset # HTTP dispatcher: router.delete
 songmaker_cli/settings_api.py:api_get_builtins # HTTP dispatcher: router.get('/settings/generation-builtins')
 songmaker_cli/settings_api.py:api_get_cover_settings # HTTP dispatcher: router.get('/settings/cover')
 songmaker_cli/settings_api.py:api_get_cowriter_settings # HTTP dispatcher: router.get('/settings/cowriter')
-songmaker_cli/settings_api.py:api_get_cowriter_offer # HTTP dispatcher: router.get('/settings/cowriter/offer')
 songmaker_cli/settings_api.py:api_get_default_config # HTTP dispatcher: router.get('/settings/default-config')
 songmaker_cli/settings_api.py:api_get_generation_defaults # HTTP dispatcher: router.get('/settings/generation-defaults')
 songmaker_cli/settings_api.py:api_get_judge_settings # HTTP dispatcher: router.get('/settings/judge', responses={422: {'description': 'Stored judge configuration is invalid'}})
