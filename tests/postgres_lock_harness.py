@@ -25,6 +25,11 @@ _ADVISORY_WAITERS = text("""
 """)
 
 
+def has_written(session: Session) -> bool:
+    """True once the session's transaction wrote something (it was assigned a transaction id)."""
+    return session.execute(text("SELECT pg_current_xact_id_if_assigned() IS NOT NULL")).scalar_one()
+
+
 class CommitPause:
     """Holds a writer at its pending commit and names the backend that holds its locks.
 
