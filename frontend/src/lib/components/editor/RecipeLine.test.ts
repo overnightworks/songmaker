@@ -134,6 +134,17 @@ describe('RecipeLine', () => {
 		expect(closedLine(target)).not.toBeNull();
 	});
 
+	it('moves focus to the Song tab on opening and back to the closed line on closing', async () => {
+		const target = await renderLine();
+		closedLine(target).focus();
+		closedLine(target).click();
+		await vi.waitFor(() =>
+			expect(document.activeElement).toBe(target.querySelector('[data-tab="song"]'))
+		);
+		(target.querySelector('.close') as HTMLButtonElement).click();
+		await vi.waitFor(() => expect(document.activeElement).toBe(closedLine(target)));
+	});
+
 	it('edits the draft through its setters and resets one field with its ↺', async () => {
 		recipeOpen.set(true);
 		const target = await renderLine();

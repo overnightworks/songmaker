@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import {
 		editAudioDuration,
 		editBpm,
@@ -57,6 +58,14 @@
 	let defaultsRequested = false;
 	let listsRequested = false;
 
+	// Opening and closing replace the focused button, so focus follows the
+	// control that took its place.
+	async function toggle(open: boolean, focusSelector: string): Promise<void> {
+		recipeOpen.set(open);
+		await tick();
+		document.querySelector<HTMLElement>(focusSelector)?.focus();
+	}
+
 	$effect(() => {
 		if (($recipeOpen || holdsEngineValues) && !defaultsRequested) {
 			defaultsRequested = true;
@@ -71,14 +80,14 @@
 </script>
 
 {#if $recipeOpen}
-	<RecipeTabs {values} {standard} onchange={apply} onclose={() => recipeOpen.set(false)} />
+	<RecipeTabs {values} {standard} onchange={apply} onclose={() => toggle(false, '.recipe-line')} />
 {:else}
 	<button
 		type="button"
 		class="recipe-line"
 		aria-expanded="false"
 		aria-label={differs ? `${RECIPE_PANEL_LABEL}, ${RECIPE_CHANGED_LABEL}` : RECIPE_PANEL_LABEL}
-		onclick={() => recipeOpen.set(true)}
+		onclick={() => toggle(true, '[data-tab="song"]')}
 	>
 		<span class="label">{RECIPE_PANEL_LABEL}</span>
 		{#if differs}<i class="dot" data-recipe-changed aria-hidden="true"></i>{/if}
