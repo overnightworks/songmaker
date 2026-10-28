@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatTime } from '$lib/utils/format';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { laidOutSeekLine, pointerOnSeekLine, shownSeekTime } from '$lib/test-utils/seek-line';
+import { followingGlowSnippet, reactiveProps } from '../../tests/reactive-fixtures.svelte';
 import TransportBarFrame from './TransportBarFrame.svelte';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 
@@ -15,6 +16,7 @@ afterEach(async () => {
 	clearComponentStyles();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
+	document.documentElement.removeAttribute('style');
 });
 
 async function mountDesktopFrame({
@@ -103,44 +105,56 @@ describe('TransportBarFrame play button (#924)', () => {
 });
 
 describe('TransportBarFrame title glow colours (#1966)', () => {
-	it('tints the playing title glow from the --viz-accent tokens when the visualizer loop never starts', async () => {
-		vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query }));
+	function setVizAccent(red: number, green: number, blue: number): void {
 		const root = document.documentElement;
-		root.style.setProperty('--viz-primary-r', '10');
-		root.style.setProperty('--viz-primary-g', '20');
-		root.style.setProperty('--viz-primary-b', '30');
-		root.style.setProperty('--viz-accent-r', '122');
-		root.style.setProperty('--viz-accent-g', '24');
-		root.style.setProperty('--viz-accent-b', '192');
+		root.style.setProperty('--viz-accent-r', String(red));
+		root.style.setProperty('--viz-accent-g', String(green));
+		root.style.setProperty('--viz-accent-b', String(blue));
+	}
+
+	async function mountGlowFrame(transport: 'paused' | 'playing') {
+		vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query }));
 		const target = document.createElement('div');
 		document.body.appendChild(target);
-		component = mount(TransportBarFrame, {
-			target,
-			props: {
-				transport: 'playing',
-				takeIsCurrent: true,
-				currentTime: 0,
-				duration: 0,
-				formatTime,
-				canPrev: false,
-				canNext: false,
-				onPrev: () => {},
-				onNext: () => {},
-				onTogglePlay: () => {},
-				onSeek: () => {},
-				trackInfo: createRawSnippet((glowStyle: () => string) => ({
-					render: () => `<span class="glow" data-style="${glowStyle()}">Nachtstrom</span>`
-				})),
-				nowPlayingOpen: false,
-				onOpenNowPlaying: () => {},
-				nowPlayingDisabled: true,
-				mobileTransport: true
-			}
+		const props = reactiveProps({
+			transport,
+			takeIsCurrent: true,
+			currentTime: 0,
+			duration: 0,
+			formatTime,
+			canPrev: false,
+			canNext: false,
+			onPrev: () => {},
+			onNext: () => {},
+			onTogglePlay: () => {},
+			onSeek: () => {},
+			trackInfo: followingGlowSnippet(),
+			nowPlayingOpen: false,
+			onOpenNowPlaying: () => {},
+			nowPlayingDisabled: true,
+			mobileTransport: true
 		});
+		component = mount(TransportBarFrame, { target, props });
 		await tick();
-		const glow = target.querySelector<HTMLElement>('.glow');
-		root.removeAttribute('style');
+		return { props, glow: () => target.querySelector<HTMLElement>('.glow')?.dataset.style };
+	}
 
-		expect(glow?.dataset.style).toContain('122, 24, 192');
+	it('tints the playing title glow from the --viz-accent tokens when the visualizer loop never starts', async () => {
+		setVizAccent(122, 24, 192);
+
+		const { glow } = await mountGlowFrame('playing');
+
+		expect(glow()).toContain('122, 24, 192');
+	});
+
+	it('picks up a theme switch that happened while paused once playback starts', async () => {
+		setVizAccent(10, 20, 30);
+		const { props, glow } = await mountGlowFrame('paused');
+
+		setVizAccent(122, 24, 192);
+		props.transport = 'playing';
+		await tick();
+
+		expect(glow()).toContain('122, 24, 192');
 	});
 });

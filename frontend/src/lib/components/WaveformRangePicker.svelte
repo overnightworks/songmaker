@@ -71,8 +71,9 @@
 	}
 
 	$effect(() => {
-		const redrawOnThemeSwitch = $theme;
-		if (peaks.length > 0 && redrawOnThemeSwitch) {
+		// Subscribing here re-runs the effect on a theme switch so the canvas takes the new colours.
+		void $theme;
+		if (peaks.length > 0) {
 			drawWaveform();
 		}
 	});
