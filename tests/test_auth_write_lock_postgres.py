@@ -17,7 +17,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
-from songmaker_cli.auth_api import _backchannel_logout_host
+from songmaker_cli.auth_api import backchannel_logout_host
 from songmaker_cli.auth_stores import DatabaseWriteLock
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.request_policies import BACKCHANNEL_LOGOUT_PATH
@@ -161,7 +161,7 @@ def test_a_back_channel_logout_waits_for_a_pending_sign_in_and_ends_its_new_sess
     callback = _in_thread(answers, "callback", lambda: world.callback(person, started))
     logout = _in_thread(answers, "logout", lambda: realm.post(
         BACKCHANNEL_LOGOUT_PATH, data={"logout_token": world.issuer.logout_token(subject)},
-        headers={"host": _backchannel_logout_host()},
+        headers={"host": backchannel_logout_host()},
     ))
     pause = _CallbackPause()
     engine = pg_factory.kw["bind"]

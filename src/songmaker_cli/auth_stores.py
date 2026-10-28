@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from webauth.ports import AccountEventKind
+from webauth.ports import AccountEventKind, SignInStores
 
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.constants import AuditAction, ResourceType
@@ -168,3 +168,26 @@ class DatabaseAuditSink:
             self.session, event.actor_id, action, ResourceType.USER, event.subject_id,
             f"role={event.role}",
         )
+
+
+@dataclass(frozen=True)
+class DatabaseSignInTransaction:
+    """The serialized context around one sign-in entry.
+
+    Each entry opens its own database session and takes the user-management lock; a clean exit
+    commits; an exception leaves the block and the session closes with its transaction rolled
+    back, so a failed entry (a deletion followed by a failing audit write) persists nothing.
+    """
+
+    factory: sessionmaker[Session]
+
+    @contextmanager
+    def __call__(self) -> Iterator[SignInStores]:
+        with self.factory() as session:
+            with DatabaseWriteLock(session).hold():
+                yield SignInStores(
+                    accounts=DatabaseSubjectUserStore(session),
+                    sessions=DatabaseSessionRecordStore(session),
+                    audit=DatabaseAuditSink(session),
+                )
+            session.commit()
