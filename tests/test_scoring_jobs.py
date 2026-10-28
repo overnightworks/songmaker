@@ -223,7 +223,7 @@ def test_default_judge_model_is_available_for_get_and_first_save(
 # ── run_scoring_job wiring ───────────────────────────────────────────
 
 
-def _seeded_generation(tmp_path: Path) -> tuple:
+def _seeded_generation(tmp_path: Path, lyrics: str | None = "Hello world") -> tuple:
     factory = init_db(tmp_path / "scoring.db")
     with factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
@@ -232,7 +232,7 @@ def _seeded_generation(tmp_path: Path) -> tuple:
         session.add(Song(id="s1", title="Song One", album_id="alb1", track_number=1))
         session.add(Version(
             id="v1", song_id="s1", version_number=1,
-            lyrics="Hello world", prompt="rock style", bpm=120,
+            lyrics=lyrics, prompt="rock style", bpm=120,
         ))
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
@@ -248,7 +248,7 @@ def _seeded_generation(tmp_path: Path) -> tuple:
     return factory, audio_dir
 
 
-def _scoring_result_with_transcript() -> SongScores:
+def _scoring_result_with_transcript(*, silent: bool = False) -> SongScores:
     return SongScores(
         emotional_dynamics=EmotionalDynamicsScore(
             pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2,
@@ -257,8 +257,10 @@ def _scoring_result_with_transcript() -> SongScores:
         text_accuracy=TextAccuracyScore(
             similarity_ratio=0.9,
             intended_line_texts=("hello", "world"),
-            transcribed_line_texts=("hello", "world"),
-            whisper_cues=(WhisperCue(start=0.0, end=0.8, text="hello world"),),
+            transcribed_line_texts=() if silent else ("hello", "world"),
+            whisper_cues=() if silent else (
+                WhisperCue(start=0.0, end=0.8, text="hello world"),
+            ),
         ),
         runs=(
             ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK),
@@ -269,7 +271,11 @@ def _scoring_result_with_transcript() -> SongScores:
 
 @pytest.mark.parametrize(
     ("provider", "route", "model"),
-    [("grok", "api", "grok-4.6"), ("claude", "api", "claude-sonnet-4-6")],
+    [
+        ("grok", "api", "grok-4.6"),
+        ("codex", "api", "gpt-5"),
+        ("claude", "api", "claude-sonnet-4-6"),
+    ],
 )
 def test_scoring_run_calls_no_provider_and_writes_no_verdict_key(
     tmp_path: Path, provider: str, route: str, model: str,
@@ -328,21 +334,27 @@ def test_scoring_run_asks_the_child_for_exactly_the_requested_scorers(
     assert scorer.score.call_args.kwargs["scorers"] == ["silence"]
 
 
+@pytest.mark.parametrize(
+    ("lyrics", "silent"),
+    [("Hello world", False), ("Hello world", True), (None, False)],
+    ids=["lyrics-and-transcript", "lyrics-empty-transcript", "no-lyrics"],
+)
 def test_scoring_run_for_a_take_without_a_score_row_writes_no_verdict_key(
-    tmp_path: Path,
+    tmp_path: Path, lyrics: str | None, silent: bool,
 ) -> None:
     from songmaker_cli.db.models import Score
 
-    factory, audio_dir = _seeded_generation(tmp_path)
+    factory, audio_dir = _seeded_generation(tmp_path, lyrics)
     with patch(
         "songmaker_cli.jobs.get_scorer_process",
         return_value=MagicMock(score=MagicMock(
-            return_value=_scoring_result_with_transcript(),
+            return_value=_scoring_result_with_transcript(silent=silent),
         )),
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
 
     with factory() as session:
+        assert session.query(Job).filter_by(id="j-score").one().status == "completed"
         stored = session.query(Score).filter_by(generation_id="g1").one()
         assert "lyrical_coherence" not in stored.value
         assert "lyrical_summary" not in stored.value
