@@ -24,7 +24,7 @@ Before writing tests, you need to know what correct behavior looks like. Read th
 
 For each external boundary in `src/acestep_engine/client.py`:
 
-1. Read existing tests in `tests/test_client.py`
+1. Read existing tests in `tests/acestep_engine/test_client.py`
 2. Add tests that **assert the payload content** sent to external APIs, not just the return value. Examples:
    - When `config.seed=42`, assert payload contains `{"seed": 42, "use_random_seed": false}`
    - When `config.seed=-1`, assert payload contains `{"use_random_seed": true}`

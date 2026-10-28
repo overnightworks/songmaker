@@ -12,7 +12,7 @@ import pytest
 from songmaker_cli.request_policies import build_rate_limit_policy
 from songmaker_cli.settings import Settings
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import e2e_rate_window as rate_window  # noqa: E402
 
