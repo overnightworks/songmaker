@@ -158,11 +158,11 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra agent-service --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra agent-service --extra image --extra mcp # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py tests/test_reference_save_lock_postgres.py tests/test_song_version_lock_postgres.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
       - name: Require executed PostgreSQL reference quota and write lock proofs
         run: |
           python - <<'PYTHON'
@@ -182,13 +182,19 @@ jobs:
           assert cases, "No PostgreSQL reference quota proofs executed"
           assert not any(case.find("skipped") is not None for case in cases), "Quota proof skipped"
           print(f"PostgreSQL reference quota proofs: {len(cases)} passed, 0 skipped")
-          lock_cases = [
-              case for case in ET.parse("postgresql-contract.xml").iter("testcase")
-              if case.attrib["classname"].endswith("test_auth_write_lock_postgres")
-          ]
-          assert len(lock_cases) == 3, f"Expected 3 PostgreSQL write lock proofs, got {len(lock_cases)}"
-          assert not any(case.find("skipped") is not None for case in lock_cases), "Write lock proof skipped"
-          print(f"PostgreSQL write lock proofs: {len(lock_cases)} passed, 0 skipped")
+          expected_lock_cases = {
+              "test_auth_write_lock_postgres": 3,
+              "test_reference_save_lock_postgres": 6,
+              "test_song_version_lock_postgres": 11,
+          }
+          for module, expected in expected_lock_cases.items():
+              lock_cases = [
+                  case for case in ET.parse("postgresql-contract.xml").iter("testcase")
+                  if case.attrib["classname"].endswith(module)
+              ]
+              assert len(lock_cases) == expected, f"Expected {expected} {module} proofs, got {len(lock_cases)}"
+              assert not any(case.find("skipped") is not None for case in lock_cases), f"{module} proof skipped"
+              print(f"{module}: {len(lock_cases)} passed, 0 skipped")
           PYTHON
 
   frontend:

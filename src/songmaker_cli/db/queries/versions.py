@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from songmaker_cli.db.models import Version
+from songmaker_cli.db.queries.songs import lock_song_row
 
 
 def get_version(session: Session, version_id: str, song_id: str) -> Version | None:
@@ -25,6 +26,11 @@ def delete_version(
     inconsistency if the commit fails.
     """
     version = session.query(Version).filter_by(id=version_id).first()
+    if not version:
+        raise ValueError(f"Version not found: {version_id}")
+    lock_song_row(session, version.song_id)
+    # A delete that committed while this one waited leaves nothing to delete.
+    version = session.query(Version).populate_existing().filter_by(id=version_id).first()
     if not version:
         raise ValueError(f"Version not found: {version_id}")
 

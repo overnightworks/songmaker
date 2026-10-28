@@ -103,13 +103,28 @@ def _begin_exclusive(session: Session, lock_id: int = _RATE_LIMIT_LOCK_ID) -> No
 
     PostgreSQL: advisory lock scoped to the transaction (auto-released on
     commit/rollback). Different lock_ids allow independent serialization.
-    SQLite: BEGIN IMMEDIATE (global write lock, test databases only).
+    SQLite: BEGIN IMMEDIATE (global write lock, test databases only); inside a
+    transaction that already began it the database-wide lock is already held,
+    and a second BEGIN would raise.
     """
     dialect = session.bind.dialect.name
     if dialect == "sqlite":
-        session.execute(text("BEGIN IMMEDIATE"))
+        if not session.connection().connection.dbapi_connection.in_transaction:
+            session.execute(text("BEGIN IMMEDIATE"))
     else:
         session.execute(text("SELECT pg_advisory_xact_lock(:id)").bindparams(id=lock_id))
+
+
+def commit_auth_state_before_lock(session: Session, caller: str) -> None:
+    """Commit the auth dependency's renewal and audit writes so a lock can follow.
+
+    Callers must have made no application mutation: the commit persists whatever is pending.
+    """
+    assert not session.new and not session.dirty and not session.deleted, (
+        f"{caller}: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
+    session.commit()
 
 
 def lock_lora_capacity(session: Session) -> None:
@@ -121,11 +136,7 @@ def lock_lora_capacity(session: Session) -> None:
     renewal/audit mutations before taking the lock; callers must not have
     made application mutations yet.
     """
-    assert not session.new and not session.dirty and not session.deleted, (
-        "lock_lora_capacity: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
-    session.commit()
+    commit_auth_state_before_lock(session, "lock_lora_capacity")
     _begin_exclusive(session, _LORA_CAPACITY_LOCK_ID)
 
 
@@ -310,11 +321,7 @@ def _acquire_unique_slug(
     mutations besides auth-layer session renewal, because the commit() below
     would persist them unconditionally.
     """
-    assert not session.new and not session.dirty and not session.deleted, (
-        f"{caller}: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
-    session.commit()
+    commit_auth_state_before_lock(session, caller)
     _begin_exclusive(session, lock_id)
     candidate = base_slug
     counter = 1
