@@ -926,22 +926,14 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
 
 
 @pytest.mark.parametrize("role", ["admin", "member"])
-@pytest.mark.parametrize("method", ["get", "put"])
-def test_the_removed_judge_settings_endpoint_answers_the_ordinary_not_found(
-    admin_client, method, role,
-):
-    client, _ = admin_client
+@pytest.mark.parametrize("method", ["GET", "PUT"])
+def test_removed_judge_endpoint_answers_ordinary_not_found(admin_client, method, role):
+    client = admin_client[0]
     client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
-        "u-test", role=role, username="u-u-test"
-    )
-    request_arguments = {"json": {"provider": "grok", "model": "grok-4.6"}} if method == "put" else {}
-
-    unknown_path = getattr(client, method)("/api/settings/never-existed", **request_arguments)
-    response = getattr(client, method)("/api/settings/judge", **request_arguments)
-
-    assert unknown_path.status_code == 404
-    assert response.status_code == 404
-    assert response.content == unknown_path.content
+        "u-test", role=role, username="u-u-test")
+    unknown, removed = [client.request(method, f"/api/settings/{n}") for n in ("nope", "judge")]
+    assert removed.status_code == unknown.status_code == 404
+    assert removed.content == unknown.content
 
 
 _LEFTOVER_JUDGE_ROWS = {
