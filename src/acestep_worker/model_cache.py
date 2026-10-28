@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -8,6 +9,8 @@ from datetime import datetime
 from typing import Any
 
 from acestep_worker.clock import utcnow
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -219,6 +222,33 @@ class ModelCache:
             self._in_use[mode] -= 1
             if self._in_use[mode] <= 0:
                 del self._in_use[mode]
+
+    async def release_and_stop(self, mode: str) -> None:
+        """End one use of ``mode`` and, when none is left, stop its child.
+
+        The unloader runs under the cache lock, so a take admitted while the child stops
+        waits behind it and finds the mode gone. The entry is dropped even when the
+        unloader fails: unlike ``evict``, the caller no longer trusts this child. The
+        admin pin stays, so the mode is pinned again once it is reloaded.
+        """
+        async with self._lock:
+            if mode not in self._in_use:
+                return
+            self._in_use[mode] -= 1
+            if self._in_use[mode] > 0:
+                log.warning(
+                    "Not stopping %s: %d other uses still hold it", mode, self._in_use[mode]
+                )
+                return
+            del self._in_use[mode]
+            model = self._loaded.pop(mode, None)
+            if model is None:
+                return
+            try:
+                await self._unloader(model)
+            except Exception:
+                log.exception("Stopping the %s child failed", mode)
+                raise
 
     def _declared_used_gb(self) -> float:
         return sum(self._sizes.get(m, 0.0) for m in self._loaded)

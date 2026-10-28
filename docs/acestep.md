@@ -64,13 +64,21 @@ physically stages the dataset inside the Fork's safe root, trains there, and
 exports from the final training output into a separate export directory. Each
 training poll updates the existing TaskStore progress stream, which Songmaker
 consumes through SSE while the Fork reports progress; the timeout and heartbeat
-ordering is documented in [the architecture](architecture.md#worker-and-job-timeouts).
+ordering is documented in [the architecture](architecture.md#worker-architecture).
 Only the exported adapter is copied back through the shared training handoff
 directory; the product job moves it to `user_loras/<user>/<id>/lora/` and marks
 the LoRA ready. The worker removes its workspace after success, failure, or
 cancellation when `rmtree` succeeds. A `SIGKILL` can leave
 `/opt/acestep/training/<id>` in the container layer; the product job removes the
 shared `training_tmp` handoff directory.
+
+When a training ends, whether it succeeded, failed or was cancelled, the worker
+stops that mode's ACE-Step child before it releases the GPU hold, because the
+Fork does not put the LM back after a training. The scheduler loads the
+mode again before the next take (or after one "not loaded" answer when its view
+was stale), and the new child passes the same LM check as any load. The price is
+one warm reload per training (under 30 seconds with a warm page cache). A kept
+(pinned) mode stays pinned but is not resident until that reload.
 
 **Auto-scoring (issue #222).** Every successfully persisted generation gets a
 score job automatically — `jobs.generation._auto_score_generation`, called
