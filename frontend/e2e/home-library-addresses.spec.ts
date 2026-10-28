@@ -737,7 +737,8 @@ test(
 );
 
 // The wall opens offline only from what the worker precached. The one stub,
-// loseNetwork's refusal of the event stream, is a request the worker never answers.
+// loseNetwork's refusal of the event stream, may be missed on a controlled page;
+// setOffline refuses that stream either way.
 test.describe('with the service worker in control', () => {
 	test.use({ serviceWorkers: 'allow' });
 
