@@ -500,27 +500,6 @@ async def stale_job_reaper_loop(app: FastAPI) -> None:
             registry.record_success(BackgroundLoopName.STALE_JOB_REAPER)
 
 
-def pin_judge_route(ctx: AppContext) -> None:
-    """Persist the pre-route judge transport once using the shared runtime config."""
-    from agent_providers.config import current_config
-    from sqlalchemy.exc import IntegrityError
-
-    from songmaker_cli.db.queries.settings import pin_judge_route_if_unset
-
-    with ctx.db() as session:
-        try:
-            route = pin_judge_route_if_unset(
-                session, anthropic_key_is_set=bool(current_config().anthropic_api_key),
-            )
-            session.commit()
-        except IntegrityError:
-            session.rollback()
-            log.info("Judge route already pinned (concurrent startup)")
-            return
-        if route is not None:
-            log.info("Judge route pinned to %s", route)
-
-
 async def report_claude_cli_tool_surface() -> Literal["ok", "drift", "unverified"]:
     """Verify the mounted Claude CLI's tool surface at boot; say so in the
     log, and return the state for ``/health``'s ``claude_cli_tool_surface``

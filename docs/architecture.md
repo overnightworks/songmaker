@@ -975,7 +975,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Config | ACE-Step config building (merges defaults + user + song params) | `config.py` |
 | DB | SQLAlchemy ORM models, query functions, engine init | `db/` |
 | Scoring | Fault-isolated pipeline: text accuracy, dynamics, BPM, silence, spectral, aesthetics | `scoring/` |
-| Co-writer | The turn as a run at the agent service: its agent file, its tokens and run binding, the tools it calls back at `/mcp`; the cover selection's route is resolved by `cowriter/routing.py` and the judge is configured separately | `agents/cowriter.md`, `cowriter/service_turn.py`, `cowriter/service_runs.py`, `cowriter/mcp_endpoint.py`, `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
+| Co-writer | The turn as a run at the agent service: its agent file, its tokens and run binding, the tools it calls back at `/mcp`; the cover selection's route is resolved by `cowriter/routing.py` | `agents/cowriter.md`, `cowriter/service_turn.py`, `cowriter/service_runs.py`, `cowriter/mcp_endpoint.py`, `cowriter/routing.py`, `provider_status.py`, `agent_providers/dispatch.py`, `agent_providers/catalog.py` |
 | Conversation | Conversation-scoped co-writer turns, history, and durable memory | `conversation_api.py` |
 | MCP | Claude's stdio tool server, the `/mcp` endpoint for the agent service, and the shared tool declarations and execution | `mcp_server/`, `cowriter/mcp_endpoint.py`, `cowriter/tools.py` |
 | CLI | Starts the server | `main.py` |
@@ -1011,12 +1011,11 @@ Trust, tokens and the network: [Security](security.md#co-writer-turn-through-the
 
 ### Agent routes
 
-`db/queries/settings.py` owns the independent Cover and Judge selections. Cover captures its provider,
-model, and explicit `cli` or `api` route before work begins. The Judge has its
-own saved route, which no scoring run reads; the Judge settings and the `/settings/judge` endpoints
-stay until a later item removes them.
+`db/queries/settings.py` owns the Cover selection. Cover captures its provider,
+model, and explicit `cli` or `api` route before work begins.
 The Co-Writer has no selection here: the agent service's configuration chooses the turn's model
-(the agent file names none), and the rows once saved for it stay in the table unread.
+(the agent file names none), and the rows once saved for it stay in the table unread. The rows
+once saved for the removed judge stay in the table unread as well.
 `agent_providers/dispatch.py`
 owns the resulting adapter decision for the Cover (the Co-Writer
 turn no longer executes a route; a scoring run calls no provider): Cover asks `cover_image_capability(provider, route)`,
@@ -1031,15 +1030,7 @@ named (`<Provider> · no image tool`) instead of quietly running Codex.
 Codex CLI route reads its model catalogue from the mounted CLI's
 `codex debug models` JSON output. The settings responses project the selected
 route for legacy callers while also returning route-keyed readiness and
-catalogue snapshots. Judge settings expose `route` and `provider_routes_status`;
-the saved route owns their model list.
-At startup, an absent `judge_route` is pinned once from the saved provider and
-shared provider runtime configuration: Claude (also the unset provider) uses
-API when `ANTHROPIC_API_KEY` is set, otherwise CLI; Grok, Codex, and retired
-providers pin API. Existing route rows are preserved. Reads without a valid
-route return 422. An omitted or null route in a Judge update keeps the saved
-route. The Models page has no Scoring control, and no scoring run reads the
-Judge settings. Saving a Models row is a question of
+catalogue snapshots. The Models page has no Scoring control. Saving a Models row is a question of
 form — a known provider, a known route, and a model the provider lists, the one
 the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
@@ -1288,7 +1279,6 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `GROK_CLI_STREAMING_OUTPUT_FORMAT` | Go | The Grok CLI's streaming output format. |
 | `JUDGE_FAILURE_TIMEOUT` | Go | The one reason a judge turn reports when it runs out of time. |
 | `CLAUDE_CLI_BINARY` | Stay | Songmaker's default binary name; the live value arrives as `ProviderRuntimeConfig.claude_cli_binary`. |
-| `CLAUDE_SCORING_MODEL_DEFAULT` | Stay | The judge's fallback model — a product choice. |
 | `CODEX_CLI_AUTH_FILE` | Stay | A container path; deployment fact, arrives through the runtime configuration. |
 | `CODEX_CLI_BINARY` | Stay | Songmaker's default binary name; arrives as `ProviderRuntimeConfig.codex_cli_binary`. |
 | `CODEX_CLI_MAX_CONCURRENT_PROCESSES` | Stay | Default of the `codex_cli_max_concurrent_processes` setting; the live cap arrives through the configuration. |
@@ -1317,7 +1307,6 @@ modules to it in both directions, so a constant cannot quietly change sides.
 | `COVER_MAX_PIXELS` | Stay | The pixel ceiling for any cover songmaker accepts; injected as `ImagePolicy.maximum_pixels`. |
 | `COVER_PNG_MAGIC` | Stay | The signature a generated cover must carry; injected as `ImagePolicy.output_signature`. |
 | `GROK_CLI_PROMPT_FILE_PLACEHOLDER` | Stay | Mechanics, but its value carries songmaker's name; injected as `ProviderRuntimeConfig.cli_prompt_file_placeholder`. |
-| `JUDGE_DEFAULT_PROVIDER` | Stay | Which provider judges lyrical coherence by default — a product choice. |
 | `SECRET_ENV_KEYS` | Stay | Songmaker's own secret names; injected as `ProviderRuntimeConfig.secret_env_keys`. |
 
 The in-tree packages beside the application — `acestep_engine`, `acestep_worker`, `audio_engine` — never import `songmaker_cli`; the dependency runs one way. `agent_providers` and `webauth` are now installed distributions rather than directories under `src/`, and their own boundaries are contracted in their repositories; because `include_external_packages` is on, `.importlinter` still resolves them in songmaker's real import graph. Quality's `import-contract` rule breaks the build on a violation, reading that graph rather than grepping the package directories.
@@ -1549,9 +1538,7 @@ close the stream.
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
 | GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model; both answers carry `allowed_providers`, the sorted providers a save accepts. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
-| GET | `/api/settings/judge` | admin | Judge provider, route, model, and `provider_routes_status` for both routes per provider. `allowed_models` and `models_by_provider` project the saved route and retain the selected model. `models_errors` names unavailable catalogs; a missing or invalid saved route returns 422. |
-| PUT | `/api/settings/judge` | admin | Persist judge provider, route, and model. Omitting `route` or sending null keeps the saved route. The model must be listed on that route, already retained for that provider, or empty while the catalog lists nothing. Unavailable selections remain saved with their route reason; unknown selections return 422. A fresh or retired stored pair is replaceable. |
-| GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes, and `cover_routes` carries image capability; neither reads a saved route, so a missing or invalid Judge route does not affect it. Cover's route reason comes from the shared image-capability dispatch owner. |
+| GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes, and `cover_routes` carries image capability; neither reads a saved route. Cover's route reason comes from the shared image-capability dispatch owner. |
 | GET | `/api/memory` | user | Durable co-writer memory (`?song_id=` adds song + album scopes) |
 | PUT | `/api/memory/user` | user | Replace user-scope co-writer memory |
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |

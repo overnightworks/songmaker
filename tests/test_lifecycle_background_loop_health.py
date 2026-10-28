@@ -260,7 +260,7 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
     from agent_providers.catalog import ProviderRoute
     from agent_providers.constants import COWRITER_PROVIDERS
 
-    from songmaker_cli.provider_status import provider_snapshot
+    from songmaker_cli.provider_status import provider_snapshots
 
     refreshed = threading.Event()
     refreshed_routes: set[tuple[str, ProviderRoute]] = set()
@@ -303,7 +303,7 @@ def test_provider_status_loop_fills_snapshots_and_is_healthy(
         assert client.portal.call(asyncio.to_thread, refreshed.wait, 1)
         health = client.get("/health").json()["background_loops"]
 
-    assert all(provider_snapshot(provider) is not None for provider in COWRITER_PROVIDERS)
+    assert all(provider in provider_snapshots() for provider in COWRITER_PROVIDERS)
     assert refreshed_routes == expected_routes
     assert health[BackgroundLoopName.PROVIDER_STATUS_REFRESH]["state"] == BackgroundLoopStatus.OK
 

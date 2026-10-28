@@ -133,7 +133,6 @@ export interface Capabilities {
 	generation: boolean;
 	scoring: boolean;
 	chat_model: string;
-	scoring_model: string;
 }
 
 export interface ChatMessageItem {
@@ -418,24 +417,6 @@ export interface JobItem {
 	queue_position?: number | null;
 	started_at?: string | null;
 	completed_at?: string | null;
-}
-
-export interface JudgeSettings {
-	provider: string;
-	route: 'cli' | 'api';
-	provider_routes_status: Record<string, Record<'cli' | 'api', ProviderRouteStatusResponse>>;
-	model: string;
-	allowed_providers: string[];
-	allowed_models: string[];
-	models_by_provider: Record<string, string[]>;
-	models_errors: Record<string, string>;
-	probed_at: Record<string, string | null>;
-}
-
-export interface JudgeSettingsRequest {
-	provider: string;
-	route?: 'cli' | 'api' | null;
-	model: string;
 }
 
 export interface LastFailedGenerationResult {

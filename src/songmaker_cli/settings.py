@@ -24,7 +24,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from acestep_engine.settings import EngineSettings
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
-    CLAUDE_SCORING_MODEL_DEFAULT,
     CODEX_CLI_MAX_CONCURRENT_PROCESSES,
     COVER_CLI_DEADLINE_SECONDS,
     COVER_JOB_BUDGET_SECONDS,
@@ -372,7 +371,6 @@ class Settings(BaseSettings):
 
     # ── Claude ────────────────────────────────────────────────────────
     claude_chat_model: str = "claude-opus-4-6"
-    claude_scoring_model: str = CLAUDE_SCORING_MODEL_DEFAULT
     anthropic_api_key: SecretStr | None = None
     xai_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
@@ -400,6 +398,7 @@ class Settings(BaseSettings):
     grafana_user: str | None = None
     grafana_password: SecretStr | None = None
     hf_token: SecretStr | None = None
+    claude_scoring_model: str | None = None
 
     # ── Alert channel (issue #333) ─────────────────────────────────────
     # Read directly from .env by scripts/alert.sh (systemd OnFailure=)
