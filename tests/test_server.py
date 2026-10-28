@@ -17,9 +17,9 @@ import httpx
 import pytest
 from conftest import (
     TEST_SECRET,
-    login_and_csrf,
     make_fake_redis,
     make_test_app,
+    seed_session,
     seed_user,
     web_client,
 )
@@ -65,7 +65,7 @@ def server_app(tmp_path: Path) -> TestClient:
     user_dir = audio_dir / _ADMIN_ID
     user_dir.mkdir(parents=True, exist_ok=True)
     (user_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
     return client
 
 
@@ -228,8 +228,8 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import login_and_csrf
-    login_and_csrf(client, "admin6")
+    from conftest import seed_session
+    seed_session(client, "admin6")
     resp = client.get(f"/audio/{admin_id}/data.mp3")
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Not Found"
@@ -533,8 +533,8 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> 
         )
         app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
         client = web_client(app, cookies={})
-        from conftest import login_and_csrf
-        login_and_csrf(client, "admin2")
+        from conftest import seed_session
+        seed_session(client, "admin2")
 
         resp = client.post(
             "/api/songs",
@@ -1105,8 +1105,8 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import login_and_csrf
-    login_and_csrf(client, "admin5")
+    from conftest import seed_session
+    seed_session(client, "admin5")
     resp = client.get("/audio/other-user-id/song.mp3")
     assert resp.status_code == 404
 

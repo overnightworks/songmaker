@@ -8,7 +8,7 @@ import {
 	HOME_LISTEN_ERROR
 } from '../src/lib/constants';
 import {
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	HOME_PATH,
 	loseNetwork,
@@ -33,7 +33,7 @@ async function postFromPage(
 	path: string,
 	data: unknown = {}
 ): Promise<Record<string, string>> {
-	const response = await page.request.post(path, { headers: await csrfHeaders(page), data });
+	const response = await page.request.post(path, { headers: await sameOriginHeaders(page), data });
 	expect(response.ok(), `${path}: ${response.status()}`).toBe(true);
 	return response.json();
 }

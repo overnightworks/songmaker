@@ -126,8 +126,8 @@ def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis, mock_ar
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import login_and_csrf
-    login_and_csrf(client, "admin")
+    from conftest import seed_session
+    seed_session(client, "admin")
     for _ in range(5):
         resp = client.get("/api/songs")
         assert resp.status_code == 200
@@ -178,8 +178,8 @@ def test_ip_rate_limit_middleware_writes_to_redis(
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import login_and_csrf
-    login_and_csrf(client, "admin")
+    from conftest import seed_session
+    seed_session(client, "admin")
     client.get("/api/songs")
     keys = [k for k in fake_redis.keys() if k.startswith(REDIS_RL_IP_PREFIX)]
     assert len(keys) > 0

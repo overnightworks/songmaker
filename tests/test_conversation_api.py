@@ -406,7 +406,7 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
     tmp_path, mock_arq_pool, chat_job_status,
 ):
     """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
-    from conftest import login_and_csrf, make_test_app
+    from conftest import make_test_app, seed_session
 
     def _seed_a_turn_the_restart_interrupted(session) -> None:
         musician = seed_user(session, "musician", role="user")
@@ -416,7 +416,7 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
 
     c, factory = make_test_app(tmp_path, seed_db=_seed_a_turn_the_restart_interrupted)
     with c:
-        login_and_csrf(c, "musician")
+        seed_session(c, "musician")
         body = c.get("/api/conversations/conv-1").json()
 
     assert [m["content"] for m in body["messages"]] == ["Ja bitte"]

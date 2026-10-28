@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 from conftest import (
-    login_and_csrf,
     make_test_app,
     queries_without_session_auth,
+    seed_session,
 )
 from sqlalchemy import event
 
@@ -95,7 +95,7 @@ def _seed_pick_scenarios(session) -> None:
 @pytest.fixture
 def picks_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_pick_scenarios)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     return client, factory
 
 
@@ -229,7 +229,7 @@ def test_list_albums_song_count_excludes_soft_deleted_song(tmp_path: Path) -> No
         ))
 
     client, _ = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     resp = client.get("/api/albums")
     assert resp.status_code == 200
     by_id = {a["id"]: a for a in resp.json()["items"]}
@@ -280,7 +280,7 @@ _PLAYABLE_TAKE_EXPECTATIONS = {
 @pytest.fixture
 def playable_take_client(tmp_path: Path):
     client, _ = make_test_app(tmp_path, seed_db=_seed_playable_take_scenarios)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     return client
 
 
@@ -322,7 +322,7 @@ def _seed_metadata_scenarios(session) -> None:
 @pytest.fixture
 def metadata_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_metadata_scenarios)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     return client, factory
 
 
@@ -410,7 +410,7 @@ def test_update_album_metadata_other_user_blocked(tmp_path: Path) -> None:
         ))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, "intruder")
+    seed_session(client, "intruder")
     resp = client.put("/api/albums/theirs", json={"subtitle": "Hijacked"})
     assert resp.status_code == 404
     with factory() as session:
@@ -429,7 +429,7 @@ def _seed_archive_scenarios(session) -> None:
 @pytest.fixture
 def archive_client(tmp_path: Path):
     client, factory = make_test_app(tmp_path, seed_db=_seed_archive_scenarios)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     return client, factory
 
 
@@ -473,7 +473,7 @@ def test_archived_filter_song_count_counts_songs_of_archived_album(tmp_path: Pat
         session.add(Song(id="s2", title="Two", album_id="alb", track_number=2, slug="two"))
 
     client, _ = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     resp = client.get("/api/albums", params={"archived": "true"})
     assert resp.status_code == 200
     by_id = {a["id"]: a for a in resp.json()["items"]}
@@ -522,7 +522,7 @@ def test_archive_other_users_album_is_404(tmp_path: Path) -> None:
         session.add(Album(id="theirs", title="Theirs", artist="A", created_by="u-owner"))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, "intruder")
+    seed_session(client, "intruder")
     resp = client.post("/api/albums/theirs/archive")
     assert resp.status_code == 404
     with factory() as session:
@@ -545,7 +545,7 @@ def test_unarchive_other_users_album_is_404(tmp_path: Path) -> None:
         ))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, "intruder")
+    seed_session(client, "intruder")
     resp = client.post("/api/albums/theirs/unarchive")
     assert resp.status_code == 404
     with factory() as session:
@@ -576,7 +576,7 @@ def creation_client(tmp_path: Path):
         ))
 
     client, factory = make_test_app(tmp_path, seed_db=_seed)
-    login_and_csrf(client, _ADMIN_USER)
+    seed_session(client, _ADMIN_USER)
     return client, factory
 
 

@@ -8,7 +8,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, seed_user, web_client
+from conftest import make_test_app, seed_session, seed_user, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy.orm import Session
@@ -120,7 +120,7 @@ def _seed_owners(session) -> None:
 
 def _authed_app(tmp_path: Path, username: str, password: str) -> tuple[TestClient, object]:
     client, factory = make_test_app(tmp_path, seed_db=_seed_owners)
-    login_and_csrf(client, username)
+    seed_session(client, username)
     return client, factory
 
 

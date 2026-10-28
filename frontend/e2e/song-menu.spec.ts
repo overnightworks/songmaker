@@ -21,7 +21,7 @@ import {
 import {
 	appBar,
 	boundingBoxes,
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	ONLY_IN_SHELL,
 	type Shell,
@@ -93,7 +93,7 @@ async function onOwnSong(
 	flow: (ids: { songId: string; albumId: string }) => Promise<void>
 ): Promise<void> {
 	await page.setViewportSize({ width, height: VIEWPORT_HEIGHT_PX });
-	const headers = await csrfHeaders(page);
+	const headers = await sameOriginHeaders(page);
 	const album = await page.request.post('/api/albums', {
 		headers,
 		data: { title: `E2E Song menu ${Date.now()}`, artist: '' }
