@@ -72,7 +72,9 @@ const newButton = (page: Page) =>
 	workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true });
 const listenRegion = (page: Page) => workspace(page).getByRole('region', LISTEN_REGION);
 const wall = (page: Page) => workspace(page).locator(WALL_SELECTOR);
-const historyLength = (page: Page) => page.evaluate(() => history.length);
+// A navigation in flight destroys the execution context; NaN equals no length, so a poll retries.
+const historyLength = (page: Page): Promise<number> =>
+	page.evaluate(() => history.length).catch(() => Number.NaN);
 
 function albumAddress(library: SeededLibrary): RegExp {
 	return new RegExp(`/album/${library.albumId}$`);

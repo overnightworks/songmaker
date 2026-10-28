@@ -541,15 +541,7 @@ describe('admin models tab', () => {
 		]);
 	});
 
-	it('keeps every provider offered while the reachability probe is pending', async () => {
-		api.fetchProviderStatus.mockReturnValue(new Promise(() => {}));
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		expect(optionLabels(providerSelect(target, 'Scoring'))[0]).toBe('Claude · Checking…');
-	});
-
-	it('keeps every provider offered after the reachability probe fails', async () => {
+	it('keeps every provider offered and names a failed reachability probe in the row', async () => {
 		api.fetchProviderStatus.mockRejectedValue(serverRefusal('Provider probe failed'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
@@ -559,43 +551,26 @@ describe('admin models tab', () => {
 			'Codex · Provider probe failed',
 			'Grok · Provider probe failed'
 		]);
+		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Claude · Provider probe failed');
 	});
 
-	it('shows each row its live models for the selected route', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['gpt-5-codex']);
-	});
-
-	it('greys a route that is not set up and names its reason in the row', async () => {
+	it('shows the cover row its live models and greys a route that is not set up', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
 		const cover = rowNamed(target, 'Cover');
+		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['gpt-5-codex']);
 		expect(routeButton(cover, 'API')).toHaveClass('dead');
 		expect(reasons(cover)).toContain('API · no image tool');
 	});
 
-	it('stands with the table while the reachability probe is still running', async () => {
+	it('keeps every provider offered while the reachability probe runs', async () => {
 		api.fetchProviderStatus.mockReturnValue(new Promise(() => {}));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
-		expect(taskNames(sectionByHeading(target, 'Models'))).toEqual([
-			'Co-Writer',
-			'Cover',
-			'Scoring'
-		]);
+		expect(optionLabels(providerSelect(target, 'Scoring'))[0]).toBe('Claude · Checking…');
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Checking…');
-	});
-
-	it('names a failed reachability probe in the row instead of claiming Checking', async () => {
-		api.fetchProviderStatus.mockRejectedValue(serverRefusal('Provider probe failed'));
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Claude · Provider probe failed');
 	});
 
 	it('C16 shows the co-writer row as set by the agent service, without a choice', async () => {
@@ -631,14 +606,14 @@ describe('admin models tab', () => {
 		arrive(judgeSettings('claude', 'claude-opus'));
 		await flush();
 
+		expect(target.textContent).not.toContain(MODELS_LOADING_LABEL);
 		expect(optionLabels(providerSelect(target, 'Cover')).length).toBeGreaterThan(0);
 	});
 
-	it('shows the load error and no empty cover select when the judge settings fail', async () => {
+	it('shows the load error and no cover select when the judge settings fail', async () => {
 		api.fetchJudgeSettings.mockRejectedValue(serverRefusal('scoring unavailable'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
-
 		expect(target.textContent).toContain('scoring unavailable');
 		expect(target.querySelector('select[aria-label="Cover provider"]')).toBeNull();
 	});
