@@ -282,7 +282,7 @@ Run it under the probe lock with the isolated project and port:
 
 ```bash
 secret_file="$(mktemp)" && echo e2e-ci-client-secret > "$secret_file"
-flock /tmp/songmaker-probe.lock env \
+flock /tmp/probe-stack.lock env \
   COMPOSE_PROJECT_NAME=songmaker-i689-probe \
   WEB_PORT=18080 \
   POSTGRES_PASSWORD=e2e-ci-postgres-password \
