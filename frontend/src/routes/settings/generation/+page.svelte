@@ -331,7 +331,7 @@
 	.default-chip.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.default-chip.shared {
@@ -351,7 +351,7 @@
 
 	.save-btn {
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
+		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		padding: var(--btn-padding-pill);
@@ -519,7 +519,7 @@
 		padding: 1px 6px;
 		border-radius: 3px;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 		letter-spacing: 0.5px;
 	}
 

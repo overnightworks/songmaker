@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fetchMediaBytes } from '$lib/api/fetch';
 	import { readVizColors } from '$lib/utils/visualizer';
+	import { theme } from '$lib/stores/ui';
 
 	interface Props {
 		audioUrl: string;
@@ -70,7 +71,7 @@
 	}
 
 	$effect(() => {
-		if (peaks.length > 0) {
+		if (peaks.length > 0 && $theme) {
 			drawWaveform();
 		}
 	});

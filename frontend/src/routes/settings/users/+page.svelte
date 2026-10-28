@@ -1078,7 +1078,7 @@
 	.save-btn {
 		display: inline-block;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
+		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		padding: 0.4rem 1rem;
@@ -1146,7 +1146,7 @@
 	.gen-model-tab.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.gen-defaults-controls {
@@ -1185,7 +1185,7 @@
 	.model-toggle.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.model-toggle:hover:not(.active) {

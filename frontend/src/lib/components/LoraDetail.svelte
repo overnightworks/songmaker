@@ -729,7 +729,7 @@
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 		font-family: var(--font-display);
 		letter-spacing: 0.5px;
 		font-size: 0.8rem;
@@ -941,7 +941,7 @@
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 		font-family: var(--font-display);
 		letter-spacing: 0.75px;
 		text-transform: uppercase;
