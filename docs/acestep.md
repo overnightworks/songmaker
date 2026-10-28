@@ -539,7 +539,7 @@ OOM PARTIAL jobs until a newer generate-family attempt or a non-archived take
 created strictly after completion supersedes them. Historical PARTIAL rows without
 completion timestamps are not backfilled. UI presentation remains slice 14 of #916.
 The client and worker contract is verified by the `S7-*` cases in
-[`test_client.py`](../tests/test_client.py),
+[`test_client.py`](../tests/acestep_engine/test_client.py),
 [`test_task_store.py`](../tests/acestep_worker/test_task_store.py) and
 [`test_wrapper.py`](../tests/acestep_worker/test_wrapper.py).
 

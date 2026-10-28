@@ -9,8 +9,8 @@ from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
-from acestep_http import acestep_http
 from conftest import mock_http_response as _mock_response
+from support.acestep_http import acestep_http
 
 from acestep_engine.client import (
     _AUDIO_UPLOAD_FIELDS,
