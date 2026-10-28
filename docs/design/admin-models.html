@@ -1278,7 +1278,7 @@
 	Bildbesitzer für den Admin-Tab „Models" — <strong>Fassung 2, am 06.09.2026 freigegeben</strong> nach
 	dem Operator-Ruling desselben Tages und am selben Tag nachgeschärft (alle Aufgaben mit allen
 	Anbietern, Gründe im Select). Die Scoring-Zeile ist <strong>am 28.10.2026 entfallen</strong>
-	(#1974): der automatische Kohärenz-Judge verlässt die App, die Seite hat keine Scoring-Steuerung mehr.
+	(#1974): der automatische Kohärenz-Judge hat die App verlassen, die Seite hat keine Scoring-Steuerung mehr.
 	Sie ist ein Bild, noch kein Produktverhalten. Gebaut wird gegen Issue #317;
 	#315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
 	<code>docs/design/navigation.html</code>. Warum-Notizen auf Deutsch (für den Operator), alle
@@ -1358,7 +1358,7 @@
 			<p>
 				<strong>Am 28.10.2026 für #1974 entfernt:</strong> Die Scoring-Zeile (die am 10.09.2026 für #844
 				freigegeben worden war) und die Zustände (b) und (x) für sie entfallen, weil der automatische
-				Kohärenz-Judge ausgebaut wird. Es bleibt keine Scoring-Steuerung, auch keine ausgegraute.
+				Kohärenz-Judge ausgebaut ist. Es bleibt keine Scoring-Steuerung, auch keine ausgegraute.
 			</p>
 		</div>
 	</section>
@@ -2618,7 +2618,8 @@
 			<p class="freeze-note">
 				Eingefrorener Bildbesitzer — vom Operator freigegeben am 01.09.2026, erste Fassung.
 				Am 06.09.2026 durch Fassung 2 abgelöst: zu komplex, erklärte die Maschinerie statt der
-				Aufgabe. Steht hier als Historie, nicht als Bauvorlage.
+				Aufgabe. Steht hier als Historie, nicht als Bauvorlage. Der Scoring-Block und der Judge-Befund
+				wurden entfernt, als der Judge die App verließ (#1976).
 			</p>
 
 			<header>
@@ -2646,7 +2647,7 @@
 					<p class="ruling">Zwei Operator-Rulings für diesen Entwurf: Sprache der Karten = Englisch (App ist
 						englisch, nur diese Notiz bleibt deutsch). Scoring wird providerneutral entworfen — je Aufgabe
 						ein eigener Provider, keine erzwungene Kopplung an den Co-Writer.</p>
-					<p>Sieben Befunde, im Code belegt:</p>
+					<p>Sechs Befunde, im Code belegt:</p>
 					<ol class="findings">
 						<li>
 							<span class="num">1</span>
@@ -2677,7 +2678,7 @@
 							<code class="loc">src/songmaker_cli/settings.py:185-187 (xai_api_key, openai_api_key)</code>
 						</li>
 						<li>
-							<span class="num">5</span>
+							<span class="num">4</span>
 							<span class="claim">
 								Kerndefekt: Der Modell-Katalog verlangt für jeden Provider einen API-Key, auch für
 								Claude — aber der echte Co-Writer-Chat läuft über die gemountete Claude-Code-CLI-Anmeldung
@@ -2688,7 +2689,7 @@
 							<code class="loc">src/agent_providers/catalog.py (Key-Pflicht für Claude) · src/agent_providers/claude/adapter.py (CLI-Aufruf ohne api_key)</code>
 						</li>
 						<li>
-							<span class="num">6</span>
+							<span class="num">5</span>
 							<span class="claim">
 								Frontend-Bug: Wechselt man auf einen Provider mit leerem Katalog, wird das alte
 								Modell nicht geleert — der <code>$effect</code> greift nur, wenn die neue Liste nicht
@@ -2699,7 +2700,7 @@
 							<code class="loc">frontend/src/routes/settings/users/+page.svelte:282-287 ($effect) · :918 (disabled-Bedingung)</code>
 						</li>
 						<li>
-							<span class="num">7</span>
+							<span class="num">6</span>
 							<span class="claim">
 								Zwei Quellen der Wahrheit für „welche Claude-Modelle gibt es": Der Co-Writer holt live
 								von der Anthropic-API, Scoring nutzt eine hartkodierte, veraltete Liste mit
