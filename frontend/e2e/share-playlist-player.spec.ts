@@ -8,11 +8,11 @@ import type { SharedPlaylistPayload } from '../src/lib/api/types';
 import {
 	FlowGuard,
 	boundingBoxes,
-	loadedImages,
 	nameStartingWith,
 	ONLY_IN_SHELL,
 	type ExpectedRefusal
 } from './helpers';
+import { loadedImages } from './loaded-images';
 import {
 	PLAYLIST_API,
 	PLAYLIST_TITLE,

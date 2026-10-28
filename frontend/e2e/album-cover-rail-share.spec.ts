@@ -10,9 +10,9 @@ import {
 	sameOriginHeaders,
 	FlowGuard,
 	LIBRARY_PATH,
-	loadedImages,
 	ONLY_IN_SHELL
 } from './helpers';
+import { loadedImages } from './loaded-images';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');

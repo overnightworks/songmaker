@@ -837,11 +837,3 @@ export class FlowGuard {
 		expect(this.apiRequestCount).toBeLessThanOrEqual(budget);
 	}
 }
-
-export async function loadedImages(images: Locator) {
-	for (const image of await images.all()) {
-		await expect
-			.poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
-			.toBeGreaterThan(0);
-	}
-}
