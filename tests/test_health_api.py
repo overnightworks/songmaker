@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from fnmatch import fnmatchcase
 from pathlib import Path
 from types import MappingProxyType
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from agent_providers.claude import provider
@@ -338,6 +338,14 @@ def _seed_one_worker(session) -> None:
 _EMPTY_HEARTBEAT: Mapping[str, object] = MappingProxyType({"loaded": []})
 
 
+_LM_FAILED = {"acestep-worker-0": b"sft"}
+
+
+async def _async_iter(items):
+    for item in items:
+        yield item
+
+
 def _get_health(
     client,
     *,
@@ -358,6 +366,17 @@ def _get_health(
         for worker_id, value in (lm_failure_values or {}).items()
     }
     arq_mod._pool.get = AsyncMock(side_effect=lambda key: failure_values.get(key, heartbeat_bytes))
+    arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(key in failure_values))
+    arq_mod._pool.keys = AsyncMock(
+        side_effect=lambda pattern: [
+            key.encode() for key in failure_values if fnmatchcase(key, pattern)
+        ]
+    )
+    arq_mod._pool.scan_iter = MagicMock(
+        side_effect=lambda match=None, **_: _async_iter(
+            key.encode() for key in failure_values if match is None or fnmatchcase(key, match)
+        )
+    )
 
     with (
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
@@ -472,19 +491,8 @@ def test_worker_without_gpu_healthy_field_is_treated_as_not_online(health_client
     assert body["acestep"] == "unhealthy"
 
 
-def _set_lm_failure_keys(*worker_ids: str) -> None:
-    import songmaker_cli.arq_pool as arq_mod
-
-    present = {lm_failure_key(worker_id) for worker_id in worker_ids}
-    arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(key in present))
-    arq_mod._pool.keys = AsyncMock(
-        side_effect=lambda pattern: [key.encode() for key in present if fnmatchcase(key, pattern)]
-    )
-
-
 def test_registered_worker_with_lm_failure_key_names_the_reason(health_client) -> None:
-    _set_lm_failure_keys("acestep-worker-0")
-    body = _get_health(health_client, heartbeat=None)
+    body = _get_health(health_client, heartbeat=None, lm_failure_values=_LM_FAILED)
     assert body["status"] == "degraded"
     assert body["acestep"] == "unhealthy"
     assert body["acestep_reason"] == "lm_init_failed"
@@ -496,21 +504,18 @@ def test_worker_without_lm_failure_key_has_no_reason(health_client) -> None:
 
 
 def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> None:
-    _set_lm_failure_keys("ghost-worker")
-    body = _get_health(health_client, gpu_healthy=True)
+    body = _get_health(
+        health_client, gpu_healthy=True, lm_failure_values={"ghost-worker": b"sft"},
+    )
     assert body["acestep_reason"] is None
     assert body["acestep"] == "healthy"
+    serialized = json.dumps(body)
+    assert "ghost-worker" not in serialized
+    assert "sft" not in serialized
 
 
 def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
-    import songmaker_cli.arq_pool as arq_mod
-
-    stored = {"acestep-worker-0": b"sft"}
-    arq_mod._pool.exists = AsyncMock(
-        side_effect=lambda key: int(key in {lm_failure_key(worker) for worker in stored}),
-    )
-    body = _get_health(health_client, heartbeat=None, lm_failure_values=stored)
-    arq_mod._pool.exists.assert_awaited()
+    body = _get_health(health_client, heartbeat=None, lm_failure_values=_LM_FAILED)
     assert body["acestep_reason"] == "lm_init_failed"
     serialized = json.dumps(body)
     assert "acestep-worker-0" not in serialized
@@ -518,10 +523,9 @@ def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
 
 
 def test_reason_follows_the_key_when_the_worker_recovers(health_client) -> None:
-    _set_lm_failure_keys("acestep-worker-0")
-    assert _get_health(health_client, heartbeat=None)["acestep_reason"] == "lm_init_failed"
+    failed = _get_health(health_client, heartbeat=None, lm_failure_values=_LM_FAILED)
+    assert failed["acestep_reason"] == "lm_init_failed"
 
-    _set_lm_failure_keys()
     body = _get_health(health_client, gpu_healthy=True)
     assert body["acestep_reason"] is None
     assert body["acestep"] == "healthy"
