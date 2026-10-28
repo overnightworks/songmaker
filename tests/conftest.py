@@ -461,6 +461,7 @@ def mock_arq_pool():
         arq_mod._pool.zcard = AsyncMock(return_value=0)
         arq_mod._pool.keys = AsyncMock(return_value=[])
         arq_mod._pool.get = AsyncMock(return_value=None)
+        arq_mod._pool.exists = AsyncMock(return_value=0)
         arq_mod._pool.aclose = AsyncMock()
         return arq_mod._pool
 

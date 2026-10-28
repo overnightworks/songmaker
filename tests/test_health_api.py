@@ -331,13 +331,18 @@ def _seed_one_worker(session) -> None:
     )
 
 
-def _get_health(client, *, gpu_healthy: bool | None) -> dict:
+def _get_health(
+    client, *, gpu_healthy: bool | None = None, heartbeat: dict | None = {"loaded": []},
+) -> dict:
+    """``heartbeat=None`` means the worker publishes no heartbeat at all."""
     import songmaker_cli.arq_pool as arq_mod
 
-    state: dict = {"loaded": []}
-    if gpu_healthy is not None:
+    state = None if heartbeat is None else dict(heartbeat)
+    if state is not None and gpu_healthy is not None:
         state["gpu_healthy"] = gpu_healthy
-    arq_mod._pool.get = AsyncMock(return_value=json.dumps(state).encode())
+    arq_mod._pool.get = AsyncMock(
+        return_value=None if state is None else json.dumps(state).encode(),
+    )
 
     with (
         patch("songmaker_cli.arq_pool.is_music_worker_healthy", AsyncMock(return_value=True)),
@@ -362,7 +367,7 @@ def expected_health_json() -> bytes:
     return (
         b'{"status":"$status","music_worker":"running","scoring_worker":"running",'
         b'"music_queue_depth":3,"scoring_queue_depth":2,"db":"ok","redis":"ok",'
-        b'"acestep":"$acestep",'
+        b'"acestep":"$acestep","acestep_reason":null,'
         b'"acestep_workers_total":1,"acestep_workers_online":$online,'
         b'"queue_depth_cap_reached":false,"uptime_seconds":123,'
         b'"claude_cli_tool_surface":"$surface","codex_image_sandbox_runtime":"unverified",'
@@ -450,6 +455,55 @@ def test_worker_without_gpu_healthy_field_is_treated_as_not_online(health_client
     body = _get_health(health_client, gpu_healthy=None)
     assert body["acestep_workers_online"] == 0
     assert body["acestep"] == "unhealthy"
+
+
+def _set_lm_failure_keys(*worker_ids: str) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+
+    present = {f"songmaker:acestep:lm-failure:{worker_id}" for worker_id in worker_ids}
+    arq_mod._pool.exists = AsyncMock(side_effect=lambda key: int(key in present))
+
+
+def test_registered_worker_with_lm_failure_key_names_the_reason(health_client) -> None:
+    _set_lm_failure_keys("acestep-worker-0")
+    body = _get_health(health_client, heartbeat=None)
+    assert body["status"] == "degraded"
+    assert body["acestep"] == "unhealthy"
+    assert body["acestep_reason"] == "lm_init_failed"
+
+
+def test_worker_without_lm_failure_key_has_no_reason(health_client) -> None:
+    body = _get_health(health_client, gpu_healthy=False)
+    assert body["acestep_reason"] is None
+
+
+def test_lm_failure_key_of_an_unregistered_worker_is_ignored(health_client) -> None:
+    _set_lm_failure_keys("ghost-worker")
+    body = _get_health(health_client, gpu_healthy=True)
+    assert body["acestep_reason"] is None
+    assert body["acestep"] == "healthy"
+
+
+def test_reason_carries_neither_worker_id_nor_key_value(health_client) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+
+    _set_lm_failure_keys("acestep-worker-0")
+    body = _get_health(health_client, heartbeat=None)
+    # the key's value ("sft") is never fetched, so it cannot reach the body
+    arq_mod._pool.exists.assert_awaited()
+    assert body["acestep_reason"] == "lm_init_failed"
+    assert "acestep-worker-0" not in json.dumps(body)
+
+
+def test_reason_follows_the_key_when_the_worker_recovers(health_client) -> None:
+    _set_lm_failure_keys("acestep-worker-0")
+    assert _get_health(health_client, heartbeat=None)["acestep_reason"] == "lm_init_failed"
+
+    _set_lm_failure_keys()
+    body = _get_health(health_client, gpu_healthy=True)
+    assert body["acestep_reason"] is None
+    assert body["acestep"] == "healthy"
+    assert body["status"] == "ok"
 
 
 def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client) -> None:

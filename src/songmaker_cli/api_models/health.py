@@ -28,6 +28,7 @@ class HealthSignals:
     scoring_queue_depth: int
     workers_total: int
     workers_online: int
+    workers_lm_failed: bool
     queue_depth_cap_reached: bool
     uptime_seconds: int
     claude_cli_tool_surface: ClaudeCliToolSurface
@@ -58,6 +59,11 @@ class HealthResponse(BaseModel):
     db: Literal["ok", "error"]
     redis: Literal["ok", "error"]
     acestep: Literal["healthy", "unknown", "unhealthy"]
+    acestep_reason: Literal["lm_init_failed"] | None = Field(description=(
+        "Why ACE-Step is not healthy when the cause is known: lm_init_failed while a "
+        "registered worker's language model cannot start, otherwise null. A fixed code; "
+        "the worker, the mode and the vendor's error text stay in the worker log."
+    ))
     acestep_workers_total: int
     acestep_workers_online: int
     queue_depth_cap_reached: bool
@@ -106,6 +112,7 @@ class HealthResponse(BaseModel):
             db="ok" if signals.db_ok else "error",
             redis="ok" if signals.redis_ok else "error",
             acestep=acestep,
+            acestep_reason="lm_init_failed" if signals.workers_lm_failed else None,
             acestep_workers_total=signals.workers_total,
             acestep_workers_online=signals.workers_online,
             queue_depth_cap_reached=signals.queue_depth_cap_reached,
