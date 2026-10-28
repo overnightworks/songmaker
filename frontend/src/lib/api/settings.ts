@@ -4,7 +4,6 @@ import type {
 	CoverSettingsResponse,
 	CowriterSettings,
 	DefaultConfigResponse,
-	JudgeSettings,
 	PresetItem,
 	PresetUpdateRequest,
 	ProviderStatus,
@@ -54,22 +53,6 @@ export async function updateCowriterSettings(tailTokenBudget: number): Promise<C
 		method: 'PUT',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ tail_token_budget: tailTokenBudget })
-	});
-}
-
-export async function fetchJudgeSettings(): Promise<JudgeSettings> {
-	return apiFetch<JudgeSettings>('/api/settings/judge');
-}
-
-export async function updateJudgeSettings(
-	provider: string,
-	route: 'cli' | 'api',
-	model: string
-): Promise<JudgeSettings> {
-	return apiFetch<JudgeSettings>('/api/settings/judge', {
-		method: 'PUT',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ provider, route, model })
 	});
 }
 

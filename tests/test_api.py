@@ -2296,8 +2296,8 @@ def test_scoring_schema_endpoint(client: TestClient) -> None:
     by_name = {s["name"]: s for s in body["scorers"]}
     assert by_name["audiobox"]["device"] == "gpu"
     assert by_name["audiobox"]["needs_audio"] is False
-    assert by_name["lyrical_coherence"]["host"] == "parent"
-    assert by_name["audiobox"]["host"] == "child"
+    assert "lyrical_coherence" not in by_name
+    assert all("host" not in scorer for scorer in body["scorers"])
     assert "audiobox_enjoyment" in by_name["audiobox"]["output_keys"]
     assert "silence_gaps" in by_name["silence"]["output_keys"]
 
@@ -3571,8 +3571,8 @@ def test_score_request_invalid_scorer_direct() -> None:
 
     from songmaker_cli.api_models import ScoreRequest
 
-    with pytest.raises(ValidationError, match="Unknown scorers"):
-        ScoreRequest(scorers=["fake_scorer"])
+    with pytest.raises(ValidationError, match="Unknown scorers: lyrical_coherence"):
+        ScoreRequest(scorers=["lyrical_coherence"])
 
 
 def test_check_song_access_ownership_denied(tmp_path: Path) -> None:

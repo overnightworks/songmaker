@@ -18,7 +18,7 @@ USER songmaker
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project \
-    --extra server --extra scoring --extra whisper --extra api # why: The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source distribution, so this locked sync alone may build it. Every dependency remains resolved from uv.lock.
+    --extra server --extra scoring --extra whisper # why: The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source distribution, so this locked sync alone may build it. Every dependency remains resolved from uv.lock.
 
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \
@@ -41,9 +41,6 @@ COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
     --editable . # why: The local project adds no resolved dependencies and cannot change locked versions.
-
-# The judge uses only Claude's CLI fallback; Grok and Codex use HTTP APIs.
-RUN install -d /home/songmaker/.claude
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image

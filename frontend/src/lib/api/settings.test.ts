@@ -13,7 +13,6 @@ import {
 	updateCowriterSettings,
 	updateDefaultConfig,
 	updateGenerationDefaults,
-	updateJudgeSettings,
 	updateRateLimits
 } from './settings';
 
@@ -38,13 +37,6 @@ describe('settings API contract', () => {
 			'/api/settings/generation-defaults',
 			'PUT',
 			{ acestep: { inference_steps: 7 } }
-		],
-		[
-			'judge settings',
-			() => updateJudgeSettings('claude', 'cli', 'claude-sonnet'),
-			'/api/settings/judge',
-			'PUT',
-			{ provider: 'claude', route: 'cli', model: 'claude-sonnet' }
 		],
 		[
 			'cover settings',

@@ -1,21 +1,17 @@
-"""The lyrical-coherence judge is provider-neutral, like the co-writer (#315).
+"""Scoring jobs and the judge settings layer.
 
-Judge provider/model are their own settings, stored and validated like the
-co-writer's pair but never coupled to it, and the scoring job resolves and
-uses them instead of a Claude-only path.
+A scoring run calls no provider; the judge settings stay stored until their
+own removal (#1476 step 3).
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
-import threading
-from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from conftest import (
     make_authenticated_user,
     make_router_app,
@@ -63,13 +59,9 @@ LIVE_CATALOG = {
 
 def test_scoring_job_is_importable_without_the_mcp_package() -> None:
     """The scoring worker container never installs the ``mcp`` extra (it
-    ships only ``server``, ``scoring``, ``whisper``), and the tool-free judge
-    (``call_provider_once``) must not drag the tool-using co-writer's MCP
-    server into its import path (#315). A fresh interpreter with ``mcp``
-    poisoned in ``sys.modules`` proves the whole chain that
-    ``songmaker_cli.jobs.scoring`` pulls in — through
-    ``scoring.lyrical_coherence`` -> ``agent_providers.dispatch`` ->
-    ``agent_providers.openai_adapter`` — stays importable without it.
+    ships only ``server``, ``scoring``, ``whisper``). A fresh interpreter
+    with ``mcp`` poisoned in ``sys.modules`` proves the whole chain that
+    ``songmaker_cli.jobs.scoring`` pulls in stays importable without it.
     """
     script = (
         "import sys\n"
@@ -231,7 +223,7 @@ def test_default_judge_model_is_available_for_get_and_first_save(
 # ── run_scoring_job wiring ───────────────────────────────────────────
 
 
-def _seeded_generation(tmp_path: Path) -> tuple:
+def _seeded_generation(tmp_path: Path, lyrics: str | None = "Hello world") -> tuple:
     factory = init_db(tmp_path / "scoring.db")
     with factory() as session:
         session.add(User(id="u1", username="user1", role="user"))
@@ -240,7 +232,7 @@ def _seeded_generation(tmp_path: Path) -> tuple:
         session.add(Song(id="s1", title="Song One", album_id="alb1", track_number=1))
         session.add(Version(
             id="v1", song_id="s1", version_number=1,
-            lyrics="Hello world", prompt="rock style", bpm=120,
+            lyrics=lyrics, prompt="rock style", bpm=120,
         ))
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1,
@@ -256,7 +248,7 @@ def _seeded_generation(tmp_path: Path) -> tuple:
     return factory, audio_dir
 
 
-def _scoring_result_with_transcript() -> SongScores:
+def _scoring_result_with_transcript(*, silent: bool = False) -> SongScores:
     return SongScores(
         emotional_dynamics=EmotionalDynamicsScore(
             pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2,
@@ -265,8 +257,10 @@ def _scoring_result_with_transcript() -> SongScores:
         text_accuracy=TextAccuracyScore(
             similarity_ratio=0.9,
             intended_line_texts=("hello", "world"),
-            transcribed_line_texts=("hello", "world"),
-            whisper_cues=(WhisperCue(start=0.0, end=0.8, text="hello world"),),
+            transcribed_line_texts=() if silent else ("hello", "world"),
+            whisper_cues=() if silent else (
+                WhisperCue(start=0.0, end=0.8, text="hello world"),
+            ),
         ),
         runs=(
             ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK),
@@ -275,17 +269,29 @@ def _scoring_result_with_transcript() -> SongScores:
     )
 
 
-def test_run_scoring_job_uses_the_configured_judge_provider_not_claude(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("provider", "route", "model"),
+    [
+        ("grok", "api", "grok-4.6"),
+        ("codex", "api", "gpt-5"),
+        ("claude", "api", "claude-sonnet-4-6"),
+    ],
+)
+def test_scoring_run_calls_no_provider_and_writes_no_verdict_key(
+    tmp_path: Path, provider: str, route: str, model: str,
 ) -> None:
-    """A musician who points scoring at a different provider than the
-    co-writer sees that provider judge the take (#315's done-when)."""
-    factory, audio_dir = _seeded_generation(tmp_path)
-    with factory() as session:
-        set_judge_settings(session, "grok", "api", "grok-4.6")
-        session.commit()
+    """Whatever the judge settings hold, a scoring run completes without
+    reaching a provider and leaves a stored verdict pair exactly as it is
+    (#1976, the operator's ruling of 28.10.2026)."""
+    from songmaker_cli.db.models import Score
 
-    override_provider_runtime(xai_api_key="grok-key")
+    factory, audio_dir = _seeded_generation(tmp_path)
+    stored_pair = {"lyrical_coherence": 8, "lyrical_summary": "stored verdict"}
+    with factory() as session:
+        set_judge_settings(session, provider, route, model)
+        session.add(Score(generation_id="g1", scorer="batch", value=dict(stored_pair)))
+        session.commit()
+    override_provider_runtime(anthropic_api_key=None, xai_api_key=None)
 
     with (
         patch(
@@ -296,162 +302,68 @@ def test_run_scoring_job_uses_the_configured_judge_provider_not_claude(
         ),
         patch(
             "agent_providers.dispatch.call_openai_compatible_once",
-            return_value='{"score": 8, "issues": [], "summary": "grok verdict"}',
-        ) as grok_call,
-        patch("agent_providers.claude.adapter.call_claude") as claude_call,
-    ):
-        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
-
-    assert grok_call.call_args.kwargs["provider"] == "grok"
-    assert grok_call.call_args.kwargs["model"] == "grok-4.6"
-    claude_call.assert_not_called()
-
-    from songmaker_cli.db.models import Score
-    with factory() as session:
-        stored = session.query(Score).filter_by(generation_id="g1").one()
-        assert stored.value["lyrical_coherence"] == 8
-
-
-def test_run_scoring_job_fails_the_judge_loudly_when_its_provider_is_unconfigured(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """No configured Grok credential must never fall back to Claude — the
-    generation keeps no lyrical_coherence score, and the job itself surfaces
-    the failure (status + named reason) instead of ending green (#315)."""
-    factory, audio_dir = _seeded_generation(tmp_path)
-    with factory() as session:
-        set_judge_settings(session, "grok", "api", "grok-4.6")
-        session.commit()
-
-    override_provider_runtime(xai_api_key=None)
-
-    with (
-        patch(
-            "songmaker_cli.jobs.get_scorer_process",
-            return_value=MagicMock(score=MagicMock(
-                return_value=_scoring_result_with_transcript(),
-            )),
+            side_effect=AssertionError("a scoring run reached a provider"),
         ),
-        patch("agent_providers.claude.adapter.call_claude") as claude_call,
+        patch(
+            "agent_providers.claude.adapter.call_claude",
+            side_effect=AssertionError("a scoring run reached a provider"),
+        ),
     ):
         run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
 
-    claude_call.assert_not_called()
-    from songmaker_cli.db.models import Score
     with factory() as session:
+        job = session.query(Job).filter_by(id="j-score").one()
+        stored = session.query(Score).filter_by(generation_id="g1").one()
+        assert job.status == "completed"
+        assert job.error_type is None
+        assert {key: stored.value[key] for key in stored_pair} == stored_pair
+        assert "text_accuracy" in stored.value
+
+
+def test_scoring_run_asks_the_child_for_exactly_the_requested_scorers(
+    tmp_path: Path,
+) -> None:
+    factory, audio_dir = _seeded_generation(tmp_path)
+    scorer = MagicMock(score=MagicMock(return_value=_scoring_result_with_transcript()))
+
+    with patch("songmaker_cli.jobs.get_scorer_process", return_value=scorer):
+        run_scoring_job(
+            "j-score", "g1", ["silence"], db_factory=factory, audio_dir=audio_dir,
+        )
+
+    assert scorer.score.call_args.kwargs["scorers"] == ["silence"]
+
+
+@pytest.mark.parametrize(
+    ("lyrics", "silent"),
+    [("Hello world", False), ("Hello world", True), (None, False)],
+    ids=["lyrics-and-transcript", "lyrics-empty-transcript", "no-lyrics"],
+)
+def test_scoring_run_for_a_take_without_a_score_row_writes_no_verdict_key(
+    tmp_path: Path, lyrics: str | None, silent: bool,
+) -> None:
+    from songmaker_cli.db.models import Score
+
+    factory, audio_dir = _seeded_generation(tmp_path, lyrics)
+    with patch(
+        "songmaker_cli.jobs.get_scorer_process",
+        return_value=MagicMock(score=MagicMock(
+            return_value=_scoring_result_with_transcript(silent=silent),
+        )),
+    ):
+        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
+
+    with factory() as session:
+        assert session.query(Job).filter_by(id="j-score").one().status == "completed"
         stored = session.query(Score).filter_by(generation_id="g1").one()
         assert "lyrical_coherence" not in stored.value
-
-    with factory() as session:
-        job = session.query(Job).filter_by(id="j-score").one()
-        assert job.status == "partial"
-        assert job.error_type == "judge_error"
-        assert job.error == "Lyrical coherence judge failed"
-
-
-def test_run_scoring_job_hides_judge_cli_details(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    factory, audio_dir = _seeded_generation(tmp_path)
-    judged_scores = replace(
-        _scoring_result_with_transcript(),
-        runs=(
-            ScorerRun(scorer="emotional_dynamics", outcome=ScorerOutcome.OK),
-            ScorerRun(
-                scorer="lyrical_coherence",
-                outcome=ScorerOutcome.FAILED,
-                detail="/usr/local/bin/claude exited with stderr from the judge",
-            ),
-        ),
-    )
-
-    with (
-        patch(
-            "songmaker_cli.jobs.get_scorer_process",
-            return_value=MagicMock(score=MagicMock(
-                return_value=_scoring_result_with_transcript(),
-            )),
-        ),
-        patch(
-            "songmaker_cli.jobs.scoring.judge_lyrical_coherence",
-            return_value=judged_scores,
-        ),
-    ):
-        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
-
-    with factory() as session:
-        job = session.query(Job).filter_by(id="j-score").one()
-        assert job.status == "partial"
-        assert job.error_type == "judge_error"
-        assert job.error == "Lyrical coherence judge failed"
-        assert "/usr/local/bin/claude" not in job.error
-
-
-def test_judge_timeout_marks_the_job_partial_after_the_provider_stops(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    factory, audio_dir = _seeded_generation(tmp_path)
-    override_provider_runtime(anthropic_api_key=None)
-    preflight_completed = threading.Event()
-    cli_stopped = threading.Event()
-    judged: SongScores | None = None
-
-    from songmaker_cli.scoring.lyrical_coherence import judge_lyrical_coherence
-
-    def capture_judged(*args: object, **kwargs: object) -> SongScores:
-        nonlocal judged
-        judged = judge_lyrical_coherence(*args, **kwargs)
-        return judged
-
-    def verified_binary(*_args: object, **_kwargs: object) -> str:
-        preflight_completed.set()
-        return "/usr/bin/claude"
-
-    def timed_out_cli(*args: object, **kwargs: object) -> None:
-        cli_stopped.set()
-        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"])
-
-    with (
-        patch(
-            "songmaker_cli.jobs.get_scorer_process",
-            return_value=MagicMock(score=MagicMock(
-                return_value=_scoring_result_with_transcript(),
-            )),
-        ),
-        patch(
-            "agent_providers.claude.provider.verify_no_builtin_cli_tools",
-            side_effect=verified_binary,
-        ),
-        patch(
-            "agent_providers.claude.provider.subprocess.run",
-            side_effect=timed_out_cli,
-        ),
-        patch(
-            "songmaker_cli.jobs.scoring.judge_lyrical_coherence",
-            side_effect=capture_judged,
-        ),
-    ):
-        run_scoring_job("j-score", "g1", None, db_factory=factory, audio_dir=audio_dir)
-
-    assert preflight_completed.is_set()
-    assert cli_stopped.is_set()
-    assert judged is not None
-    assert judged.runs[-1].outcome is ScorerOutcome.FAILED
-    from songmaker_cli.db.models import Score
-    with factory() as session:
-        job = session.query(Job).filter_by(id="j-score").one()
-        stored = session.query(Score).filter_by(generation_id="g1").one()
-        assert job.status == "partial"
-        assert job.error_type == "judge_error"
-        assert JUDGE_FAILURE_TIMEOUT in job.error
-        assert "lyrical_coherence" not in stored.value
+        assert "lyrical_summary" not in stored.value
 
 
 def test_child_scorer_timeout_leaves_the_job_completed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A child scorer timing out remains isolated; only the parent judge
-    turns an otherwise useful scoring run into a partial job."""
+    """A child scorer timing out remains isolated: the job still completes."""
     factory, audio_dir = _seeded_generation(tmp_path)
     child_timeout = SongScores(runs=(ScorerRun(
         scorer="silence",

@@ -21,6 +21,7 @@ from unittest.mock import patch
 
 import jwt
 import pytest
+from agent_runtime_client.capability import CAPABILITY_TOKEN_TYPE
 from agent_runtime_client.mcp_server import CapabilityVerificationKey, UnsoundVerificationKey
 from conftest import make_test_app
 from cryptography.hazmat.primitives import serialization
@@ -29,6 +30,7 @@ from fastapi.testclient import TestClient
 
 from songmaker_cli.cowriter import service_runs
 from songmaker_cli.cowriter.mcp_endpoint import (
+    CAPABILITY_AGENT,
     McpKeyProblem,
     compose_mcp_endpoint,
     cowriter_mcp_availability,
@@ -84,7 +86,9 @@ def mint(
     *,
     person: tuple[str, str] = (ISSUER, "anna"),
     app: str = "songmaker",
-    purpose: str = "cowriter",
+    agent: str | None = CAPABILITY_AGENT,
+    token_type: str = CAPABILITY_TOKEN_TYPE,
+    extra_claims: dict[str, Any] | None = None,
     audience: str = ORIGIN,
     tools: tuple[str, ...] = ALL_TOOLS,
     issued_at: float | None = None,
@@ -98,15 +102,16 @@ def mint(
         "iat": issued,
         "exp": issued + lifetime,
         "app": app,
-        "purpose": purpose,
         "principal": {"iss": person[0], "sub": person[1]},
         "tools": list(tools),
+        **({} if agent is None else {"agent": agent}),
+        **(extra_claims or {}),
     }
     return jwt.encode(
         claims,
         _private_pem(signing_key),
         algorithm="RS256",
-        headers={"kid": "test-key", "typ": "agent-capability+jwt"},
+        headers={"kid": "test-key", "typ": token_type},
     )
 
 
@@ -403,12 +408,12 @@ def test_m6_a_capability_of_an_earlier_run_is_refused_during_the_next_turn_of_th
     "claim_changes",
     [
         {"app": "other-app"},
-        {"purpose": "other-purpose"},
+        {"agent": "other-agent"},
         {"person": ("https://other.issuer/realms/x", "anna")},
     ],
-    ids=["app", "purpose", "issuer"],
+    ids=["app", "agent", "issuer"],
 )
-def test_m7_a_capability_for_another_app_purpose_or_issuer_is_refused(
+def test_m7_a_capability_for_another_app_agent_or_issuer_is_refused(
     endpoint, signing_key, run_id, claim_changes,
 ):
     token = mint(signing_key, run_id, **claim_changes)
@@ -459,12 +464,24 @@ def _token(kind: str, signing_key, foreign_key, run_id) -> str | None:
         "foreign-key": lambda: mint(foreign_key, run_id),
         "unsigned": lambda: "e30.e30.",
         "expired": lambda: mint(signing_key, run_id, issued_at=now - 2 * LIFETIME),
+        "old-type": lambda: mint(signing_key, run_id, token_type="agent-capability+jwt"),
+        "purpose-claim": lambda: mint(
+            signing_key, run_id, agent=None, extra_claims={"purpose": "cowriter"},
+        ),
+        "purpose-beside-agent": lambda: mint(
+            signing_key, run_id, extra_claims={"purpose": "cowriter"},
+        ),
+        "no-agent": lambda: mint(signing_key, run_id, agent=None),
     }[kind]()
 
 
 @pytest.mark.parametrize(
     ("kind", "status"),
-    [("wrong-audience", 401), ("foreign-key", 401), ("unsigned", 401), ("expired", 401)],
+    [
+        ("wrong-audience", 401), ("foreign-key", 401), ("unsigned", 401), ("expired", 401),
+        ("old-type", 401), ("purpose-claim", 401), ("purpose-beside-agent", 401),
+        ("no-agent", 401),
+    ],
 )
 def test_m9_a_capability_that_does_not_verify_is_401_with_an_empty_body(
     endpoint, signing_key, foreign_key, run_id, kind, status,

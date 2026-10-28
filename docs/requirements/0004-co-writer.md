@@ -39,11 +39,8 @@ Quelle: OPERATOR — Issue #26, “Verhalten”.
 ### REQ-COWRITER-08: When a Co-Writer turn uses a rolling summary, that summary preserves at least the album concept, locked versus open lyric decisions, names and characters, and open questions.
 Quelle: OPERATOR — Issue #26, “Locked-in”.
 
-### REQ-COWRITER-09: A Co-Writer turn runs through the agent service with the model Songmaker sends for the Co-Writer.
-Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
-
-### REQ-COWRITER-10: When no Co-Writer model has been chosen, the model is `claude/opus`.
-Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
+### REQ-COWRITER-09: A Co-Writer turn runs through the agent service, and the service configuration alone chooses its model; Songmaker's run request names none.
+Quelle: OPERATOR — agent-runtime#494, Urteil vom 27.10.2026; ersetzt die Modellwahl des Operators vom 23.10.2026.
 
 ### REQ-COWRITER-11: When the agent service refuses or fails the run, the turn ends with a named error; Songmaker never answers through a local provider or another model.
 Quelle: HEAD — Issue #1476, Vorschlag; hält Q1 und das Urteil zur Modellwahl des Operators vom 23.10.2026 fest.
@@ -129,8 +126,8 @@ Quelle: OPERATOR — Issue #35, “Verhalten” and Acceptance.
   or tail budget.
 - Exact tail-budget numbers, token-count algorithm, SSE event types, and the
   agent-service and `/mcp` transport.
-- Scoring provider and scoring model (remain Claude per Issue #34; out of
-  Co-Writer).
+- Scoring: a scoring run has no provider and no model; the Co-Writer judges a
+  take only when asked (REQ-COWRITER-27).
 - Legacy per-song chat endpoints and user-applied songmaker blocks.
 - Vector RAG and automatic copying of take facts into memory.
 - This document does not prescribe database, API, or provider-adapter mechanisms.

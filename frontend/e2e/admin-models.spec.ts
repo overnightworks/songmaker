@@ -32,16 +32,12 @@ import {
 	MODELS_COLUMN_STATUS_LABEL,
 	MODELS_COLUMN_TASK_LABEL,
 	MODELS_HISTORY_TAIL_LABEL,
-	MODELS_LIST_NEEDS_CLI_HINT,
 	MODELS_NO_MODELS_LABEL,
-	MODELS_ROUTE_NOT_LOGGED_IN_PHRASE,
 	MODELS_SAVED_LABEL,
 	MODELS_TASK_COVER_LABEL,
 	MODELS_TASK_COWRITER_LABEL,
-	MODELS_TASK_SCORING_LABEL,
 	PROVIDER_ROUTE_API_LABEL,
 	PROVIDER_ROUTE_CLI_LABEL,
-	modelsRouteNotAvailablePhrase,
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
@@ -49,12 +45,12 @@ import { readSeededLibrary } from './seed';
 
 /**
  * What each test costs the API, measured on a green run against the CI recipe:
- * 11 for the table walked at four desktop widths, 24 for the Cover row's save,
- * reload and restore, 46 for the co-writer turn (a cold album open, the song,
- * the chat and the return to the tab), 9 for the phone cards, 24 (20 on the phone)
- * for the Scoring row's save, reload and restore. One ceiling for the file,
- * the same way `album-address.spec.ts` carries one for its four, with headroom
- * for the retry CI allows. The budget is a ceiling, not a knob: a flow that
+ * 8 for the table walked at four desktop widths, 18 for the Cover row's save,
+ * reload and restore, 32 for the co-writer turn (a cold album open, the song,
+ * the chat and the return to the tab) and 6 for the phone cards.
+ * One ceiling for the file, the same way `album-address.spec.ts` carries one
+ * for its four: the ceiling of the largest test plus headroom for the retry CI
+ * allows. The budget is a ceiling, not a knob: a flow that
  * suddenly needs several more round trips is a regression, so find the extra
  * requests instead of raising this number -- see
  * `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full reasoning.
@@ -77,7 +73,7 @@ const NAMED_TURN_FAILURES =
 // The co-writer row of the Models table: words, no control, no model and no status (#1949):
 // the agent service decides the model, so the row says so.
 const COWRITER_ROW_WORDS = ['Set by the agent service', 'Agent service'];
-const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL, MODELS_TASK_SCORING_LABEL];
+const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL];
 
 async function openModelsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');
@@ -230,10 +226,9 @@ test(
 		// the agent service chooses (#1476, lines 1 and 2).
 		await expectCowriterRowReadOnly(page);
 		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toBeVisible();
-		await expect(providerSelect(page, MODELS_TASK_SCORING_LABEL)).toBeVisible();
-		await expect(page.locator('.tt-row')).toHaveCount(3);
+		await expect(page.locator('.tt-row')).toHaveCount(2);
 
-		// Both routes stay offered in the Cover and Scoring rows, and the one that is
+		// Both routes stay offered in the Cover row, and the one that is
 		// not set up says why rather than disappearing (line 4).
 		for (const task of SELECTABLE_TASKS) {
 			const routes = routeSwitch(page, task);
@@ -256,11 +251,7 @@ test(
 		// The columns are the picture's five, and every one of them -- Status
 		// included, the one the operator found clipped away -- stays on screen at
 		// every width, without the page ever scrolling sideways.
-		const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
-		// The keyless existing installation pins the judge route to CLI (#903).
-		await expect(scoringStatus).toContainText(
-			`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
-		);
+		const coverStatus = taskStatus(page, MODELS_TASK_COVER_LABEL);
 		for (const width of DESKTOP_WIDTHS) {
 			await page.setViewportSize({ width, height: DESKTOP_HEIGHT });
 			for (const column of [
@@ -272,7 +263,7 @@ test(
 			]) {
 				await expect(columnHeader(page, column)).toBeInViewport();
 			}
-			await expect(scoringStatus).toBeInViewport();
+			await expect(coverStatus).toBeInViewport();
 			for (const task of SELECTABLE_TASKS) {
 				await expectProviderNameShownWhole(page, task);
 				await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
@@ -369,11 +360,7 @@ test(
 		// card, so each value still says what it is (#820, line 12).
 		await expect(columnHeader(page, MODELS_COLUMN_TASK_LABEL)).toBeHidden();
 		await expectCowriterRowReadOnly(page);
-		for (const task of [
-			MODELS_TASK_COWRITER_LABEL,
-			MODELS_TASK_COVER_LABEL,
-			MODELS_TASK_SCORING_LABEL
-		]) {
+		for (const task of [MODELS_TASK_COWRITER_LABEL, MODELS_TASK_COVER_LABEL]) {
 			const card = taskRow(page, task);
 			// The Co-Writer card has no Status line: nothing is checked for it (#1949).
 			const columns = [
@@ -388,13 +375,9 @@ test(
 		}
 		// The cards stack, so the last task's status is reached by scrolling down --
 		// never by scrolling sideways.
-		const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
-		// The keyless existing installation pins the judge route to CLI (#903).
-		await expect(scoringStatus).toContainText(
-			`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
-		);
-		await scoringStatus.scrollIntoViewIfNeeded();
-		await expect(scoringStatus).toBeInViewport();
+		const coverStatus = taskStatus(page, MODELS_TASK_COVER_LABEL);
+		await coverStatus.scrollIntoViewIfNeeded();
+		await expect(coverStatus).toBeInViewport();
 
 		// The narrowest provider column there is, and the name still stands in it
 		// whole (#820, line 5; #883).
@@ -407,90 +390,3 @@ test(
 		await attachShot(page, testInfo, 'admin-models-375', true);
 	}
 );
-
-// The Scoring row stands on the route the judge was saved with. This stack has
-// no key and no mounted CLI, so the judge was pinned to CLI at boot (#903):
-// the row must say CLI with the CLI's state, grey API with its reason, and
-// send that route when it saves. A logged-in CLI and its model list cannot
-// exist here; the unit suite pins them against the route statuses (#1473).
-const SCORING_VIEWPORTS = [
-	{ shell: ONLY_IN_SHELL.desktop, viewport: { width: 1440, height: DESKTOP_HEIGHT } },
-	{ shell: ONLY_IN_SHELL.mobile, viewport: PHONE_VIEWPORT }
-] as const;
-const SCORING_API_NOT_AVAILABLE = `${PROVIDER_ROUTE_API_LABEL} · ${modelsRouteNotAvailablePhrase(MODELS_TASK_SCORING_LABEL)}`;
-
-async function expectScoringRowOnItsSavedCliRoute(page: Page, provider: string): Promise<void> {
-	const routes = routeSwitch(page, MODELS_TASK_SCORING_LABEL);
-	await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_CLI_LABEL })).toHaveAttribute(
-		'aria-pressed',
-		'true'
-	);
-	await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_API_LABEL })).toBeDisabled();
-	await expect(
-		taskRow(page, MODELS_TASK_SCORING_LABEL).getByText(SCORING_API_NOT_AVAILABLE)
-	).toBeVisible();
-	await expect(taskStatus(page, MODELS_TASK_SCORING_LABEL)).toContainText(
-		`${provider} ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
-	);
-}
-
-async function expectScoringListsNoModels(page: Page): Promise<void> {
-	const model = modelSelect(page, MODELS_TASK_SCORING_LABEL);
-	await expect(model).toHaveText(MODELS_NO_MODELS_LABEL);
-	await expect(model).toBeDisabled();
-	await expect(
-		taskRow(page, MODELS_TASK_SCORING_LABEL).getByText(MODELS_LIST_NEEDS_CLI_HINT)
-	).toBeVisible();
-}
-
-for (const { shell, viewport } of SCORING_VIEWPORTS) {
-	test(
-		`at ${viewport.width}px the Scoring row stands on its saved route and saves a change on it`,
-		{ tag: shell },
-		async ({ page }, testInfo) => {
-			await page.setViewportSize(viewport);
-			await openModelsTab(page);
-
-			await expectScoringRowOnItsSavedCliRoute(page, 'Claude');
-			// The CLI lists nothing here, so the row offers nothing but the model it
-			// already carries -- no list is invented for it.
-			const savedModel = await modelSelect(page, MODELS_TASK_SCORING_LABEL).inputValue();
-			expect(savedModel).not.toBe('');
-			await expect(modelSelect(page, MODELS_TASK_SCORING_LABEL).locator('option')).toHaveText([
-				savedModel
-			]);
-			await attachShot(
-				taskRow(page, MODELS_TASK_SCORING_LABEL),
-				testInfo,
-				`scoring-row-${viewport.width}`
-			);
-
-			const providers = providerSelect(page, MODELS_TASK_SCORING_LABEL);
-			const before = await providers.inputValue();
-			try {
-				const saving = page.waitForRequest(
-					(request) => request.method() === 'PUT' && request.url().endsWith('/api/settings/judge')
-				);
-				await providers.selectOption('codex');
-				expect((await saving).postDataJSON()).toEqual({
-					provider: 'codex',
-					route: 'cli',
-					model: ''
-				});
-				await expectSaved(page, MODELS_TASK_SCORING_LABEL);
-				await expectScoringRowOnItsSavedCliRoute(page, 'Codex');
-				await expectScoringListsNoModels(page);
-
-				await openModelsTab(page);
-				await expect(providerSelect(page, MODELS_TASK_SCORING_LABEL)).toHaveValue('codex');
-				await expectScoringRowOnItsSavedCliRoute(page, 'Codex');
-				await expectScoringListsNoModels(page);
-			} finally {
-				// The judge is instance-wide and outlives the test, so it is put back
-				// through the same control for the next project and spec.
-				await providerSelect(page, MODELS_TASK_SCORING_LABEL).selectOption(before);
-				await expectSaved(page, MODELS_TASK_SCORING_LABEL);
-			}
-		}
-	);
-}

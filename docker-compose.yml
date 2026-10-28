@@ -341,27 +341,10 @@ services:
       SCORING_MAX_JOBS: "${SCORING_MAX_JOBS:-1}"
       SCORER_TIMEOUT_SECONDS: "${SCORER_TIMEOUT_SECONDS:-120}"
       TEXT_ACCURACY_TIMEOUT_SECONDS: "${TEXT_ACCURACY_TIMEOUT_SECONDS:-300}"
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      XAI_API_KEY: ${XAI_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LOG_FORMAT: json
     volumes:
       - audiofiles:/app/data/audio
       - hfcache:/app/.cache/huggingface/hub
-      # Claude only: the judge uses Grok and Codex through their HTTP APIs,
-      # so their subscription credentials do not belong in this container.
-      - type: bind
-        source: ${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}
-        target: /usr/local/bin/claude
-        read_only: true
-        bind:
-          create_host_path: false
-      - type: bind
-        source: ${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}/claude.json
-        target: /home/songmaker/.claude/.credentials.json
-        read_only: true
-        bind:
-          create_host_path: false
 
   prometheus:
     image: prom/prometheus:latest

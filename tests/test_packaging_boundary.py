@@ -58,7 +58,7 @@ CONTAINERS = {
     "scoring-worker": ContainerSpec(
         "songmaker-scoring-worker",
         Path("docker/scoring-worker.Dockerfile"),
-        frozenset({"server", "scoring", "whisper", "api"}),
+        frozenset({"server", "scoring", "whisper"}),
         "songmaker_cli.scoring_worker",
         ("songmaker_cli.scoring_worker",),
         ("songmaker_cli.scoring_worker.ScoringWorkerSettings",),
@@ -524,9 +524,8 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
 
 
 def test_the_mcp_server_spec_imports_without_the_mcp_extra() -> None:
-    """The scoring-worker container runs tool-free Claude calls through the
-    same provider module but installs no ``mcp`` extra, so songmaker's MCP
-    declaration must stay outside ``mcp_server/`` — whose ``__init__``
+    """The scoring-worker container installs no ``mcp`` extra, so songmaker's
+    MCP declaration must stay outside ``mcp_server/`` — whose ``__init__``
     imports that extra eagerly (ruling ac on #825)."""
     spec = CONTAINERS["scoring-worker"]
     blocked_roots = frozenset(
@@ -549,8 +548,8 @@ def test_the_mcp_server_spec_imports_without_the_mcp_extra() -> None:
 
 def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
     """The scoring worker reaches the cover job's error names through
-    ``jobs/_runtime.py`` but never produces an image, so it installs the
-    ``api`` extra and not ``image``. Pillow must therefore stay behind the
+    ``jobs/_runtime.py`` but never produces an image, so it installs no
+    ``image`` extra. Pillow must therefore stay behind the
     one call that encodes a picture (issue #871)."""
     spec = CONTAINERS["scoring-worker"]
     blocked_roots = frozenset(
@@ -571,13 +570,13 @@ def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
     )
 
 
-def test_both_provider_facing_images_ship_the_claude_sdk() -> None:
-    """The documented ANTHROPIC_API_KEY path is installed in both images."""
+def test_only_the_web_image_ships_the_claude_sdk() -> None:
+    """The documented ANTHROPIC_API_KEY path is installed where it is used."""
     owns_the_sdk = _optional_extras_by_distribution()["anthropic"]
 
-    for container in ("web", "scoring-worker"):
-        assert CONTAINERS[container].extras & owns_the_sdk, container
-    assert not CONTAINERS["music-worker"].extras & owns_the_sdk
+    assert CONTAINERS["web"].extras & owns_the_sdk
+    for container in ("music-worker", "scoring-worker"):
+        assert not CONTAINERS[container].extras & owns_the_sdk, container
 
 
 def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None:
@@ -614,14 +613,6 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
     }
     expected_sources_by_service = {
         "songmaker-web": expected_web_sources_by_target,
-        "songmaker-scoring-worker": {
-            target: source
-            for target, source in expected_web_sources_by_target.items()
-            if target in {
-                "/usr/local/bin/claude",
-                "/home/songmaker/.claude/.credentials.json",
-            }
-        },
         "songmaker-music-worker": {
             target: source
             for target, source in expected_web_sources_by_target.items()
