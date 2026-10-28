@@ -192,6 +192,24 @@ describe('RecipeTabs', () => {
 		expect(props.values.genParams).toEqual({ user_lora_id: 'mara', inference_steps: 12 });
 	});
 
+	it('a hand-edited engine field reads Custom on the Preset row and its undo returns the engine to Default', async () => {
+		const target = await renderTabs(
+			atStandard({ genParams: { user_lora_id: 'mara', lm_temperature: 0.5 } })
+		);
+		await clickSettled(recipeTabNamed(target, 'Engine'));
+		const select = target.querySelector<HTMLSelectElement>(
+			'select[aria-label="Preset"]'
+		) as HTMLSelectElement;
+		const row = target.querySelector('[data-field="preset"]') as HTMLElement;
+		expect(select.selectedOptions[0].textContent).toBe('Custom');
+		expect(row.querySelector('[data-field-changed]')).not.toBeNull();
+		const undo = resetButton(target, 'preset') as HTMLButtonElement;
+		expect(undo.title).toBe('Back to Default');
+		await clickSettled(undo);
+		expect(props.values.genParams).toEqual({ user_lora_id: 'mara' });
+		expect(select.selectedOptions[0].textContent).toBe('Default');
+	});
+
 	it('the Preset row names the chosen preset while a Voice is set', async () => {
 		const target = await renderTabs(
 			atStandard({ genParams: { user_lora_id: 'mara', inference_steps: 12 } })
