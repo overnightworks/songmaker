@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin · Models — Fassung 2 mit Scoring-CLI/API</title>
+<title>Admin · Models — Fassung 2</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Oswald:wght@400;500&family=Open+Sans:wght@400;600&display=swap">
 <style>
 	:root {
@@ -1277,9 +1277,9 @@
 <p class="freeze-note">
 	Bildbesitzer für den Admin-Tab „Models" — <strong>Fassung 2, am 06.09.2026 freigegeben</strong> nach
 	dem Operator-Ruling desselben Tages und am selben Tag nachgeschärft (alle Aufgaben mit allen
-	Anbietern, Gründe im Select). Die Scoring-CLI/API-Zeile wurde <strong>am 10.09.2026 für #844
-	freigegeben</strong> und ist Teil der aktuellen Fassung. Sie ist ein Bild, noch kein Produktverhalten;
-	der Default bestehender Installationen bleibt in #844 offen. Gebaut wird gegen Issue #317;
+	Anbietern, Gründe im Select). Die Scoring-Zeile ist <strong>am 28.10.2026 entfallen</strong>
+	(#1974): der automatische Kohärenz-Judge verlässt die App, die Seite hat keine Scoring-Steuerung mehr.
+	Sie ist ein Bild, noch kein Produktverhalten. Gebaut wird gegen Issue #317;
 	#315 und #316 sind die Backend-Voraussetzungen. Bildsprache 1:1 von
 	<code>docs/design/navigation.html</code>. Warum-Notizen auf Deutsch (für den Operator), alle
 	Beschriftungen im Mockup auf Englisch, weil die App englisch ist. Fassung 1 steht unten als
@@ -1298,16 +1298,16 @@
 	<strong>Gesegnet am 26.10.2026 für #1895:</strong> Der Abschnitt
 	<a href="#agent-service">„Neu · #1895 — der Agent-Service übernimmt"</a> zeichnet die Models-Tabelle für
 	#1476 (Punkte 1–6 von „The pictures must show") in jedem Zwischenstand der Landung, am Desktop und bei
-	390&nbsp;px. Er überschreibt die Co-Writer-, Cover- und Scoring-Zeilen von Fassung 2.
+	390&nbsp;px. Er überschreibt die Co-Writer- und Cover-Zeilen von Fassung 2.
 </p>
 <div class="wrap">
 	<header>
-		<div class="eyebrow">Songmaker · Admin · Models · Fassung 2 · Scoring-Route #844</div>
+		<div class="eyebrow">Songmaker · Admin · Models · Fassung 2</div>
 		<h1>One table: who does what, and does it work?</h1>
 		<p class="lede">
-			Drei Aufgaben, eine Tabelle, eine Zeile pro Aufgabe. Die Seite erklärt nicht mehr die
-			Maschinerie dahinter, sondern beantwortet in einem Blick: Wer macht Co-Writer, Cover und
-			Scoring — und läuft es? Der Providers-Block von oben entfällt; sein Inhalt steht als
+			Zwei Aufgaben, eine Tabelle, eine Zeile pro Aufgabe. Die Seite erklärt nicht mehr die
+			Maschinerie dahinter, sondern beantwortet in einem Blick: Wer macht Co-Writer und
+			Cover — und läuft es? Der Providers-Block von oben entfällt; sein Inhalt steht als
 			Status in der jeweiligen Zeile.
 		</p>
 	</header>
@@ -1321,8 +1321,8 @@
 			</p>
 			<p class="ruling">Was das Ruling festlegt:</p>
 			<ul>
-				<li><strong>Aufgabe zuerst.</strong> Eine Tabelle mit drei Zeilen — Co-Writer, Cover,
-					Scoring — und den Spalten Task, Provider, Route, Model, Status. Keine baugleichen
+				<li><strong>Aufgabe zuerst.</strong> Eine Tabelle mit zwei Zeilen — Co-Writer und
+					Cover — und den Spalten Task, Provider, Route, Model, Status. Keine baugleichen
 					Blöcke mehr, keine Karten pro Provider.</li>
 				<li><strong>Der CLI/API-Schalter bleibt sichtbar, wird aber ausgegraut.</strong> Eine
 					nicht eingerichtete Route verschwindet nie automatisch; sie steht grau da, mit ihrem
@@ -1356,10 +1356,9 @@
 				Mensch beenden kann: ein fehlgeschlagenes Speichern.
 			</p>
 			<p>
-				<strong>Am 10.09.2026 für #844 freigegeben:</strong> Auch Scoring bekommt im Bild dieselbe auswählbare
-				CLI/API-Route wie Co-Writer. Die gewählte, nicht benutzbare Route bleibt gespeichert und
-				erklärt ihren Grund in derselben Zeile; es gibt keinen stillen Wechsel. Die Beispiele wählen
-				nur Zustände für das Bild und entscheiden keinen Default vorhandener Installationen.
+				<strong>Am 28.10.2026 für #1974 entfernt:</strong> Die Scoring-Zeile (die am 10.09.2026 für #844
+				freigegeben worden war) und die Zustände (b) und (x) für sie entfallen, weil der automatische
+				Kohärenz-Judge ausgebaut wird. Es bleibt keine Scoring-Steuerung, auch keine ausgegraute.
 			</p>
 		</div>
 	</section>
@@ -1419,80 +1418,7 @@
 								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 							</div>
 
-							<div class="tt-row">
-								<span class="cell-task">Scoring</span>
-								<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
-								<span>
-									<span class="rsw"><b class="on">CLI</b><b>API</b></span>
-									<small class="why">API · key set</small>
-								</span>
-								<span><span class="sel">opus<span class="caret">⌄</span></span></span>
-								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-							</div>
 						</div>
-					</div>
-				</div>
-			</article>
-
-			<article class="state wide">
-				<div class="state-head"><h3>(b) Scoring · Grok chosen, key missing</h3><span class="tag tag-now">Needs its API key</span></div>
-				<p class="state-note">
-					Der Admin hat für Scoring Grok über API gewählt, der Schlüssel fehlt. Die Zeile wird gelb,
-					die API-Pill bleibt gewählt, aber inaktiv (gestrichelt); CLI bleibt als eingerichtete,
-					unbenutzte Alternative sichtbar. Das Modell-Feld erfindet keinen Wert. Co-Writer und Cover bleiben
-					unberührt — der Ausfall gehört einer Zeile, nicht der Seite.
-				</p>
-
-				<div class="tt">
-					<div class="tt-head">
-						<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
-					</div>
-
-					<div class="tt-row">
-						<span class="cell-task">Co-Writer</span>
-						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
-						<span>
-							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
-							<small class="why">API · key set</small>
-						</span>
-						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
-						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-					</div>
-					<div class="tt-sub">
-						<details class="adv"><summary>Advanced</summary>
-							<div class="adv-body">
-								<span class="field-label">History tail (tokens)</span>
-								<input class="mock" value="24000">
-							</div>
-						</details>
-					</div>
-
-					<div class="tt-row">
-						<span class="cell-task">Cover</span>
-						<span>
-							<span class="sel">Codex<span class="caret">⌄</span></span>
-						</span>
-						<span>
-							<span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span>
-							<small class="why">API · no image tool</small>
-						</span>
-						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
-						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-					</div>
-
-					<div class="tt-row warn">
-						<span class="cell-task">Scoring</span>
-						<span><span class="sel">Grok<span class="caret">⌄</span></span></span>
-						<span>
-							<span class="rsw"><b>CLI</b><b class="picked-dead">API</b></span>
-							<small class="why warn">API · key not set</small>
-							<small class="why">CLI · login set</small>
-						</span>
-						<span>
-							<span class="sel off">No models<span class="caret">⌄</span></span>
-							<small class="hint">List needs the key</small>
-						</span>
-						<span class="st warn"><span class="mark">!</span>Needs its API key</span>
 					</div>
 				</div>
 			</article>
@@ -1548,16 +1474,6 @@
 						<span class="st off"><span class="mark">○</span>Claude · no image tool</span>
 					</div>
 
-					<div class="tt-row">
-						<span class="cell-task">Scoring</span>
-						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
-						<span>
-							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
-							<small class="why">API · key set</small>
-						</span>
-						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
-						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-					</div>
 				</div>
 			</article>
 
@@ -1600,23 +1516,6 @@
 						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 					</div>
 
-					<div class="tt-row">
-						<span class="cell-task">Scoring</span>
-						<span>
-							<span class="sel">Claude<span class="caret">⌃</span></span>
-							<div class="menu">
-								<div class="menu-item picked"><span>Claude</span><span class="state">✓ ready</span></div>
-								<div class="menu-item gap"><span>Grok</span><span class="state">needs its API key</span></div>
-								<div class="menu-item gap"><span>Codex</span><span class="state">not logged in</span></div>
-							</div>
-						</span>
-						<span>
-							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
-							<small class="why">API · key set</small>
-						</span>
-						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
-						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-					</div>
 				</div>
 
 				<div class="menu-demo">
@@ -1633,7 +1532,7 @@
 				<div class="state-head"><h3>(e) Saving happens in the row</h3><span class="tag tag-state">Saved · failed</span></div>
 				<p class="state-note">
 					Jede Änderung speichert sofort ihre eigene Zeile. Der Co-Writer wurde gerade auf
-					Grok umgestellt und bestätigt das mit „Saved."; die Scoring-Zeile hat es versucht
+					Grok umgestellt und bestätigt das mit „Saved."; die Cover-Zeile hat es versucht
 					und ist abgewiesen worden — der Grund steht in der Zeile, mit einem Retry direkt
 					daneben. Die Advanced-Zeile ist hier aufgeklappt gezeichnet.
 				</p>
@@ -1677,23 +1576,6 @@
 						</span>
 						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
 						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-					</div>
-
-					<div class="tt-row bad">
-						<span class="cell-task">Scoring</span>
-						<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
-						<span>
-							<span class="rsw"><b class="on">CLI</b><b>API</b></span>
-							<small class="why">API · key set</small>
-						</span>
-						<span><span class="sel">opus<span class="caret">⌄</span></span></span>
-						<span class="st bad"><span class="mark">✕</span>Not saved</span>
-					</div>
-					<div class="tt-sub bad">
-						<p class="row-error">
-							<span>The server rejected claude-opus-4-6: unknown model.</span>
-							<button class="retry">Retry</button>
-						</p>
 					</div>
 				</div>
 			</article>
@@ -1750,17 +1632,6 @@
 							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Codex CLI not logged in</span></div>
 						</div>
 
-						<div class="tcard warn">
-							<h4>Scoring</h4>
-							<div class="line"><span class="k">Provider</span><span><span class="sel">Grok<span class="caret">⌄</span></span></span></div>
-							<div class="line"><span class="k">Route</span><span>
-								<span class="rsw"><b>CLI</b><b class="picked-dead">API</b></span>
-								<small class="why warn">API · key not set</small>
-								<small class="why">CLI · login set</small>
-							</span></div>
-							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
-							<div class="line"><span class="k">Status</span><span class="st warn"><span class="mark">!</span>Needs its API key</span></div>
-						</div>
 					</div>
 				</div>
 			</article>
@@ -1798,13 +1669,6 @@
 							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Codex CLI not logged in</span></div>
 						</div>
 
-						<div class="tcard off">
-							<h4>Scoring</h4>
-							<div class="line"><span class="k">Provider</span><span><span class="sel">Claude<span class="caret">⌄</span></span></span></div>
-							<div class="line"><span class="k">Route</span><span><span class="rsw"><b class="picked-dead">CLI</b><b>API</b></span></span></div>
-							<div class="line"><span class="k">Model</span><span><span class="sel off">No models<span class="caret">⌄</span></span></span></div>
-							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Checking…</span></div>
-						</div>
 					</div>
 				</div>
 			</article>
@@ -2579,8 +2443,8 @@
 			<h3>Warum — #1476, „mit prio umbauen, dass der dienst genutzt wird" (26.10.2026)</h3>
 			<p>
 				Songmaker ruft keinen Anbieter mehr selbst auf. Der Co-Writer läuft über den Agent-Service, der
-				Claude unter dem einen geteilten Login betreibt; Cover und Scoring kann der Dienst noch nicht und
-				sind bis dahin <strong>nicht verfügbar</strong>. Die Tabelle behält ihre fünf Spalten, damit jeder
+				Claude unter dem einen geteilten Login betreibt; Cover kann der Dienst noch nicht und
+				ist bis dahin <strong>nicht verfügbar</strong>. Die Tabelle behält ihre fünf Spalten, damit jeder
 				Zwischenstand der Landung lesbar bleibt: eine alte, bedienbare Zeile neben einer neuen, die der Admin
 				nur liest.
 			</p>
@@ -2590,26 +2454,24 @@
 				<li><strong>Kein Licht, wo niemand prüft.</strong> Songmaker liest keine Einstellung des Dienstes
 					und prüft den Co-Writer nicht vorab; die Zeile hat keinen Status, nur „Set by the agent service"
 					für Provider und Modell (Operator, 27.10.2026, agent-runtime#494).</li>
-				<li><strong>Nicht verfügbar ist grau, nicht rot.</strong> Cover und Scoring tragen den leeren Ring
-					von Fassung 2 und sagen, worauf sie warten. Rot bleibt dem fehlgeschlagenen Speichern.</li>
+				<li><strong>Nicht verfügbar ist grau, nicht rot.</strong> Cover trägt den leeren Ring
+					von Fassung 2 und sagt, worauf es wartet. Rot bleibt dem fehlgeschlagenen Speichern.</li>
 				<li><strong>Kein Modell, das der Dienst entscheidet.</strong> Songmaker liest das Angebot des
 					Dienstes nicht; das Modell wird weder gewählt noch angezeigt (#1949).</li>
 			</ul>
 			<p>
-				Die Zustände folgen der Landungsreihenfolge aus #1476: (w) Slices 2–4, (x) der Zustand heute, (y) Slice 6. Dieser Abschnitt überschreibt die Co-Writer-, Cover- und
-				Scoring-Zeilen von Fassung 2 und den Abschnitt „Was offen bleibt"; der Zustand
-				„Unknown claude model ''" · „✕ Not saved" in der Scoring-Zeile kommt nicht mehr vor, weil die Zeile
-				nichts mehr speichert.
+				Die Zustände folgen der Landungsreihenfolge aus #1476: (w) Slices 2–4, (y) Slice 6. Dieser Abschnitt überschreibt die Co-Writer- und Cover-Zeilen von
+				Fassung 2 und den Abschnitt „Was offen bleibt"; eine Scoring-Zeile gibt es nicht mehr.
 			</p>
 		</div>
 
 		<div class="states">
 			<article class="state wide">
-				<div class="state-head"><h3>(w) Cutover-Tag · Co-Writer neu, Cover und Scoring wie heute</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1895</span></div>
+				<div class="state-head"><h3>(w) Cutover-Tag · Co-Writer neu, Cover wie heute</h3><span class="tag tag-next">Desktop ≥ 1280</span><span class="proposed-tag flush">New · #1895</span></div>
 				<p class="state-note">
 					Nach Slices 2–4. Die Co-Writer-Zeile liest nur: „Set by the agent service" für Provider und Modell,
 					Agent service als Route, kein Status. Darunter Advanced mit dem History-Tail wie heute.
-					Cover und Scoring laufen an diesem Tag noch auf ihrem alten Weg und sind bedienbar wie in (a).
+					Cover läuft an diesem Tag noch auf dem alten Weg und ist bedienbar wie in (a).
 				</p>
 				<div class="screen">
 					<div class="screen-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
@@ -2638,46 +2500,9 @@
 								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
 							</div>
 
-							<div class="tt-row">
-								<span class="cell-task">Scoring</span>
-								<span><span class="sel">Claude<span class="caret">⌄</span></span></span>
-								<span><span class="rsw"><b class="on">CLI</b><b>API</b></span><small class="why">API · key set</small></span>
-								<span><span class="sel">opus<span class="caret">⌄</span></span></span>
-								<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-							</div>
 						</div></div>
 					</div>
 				</div>
-			</article>
-
-			<article class="state wide">
-				<div class="state-head"><h3>(x) Scoring · Kohärenz-Judge nicht verfügbar, bis er über den Dienst läuft</h3><span class="tag tag-state">Not available</span><span class="proposed-tag flush">New · #1895</span></div>
-				<p class="state-note">
-					Der Kohärenz-Judge wartet auf Hintergrundläufe im Dienst. Die Scoring-Zeile wird grau, Provider
-					und Modell sind „—", der Grund steht im Status. Cover ist noch die alte Zeile.
-				</p>
-				<div class="tt-scroll"><div class="tt">
-					<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
-					<div class="tt-row">
-						<span class="cell-task">Co-Writer</span>
-						<span class="ro">Set by the agent service</span><span class="ro">Agent service</span><span class="ro">Set by the agent service</span>
-					</div>
-					<div class="tt-sub"><details class="adv"><summary>Advanced</summary><div class="adv-body"><span class="field-label">History tail (tokens)</span><input class="mock" value="24000"></div></details></div>
-					<div class="tt-row">
-						<span class="cell-task">Cover</span>
-						<span><span class="sel">Codex<span class="caret">⌄</span></span></span>
-						<span><span class="rsw"><b class="on">CLI</b><b class="dead">API</b></span><small class="why">API · no image tool</small></span>
-						<span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span>
-						<span class="st ok"><span class="mark">✓</span>Ready · CLI login</span>
-					</div>
-					<div class="tt-row off">
-						<span class="cell-task">Scoring</span>
-						<span class="ro none is-new">—</span>
-						<span class="ro is-new">Agent service</span>
-						<span class="ro none is-new">—</span>
-						<span class="st off is-new"><span class="mark">○</span>Not available yet: waits for background runs through the agent service</span>
-					</div>
-				</div></div>
 			</article>
 
 			<article class="state wide">
@@ -2699,11 +2524,6 @@
 						<span class="ro is-new">Agent service</span>
 						<span class="ro none is-new">—</span>
 						<span class="st off is-new"><span class="mark">○</span>Not available yet: waits for image runs through the agent service</span>
-					</div>
-					<div class="tt-row off">
-						<span class="cell-task">Scoring</span>
-						<span class="ro none">—</span><span class="ro">Agent service</span><span class="ro none">—</span>
-						<span class="st off"><span class="mark">○</span>Not available yet: waits for background runs through the agent service</span>
 					</div>
 				</div></div>
 			</article>
@@ -2730,20 +2550,13 @@
 							<div class="line"><span class="k">Model</span><span><span class="sel">gpt-5-codex<span class="caret">⌄</span></span></span></div>
 							<div class="line"><span class="k">Status</span><span class="st ok"><span class="mark">✓</span>Ready · CLI login</span></div>
 						</div>
-						<div class="tcard">
-							<h4>Scoring</h4>
-							<div class="line"><span class="k">Provider</span><span><span class="sel">Claude<span class="caret">⌄</span></span></span></div>
-							<div class="line"><span class="k">Route</span><span><span class="rsw"><b class="on">CLI</b><b>API</b></span><small class="why">API · key set</small></span></div>
-							<div class="line"><span class="k">Model</span><span><span class="sel">opus<span class="caret">⌄</span></span></span></div>
-							<div class="line"><span class="k">Status</span><span class="st ok"><span class="mark">✓</span>Ready · CLI login</span></div>
-						</div>
 					</div>
 				</div>
 			</article>
 
 			<article class="state">
 				<div class="state-head"><h3>(y′) Nach Slice 6 · gestapelt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1895</span></div>
-				<p class="state-note">Alles liest nur; Cover und Scoring grau mit ihrem Grund, vollständig, nicht gekürzt.</p>
+				<p class="state-note">Alles liest nur; Cover grau mit seinem Grund, vollständig, nicht gekürzt.</p>
 				<div class="phone p390">
 					<div class="ph-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
 					<div class="ph-body">
@@ -2761,13 +2574,6 @@
 							<div class="line"><span class="k">Model</span><span class="ro none">—</span></div>
 							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Not available yet: waits for image runs through the agent service</span></div>
 						</div>
-						<div class="tcard off">
-							<h4>Scoring</h4>
-							<div class="line"><span class="k">Provider</span><span class="ro none">—</span></div>
-							<div class="line"><span class="k">Route</span><span class="ro">Agent service</span></div>
-							<div class="line"><span class="k">Model</span><span class="ro none">—</span></div>
-							<div class="line"><span class="k">Status</span><span class="st off"><span class="mark">○</span>Not available yet: waits for background runs through the agent service</span></div>
-						</div>
 					</div>
 				</div>
 			</article>
@@ -2779,12 +2585,8 @@
 		<div class="decision">
 			<h3>Was offen bleibt</h3>
 			<p>
-				Der Scoring-Provider und die CLI/API-Wahl sind weiterhin Zielzustand: Der
-				<code>lyrical_coherence</code>-Judge ruft heute fest Claude auf, eine echte
-				Provider-Abstraktion ist Issue #315. Bis dahin ist das Provider-Select in der
-				Scoring-Zeile ein Bild, kein Verhalten. Die Scoring-CLI/API-Zeile wurde am 10.09.2026 für #844
-				freigegeben und ist Teil der aktuellen Fassung; der Default bestehender Installationen bleibt
-				in #844 offen.
+				Eine Scoring-Zeile gibt es nicht mehr (#1974): der automatische Kohärenz-Judge
+				wird ausgebaut, die Co-Writer-Bewertung ersetzt ihn auf Anfrage.
 			</p>
 			<p>
 				Woher „ready" seine Wahrheit nimmt, entscheidet das Backend (#316): eine Live-Probe bei
