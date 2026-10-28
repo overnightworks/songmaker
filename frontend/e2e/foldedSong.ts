@@ -5,7 +5,7 @@
 import { expect, type Page } from '@playwright/test';
 import type { SongItem } from '../src/lib/api/types';
 import { EDITOR_TAB_TAKES_LABEL, songEditorOpenLabel } from '../src/lib/constants';
-import { csrfHeaders, nameStartingWith, workspace } from './helpers';
+import { sameOriginHeaders, nameStartingWith, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,
 	seedRunningGenerationJob,
@@ -32,7 +32,7 @@ export async function readSong(page: Page, songId: string): Promise<SongItem> {
 
 export async function createAlbum(page: Page): Promise<string> {
 	const album = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title: `E2E Take folds ${Date.now()}`, artist: '' }
 	});
 	expect(album.ok()).toBe(true);
@@ -47,7 +47,7 @@ export async function seedFoldedSong(
 	const title = `Folds ${label} ${Date.now()}`;
 	const songId = await seedSongPhoneSong(albumId, title, 1, FIRST_VERSION_TAKE_COUNT);
 	const saved = await page.request.put(`/api/songs/${songId}`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { lyrics: SECOND_VERSION_LYRICS }
 	});
 	expect(saved.ok()).toBe(true);

@@ -11,7 +11,7 @@ import pytest
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import generate_types  # noqa: E402
 from agent_providers.events import AssistantTextEvent  # noqa: E402

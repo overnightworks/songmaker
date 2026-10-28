@@ -88,10 +88,33 @@ def list_own_playable_generations(session: Session, user_id: str) -> list[Genera
     )
 
 
+_GENERATION_FILE_SUFFIXES: Final = (
+    ".mp3",
+    ".wav",
+    ".raw.wav",
+    ".pre-remaster.wav",
+    ".pre-remaster.mp3",
+    ".md",
+    ".whisper",
+)
+
+
+def generation_file_set(audio_rel: str) -> list[str]:
+    """Return every file a take owns, as audio-dir-relative names."""
+    stem = audio_rel.removesuffix(".mp3").removesuffix(".wav")
+    return [stem + suffix for suffix in _GENERATION_FILE_SUFFIXES]
+
+
 def all_generation_paths(session: Session) -> set[str]:
-    """Return set of all mp3_path and wav_path values in the DB."""
+    """Return every file name owned by a take in the DB."""
     rows = session.query(Generation.mp3_path, Generation.wav_path).all()
-    return {p for mp3, wav in rows for p in (mp3, wav) if p}
+    return {
+        owned
+        for mp3, wav in rows
+        for audio_rel in (mp3, wav)
+        if audio_rel
+        for owned in generation_file_set(audio_rel)
+    }
 
 
 def create_generation(
@@ -359,16 +382,14 @@ def disable_generation_sharing(session: Session, generation_id: str) -> Generati
     return disable_sharing(session, Generation, generation_id)
 
 
-_GENERATION_FILE_SUFFIXES = [".mp3", ".wav", ".md", ".whisper"]
-
-
 def delete_generation_files(audio_dir: Path, mp3_rel: str) -> None:
+    audio_root = audio_dir.resolve()
     mp3 = (audio_dir / mp3_rel).resolve()
-    if not mp3.is_relative_to(audio_dir.resolve()):
+    if not mp3.is_relative_to(audio_root):
         log.warning("Path traversal blocked in delete: %s", mp3_rel)
         return
-    for suffix in _GENERATION_FILE_SUFFIXES:
-        path = mp3.with_suffix(suffix)
+    for owned in generation_file_set(mp3.relative_to(audio_root).as_posix()):
+        path = audio_root / owned
         if path.exists():
             path.unlink()
             log.info("Deleted: %s", path)

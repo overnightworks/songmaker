@@ -267,3 +267,15 @@ def test_reimport_api_wrong_song(reimport_client: TestClient) -> None:
         files={"mp3": ("test.mp3", b"fake-mp3", "audio/mpeg")},
     )
     assert resp.status_code == 404
+
+
+def test_reimported_take_records_no_reference(seeded_db, tmp_path: Path) -> None:
+    mp3_src = tmp_path / "source.mp3"
+    mp3_src.write_bytes(b"fake-mp3-data")
+
+    with seeded_db() as session:
+        gen_id = reimport_files(session, tmp_path / "audio", USER_ID, SONG_ID, mp3_file=mp3_src)
+        session.commit()
+
+    with seeded_db() as session:
+        assert get_generation(session, gen_id).generation_params["reference_audio_path"] == ""

@@ -12,7 +12,7 @@ from sqlalchemy import text
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, GenerationPreset, Song
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 import migrate_generation_params as mig  # noqa: E402
 

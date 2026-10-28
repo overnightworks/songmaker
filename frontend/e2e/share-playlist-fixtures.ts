@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { expect, type Page, type Route } from '@playwright/test';
 import type { AlbumCoverUrls, SharedPlaylistPayload } from '../src/lib/api/types';
-import { csrfHeaders } from './helpers';
+import { sameOriginHeaders } from './helpers';
+import { requiredAdminUsername } from './required-env';
 import { BASE_URL, TAKE_FIXTURE, archiveOwnedAlbum, runMarker } from './seed';
 
 export const PLAYLIST_TITLE = 'E2E Shared Journey';
@@ -112,8 +113,7 @@ export interface RealPlaylist {
 }
 
 async function seedMemberSong(albumId: string, position: number): Promise<string> {
-	const owner = process.env.E2E_ADMIN_USERNAME;
-	if (!owner) throw new Error('E2E_ADMIN_USERNAME is required for the isolated E2E stack');
+	const owner = requiredAdminUsername();
 	return new Promise((resolve, reject) => {
 		const child = execFile(
 			'docker',
@@ -152,7 +152,7 @@ async function seedMemberSong(albumId: string, position: number): Promise<string
 }
 
 export async function createRealPlaylist(owner: Page): Promise<RealPlaylist> {
-	const headers = await csrfHeaders(owner);
+	const headers = await sameOriginHeaders(owner);
 	const albums: string[] = [];
 	const post = async <T>(url: string, data: unknown): Promise<T> => {
 		const response = await owner.request.post(url, { headers, data });

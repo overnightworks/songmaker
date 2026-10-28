@@ -1041,21 +1041,20 @@ providers pin API. Existing route rows are preserved. Reads without a valid
 route return 422. An omitted or null route in a Judge update keeps the saved
 route. The settings contract is ahead of the call: until #844's runtime handoff,
 a newly selected route can report ready while the worker still takes its
-existing path. The Models page's Scoring row shows the saved route with that
-route's readiness and model list, greys the other route, and sends the route
-with every save. Saving a row is a question of
+existing path. The Models page has no Scoring control: the judge runs on its
+stored setting. Saving a Models row is a question of
 form — a known provider, a known route, and a model the provider lists, the one
 the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
 unusable one stays saved until its next turn or job fails with the named reason.
 
 Cover and the scoring Judge are what ask that one dispatch; the Co-Writer runs at
-the agent service. Settings › Admin › **Models** shows all three: one table, one
+the agent service. Settings › Admin › **Models** shows the Co-Writer and Cover: one table, one
 row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
 read-only (`ModelsCowriterRow.svelte`): "Set by the agent service" in the Provider
 and Model cells, Agent service as the route, no status, and the history tail under
 Advanced; the app reads no service setting and names no model the service decides.
-The Cover and Scoring rows offer every provider, because what a provider
+The Cover row offers every provider, the list its own settings response carries, because what a provider
 cannot do, or has not been set up for, is a reason next to the choice and never
 a missing control: an unusable route stays visible and greyed with its reason
 (`API · key not set`, `CLI · not logged in`, `API · no image tool`), a provider
@@ -1552,7 +1551,7 @@ close the stream.
 | POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. One turn runs per user at a time: a turn sent while another still runs is refused with 409, checked under the rate-limit lock, and the panel that is refused follows the running turn. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job; the web process fails every active chat job when it starts, since no turn survives a restart, and the stale-job reaper ends one whose heartbeat stops; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. A panel whose stream drops without the server's own error frame (network loss, timeout, an early end) re-reads the conversation and follows or shows that turn; it names a failure only when the message never reached the server — decided by the persisted message ids, not by text alone, so a repeated "ok" is never mistaken for the answered one before it. The turn runs at the agent service ("The co-writer turn" above); a refused or failed run emits exactly one error frame with a `problem` (`unavailable` 503, `busy` 429 with `retry_after_seconds`, `not_enabled` 403, `sign_in_again` 401) and never a local provider. |
 | GET | `/api/settings/cowriter` | user | The history-tail budget alone. |
 | PUT | `/api/settings/cowriter` | admin | Persist the history-tail budget; a value out of range, or any other field, is rejected with 422. |
-| GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
+| GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model; both answers carry `allowed_providers`, the sorted providers a save accepts. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
 | GET | `/api/settings/judge` | admin | Judge provider, route, model, and `provider_routes_status` for both routes per provider. `allowed_models` and `models_by_provider` project the saved route and retain the selected model. `models_errors` names unavailable catalogs; a missing or invalid saved route returns 422. |
 | PUT | `/api/settings/judge` | admin | Persist judge provider, route, and model. Omitting `route` or sending null keeps the saved route. The model must be listed on that route, already retained for that provider, or empty while the catalog lists nothing. Unavailable selections remain saved with their route reason; unknown selections return 422. A fresh or retired stored pair is replaceable. |
 | GET | `/api/settings/providers` | admin | `cowriter_routes` carries shared provider readiness and catalogs for both routes, and `cover_routes` carries image capability; neither reads a saved route, so a missing or invalid Judge route does not affect it. Cover's route reason comes from the shared image-capability dispatch owner. |

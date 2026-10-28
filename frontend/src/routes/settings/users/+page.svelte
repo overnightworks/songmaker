@@ -15,8 +15,6 @@
 		toggleModel as toggleModelApi,
 		fetchCowriterSettings,
 		updateCowriterSettings,
-		fetchJudgeSettings,
-		updateJudgeSettings,
 		fetchCoverSettings,
 		updateCoverSettings,
 		fetchProviderStatus
@@ -25,7 +23,6 @@
 	import type {
 		CoverSettingsResponse,
 		CowriterSettings,
-		JudgeSettings,
 		ProviderRouteStatusResponse,
 		ProviderStatus,
 		SafeRouteReason
@@ -36,10 +33,7 @@
 	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
 	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
 	import TakeRetentionPanel from '$lib/components/TakeRetentionPanel.svelte';
-	import ModelsTaskRow, {
-		MODELS_ROUTE_NOT_AVAILABLE_CODE,
-		routeReasonSentence
-	} from '$lib/components/ModelsTaskRow.svelte';
+	import ModelsTaskRow, { routeReasonSentence } from '$lib/components/ModelsTaskRow.svelte';
 	import ModelsCowriterRow from '$lib/components/ModelsCowriterRow.svelte';
 	import type {
 		ModelsRouteKey,
@@ -66,13 +60,11 @@
 		MODELS_HEADING,
 		MODELS_HISTORY_TAIL_LABEL,
 		MODELS_RETRY_LABEL,
-		MODELS_LOADING_LABEL,
+		modelsRowStatus,
 		MODELS_SAVED_LABEL,
 		MODELS_SAVE_FAILED_FALLBACK,
 		MODELS_TASK_COVER_LABEL,
 		MODELS_TASK_COWRITER_LABEL,
-		MODELS_TASK_SCORING_LABEL,
-		modelsRouteNotAvailablePhrase,
 		PROVIDER_STATUS_UNAVAILABLE_DETAIL
 	} from '$lib/constants';
 	import {
@@ -146,7 +138,6 @@
 	let cowriterBudgetSaved = $state(false);
 	let cowriterBudgetFailure = $state<string | null>(null);
 	let coverSettings = $state<CoverSettingsResponse | null>(null);
-	let judgeSettings = $state<JudgeSettings | null>(null);
 
 	let registryModes = $state<string[]>([]);
 
@@ -169,7 +160,6 @@
 		'providerStatus',
 		'cowriter',
 		'cover',
-		'scoring',
 		'genDefaults'
 	] as const;
 	type AdminLoad = (typeof ADMIN_LOADS)[number];
@@ -180,14 +170,12 @@
 		providerStatus: PROVIDER_STATUS_UNAVAILABLE_DETAIL,
 		cowriter: 'Failed to load co-writer settings',
 		cover: 'Failed to load cover settings',
-		scoring: 'Failed to load scoring settings',
 		genDefaults: 'Failed to load generation defaults'
 	};
 	const PAGE_WIDE_LOADS = {
 		rateLimits: ['ratelimits'],
 		cowriter: ['models'],
-		cover: ['models'],
-		scoring: ['models']
+		cover: ['models']
 	} satisfies Partial<Record<AdminLoad, AdminTab[]>>;
 
 	const loadReloads: Record<AdminLoad, ReturnType<typeof reloadWhileUnreachable>> = {
@@ -196,7 +184,6 @@
 		providerStatus: reloadWhileUnreachable(() => void loadProviderStatuses()),
 		cowriter: reloadWhileUnreachable(() => void loadCowriterSettings()),
 		cover: reloadWhileUnreachable(() => void loadCoverSettings()),
-		scoring: reloadWhileUnreachable(() => void loadJudgeSettings()),
 		genDefaults: reloadWhileUnreachable(() => void loadGenDefaults())
 	};
 	const loadFailures = derived(
@@ -296,7 +283,6 @@
 		void loadProviderStatuses();
 		void loadCowriterSettings();
 		void loadCoverSettings();
-		void loadJudgeSettings();
 	}
 
 	async function loadProviderStatuses(): Promise<void> {
@@ -325,15 +311,6 @@
 			settleLoad('cover');
 		} catch (e) {
 			failLoad('cover', e);
-		}
-	}
-
-	async function loadJudgeSettings(): Promise<void> {
-		try {
-			judgeSettings = await fetchJudgeSettings();
-			settleLoad('scoring');
-		} catch (e) {
-			failLoad('scoring', e);
 		}
 	}
 
@@ -373,16 +350,6 @@
 		};
 	}
 
-	function transportRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
-		const readiness = catalogueOf(provider, route)?.readiness;
-		return taskRoute(
-			provider,
-			route,
-			readiness?.state === 'ready',
-			readiness && readiness.state !== 'unverified' ? (readiness.reason ?? null) : null
-		);
-	}
-
 	function coverRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
 		const readiness = providerStatusFor(provider)?.cover_routes?.[route];
 		const canDraw = readiness?.state === 'ready';
@@ -393,20 +360,6 @@
 			readiness && readiness.state !== 'unverified' ? (readiness.reason ?? null) : null,
 			canDraw ? undefined : []
 		);
-	}
-
-	function scoringRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
-		if (route !== scoringSavedRoute) {
-			return {
-				ready: false,
-				reason: {
-					code: MODELS_ROUTE_NOT_AVAILABLE_CODE,
-					message: modelsRouteNotAvailablePhrase(MODELS_TASK_SCORING_LABEL)
-				},
-				models: []
-			};
-		}
-		return transportRoute(provider, route);
 	}
 
 	function taskProviders(
@@ -421,21 +374,12 @@
 	}
 
 	const coverProviders = $derived(
-		taskProviders(coverRoute, judgeSettings?.allowed_providers ?? [])
+		taskProviders(coverRoute, coverSettings?.allowed_providers ?? [])
 	);
 	const coverSelection = $derived<ModelsTaskSelection>({
 		provider: coverSettings?.provider ?? '',
 		route: coverSettings?.route ?? FALLBACK_ROUTE,
 		model: coverSettings?.model ?? ''
-	});
-	const scoringSavedRoute = $derived(judgeSettings?.route ?? FALLBACK_ROUTE);
-	const scoringProviders = $derived(
-		taskProviders(scoringRoute, judgeSettings?.allowed_providers ?? [])
-	);
-	const scoringSelection = $derived<ModelsTaskSelection>({
-		provider: judgeSettings?.provider ?? '',
-		route: scoringSavedRoute,
-		model: judgeSettings?.model ?? ''
 	});
 
 	function isRouteReason(detail: unknown): detail is ModelsRouteReason {
@@ -469,22 +413,6 @@
 			return { ok: true };
 		} catch (e) {
 			return { ok: false, reason: saveFailureReason(e, MODELS_TASK_COVER_LABEL, selection.route) };
-		}
-	}
-
-	async function saveScoring(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
-		try {
-			judgeSettings = await updateJudgeSettings(
-				selection.provider,
-				selection.route,
-				selection.model
-			);
-			return { ok: true };
-		} catch (e) {
-			return {
-				ok: false,
-				reason: saveFailureReason(e, MODELS_TASK_SCORING_LABEL, selection.route)
-			};
 		}
 	}
 
@@ -730,9 +658,9 @@
 					{#if cowriterSettings}
 						<ModelsCowriterRow advanced={cowriterAdvanced} />
 					{:else}
-						<p class="hint">{MODELS_LOADING_LABEL}</p>
+						<p class="hint">{modelsRowStatus($loadFailures.cowriter)}</p>
 					{/if}
-					{#if coverSettings && judgeSettings}
+					{#if coverSettings}
 						<ModelsTaskRow
 							task={MODELS_TASK_COVER_LABEL}
 							providers={coverProviders}
@@ -740,17 +668,7 @@
 							save={saveCover}
 						/>
 					{:else}
-						<p class="hint">{MODELS_LOADING_LABEL}</p>
-					{/if}
-					{#if judgeSettings}
-						<ModelsTaskRow
-							task={MODELS_TASK_SCORING_LABEL}
-							providers={scoringProviders}
-							selection={scoringSelection}
-							save={saveScoring}
-						/>
-					{:else}
-						<p class="hint">{MODELS_LOADING_LABEL}</p>
+						<p class="hint">{modelsRowStatus($loadFailures.cover)}</p>
 					{/if}
 				</div>
 			</section>
@@ -1078,7 +996,7 @@
 	.save-btn {
 		display: inline-block;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: white;
+		color: var(--on-accent);
 		border: none;
 		border-radius: var(--btn-radius-pill);
 		padding: 0.4rem 1rem;
@@ -1091,7 +1009,7 @@
 	}
 
 	.save-btn:hover:not(.disabled):not(:disabled) {
-		box-shadow: 0 0 16px rgba(160, 32, 240, 0.3);
+		box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
 	.save-btn.disabled,
@@ -1146,7 +1064,7 @@
 	.gen-model-tab.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.gen-defaults-controls {
@@ -1185,7 +1103,7 @@
 	.model-toggle.active {
 		border-color: transparent;
 		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
+		color: var(--on-accent);
 	}
 
 	.model-toggle:hover:not(.active) {

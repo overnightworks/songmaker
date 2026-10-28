@@ -181,7 +181,7 @@
 	const duration = $derived(formatDuration(gen));
 	const provenance = $derived(compact ? null : takeProvenance(gen));
 	const headline = $derived(compact ? null : headlineScore(gen));
-	const flag = $derived(compact ? null : qualityFlag(gen.scores));
+	const flag = $derived(compact ? null : qualityFlag(gen));
 	const batchNotice = $derived(compact ? null : takeBatchReductionLabel(gen.generation_params));
 	const voice = $derived(compact ? undefined : voiceForGeneration(gen));
 	// A plain click on a link to another take unfolds the version holding it,
@@ -413,12 +413,12 @@
 	@keyframes buffer-pulse {
 		0%,
 		100% {
-			border-color: rgba(160, 32, 240, 0.2);
-			box-shadow: 0 0 0 rgba(160, 32, 240, 0);
+			border-color: color-mix(in srgb, var(--accent) 20%, transparent);
+			box-shadow: 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
 		}
 		50% {
 			border-color: var(--accent);
-			box-shadow: 0 0 12px rgba(160, 32, 240, 0.15);
+			box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent);
 		}
 	}
 

@@ -14,10 +14,10 @@ from unittest.mock import MagicMock
 import fakeredis.aioredis
 import httpx
 import pytest
-from acestep_http import acestep_http
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.routing import BaseRoute
+from support.acestep_http import acestep_http
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig

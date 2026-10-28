@@ -11,13 +11,13 @@ import {
 	SONG_MENU_SAVE_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { csrfHeaders, workspace } from './helpers';
+import { sameOriginHeaders, workspace } from './helpers';
 import { archiveOwnedAlbum, runMarker, seedSongPhoneSong } from './seed';
 
 const test = base.extend<{ ownedAlbumId: string }>({
 	ownedAlbumId: async ({ page }, use) => {
 		const response = await page.request.post('/api/albums', {
-			headers: await csrfHeaders(page),
+			headers: await sameOriginHeaders(page),
 			data: { title: `E2E Leave Prompt ${runMarker()}` }
 		});
 		expect(response.ok()).toBe(true);

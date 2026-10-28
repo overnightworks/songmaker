@@ -74,6 +74,9 @@ jobs:
       - name: Repository root layout
         run: uv run --no-sync --frozen --no-build python scripts/check_root_layout.py
 
+      - name: CI and compose pin the same Postgres image
+        run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
+
       - name: Check TypeScript types in sync
         run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
@@ -119,10 +122,10 @@ jobs:
         run: |
           run_promtool() {
             docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
-              --entrypoint promtool prom/prometheus:latest "$@"
+              --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 "$@"
           }
           docker run --rm -v "$PWD/monitoring:/etc/prometheus:ro" \
-            --entrypoint promtool prom/prometheus:latest check config /etc/prometheus/prometheus.yml
+            --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 check config /etc/prometheus/prometheus.yml
           run_promtool check rules rules/alert.rules.yml
           run_promtool test rules alert.rules.test.yml
 
@@ -132,7 +135,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
         env:
           POSTGRES_USER: songmaker
           POSTGRES_PASSWORD: songmaker # why: disposable password for this isolated GitHub Actions service container.

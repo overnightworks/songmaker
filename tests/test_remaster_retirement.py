@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 from conftest import (
-    login_and_csrf,
     make_test_app,
+    seed_session,
 )
 from sqlalchemy import select
 
@@ -47,7 +47,7 @@ def test_remaster_is_unavailable_and_preserves_audio_and_history(
 
     with client:
         if authenticated:
-            login_and_csrf(client, "owner")
+            seed_session(client, "owner")
         with db() as session:
             generation_before = session.execute(select(Generation.__table__)).all()
             audits_before = session.execute(select(AuditLog.__table__).order_by(AuditLog.id)).all()

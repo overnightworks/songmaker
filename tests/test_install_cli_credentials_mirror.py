@@ -133,7 +133,7 @@ unit_of() {
 # systemd's verbs, answered from the table. A start records the request and
 # changes the table; it does NOT run the unit's ExecStart. That the mirror
 # script really creates its directories is pinned directly against the script
-# in tests/test_mirror_agent_cli_credentials.py, where no fake is involved.
+# in tests/scripts/test_mirror_agent_cli_credentials.py, where no fake is involved.
 systemctl_dispatch() {
     local operation="${1:-}" unit
     case "$operation" in
@@ -350,7 +350,7 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
         Without it the installer's own closing preflight would fail on files
         that nobody wrote. That the script really creates its directories, and
         with which mode, is pinned against the script itself in
-        tests/test_mirror_agent_cli_credentials.py — not through a fake.
+        tests/scripts/test_mirror_agent_cli_credentials.py — not through a fake.
         """
         subprocess.run(
             [

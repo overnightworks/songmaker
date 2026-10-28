@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import socket
 import threading
 import time
 from collections.abc import Awaitable, Callable
@@ -33,14 +32,9 @@ _NOT_STOPPED_EXIT_CODE = 99
 Loader = Callable[[str], Awaitable[LoadedModel]]
 
 
-def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
-
-
 class _Worker:
-    def __init__(self, tmp_path: Path) -> None:
+    def __init__(self, tmp_path: Path, free_port: Callable[[], int]) -> None:
+        self._free_port = free_port
         self._server = fakeredis.FakeServer()
         self.redis = fakeredis.aioredis.FakeRedis(server=self._server)
         self.loader: Loader = self._load_ok
@@ -100,7 +94,7 @@ class _Worker:
         The forced exit never ends the test process unless a test passes its own.
         """
         serve_options.setdefault("force_exit", lambda _: None)
-        port = _free_port()
+        port = self._free_port()
         deps = self.deps
         outcome: list[object] = []
         served = threading.Event()
@@ -146,8 +140,8 @@ class _Worker:
 
 
 @pytest.fixture
-def worker(tmp_path: Path) -> _Worker:
-    return _Worker(tmp_path)
+def worker(tmp_path: Path, free_port: Callable[[], int]) -> _Worker:
+    return _Worker(tmp_path, free_port)
 
 
 def _raise(error: Exception) -> Loader:

@@ -642,6 +642,7 @@ def _cover_response(session: Session) -> CoverSettingsResponse:
         provider=selection.provider,
         route=selection.route,
         model=selection.model,
+        allowed_providers=sorted(COWRITER_PROVIDERS),
     )
 
 

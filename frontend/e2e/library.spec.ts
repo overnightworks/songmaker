@@ -52,7 +52,7 @@ import {
 	appBar,
 	boundingBoxes,
 	containing,
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	MOBILE_VIEWPORT,
@@ -738,7 +738,7 @@ test(
 		const targetTitle = `${runTag} target`;
 		const albumIds: string[] = [];
 		await page.goto(HOME_PATH);
-		const headers = await csrfHeaders(page);
+		const headers = await sameOriginHeaders(page);
 		try {
 			// The target is created first, so the newest-first browse puts it last.
 			for (let index = 0; index <= LIBRARY_ALBUM_PAGE_SIZE; index++) {
@@ -1035,7 +1035,7 @@ async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<voi
 	if (!played) throw new Error(`Missing seeded playlist ${seeded.slug}`);
 	const listen = await page.request.post(
 		`/api/songs/${readSeededLibrary().listenReorderSongs.desktop.id}/listen`,
-		{ headers: await csrfHeaders(page), data: { playlist_id: played.id } }
+		{ headers: await sameOriginHeaders(page), data: { playlist_id: played.id } }
 	);
 	expect(listen.status()).toBe(200);
 }
@@ -1043,7 +1043,7 @@ async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<voi
 async function listenInSeededAlbum(page: Page): Promise<void> {
 	const listen = await page.request.post(
 		`/api/songs/${readSeededLibrary().listenReorderSongs.desktop.id}/listen`,
-		{ headers: await csrfHeaders(page) }
+		{ headers: await sameOriginHeaders(page) }
 	);
 	expect(listen.status()).toBe(200);
 }

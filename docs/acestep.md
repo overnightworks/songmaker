@@ -64,13 +64,21 @@ physically stages the dataset inside the Fork's safe root, trains there, and
 exports from the final training output into a separate export directory. Each
 training poll updates the existing TaskStore progress stream, which Songmaker
 consumes through SSE while the Fork reports progress; the timeout and heartbeat
-ordering is documented in [the architecture](architecture.md#worker-and-job-timeouts).
+ordering is documented in [the architecture](architecture.md#worker-architecture).
 Only the exported adapter is copied back through the shared training handoff
 directory; the product job moves it to `user_loras/<user>/<id>/lora/` and marks
 the LoRA ready. The worker removes its workspace after success, failure, or
 cancellation when `rmtree` succeeds. A `SIGKILL` can leave
 `/opt/acestep/training/<id>` in the container layer; the product job removes the
 shared `training_tmp` handoff directory.
+
+When a training ends, whether it succeeded, failed or was cancelled, the worker
+stops that mode's ACE-Step child before it releases the GPU hold, because the
+Fork does not put the LM back after a training. The scheduler loads the
+mode again before the next take (or after one "not loaded" answer when its view
+was stale), and the new child passes the same LM check as any load. The price is
+one warm reload per training (under 30 seconds with a warm page cache). A kept
+(pinned) mode stays pinned but is not resident until that reload.
 
 **Auto-scoring (issue #222).** Every successfully persisted generation gets a
 score job automatically — `jobs.generation._auto_score_generation`, called
@@ -423,7 +431,7 @@ When `repaint_mode` or `repaint_wav_crossfade_sec` is set, the server handles cr
 
 **Audio hand-off to the ACE-Step fork.** Songmaker keeps the source and reference files as local paths until submission, then uploads them in the `/release_task` multipart body: `src_audio_path` becomes `ctx_audio`, and `reference_audio_path` becomes `ref_audio`. It never sends either local absolute path as a request field. The fork rejects such paths (`release_task_audio_paths.py:40-41`) and persists multipart uploads to its temporary directory (`release_task_request_parser.py:104-132`); the latter is therefore the supported Repaint, Cover, and reference-audio contract.
 
-**Reference audio** uploads via `POST /api/audio/upload` (max 50 MiB per file, .mp3/.wav/.flac/.ogg; aggregate quota per user: decimal 500 MB / 500,000,000 bytes and 50 files). The path is stored in version `generation_params.reference_audio_path`; Songmaker uploads that file as multipart `ref_audio` when it submits to ACE-Step. Path traversal is blocked at both API validation and job execution levels. See [reference upload admission](security.md#reference-audio-upload) for quota settings, storage refusals and cleanup ownership.
+**Reference audio** uploads via `POST /api/audio/upload` (max 50 MiB per file, .mp3/.wav/.flac/.ogg; aggregate quota per user: decimal 500 MB / 500,000,000 bytes and 50 files). The path is stored in version `generation_params.reference_audio_path`; Songmaker uploads that file as multipart `ref_audio` when it submits to ACE-Step. Each take records the reference it ran with, whether it came from the version, a preset or a global default, in its own `generation_params.reference_audio_path` (`""` for none), and the version's value can change later; a take persisted earlier has no such key. Path traversal is blocked at both API validation and job execution levels. See [reference upload admission](security.md#reference-audio-upload) for quota settings, storage refusals and cleanup ownership.
 
 ## CoT Response Data
 
@@ -531,7 +539,7 @@ OOM PARTIAL jobs until a newer generate-family attempt or a non-archived take
 created strictly after completion supersedes them. Historical PARTIAL rows without
 completion timestamps are not backfilled. UI presentation remains slice 14 of #916.
 The client and worker contract is verified by the `S7-*` cases in
-[`test_client.py`](../tests/test_client.py),
+[`test_client.py`](../tests/acestep_engine/test_client.py),
 [`test_task_store.py`](../tests/acestep_worker/test_task_store.py) and
 [`test_wrapper.py`](../tests/acestep_worker/test_wrapper.py).
 

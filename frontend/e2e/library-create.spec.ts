@@ -48,7 +48,7 @@ import {
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	loseNetwork,
 	nameStartingWith,
@@ -499,7 +499,7 @@ test(
 		const albumTitle = `${'Nightdrive'.repeat(15)}${Date.now()}`;
 		await page.goto(HOME_PATH);
 		const created = await page.request.post(ALBUMS_API, {
-			headers: await csrfHeaders(page),
+			headers: await sameOriginHeaders(page),
 			data: { title: albumTitle, artist: '' }
 		});
 		expect(created.ok()).toBe(true);
