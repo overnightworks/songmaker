@@ -1,5 +1,6 @@
 body_contract = "block"
 merge_method = "squash"
+lane_shared = ["quality/baseline.toml", "scripts/vulture_whitelist.py"]
 dependency_paths = [
   ".github/workflows/",
   "frontend/package.json",
