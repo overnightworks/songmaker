@@ -255,6 +255,20 @@ def test_backup_with_zero_retention_prunes_nothing(docker_log: Path, tmp_path: P
 
     assert result.returncode == 0, result.stderr
     assert old.is_dir()
+    copy_line = next(line for line in _logged(docker_log) if "cp -a" in line)
+    assert "helper-image:pinned sh -c" in copy_line
+
+
+def test_backup_fails_when_compose_names_no_helper_image(docker_log: Path, tmp_path: Path) -> None:
+    result = _run(
+        BACKUP_SCRIPT,
+        docker_log,
+        [],
+        BACKUP_DIR=str(tmp_path / "backups"),
+        FAKE_DOCKER_FAIL_ON="config --images",
+    )
+
+    assert result.returncode != 0
 
 
 def test_backup_with_a_missing_volume_fails_before_any_snapshot_work(

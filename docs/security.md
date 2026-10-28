@@ -1128,8 +1128,9 @@ copy audio through the digest-pinned `postgres` image compose names (Alpine-base
 `sh`, `cp -a`, `find`), so no helper image is pulled unpinned. The frozen monitoring
 stack is not pinned. Dependabot moves the Dockerfile and compose pins, patch releases
 only (PostgreSQL within 16); a major or minor move of an image is its own change,
-for PostgreSQL 17 a data migration. The CI pins are moved by hand, except CI's PostgreSQL service, which
-`scripts/check_pinned_images_match.py` keeps equal to compose's. Project tooling in CI and application dependencies in worker
+for PostgreSQL 17 a data migration. The CI pins are moved by hand; `scripts/check_pinned_images_match.py` fails while
+CI's PostgreSQL service differs from compose's, so a Dependabot PostgreSQL bump
+needs the same edit in `.github/workflows/ci.yml`. Project tooling in CI and application dependencies in worker
 images are installed through `uv` with the committed `uv.lock`; Bandit and
 pip-audit run in separate tool environments so they do not change that lock.
 The repository itself is installed as the trusted local editable project. All
