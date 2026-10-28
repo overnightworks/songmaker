@@ -569,6 +569,7 @@ describe('admin models tab', () => {
 			'Codex ✓ ready',
 			'Grok · no image tool'
 		]);
+		expect(target.textContent).not.toContain('Loading…');
 	});
 
 	it('keeps the cover row on the loading hint until the cover settings arrive', async () => {
