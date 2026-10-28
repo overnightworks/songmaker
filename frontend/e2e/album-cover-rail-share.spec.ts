@@ -12,6 +12,7 @@ import {
 	LIBRARY_PATH,
 	ONLY_IN_SHELL
 } from './helpers';
+import { loadedImages } from './loaded-images';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TAKE_FIXTURE = path.join(E2E_DIR, 'fixtures', 'take.mp3');
@@ -220,12 +221,14 @@ test('1354_65_C2 1354_37b_62_A: a shared playlist replaces its upload with the c
 				'src',
 				/\/shared\/playlist\/[^/]+\/cover\?variant=card&v=/
 			);
+			await loadedImages(publicPage.locator('.cover-art .playlist-cover-image'));
 
 			await deletePlaylistCover(page, playlist.id);
 			await publicPage.reload();
 			await expect(publicPage.locator('.cover-art .playlist-cover-image')).toHaveCount(0);
 			await expect(publicPage.locator('.cover-art .playlist-cover-cell')).toHaveCount(4);
 			await expect(publicPage.locator('.cover-art .playlist-cover-cell img')).toHaveCount(1);
+			await loadedImages(publicPage.locator('.cover-art .playlist-cover-cell img'));
 
 			const unshare = await page.request.delete(`/api/playlists/${playlist.id}/share`, {
 				headers: await sameOriginHeaders(page)
