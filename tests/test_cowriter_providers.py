@@ -925,15 +925,23 @@ def test_provider_status_response_is_byte_identical_for_a_fixed_snapshot(
     assert response.content == _pinned_response_body(case)
 
 
+@pytest.mark.parametrize("role", ["admin", "member"])
 @pytest.mark.parametrize("method", ["get", "put"])
-def test_the_removed_judge_settings_endpoint_answers_not_found(admin_client, method):
+def test_the_removed_judge_settings_endpoint_answers_the_ordinary_not_found(
+    admin_client, method, role,
+):
     client, _ = admin_client
+    client.app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u-test", role=role, username="u-u-test"
+    )
+    request_arguments = {"json": {"provider": "grok", "model": "grok-4.6"}} if method == "put" else {}
 
-    response = getattr(client, method)("/api/settings/judge", **(
-        {"json": {"provider": "grok", "model": "grok-4.6"}} if method == "put" else {}
-    ))
+    unknown_path = getattr(client, method)("/api/settings/never-existed", **request_arguments)
+    response = getattr(client, method)("/api/settings/judge", **request_arguments)
 
+    assert unknown_path.status_code == 404
     assert response.status_code == 404
+    assert response.content == unknown_path.content
 
 
 _LEFTOVER_JUDGE_ROWS = {
