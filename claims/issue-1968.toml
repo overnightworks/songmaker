@@ -1,0 +1,8 @@
+claim_id = "e0569381f9074001b78ca1f3756485ad"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6b44e2827b508932a1588947afacf222d102fef6"
+branch = "claude/issue-1968-cowriter-reads-stored-scores"
+scope = ["src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/mcp_server/schemas.py", "tests/test_mcp_server.py", "tests/test_takes.py"]
+opened_commit = "1db5b266b52a773c8d387f5d8df807392127aa0d"
+whole_reason = "One reader repair: the MCP answer and the take block must read the same owner, and the two rewritten tests pin the shape both now return."
