@@ -50,7 +50,7 @@ server = [
     "python-multipart>=0.0.7,<1",
     # The auth layer lives in its own repository since #879. Candidate pin of the
     # 0.24.0 sign-in routes (#1957): the release wheel replaces this git pin at
-    # webauth v0.24.0, because the slim images have no git.
+    # webauth v0.24.0; the backend image installs git until then.
     "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@961627fb4d6d0cb03801b87249a92f0ea505cfe7",
     # The provider layer lives in its own repository since #886. Bare in the
     # server extra so its api/image capabilities do not leak anthropic into the
