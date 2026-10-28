@@ -2784,34 +2784,50 @@ def test_job_duration_stats_no_completed(db_factory) -> None:
 # ── _apply_task_overrides ──────────────────────────────────────────
 
 
-def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
+def _override_context(tmp_path: Path, config: AceStepConfig | None = None, model_name="turbo"):
     from songmaker_cli.parser import AlbumMeta, SongMeta
 
-    src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
-
-    config = AceStepConfig(prompt="test", lyrics="la la", audio_duration=180)
-    ctx = GenerationContext(
+    return GenerationContext(
         song_id="s1",
         version_id="v1",
         meta=SongMeta(title="t", lyrics="la la", prompt="test"),
         album_meta=AlbumMeta(title="a", artist="b"),
-        ace_config=config,
+        ace_config=config or AceStepConfig(prompt="test", lyrics="la la", audio_duration=0),
         audio_dir=tmp_path,
         user_id="u1",
-        model_name="turbo",
+        model_name=model_name,
     )
-    params = RepaintTaskParams(
+
+
+def _repaint_params(src_wav: Path, start: float, end: float) -> RepaintTaskParams:
+    return RepaintTaskParams(
         src_wav_path=str(src_wav),
         src_generation_id="g0",
-        repainting_start=0.3,
-        repainting_end=0.8,
+        repainting_start=start,
+        repainting_end=end,
         lyrics="la la",
         prompt="test",
     )
-    result = _apply_repaint_overrides(ctx, params)
-    assert result.ace_config.repainting_start == pytest.approx(54.0)
-    assert result.ace_config.repainting_end == pytest.approx(144.0)
+
+
+def test_repaint_of_an_unreadable_source_take_fails_loud(tmp_path: Path) -> None:
+    src_wav = tmp_path / "src.wav"
+    src_wav.write_bytes(b"RIFF" + b"\x00" * 100)
+    ctx = _override_context(tmp_path)
+    params = _repaint_params(src_wav, 0.3, 0.8)
+    with pytest.raises(ValueError, match="Cannot measure"):
+        _apply_repaint_overrides(ctx, params)
+
+
+def test_repaint_range_is_a_fraction_of_the_source_take(tmp_path: Path, make_wav_bytes) -> None:
+    src_wav = tmp_path / "src.wav"
+    src_wav.write_bytes(make_wav_bytes(b"\x80" * 2000, sampwidth=1, sample_rate=10))
+    ctx = _override_context(tmp_path)
+
+    result = _apply_repaint_overrides(ctx, _repaint_params(src_wav, 0.3, 0.8))
+
+    assert result.ace_config.repainting_start == pytest.approx(60.0)
+    assert result.ace_config.repainting_end == pytest.approx(160.0)
     assert result.ace_config.task_type == "repaint"
     assert result.ace_config.thinking is True
     assert result.ace_config.src_audio_path.startswith(str(tmp_path / ".tmp"))
@@ -2819,12 +2835,9 @@ def test_repaint_converts_fractions_to_seconds(tmp_path: Path) -> None:
     assert result.src_generation_id == "g0"
 
 
-def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
-    from songmaker_cli.parser import AlbumMeta, SongMeta
-
+def test_repaint_inherits_generation_settings(tmp_path: Path, make_wav_bytes) -> None:
     src_wav = tmp_path / "src.wav"
-    src_wav.write_bytes(b"RIFF" + b"\x00" * 40)
-
+    src_wav.write_bytes(make_wav_bytes(b"\x80" * 2000, sampwidth=1, sample_rate=10))
     config = AceStepConfig(
         prompt="test",
         lyrics="la la",
@@ -2834,25 +2847,11 @@ def test_repaint_inherits_generation_settings(tmp_path: Path) -> None:
         shift=2.0,
         thinking=True,
     )
-    ctx = GenerationContext(
-        song_id="s1",
-        version_id="v1",
-        meta=SongMeta(title="t", lyrics="la la", prompt="test"),
-        album_meta=AlbumMeta(title="a", artist="b"),
-        ace_config=config,
-        audio_dir=tmp_path,
-        user_id="u1",
-        model_name="sft",
+
+    result = _apply_repaint_overrides(
+        _override_context(tmp_path, config, "sft"), _repaint_params(src_wav, 0.1, 0.3),
     )
-    params = RepaintTaskParams(
-        src_wav_path=str(src_wav),
-        src_generation_id="g0",
-        repainting_start=0.1,
-        repainting_end=0.3,
-        lyrics="la la",
-        prompt="test",
-    )
-    result = _apply_repaint_overrides(ctx, params)
+
     assert result.ace_config.guidance_scale == 5.0
     assert result.ace_config.inference_steps == 50
     assert result.ace_config.shift == 2.0

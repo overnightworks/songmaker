@@ -245,8 +245,8 @@ def test_create_song(client: TestClient) -> None:
     resp = client.post("/api/songs", json={
         "title": "Lightning", "album_id": "rock", "lyrics": "flash", "bpm": 160,
     })
-    assert resp.status_code == 200
-    assert resp.json()["title"] == "Lightning"
+    body = resp.json()
+    assert (resp.status_code, body["title"], body["audio_duration"]) == (200, "Lightning", 0)
 
 
 def test_update_song(client: TestClient) -> None:
@@ -265,6 +265,14 @@ def test_update_song_as_new_version_keeps_a_takeless_latest_version(client: Test
     assert [(v["version_number"], v["lyrics"]) for v in versions] == [
         (3, "boom"), (2, "takeless second draft"), (1, "boom"),
     ]
+
+
+def test_update_song_without_any_version_records_auto_duration(client: TestClient) -> None:
+    assert client.delete("/api/versions/v1").status_code == 200
+
+    resp = client.put("/api/songs/s1", json={"lyrics": "after the only version is gone"})
+
+    assert (resp.status_code, resp.json()["audio_duration"]) == (200, 0)
 
 
 def test_rename_song(client: TestClient) -> None:
@@ -1182,23 +1190,9 @@ def test_get_generation_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_pick_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/pick")
-    assert resp.status_code == 404
-
-
-def test_unpick_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/unpick")
-    assert resp.status_code == 404
-
-
-def test_keep_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/keep")
-    assert resp.status_code == 404
-
-
-def test_unkeep_generation_not_found(client: TestClient) -> None:
-    resp = client.post("/api/generations/nonexistent/unkeep")
+@pytest.mark.parametrize("action", ["pick", "unpick", "keep", "unkeep"])
+def test_generation_flag_action_not_found(client: TestClient, action: str) -> None:
+    resp = client.post(f"/api/generations/nonexistent/{action}")
     assert resp.status_code == 404
 
 

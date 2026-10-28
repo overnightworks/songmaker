@@ -30,9 +30,7 @@ JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
-JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = (
-    "Selected voice is unavailable for this generation"
-)
+JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = "Selected voice is unavailable for this generation"
 JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
     "Codex CLI is not logged in. Sign in on the operator host, then try again."
 )
@@ -77,6 +75,8 @@ LORA_TRAINING_MODEL_MODES: Final[frozenset[str]] = frozenset({"sft", "turbo"})
 
 GENERATION_WAITING_FOR_LORA_QUEUE_REASON: Final[str] = "Waiting for LoRA training on this GPU."
 GENERATION_ETA_MIN_PROGRESS: Final[float] = 0.05
+# 0 asks ACE-Step to choose the song length.
+AUTO_LENGTH_SECONDS: Final[int] = 0
 LORA_WAITING_FOR_GENERATION_QUEUE_REASON: Final[str] = "Waiting for queued generations on this GPU."
 
 DEFAULT_ARTIST = "Flex0r"

@@ -389,7 +389,7 @@ Top-level song/version fields:
 
 | Field | Range | Default | Effect |
 |-------|-------|---------|--------|
-| `audio_duration` | 0-600 | 180 | Output length in seconds; 0 lets ACE-Step decide |
+| `audio_duration` | 0-600 | 0 (Auto) | Output length in seconds; 0 lets ACE-Step decide |
 | `bpm` | 0-999 | 0 | Target BPM; 0 lets ACE-Step decide |
 | `key_scale` | string | empty | Target key |
 | `vocal_language` | string | empty | Vocal language hint |
