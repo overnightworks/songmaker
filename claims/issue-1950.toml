@@ -1,8 +1,0 @@
-claim_id = "a71c9457a77643b0ac76fa64fcc2a8fb"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "28a93916622e5e4198b4369d7d5ed8daa2af5617"
-branch = "claude/issue-1950-agent-runtime-protocol-3"
-scope = ["AGENTS.md", "docs/architecture.md", "docs/requirements/0004-co-writer.md", "docs/security.md", "pyproject.toml", "quality/baseline.toml", "src/songmaker_cli/agents/cowriter.md", "src/songmaker_cli/cowriter/mcp_endpoint.py", "tests/fake_agent_service.py", "tests/test_conversation_api.py", "tests/test_cowriter_mcp_endpoint.py", "tests/test_cowriter_service_turn.py", "uv.lock"]
-opened_commit = "87fbc4c26322cdcb2d67572d53901ef0969b1dd1"
-whole_reason = "songmaker pins agent-runtime client 0.10.0: protocol 3, an agent file without model, and /mcp accepting only agent-capability-2+jwt with an agent claim of cowriter; the fake service, tests, repository facts, docs and REQ-COWRITER-09 and -10 follow."
