@@ -3,5 +3,5 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "5200debde6fee34403af9c3460fbe2353c11c072"
 branch = "claude/issue-1973-shared-cover-test-waits-for-images"
-scope = ["frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/share-playlist-player.spec.ts"]
+scope = ["frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/loaded-images.ts", "frontend/e2e/share-playlist-player.spec.ts"]
 opened_commit = "559757262f122c6280658944c192cf2469dd47fd"
