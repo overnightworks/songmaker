@@ -273,7 +273,6 @@ test(
 				await expect(columnHeader(page, column)).toBeInViewport();
 			}
 			await expect(scoringStatus).toBeInViewport();
-			await expect(taskStatus(page, MODELS_TASK_COWRITER_LABEL)).toBeInViewport();
 			for (const task of SELECTABLE_TASKS) {
 				await expectProviderNameShownWhole(page, task);
 				await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
@@ -371,12 +370,14 @@ test(
 			MODELS_TASK_SCORING_LABEL
 		]) {
 			const card = taskRow(page, task);
-			for (const column of [
+			// The Co-Writer card has no Status line: nothing is checked for it (#1949).
+			const columns = [
 				MODELS_COLUMN_PROVIDER_LABEL,
 				MODELS_COLUMN_ROUTE_LABEL,
-				MODELS_COLUMN_MODEL_LABEL,
-				MODELS_COLUMN_STATUS_LABEL
-			]) {
+				MODELS_COLUMN_MODEL_LABEL
+			];
+			if (task !== MODELS_TASK_COWRITER_LABEL) columns.push(MODELS_COLUMN_STATUS_LABEL);
+			for (const column of columns) {
 				await expect(card.getByText(column, { exact: true })).toBeVisible();
 			}
 		}
