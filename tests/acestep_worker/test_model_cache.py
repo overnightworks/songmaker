@@ -25,6 +25,7 @@ def _make_cache(
     budget: float = 24.0,
     sizes: dict[str, float] | None = None,
     vram_reader=None,
+    unloader=None,
 ):
     sizes = sizes or {"sft": 6.0, "xl-sft": 12.0, "huge": 30.0}
     loaded_log: list[str] = []
@@ -34,14 +35,14 @@ def _make_cache(
         loaded_log.append(mode)
         return LoadedModel(mode=mode, handle=f"handle-{mode}", port=8101)
 
-    async def unloader(model: LoadedModel) -> None:
+    async def recording_unloader(model: LoadedModel) -> None:
         unloaded_log.append(model)
 
     cache = ModelCache(
         vram_budget_gb=budget,
         model_sizes=sizes,
         loader=loader,
-        unloader=unloader,
+        unloader=unloader or recording_unloader,
         vram_reader=vram_reader,
     )
     return cache, loaded_log, unloaded_log
@@ -765,7 +766,9 @@ def test_release_and_stop_stops_only_with_the_last_use(caplog: pytest.LogCapture
     loaded = _run(cache.acquire_for_use("sft"))
     with caplog.at_level("WARNING"):
         _run(cache.release_and_stop("sft"))
-    assert (unloaded, cache.in_use_count("sft"), "sft" in caplog.text) == ([], 1, True)
+    assert (unloaded, cache.in_use_count("sft")) == ([], 1)
+    warning_loggers = {r.name for r in caplog.records if r.levelname == "WARNING"}
+    assert "acestep_worker.model_cache" in warning_loggers
     _run(cache.release_and_stop("sft"))
     assert (unloaded, cache.loaded_modes()) == ([loaded], [])
 
@@ -782,12 +785,10 @@ def test_release_and_stop_without_a_use_is_a_no_op(loaded: bool) -> None:
 def test_release_and_stop_drops_the_mode_keeps_the_pin_and_raises_when_the_unloader_fails(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    cache, _, _ = _make_cache()
-
     async def failing_unloader(_: LoadedModel) -> None:
         raise RuntimeError("child would not stop")
 
-    cache._unloader = failing_unloader
+    cache, _, _ = _make_cache(unloader=failing_unloader)
     _run(cache.load("sft"))
     _run(cache.pin("sft"))
     _run(cache.acquire_for_use("sft"))

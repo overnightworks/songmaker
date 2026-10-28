@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
@@ -64,6 +64,18 @@ async def _generation_completes(store: TaskStore, task_id: str, **_: object) -> 
     await store.complete(task_id, GenerationTaskResult(mode="sft", audio_path="/a.wav", seed=1))
 
 
+@dataclass(frozen=True)
+class _GpuHold:
+    redis: fakeredis.aioredis.FakeRedis
+    key: str
+
+    async def exists(self) -> bool:
+        return bool(await self.redis.exists(self.key))
+
+    async def lapse(self) -> None:
+        await self.redis.delete(self.key)
+
+
 @dataclass
 class _Worker:
     deps: WorkerDeps
@@ -76,7 +88,7 @@ class _Worker:
         return self.deps.redis  # type: ignore[return-value]
 
     async def hold_exists(self) -> bool:
-        return bool(await self.redis.exists(gpu_hold_key(self.deps.worker_id)))
+        return await _GpuHold(self.redis, gpu_hold_key(self.deps.worker_id)).exists()
 
     def app_client(self) -> httpx.AsyncClient:
         transport = httpx.ASGITransport(app=create_app(self.deps))
@@ -108,13 +120,39 @@ class _Worker:
         assert mode not in self.deps.cache.loaded_modes()
 
 
+def _worker_deps(
+    cache: ModelCache, redis: fakeredis.aioredis.FakeRedis, tmp_path: Path
+) -> WorkerDeps:
+    deps = WorkerDeps(
+        worker_id="acestep-worker-0",
+        cache=cache,
+        task_store=TaskStore(),
+        heartbeat=None,  # type: ignore[arg-type]
+        redis=redis,
+        registry_client=None,
+        registration=None,
+        checkpoint_dir=tmp_path,
+        audio_output_dir=tmp_path / "audio",
+        internal_token="test-internal-token",
+        generate_runner=_generation_completes,
+    )
+    deps.heartbeat = HeartbeatLoop(
+        redis=redis,
+        worker_id=deps.worker_id,
+        state_provider=lambda: build_state_payload(deps),
+    )
+    return deps
+
+
 @pytest.fixture
 def make_worker(
     tmp_path: Path, fake_uv, free_port: Callable[[], int]
-) -> Callable[..., _Worker]:
+) -> Iterator[Callable[..., _Worker]]:
+    started: list[SubprocessHandle] = []
+
     def make(
         *,
-        unloader_wrapper: Callable[[_Worker, Unloader], Unloader] | None = None,
+        unloader_wrapper: Callable[[_GpuHold, Unloader], Unloader] | None = None,
         init_llm: bool = True,
     ) -> _Worker:
         redis = fakeredis.aioredis.FakeRedis(decode_responses=False)
@@ -123,48 +161,36 @@ def make_worker(
         )
         body = fake_uv.health(llm_initialized=init_llm)
         children: list[SubprocessHandle] = []
+        hold = _GpuHold(redis, gpu_hold_key("acestep-worker-0"))
+        hold_existed_when_child_stopped: list[bool] = []
+
+        async def observing(model: LoadedModel) -> None:
+            hold_existed_when_child_stopped.append(await hold.exists())
+            await production_unloader(model)
 
         async def loader(mode: str) -> LoadedModel:
             handle = await asyncio.to_thread(fake_uv.start, body, mode=mode, init_llm=init_llm)
             children.append(handle)
+            started.append(handle)
             return LoadedModel(mode=mode, handle=handle, port=handle.port)
 
         cache = ModelCache(
             vram_budget_gb=24.0,
             model_sizes={"sft": 6.0, "turbo": 6.0},
             loader=loader,
-            unloader=production_unloader,
+            unloader=unloader_wrapper(hold, observing) if unloader_wrapper else observing,
         )
-        deps = WorkerDeps(
-            worker_id="acestep-worker-0",
-            cache=cache,
-            task_store=TaskStore(),
-            heartbeat=None,  # type: ignore[arg-type]
-            redis=redis,
-            registry_client=None,
-            registration=None,
-            checkpoint_dir=tmp_path,
-            audio_output_dir=tmp_path / "audio",
-            internal_token="test-internal-token",
-            generate_runner=_generation_completes,
+        deps = _worker_deps(cache, redis, tmp_path)
+        return _Worker(
+            deps=deps,
+            children=children,
+            hold_existed_when_child_stopped=hold_existed_when_child_stopped,
         )
-        deps.heartbeat = HeartbeatLoop(
-            redis=redis,
-            worker_id=deps.worker_id,
-            state_provider=lambda: build_state_payload(deps),
-        )
-        worker = _Worker(deps=deps, children=children)
 
-        async def observing(model: LoadedModel) -> None:
-            worker.hold_existed_when_child_stopped.append(await worker.hold_exists())
-            await production_unloader(model)
-
-        cache._unloader = (
-            unloader_wrapper(worker, observing) if unloader_wrapper is not None else observing
-        )
-        return worker
-
-    return make
+    yield make
+    for handle in started:
+        handle.process.kill()
+        handle.process.wait()
 
 
 async def _within(awaitable: Awaitable[_T]) -> _T:
@@ -259,7 +285,7 @@ def test_failing_stop_still_releases_everything_and_is_logged(
     make_worker, caplog: pytest.LogCaptureFixture
 ) -> None:
 
-    def failing_wrapper(_worker: _Worker, observing: Unloader) -> Unloader:
+    def failing_wrapper(_hold: _GpuHold, observing: Unloader) -> Unloader:
         async def unloader(model: LoadedModel) -> None:
             await observing(model)
             raise RuntimeError("child would not stop")
@@ -284,29 +310,26 @@ def test_failing_stop_still_releases_everything_and_is_logged(
 
 
 def test_training_cancelled_while_the_child_stops_still_releases_everything(make_worker) -> None:
-    stopping = asyncio.Event
-    holder: dict[str, asyncio.Event] = {}
-
-    def blocking_wrapper(_worker: _Worker, observing: Unloader) -> Unloader:
-        async def unloader(model: LoadedModel) -> None:
-            await observing(model)
-            holder["stopping"].set()
-            await asyncio.Event().wait()
-
-        return unloader
-
     async def scenario() -> None:
-        holder["stopping"] = stopping()
+        stopping = asyncio.Event()
+
+        def blocking_wrapper(_hold: _GpuHold, observing: Unloader) -> Unloader:
+            async def unloader(model: LoadedModel) -> None:
+                await observing(model)
+                stopping.set()
+                await asyncio.Event().wait()
+
+            return unloader
+
         worker = make_worker(unloader_wrapper=blocking_wrapper)
         await worker.deps.cache.load("sft")
         owner = await worker.start_training(_training_succeeds)
-        await _within(holder["stopping"].wait())
+        await _within(stopping.wait())
         owner.cancel()
         with pytest.raises(asyncio.CancelledError):
             await owner
 
         await worker.assert_everything_released()
-        worker.children[0].process.kill()
 
     asyncio.run(scenario())
 
@@ -328,7 +351,9 @@ def test_use_above_one_leaves_the_child_running_and_is_logged(
 
     with caplog.at_level("WARNING"):
         asyncio.run(scenario())
-    assert "sft" in caplog.text
+    assert any(
+        r.name == "acestep_worker.model_cache" and r.levelname == "WARNING" for r in caplog.records
+    )
 
 
 def test_training_leaves_another_loaded_mode_running(make_worker) -> None:
@@ -383,11 +408,11 @@ def test_cleanup_after_the_shutdown_evicted_everything_raises_nothing(make_worke
 def test_take_during_the_stop_never_reaches_the_old_child(make_worker, hold_lapses: bool) -> None:
     holder: dict[str, asyncio.Event] = {}
 
-    def gated_wrapper(worker: _Worker, observing: Unloader) -> Unloader:
+    def gated_wrapper(hold: _GpuHold, observing: Unloader) -> Unloader:
         async def unloader(model: LoadedModel) -> None:
             await observing(model)
             if hold_lapses:
-                await worker.redis.delete(gpu_hold_key(worker.deps.worker_id))
+                await hold.lapse()
             holder["stopping"].set()
             await _within(holder["proceed"].wait())
 
