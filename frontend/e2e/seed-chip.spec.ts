@@ -17,7 +17,7 @@ import {
 } from '../src/lib/constants';
 import { NOW_PLAYING_TAKE_TAB } from '../src/lib/constants/now-playing';
 import { SEED_CHIP_CLEAR_LABEL, TAKE_USE_SEED_LABEL } from '../src/lib/constants/take-task';
-import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
+import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { showTab } from './foldedSong';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
 
@@ -39,7 +39,7 @@ let albumId: string;
 
 test.beforeEach(async ({ page }) => {
 	const album = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title: `E2E Seed chip ${Date.now()}`, artist: '' }
 	});
 	expect(album.ok()).toBe(true);

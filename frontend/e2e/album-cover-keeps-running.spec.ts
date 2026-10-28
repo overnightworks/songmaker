@@ -27,7 +27,7 @@ import {
 	albumCoverSuggestionAlt
 } from '../src/lib/constants';
 import { albumCoverWaitingText } from '../src/lib/constants/album-cover-mark';
-import { csrfHeaders, HOME_PATH, shellOf, workspace } from './helpers';
+import { sameOriginHeaders, HOME_PATH, shellOf, workspace } from './helpers';
 import { archiveOwnedAlbum, BASE_URL, STORAGE_STATE_FILE } from './seed';
 import { completeCoverJob, seedRunningCoverJob } from './seed-cover';
 
@@ -66,7 +66,7 @@ async function expectElapsedTimeSinceStart(editing: Locator): Promise<void> {
 async function createFreshAlbum(page: Page, shell: string): Promise<FreshAlbum> {
 	const title = `E2E Cover Keeps Running ${shell} ${Date.now()}`;
 	const response = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title, artist: '' }
 	});
 	expect(response.ok()).toBe(true);

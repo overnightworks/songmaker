@@ -20,7 +20,7 @@ import {
 import {
 	appBar,
 	boundingBoxes,
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	shellOf,
 	workspace,
@@ -62,7 +62,7 @@ async function createEmptyAlbum(
 ): Promise<{ id: string; title: string }> {
 	const title = `Nightdrive ${shellOf(testInfo)} ${Date.now()}`;
 	const response = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title, artist: '' }
 	});
 	expect(response.ok()).toBe(true);

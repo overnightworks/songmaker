@@ -15,7 +15,7 @@ import {
 	TAKE_REPAINT_LABEL
 } from '../src/lib/constants';
 import { TAKE_TASK_CLOSE_LABEL } from '../src/lib/constants/take-task';
-import { csrfHeaders, shellOf } from './helpers';
+import { sameOriginHeaders, shellOf } from './helpers';
 import { archiveOwnedAlbum, seedSongPhoneSong } from './seed';
 
 const SONG_TITLE = 'Take task card cells';
@@ -23,7 +23,7 @@ const TAKE_COUNT = 3;
 const QUEUED_JOB = { id: 'e2e-task-job', type: 'generate', status: 'queued', progress: 0 };
 
 async function onOwnTakes(page: Page, flow: () => Promise<void>): Promise<void> {
-	const headers = await csrfHeaders(page);
+	const headers = await sameOriginHeaders(page);
 	const album = await page.request.post('/api/albums', {
 		headers,
 		data: { title: `E2E Take task card ${Date.now()}`, artist: '' }

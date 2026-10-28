@@ -8,7 +8,7 @@ import {
 	songEditorOpenLabel
 } from '../src/lib/constants';
 import {
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	nameStartingWith,
 	shellOf,
@@ -279,13 +279,13 @@ async function importSongWithTake(
 	audio: Buffer
 ): Promise<void> {
 	const created = await page.request.post('/api/songs', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title, album_id: albumId, lyrics: `${title} lyrics`, prompt: 'calm test tone' }
 	});
 	expect(created.ok(), `Song creation failed: ${await created.text()}`).toBe(true);
 	const { id } = (await created.json()) as { id: string };
 	const imported = await page.request.post(`/api/songs/${id}/reimport`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		multipart: { mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: audio } }
 	});
 	expect(imported.ok(), `Take import failed: ${await imported.text()}`).toBe(true);
@@ -307,7 +307,7 @@ async function withAlbumOfItsOwn(
 	flow: (albumId: string) => Promise<void>
 ): Promise<void> {
 	const created = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title: `E2E Playback Restore ${marker}`, artist: '' }
 	});
 	expect(created.ok()).toBe(true);

@@ -16,7 +16,7 @@ import {
 	selectedCountLabel,
 	TAKE_SELECT_ALL_UNKEPT_LABEL
 } from '../src/lib/constants/now-playing';
-import { csrfHeaders, FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
+import { sameOriginHeaders, FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { archiveOwnedAlbum, seedTakeStripSong } from './seed';
 
 const TAKES_PER_SONG = 4;
@@ -57,7 +57,7 @@ test(
 	'1824 a selection made on one song leaves no toolbar on another song',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
-		const headers = await csrfHeaders(page);
+		const headers = await sameOriginHeaders(page);
 		const album = await page.request.post('/api/albums', {
 			headers,
 			data: { title: `E2E Take selection ${Date.now()}`, artist: '' }
@@ -90,7 +90,7 @@ test(
 	'1844 Delete N asks first, Cancel keeps the ticks and Delete removes exactly the ticked takes',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
-		const headers = await csrfHeaders(page);
+		const headers = await sameOriginHeaders(page);
 		const album = await page.request.post('/api/albums', {
 			headers,
 			data: { title: `E2E Bulk delete ${Date.now()}`, artist: '' }

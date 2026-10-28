@@ -42,7 +42,7 @@ import {
 	accountMenu,
 	appBar,
 	containing,
-	csrfHeaders,
+	sameOriginHeaders,
 	FlowGuard,
 	nameStartingWith,
 	ONLY_IN_SHELL,
@@ -997,7 +997,7 @@ interface CreatedAlbum {
 }
 
 async function postAsSession<T>(page: Page, url: string, data: unknown): Promise<T> {
-	const response = await page.request.post(url, { data, headers: await csrfHeaders(page) });
+	const response = await page.request.post(url, { data, headers: await sameOriginHeaders(page) });
 	expect(response.ok(), `POST ${url} failed: ${await response.text()}`).toBeTruthy();
 	return (await response.json()) as T;
 }
@@ -1018,7 +1018,7 @@ async function seedAlbumWithoutTakes(page: Page): Promise<{ id: string; title: s
 
 async function deleteAlbum(page: Page, albumId: string): Promise<void> {
 	const response = await page.request.delete(`/api/albums/${albumId}`, {
-		headers: await csrfHeaders(page)
+		headers: await sameOriginHeaders(page)
 	});
 	expect(
 		response.ok(),

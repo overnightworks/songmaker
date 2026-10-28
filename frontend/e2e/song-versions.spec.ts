@@ -71,7 +71,7 @@ import {
 	type TakeVersion
 } from '../src/lib/constants/now-playing';
 import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
-import { csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
+import { sameOriginHeaders, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,
 	readSeededLibrary,
@@ -106,7 +106,7 @@ const songsSeededByThisTest: string[] = [];
 
 async function deleteSeededSong(page: Page, songId: string): Promise<void> {
 	const deleted = await page.request.delete(`/api/songs/${songId}`, {
-		headers: await csrfHeaders(page)
+		headers: await sameOriginHeaders(page)
 	});
 	expect(deleted.ok(), `Deleting a seeded song failed: ${await deleted.text()}`).toBeTruthy();
 }
@@ -128,7 +128,7 @@ async function seedTwoVersions(
 	const songId = await seedSongPhoneSong(library.songPhoneAlbumId, title, 1, 1);
 	songsSeededByThisTest.push(songId);
 	const saved = await page.request.put(`/api/songs/${songId}`, {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { lyrics: SECOND_VERSION_LYRICS }
 	});
 	expect(saved.ok(), `Saving v2 failed: ${await saved.text()}`).toBeTruthy();
@@ -162,7 +162,7 @@ function seededVersion(versions: VersionItem[], versionNumber: number): TakeVers
 async function saveFurtherVersions(page: Page, songId: string, count: number): Promise<void> {
 	for (let saves = 0; saves < count; saves += 1) {
 		const saved = await page.request.put(`/api/songs/${songId}`, {
-			headers: await csrfHeaders(page),
+			headers: await sameOriginHeaders(page),
 			data: { lyrics: SECOND_VERSION_LYRICS, new_version: true }
 		});
 		expect(saved.ok(), `Saving a further version failed: ${await saved.text()}`).toBeTruthy();
@@ -207,7 +207,7 @@ async function takeOf(page: Page, songId: string, versionNumber: number): Promis
 async function pickTheTakeOf(page: Page, songId: string, versionNumber: number): Promise<void> {
 	const take = await takeOf(page, songId, versionNumber);
 	const picked = await page.request.post(`/api/generations/${take.id}/pick`, {
-		headers: await csrfHeaders(page)
+		headers: await sameOriginHeaders(page)
 	});
 	expect(picked.ok(), `Picking the take failed: ${await picked.text()}`).toBeTruthy();
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { EDITOR_OPEN_WORKER_POOL_LABEL, EDITOR_TAB_EDIT_LABEL } from '../src/lib/constants';
-import { csrfHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
+import { sameOriginHeaders, nameStartingWith, ONLY_IN_SHELL } from './helpers';
 import {
 	archiveAlbumOfAddress,
 	archiveOwnedAlbum,
@@ -22,7 +22,7 @@ type OpenedSong = { title: string; cleanup: () => Promise<void> };
 // The admin case is the run's own session on a song it owns.
 async function openAdminSong(page: Page): Promise<OpenedSong> {
 	const response = await page.request.post('/api/albums', {
-		headers: await csrfHeaders(page),
+		headers: await sameOriginHeaders(page),
 		data: { title: `E2E Generate Without Worker ${runMarker()}` }
 	});
 	expect(response.ok()).toBe(true);

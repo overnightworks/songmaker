@@ -9,11 +9,11 @@ from unittest.mock import patch
 
 import pytest
 from conftest import (
-    login_and_csrf,
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
     make_test_app,
+    seed_session,
     web_client,
 )
 from fastapi.testclient import TestClient
@@ -946,7 +946,7 @@ def _seed_sharing_data(session) -> None:
 
 def test_shared_playlist_view(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
 
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -969,7 +969,7 @@ def test_shared_playlist_view(tmp_path: Path) -> None:
 
 def test_shared_playlist_audio(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
 
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
@@ -987,7 +987,7 @@ def test_shared_playlist_stops_presenting_a_deleted_songs_take_1374_rule_9(
     tmp_path: Path,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
     (audio_dir / "g1.mp3").write_bytes(b"\xff\xfb\x90\x00" * 100)
@@ -1032,7 +1032,7 @@ def test_shared_playlist_stream_stops_presenting_a_deleted_songs_take_1374_rule_
     expected_new_stream_takes: list[str] | None,
 ) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_two_song_sharing_data)
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
     audio_dir = tmp_path / "audio" / "admin_user"
     audio_dir.mkdir(parents=True, exist_ok=True)
     for take_id in ("g1", "g2"):
@@ -1064,7 +1064,7 @@ def test_shared_playlist_not_found(tmp_path: Path) -> None:
 
 def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
 
     resp = client.post("/api/playlists/pl1/share")
     slug = resp.json()["share_slug"]
@@ -1076,7 +1076,7 @@ def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
 
 def test_unshare_playlist(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    login_and_csrf(client, "admin")
+    seed_session(client, "admin")
 
     client.post("/api/playlists/pl1/share")
     resp = client.delete("/api/playlists/pl1/share")
