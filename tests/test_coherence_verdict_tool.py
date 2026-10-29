@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 
 import pytest
+from sqlalchemy import event
+from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
@@ -216,6 +218,22 @@ def test_a_refused_later_verdict_keeps_the_earlier_one(factory):
     ]
 
 
+def test_writers_lock_the_take_before_reading_its_batch_row(factory):
+    _take(factory, "g1")
+    locked = []
+
+    def record(state):
+        statement = state.statement
+        if state.is_select and getattr(statement, "_for_update_arg", None) is not None:
+            locked.extend(d["entity"] for d in statement.column_descriptions)
+
+    event.listen(factory, "do_orm_execute", record)
+    _save(factory, "g1", 8, SUMMARY)
+
+    assert locked[0] is Generation
+    assert Score in locked
+
+
 @pytest.mark.parametrize(
     ("failure", "raised"),
     [
@@ -223,19 +241,18 @@ def test_a_refused_later_verdict_keeps_the_earlier_one(factory):
         (RuntimeError("boom"), True),
     ],
 )
-def test_a_failure_after_the_flush_leaves_the_stored_row_as_it_was(
-    factory, monkeypatch, failure, raised,
-):
+def test_a_failure_after_the_flush_leaves_the_stored_row_as_it_was(factory, failure, raised):
     _take(factory, "g1", batch=dict(LOCAL_SCORES))
 
-    def fail(_generation):
-        raise failure
+    class FailingAfterFlush(Session):
+        def expire(self, *_args, **_kwargs):
+            raise failure
 
-    monkeypatch.setattr(tools.GenerationDetail, "from_orm", fail)
+    failing_factory = sessionmaker(bind=factory.kw["bind"], class_=FailingAfterFlush)
 
     if raised:
         with pytest.raises(RuntimeError):
-            _save(factory, "g1", 8, SUMMARY)
+            _save(failing_factory, "g1", 8, SUMMARY)
     else:
-        assert _save(factory, "g1", 8, SUMMARY).is_error is True
+        assert _save(failing_factory, "g1", 8, SUMMARY).is_error is True
     assert _stored(factory, "g1") == [("batch", LOCAL_SCORES)]

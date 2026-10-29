@@ -188,6 +188,9 @@ def save_scores(
     """
     from sqlalchemy.orm.attributes import flag_modified
 
+    # Score has no uniqueness on (generation_id, scorer); locking the generation row
+    # serializes writers so two first writes cannot each insert a batch row.
+    session.query(Generation.id).filter_by(id=generation_id).with_for_update().first()
     existing = (
         session.query(Score)
         .filter_by(generation_id=generation_id, scorer="batch")

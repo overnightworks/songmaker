@@ -8,7 +8,8 @@ same as the HTTP endpoints. Every co-writer content write creates a
 new version.
 
 The ``server.py`` layer wires these into FastMCP tools — opening
-sessions, loading the user, committing writes. Keeping the logic in
+sessions, loading the user, committing writes; ``save_coherence_verdict`` is
+the exception, served only through ``/mcp`` and the in-process dispatcher. Keeping the logic in
 pure functions makes everything directly unit-testable without
 speaking the MCP protocol.
 """
@@ -152,6 +153,13 @@ def tool_get_generation(
     return GenerationDetail.from_orm(gen)
 
 
+# ── Write tools ───────────────────────────────────────────────────────
+#
+# These delegate to existing DB queries. Co-writer content writes always use
+# update_song()'s force_new_version path, while editor writes retain its draft
+# editing behavior.
+
+
 COHERENCE_SUMMARY_MAX_CHARS: Final = 300
 
 
@@ -178,13 +186,6 @@ def tool_save_coherence_verdict(
     save_coherence_verdict(session, gen.id, score, summary)
     session.expire(gen, ["scores"])
     return GenerationDetail.from_orm(gen)
-
-
-# ── Write tools ───────────────────────────────────────────────────────
-#
-# These delegate to existing DB queries. Co-writer content writes always use
-# update_song()'s force_new_version path, while editor writes retain its draft
-# editing behavior.
 
 
 def tool_create_song(
