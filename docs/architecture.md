@@ -1030,7 +1030,7 @@ named (`<Provider> · no image tool`) instead of quietly running Codex.
 Codex CLI route reads its model catalogue from the mounted CLI's
 `codex debug models` JSON output. The settings responses project the selected
 route for legacy callers while also returning route-keyed readiness and
-catalogue snapshots. The Models page has no Scoring control. Saving a Models row is a question of
+catalogue snapshots. The Agents page has no Scoring control. Saving an Agents row is a question of
 form — a known provider, a known route, and a model the provider lists, the one
 the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
