@@ -48,10 +48,8 @@ server = [
     "arq>=0.26,<1",
     "mutagen>=1.47,<2",
     "python-multipart>=0.0.7,<1",
-    # The auth layer lives in its own repository since #879. Candidate pin of the
-    # 0.24.0 sign-in routes (#1957): the release wheel replaces this git pin at
-    # webauth v0.24.0, because the slim images have no git.
-    "overnightworks-webauth[redis] @ git+https://github.com/overnightworks/webauth@961627fb4d6d0cb03801b87249a92f0ea505cfe7",
+    # The auth layer lives in its own repository since #879.
+    "overnightworks-webauth[redis] @ https://github.com/overnightworks/webauth/releases/download/v0.24.0/overnightworks_webauth-0.24.0-py3-none-any.whl#sha256=51e568884b14dbe005fe9b1174cb6546843357f23a298b3d3acbd17bdc1039b7",
     # The provider layer lives in its own repository since #886. Bare in the
     # server extra so its api/image capabilities do not leak anthropic into the
     # music worker or Pillow into the scoring worker (A8).
