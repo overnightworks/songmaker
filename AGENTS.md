@@ -2,7 +2,7 @@
 
 Repository facts only. The global contract owns coordination, claims, worktrees, review and code policy; `CLAUDE.md` is exactly `@AGENTS.md`.
 
-AI-powered song generation platform: SvelteKit web UI (`frontend/`, pnpm, Node 22 LTS), FastAPI backend, PostgreSQL, Redis. Songs are created, generated via ACE-Step, scored and reviewed. The CLI only starts the server. Python 3.12, venv `.venv/`.
+AI-powered song generation platform: SvelteKit web UI (`frontend/`, pnpm, Node 22 LTS), FastAPI backend, PostgreSQL, Redis. Songs are created, generated via ACE-Step, scored and reviewed. The CLI only starts the server. Python 3.14 (CI also tests 3.12 while the ACE-Step worker image runs it), venv `.venv/`.
 
 The README indexes the docs.
 

@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
         with:
-          python-version: "3.12"
+          python-version-file: .python-version
 
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
@@ -47,7 +47,7 @@ jobs:
 
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
         with:
-          python-version: "3.12"
+          python-version-file: .python-version
 
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
 
@@ -55,4 +55,4 @@ jobs:
         run: uv sync --frozen --extra server --extra dev --extra mcp --extra agent-service --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Audit Python dependencies
-        run: uvx --isolated --from 'pip-audit>=2.9,<3' pip-audit --path .venv/lib/python3.12/site-packages --skip-editable --ignore-vuln CVE-2026-4539 # why: pip-audit runs in its own tool environment and audits the project environment created from uv.lock.
+        run: uvx --isolated --from 'pip-audit>=2.9,<3' pip-audit --path .venv/lib/python*/site-packages --skip-editable --ignore-vuln CVE-2026-4539 # why: pip-audit runs in its own tool environment and audits the project environment created from uv.lock.
