@@ -291,8 +291,80 @@ it('imports with the defaults when browser storage throws', async () => {
 	const { theme, railCollapsed, railWidth, libraryWallOrder } = await import('./ui');
 	vi.restoreAllMocks();
 
-	expect(get(theme)).toBe('dark');
+	expect(get(theme)).toBe('light');
 	expect(get(railCollapsed)).toBe(false);
 	expect(get(railWidth)).toBe(264);
 	expect(get(libraryWallOrder)).toBe('title');
+});
+
+describe('theme', () => {
+	function stubDevice(scheme: 'dark' | 'light' | 'unsupported') {
+		if (scheme === 'unsupported') {
+			vi.stubGlobal('matchMedia', undefined);
+			return;
+		}
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: query === '(prefers-color-scheme: dark)' && scheme === 'dark'
+			}))
+		);
+	}
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		delete document.documentElement.dataset.theme;
+	});
+
+	it.each([
+		['follows a dark device when there is no choice', 'dark', null, 'dark'],
+		['follows a light device when there is no choice', 'light', null, 'light'],
+		['is light when the browser cannot tell the device', 'unsupported', null, 'light'],
+		['keeps a stored light choice on a dark device', 'dark', 'light', 'light'],
+		['keeps a stored dark choice on a light device', 'light', 'dark', 'dark']
+	] as const)('%s', async (_, device, stored, expected) => {
+		stubDevice(device);
+		if (stored) localStorage.setItem('theme', stored);
+		const { theme } = await import('./ui');
+
+		expect(get(theme)).toBe(expected);
+	});
+
+	it('is light without a window', async () => {
+		vi.stubGlobal('window', undefined);
+		const { theme } = await import('./ui');
+
+		expect(get(theme)).toBe('light');
+	});
+
+	it('leaves data-theme unset and removes a stale one when there is no choice', async () => {
+		stubDevice('dark');
+		const { initTheme } = await import('./ui');
+		document.documentElement.dataset.theme = 'light';
+
+		initTheme();
+
+		expect(document.documentElement.dataset.theme).toBeUndefined();
+	});
+
+	it('writes data-theme for a stored choice', async () => {
+		stubDevice('light');
+		localStorage.setItem('theme', 'dark');
+		const { initTheme } = await import('./ui');
+
+		initTheme();
+
+		expect(document.documentElement.dataset.theme).toBe('dark');
+	});
+
+	it('stores the choice and writes data-theme when toggled', async () => {
+		stubDevice('light');
+		const { theme, toggleTheme } = await import('./ui');
+
+		toggleTheme();
+
+		expect(get(theme)).toBe('dark');
+		expect(localStorage.getItem('theme')).toBe('dark');
+		expect(document.documentElement.dataset.theme).toBe('dark');
+	});
 });

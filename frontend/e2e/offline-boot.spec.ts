@@ -16,34 +16,59 @@ async function offlineLook(page: Page) {
 		return {
 			displayFace: document.fonts.check('700 16px Oswald'),
 			bodyFace: document.fonts.check('400 16px "Open Sans"'),
-			background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+			background: getComputedStyle(document.documentElement).getPropertyValue('--bg').trim(),
+			primary: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
+			chosenTheme: document.documentElement.dataset.theme ?? null
 		};
 	});
 }
 
+const LOOKS = {
+	light: { background: '#f4f4f6', primary: '#d41a0a' },
+	dark: { background: '#0d0d0d', primary: '#ff3220' }
+} as const;
+
+type Scheme = keyof typeof LOOKS;
+
+/** The device's scheme and the person's stored choice (none, or the same or the other scheme) decide the look. */
+const THEME_CASES: ReadonlyArray<{ device: Scheme; choice: Scheme | null; shown: Scheme }> = [
+	{ device: 'light', choice: null, shown: 'light' },
+	{ device: 'dark', choice: null, shown: 'dark' },
+	{ device: 'dark', choice: 'light', shown: 'light' },
+	{ device: 'light', choice: 'dark', shown: 'dark' }
+];
+
 for (const address of ['root', 'album'] as const) {
-	test(`1160-F42-boot: an offline reload at the ${address} address shows the app's offline strip in the kit's faces and colours`, async ({
-		page,
-		context
-	}) => {
-		const path = address === 'root' ? HOME_PATH : `/album/${readSeededLibrary().songPhoneAlbumId}`;
-		await page.goto(path);
-		await waitForServiceWorkerControl(page);
-		await context.setOffline(true);
+	for (const { device, choice, shown } of THEME_CASES) {
+		test(`1160-F42-boot: an offline reload at the ${address} address on a ${device} device with ${choice ? `a stored ${choice} choice` : 'no choice'} shows the offline strip in the kit's faces and the ${shown} colours`, async ({
+			page,
+			context
+		}) => {
+			const path =
+				address === 'root' ? HOME_PATH : `/album/${readSeededLibrary().songPhoneAlbumId}`;
+			await page.emulateMedia({ colorScheme: device });
+			if (choice) {
+				await page.addInitScript((value) => localStorage.setItem('theme', value), choice);
+			}
+			await page.goto(path);
+			await waitForServiceWorkerControl(page);
+			await context.setOffline(true);
 
-		const response = await page.reload();
+			const response = await page.reload();
 
-		expect(response?.ok()).toBe(true);
-		expect(new URL(page.url()).pathname).toBe(path);
-		await expect(offlineStrip(page)).toBeVisible();
-		await expect
-			.poll(() => offlineLook(page))
-			.toEqual({
-				displayFace: true,
-				bodyFace: true,
-				background: '#0d0d0d'
-			});
-	});
+			expect(response?.ok()).toBe(true);
+			expect(new URL(page.url()).pathname).toBe(path);
+			await expect(offlineStrip(page)).toBeVisible();
+			await expect
+				.poll(() => offlineLook(page))
+				.toEqual({
+					displayFace: true,
+					bodyFace: true,
+					...LOOKS[shown],
+					chosenTheme: choice
+				});
+		});
+	}
 }
 
 test('1160-F42-boot: an online health navigation still shows the server response after installation', async ({

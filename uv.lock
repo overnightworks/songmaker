@@ -1061,10 +1061,10 @@ provides-extras = ["mcp-server"]
 
 [[package]]
 name = "overnightworks-appkit"
-version = "0.5.0"
-source = { url = "https://github.com/overnightworks/appkit/releases/download/v0.5.0/overnightworks_appkit-0.5.0-py3-none-any.whl" }
+version = "0.6.0"
+source = { url = "https://github.com/overnightworks/appkit/releases/download/v0.6.0/overnightworks_appkit-0.6.0-py3-none-any.whl" }
 wheels = [
-    { url = "https://github.com/overnightworks/appkit/releases/download/v0.5.0/overnightworks_appkit-0.5.0-py3-none-any.whl", hash = "sha256:7539a8a42d3e07aaf71e14fae63db0eb59806eb641c18c87abad5b67ea21ada1" },
+    { url = "https://github.com/overnightworks/appkit/releases/download/v0.6.0/overnightworks_appkit-0.6.0-py3-none-any.whl", hash = "sha256:ea6debbc632ae8f1b77966986b1f9036987571465ef0949bb1b29b898a7267fb" },
 ]
 
 [[package]]
@@ -1815,7 +1815,7 @@ requires-dist = [
 provides-extras = ["similarity", "scoring", "whisper", "server", "api", "image", "mcp", "agent-service", "acestep-worker", "dev"]
 
 [package.metadata.requires-dev]
-frontend = [{ name = "overnightworks-appkit", url = "https://github.com/overnightworks/appkit/releases/download/v0.5.0/overnightworks_appkit-0.5.0-py3-none-any.whl" }]
+frontend = [{ name = "overnightworks-appkit", url = "https://github.com/overnightworks/appkit/releases/download/v0.6.0/overnightworks_appkit-0.6.0-py3-none-any.whl" }]
 
 [[package]]
 name = "sortedcontainers"
