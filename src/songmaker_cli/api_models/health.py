@@ -8,6 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.health_types import (
     BackgroundLoopHealth,
     BackgroundLoopName,
@@ -34,6 +35,7 @@ class HealthSignals:
     claude_cli_tool_surface: ClaudeCliToolSurface
     codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth
     background_loops: Mapping[BackgroundLoopName, BackgroundLoopHealth]
+    release: ReleaseInfo
 
 
 class BackgroundLoopResponse(BaseModel):
@@ -88,6 +90,7 @@ class HealthResponse(BaseModel):
         "an earlier one. Before the boot report runs, it reports unverified."
     ))
     background_loops: dict[BackgroundLoopName, BackgroundLoopResponse]
+    release: ReleaseInfo
 
     @classmethod
     def from_signals(cls, signals: HealthSignals) -> HealthResponse:
@@ -124,4 +127,5 @@ class HealthResponse(BaseModel):
                 name: BackgroundLoopResponse.from_health(health)
                 for name, health in signals.background_loops.items()
             },
+            release=signals.release,
         )

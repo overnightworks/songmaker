@@ -48,6 +48,7 @@ class Checkout:
         self.origin = tmp_path / "origin.git"
         self.log_file = tmp_path / "journal.txt"
         self.docker_calls_file = tmp_path / "docker-calls.txt"
+        self.docker_release_env_file = tmp_path / "docker-release-env.txt"
         self.curl_calls_file = tmp_path / "curl-calls.txt"
         self.check_runs_file = tmp_path / "check-runs.txt"
         self.check_runs_raw_response_file = tmp_path / "check-runs-response.json"
@@ -256,6 +257,8 @@ class Checkout:
             self._bin / "docker",
             "#!/bin/bash\n"
             'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
+            'printf "%s\\t%s\\t%s\\n" "$*" "${SONGMAKER_RELEASE-}" "${SONGMAKER_COMMIT-}" '
+            '>> "$DOCKER_RELEASE_ENV_FILE"\n'
             + self._compose_config_quiet_stub()
             +
             'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--format" '
@@ -630,6 +633,7 @@ class Checkout:
                 "HOME": str(self.root.parent),
                 "LOG_CAPTURE_FILE": str(self.log_file),
                 "DOCKER_CALLS_FILE": str(self.docker_calls_file),
+                "DOCKER_RELEASE_ENV_FILE": str(self.docker_release_env_file),
                 "CURL_CALLS_FILE": str(self.curl_calls_file),
                 "GH_CHECK_RUNS_FILE": str(self.check_runs_file),
                 "GH_CHECK_RUNS_DIRECTORY": str(self.check_runs_directory),
@@ -706,6 +710,19 @@ class Checkout:
             call for call in self.docker_calls.splitlines()
             if "build" in call or call.startswith("compose up")
         ]
+
+    @property
+    def release_env_of_build_and_recreate_calls(self) -> dict[str, tuple[str, str]]:
+        """Per `compose build` / `compose up` call: the release and commit it ran with."""
+        lines = (
+            self.docker_release_env_file.read_text().splitlines()
+            if self.docker_release_env_file.exists() else []
+        )
+        recorded = (line.split("\t") for line in lines)
+        return {
+            call: (release, commit) for call, release, commit in recorded
+            if "build" in call or call.startswith("compose up")
+        }
 
     @property
     def docker_calls(self) -> str:

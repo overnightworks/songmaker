@@ -191,6 +191,7 @@ export function makeHealthResponse(overrides: Partial<HealthResponse> = {}): Hea
 			stale_job_reaper: { state: 'ok', consecutive_failures: 0, last_error: null },
 			provider_status_refresh: { state: 'ok', consecutive_failures: 0, last_error: null }
 		},
+		release: { tag: 'v2026.10.28.4', commit: 'a'.repeat(40) },
 		queue_depth_cap_reached: false,
 		music_queue_depth: 0,
 		scoring_queue_depth: 0,

@@ -33,7 +33,7 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.server import create_app, run_server
-from songmaker_cli.settings import get_settings
+from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
 _ADMIN_ID = "admin-user-id"
 _PROXY_NETWORK = "172.16.0.0/12"
@@ -1331,9 +1331,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(
-            username="admincap", role="admin",
-        )
+        admin = User(username="admincap", role="admin")
         session.add(admin)
         for _ in range(3):
             session.add(Job(type="generate", status="queued"))
@@ -1355,7 +1353,9 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", AsyncMock(return_value=0)),
         patch("songmaker_cli.settings.get_settings") as mock_settings,
     ):
-        mock_settings.return_value.max_queue_depth = 2
+        mock_settings.return_value.configure_mock(
+            max_queue_depth=2, songmaker_release=UNRELEASED_TAG, songmaker_commit=UNKNOWN_COMMIT,
+        )
         resp = client.get("/health")
     assert resp.status_code == 200
     assert resp.json()["queue_depth_cap_reached"] is True

@@ -80,6 +80,24 @@ def test_a_release_tag_deploys_its_commit_detached_and_the_journal_names_the_tag
     assert any(tag in line and commit in line for line in checkout.journal.splitlines())
 
 
+def test_the_tick_builds_and_recreates_with_the_release_tag_and_commit_it_deploys(
+    checkout: Checkout,
+) -> None:
+    """defect:#2009 -- compose build and compose up see the tag and its full commit."""
+
+    checkout.move_main_forward()
+    tag = "v2026.10.25.1"
+    commit = checkout.commit_of(tag)
+
+    result = checkout.tick()
+
+    runs = checkout.release_env_of_build_and_recreate_calls
+    assert result.returncode == 0
+    assert any("compose build" in call for call in runs)
+    assert any(call.startswith("compose up") for call in runs)
+    assert set(runs.values()) == {(tag, commit)}
+
+
 def test_untagged_commits_after_a_release_do_not_deploy(checkout: Checkout) -> None:
     """defect:#1880 cell T3 -- the tag's commit deploys, not the tip of main."""
 

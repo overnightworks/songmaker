@@ -1570,6 +1570,10 @@ if [[ -n "$ACESTEP_PIN" ]]; then
     checkout_acestep_pin "$ACESTEP_PIN"
 fi
 
+# compose build and compose up must see the same arguments, or up would
+# recreate the services with a configuration that differs from the image.
+export SONGMAKER_RELEASE="${RELEASE_TAG_OF[$DEPLOY_COMMIT]}" SONGMAKER_COMMIT="$DEPLOY_COMMIT"
+
 # The selected commit may require a variable the previous one did not; name
 # it before the base-image and compose builds rather than after them.
 compose_config_refusal "after checking out $DEPLOY_COMMIT"
