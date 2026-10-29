@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
+from support.migration_chain import is_on_the_single_chain
 
 MIGRATION = "songmaker_cli.db.migrations.versions.5b2e9d4a7c31_reference_recordings_are_records"
 PREVIOUS_REVISION = "c4e8a1f72d95"
@@ -84,11 +84,8 @@ def _insert_recording(connection, user_id="u1", storage_path="u1/refs/a.wav"):
 
 
 def test_the_migration_follows_the_coherence_verdict_revision_on_the_single_chain(migration):
-    scripts = ScriptDirectory.from_config(_alembic_config())
-    (head,) = scripts.get_heads()
-    ancestors = {script.revision for script in scripts.iterate_revisions(head, "base")}
     assert migration.down_revision == PREVIOUS_REVISION
-    assert migration.revision in ancestors
+    assert is_on_the_single_chain(migration.revision)
 
 
 def test_upgrade_creates_the_table_with_its_unique_and_foreign_key_constraints(
