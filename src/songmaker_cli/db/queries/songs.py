@@ -454,7 +454,7 @@ def restore_song(session: Session, song_id: str) -> Song:
         return song
     deleted_at = aware_timestamp(song.deleted_at)
     age = datetime.now(timezone.utc) - deleted_at
-    window = timedelta(days=get_settings().soft_delete_retention_days)
+    window = timedelta(days=get_settings().final_deletion_days)
     if age > window:
         raise RestoreWindowExpiredError(
             f"Song {song_id} was deleted {age.days} days ago, "
