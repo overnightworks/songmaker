@@ -1,3 +1,4 @@
+import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -22,8 +23,23 @@ function requireApiTargetForDevServer(): Plugin {
 	};
 }
 
+// Shared with vitest.config.ts so unit tests compile with the build's settings.
+export const sveltekitOptions: Parameters<typeof sveltekit>[0] = {
+	adapter: adapter({
+		pages: 'build',
+		assets: 'build',
+		fallback: 'index.html'
+	}),
+	serviceWorker: {
+		// Manual registration in +layout.svelte avoids CSP inline-script issues.
+		register: false
+	},
+	dynamicCompileOptions: ({ filename }) =>
+		filename.includes('node_modules') ? undefined : { runes: true }
+};
+
 export default defineConfig({
-	plugins: [requireApiTargetForDevServer(), sveltekit()],
+	plugins: [requireApiTargetForDevServer(), sveltekit(sveltekitOptions)],
 	build: {
 		assetsInlineLimit: keepFontsAsFiles
 	},
