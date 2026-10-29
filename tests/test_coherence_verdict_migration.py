@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
+from support.migration_chain import is_on_the_single_chain
 
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 
@@ -111,10 +111,9 @@ def _upgrade_with(database, migration, values, scorers=None):
     return before, _stored_text(engine)
 
 
-def test_the_migration_is_the_single_head_above_the_session_token_revision(migration):
-    config = _alembic_config()
+def test_the_migration_follows_the_session_token_revision_on_the_single_chain(migration):
     assert migration.down_revision == PREVIOUS_REVISION
-    assert ScriptDirectory.from_config(config).get_heads() == [migration.revision]
+    assert is_on_the_single_chain(migration.revision)
 
 
 def test_upgrade_deletes_both_keys_and_keeps_every_other_key(database, migration):

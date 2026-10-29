@@ -435,6 +435,27 @@ class User(Base):
     )
 
 
+REFERENCE_FILENAME_MAX_LENGTH: Final = 255
+
+
+class ReferenceRecording(Base):
+    """One uploaded reference audio file; the row, not the directory, is the owner's quota."""
+
+    __tablename__ = "reference_recordings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey(USERS_ID, ondelete="RESTRICT"), nullable=False, index=True,
+    )
+    storage_path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    original_filename: Mapped[str] = mapped_column(
+        String(REFERENCE_FILENAME_MAX_LENGTH), nullable=False,
+    )
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
+
+
 class ResourceEventCursor(Base):
     """Per-user allocator retained independently from delivered event history."""
 
