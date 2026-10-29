@@ -18,7 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Final, Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from acestep_engine.settings import EngineSettings
@@ -45,6 +45,14 @@ from songmaker_cli.constants import (
 
 # The web server's port: the CLI and server default, and the port of the back-channel Host.
 DEFAULT_SERVER_PORT: Final = 8080
+
+# What `/health` reports for an image built without the release build arguments.
+UNRELEASED_TAG: Final[str] = "unreleased"
+UNKNOWN_COMMIT: Final[str] = "unknown"
+_RELEASE_FIELD_DEFAULTS: Final = {
+    "songmaker_release": UNRELEASED_TAG,
+    "songmaker_commit": UNKNOWN_COMMIT,
+}
 
 
 @dataclass(frozen=True)
@@ -130,6 +138,14 @@ class Settings(BaseSettings):
     redis_url: str
     session_secret: SecretStr
     songmaker_internal_token: SecretStr
+
+    @field_validator("songmaker_release", "songmaker_commit", mode="before")
+    @classmethod
+    def blank_release_value_is_missing(cls, value: object, info: ValidationInfo) -> object:
+        """An unset build argument reaches the image as an empty ENV: that is "missing"."""
+        if isinstance(value, str) and not value.strip():
+            return _RELEASE_FIELD_DEFAULTS[info.field_name or ""]
+        return value
 
     @model_validator(mode="after")
     def validate_job_timeout_orders(self) -> Settings:
@@ -380,6 +396,10 @@ class Settings(BaseSettings):
     # launches the MCP server via --mcp-config. Identifies the acting
     # user so tool calls can run the same ownership checks as HTTP.
     songmaker_mcp_user_id: str | None = None
+
+    # ── Release (written into the image by the build arguments) ───────
+    songmaker_release: str = UNRELEASED_TAG
+    songmaker_commit: str = UNKNOWN_COMMIT
 
     # ── Filesystem roots (override via env for Docker volume mounts) ──
     audio_dir: str = "data/audio"

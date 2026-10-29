@@ -289,10 +289,9 @@ def _binds_loopback_only(host_ip: str) -> bool:
     return bool(host_ip) and ipaddress.ip_address(host_ip).is_loopback
 
 
-def _service_dockerfile(service_block: str) -> Path:
-    match = re.search(r"^      dockerfile: (.+)$", service_block, re.MULTILINE)
-    assert match, "service has no build dockerfile"
-    return Path(match.group(1))
+def _service_dockerfile(service: str) -> Path:
+    build = _raw_compose_services()[service]["build"]
+    return Path(build["dockerfile"])
 
 
 def _service_command(service_block: str) -> tuple[str, ...] | None:
@@ -448,7 +447,7 @@ def test_container_extras_match_every_uv_sync_line() -> None:
 def test_container_entrypoints_match_runtime_configuration() -> None:
     for spec in CONTAINERS.values():
         service_block = _compose_service_block(spec.compose_service)
-        assert _service_dockerfile(service_block) == spec.dockerfile
+        assert _service_dockerfile(spec.compose_service) == spec.dockerfile
         assert _service_command(service_block) == spec.command
 
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())

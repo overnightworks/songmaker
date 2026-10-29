@@ -64,6 +64,10 @@ RUN install -d -o songmaker -g songmaker /home/songmaker/.claude /home/songmaker
 # directory, which the app can never chown back under cap_drop: ALL.
 RUN mkdir -p /app/data/queue-streams /app/data/audio
 RUN chown -R songmaker:songmaker /app
+# After the last RUN so the node and uv layers stay cached across releases.
+ARG SONGMAKER_RELEASE
+ARG SONGMAKER_COMMIT
+ENV SONGMAKER_RELEASE=$SONGMAKER_RELEASE SONGMAKER_COMMIT=$SONGMAKER_COMMIT
 USER songmaker
 
 EXPOSE 8080

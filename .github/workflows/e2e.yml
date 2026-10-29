@@ -65,6 +65,7 @@ jobs:
           # so the address it's really reachable at is the same host:port
           # the smoke test and Playwright drive it through below.
           PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
+          SONGMAKER_COMMIT: ${{ github.sha }}
         run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-web
 
       - name: Smoke test
@@ -81,6 +82,13 @@ jobs:
           [ "$db_ok" = "ok" ] && [ "$redis_ok" = "ok" ] || {
             echo "expected db=ok redis=ok, got db=$db_ok redis=$redis_ok" >&2
             echo "$health" >&2
+            exit 1
+          }
+
+          # The image reports the commit it was built from.
+          release_commit="$(jq -r '.release.commit' <<<"$health")"
+          [ "$release_commit" = "$GITHUB_SHA" ] || {
+            echo "expected release.commit=$GITHUB_SHA, got $release_commit" >&2
             exit 1
           }
 
