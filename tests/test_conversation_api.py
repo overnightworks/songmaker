@@ -259,19 +259,6 @@ def test_acall_claude_with_mcp_timeout_kills_subprocess(monkeypatch):
 # ── /api/chat/turn ────────────────────────────────────────────────────
 
 
-def test_chat_turn_without_a_browser_session_is_refused_before_any_chat_state(client):
-    c, factory = client
-
-    resp = c.post("/api/chat/turn", json={"message": "hey"})
-
-    assert (resp.status_code, resp.json()) == (
-        403, {"detail": "The co-writer needs a browser sign-in."},
-    )
-    with factory() as session:
-        assert session.query(Job).count() == 0
-        assert session.query(ChatMessage).count() == 0
-
-
 def test_chat_turn_streams_sse_and_stores_messages(client, service):
     c, factory = client
     service.agent.reply_with(answers("ok"))

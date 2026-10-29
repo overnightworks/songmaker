@@ -33,7 +33,6 @@ from songmaker_cli.app_context import (
     parse_trusted_proxies,
 )
 from songmaker_cli.audio_paths import AudioPathRejectedError
-from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
     APP_NAME,
@@ -240,8 +239,7 @@ def create_app(
     #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
     #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
     #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   7. BearerGateMiddleware       -- only with TOKEN_CLIENTS: a verified token on a
-    #                                    person path is the person and skips CSRF
+    #   7. BearerGateMiddleware       -- with TOKEN_CLIENTS: a verified person-path token skips CSRF
     #   8. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
     #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
     #  10. AccessLogMiddleware        -- log all requests (after security checks)
@@ -269,16 +267,10 @@ def create_app(
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
     install_web_auth_middleware(
-        app,
-        security_headers=build_security_headers_policy(script_hashes),
-        body_size=build_body_size_policy(settings),
-        rate_limit=build_rate_limit_policy(settings),
+        app, security_headers=build_security_headers_policy(script_hashes),
+        body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
         csrf_origin=build_csrf_origin_policy(),
-        bearer_gate=build_bearer_gate(
-            settings,
-            app.state.oidc_sign_in,
-            DatabaseSignInTransaction(ctx.db),
-        ),
+        bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db),
     )
 
     app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.

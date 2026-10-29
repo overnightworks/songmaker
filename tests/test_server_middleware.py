@@ -292,23 +292,18 @@ def test_created_app_stacks_its_middleware_in_the_documented_security_order(
 def test_created_app_with_token_clients_puts_the_bearer_gate_between_rate_limit_and_csrf(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The enabled stack is the disabled one plus the bearer layer webauth inserts, nothing moved."""
+    """The enabled stack is the disabled one plus webauth's bearer layer, nothing moved."""
     from webauth.middleware.bearer_gate import BearerGateMiddleware
 
     from songmaker_cli.settings import get_settings
 
-    (tmp_path / "disabled").mkdir()
-    (tmp_path / "enabled").mkdir()
-    disabled, _ = make_test_app(tmp_path / "disabled")
+    disabled = [layer.cls for layer in make_test_app(tmp_path)[0].app.user_middleware]
     monkeypatch.setenv("TOKEN_CLIENTS", "hal")
     get_settings.cache_clear()
-    enabled, _ = make_test_app(tmp_path / "enabled")
+    enabled = [layer.cls for layer in make_test_app(tmp_path)[0].app.user_middleware]
 
-    layers = [layer.cls for layer in enabled.app.user_middleware]
-    assert layers.index(BearerGateMiddleware) == layers.index(IpRateLimitMiddleware) + 1
-    assert layers.index(CsrfOriginMiddleware) == layers.index(BearerGateMiddleware) + 1
-    layers.remove(BearerGateMiddleware)
-    assert layers == [layer.cls for layer in disabled.app.user_middleware]
+    assert enabled == [*disabled[:6], BearerGateMiddleware, *disabled[6:]]
+    assert disabled[5:7] == [IpRateLimitMiddleware, CsrfOriginMiddleware]
 
 
 @pytest.mark.parametrize(("outcome", "started"), [

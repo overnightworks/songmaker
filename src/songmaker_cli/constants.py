@@ -246,8 +246,6 @@ SESSION_ABSOLUTE_MAX_AGE_SECONDS_DEFAULT: Final = 30 * 24 * 60 * 60
 OIDC_LOGIN_GROUP: Final = "/apps/songmaker"
 OIDC_ADMIN_GROUP: Final = "/apps/songmaker/admin"
 OIDC_LEEWAY_SECONDS: Final = 30
-# Where a person's hal token is that person: the REST API and the take files it names.
-PERSON_PATH_PREFIXES: Final = ("/api/", "/audio/")
 OIDC_START_PATH: Final = "/login/oidc"
 OIDC_CALLBACK_PATH: Final = "/auth/callback"
 LOGOUT_PATH: Final = "/auth/logout"

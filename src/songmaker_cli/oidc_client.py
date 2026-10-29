@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Final, overload
 
 from fastapi import HTTPException
 from pydantic import SecretStr
@@ -21,23 +21,25 @@ from webauth.oidc_transport import post_token_request_over_https
 from webauth.policies import AuthorizedParties, PathRules
 
 from songmaker_cli.api_helpers import resolve_public_base_url
+from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import (
     OIDC_ADMIN_GROUP,
     OIDC_CALLBACK_PATH,
     OIDC_LEEWAY_SECONDS,
     OIDC_LOGIN_GROUP,
-    PERSON_PATH_PREFIXES,
     SIGNED_OUT_PATH,
 )
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from webauth.ports import SignInTransaction
+    from sqlalchemy.orm import Session, sessionmaker
 
     from songmaker_cli.settings import Settings
 
 _REALM_ENDPOINT_PREFIX = "protocol/openid-connect"
+# Where a person's hal token is that person: the REST API and the take files it names.
+PERSON_PATH_PREFIXES: Final = ("/api/", "/audio/")
 
 
 @overload
@@ -121,7 +123,7 @@ def build_oidc_sign_in(settings: Settings) -> OidcSignIn:
 def build_bearer_gate(
     settings: Settings,
     oidc_sign_in: OidcSignIn,
-    transaction: SignInTransaction,
+    database: sessionmaker[Session],
 ) -> BearerGate | None:
     """The gate that admits a person's token on the person paths; none while no client is named."""
     if not settings.token_client_ids:
@@ -131,5 +133,7 @@ def build_bearer_gate(
         relying_party=oidc_sign_in.relying_party,
         admission=oidc_sign_in.admission,
         authorized_parties=AuthorizedParties(settings.token_client_ids),
-        person_paths=PersonPaths(PathRules(prefixes=PERSON_PATH_PREFIXES), transaction),
+        person_paths=PersonPaths(
+            PathRules(prefixes=PERSON_PATH_PREFIXES), DatabaseSignInTransaction(database),
+        ),
     )

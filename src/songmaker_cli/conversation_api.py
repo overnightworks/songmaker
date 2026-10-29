@@ -534,8 +534,7 @@ def _sse_format(event: BaseModel) -> str:
     },
 )
 async def api_chat_turn(
-    req: ChatTurnV2Request,
-    request: Request,
+    req: ChatTurnV2Request, request: Request,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
@@ -545,8 +544,7 @@ async def api_chat_turn(
     prepared = _prepare_chat_turn(req, request, user, session)
     frames = _start_chat_turn(req, TurnCaller(request.app, session_id, user), prepared)
     return StreamingResponse(
-        frames.relay(),
-        media_type=SSE_MEDIA_TYPE,
+        frames.relay(), media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
