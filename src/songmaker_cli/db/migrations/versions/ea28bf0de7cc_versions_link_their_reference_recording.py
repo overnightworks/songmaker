@@ -127,9 +127,8 @@ def _strip_path_key(
     """
     for row_id, params in list(bind.execute(sa.select(table.c.id, table.c[column]))):
         if isinstance(params, dict) and PATH_KEY in params:
-            bind.execute(
-                sa.update(table).where(table.c.id == row_id).values({column: _without_path(params, emptied)})
-            )
+            stripped = _without_path(params, emptied)
+            bind.execute(sa.update(table).where(table.c.id == row_id).values({column: stripped}))
 
 
 def upgrade() -> None:
