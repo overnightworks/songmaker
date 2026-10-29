@@ -490,10 +490,18 @@ class Checkout:
         self._land(clone, release=release)
 
     def install_backup_command(self, exit_code: int) -> None:
-        """Stand in for `hal backup songmaker --pre-apply`, recording into the Docker call log."""
+        """Stand in for `hal backup songmaker --pre-apply`, recording into the Docker call log.
+
+        Like edge's launcher it needs `uv` on its PATH, and `uv` lives only in the
+        user's executables directory, which the harness PATH does not hold.
+        """
+        user_executables = self.root.parent / ".local" / "bin"
+        user_executables.mkdir(parents=True, exist_ok=True)
+        write_executable(user_executables / "uv", "#!/bin/bash\nexit 0\n")
         write_executable(
             self._hal_path,
             "#!/bin/bash\n"
+            "command -v uv >/dev/null || { echo 'uv: not found' >&2; exit 3; }\n"
             'printf "hal %s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
             f"exit {exit_code}\n",
         )

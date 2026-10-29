@@ -384,6 +384,21 @@ def test_a_release_that_changes_the_schema_is_backed_up_once_before_the_recreate
     assert _deployed_sha(checkout) == checkout.head
 
 
+def test_a_schema_changing_release_is_backed_up_when_uv_lives_only_in_the_user_executables(
+    checkout: Checkout,
+) -> None:
+    """defect:#2020 -- hal's launcher finds uv in ~/.local/bin, not on the unit's minimal PATH."""
+
+    checkout.install_backup_command(exit_code=0)
+    checkout.move_main_forward_with_migration("aaa111")
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.backup_calls == ["hal backup songmaker --pre-apply"]
+    assert _deployed_sha(checkout) == checkout.head
+
+
 def test_a_release_whose_tag_names_another_schema_than_the_running_one_is_backed_up(
     checkout: Checkout,
 ) -> None:

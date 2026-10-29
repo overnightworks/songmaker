@@ -168,7 +168,10 @@ BASE_IMAGE_INPUT_PATHS=(docker/base/ "$ACESTEP_SUBMODULE_PATH")
 # A release that changes the alembic head is backed up first by edge's backup
 # owner; systemd's minimal PATH does not reach it, so its path is configuration.
 MIGRATIONS_VERSIONS_PATH="src/songmaker_cli/db/migrations/versions"
-HAL_BINARY="${SONGMAKER_AUTODEPLOY_HAL:-${HOME:-}/.local/bin/hal}"
+# hal's launcher runs uv from the operator's executables directory, which the
+# unit's minimal PATH lacks.
+USER_EXECUTABLES_DIRECTORY="${HOME:-}/.local/bin"
+HAL_BINARY="${SONGMAKER_AUTODEPLOY_HAL:-$USER_EXECUTABLES_DIRECTORY/hal}"
 PROMETHEUS_CONFIG_FILE="monitoring/prometheus.yml"
 PROMETHEUS_RULE_FILE="monitoring/rules/alert.rules.yml"
 PROMETHEUS_LOADED_RULE_FILE="/etc/prometheus/rules/alert.rules.yml"
@@ -1212,7 +1215,7 @@ backup_before_schema_change() {
         fail_tick "backup command missing"
     fi
     log_info "release $release_tag may change the schema (running '${running_schema:-unknown}', release '${release_schema:-unknown}') — running hal backup songmaker --pre-apply"
-    if "$HAL_BINARY" backup songmaker --pre-apply; then
+    if PATH="$USER_EXECUTABLES_DIRECTORY:$PATH" "$HAL_BINARY" backup songmaker --pre-apply; then
         return 0
     else
         backup_exit_code=$?
