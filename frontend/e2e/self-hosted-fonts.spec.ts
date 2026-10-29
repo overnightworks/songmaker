@@ -113,15 +113,11 @@ test(
 	}
 );
 
-test(
-	'precached fonts are served as woff2',
-	{ tag: ONLY_IN_SHELL.desktop },
-	async ({ page }) => {
-		const fontPaths = await precachedFontPaths(page);
+test('precached fonts are served as woff2', { tag: ONLY_IN_SHELL.desktop }, async ({ page }) => {
+	const fontPaths = await precachedFontPaths(page);
 
-		expect(fontPaths.length).toBeGreaterThan(0);
-		const font = await page.request.get(fontPaths[0]);
-		expect(font.ok()).toBe(true);
-		expect(font.headers()['content-type']).toBe('font/woff2');
-	}
-);
+	expect(fontPaths.length).toBeGreaterThan(0);
+	const font = await page.request.get(fontPaths[0]);
+	expect(font.ok()).toBe(true);
+	expect(font.headers()['content-type']).toBe('font/woff2');
+});
