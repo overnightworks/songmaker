@@ -1,7 +1,0 @@
-claim_id = "3256d98e6b8a48dd9686fd4b73e3ba57"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "544da8c7a502bc2c040b069157b9036b4b2a3347"
-branch = "claude/issue-2034-the-cover-image-gate-test-reads-the-abor"
-scope = ["tests/test_cover_suggestion_job.py"]
-opened_commit = "83ea71709bbca018210c336c21eaf7ccece9d492"
