@@ -1294,6 +1294,7 @@ Moving scoring onto the GPU (`SCORING_DEVICE=cuda`) would put two containers on 
 - **No IP binding on sessions**: A stolen session cookie works from any IP. Songmaker stores no address or user agent per session; the session stays valid across mobile-network changes (#327).
 - **No MFA in songmaker**: second factors, if any, are Keycloak's. Acceptable for invite-only deployments.
 - **Worker control endpoints have no cooldown**: `POST /api/admin/workers/{id}/restart`, `POST /api/admin/workers/{id}/pin_model`, and `POST /api/admin/registry/{mode}/download` are not rate-limited. Repeated calls by a compromised admin could disrupt GPU workers or exhaust download bandwidth. Admin-only auth is the only gate.
+- **`/health` names the running release and commit** to an unauthenticated caller. Accepted under the single-user, single-node trust model: both values are non-secret and public in the repository's tags.
 - **`/metrics` endpoint is unauthenticated**: Exposes Prometheus metrics (request counts, latencies, queue depth, VRAM usage) without auth (`health_api.py:211-218`). The web container binds port 8080 to `127.0.0.1`, so the repository makes this endpoint host-local by default (`docker-compose.yml:89-90`); a public deployment needs a filtering layer in front of it, which this repository does not provide (#327).
 
 ## Hardening Roadmap (for public internet exposure)

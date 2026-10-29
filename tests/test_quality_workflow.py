@@ -78,6 +78,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
         ("#1914", "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1145"),
         ("#1958", "size baseline raises file_lines frontend/src/lib/api/types.ts 1139 -> 1140"),
         ("#1974", "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1141"),
+        ("#2009", "size baseline raises file_lines frontend/src/lib/api/types.ts 1121 -> 1127"),
     ]
     for entry in loosened:
         assert set(entry) == {"what", "item", "date", "reason"}
