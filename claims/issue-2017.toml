@@ -1,0 +1,8 @@
+claim_id = "aafc84248d8d4717be8fdd4e9eb45e8c"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "d19450c4e13df0269a9def9962d1be11fba80eb8"
+branch = "claude/issue-2017-cowriter-stores-coherence-verdict"
+scope = ["AGENTS.md", "docs/architecture.md", "docs/requirements/0004-co-writer.md", "docs/security.md", "legal/datenschutz.html", "scripts/generate_types.py", "src/songmaker_cli/agents/cowriter.md", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/mcp_server/tools.py", "tests/test_coherence_verdict_tool.py", "tests/test_cowriter_mcp_endpoint.py", "tests/test_cowriter_ownership.py", "tests/test_cowriter_tool_catalog.py", "tests/test_mcp_server.py", "tests/test_scoring_persistence.py"]
+opened_commit = "dae1685e2306c45f18f4b2e0e42a2a479464ba22"
+whole_reason = "One tool contract: the catalog entry, its body, the fresh locked merge it needs, the single owner of the stored key names, the agent file that selects it, and the privacy sentence that must be true at the merge; any half is a tool that cannot run, an unselected tool, lost concurrent scores, a second key literal, or untrue privacy text."
