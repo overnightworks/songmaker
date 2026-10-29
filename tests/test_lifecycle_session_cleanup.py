@@ -4,8 +4,8 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from conftest import TEST_SECRET
 from fastapi import FastAPI
+from support.web_app import TEST_SECRET
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db

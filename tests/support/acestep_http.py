@@ -7,9 +7,11 @@ import wave
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from http.client import HTTPResponse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 from threading import Thread
+from unittest.mock import MagicMock
 
 
 def audio_fixture() -> bytes:
@@ -86,3 +88,23 @@ def acestep_http(
         finally:
             server.shutdown()
             thread.join()
+
+
+def mock_http_response(data: bytes, status: int = 200) -> MagicMock:
+    """Build a mock urllib HTTPResponse for ACE-Step client tests.
+
+    Supports both full reads (``resp.read()``) and chunked reads
+    (``resp.read(n)``) so the same mock works with the deadline-based
+    chunked download in ``_download_audio``.
+    """
+    resp = MagicMock(spec=HTTPResponse)
+    resp.status = status
+    buf = BytesIO(data)
+
+    def _read(size: int = -1) -> bytes:
+        return buf.read(size) if size != -1 else buf.read()
+
+    resp.read = _read
+    resp.__enter__ = MagicMock(return_value=resp)
+    resp.__exit__ = MagicMock(return_value=False)
+    return resp

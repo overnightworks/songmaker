@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
-from fake_agent_service import CowriterStack, attach_cowriter_service
+from support.fake_agent_service import CowriterStack, attach_cowriter_service
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import JobType
 from songmaker_cli.db.engine import init_test_db as init_db

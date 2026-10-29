@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import NamedTuple
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import SongWorkKind
 from songmaker_cli.db.engine import init_test_db

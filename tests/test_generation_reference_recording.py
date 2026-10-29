@@ -8,19 +8,17 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-import test_jobs
+from support.generation_job_world import (
+    make_generation_dto,
+    patch_generation_dispatch,
+    run_async,
+)
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
 from songmaker_cli.config import save_generation_defaults
 from songmaker_cli.db.models import Generation, GenerationPreset, Version
 from songmaker_cli.db.queries.songs import update_song
 from songmaker_cli.jobs import run_generation_job
-
-db_factory = test_jobs.db_factory
-seeded_db = test_jobs.seeded_db
-_make_dto = test_jobs._make_dto
-_patch_dispatch_and_post_process = test_jobs._patch_dispatch_and_post_process
-_run = test_jobs._run
 
 REFERENCE_A = "u1/refs/aaaaaaaa-0000-0000-0000-000000000001.wav"
 REFERENCE_B = "u1/refs/bbbbbbbb-0000-0000-0000-000000000002.wav"
@@ -41,11 +39,11 @@ def _run_job(
     stored_global_defaults: bool = False,
     **task,
 ) -> None:
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto(seed=42))
     if stored_global_defaults:
         defaults = contextlib.nullcontext()
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",

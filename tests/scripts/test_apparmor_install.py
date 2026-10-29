@@ -17,15 +17,15 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from test_install_cli_credentials_mirror import (
+from support.codex_sandbox_proof import proof
+from support.install_script_fakes import (
     INHERITED_ENVIRONMENT,
     RECORDER,
-    REPO_ROOT,
-    _executable,
+    make_executable,
 )
-from test_prove_codex_image_sandbox import proof
+from support.repository_root import REPOSITORY_ROOT
 
-INSTALLER = REPO_ROOT / "scripts" / "apparmor" / "install_profile.sh"
+INSTALLER = REPOSITORY_ROOT / "scripts" / "apparmor" / "install_profile.sh"
 PROFILE = INSTALLER.parent / proof.DEFAULT_WEB_PROFILE
 A_STALE_COPY = b"profile songmaker-web { # rules from an older checkout\n}\n"
 A_LONG_AGO_NS = 1_600_000_000 * 10**9
@@ -130,9 +130,9 @@ def run_installer(tmp_path: Path):
     os.utime(source, ns=(A_LONG_AGO_NS, A_LONG_AGO_NS))
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
-    _executable(fake_bin / "id", FAKE_ID)
-    _executable(fake_bin / "apparmor_parser", FAKE_APPARMOR_PARSER)
-    _executable(fake_bin / "aa-status", FAKE_AA_STATUS)
+    make_executable(fake_bin / "id", FAKE_ID)
+    make_executable(fake_bin / "apparmor_parser", FAKE_APPARMOR_PARSER)
+    make_executable(fake_bin / "aa-status", FAKE_AA_STATUS)
     recording = tmp_path / "recording"
     recording.write_text("")
     installed_dir = tmp_path / "apparmor.d"

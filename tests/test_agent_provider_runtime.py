@@ -13,7 +13,7 @@ from agent_providers.config import (
     current_config,
     reset_config,
 )
-from conftest import make_test_app
+from support.web_app import make_test_app
 
 from songmaker_cli.agent_runtime import configure_agent_providers
 from songmaker_cli.constants import (

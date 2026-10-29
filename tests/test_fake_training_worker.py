@@ -10,8 +10,8 @@ from io import BytesIO
 from pathlib import Path
 
 import fakeredis.aioredis
-from conftest import make_test_app
 from fastapi.testclient import TestClient
+from support.web_app import make_test_app
 
 from acestep_worker.heartbeat import worker_state_key
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER

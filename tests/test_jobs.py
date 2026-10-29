@@ -6,13 +6,18 @@ import asyncio
 import inspect
 import json
 import os
-from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import fakeredis.aioredis
 import httpx
 import pytest
+from support.generation_job_world import (
+    make_generation_dto,
+    patch_generation_dispatch,
+    persist_via_post_process,
+    run_async,
+)
 from worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
@@ -30,14 +35,11 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
 )
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
-    Album,
     Generation,
     Job,
     ResourceEvent,
     Score,
-    Song,
     User,
     Version,
 )
@@ -55,14 +57,12 @@ from songmaker_cli.jobs import (
     _apply_repaint_overrides,
     _finalize_generation_job,
     _make_generation_progress_callback,
-    _persist_generation_row,
     _update_job,
     run_generation_job,
     run_scoring_job,
 )
 from songmaker_cli.jobs.generation import GenerationJobRequest, GenerationProgressTracker
 from songmaker_cli.scheduler import (
-    GenerationTaskResultDTO,
     WorkerTaskFailed,
 )
 from songmaker_cli.scoring.models import (
@@ -72,38 +72,6 @@ from songmaker_cli.scoring.models import (
     SongScores,
     TextAccuracyScore,
 )
-
-
-def _run(coro):
-    return asyncio.run(coro)
-
-
-def _make_dto(
-    seed: int = 42,
-    audio_path: str = "/tmp/fake.wav",
-    delivered_batch_size: int | None = None,
-) -> GenerationTaskResultDTO:
-    return GenerationTaskResultDTO(
-        mode="turbo",
-        audio_path=audio_path,
-        seed=seed,
-        cot_caption="",
-        cot_lyrics="",
-        delivered_batch_size=delivered_batch_size,
-    )
-
-
-def _persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
-    return _persist_generation_row(
-        db_factory=db_factory,
-        ctx=ctx,
-        generation_id=generation_id,
-        seed=kwargs.get("worker_seed", 0),
-        cot_caption=kwargs.get("worker_cot_caption", ""),
-        cot_lyrics=kwargs.get("worker_cot_lyrics", ""),
-        delivered_batch_size=kwargs.get("worker_delivered_batch_size"),
-        job_id=kwargs["job_id"],
-    )
 
 
 async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None:
@@ -123,53 +91,6 @@ async def _seed_healthy_worker(redis, db_factory, worker_id: str = "w1") -> None
         worker_state_key(worker_id),
         json.dumps({"gpu_healthy": True, "loaded": ["sft"]}),
     )
-
-
-@pytest.fixture
-def db_factory(tmp_path: Path):
-    factory = init_db(tmp_path / "test.db")
-    return factory
-
-
-@pytest.fixture
-def seeded_db(db_factory, tmp_path: Path):
-    with db_factory() as session:
-        session.add(User(id="u1", username="user1", role="user"))
-        session.flush()
-        session.add(Album(id="rock", title="Rock", artist="Band", created_by="u1"))
-        session.add(
-            Song(
-                id="s1",
-                title="Song One",
-                album_id="rock",
-                track_number=1,
-                vocal_language="en",
-            )
-        )
-        session.add(
-            Version(
-                id="v1",
-                song_id="s1",
-                version_number=1,
-                lyrics="Hello world",
-                prompt="rock style",
-                bpm=120,
-                audio_duration=60,
-                key_scale="Am",
-            )
-        )
-        session.add(Job(id="j1", type="generate", status="queued", user_id="u1"))
-        session.add(Job(id="j2", type="score", status="queued"))
-        session.commit()
-
-    mp3_dir = tmp_path / "audio" / "user1"
-    mp3_dir.mkdir(parents=True)
-    mp3 = mp3_dir / "g_seed42.mp3"
-    mp3.write_bytes(b"\xff\xfb\x90\x00" * 100)
-
-    (tmp_path / "data").mkdir(exist_ok=True)
-    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    return db_factory
 
 
 # ── _update_job ─────────────────────────────────────────────────────
@@ -210,33 +131,6 @@ def test_update_job_raises_after_retries(db_factory) -> None:
 # ── run_generation_job ──────────────────────────────────────────────
 
 
-def _patch_dispatch_and_post_process(dto_or_side_effect):
-    if isinstance(dto_or_side_effect, list):
-        dispatch = AsyncMock(side_effect=dto_or_side_effect)
-    elif callable(dto_or_side_effect) or isinstance(dto_or_side_effect, BaseException):
-        dispatch = AsyncMock(side_effect=dto_or_side_effect)
-    else:
-        dispatch = AsyncMock(return_value=dto_or_side_effect)
-
-    @contextmanager
-    def patch_dispatch():
-        with (
-            patch.multiple(
-                "songmaker_cli.jobs",
-                admit_generation_worker=AsyncMock(return_value=MagicMock(id="w1")),
-                dispatch_generation_on_worker=dispatch,
-            ),
-            patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
-        ):
-            yield
-
-    return (
-        patch_dispatch(),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-    )
-
-
 @pytest.mark.parametrize("count", [1, 2])
 def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> None:
     observed_takes = []
@@ -251,11 +145,11 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> Non
             job = get_job(session, "j1")
             observed_takes.append((job.take_index, job.take_count, job.progress))
             generation_starts.append(job.generation_started_at)
-        return _make_dto(seed=42)
+        return make_generation_dto(seed=42)
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
+    dispatch, post_process, defaults = patch_generation_dispatch(generate_take)
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -310,7 +204,7 @@ def test_generation_hold_defers_before_building_temporary_context(
         ),
         patch("songmaker_cli.jobs.generation._build_generation_context", build_context),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -421,7 +315,7 @@ def test_generation_request_roundtrip_and_requeue_preserve_values(
             decoded = deserialize_job(payload)
             assert decoded.function == JobFunction.GENERATE
             assert decoded.args == expected_args
-            _run(worker.generate({"redis": redis}, *decoded.args, **decoded.kwargs))
+            run_async(worker.generate({"redis": redis}, *decoded.args, **decoded.kwargs))
             queued = redis.enqueue_job.await_args.args
             assert queued[0] == JobFunction.GENERATE
             queued_args = queued[1:]
@@ -434,15 +328,15 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
     redis = MagicMock()
     redis.enqueue_job = AsyncMock()
     admitted = AsyncMock(side_effect=[AllWorkersHeld("held"), MagicMock(id="w1")])
-    dispatch = AsyncMock(return_value=_make_dto())
+    dispatch = AsyncMock(return_value=make_generation_dto())
     with (
         patch("songmaker_cli.jobs.admit_generation_worker", admitted),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
         patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
@@ -451,7 +345,7 @@ def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path)
         )
         with seeded_db() as session:
             assert get_job(session, "j1").queue_reason == "Waiting for LoRA training on this GPU."
-        _run(
+        run_async(
             run_generation_job(
                 "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
                 audio_dir=tmp_path / "audio", data_dir=tmp_path / "data", redis=redis,
@@ -476,12 +370,12 @@ def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_p
         await _seed_healthy_worker(redis, seeded_db)
         assert await reserve_gpu_hold(redis, "w1", "hold-token", 15)
 
-        dispatch = AsyncMock(return_value=_make_dto())
+        dispatch = AsyncMock(return_value=make_generation_dto())
         with (
             patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
             patch(
                 "songmaker_cli.jobs.post_process_generation",
-                side_effect=_persist_via_post_process,
+                side_effect=persist_via_post_process,
             ),
             patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         ):
@@ -505,7 +399,7 @@ def test_generation_reenters_after_an_actual_redis_hold_release(seeded_db, tmp_p
         dispatch.assert_awaited_once()
         assert await read_queue_depth(redis, "w1") == 0
 
-    _run(exercise())
+    run_async(exercise())
 
 
 def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
@@ -543,7 +437,7 @@ def test_generation_defers_when_lua_admit_loses_a_hold_race_before_running(
             assert job.status == "queued"
             assert job.queue_reason == "Waiting for LoRA training on this GPU."
 
-    _run(exercise())
+    run_async(exercise())
 
 
 def test_generation_job_persists_the_takes_own_measured_duration(
@@ -562,9 +456,9 @@ def test_generation_job_persists_the_takes_own_measured_duration(
 
     monkeypatch.setattr(audio_files, "read_audio_duration", _read)
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto(seed=42))
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -593,10 +487,10 @@ def test_generation_job_persists_the_takes_own_measured_duration(
 
 
 def test_generation_job_multiple_count(seeded_db, tmp_path: Path) -> None:
-    dtos = [_make_dto(seed=100 + i) for i in range(3)]
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(dtos)
+    dtos = [make_generation_dto(seed=100 + i) for i in range(3)]
+    dispatch, post_process, defaults = patch_generation_dispatch(dtos)
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -631,16 +525,16 @@ def test_generation_series_keeps_its_admission_until_the_third_take(
         takes += 1
         assert admitted.await_count == 1
         released.assert_not_awaited()
-        return _make_dto(seed=takes)
+        return make_generation_dto(seed=takes)
 
     with (
         patch("songmaker_cli.jobs.admit_generation_worker", admitted),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
         patch("songmaker_cli.jobs.generation.decr_queue_depth", released),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -677,13 +571,13 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
             take_count += 1
             assert await read_queue_depth(redis, "w1") == 1
             assert not await reserve_gpu_hold(redis, "w1", "training-token", 15)
-            return _make_dto(seed=take_count)
+            return make_generation_dto(seed=take_count)
 
         with (
             patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
             patch(
                 "songmaker_cli.jobs.post_process_generation",
-                side_effect=_persist_via_post_process,
+                side_effect=persist_via_post_process,
             ),
             patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
         ):
@@ -698,7 +592,7 @@ def test_generation_count_series_blocks_hold_reservation_until_final_cleanup(
         assert await reserve_gpu_hold(redis, "w1", "training-token", 15)
         assert await release_gpu_hold(redis, "w1", "training-token")
 
-    _run(exercise())
+    run_async(exercise())
 
 
 @pytest.mark.parametrize("outcome", ["cancel", "error", "timeout"])
@@ -713,7 +607,7 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
     async def dispatch(**kwargs):
         if outcome == "cancel":
             _cancel_job(seeded_db, "j1")
-            return _make_dto()
+            return make_generation_dto()
         if outcome == "timeout":
             raise asyncio.CancelledError()
         raise WorkerTaskFailed("worker failed")
@@ -741,14 +635,14 @@ def test_generation_series_releases_redis_occupancy_after_every_terminal_outcome
         assert await read_queue_depth(redis, "w1") == 0
         assert await reserve_gpu_hold(redis, "w1", "training-token", 15)
 
-    _run(exercise())
+    run_async(exercise())
 
 
 def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
-    side_effects = [_make_dto(seed=100), RuntimeError("GPU OOM"), RuntimeError("GPU OOM")]
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(side_effects)
+    side_effects = [make_generation_dto(seed=100), RuntimeError("GPU OOM"), RuntimeError("GPU OOM")]
+    dispatch, post_process, defaults = patch_generation_dispatch(side_effects)
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -783,7 +677,7 @@ def test_generation_job_song_not_found(seeded_db, tmp_path: Path) -> None:
         ),
         patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "nonexistent",
@@ -813,7 +707,7 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
         ),
         patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -855,7 +749,7 @@ def test_generation_job_rejects_foreign_reference_before_dispatch(
         patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -894,7 +788,7 @@ def test_generation_job_no_capacity(seeded_db, generation_worker_peer) -> None:
             await _run_peer_generation(seeded_db, peer, 1)
             assert peer.requests == []
 
-    _run(exercise())
+    run_async(exercise())
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
@@ -951,7 +845,7 @@ def test_generation_job_selects_musician_line(
             await _run_peer_generation(seeded_db, peer, completed + 1)
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
 
-    _run(exercise())
+    run_async(exercise())
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == ("partial" if completed else "failed")
@@ -1006,7 +900,7 @@ def test_generation_job_sanitizes_auto_load_response(
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
             assert peer.requests == [("load", "sft")]
 
-    _run(exercise())
+    run_async(exercise())
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
@@ -1033,7 +927,7 @@ def test_s5_generation_job_worker_disappears_before_request(
             assert await read_queue_depth(peer.redis, peer.settings.worker_id) == 0
             assert peer.requests == []
 
-    _run(exercise())
+    run_async(exercise())
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
@@ -1076,7 +970,7 @@ def test_s5_generation_job_reload_unavailable(
                 "load",
             ] + ([] if load_fails else ["submit"])
 
-    _run(exercise())
+    run_async(exercise())
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == ("partial" if completed else "failed")
@@ -1141,7 +1035,7 @@ def test_s8_take_outcomes(
                     task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
 
-    _run(exercise())
+    run_async(exercise())
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == status
@@ -1156,11 +1050,11 @@ def test_s8_take_outcomes(
 
 
 def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+    dispatch, post_process, defaults = patch_generation_dispatch(
         RuntimeError("GPU error"),
     )
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1193,14 +1087,14 @@ def test_generation_event_failure_rolls_back_generation(
             path = ctx.audio_dir / ctx.user_id / f"{generation_id}{suffix}"
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b"audio")
-        _persist_via_post_process(
+        persist_via_post_process(
             ctx=ctx,
             generation_id=generation_id,
             db_factory=db_factory,
             **kwargs,
         )
 
-    dispatch = AsyncMock(return_value=_make_dto())
+    dispatch = AsyncMock(return_value=make_generation_dto())
     with (
         patch(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
@@ -1214,7 +1108,7 @@ def test_generation_event_failure_rolls_back_generation(
             side_effect=RuntimeError("event write failed"),
         ),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1247,10 +1141,10 @@ def _healthy_scoring_redis() -> MagicMock:
 
 
 def test_generation_job_auto_scores_the_new_generation(seeded_db, tmp_path: Path) -> None:
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto(seed=42))
     redis = _healthy_scoring_redis()
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1285,9 +1179,9 @@ def test_generation_job_auto_score_is_not_counted_against_the_users_rate_limit(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto())
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1314,12 +1208,12 @@ def test_generation_job_marks_auto_score_failed_when_scoring_worker_is_down(
     seeded_db,
     tmp_path: Path,
 ) -> None:
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto())
     redis = MagicMock()
     redis.exists = AsyncMock(return_value=0)
     redis.enqueue_job = AsyncMock()
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1351,9 +1245,9 @@ def test_generation_job_version_gen_params_merged(seeded_db, tmp_path: Path) -> 
         ver.generation_params = {"inference_steps": 50, "shift": 2.0}
         session.commit()
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto())
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1386,9 +1280,9 @@ def test_generation_job_persists_requested_batch_size(seeded_db, tmp_path: Path)
         ver.generation_params = {"batch_size": 2}
         session.commit()
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto())
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1422,11 +1316,11 @@ def test_generation_job_persists_vram_guard_batch_reduction(seeded_db, tmp_path:
         ver.generation_params = {"batch_size": 2}
         session.commit()
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
-        _make_dto(delivered_batch_size=1),
+    dispatch, post_process, defaults = patch_generation_dispatch(
+        make_generation_dto(delivered_batch_size=1),
     )
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1463,11 +1357,11 @@ def test_generation_job_omits_delivered_batch_size_when_it_matches_requested(
         ver.generation_params = {"batch_size": 2}
         session.commit()
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
-        _make_dto(delivered_batch_size=2),
+    dispatch, post_process, defaults = patch_generation_dispatch(
+        make_generation_dto(delivered_batch_size=2),
     )
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1495,9 +1389,9 @@ def test_generation_job_omits_default_batch_size(seeded_db, tmp_path: Path) -> N
     be noise — matches the other resolved-default fields on this row
     (e.g. `use_cot_caption`), which stay absent unless they diverge.
     """
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto())
+    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto())
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1519,20 +1413,20 @@ def test_generation_job_omits_default_batch_size(seeded_db, tmp_path: Path) -> N
 
 
 def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> None:
-    dispatch = AsyncMock(return_value=_make_dto())
+    dispatch = AsyncMock(return_value=make_generation_dto())
     with (
         patch(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
         patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch(
             "songmaker_cli.jobs.load_generation_defaults",
             return_value={"sft": {"shift": 7.0}},
         ) as mock_load,
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1551,17 +1445,17 @@ def test_generation_job_global_defaults_loaded(seeded_db, tmp_path: Path) -> Non
 
 
 def test_generation_job_passes_target_model_to_dispatch(seeded_db, tmp_path: Path) -> None:
-    dispatch = AsyncMock(return_value=_make_dto())
+    dispatch = AsyncMock(return_value=make_generation_dto())
     with (
         patch(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
         ),
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
         patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=_persist_via_post_process),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1594,7 +1488,7 @@ def test_generation_job_queued_cancel_prevents_execution(seeded_db, tmp_path: Pa
         patch("songmaker_cli.jobs.dispatch_generation_on_worker", new_callable=AsyncMock) as run,
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1631,7 +1525,7 @@ def test_generation_job_cancelled_after_setup_does_not_dispatch_or_persist(
             _cancel_job(factory, job_id)
         return updated
 
-    dispatch = AsyncMock(return_value=_make_dto())
+    dispatch = AsyncMock(return_value=make_generation_dto())
     with (
         patch(
             "songmaker_cli.jobs.admit_generation_worker",
@@ -1642,7 +1536,7 @@ def test_generation_job_cancelled_after_setup_does_not_dispatch_or_persist(
         patch("songmaker_cli.jobs.generation._update_job", side_effect=mark_running_then_cancel),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1676,7 +1570,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
         session.commit()
 
     def persist_then_cancel(*, ctx, generation_id, db_factory, **kwargs):
-        result = _persist_via_post_process(
+        result = persist_via_post_process(
             ctx=ctx,
             generation_id=generation_id,
             db_factory=db_factory,
@@ -1685,7 +1579,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
         _cancel_job(db_factory, "j1")
         return result
 
-    dispatch = AsyncMock(side_effect=[_make_dto(seed=100 + i) for i in range(3)])
+    dispatch = AsyncMock(side_effect=[make_generation_dto(seed=100 + i) for i in range(3)])
     with (
         patch(
             "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
@@ -1695,7 +1589,7 @@ def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_
         patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_then_cancel),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1728,7 +1622,7 @@ def test_generation_job_cancel_after_worker_skips_persist(
 ) -> None:
     async def dispatch_then_cancel(**kwargs):
         _cancel_job(seeded_db, "j1")
-        return _make_dto(seed=7)
+        return make_generation_dto(seed=7)
 
     dispatch = AsyncMock(side_effect=dispatch_then_cancel)
     with (
@@ -1739,11 +1633,11 @@ def test_generation_job_cancel_after_worker_skips_persist(
         patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
         patch(
             "songmaker_cli.jobs.post_process_generation",
-            side_effect=_persist_via_post_process,
+            side_effect=persist_via_post_process,
         ) as post_process,
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1",
                 "s1",
@@ -1808,13 +1702,13 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
             progress = progress_from_result(item)
             kwargs["on_progress"](progress.phase, progress.fraction)
             observed.append(job_progress())
-        return _make_dto(seed=42)
+        return make_generation_dto(seed=42)
 
     def post_process_observing_progress(**kwargs):
         observed.append(job_progress())
-        return _persist_via_post_process(**kwargs)
+        return persist_via_post_process(**kwargs)
 
-    dispatch, _, defaults = _patch_dispatch_and_post_process(generate_take)
+    dispatch, _, defaults = patch_generation_dispatch(generate_take)
     with (
         dispatch,
         defaults,
@@ -1824,7 +1718,7 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
         ),
         patch("songmaker_cli.jobs.generation._PROGRESS_THROTTLE_SECONDS", 0.0),
     ):
-        _run(
+        run_async(
             run_generation_job(
                 "j1", "s1", "v1", count, "u1",
                 db_factory=seeded_db,
@@ -1865,11 +1759,11 @@ def _observe_job_while_acestep_reports(
             progress = progress_from_result(item)
             kwargs["on_progress"](progress.phase, progress.fraction)
             observe()
-        return _make_dto(seed=42)
+        return make_generation_dto(seed=42)
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
+    dispatch, post_process, defaults = patch_generation_dispatch(generate_take)
     with dispatch, post_process, defaults:
-        _run(
+        run_async(
             run_generation_job(
                 "j1", "s1", "v1", 1, "u1",
                 db_factory=seeded_db,
@@ -1955,7 +1849,7 @@ def test_s8_cancel_after_oom(seeded_db, generation_worker_peer, tmp_path):
                     task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
 
-    _run(exercise())
+    run_async(exercise())
 
 
 def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
@@ -2731,12 +2625,6 @@ def _seed_worker_row(factory, worker_id: str = "w1") -> None:
         session.commit()
 
 
-def _run(coro):
-    import asyncio
-
-    return asyncio.new_event_loop().run_until_complete(coro)
-
-
 def test_load_model_on_worker_success(seeded_db, internal_token: str) -> None:
     """1301-F10-FIXTURE: forward the configured internal token."""
     from unittest.mock import AsyncMock
@@ -2753,7 +2641,7 @@ def test_load_model_on_worker_success(seeded_db, internal_token: str) -> None:
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
+        run_async(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "w1-job")
@@ -2774,7 +2662,7 @@ def test_load_model_on_worker_unknown_worker(seeded_db) -> None:
         session.add(Job(id="job1", type="load_model_on_worker", status="queued"))
         session.commit()
 
-    _run(load_model_on_worker({}, "job1", "missing", "sft", db_factory=seeded_db))
+    run_async(load_model_on_worker({}, "job1", "missing", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "job1")
@@ -2799,7 +2687,7 @@ def test_load_model_on_worker_unreachable(seeded_db) -> None:
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
+        run_async(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "w1-job")
@@ -2825,7 +2713,7 @@ def test_load_model_on_worker_returns_5xx(seeded_db, response_format: str) -> No
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
+        run_async(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "w1-job")
@@ -2851,7 +2739,7 @@ def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, capl
     fake_client.__aexit__ = AsyncMock(return_value=False)
 
     with patch("httpx.AsyncClient", return_value=fake_client):
-        _run(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
+        run_async(load_model_on_worker({}, "w1-job", "w1", "sft", db_factory=seeded_db))
 
     assert "w1-job" in caplog.text
     assert long_tail in caplog.text
@@ -2913,7 +2801,7 @@ def test_download_model_on_worker_unknown_mode(seeded_db) -> None:
 
     _seed_download_job(seeded_db, "dl1")
     redis = _FakeRedis()
-    _run(download_model_on_worker({"redis": redis}, "dl1", "ghost", db_factory=seeded_db))
+    run_async(download_model_on_worker({"redis": redis}, "dl1", "ghost", db_factory=seeded_db))
 
     with seeded_db() as session:
         job = get_job(session, "dl1")
@@ -2926,7 +2814,9 @@ def test_download_model_on_worker_no_online_workers(seeded_db) -> None:
 
     _seed_download_job(seeded_db, "dl2")
     redis = _FakeRedis()
-    _run(download_model_on_worker({"redis": redis}, "dl2", "sft", db_factory=seeded_db))
+    run_async(download_model_on_worker(
+        {"redis": redis}, "dl2", "sft", db_factory=seeded_db,
+    ))
 
     with seeded_db() as session:
         job = get_job(session, "dl2")
@@ -2953,7 +2843,9 @@ def test_download_model_on_worker_unreachable(seeded_db) -> None:
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl3", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl3", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl3")
@@ -2979,7 +2871,9 @@ def test_download_model_on_worker_returns_5xx(seeded_db) -> None:
     with (
         patch("httpx.AsyncClient", return_value=fake_client),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl4", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl4", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl4")
@@ -3017,7 +2911,9 @@ def test_download_model_on_worker_happy_path(seeded_db, internal_token: str) -> 
         patch("httpx.AsyncClient", return_value=fake_client),
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl5", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl5", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl5")
@@ -3066,7 +2962,9 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl6", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl6", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl6")
@@ -3104,7 +3002,9 @@ def test_download_model_on_worker_sse_transport_error(seeded_db) -> None:
             new=transport_drop,
         ),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl7", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl7", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl7")
@@ -3137,7 +3037,9 @@ def test_download_model_on_worker_clears_redis_flag_on_success(seeded_db) -> Non
         patch("httpx.AsyncClient", return_value=fake_client),
         patch("songmaker_cli.scheduler.consume_download_task_stream", new=fake_consume),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl8", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl8", "sft", db_factory=seeded_db,
+        ))
 
     assert download_key("sft") not in redis.store
 
@@ -3149,7 +3051,11 @@ def test_download_model_on_worker_clears_redis_flag_on_failure(seeded_db) -> Non
     _seed_download_job(seeded_db, "dl9")
     redis = _FakeRedis()
 
-    _run(download_model_on_worker({"redis": redis}, "dl9", "sft", db_factory=seeded_db))
+    run_async(download_model_on_worker(
+
+        {"redis": redis}, "dl9", "sft", db_factory=seeded_db,
+
+    ))
 
     assert download_key("sft") not in redis.store
 
@@ -3163,7 +3069,11 @@ def test_download_model_on_worker_aborts_when_flag_already_set(seeded_db) -> Non
     redis = _FakeRedis()
     redis.store[download_key("sft")] = "previous-job"
 
-    _run(download_model_on_worker({"redis": redis}, "dl10", "sft", db_factory=seeded_db))
+    run_async(download_model_on_worker(
+
+        {"redis": redis}, "dl10", "sft", db_factory=seeded_db,
+
+    ))
 
     with seeded_db() as session:
         job = get_job(session, "dl10")
@@ -3209,7 +3119,9 @@ def test_download_retries_on_worker_task_failed_then_succeeds(seeded_db) -> None
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-retry-1", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl-retry-1", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl-retry-1")
@@ -3253,7 +3165,9 @@ def test_download_retries_on_sse_drop_then_succeeds(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-retry-2", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl-retry-2", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl-retry-2")
@@ -3293,7 +3207,9 @@ def test_download_does_not_retry_on_connect_error(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-noretry", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl-noretry", "sft", db_factory=seeded_db,
+        ))
 
     with seeded_db() as session:
         job = get_job(session, "dl-noretry")
@@ -3335,7 +3251,9 @@ def test_download_redis_flag_held_across_retries(seeded_db) -> None:
         ),
         patch("songmaker_cli.jobs.asyncio.sleep", new=_instant_sleep),
     ):
-        _run(download_model_on_worker({"redis": redis}, "dl-flag", "sft", db_factory=seeded_db))
+        run_async(download_model_on_worker(
+            {"redis": redis}, "dl-flag", "sft", db_factory=seeded_db,
+        ))
 
     assert seen_during_retries == [True, True, True]
     assert flag_key not in redis.store

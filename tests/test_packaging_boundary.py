@@ -18,7 +18,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import REPOSITORY_ROOT, run_compose_config
+from support.compose_config import run_compose_config
+from support.repository_root import REPOSITORY_ROOT
 
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
 DOCKER_ROOT = REPOSITORY_ROOT / "docker"

@@ -8,7 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import (
+from fastapi.testclient import TestClient
+from PIL import Image
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+from support.web_app import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
@@ -16,10 +20,6 @@ from conftest import (
     seed_session,
     web_client,
 )
-from fastapi.testclient import TestClient
-from PIL import Image
-from sqlalchemy import event
-from sqlalchemy.orm import Session
 
 from songmaker_cli.api_helpers import slugify
 from songmaker_cli.constants import (

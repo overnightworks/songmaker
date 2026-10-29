@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.constants import JOB_ERROR_USER_LORA_UNAVAILABLE, LoraStatus

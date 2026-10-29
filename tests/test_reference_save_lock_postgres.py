@@ -6,7 +6,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app, seed_session
 from httpx import Response
 from postgres_lock_harness import (
     WAIT_SECONDS,
@@ -15,6 +14,7 @@ from postgres_lock_harness import (
     race,
     stop_workers,
 )
+from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User, Version

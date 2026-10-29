@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from conftest import run_compose_config
+from support.compose_config import run_compose_config
 
 from acestep_worker.settings import WorkerSettings
 from songmaker_cli.constants import GENERATE_LOAD_MODEL_TIMEOUT_SECONDS

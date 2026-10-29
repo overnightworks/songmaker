@@ -347,7 +347,8 @@ tests/
 
 tests/acestep_engine/              ACE-Step client, progress and training client
 tests/audio_engine/                Audio I/O and mastering
-tests/support/                     Shared test helpers (the ACE-Step HTTP boundary)
+tests/support/                     Shared test helpers and pytest plugins; tests import them
+                                   as `support.<module>`, never from `conftest`
 
 tests/acestep_worker/
 ├── test_downloads.py
@@ -439,14 +440,14 @@ The backend CI job compares both counts with `scripts/test_helper_ratchet.txt`;
 a growth fails, including with `--update`. After consolidation, run
 `scripts/test_helper_ratchet.sh --update` to commit the smaller baseline; normal
 checks never rewrite it. Router-only API tests use `make_router_ctx` from
-`tests/conftest.py` to prepare a context with an optional database and seed callback,
-then `make_router_app(ctx, user=...)` to mount the router. `make_authenticated_user`
+`tests/support/web_app.py` to prepare a context with an optional database and seed callback,
+then `make_router_app(ctx, user=...)` to mount the router. `make_authenticated_user` (`tests/support/accounts.py`)
 builds active users with an explicit ID and optional role and username. Full
 middleware and lifecycle tests continue to use `make_test_app`.
 
 ### Python
 
-- **Real SQLite** for DB tests (`tmp_path` per test, `seeded_db` fixture in `conftest.py`)
+- **Real SQLite** for DB tests (`tmp_path` per test, `seeded_db` fixture in `tests/support/generation_job_world.py`)
 - **Synthesized audio** for mastering/scoring tests (sine waves via numpy)
 - **Mock external services**: scheduler dispatch, Whisper model, Claude API, ffmpeg
 - **Patch at the import location**, not the source: `patch("songmaker_cli.jobs.dispatch_generation_on_worker")`

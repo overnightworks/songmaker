@@ -8,14 +8,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from conftest import (
-    make_authenticated_user,
-    make_router_app,
-    make_router_ctx,
-    seed_user,
-    web_client,
-)
-from fake_agent_service import (
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
+from support.fake_agent_service import (
     CowriterStack,
     answers,
     attach_cowriter_service,
@@ -24,8 +19,13 @@ from fake_agent_service import (
     signed_in_request,
     streams,
 )
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session, sessionmaker
+from support.web_app import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    seed_user,
+    web_client,
+)
 
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE
 from songmaker_cli.cowriter import service_runs
@@ -406,7 +406,7 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
     tmp_path, mock_arq_pool, chat_job_status,
 ):
     """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
-    from conftest import make_test_app, seed_session
+    from support.web_app import make_test_app, seed_session
 
     def _seed_a_turn_the_restart_interrupted(session) -> None:
         musician = seed_user(session, "musician", role="user")

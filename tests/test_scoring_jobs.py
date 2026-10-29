@@ -8,9 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import (
-    override_provider_runtime,
-)
+from support.provider_runtime import override_provider_runtime
 
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Job, Song, User, Version

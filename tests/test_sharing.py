@@ -10,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import (
+from fastapi.testclient import TestClient
+from sqlalchemy import event
+from support.web_app import (
     TEST_ORIGIN,
     TEST_SECRET,
     make_fake_redis,
@@ -19,8 +21,6 @@ from conftest import (
     seed_user,
     web_client,
 )
-from fastapi.testclient import TestClient
-from sqlalchemy import event
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.api_models.playlists import SharedPlaylistEntryResponse

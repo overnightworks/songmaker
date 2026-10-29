@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from support.web_app import TEST_SECRET, make_fake_redis
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (

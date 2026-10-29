@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app, seed_session
+from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User
@@ -83,7 +83,7 @@ def test_rejects_symlink_outside_owner_root(tmp_path: Path, operation: str) -> N
                 f"user-a/{REFERENCE_AUDIO_DIR}/alias.wav",
             )
     else:
-        from conftest import make_router_ctx
+        from support.web_app import make_router_ctx
 
         from songmaker_cli.reference_audio import ReferenceAudioStorageError, store_reference_audio
         from songmaker_cli.settings import Settings
@@ -164,7 +164,7 @@ def test_admission_rejects_unsafe_owner_inventory(tmp_path, entry_kind):
     """1301-F3-Q-PATH: issue criterion evidence."""
     import os
 
-    from conftest import make_router_ctx
+    from support.web_app import make_router_ctx
 
     from songmaker_cli.reference_audio import (
         ReferenceAudioStorageError,
@@ -202,7 +202,7 @@ def test_admission_rejects_unsafe_owner_inventory(tmp_path, entry_kind):
 
 
 def test_missing_reference_owner_is_refused_before_directory_creation(tmp_path):
-    from conftest import make_router_ctx
+    from support.web_app import make_router_ctx
 
     from songmaker_cli.reference_audio import ReferenceAudioStorageError, store_reference_audio
     from songmaker_cli.settings import Settings

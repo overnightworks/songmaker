@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import make_authenticated_user, make_test_app, seed_session
 from postgres_lock_harness import race
+from support.web_app import make_authenticated_user, make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User, Version

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from conftest import make_test_app
+from support.web_app import make_test_app
 
 
 def test_the_removed_offer_path_answers_404(tmp_path):

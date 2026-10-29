@@ -10,10 +10,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis, make_test_app, seed_user, web_client
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event as sqlalchemy_event
+from support.web_app import TEST_SECRET, make_fake_redis, make_test_app, seed_user, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 
 import songmaker_cli.middleware.resource_stream_deadline as deadline_middleware

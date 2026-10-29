@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from conftest import make_test_app, web_client
 from fake_oidc_issuer import Person, a_fake_issuer
 from httpx import Response
-from oidc_world import World
 from postgres_lock_harness import (
     WAIT_SECONDS,
     CommitPause,
@@ -17,6 +15,8 @@ from postgres_lock_harness import (
 from psycopg2.errors import LockNotAvailable
 from sqlalchemy import event, text
 from sqlalchemy.exc import OperationalError
+from support.oidc_world import World
+from support.web_app import make_test_app, web_client
 
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive
 from songmaker_cli.auth_api import backchannel_logout_host

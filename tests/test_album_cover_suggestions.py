@@ -7,7 +7,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import (
+from fastapi.testclient import TestClient
+from PIL import Image
+from support.web_app import (
     make_authenticated_user,
     make_router_app,
     make_router_ctx,
@@ -15,8 +17,6 @@ from conftest import (
     seed_session,
     web_client,
 )
-from fastapi.testclient import TestClient
-from PIL import Image
 from webauth.ports import AuthenticatedUser
 from xmp_packet import read_digital_source_type
 

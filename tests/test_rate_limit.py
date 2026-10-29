@@ -9,8 +9,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_test_app, seed_user, web_client
 from fastapi.testclient import TestClient
+from support.web_app import make_test_app, seed_user, web_client
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.proxies import TrustedProxies
 
@@ -67,7 +67,7 @@ def _login_as(client: TestClient, role: str) -> None:
         if album and not album.created_by:
             album.created_by = user.id
         session.commit()
-    from conftest import seed_session
+    from support.web_app import seed_session
     seed_session(client, f"test_{role}")
 
 
@@ -535,7 +535,7 @@ def shared_slug_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, str]:
         album = session.query(Album).filter_by(id="shared_album").first()
         album.created_by = admin.id
         session.commit()
-    from conftest import seed_session
+    from support.web_app import seed_session
     seed_session(client, "admin")
     slug = client.post("/api/albums/shared_album/share").json()["share_slug"]
     client.cookies.clear()

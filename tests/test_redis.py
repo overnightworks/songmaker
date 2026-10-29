@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
-from conftest import TEST_SECRET, web_client
+from support.web_app import TEST_SECRET, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -126,7 +126,7 @@ def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis, mock_ar
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import seed_session
+    from support.web_app import seed_session
     seed_session(client, "admin")
     for _ in range(5):
         resp = client.get("/api/songs")
@@ -178,7 +178,7 @@ def test_ip_rate_limit_middleware_writes_to_redis(
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import seed_session
+    from support.web_app import seed_session
     seed_session(client, "admin")
     client.get("/api/songs")
     keys = [k for k in fake_redis.keys() if k.startswith(REDIS_RL_IP_PREFIX)]

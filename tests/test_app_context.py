@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from support.web_app import TEST_SECRET, make_fake_redis
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import (

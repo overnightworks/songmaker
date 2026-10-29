@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app
 from fastapi.testclient import TestClient
+from support.web_app import make_test_app
 
 from songmaker_cli.db.queries.workers import get_worker_identity, list_worker_identities
 

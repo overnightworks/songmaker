@@ -7,14 +7,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from test_install_cli_credentials_mirror import (
+from support.install_script_fakes import (
     FAKE_SUDO,
     FAKE_SYSTEMCTL,
     INHERITED_ENVIRONMENT,
-    REPO_ROOT,
-    _executable,
-    _linked_worktree_of,
+    linked_worktree_of,
+    make_executable,
 )
+from support.repository_root import REPOSITORY_ROOT
 
 AUTOSTART_FILES = (
     "agent_cli_paths.sh",
@@ -34,7 +34,7 @@ def run_autostart(tmp_path: Path):
     scripts = checkout / "scripts"
     scripts.mkdir(parents=True)
     for name in AUTOSTART_FILES:
-        source = REPO_ROOT / "scripts" / name
+        source = REPOSITORY_ROOT / "scripts" / name
         target = scripts / name
         target.write_bytes(source.read_bytes())
         target.chmod(source.stat().st_mode)
@@ -42,8 +42,8 @@ def run_autostart(tmp_path: Path):
 
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
-    _executable(fake_bin / "sudo", FAKE_SUDO)
-    _executable(fake_bin / "systemctl", FAKE_SYSTEMCTL)
+    make_executable(fake_bin / "sudo", FAKE_SUDO)
+    make_executable(fake_bin / "systemctl", FAKE_SYSTEMCTL)
     units = tmp_path / "systemd"
     units.mkdir()
     recording = tmp_path / "recording"
@@ -98,7 +98,7 @@ def run_autostart(tmp_path: Path):
 
 
 def test_installer_refuses_a_linked_worktree(run_autostart, tmp_path: Path) -> None:
-    linked = _linked_worktree_of(run_autostart.checkout, tmp_path)
+    linked = linked_worktree_of(run_autostart.checkout, tmp_path)
 
     result = run_autostart(from_checkout=linked)
 

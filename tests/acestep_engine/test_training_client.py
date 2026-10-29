@@ -6,7 +6,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from conftest import mock_http_response
+from support.acestep_http import mock_http_response
 
 from acestep_engine.models import LoraTrainingConfig
 from acestep_engine.training_client import (

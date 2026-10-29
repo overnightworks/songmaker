@@ -12,16 +12,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import (
-    TEST_CLIENT_SECRET,
-    TEST_ORIGIN,
-    make_test_app,
-    seed_session,
-    web_client,
-)
 from fake_oidc_issuer import Person
 from httpx import Response
-from oidc_world import World
+from support.oidc_client import TEST_CLIENT_SECRET
+from support.oidc_world import World
+from support.web_app import TEST_ORIGIN, make_test_app, seed_session, web_client
 
 from songmaker_cli.auth_api import LOGOUT_BUTTON_LABEL
 from songmaker_cli.db.models import USERNAME_MAX_LENGTH, AuditLog, UserSession
@@ -720,7 +715,7 @@ def test_a_cookie_signed_the_old_way_is_refused_even_for_a_live_session(world: W
     import hashlib
     import hmac
 
-    from conftest import TEST_SECRET
+    from support.web_app import TEST_SECRET
 
     world.sign_in(_member())
     with world.factory() as session:

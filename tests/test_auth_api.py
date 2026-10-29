@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app, seed_session, seed_user
 from fastapi.testclient import TestClient
+from support.web_app import make_test_app, seed_session, seed_user
 from webauth.config import installed_web_auth_config
 
 from songmaker_cli.db.models import UserSession

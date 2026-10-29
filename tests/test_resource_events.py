@@ -9,9 +9,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from conftest import seed_user
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.web_app import seed_user
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import ResourceEventKind, ResourceType

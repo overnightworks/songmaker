@@ -1,7 +1,7 @@
 """Generate failure ownership without worker or database dependencies."""
 
 import pytest
-from conftest import GENERATION_SETUP_MESSAGES, OTHER_GENERATION_ERROR_TYPES
+from support.generation_failures import GENERATION_SETUP_MESSAGES, OTHER_GENERATION_ERROR_TYPES
 
 from songmaker_cli.jobs._runtime import GenerationSetupError
 from songmaker_cli.jobs.generation_failure import (

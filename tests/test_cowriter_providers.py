@@ -14,18 +14,10 @@ from agent_providers.errors import (
     normalize_route_failure,
 )
 from agent_providers.process import LOGGED_OUT, CliLogin, GrokCliStatus
-from conftest import (
-    TEST_SECRET,
-    make_authenticated_user,
-    make_router_app,
-    make_router_ctx,
-    make_test_app,
-    override_provider_runtime,
-    refresh_provider_snapshots,
-    seed_user,
-    web_client,
-)
-from fake_agent_service import attach_cowriter_service
+from support.admin_client import build_admin_client
+from support.fake_agent_service import attach_cowriter_service
+from support.provider_runtime import override_provider_runtime, refresh_provider_snapshots
+from support.web_app import TEST_SECRET, make_authenticated_user, make_test_app, seed_user
 
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -35,7 +27,6 @@ from songmaker_cli.constants import (
     SETTING_COVER_ROUTE,
 )
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
-from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
@@ -99,14 +90,13 @@ def admin_client(tmp_path: Path, monkeypatch):
         "agent_providers.catalog.list_provider_models",
         lambda provider, _route: list(LIVE_CATALOG[provider]),
     )
-    factory = init_db(tmp_path / "cowriter.db")
-    with factory() as session:
-        _seed(session, "u-test")
-    app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
-        user=make_authenticated_user("u-test", role="admin", username="u-u-test"),
+    return build_admin_client(
+        tmp_path,
+        lambda session: _seed(session, "u-test"),
+        user_id="u-test",
+        username="u-u-test",
+        database_name="cowriter.db",
     )
-    return web_client(app), factory
 
 
 def _stored_choice_rows(factory) -> dict[str, str | None]:

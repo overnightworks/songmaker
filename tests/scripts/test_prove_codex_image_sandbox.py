@@ -1,24 +1,15 @@
 from __future__ import annotations
 
-import importlib.util
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+from support.codex_sandbox_proof import proof
+from support.repository_root import REPOSITORY_ROOT
 
-_REPOSITORY_ROOT = Path(__file__).parents[2]
-_SCRIPT_PATH = _REPOSITORY_ROOT / "scripts" / "prove_codex_image_sandbox.py"
-_SPEC = importlib.util.spec_from_file_location("prove_codex_image_sandbox", _SCRIPT_PATH)
-assert _SPEC is not None
-assert _SPEC.loader is not None
-proof = importlib.util.module_from_spec(_SPEC)
-sys.modules[_SPEC.name] = proof
-_SPEC.loader.exec_module(proof)
-
-_PROFILE_PATH = _REPOSITORY_ROOT / "scripts" / "apparmor" / proof.DEFAULT_WEB_PROFILE
+_PROFILE_PATH = REPOSITORY_ROOT / "scripts" / "apparmor" / proof.DEFAULT_WEB_PROFILE
 AN_EMBEDDING_PROFILE = "another-host-web"
 
 
@@ -262,7 +253,7 @@ def test_the_profile_name_defaults_agree_across_the_deployment() -> None:
     service never asks for. That the installer installs this same profile
     when given no name is driven in tests/scripts/test_apparmor_install.py.
     """
-    compose = (_REPOSITORY_ROOT / "docker-compose.yml").read_text()
+    compose = (REPOSITORY_ROOT / "docker-compose.yml").read_text()
 
     assert f"apparmor=${{SONGMAKER_APPARMOR_PROFILE:-{proof.DEFAULT_WEB_PROFILE}}}" in compose
     assert _PROFILE_PATH.is_file()

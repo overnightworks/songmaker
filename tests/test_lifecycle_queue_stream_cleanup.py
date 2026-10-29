@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis
+from support.web_app import TEST_SECRET, make_fake_redis
 
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.queue_streams as queue_streams
