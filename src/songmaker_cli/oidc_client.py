@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, overload
+from typing import TYPE_CHECKING, overload
 
 from fastapi import HTTPException
 from pydantic import SecretStr
@@ -29,6 +29,7 @@ from songmaker_cli.constants import (
     OIDC_LOGIN_GROUP,
     SIGNED_OUT_PATH,
 )
+from songmaker_cli.request_policies import API_PATH_PREFIX, MEDIA_PATH_PREFIX
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,8 +39,6 @@ if TYPE_CHECKING:
     from songmaker_cli.settings import Settings
 
 _REALM_ENDPOINT_PREFIX = "protocol/openid-connect"
-# Where a person's hal token is that person: the REST API and the take files it names.
-PERSON_PATH_PREFIXES: Final = ("/api/", "/audio/")
 
 
 @overload
@@ -134,6 +133,7 @@ def build_bearer_gate(
         admission=oidc_sign_in.admission,
         authorized_parties=AuthorizedParties(settings.token_client_ids),
         person_paths=PersonPaths(
-            PathRules(prefixes=PERSON_PATH_PREFIXES), DatabaseSignInTransaction(database),
+            PathRules(prefixes=(API_PATH_PREFIX, MEDIA_PATH_PREFIX)),
+            DatabaseSignInTransaction(database),
         ),
     )
