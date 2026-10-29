@@ -41,7 +41,7 @@ songmaker_cli/conversation_api.py:api_new_conversation # HTTP dispatcher: router
 songmaker_cli/conversation_api.py:api_put_album_memory # HTTP dispatcher: router.put('/memory/albums/{album_id}')
 songmaker_cli/conversation_api.py:api_put_song_memory # HTTP dispatcher: router.put('/memory/songs/{song_id}')
 songmaker_cli/conversation_api.py:api_put_user_memory # HTTP dispatcher: router.put('/memory/user')
-songmaker_cli/db/engine.py:init_test_db # Explicit test database constructor; used by tests/conftest.py and database tests
+songmaker_cli/db/engine.py:init_test_db # Explicit test database constructor; used by tests/support/web_app.py and database tests
 songmaker_cli/db/queries/auth.py:get_user_by_username # Operational callers scripts/seed_e2e_*.py and scripts/archive_e2e_albums.py outside src
 songmaker_cli/generation_api.py:api_active_generation # HTTP dispatcher: router.get('/songs/{song_id}/active-generation')
 songmaker_cli/generation_api.py:api_bulk_delete_generations # HTTP dispatcher: router.post('/generations/bulk-delete', responses={404: {'description': 'One or more generations do not exist'}})
