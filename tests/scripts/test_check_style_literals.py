@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 CHECKER = runpy.run_path(
-    str(Path(__file__).resolve().parents[1] / "scripts/check_style_literals.py")
+    str(Path(__file__).resolve().parents[2] / "scripts/check_style_literals.py")
 )
 
 

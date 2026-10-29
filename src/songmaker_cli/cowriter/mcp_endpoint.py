@@ -42,7 +42,7 @@ from songmaker_cli.settings import Settings
 log = logging.getLogger(__name__)
 
 CAPABILITY_APP: Final = "songmaker"
-CAPABILITY_PURPOSE: Final = "cowriter"
+CAPABILITY_AGENT: Final = "cowriter"
 _REFUSED: Final = ToolOutcome("The tool call was refused.", is_error=True)
 _KEY_SETTING: Final = "agent_service_capability_key_file"
 _ORIGIN_SETTING: Final = "agent_service_mcp_origin"
@@ -187,7 +187,7 @@ def _handler_for(name: str, app, issuer: str | None):
 
 
 def _is_for_the_running_turn(claims: CapabilityClaims, issuer: str | None) -> bool:
-    if claims.app != CAPABILITY_APP or claims.purpose != CAPABILITY_PURPOSE:
+    if claims.app != CAPABILITY_APP or claims.agent != CAPABILITY_AGENT:
         return False
     if claims.principal.iss != issuer:
         return False

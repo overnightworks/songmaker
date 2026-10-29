@@ -6,7 +6,6 @@ import asyncio
 import inspect
 import json
 import os
-import threading
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import fakeredis.aioredis
 import httpx
 import pytest
-from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from worker_http_peer import WorkerReply, WorkerScenario, WorkerStream
 
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
@@ -1977,24 +1975,6 @@ def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
 # ── run_scoring_job ─────────────────────────────────────────────────
 
 
-@pytest.fixture(autouse=True)
-def stubbed_claude_judge():
-    """The scoring job judges lyrical coherence in this process, right after
-    the scorer child returns — no test may reach the real Claude CLI or API.
-
-    The default judge provider is Claude (#315), routed through the
-    cowriter's claude_adapter — stub it there, one level below
-    ``call_provider_once``, so the provider-dispatch logic itself still runs.
-    """
-    from agent_providers.claude.provider import ClaudeResponse
-
-    with patch(
-        "agent_providers.claude.adapter.call_claude",
-        return_value=ClaudeResponse(text='{"score": 6, "issues": [], "summary": "fine"}'),
-    ) as judge:
-        yield judge
-
-
 def _seed_generation(db_factory) -> None:
     with db_factory() as session:
         session.add(
@@ -2173,54 +2153,6 @@ def test_a_cancelled_job_still_keeps_its_tainted_child_out_of_the_next_request(
     assert live_scorer_process._process.pid != pid_before
 
 
-def test_scoring_job_keeps_the_child_and_marks_partial_when_the_judge_timed_out(
-    seeded_db,
-    tmp_path: Path,
-    live_scorer_process,
-    monkeypatch: pytest.MonkeyPatch,
-    stubbed_claude_judge,
-) -> None:
-    """A judge timeout leaves the child usable and marks the job partial. The
-    abandoned thread is this process's problem — killing the child would
-    reclaim nothing, so it keeps running.
-    """
-    from agent_providers.claude.provider import UnavailableError
-
-    judge_timeout = threading.Event()
-
-    def signal_judge_timeout(*_args: object, **_kwargs: object) -> None:
-        judge_timeout.set()
-        raise UnavailableError(JUDGE_FAILURE_TIMEOUT)
-
-    stubbed_claude_judge.side_effect = signal_judge_timeout
-    _seed_generation(seeded_db)
-    audio_dir = _audio_dir_with_mp3(tmp_path)
-    pid_before = live_scorer_process._process.pid
-    monkeypatch.setattr(
-        live_scorer_process,
-        "score",
-        lambda *_args, **_kwargs: _scoring_result(with_whisper=True),
-    )
-
-    with patch(
-        "songmaker_cli.jobs.get_scorer_process",
-        return_value=live_scorer_process,
-    ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
-
-    assert judge_timeout.is_set()
-    assert live_scorer_process.alive
-    assert live_scorer_process._process.pid == pid_before
-    with seeded_db() as session:
-        job = get_job(session, "j2")
-        scores = session.query(Score).filter_by(generation_id="g1").one()
-        assert job.status == "partial"
-        assert job.error_type == "judge_error"
-        assert JUDGE_FAILURE_TIMEOUT in job.error
-        assert scores.value["dynamics"] == 55.0
-        assert "lyrical_coherence" not in scores.value
-
-
 def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
     _seed_generation(seeded_db)
     audio_dir = _audio_dir_with_mp3(tmp_path)
@@ -2244,114 +2176,6 @@ def test_scoring_job_happy_path(seeded_db, tmp_path: Path) -> None:
         gen = get_generation(session, "g1")
         assert gen.whisper_text is None
         assert gen.whisper_cues is None
-
-
-def test_scoring_job_judges_coherence_here_and_sends_no_secret_to_the_child(
-    seeded_db,
-    tmp_path: Path,
-) -> None:
-    """The scorer child is spawned with ANTHROPIC_API_KEY scrubbed and loads
-    third-party model weights, so no secret must cross the pipe at all: this
-    process judges coherence itself, on the result the child returned, and
-    only resolves the judge provider's credential (#315) when it calls out.
-    """
-    from pydantic import SecretStr
-
-    from songmaker_cli.constants import CLAUDE_SCORING_MODEL_DEFAULT
-
-    _seed_generation(seeded_db)
-    audio_dir = _audio_dir_with_mp3(tmp_path)
-
-    captured: dict = {}
-
-    def _capture_score(
-        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
-    ):
-        captured["child_config"] = config
-        return _scoring_result(with_whisper=True)
-
-    def _capture_judge(scores, meta, config):
-        captured["judged"] = scores
-        captured["judge_config"] = config
-        return scores
-
-    with (
-        patch(
-            "songmaker_cli.jobs.get_scorer_process",
-            return_value=MagicMock(score=_capture_score),
-        ),
-        patch("songmaker_cli.jobs.scoring.judge_lyrical_coherence", _capture_judge),
-    ):
-        run_scoring_job("j2", "g1", None, db_factory=seeded_db, audio_dir=audio_dir)
-
-    assert captured["judge_config"].provider == "claude"
-    assert captured["judge_config"].model == CLAUDE_SCORING_MODEL_DEFAULT
-    assert captured["judged"].text_accuracy is not None
-    assert not any(
-        isinstance(value, SecretStr) for value in vars(captured["child_config"]).values()
-    )
-
-
-def test_scoring_job_never_asks_the_child_for_the_parent_hosted_scorer(
-    seeded_db,
-    tmp_path: Path,
-) -> None:
-    _seed_generation(seeded_db)
-    audio_dir = _audio_dir_with_mp3(tmp_path)
-
-    captured: dict = {}
-
-    def _capture_score(
-        mp3_path, meta=None, scorers=None, config=None, job_id=None, on_progress=None
-    ):
-        captured["scorers"] = scorers
-        return _scoring_result()
-
-    with (
-        patch(
-            "songmaker_cli.jobs.get_scorer_process",
-            return_value=MagicMock(score=_capture_score),
-        ),
-        patch(
-            "songmaker_cli.jobs.scoring.judge_lyrical_coherence",
-            side_effect=lambda scores, meta, config: scores,
-        ) as judge,
-    ):
-        run_scoring_job(
-            "j2",
-            "g1",
-            ["silence", "lyrical_coherence"],
-            db_factory=seeded_db,
-            audio_dir=audio_dir,
-        )
-
-    assert captured["scorers"] == ["silence"]
-    judge.assert_called_once()
-
-
-def test_scoring_job_skips_the_judge_when_coherence_was_not_requested(
-    seeded_db,
-    tmp_path: Path,
-) -> None:
-    _seed_generation(seeded_db)
-    audio_dir = _audio_dir_with_mp3(tmp_path)
-
-    with (
-        patch(
-            "songmaker_cli.jobs.get_scorer_process",
-            return_value=MagicMock(score=MagicMock(return_value=_scoring_result())),
-        ),
-        patch("songmaker_cli.jobs.scoring.judge_lyrical_coherence") as judge,
-    ):
-        run_scoring_job(
-            "j2",
-            "g1",
-            ["silence"],
-            db_factory=seeded_db,
-            audio_dir=audio_dir,
-        )
-
-    judge.assert_not_called()
 
 
 def test_scoring_job_saves_whisper_text(seeded_db, tmp_path: Path) -> None:
@@ -2794,7 +2618,7 @@ def _override_context(tmp_path: Path, config: AceStepConfig | None = None, model
         album_meta=AlbumMeta(title="a", artist="b"),
         ace_config=config or AceStepConfig(prompt="test", lyrics="la la", audio_duration=0),
         audio_dir=tmp_path,
-        user_id="u1",
+        user_id="u1", reference_audio_path="",
         model_name=model_name,
     )
 
@@ -2872,7 +2696,7 @@ def test_cover_does_not_convert_fractions(tmp_path: Path) -> None:
         album_meta=AlbumMeta(title="a", artist="b"),
         ace_config=config,
         audio_dir=tmp_path,
-        user_id="u1",
+        user_id="u1", reference_audio_path="",
         model_name="turbo",
     )
     params = CoverTaskParams(

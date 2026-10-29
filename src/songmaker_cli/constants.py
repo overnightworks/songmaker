@@ -26,7 +26,6 @@ JOB_ERROR_WORKER_TRAINING_FAILED: Final[str] = "Worker training failed"
 JOB_ERROR_WORKER_STREAM_SILENT: Final[str] = "Worker stream went silent"
 JOB_ERROR_INTERNAL: Final[str] = "Internal error during processing"
 JOB_ERROR_UNEXPECTED: Final[str] = "An unexpected error occurred"
-JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
@@ -150,17 +149,7 @@ WHISPER_BEAM_SIZE = 5
 WHISPER_TEMPERATURE = 0.0
 
 SETTING_CLAUDE_CHAT_MODEL = "claude_chat_model"
-SETTING_CLAUDE_SCORING_MODEL = "claude_scoring_model"
-# Default for Settings.claude_scoring_model, which the DB setting overrides
-# (get_claude_scoring_model). Since #315 the coherence judge itself reads
-# judge_provider/judge_model instead; get_judge_model() falls back to this
-# chain only while the judge provider stays on its default, Claude, so a
-# musician who already customized claude_scoring_model keeps that value.
-CLAUDE_SCORING_MODEL_DEFAULT = "claude-opus-4-6"
 SETTING_COWRITER_TAIL_TOKEN_BUDGET = "cowriter_tail_token_budget"  # nosec B105
-SETTING_JUDGE_PROVIDER = "judge_provider"
-SETTING_JUDGE_ROUTE = "judge_route"
-SETTING_JUDGE_MODEL = "judge_model"
 SETTING_COVER_PROVIDER = "cover_provider"
 SETTING_COVER_ROUTE = "cover_route"
 SETTING_COVER_MODEL = "cover_model"
@@ -170,12 +159,6 @@ SETTING_COVER_MODEL = "cover_model"
 COVER_DEFAULT_PROVIDER: Final[str] = "codex"
 COVER_DEFAULT_ROUTE: Final[str] = "cli"
 COVER_DEFAULT_MODEL: Final[str] = ""
-# The judge is its own task with its own provider choice (not coupled to the
-# co-writer's), but its default must not move the goalposts on day one: the
-# default provider stays Claude, and get_judge_model() falls back to the
-# pre-existing claude_scoring_model default when unset (#315). The route is
-# pinned once at boot to preserve the existing call path (#903).
-JUDGE_DEFAULT_PROVIDER = "claude"
 
 MEMORY_SCOPE_USER = "user"
 MEMORY_SCOPE_SONG = "song"
@@ -670,7 +653,7 @@ STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {
         heartbeat_seconds=SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
         liveness_signal=WorkerLivenessSignal.SCORING,
         restart_grace_seconds=WORKER_RESTART_GRACE_SECONDS,
-    ),  # 300 s scorer + 120 s judge, then safety margin (#331 F20)
+    ),  # 300 s scorer, then safety margin (#331 F20)
     JobType.GENERATE: JobStaleThresholds(
         queued_seconds=WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS,
         heartbeat_seconds=GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS,
@@ -734,7 +717,6 @@ class ResourceType(StrEnum):
     MODEL = "model"
     DEFAULT_CONFIG = "default_config"
     COWRITER = "cowriter"
-    JUDGE = "judge"
     COVER = "cover"
     RATE_LIMITS = "rate_limits"
     JOB = "job"

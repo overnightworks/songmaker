@@ -30,7 +30,7 @@ from acestep_engine.client import (
 )
 
 _VENDORED_ACESTEP_PATH = (
-    Path(__file__).resolve().parent.parent / "vendor" / "acestep"
+    Path(__file__).resolve().parents[2] / "vendor" / "acestep"
 )
 if str(_VENDORED_ACESTEP_PATH) not in sys.path:
     sys.path.insert(0, str(_VENDORED_ACESTEP_PATH))

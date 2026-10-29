@@ -17,6 +17,7 @@ from songmaker_cli.api_helpers import (
     check_song_access,
     check_song_access_including_deleted,
     cleanup_generation_files,
+    commit_auth_state_before_lock,
     gen_params_to_json,
     owner_filter,
     page_has_more,
@@ -81,22 +82,25 @@ from songmaker_cli.db.queries.versions import delete_version
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
-    resolve_owned_reference_audio,
+    resolve_owned_reference_audio_under_lock,
 )
 
 
+def _named_reference(generation_params: BaseGenerationParams | None) -> str | None:
+    return generation_params.reference_audio_path if generation_params else None
+
+
 def _require_owned_reference_audio(
-    audio_dir: Path, user_id: str, generation_params: BaseGenerationParams | None,
+    session: Session, audio_dir: Path, user_id: str, reference: str | None,
 ) -> None:
-    if generation_params is None:
-        return
-    path = generation_params.reference_audio_path
-    if not path:
+    """Validate a named reference under the owner lock, which the caller's commit releases."""
+    if not reference:
         return
     try:
-        resolve_owned_reference_audio(audio_dir, user_id, path)
+        resolve_owned_reference_audio_under_lock(session, audio_dir, user_id, reference)
     except ReferenceAudioRejected as exc:
         raise HTTPException(404, "Reference audio not found") from exc
+
 
 router = APIRouter()
 
@@ -161,8 +165,10 @@ def api_create_song(
 ) -> SongResponse:
     album = get_album(session, req.album_id)
     check_album_access(album, user)
-    _require_owned_reference_audio(ctx.audio_dir, user.id, req.generation_params)
     slug = unique_song_slug(session, req.album_id, req.title)
+    _require_owned_reference_audio(
+        session, ctx.audio_dir, user.id, _named_reference(req.generation_params),
+    )
     song = create_song(
         session, title=req.title, album_id=req.album_id,
         lyrics=req.lyrics, prompt=req.prompt, bpm=req.bpm,
@@ -187,8 +193,10 @@ def api_update_song(
     ctx: AppContext = Depends(get_app_context),
 ) -> SongResponse:
     check_song_access(session, song_id, user)
-    if "generation_params" in req.model_fields_set:
-        _require_owned_reference_audio(ctx.audio_dir, user.id, req.generation_params)
+    reference = _named_reference(req.generation_params)
+    if reference:
+        commit_auth_state_before_lock(session, "api_update_song")
+    _require_owned_reference_audio(session, ctx.audio_dir, user.id, reference)
     kwargs: dict = {
         "lyrics": req.lyrics,
         "prompt": req.prompt,

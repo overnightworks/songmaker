@@ -74,6 +74,14 @@ def _lock_reference_owner(session: Session, user_id: str) -> None:
         raise ReferenceAudioStorageError("missing owner")
 
 
+def resolve_owned_reference_audio_under_lock(
+    session: Session, audio_dir: Path, user_id: str, stored_relative: str,
+) -> Path:
+    """Take the owner lock, then resolve: the lock lasts until the caller commits."""
+    _lock_reference_owner(session, user_id)
+    return resolve_owned_reference_audio(audio_dir, user_id, stored_relative)
+
+
 def _reference_directory(stack: ExitStack, audio_dir: Path, user_id: str) -> int:
     if Path(user_id).name != user_id or user_id in {"", ".", ".."}:
         raise ReferenceAudioStorageError("invalid owner")

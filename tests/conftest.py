@@ -378,11 +378,10 @@ def _isolate_codex_process_pool():
 def _no_claude_cli_tool_surface_probe():
     """Never let a test spawn the real Claude CLI to read its tool surface.
 
-    Server startup, every co-writer turn, the legacy per-song chat endpoint,
-    and the lyrical-coherence judge each ask the mounted binary which tools
-    it offers before running it (#351); on a developer machine that binary
-    exists, so without this a lifespan, co-writer, chat, or scoring test
-    would start a real CLI session. Each probe's own behaviour is pinned in
+    Server startup and every co-writer turn each ask the mounted binary which
+    tools it offers before running it (#351); on a developer machine that
+    binary exists, so without this a lifespan or co-writer test would start a
+    real CLI session. Each probe's own behaviour is pinned in
     ``test_claude_provider.py``.
     """
     from unittest.mock import AsyncMock
@@ -653,14 +652,6 @@ def read_wav(path: Path) -> tuple[np.ndarray, int]:
         return int16.astype(np.float32) / 32768.0, sr
 
 
-def seed_judge_route(session) -> None:
-    """Settings-only TestClients skip the startup pin and retain the old API route."""
-    from songmaker_cli.constants import SETTING_JUDGE_ROUTE
-    from songmaker_cli.db.queries.settings import set_claude_model
-
-    set_claude_model(session, SETTING_JUDGE_ROUTE, "api")
-
-
 def make_authenticated_user(
     user_id: str,
     *,
@@ -756,7 +747,6 @@ def make_test_app(
 
     factory = factory or init_db(data_dir / "songmaker.db")
     with factory() as session:
-        seed_judge_route(session)
         if seed_db is not None:
             seed_db(session)
         session.commit()

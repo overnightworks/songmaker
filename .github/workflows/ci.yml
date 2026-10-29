@@ -74,6 +74,9 @@ jobs:
       - name: Repository root layout
         run: uv run --no-sync --frozen --no-build python scripts/check_root_layout.py
 
+      - name: CI and compose pin the same Postgres image
+        run: uv run --no-sync --frozen --no-build python scripts/check_pinned_images_match.py
+
       - name: Check TypeScript types in sync
         run: uv run --no-sync --frozen --no-build python scripts/generate_types.py --check
 
@@ -119,10 +122,10 @@ jobs:
         run: |
           run_promtool() {
             docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
-              --entrypoint promtool prom/prometheus:latest "$@"
+              --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 "$@"
           }
           docker run --rm -v "$PWD/monitoring:/etc/prometheus:ro" \
-            --entrypoint promtool prom/prometheus:latest check config /etc/prometheus/prometheus.yml
+            --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 check config /etc/prometheus/prometheus.yml
           run_promtool check rules rules/alert.rules.yml
           run_promtool test rules alert.rules.test.yml
 
@@ -132,7 +135,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
         env:
           POSTGRES_USER: songmaker
           POSTGRES_PASSWORD: songmaker # why: disposable password for this isolated GitHub Actions service container.
@@ -155,11 +158,11 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - name: Install dependencies
-        run: uv sync --frozen --extra server --extra dev --extra agent-service --extra image # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
+        run: uv sync --frozen --extra server --extra dev --extra agent-service --extra image --extra mcp # why: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py tests/test_reference_save_lock_postgres.py tests/test_song_version_lock_postgres.py tests/test_coherence_verdict_migration.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
       - name: Require executed PostgreSQL reference quota and write lock proofs
         run: |
           python - <<'PYTHON'
@@ -179,13 +182,20 @@ jobs:
           assert cases, "No PostgreSQL reference quota proofs executed"
           assert not any(case.find("skipped") is not None for case in cases), "Quota proof skipped"
           print(f"PostgreSQL reference quota proofs: {len(cases)} passed, 0 skipped")
-          lock_cases = [
-              case for case in ET.parse("postgresql-contract.xml").iter("testcase")
-              if case.attrib["classname"].endswith("test_auth_write_lock_postgres")
-          ]
-          assert len(lock_cases) == 3, f"Expected 3 PostgreSQL write lock proofs, got {len(lock_cases)}"
-          assert not any(case.find("skipped") is not None for case in lock_cases), "Write lock proof skipped"
-          print(f"PostgreSQL write lock proofs: {len(lock_cases)} passed, 0 skipped")
+          expected_lock_cases = {
+              "test_auth_write_lock_postgres": 3,
+              "test_reference_save_lock_postgres": 6,
+              "test_song_version_lock_postgres": 11,
+              "test_coherence_verdict_migration": 15,
+          }
+          for module, expected in expected_lock_cases.items():
+              lock_cases = [
+                  case for case in ET.parse("postgresql-contract.xml").iter("testcase")
+                  if case.attrib["classname"].endswith(module)
+              ]
+              assert len(lock_cases) == expected, f"Expected {expected} {module} proofs, got {len(lock_cases)}"
+              assert not any(case.find("skipped") is not None for case in lock_cases), f"{module} proof skipped"
+              print(f"{module}: {len(lock_cases)} passed, 0 skipped")
           PYTHON
 
   frontend:

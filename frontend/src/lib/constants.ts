@@ -283,11 +283,13 @@ export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailabl
 export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';
 export const PROVIDER_ROUTE_API_LABEL = 'API';
 
-export const MODELS_HEADING = 'Models';
-export const MODELS_LOADING_LABEL = 'Loading…';
+export const AGENTS_HEADING = 'Agents';
+const MODELS_LOADING_LABEL = 'Loading…';
+const MODELS_UNAVAILABLE_LABEL = 'Unavailable';
+export const modelsRowStatus = (loadFailure: string | null): string =>
+	loadFailure ? MODELS_UNAVAILABLE_LABEL : MODELS_LOADING_LABEL;
 export const MODELS_TASK_COWRITER_LABEL = 'Co-Writer';
 export const MODELS_TASK_COVER_LABEL = 'Cover';
-export const MODELS_TASK_SCORING_LABEL = 'Scoring';
 export const MODELS_COLUMN_TASK_LABEL = 'Task';
 export const MODELS_COLUMN_PROVIDER_LABEL = 'Provider';
 export const MODELS_COLUMN_ROUTE_LABEL = 'Route';

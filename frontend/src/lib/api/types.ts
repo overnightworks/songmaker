@@ -18,8 +18,6 @@ export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';
 export interface TrackScores {
 	text_accuracy?: number;
 	detected_language?: string;
-	lyrical_coherence?: number;
-	lyrical_summary?: string;
 	dynamics?: number;
 	dynamics_pitch_cv?: number;
 	dynamics_rms_contrast?: number;
@@ -33,6 +31,8 @@ export interface TrackScores {
 	silence_gaps?: number;
 	silence_longest?: number;
 	spectral_artifacts?: number;
+	lyrical_coherence?: number;
+	lyrical_summary?: string;
 	user_rating?: number;
 	user_notes?: string;
 }
@@ -133,7 +133,6 @@ export interface Capabilities {
 	generation: boolean;
 	scoring: boolean;
 	chat_model: string;
-	scoring_model: string;
 }
 
 export interface ChatMessageItem {
@@ -221,6 +220,7 @@ export interface CoverSettingsResponse {
 	provider: string;
 	route: 'cli' | 'api';
 	model: string;
+	allowed_providers: string[];
 }
 
 export interface CoverSuggestionResponse {
@@ -417,24 +417,6 @@ export interface JobItem {
 	queue_position?: number | null;
 	started_at?: string | null;
 	completed_at?: string | null;
-}
-
-export interface JudgeSettings {
-	provider: string;
-	route: 'cli' | 'api';
-	provider_routes_status: Record<string, Record<'cli' | 'api', ProviderRouteStatusResponse>>;
-	model: string;
-	allowed_providers: string[];
-	allowed_models: string[];
-	models_by_provider: Record<string, string[]>;
-	models_errors: Record<string, string>;
-	probed_at: Record<string, string | null>;
-}
-
-export interface JudgeSettingsRequest {
-	provider: string;
-	route?: 'cli' | 'api' | null;
-	model: string;
 }
 
 export interface LastFailedGenerationResult {
@@ -805,7 +787,6 @@ export interface ScorerSchemaItem {
 	output_keys: string[];
 	needs_audio: boolean;
 	device: string;
-	host: string;
 }
 
 export interface ScoringSchemaResponse {

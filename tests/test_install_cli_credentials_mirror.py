@@ -133,7 +133,7 @@ unit_of() {
 # systemd's verbs, answered from the table. A start records the request and
 # changes the table; it does NOT run the unit's ExecStart. That the mirror
 # script really creates its directories is pinned directly against the script
-# in tests/test_mirror_agent_cli_credentials.py, where no fake is involved.
+# in tests/scripts/test_mirror_agent_cli_credentials.py, where no fake is involved.
 systemctl_dispatch() {
     local operation="${1:-}" unit
     case "$operation" in
@@ -279,11 +279,11 @@ def home(tmp_path: Path) -> Path:
         ),
         (
             ".grok/auth.json",
-            '{"realm": {"key": "k", "auth_mode": "oidc", "create_time": "t", '
-            '"expires_at": "t", "user_id": "u", "team_id": "t", '
-            '"principal_type": "User", "principal_id": "p", '
-            '"oidc_issuer": "i", "oidc_client_id": "c", '
-            '"coding_data_retention_opt_out": true, "refresh_token": "secret"}}',
+            '{"realm": {"key": "k", "auth_mode": "oidc", "create_time": "t", "expires_at": "t", '
+            '"user_id": "u", "team_id": "t", "principal_type": "User", "principal_id": "p", '
+            '"oidc_issuer": "i", "oidc_client_id": "c", "coding_data_retention_opt_out": true, '
+            '"coding_data_team": true, "team_zero_data_retention": true, '
+            '"refresh_token": "secret"}}',
         ),
         (
             ".codex/auth.json",
@@ -350,7 +350,7 @@ def run_installer(tmp_path: Path, checkout: Path, home: Path):
         Without it the installer's own closing preflight would fail on files
         that nobody wrote. That the script really creates its directories, and
         with which mode, is pinned against the script itself in
-        tests/test_mirror_agent_cli_credentials.py — not through a fake.
+        tests/scripts/test_mirror_agent_cli_credentials.py — not through a fake.
         """
         subprocess.run(
             [

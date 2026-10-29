@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from types import UnionType
-from typing import Annotated, Any, Literal, TypeAliasType, Union, cast, get_args, get_origin
+from typing import Annotated, Any, Final, Literal, TypeAliasType, Union, cast, get_args, get_origin
 
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
@@ -70,7 +70,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "CowriterSettingsResponse": "CowriterSettings",
     "GenerationResponse": "GenerationItem",
     "JobResponse": "JobItem",
-    "JudgeSettingsResponse": "JudgeSettings",
     "LastFailedGenerationResponse": "LastFailedGenerationResult",
     "LibraryPoolQueueResponse": "LibraryPoolQueue",
     "LibraryPoolTakeResponse": "LibraryPoolTakeItem",
@@ -119,7 +118,7 @@ FIELD_TYPE_OVERRIDES: dict[tuple[str, str], str] = {
 TYPE_ALIASES: dict[str, str] = {
     "RepaintMode": "'conservative' | 'balanced' | 'aggressive'",
 }
-STRING_OUTPUT_KEYS = frozenset({"lyrical_summary", "detected_language"})
+STRING_OUTPUT_KEYS = frozenset({"detected_language"})
 
 
 @dataclass(frozen=True)
@@ -513,6 +512,10 @@ def _model_to_interface(model: type[BaseModel]) -> str:
     return "\n".join(lines)
 
 
+# Stored verdict keys no scorer outputs: score, summary
+COHERENCE_VERDICT_KEYS: Final = ("lyrical_coherence", "lyrical_summary")
+
+
 def _build_track_scores_interface() -> str:
     from songmaker_cli.scoring.registry import SCORERS
 
@@ -521,7 +524,13 @@ def _build_track_scores_interface() -> str:
         for spec in SCORERS.values()
         for key in spec.output_keys
     ]
-    fields.extend((("user_rating", "number"), ("user_notes", "string")))
+    coherence_score, coherence_summary = COHERENCE_VERDICT_KEYS
+    fields.extend((
+        (coherence_score, "number"),
+        (coherence_summary, "string"),
+        ("user_rating", "number"),
+        ("user_notes", "string"),
+    ))
     lines = ["export interface TrackScores {"]
     lines.extend(f"\t{name}?: {ts_type};" for name, ts_type in fields)
     lines.append("}")

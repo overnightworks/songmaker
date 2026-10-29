@@ -33,12 +33,12 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   mit Menü samt Rechtliches-Zeile; (j) überschreibt dort die Settings-Zeilen
   von (e) und (h), das Konto-Menü von (h) und (i) und die Konto-Zeile der
   Desktop-Leiste.
-- `admin-models.html` — der Admin-Tab „Models" (#317). Fassung 1 wurde am
+- `admin-models.html` — der Admin-Tab „Agents" (#317). Fassung 1 wurde am
   01.09.2026 freigegeben; Fassung 2 wurde am 06.09.2026 freigegeben: eine
   Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
-  Auswahl und Status. Die Scoring-CLI/API-Zeile wurde am 10.09.2026 für #844
-  freigegeben und ist Teil der aktuellen Fassung. Sie ist ein Bild, noch kein
-  Produktverhalten; der Default bestehender Installationen bleibt in #844 offen.
+  Auswahl und Status. Die Scoring-CLI/API-Zeile (10.09.2026, #844) ist am
+  28.10.2026 mit den Zuständen (b) und (x) entfernt worden (#1974): der
+  automatische Judge hat die App verlassen, die Tabelle hat zwei Zeilen.
   Backend-Voraussetzungen: #316 (echter Provider-Status) und #315 (Judge
   providerneutral). Der Abschnitt „#1500 — VRAM und Kapazität" wurde am
   17.10.2026 freigegeben: die Worker-Karte mit VRAM-Zeile und der Liste der

@@ -121,24 +121,6 @@ class CowriterSettingsResponse(BaseModel):
     tail_token_budget: int
 
 
-class JudgeSettingsRequest(BaseModel):
-    provider: str
-    route: Literal["cli", "api"] | None = None
-    model: str
-
-
-class JudgeSettingsResponse(BaseModel):
-    provider: str
-    route: Literal["cli", "api"]
-    provider_routes_status: dict[str, dict[Literal["cli", "api"], ProviderRouteStatusResponse]]
-    model: str
-    allowed_providers: list[str]
-    allowed_models: list[str]
-    models_by_provider: dict[str, list[str]]
-    models_errors: dict[str, str] = Field(default_factory=dict)
-    probed_at: dict[str, ComputedTimestamp]
-
-
 class CoverSettingsRequest(BaseModel):
     provider: str
     route: str
@@ -149,6 +131,7 @@ class CoverSettingsResponse(BaseModel):
     provider: str
     route: Literal["cli", "api"]
     model: str
+    allowed_providers: list[str]
 
 
 class ProviderStatusResponse(BaseModel):
@@ -329,7 +312,6 @@ class CapabilitiesResponse(BaseModel):
     generation: bool
     scoring: bool
     chat_model: str
-    scoring_model: str
 
 
 class RateLimitItem(BaseModel):

@@ -378,7 +378,7 @@
 
 	.auth-retry button {
 		background: var(--accent);
-		color: var(--bg);
+		color: var(--on-accent);
 		border: none;
 		border-radius: 6px;
 		padding: 8px 20px;

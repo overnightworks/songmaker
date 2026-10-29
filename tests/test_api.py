@@ -2296,8 +2296,8 @@ def test_scoring_schema_endpoint(client: TestClient) -> None:
     by_name = {s["name"]: s for s in body["scorers"]}
     assert by_name["audiobox"]["device"] == "gpu"
     assert by_name["audiobox"]["needs_audio"] is False
-    assert by_name["lyrical_coherence"]["host"] == "parent"
-    assert by_name["audiobox"]["host"] == "child"
+    assert "lyrical_coherence" not in by_name
+    assert all("host" not in scorer for scorer in body["scorers"])
     assert "audiobox_enjoyment" in by_name["audiobox"]["output_keys"]
     assert "silence_gaps" in by_name["silence"]["output_keys"]
 
@@ -3571,8 +3571,8 @@ def test_score_request_invalid_scorer_direct() -> None:
 
     from songmaker_cli.api_models import ScoreRequest
 
-    with pytest.raises(ValidationError, match="Unknown scorers"):
-        ScoreRequest(scorers=["fake_scorer"])
+    with pytest.raises(ValidationError, match="Unknown scorers: lyrical_coherence"):
+        ScoreRequest(scorers=["lyrical_coherence"])
 
 
 def test_check_song_access_ownership_denied(tmp_path: Path) -> None:
@@ -3947,8 +3947,6 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
             "/api/settings/default-config", "put", {"400", "404"}, id="set-default-config",
         ),
         pytest.param("/api/settings/cowriter", "put", {"422"}, id="set-cowriter"),
-        pytest.param("/api/settings/judge", "get", {"422"}, id="get-judge"),
-        pytest.param("/api/settings/judge", "put", {"422"}, id="set-judge"),
         pytest.param("/api/settings/rate-limits", "put", {"400"}, id="set-rate-limits"),
     ],
 )
@@ -4081,19 +4079,19 @@ def test_create_preset_inactive_model_rejected(client: TestClient) -> None:
 
 
 def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
-    from songmaker_cli.constants import SETTING_CLAUDE_CHAT_MODEL, SETTING_CLAUDE_SCORING_MODEL
+    from songmaker_cli.constants import SETTING_CLAUDE_CHAT_MODEL
     from songmaker_cli.db.queries.settings import set_claude_model
 
     c = _make_authed_client(tmp_path, role="admin")
     with c.app.state.ctx.db() as session:
         set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, "claude-sonnet-4-6")
-        set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, "claude-haiku-4-5-20251001")
+        set_claude_model(session, "claude_scoring_model", "claude-haiku-4-5-20251001")
         session.commit()
     resp = c.get("/api/capabilities")
     assert resp.status_code == 200
     data = resp.json()
     assert data["chat_model"] == "claude-sonnet-4-6"
-    assert data["scoring_model"] == "claude-haiku-4-5-20251001"
+    assert "scoring_model" not in data
 
 
 @pytest.mark.parametrize(

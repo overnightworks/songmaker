@@ -12,7 +12,7 @@ def ratchet_tree(tmp_path: Path) -> Path:
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     shutil.copyfile(
-        Path(__file__).parents[1] / "scripts/test_helper_ratchet.sh",
+        Path(__file__).parents[2] / "scripts/test_helper_ratchet.sh",
         scripts / "test_helper_ratchet.sh",
     )
     (tmp_path / "tests").mkdir()

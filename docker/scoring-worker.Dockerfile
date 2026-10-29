@@ -1,5 +1,6 @@
 # songmaker-scoring-worker — arq worker with scoring + whisper extras
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
+FROM python:3.12.16-slim@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
@@ -7,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /app
 
@@ -17,7 +18,7 @@ USER songmaker
 
 COPY --chown=songmaker pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project \
-    --extra server --extra scoring --extra whisper --extra api # why: The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source distribution, so this locked sync alone may build it. Every dependency remains resolved from uv.lock.
+    --extra server --extra scoring --extra whisper # why: The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source distribution, so this locked sync alone may build it. Every dependency remains resolved from uv.lock.
 
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800
 ENV HF_HUB_CACHE=/app/.cache/huggingface/hub \
@@ -40,9 +41,6 @@ COPY --chown=root:root alembic.ini ./
 COPY --chown=root:root scripts/arq_healthcheck.py scripts/
 RUN uv pip install --python .venv/bin/python --no-deps --no-build \
     --editable . # why: The local project adds no resolved dependencies and cannot change locked versions.
-
-# The judge uses only Claude's CLI fallback; Grok and Codex use HTTP APIs.
-RUN install -d /home/songmaker/.claude
 
 # The audiofiles volume is shared with the web container and the other
 # workers, and Docker seeds an empty named volume from whichever image

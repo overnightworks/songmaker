@@ -55,7 +55,7 @@ limits concurrent Claude calls (default 4). The ignored content-hash cache at
 an unchanged repeat run needs neither Claude nor a model startup.
 `--no-summaries` explicitly disables the second signal. Otherwise unavailable
 models or Claude failures produce named errors (exit status 2).
-The [logic tests](../tests/test_similar_functions.py) use fakes and load no model.
+The [logic tests](../tests/scripts/test_similar_functions.py) use fakes and load no model.
 
 ## Static analysis (SonarCloud)
 
@@ -69,7 +69,7 @@ Adoption is complete only after authenticated enforcement checks and the post-me
 
 The scope covers `src`, `frontend/src` and `scripts`. Backend `tests`, frontend unit tests, and frontend E2E tests are test scope. It excludes the vendored ACE-Step fork (`vendor/**`, maintained in its own repository), design mockups (`docs/design/**`), generated test artifacts (`frontend/e2e/test-results/**` and `frontend/playwright-report/**`), planning material (`plans/**`), dependencies (`**/node_modules/**`), SvelteKit output (`**/.svelte-kit/**`), and frontend build output (`frontend/build/**`). These are not product code and would distort the analysis.
 
-Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci.ini` and `sonar-project.properties`, except `scripts/**`, which only the Sonar side names because pytest `--cov` never measures `scripts` and its lines would otherwise read as 0 % new code: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/lyrical_coherence.py` (external-provider judge); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
+Coverage exclusions are intentionally narrower and identical in `.github/workflows/coveragerc-ci.ini` and `sonar-project.properties`, except `scripts/**`, which only the Sonar side names because pytest `--cov` never measures `scripts` and its lines would otherwise read as 0 % new code: `src/songmaker_cli/main.py` (CLI entry point and local recovery commands); `src/songmaker_cli/scoring/audiobox_aesthetics.py` and `src/songmaker_cli/scoring/emotional_dynamics.py` (heavy model runtime absent from CI); `src/songmaker_cli/scoring/text_accuracy.py` (Whisper model absent from CI); `src/songmaker_cli/db/migrations/versions/**` (historical Alembic/PostgreSQL deployment artifacts); and `frontend/src/service-worker.ts` (browser/build runtime proven outside Vitest coverage). Testable scorers and the MCP entry point remain measured.
 
 ### Parallel Execution
 
@@ -82,9 +82,9 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 
 ## Coverage Targets
 
-- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the four heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci.ini`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
+- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the three heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci.ini`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`.
-- **CI PostgreSQL contract**: `tests/test_postgresql.py`, `tests/test_cover_accounting.py`, `tests/test_reference_quota.py` and `tests/test_auth_write_lock_postgres.py` run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, the user-management write lock held once per transaction (and the back-channel logout waiting on it), transactional rollback, retention gaps, and cover publication/cancellation accounting; SQLite tests do not stand in for these guarantees. The reference quota proofs (`1301-F3-Q-BOUNDARY`, `-CONCURRENT`, `-FAILURE`, `-PATH`, `-SURFACE`) cover exact limits, retained and crash-file accounting, concurrent owner admission, independent owners, unrelated same-user writes, failed writes and request cancellation. Require the PostgreSQL contract job log to show the PostgreSQL quota cases and all three write-lock cases passed with zero skipped; collection alone is not evidence. Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
+- **CI PostgreSQL contract**: `tests/test_postgresql.py`, `tests/test_cover_accounting.py`, `tests/test_reference_quota.py`, `tests/test_auth_write_lock_postgres.py`, `tests/test_reference_save_lock_postgres.py`, `tests/test_song_version_lock_postgres.py` and `tests/test_coherence_verdict_migration.py` run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent per-user event-sequence allocation, the user-management write lock held once per transaction (and the back-channel logout waiting on it), transactional rollback, retention gaps, cover publication/cancellation accounting, and the one-time deletion of the old judge's stored coherence verdicts (15 cases, SQLite and PostgreSQL, zero skipped); SQLite tests do not stand in for these guarantees. The reference quota proofs (`1301-F3-Q-BOUNDARY`, `-CONCURRENT`, `-FAILURE`, `-PATH`, `-SURFACE`) cover exact limits, retained and crash-file accounting, concurrent owner admission, independent owners, unrelated same-user writes, failed writes and request cancellation. The write-lock modules share `tests/postgres_lock_harness.py` (hold one writer at its commit, start the second, require through `pg_blocking_pids` that it waits behind the first): `test_reference_save_lock_postgres` proves that a song save naming a reference validates and commits under the reference owner lock, against a holder standing in for the cleanup sweep, in both orders (6 cases); `test_song_version_lock_postgres` proves that in-place saves, copy-forward writes, renames and version deletes on one song serialize on the song row and never carry a value read before the other committed (11 cases). Require the PostgreSQL contract job log to show the PostgreSQL quota cases and all 3, 6 and 11 write-lock cases and the 15 migration cases passed with zero skipped; collection alone is not evidence. Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
 - **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
 GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, and `security.yml`) run on push/PR to `main`.
@@ -128,7 +128,7 @@ file's job:
   argument models is a multi-file rework, tracked as a follow-up (#332,
   finding F15), not something this checker fixes by itself.
 
-`tests/test_check_no_silent_fallbacks.py` runs the checker over the real
+`tests/scripts/test_check_no_silent_fallbacks.py` runs the checker over the real
 `src/` tree, over a table of read and write statements that pins that
 boundary, and over seeded files at every path that used to be exempt.
 
@@ -145,7 +145,7 @@ N API models`. The only route role excluded is
 backend-to-backend protocol rather than a browser surface.
 
 Run `python scripts/generate_types.py` after changing a routed model, then
-`python scripts/generate_types.py --check`. `tests/test_generate_types.py`
+`python scripts/generate_types.py --check`. `tests/scripts/test_generate_types.py`
 plants routed response, body, and nested models to prove a stale type file
 fails with the missing model name and a regenerated file passes. A routed model
 declared outside `songmaker_cli.api_models` that no named exemption in the
@@ -164,7 +164,7 @@ sample of the series already carries it (issue #333). CI runs this as the
 
 ```bash
 docker run --rm -v "$PWD/monitoring:/monitoring:ro" -w /monitoring \
-  --entrypoint promtool prom/prometheus:latest test rules alert.rules.test.yml
+  --entrypoint promtool prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2 test rules alert.rules.test.yml
 ```
 
 ## End-to-end flows
@@ -333,17 +333,21 @@ tests/
 │                                  internal, LoRA, playlist, reimport, sharing, server
 ├── test_*_queries.py              DB query coverage for workers and LoRAs
 ├── test_jobs*.py                  Generation, scoring, model lifecycle, LoRA training jobs
-├── test_*worker*.py               Music/scoring worker classes and ACE-Step worker package tests
+├── test_*worker*.py               Music/scoring worker classes
 ├── test_scoring*.py               Scorer registry, pipeline, subprocess, and scorer modules
-├── test_*client*.py               CLI client, ACE-Step client, and training client tests
+├── test_*client*.py               CLI client tests
 ├── test_auth*.py                  Auth utilities and auth endpoints
 ├── test_config.py                 ACE-Step config building, defaults, path resolution
 ├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
 ├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
 ├── test_resource_event_api.py      Authenticated SSE replay, gaps, limits, headers, isolation
 ├── test_generation*.py            Generation params, retention, LoRA integration
-└── test_*                         Audio I/O, lifecycle, middleware, parser, Redis, scheduler,
-                                   soft delete, constants, MCP server, mastering
+└── test_*                         Lifecycle, middleware, parser, Redis, scheduler,
+                                   soft delete, constants, MCP server
+
+tests/acestep_engine/              ACE-Step client, progress and training client
+tests/audio_engine/                Audio I/O and mastering
+tests/support/                     Shared test helpers (the ACE-Step HTTP boundary)
 
 tests/acestep_worker/
 ├── test_downloads.py
@@ -351,9 +355,12 @@ tests/acestep_worker/
 ├── test_main.py
 ├── test_model_cache.py
 ├── test_registry_client.py
+├── test_settings_startup_timeout.py
 ├── test_subprocess_runner.py
 ├── test_task_store.py
-└── test_wrapper.py
+├── test_wrapper.py
+├── test_wrapper_train_lora.py
+└── test_wrapper_training_child_stop.py
 
 frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
@@ -402,9 +409,8 @@ The provider library's own tests likewise left with it. They moved with
 `agent_providers` to
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
 in #886 and run in that repository's CI; songmaker installs the released wheel
-(tag `v0.1.3`) and proves the surface it builds on it — the co-writer, the
-lyrical-coherence judge, and the tool-surface health it republishes on
-`/health` — through `test_conversation_api.py`,
+(tag `v0.1.3`) and proves the surface it builds on it — the co-writer and
+the tool-surface health it republishes on `/health` — through `test_conversation_api.py`,
 `test_lifecycle_claude_tool_surface.py`, and `test_health_api.py`.
 
 ## Testing Patterns
@@ -422,7 +428,7 @@ with `--update`; use that flag after replacing literals with tokens to lower
 the baseline. Ordinary checks never rewrite it. Output includes per-file counts;
 growth prints all current locations because a count-only baseline cannot
 distinguish new locations from existing ones. The file fixtures in
-`tests/test_check_style_literals.py` prove detection and ratchet behavior.
+`tests/scripts/test_check_style_literals.py` prove detection and ratchet behavior.
 
 `scripts/test_helper_ratchet.sh` checks how many helper names are defined in more
 than one test module: module-level private Python functions in `tests/`, and

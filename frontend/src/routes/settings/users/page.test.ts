@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
 	CowriterSettings,
-	JudgeSettings,
 	ProviderRouteReadiness,
 	ProviderRouteStatusResponse,
 	ProviderStatus,
@@ -35,8 +34,6 @@ const api = vi.hoisted(() => ({
 	toggleModel: vi.fn(),
 	fetchCowriterSettings: vi.fn(),
 	updateCowriterSettings: vi.fn(),
-	fetchJudgeSettings: vi.fn(),
-	updateJudgeSettings: vi.fn(),
 	fetchCoverSettings: vi.fn(),
 	updateCoverSettings: vi.fn(),
 	fetchProviderStatus: vi.fn(),
@@ -134,25 +131,7 @@ function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSe
 	};
 }
 
-function judgeSettings(
-	provider: string,
-	model: string,
-	route: 'cli' | 'api' = 'api'
-): JudgeSettings {
-	return {
-		provider,
-		route,
-		provider_routes_status: {},
-		model,
-		allowed_providers: ['claude', 'codex', 'grok'],
-		allowed_models: [model],
-		models_by_provider: {},
-		models_errors: {},
-		probed_at: {}
-	};
-}
-
-const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Models', 'ACE-Step', 'Cleanup'];
+const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Agents', 'ACE-Step', 'Cleanup'];
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -302,15 +281,16 @@ beforeEach(() => {
 	api.fetchCoverSettings.mockResolvedValue({
 		provider: 'codex',
 		route: 'cli',
-		model: 'gpt-5-codex'
+		model: 'gpt-5-codex',
+		allowed_providers: ['claude', 'codex', 'grok']
 	});
 	api.updateCoverSettings.mockImplementation(
-		async (provider: string, route: 'cli' | 'api', model: string) => ({ provider, route, model })
-	);
-	api.fetchJudgeSettings.mockResolvedValue(judgeSettings('claude', 'claude-opus'));
-	api.updateJudgeSettings.mockImplementation(
-		async (provider: string, route: 'cli' | 'api', model: string) =>
-			judgeSettings(provider, model, route)
+		async (provider: string, route: 'cli' | 'api', model: string) => ({
+			provider,
+			route,
+			model,
+			allowed_providers: ['claude', 'codex', 'grok']
+		})
 	);
 	api.listWorkers.mockResolvedValue({ workers: [] });
 	api.getRegistry.mockResolvedValue({ models: [] });
@@ -334,7 +314,7 @@ afterEach(async () => {
 describe('C2: requested admin tab', () => {
 	it.each([
 		['?tab=acestep', 'acestep'],
-		['?tab=models', 'models'],
+		['?tab=agents', 'agents'],
 		['', 'voices'],
 		['?tab=unknown', 'voices']
 	] as const)('C2: selects %s on arrival and later navigation', async (query, expected) => {
@@ -463,9 +443,8 @@ describe('admin error ownership (#1447)', () => {
 
 	it.each([
 		{ load: 'rateLimits', request: 'fetchRateLimits', start: 'ratelimits', tabs: ['ratelimits'] },
-		{ load: 'cowriter', request: 'fetchCowriterSettings', start: 'models', tabs: ['models'] },
-		{ load: 'cover', request: 'fetchCoverSettings', start: 'models', tabs: ['models'] },
-		{ load: 'scoring', request: 'fetchJudgeSettings', start: 'models', tabs: ['models'] }
+		{ load: 'cowriter', request: 'fetchCowriterSettings', start: 'agents', tabs: ['agents'] },
+		{ load: 'cover', request: 'fetchCoverSettings', start: 'agents', tabs: ['agents'] }
 	] as const)(
 		'defect:#920-12 shows $load failures only on their data tabs',
 		async ({ load, request, start, tabs }) => {
@@ -474,7 +453,7 @@ describe('admin error ownership (#1447)', () => {
 			const target = await renderPage(true);
 			await selectTab(target, start);
 			expect(target.textContent).toContain(message);
-			for (const destination of ['ratelimits', 'models', 'voices', 'generation', 'acestep']) {
+			for (const destination of ['ratelimits', 'agents', 'voices', 'generation', 'acestep']) {
 				await selectTab(target, destination);
 				expect(target.textContent?.includes(message), destination).toBe(
 					(tabs as readonly string[]).includes(destination)
@@ -502,7 +481,7 @@ describe('admin reads and actions that fail', () => {
 	it('names a save the network swallowed without browser text', async () => {
 		api.updateCowriterSettings.mockRejectedValue(lostNetwork());
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 		const budget = requireElement<HTMLInputElement>(target, '#cowriter-budget');
 		budget.value = '32000';
 		budget.dispatchEvent(new Event('change', { bubbles: true }));
@@ -513,51 +492,46 @@ describe('admin reads and actions that fail', () => {
 	});
 });
 
-describe('admin models tab', () => {
+describe('admin agents tab', () => {
 	it('answers who does what in one row per task', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
-		const models = sectionByHeading(target, 'Models');
-		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover', 'Scoring']);
-		expect(columnNames(models)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
+		const agents = sectionByHeading(target, 'Agents');
+		expect(taskNames(agents)).toEqual(['Co-Writer', 'Cover']);
+		expect(columnNames(agents)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
 		expect(headings(target)).not.toContain('Providers');
-		expect(models.querySelector('.route-card')).toBeNull();
-		expect(saveButtons(models)).toEqual([]);
+		expect(agents.querySelector('.route-card')).toBeNull();
+		expect(saveButtons(agents)).toEqual([]);
 	});
 
-	it('offers every provider in every task with the state that task gives it', async () => {
+	it('offers every provider in the cover task with the state that task gives it', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · no image tool',
 			'Codex ✓ ready',
 			'Grok · no image tool'
 		]);
-		expect(optionLabels(providerSelect(target, 'Scoring'))).toEqual([
-			'Claude ✓ ready',
-			'Codex ✓ ready',
-			'Grok · needs its API key'
-		]);
 	});
 
 	it('keeps every provider offered and names a failed reachability probe in the row', async () => {
 		api.fetchProviderStatus.mockRejectedValue(serverRefusal('Provider probe failed'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
-		expect(optionLabels(providerSelect(target, 'Scoring'))).toEqual([
+		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · Provider probe failed',
 			'Codex · Provider probe failed',
 			'Grok · Provider probe failed'
 		]);
-		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Claude · Provider probe failed');
+		expect(statusText(rowNamed(target, 'Cover'))).toBe('○Codex · Provider probe failed');
 	});
 
 	it('shows the cover row its live models and greys a route that is not set up', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const cover = rowNamed(target, 'Cover');
 		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['gpt-5-codex']);
@@ -568,172 +542,74 @@ describe('admin models tab', () => {
 	it('keeps every provider offered while the reachability probe runs', async () => {
 		api.fetchProviderStatus.mockReturnValue(new Promise(() => {}));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
-		const models = sectionByHeading(target, 'Models');
-		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover', 'Scoring']);
-		expect(optionLabels(providerSelect(target, 'Scoring'))[0]).toBe('Claude · Checking…');
-		expect(statusText(rowNamed(target, 'Scoring'))).toBe('○Checking…');
+		const agents = sectionByHeading(target, 'Agents');
+		expect(taskNames(agents)).toEqual(['Co-Writer', 'Cover']);
+		expect(optionLabels(providerSelect(target, 'Cover'))[0]).toBe('Claude · Checking…');
+		expect(statusText(rowNamed(target, 'Cover'))).toBe('○Checking…');
 	});
 
 	it('C16 shows the co-writer row as set by the agent service, without a choice', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const row = rowNamed(target, 'Co-Writer');
 		expect(row.textContent).toContain('Set by the agent service');
 		expect(row.querySelector('select, [role="group"]')).toBeNull();
 	});
 
-	it('lists the cover row providers from the judge settings when the co-writer settings do not load', async () => {
+	it('lists the cover row providers from the cover settings when the co-writer settings do not load', async () => {
 		api.fetchCowriterSettings.mockRejectedValue(serverRefusal('Co-writer settings failed'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · no image tool',
 			'Codex ✓ ready',
 			'Grok · no image tool'
 		]);
+		expect(target.querySelector('.hint')?.textContent).toBe('Unavailable');
 	});
 
-	it('keeps the cover row on the loading hint until the judge settings arrive', async () => {
-		let arrive: (settings: ReturnType<typeof judgeSettings>) => void = () => {};
-		api.fetchJudgeSettings.mockReturnValue(new Promise((resolve) => (arrive = resolve)));
+	it('keeps the cover row on the loading hint until the cover settings arrive', async () => {
+		let arrive: (settings: Awaited<ReturnType<typeof api.fetchCoverSettings>>) => void = () => {};
+		api.fetchCoverSettings.mockReturnValue(new Promise((resolve) => (arrive = resolve)));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		expect(target.querySelector(selectFor('Cover', 'provider'))).toBeNull();
-		arrive(judgeSettings('claude', 'claude-opus'));
+		expect(rowNamed(target, 'Co-Writer')).toBeTruthy();
+		expect(sectionByHeading(target, 'Agents').textContent).toContain('Loading…');
+		arrive({
+			provider: 'codex',
+			route: 'cli',
+			model: 'gpt-5-codex',
+			allowed_providers: ['claude', 'codex', 'grok']
+		});
 		await flush();
 
 		expect(optionLabels(providerSelect(target, 'Cover')).length).toBeGreaterThan(0);
 	});
 
-	it('shows the load error and no cover select when the judge settings fail', async () => {
-		api.fetchJudgeSettings.mockRejectedValue(serverRefusal('scoring unavailable'));
+	it('shows the load error and no cover select when the cover settings fail', async () => {
+		api.fetchCoverSettings.mockRejectedValue(serverRefusal('cover unavailable'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
-		expect(target.textContent).toContain('scoring unavailable');
+		await selectTab(target, 'agents');
+		expect(target.textContent).toContain('cover unavailable');
+		expect(target.textContent).not.toContain('Loading…');
 		expect(target.querySelector(selectFor('Cover', 'provider'))).toBeNull();
 	});
 
 	it('saves the cover row with its own provider, route and model', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		await choose(providerSelect(target, 'Cover'), 'claude');
 
 		expect(api.updateCoverSettings).toHaveBeenCalledWith('claude', 'cli', '');
 		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['No models']);
 		expect(rowNamed(target, 'Cover').textContent).toContain('Claude cannot draw');
-	});
-
-	it('saves the scoring row on its saved API route', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		await choose(providerSelect(target, 'Scoring'), 'codex');
-
-		expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'api', 'gpt-5.4');
-		expect(statusText(rowNamed(target, 'Scoring'))).toBe('✓Ready · key set');
-	});
-
-	describe('with the judge saved on the CLI route', () => {
-		beforeEach(() => {
-			window.history.replaceState({}, '', '/settings/users');
-			api.fetchJudgeSettings.mockResolvedValue(judgeSettings('claude', 'claude-sonnet', 'cli'));
-		});
-
-		it('shows the saved route with its state and its own model list', async () => {
-			const target = await renderPage(true);
-			await selectTab(target, 'models');
-
-			const scoring = rowNamed(target, 'Scoring');
-			expect(routeButton(scoring, 'CLI')).toHaveClass('on');
-			expect(statusText(scoring)).toBe('✓Ready · CLI login');
-			expect(optionLabels(modelSelect(target, 'Scoring'))).toEqual([
-				'claude-sonnet',
-				'claude-opus-cli'
-			]);
-			expect(modelSelect(target, 'Scoring').value).toBe('claude-sonnet');
-		});
-
-		it('greys the other route with the reason it has no way to score', async () => {
-			const target = await renderPage(true);
-			await selectTab(target, 'models');
-
-			const scoring = rowNamed(target, 'Scoring');
-			const apiRoute = routeButton(scoring, 'API');
-			expect(apiRoute).toHaveClass('dead');
-			expect(apiRoute.disabled).toBe(true);
-			expect(reasons(scoring)).toContain('API · not available for scoring');
-
-			apiRoute.click();
-			await flush();
-
-			expect(api.updateJudgeSettings).not.toHaveBeenCalled();
-		});
-
-		it('saves a model change on the saved route and says Saved.', async () => {
-			const target = await renderPage(true);
-			await selectTab(target, 'models');
-
-			await choose(modelSelect(target, 'Scoring'), 'claude-opus-cli');
-
-			expect(api.updateJudgeSettings).toHaveBeenCalledWith('claude', 'cli', 'claude-opus-cli');
-			const scoring = rowNamed(target, 'Scoring');
-			expect(scoring.textContent).toContain('Saved.');
-			expect(statusText(scoring)).toBe('✓Ready · CLI login');
-		});
-
-		it('saves a provider change on the saved route and shows that provider on it', async () => {
-			const target = await renderPage(true);
-			await selectTab(target, 'models');
-
-			await choose(providerSelect(target, 'Scoring'), 'codex');
-
-			expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'cli', 'gpt-5-codex');
-			const scoring = rowNamed(target, 'Scoring');
-			expect(routeButton(scoring, 'CLI')).toHaveClass('on');
-			expect(optionLabels(modelSelect(target, 'Scoring'))).toEqual(['gpt-5-codex']);
-		});
-	});
-
-	it('greys the CLI a scoring row saved on the API route has no way to use', async () => {
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		const scoring = rowNamed(target, 'Scoring');
-		const cli = routeButton(scoring, 'CLI');
-		expect(cli).toHaveClass('dead');
-		expect(cli.disabled).toBe(true);
-		expect(reasons(scoring)).toContain('CLI · not available for scoring');
-		expect(routeButton(scoring, 'API')).toHaveClass('on');
-		expect(optionLabels(modelSelect(target, 'Scoring'))).toEqual(['claude-opus', 'claude-api']);
-
-		cli.click();
-		await flush();
-
-		expect(api.updateJudgeSettings).not.toHaveBeenCalled();
-	});
-
-	it('shows a scoring provider that cannot answer as its own grey row', async () => {
-		api.fetchJudgeSettings.mockResolvedValue({
-			provider: 'grok',
-			route: 'api',
-			provider_routes_status: {},
-			model: '',
-			allowed_providers: ['claude', 'codex', 'grok'],
-			allowed_models: [],
-			models_by_provider: {},
-			models_errors: {},
-			probed_at: {}
-		});
-		const target = await renderPage(true);
-		await selectTab(target, 'models');
-
-		expect(statusText(rowNamed(target, 'Scoring'))).toBe('!Needs its API key');
 	});
 
 	it('offers no defaults editor and sends nothing while the generation defaults failed to load', async () => {
@@ -902,7 +778,7 @@ describe('admin models tab', () => {
 		{
 			shape: 'a route reason the row can phrase',
 			detail: { code: 'api_key_not_set', message: 'codex key is not set.' },
-			sentence: 'API · key not set'
+			sentence: 'CLI · key not set'
 		},
 		{
 			shape: 'a plain sentence from the server',
@@ -915,21 +791,21 @@ describe('admin models tab', () => {
 			sentence: 'The server rejected the change.'
 		}
 	])('names a rejected save that carries $shape', async ({ detail, sentence }) => {
-		api.updateJudgeSettings.mockRejectedValue(
+		api.updateCoverSettings.mockRejectedValue(
 			new ApiError(
 				422,
 				typeof detail === 'string' ? detail : '',
-				'/api/settings/judge',
+				'/api/settings/cover',
 				null,
 				detail
 			)
 		);
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
-		await choose(providerSelect(target, 'Scoring'), 'codex');
+		await choose(providerSelect(target, 'Cover'), 'claude');
 
-		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
+		const failure = requireElement(sectionByHeading(target, 'Agents'), '.tt-sub.bad');
 		expect(failure.textContent).toContain(sentence);
 		expect(failure.textContent).not.toContain('Something went wrong');
 		expect(requireElement(failure, '.retry').textContent?.trim()).toBe('Retry');
@@ -938,10 +814,10 @@ describe('admin models tab', () => {
 	it('names a rejected history-tail save next to the field with a retry', async () => {
 		api.updateCowriterSettings.mockRejectedValue(serverRefusal('Tail budget out of range'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Models'),
+			sectionByHeading(target, 'Agents'),
 			'details'
 		);
 		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
@@ -962,10 +838,10 @@ describe('admin models tab', () => {
 
 	it('keeps the history tail under a collapsed Advanced disclosure and saves it there', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Models'),
+			sectionByHeading(target, 'Agents'),
 			'details'
 		);
 		expect(disclosure.open).toBe(false);
