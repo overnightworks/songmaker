@@ -497,12 +497,12 @@ describe('admin agents tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'agents');
 
-		const models = sectionByHeading(target, 'Agents');
-		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover']);
-		expect(columnNames(models)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
+		const agents = sectionByHeading(target, 'Agents');
+		expect(taskNames(agents)).toEqual(['Co-Writer', 'Cover']);
+		expect(columnNames(agents)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
 		expect(headings(target)).not.toContain('Providers');
-		expect(models.querySelector('.route-card')).toBeNull();
-		expect(saveButtons(models)).toEqual([]);
+		expect(agents.querySelector('.route-card')).toBeNull();
+		expect(saveButtons(agents)).toEqual([]);
 	});
 
 	it('offers every provider in the cover task with the state that task gives it', async () => {
@@ -544,8 +544,8 @@ describe('admin agents tab', () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'agents');
 
-		const models = sectionByHeading(target, 'Agents');
-		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover']);
+		const agents = sectionByHeading(target, 'Agents');
+		expect(taskNames(agents)).toEqual(['Co-Writer', 'Cover']);
 		expect(optionLabels(providerSelect(target, 'Cover'))[0]).toBe('Claude · Checking…');
 		expect(statusText(rowNamed(target, 'Cover'))).toBe('○Checking…');
 	});

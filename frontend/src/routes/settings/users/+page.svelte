@@ -108,7 +108,7 @@
 		} else if (next === 'generation' || next === 'acestep') {
 			void loadGenDefaults();
 		} else if (next === 'agents') {
-			void loadModelsTab();
+			void loadAgentsTab();
 		}
 	}
 
@@ -279,7 +279,7 @@
 
 	const FALLBACK_ROUTE: ModelsRouteKey = 'cli';
 
-	function loadModelsTab(): void {
+	function loadAgentsTab(): void {
 		void loadProviderStatuses();
 		void loadCowriterSettings();
 		void loadCoverSettings();
