@@ -84,7 +84,7 @@ def test_g1_mandatory_names_match_rendered_dependencies():
         assert set(entry) == {"what", "item", "date", "reason"}
         assert isinstance(entry["date"], datetime.date)
     mandatory = config["gate"]["mandatory_jobs"]
-    assert len(mandatory) == len(set(mandatory)) == 4
+    assert len(mandatory) == len(set(mandatory)) == 5
     assert set(mandatory) == rendered_names
 
 

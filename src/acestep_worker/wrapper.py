@@ -6,6 +6,7 @@ import json
 import logging
 import shutil
 from collections.abc import AsyncIterator, Callable
+from concurrent.futures import Future
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1055,34 +1056,30 @@ async def default_generate_runner(
     await task_store.mark_running(task_id)
     try:
         client = AceStepClient(host="http://127.0.0.1", port=port)
-
         loop = asyncio.get_running_loop()
-
+        scheduled_updates: list[Future[None]] = []
         def _on_progress(progress: AceStepProgress) -> None:
-            asyncio.run_coroutine_threadsafe(
-                task_store.update_progress(
-                    task_id, progress.fraction, phase=progress.phase,
-                ),
-                loop,
-            )
+            update = task_store.update_progress(task_id, progress.fraction, phase=progress.phase)
+            scheduled_updates.append(asyncio.run_coroutine_threadsafe(update, loop))
 
-        result = await asyncio.to_thread(
-            client.generate,
-            config,
-            on_progress=_on_progress,
-        )
+        try:
+            result = await asyncio.to_thread(client.generate, config, on_progress=_on_progress)
+        finally:
+            for failure in filter(None, await asyncio.gather(
+                *map(asyncio.wrap_future, scheduled_updates), return_exceptions=True,
+            )):
+                log.warning("Progress write failed for task %s: %r", task_id, failure)
         audio_output_dir.mkdir(parents=True, exist_ok=True)
         out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"
         out_path.write_bytes(result.wav_bytes)
-        payload = GenerationTaskResult(
+        await task_store.complete(task_id, GenerationTaskResult(
             mode=mode,
             audio_path=str(out_path),
             seed=result.seed,
             cot_caption=result.cot_caption,
             cot_lyrics=result.cot_lyrics,
             delivered_batch_size=result.delivered_batch_size,
-        )
-        await task_store.complete(task_id, payload)
+        ))
     except Exception as exc:
         log.exception("Generation failed for task %s", task_id)
         cause = str(exc) if isinstance(exc, AceStepError) else f"{type(exc).__name__}: {exc}"

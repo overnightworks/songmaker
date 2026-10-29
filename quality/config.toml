@@ -1,6 +1,7 @@
 [gate]
 mandatory_jobs = [
     "Backend (Python 3.12)",
+    "Backend (Python 3.14)",
     "Alert rules (promtool)",
     "PostgreSQL contract (serial)",
     "Frontend (Node 22)",

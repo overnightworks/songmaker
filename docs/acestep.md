@@ -145,9 +145,11 @@ scripts/build_images.sh leaves    # compose leaves only (assumes bases exist)
 
 ```
 python:3.12-slim
-  ├── songmaker/gpu-torch-base   (torch 2.10+cu128 + cudnn — heavy CUDA layer)
-  │     └── songmaker/acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
-  │           └── songmaker-acestep-worker   (wrapper venv + entrypoint)
+  └── songmaker/gpu-torch-base   (torch 2.10+cu128 + cudnn — heavy CUDA layer)
+        └── songmaker/acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
+              └── songmaker-acestep-worker   (wrapper venv + entrypoint)
+
+python:3.14-slim
   ├── songmaker-music-worker     (server extras only — no torch, no scoring)
   ├── songmaker-scoring-worker   (server + scoring + whisper, CPU torch)
   └── songmaker-web              (server extras + frontend build, no torch)

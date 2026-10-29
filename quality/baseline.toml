@@ -60,7 +60,7 @@
 "frontend/src/routes/layout.test.ts" = 1403
 "frontend/src/routes/settings/users/+page.svelte" = 1118
 "frontend/src/routes/settings/users/page.test.ts" = 858
-"src/acestep_worker/wrapper.py" = 1092
+"src/acestep_worker/wrapper.py" = 1089
 "src/songmaker_cli/constants.py" = 814
 "src/songmaker_cli/conversation_api.py" = 975
 "src/songmaker_cli/jobs/generation.py" = 1201
@@ -175,9 +175,6 @@
 [function_lines."tests/acestep_worker/test_wrapper.py"]
 "_make_deps" = 64
 
-[function_lines."tests/test_acestep_state.py"]
-"test_heartbeat_payload_keys_match_admin_reader" = 66
-
 [function_lines."tests/acestep_worker/test_wrapper_train_lora.py"]
 "_make_deps" = 76
 "test_default_train_lora_runner_dispatches" = 140
@@ -185,6 +182,12 @@
 "test_train_lora_pins_mode_from_eviction" = 60
 "test_train_lora_releases_handover_claim_after_setup_failure" = 62
 "test_worker_renewal_failure_releases_hold_and_cache_before_background_error" = 62
+
+[function_lines."tests/scripts/test_backfill_audio_durations.py"]
+"test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
+
+[function_lines."tests/test_acestep_state.py"]
+"test_heartbeat_payload_keys_match_admin_reader" = 66
 
 [function_lines."tests/test_admin_api.py"]
 "test_list_workers_last_error_transport" = 60
@@ -196,9 +199,6 @@
 "test_s8_live_stream_during_second_take" = 94
 "test_s8_live_stream_during_second_take.drive" = 68
 "test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime" = 81
-
-[function_lines."tests/scripts/test_backfill_audio_durations.py"]
-"test_apply_survives_an_interruption_after_the_first_commit_batch" = 71
 
 [function_lines."tests/test_cover_accounting.py"]
 "test_postgresql_serializes_publication_and_cancellation" = 94
@@ -350,6 +350,9 @@ api_upload_playlist_cover = [["src/songmaker_cli/song_api.py", "api_upload_song_
 [clones."src/songmaker_cli/queue_streams.py"]
 _get_queue_stream_limiter = [["src/songmaker_cli/resource_event_api.py", "_get_open_limiter"]]
 
+[clones."tests/scripts/test_check_dead_symbols.py"]
+test_gate_takes_no_path_from_the_command_line = [["tests/scripts/test_check_style_literals.py", "test_gate_takes_no_path_from_the_command_line"]]
+
 [clones."tests/test_album_api.py"]
 _count_queries = [["tests/test_song_api.py", "_count_queries"]]
 "_count_queries._record" = [["tests/test_song_api.py", "_count_queries._record"]]
@@ -395,9 +398,6 @@ test_rename_album = [["tests/test_lora_api.py", "test_create_lora_slug_collision
 test_rename_album_strips_whitespace = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_rename_song_strips_whitespace = [["tests/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_song_detail_response_uncompressed_without_client_support = [["tests/test_server_middleware.py", "test_tiny_json_response_is_not_gzip_compressed"]]
-
-[clones."tests/scripts/test_check_dead_symbols.py"]
-test_gate_takes_no_path_from_the_command_line = [["tests/scripts/test_check_style_literals.py", "test_gate_takes_no_path_from_the_command_line"]]
 
 [clones."tests/test_conversation_api.py"]
 _seed_owned = [["tests/test_memory.py", "_seed"], ["tests/test_mentions.py", "_seed"]]

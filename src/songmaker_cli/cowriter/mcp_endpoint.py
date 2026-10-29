@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import stat
 from dataclasses import dataclass
 from enum import StrEnum
 from http import HTTPStatus
@@ -121,11 +122,11 @@ def _verification_key(settings: Settings) -> CapabilityVerificationKey | McpEndp
     if path is None:
         return McpEndpointAvailability(McpKeyProblem.MISSING)
     try:
-        if not path.exists():
-            return McpEndpointAvailability(McpKeyProblem.MISSING)
-        if not path.is_file():
+        if not stat.S_ISREG(path.stat().st_mode):
             return McpEndpointAvailability(McpKeyProblem.NOT_A_FILE)
         pem = path.read_bytes()
+    except FileNotFoundError:
+        return McpEndpointAvailability(McpKeyProblem.MISSING)
     except OSError:
         return McpEndpointAvailability(McpKeyProblem.UNREADABLE)
     try:

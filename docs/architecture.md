@@ -1969,7 +1969,7 @@ One-off data scripts (`scripts/backfill_audio_durations.py`, `scripts/migrate_ge
 docker compose exec songmaker-web /app/.venv/bin/python scripts/<name>.py --help
 ```
 
-Use `/app/.venv/bin/python`, not bare `python`. The web container's `PATH` resolves `python` to the package-less system interpreter that `python:3.12-slim` ships with — the app's dependencies live only in the `uv`-managed venv at `/app/.venv`, the same path every worker Dockerfile's `ENTRYPOINT` addresses directly rather than relying on `PATH`. Each script's module docstring documents its own dry-run/apply flags.
+Use `/app/.venv/bin/python`, not bare `python`. The web container's `PATH` resolves `python` to the package-less system interpreter that the slim base image ships with — the app's dependencies live only in the `uv`-managed venv at `/app/.venv`, the same path every worker Dockerfile's `ENTRYPOINT` addresses directly rather than relying on `PATH`. Each script's module docstring documents its own dry-run/apply flags.
 
 ## Backup & Restore
 
