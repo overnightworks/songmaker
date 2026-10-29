@@ -116,10 +116,13 @@ def _reference_directory(stack: ExitStack, audio_dir: Path, user_id: str) -> int
 
 def _remove_unrecorded_file(directory: int, name: str, user_id: str) -> None:
     """Best effort: a file that stays is a remnant, which counts nowhere and is never touched."""
+    failure_kind = None
     try:
         os.unlink(name, dir_fd=directory)
-    except OSError:
-        log.exception("Reference audio remnant stays for user %s", user_id)
+    except OSError as exc:
+        failure_kind = type(exc).__name__
+    if failure_kind is not None:
+        log.error("Reference audio remnant stays for user %s: %s", user_id, failure_kind)
 
 
 def _write_reference(directory: int, name: str, content: bytes, user_id: str) -> None:
@@ -160,12 +163,17 @@ def _record_reference(
     except BaseException:
         _remove_unrecorded_file(directory, name, user_id)
         raise
+    commit_failure = None
     try:
         session.commit()
-    except BaseException:
+    except BaseException as exc:
+        commit_failure = exc
+    if commit_failure is not None:
         # The commit may have succeeded with its confirmation lost: keep the file.
-        log.exception("Reference audio commit failed for user %s", user_id)
-        raise
+        log.error(
+            "Reference audio commit failed for user %s: %s", user_id, type(commit_failure).__name__,
+        )
+        raise commit_failure
     log.info(
         "Reference audio stored for user %s: reference %s, %d bytes",
         user_id, recording.id, size_bytes,
