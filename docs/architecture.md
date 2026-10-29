@@ -994,7 +994,7 @@ through `cowriter/service_turn.py`:
    (`fresh_access_token` through `DatabaseSessionTransaction` in
    `auth_stores.py`) and takes songmaker's workload token from the same
    relying party.
-3. It posts the `RunRequest` of `agents/cowriter.md` (the twelve tools of
+3. It posts the `RunRequest` of `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
    everything else in the messages; no model) to `AGENT_SERVICE_URL`.
 4. It reads the event stream through agent-runtime-client's decoder and
@@ -1208,7 +1208,7 @@ declares its own in `songmaker_cli/cowriter/mcp_spec.py` — deliberately outsid
 does not install. `None` is a valid value: a deployment without an MCP server
 runs its co-writer turns on the tool-free command line and gate.
 
-The same tools are also served over HTTP at `/mcp` for the agent service: `compose_mcp_endpoint` (`cowriter/mcp_endpoint.py`) puts agent-runtime-client's `McpServer` in front of the application in `run_server`, one tool per `COWRITER_TOOLS` entry, and accepts a call only for a run in `cowriter/service_runs.py` registered for that person's running turn. Trust, bypassed middleware and the named gaps: [Co-writer MCP endpoint](security.md#co-writer-mcp-endpoint).
+The stdio server's twelve tools plus `save_coherence_verdict` are also served over HTTP at `/mcp` for the agent service: `compose_mcp_endpoint` (`cowriter/mcp_endpoint.py`) puts agent-runtime-client's `McpServer` in front of the application in `run_server`, one tool per `COWRITER_TOOLS` entry, and accepts a call only for a run in `cowriter/service_runs.py` registered for that person's running turn. Trust, bypassed middleware and the named gaps: [Co-writer MCP endpoint](security.md#co-writer-mcp-endpoint).
 
 #### Provider constants: Go and Stay
 
@@ -1638,7 +1638,8 @@ service, so `PipelineConfig` carries no secret (issue #176; see
 docs/security.md). `TextAccuracyScore.transcript` is the single owner of the
 transcribed text; `Generation.whisper_text` stores it. The stored keys
 `lyrical_coherence` and `lyrical_summary` are no
-scorer's output: a scoring run leaves them as they are.
+scorer's output: a scoring run leaves them as they are, and only the
+co-writer's `save_coherence_verdict` tool writes them.
 
 **Timeouts are per scorer.** `SCORER_TIMEOUT_SECONDS` (120) is the default
 budget; `TEXT_ACCURACY_TIMEOUT_SECONDS` (300) gives Whisper its own, because a
