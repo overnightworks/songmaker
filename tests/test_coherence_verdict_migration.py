@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 import os
 import uuid
@@ -26,8 +27,12 @@ KEYS = {"lyrical_coherence": 8, "lyrical_summary": "a summary"}
 UNRELATED = {"bpm_detected": 96.0, "silence_ratio": 0.0}
 
 
+def _alembic_config() -> Config:
+    return Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+
+
 @pytest.fixture(params=["sqlite", "postgresql"])
-def database(request, tmp_path):
+def database(request, tmp_path, isolated_logging):
     """Yield (config, engine) of an empty database; PostgreSQL gets its own schema."""
     if request.param == "sqlite":
         url = make_url(f"sqlite:///{tmp_path / 'coherence.db'}")
@@ -41,7 +46,7 @@ def database(request, tmp_path):
         with admin.begin() as connection:
             connection.execute(text(f'CREATE SCHEMA "{schema}"'))
         url = make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config = _alembic_config()
     rendered_url = url.render_as_string(hide_password=False).replace("%", "%%")
     config.set_main_option("sqlalchemy.url", rendered_url)
     engine = create_engine(url)
@@ -94,7 +99,6 @@ def _stored_text(engine) -> dict[str, str]:
 def _stored_json(engine) -> dict:
     with engine.connect() as connection:
         rows = connection.execute(text("SELECT id, value FROM scores")).all()
-    import json
     return {row[0]: (json.loads(row[1]) if isinstance(row[1], str) else row[1]) for row in rows}
 
 
@@ -107,14 +111,14 @@ def _upgrade_with(database, migration, values, scorers=None):
     return before, _stored_text(engine)
 
 
-def test_the_migration_is_the_single_head_above_the_session_token_revision(database, migration):
-    config, _ = database
+def test_the_migration_is_the_single_head_above_the_session_token_revision(migration):
+    config = _alembic_config()
     assert migration.down_revision == PREVIOUS_REVISION
     assert ScriptDirectory.from_config(config).get_heads() == [migration.revision]
 
 
 def test_upgrade_deletes_both_keys_and_keeps_every_other_key(database, migration):
-    _, after = _upgrade_with(database, migration, {
+    _upgrade_with(database, migration, {
         "both": {**KEYS, "bpm_detected": 96.0},
         "coherence_only": {"lyrical_coherence": 0, **UNRELATED},
         "summary_only": {"lyrical_summary": "x", **UNRELATED},
