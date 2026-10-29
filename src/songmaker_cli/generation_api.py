@@ -194,6 +194,7 @@ async def api_upload_reference_audio(
         REFERENCE_AUDIO_EXTENSIONS,
         REFERENCE_AUDIO_MAX_BYTES,
     )
+    from songmaker_cli.db.models import REFERENCE_FILENAME_MAX_LENGTH
     from songmaker_cli.reference_audio import (
         ReferenceAudioQuotaExceeded,
         ReferenceAudioStorageError,
@@ -203,7 +204,12 @@ async def api_upload_reference_audio(
     if not file.filename:
         raise HTTPException(400, "No filename provided")
 
-    ext = Path(file.filename).suffix.lower()
+    original_filename = Path(file.filename).name
+    if len(original_filename) > REFERENCE_FILENAME_MAX_LENGTH:
+        raise HTTPException(
+            400, f"Filename too long (max {REFERENCE_FILENAME_MAX_LENGTH} characters)",
+        )
+    ext = Path(original_filename).suffix.lower()
     if ext not in REFERENCE_AUDIO_EXTENSIONS:
         accepted = ", ".join(sorted(REFERENCE_AUDIO_EXTENSIONS))
         raise HTTPException(400, f"Unsupported format '{ext}'. Accepted: {accepted}")
@@ -217,14 +223,20 @@ async def api_upload_reference_audio(
 
     try:
         rel_path = await run_in_threadpool(
-            store_reference_audio, ctx.db, ctx.audio_dir, user.id, ext, content, get_settings()
+            store_reference_audio,
+            ctx.db,
+            ctx.audio_dir,
+            user.id,
+            ext,
+            content,
+            get_settings(),
+            original_filename,
         )
     except ReferenceAudioQuotaExceeded as exc:
         raise HTTPException(409, str(exc)) from exc
     except ReferenceAudioStorageError as exc:
         raise HTTPException(500, str(exc)) from exc
 
-    log.info("Reference audio uploaded: %s (%d bytes)", rel_path, len(content))
     return ReferenceAudioResponse(path=rel_path, filename=file.filename)
 
 

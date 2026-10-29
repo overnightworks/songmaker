@@ -8,15 +8,19 @@ import os
 import stat
 import uuid
 from contextlib import ExitStack
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.api_helpers import _begin_exclusive
+from songmaker_cli.audio_files import read_audio_duration
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSIONS
 from songmaker_cli.db.models import User
+from songmaker_cli.db.queries.reference_recordings import (
+    create_reference_recording,
+    owner_reference_usage,
+)
 from songmaker_cli.settings import Settings
 
 REFERENCE_AUDIO_NOT_OWNED_DETAIL: Final = "reference audio path is not owned"
@@ -66,7 +70,10 @@ class ReferenceAudioStorageError(OSError):
 
 
 def _lock_reference_owner(session: Session, user_id: str) -> None:
-    """All reference admission and future cleanup must hold this owner lock."""
+    """Serializes one owner's reference work: upload admission now, remnant reconciliation later.
+
+    The lock lasts until the caller commits or rolls back.
+    """
     digest = hashlib.sha256((_REFERENCE_LOCK_NAMESPACE + user_id).encode()).digest()
     lock_id = int.from_bytes(digest[:8], "big", signed=True)
     _begin_exclusive(session, lock_id)
@@ -105,40 +112,17 @@ def _reference_directory(stack: ExitStack, audio_dir: Path, user_id: str) -> int
     return descriptor
 
 
-@dataclass(frozen=True)
-class _ReferenceUsage:
-    files: int
-    bytes: int
+def _remove_unrecorded_file(directory: int, name: str, user_id: str) -> None:
+    """Best effort: a file that stays is a remnant, which counts nowhere and is never touched."""
+    try:
+        os.unlink(name, dir_fd=directory)
+    except OSError as exc:
+        log.error(
+            "Reference audio remnant stays for user %s: %s", user_id, type(exc).__name__,
+        )
 
 
-def _reference_usage(directory: int) -> _ReferenceUsage:
-    count, size = 0, 0
-    with os.scandir(directory) as entries:
-        for entry in entries:
-            metadata = entry.stat(follow_symlinks=False)
-            if not stat.S_ISREG(metadata.st_mode):
-                kind = "symlink" if stat.S_ISLNK(metadata.st_mode) else "nonregular entry"
-                raise ReferenceAudioStorageError(kind)
-            try:
-                descriptor = os.open(
-                    entry.name,
-                    os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-                    dir_fd=directory,
-                )
-            except OSError as exc:
-                raise ReferenceAudioStorageError("unreadable regular entry") from exc
-            try:
-                metadata = os.fstat(descriptor)
-                if not stat.S_ISREG(metadata.st_mode):
-                    raise ReferenceAudioStorageError("nonregular entry")
-                size += metadata.st_size
-                count += 1
-            finally:
-                os.close(descriptor)
-    return _ReferenceUsage(count, size)
-
-
-def _write_reference(directory: int, name: str, content: bytes) -> None:
+def _write_reference(directory: int, name: str, content: bytes, user_id: str) -> None:
     descriptor = os.open(
         name,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
@@ -149,8 +133,46 @@ def _write_reference(directory: int, name: str, content: bytes) -> None:
         with os.fdopen(descriptor, "wb") as output:
             output.write(content)
     except BaseException:
-        os.unlink(name, dir_fd=directory)
+        _remove_unrecorded_file(directory, name, user_id)
         raise
+
+
+def _record_reference(
+    session: Session,
+    directory: int,
+    audio_dir: Path,
+    user_id: str,
+    name: str,
+    original_filename: str,
+    size_bytes: int,
+) -> str:
+    """Insert the row for the file just written; a failure before the commit removes the file."""
+    storage_path = str(Path(user_id) / REFERENCE_AUDIO_DIR / name)
+    try:
+        recording = create_reference_recording(
+            session,
+            user_id=user_id,
+            storage_path=storage_path,
+            original_filename=original_filename,
+            size_bytes=size_bytes,
+            duration_sec=read_audio_duration(audio_dir / storage_path),
+        )
+    except BaseException:
+        _remove_unrecorded_file(directory, name, user_id)
+        raise
+    try:
+        session.commit()
+    except BaseException as exc:
+        # The commit may have succeeded with its confirmation lost: keep the file.
+        log.error(
+            "Reference audio commit failed for user %s: %s", user_id, type(exc).__name__,
+        )
+        raise
+    log.info(
+        "Reference audio stored for user %s: reference %s, %d bytes",
+        user_id, recording.id, size_bytes,
+    )
+    return storage_path
 
 
 def store_reference_audio(
@@ -160,8 +182,9 @@ def store_reference_audio(
     extension: str,
     content: bytes,
     settings: Settings,
+    original_filename: str,
 ) -> str:
-    """Own the session and lock through inventory and the completed exclusive write."""
+    """Own the session and lock from the row count through the commit of the new row."""
     if extension not in REFERENCE_AUDIO_EXTENSIONS:
         raise ReferenceAudioRejected("Unsupported reference audio extension")
     with factory() as session:
@@ -170,8 +193,7 @@ def store_reference_audio(
             _lock_reference_owner(session, user_id)
             with ExitStack() as stack:
                 directory = _reference_directory(stack, audio_dir, user_id)
-                entry_kind = "inventory entry"
-                usage = _reference_usage(directory)
+                usage = owner_reference_usage(session, user_id)
                 if (
                     usage.files + 1 > settings.reference_audio_quota_files
                     or usage.bytes + len(content) > settings.reference_audio_quota_bytes
@@ -179,8 +201,10 @@ def store_reference_audio(
                     raise ReferenceAudioQuotaExceeded(REFERENCE_AUDIO_QUOTA_DETAIL)
                 name = f"{uuid.uuid4()}{extension}"
                 entry_kind = "regular upload file"
-                _write_reference(directory, name, content)
-                return str(Path(user_id) / REFERENCE_AUDIO_DIR / name)
+                _write_reference(directory, name, content, user_id)
+                return _record_reference(
+                    session, directory, audio_dir, user_id, name, original_filename, len(content),
+                )
         except OSError as exc:
             kind = (
                 str(exc)

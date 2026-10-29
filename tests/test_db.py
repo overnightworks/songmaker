@@ -2476,6 +2476,7 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "resource_event_cursors",
         "resource_events",
         "user_song_work",
+        "reference_recordings",
         "alembic_version",
     }
     assert tables == expected
