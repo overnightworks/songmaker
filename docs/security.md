@@ -414,7 +414,7 @@ File limits and body limits are separate so a legal 50 MiB file is not rejected 
 
 Symlinked ancestors or files, unexpected nesting, nonregular entries and unreadable inventory fail closed with HTTP 500, `{"detail":"Reference audio storage could not be checked."}`. This refusal also covers the configured `audio_dir`'s own ancestors. Logs identify the user and entry/error kind without content. A failed write removes only its own partial file under the lock; cleanup failure is surfaced and surviving regular bytes count on the next admission.
 
-The `reference_audio_path` field on `GenerationParams` is validated at three levels:
+The `reference_audio_path` field on `GenerationParams` is validated at three levels. Presets and global generation defaults refuse any non-empty value with 422 before these levels apply, while the job still honours a reference on a row stored earlier:
 
 1. **API validation**: Pydantic validator rejects any value containing `..`
 2. **Song write**: the path must resolve under `{audio_dir}/{authenticated_user_id}/refs`
