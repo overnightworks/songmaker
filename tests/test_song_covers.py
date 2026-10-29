@@ -469,7 +469,7 @@ def test_cleanup_expired_unlinks_covers_and_logs_deletions_only_after_commit(
     live_song_dir = audio_dir / SONG_COVER_DIRNAME / "live-song"
 
     past = datetime.now(timezone.utc) - timedelta(
-        days=get_settings().soft_delete_retention_days + 1,
+        days=get_settings().final_deletion_days + 1,
     )
     with factory() as session:
         soft_delete_album(session, "expired-album")

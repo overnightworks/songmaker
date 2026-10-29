@@ -371,18 +371,18 @@ class Settings(BaseSettings):
             poll_interval_seconds=self.lora_training_poll_interval_seconds,
         )
 
-    # ── Soft delete ───────────────────────────────────────────────────
-    soft_delete_retention_days: int = 30
+    # ── Final deletion ────────────────────────────────────────────────
+    # Days until the trash is purged and until an archived take is
+    # hard-deleted (files + row).
+    final_deletion_days: int = Field(
+        default=30, ge=1, alias="FINAL_DELETION_DAYS",
+    )
 
     # ── Generation retention ──────────────────────────────────────────
     # Generations that are neither picked nor kept are auto-archived
-    # after `generation_retention_days` and hard-deleted (files + row)
-    # after `generation_hard_delete_days` additional days archived.
+    # after `generation_retention_days`.
     generation_retention_days: int = Field(
         default=7, alias="GENERATION_RETENTION_DAYS",
-    )
-    generation_hard_delete_days: int = Field(
-        default=30, alias="GENERATION_HARD_DELETE_DAYS",
     )
 
     # ── Claude ────────────────────────────────────────────────────────

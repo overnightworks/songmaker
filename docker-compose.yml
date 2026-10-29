@@ -84,6 +84,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
+      FINAL_DELETION_DAYS:
       # The container's own healthcheck calls localhost and the ACE-Step control
       # plane and Prometheus call songmaker-web, so the Host check admits these
       # whatever ALLOWED_HOSTS lists.
@@ -233,6 +234,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
       REDIS_URL: redis://redis:6379/0
       SESSION_SECRET: ${SESSION_SECRET}
+      FINAL_DELETION_DAYS:
       MUSIC_MAX_JOBS: "${MUSIC_MAX_JOBS:-2}"
       ARQ_JOB_TIMEOUT: "${ARQ_JOB_TIMEOUT:-1000}"
       LORA_TRAINING_JOB_TIMEOUT: "${LORA_TRAINING_JOB_TIMEOUT:-3600}"

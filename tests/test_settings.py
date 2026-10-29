@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
 import pytest
 from pydantic import ValidationError
 
+from songmaker_cli.api_models.songs import generation_expiry
 from songmaker_cli.constants import DEFAULT_COVER_EXECUTOR
 from songmaker_cli.settings import (
     UNKNOWN_COMMIT,
@@ -110,6 +114,34 @@ def test_rejects_non_positive_voice_capacity(setting: str) -> None:
     required = _required_settings()
     with pytest.raises(ValidationError):
         Settings(**required, **{setting: 0})
+
+
+@pytest.mark.parametrize(("configured", "expected_days"), [(None, 30), ("7", 7)])
+def test_final_deletion_days_governs_every_deletion_window(
+    monkeypatch: pytest.MonkeyPatch, fresh_settings, configured: str | None, expected_days: int,
+) -> None:
+    monkeypatch.delenv("FINAL_DELETION_DAYS", raising=False)
+    if configured is not None:
+        monkeypatch.setenv("FINAL_DELETION_DAYS", configured)
+    now = datetime.now(timezone.utc)
+    archived = SimpleNamespace(
+        is_picked=False, is_kept=False, is_archived=True, archived_at=now, created_at=now,
+    )
+
+    assert get_settings().final_deletion_days == expected_days
+    assert generation_expiry(archived) == now + timedelta(days=expected_days)
+    assert get_settings().generation_retention_days == 7
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "soon", "1.5"])
+def test_rejects_an_invalid_final_deletion_days(
+    monkeypatch: pytest.MonkeyPatch, value: str,
+) -> None:
+    monkeypatch.setenv("FINAL_DELETION_DAYS", value)
+    required = _required_settings()
+
+    with pytest.raises(ValidationError, match="final_deletion_days|FINAL_DELETION_DAYS"):
+        Settings(**required)
 
 
 def test_default_settings_values() -> None:
