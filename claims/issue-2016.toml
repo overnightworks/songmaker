@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "d19450c4e13df0269a9def9962d1be11fba80eb8"
 branch = "claude/issue-2016-main-app-on-python-3-14"
-scope = [".github/workflows/ci.yml", ".github/workflows/security.yml", ".python-version", "AGENTS.md", "Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "docs/acestep.md", "docs/architecture.md", "pyproject.toml", "quality/baseline.toml", "quality/config.toml", "sonar-project.properties", "src/acestep_worker/wrapper.py", "src/songmaker_cli/cowriter/mcp_endpoint.py", "tests/acestep_worker/test_wrapper.py", "tests/test_quality_workflow.py", "uv.lock"]
+scope = [".github/workflows/ci.yml", ".github/workflows/security.yml", ".python-version", "AGENTS.md", "Dockerfile", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "docs/acestep.md", "docs/architecture.md", "pyproject.toml", "quality/baseline.toml", "quality/config.toml", "sonar-project.properties", "src/acestep_worker/wrapper.py", "src/songmaker_cli/cowriter/mcp_endpoint.py", "tests/acestep_worker/test_wrapper.py", "tests/acestep_worker/test_wrapper_progress_failure.py", "tests/test_quality_workflow.py", "uv.lock"]
 opened_commit = "4596f2de59674f0bd93f360f9ceb847f6011e9cc"
 whole_reason = "One runtime move: the lock, both CI legs, the gate's job list, Sonar's version and the three images must name the same interpreters in one landing, or a leg, image or gate check runs another Python than the lock."
