@@ -230,3 +230,88 @@ def test_a_version_request_still_sending_the_path_is_refused(world) -> None:
     created = client.post("/api/songs", json={"title": "T", "album_id": "album-a", **path})
     assert created.status_code == 422
     assert client.put(f"/api/songs/{song_id}", json=path).status_code == 422
+
+
+@pytest.mark.parametrize("entry_kind", ["foreign-root", "ancestor-symlink"])
+def test_admission_rejects_a_symlinked_owner_root_or_ancestor(tmp_path, entry_kind):
+    """Q7: nothing is written through a symlink."""
+    from support.web_app import make_router_ctx
+
+    from songmaker_cli.db.models import ReferenceRecording
+    from songmaker_cli.reference_audio import (
+        ReferenceAudioStorageError,
+        owner_reference_audio_root,
+        store_reference_audio,
+    )
+    from songmaker_cli.settings import Settings
+
+    ctx = make_router_ctx(tmp_path, seed_db=_seed_users)
+    foreign = _write_ref(ctx.audio_dir, "user-b", "secret.wav", b"SECRET")
+    root = owner_reference_audio_root(ctx.audio_dir, "user-a")
+    if entry_kind == "foreign-root":
+        root.parent.mkdir()
+        root.symlink_to(foreign.parent, target_is_directory=True)
+    else:
+        root.parent.symlink_to(foreign.parent.parent, target_is_directory=True)
+    before = set(ctx.audio_dir.rglob("*"))
+    settings = Settings()
+    with pytest.raises(
+        ReferenceAudioStorageError, match="Reference audio storage could not be checked"
+    ):
+        store_reference_audio(
+            ctx.db, ctx.audio_dir, "user-a", ".wav", b"a" * 100, settings, "ref.wav",
+        )
+    assert foreign.read_bytes() == b"SECRET"
+    assert set(ctx.audio_dir.rglob("*")) == before
+    with ctx.db() as session:
+        assert session.query(ReferenceRecording).count() == 0
+
+
+@pytest.mark.parametrize("entry_kind", ["nested-directory", "fifo", "unreadable-file"])
+def test_unrecorded_entries_under_the_owner_root_do_not_block_an_upload(tmp_path, entry_kind):
+    """Q6: only rows count, so entries nobody recorded cannot refuse an upload."""
+    import os
+
+    from support.web_app import make_router_ctx
+
+    from songmaker_cli.reference_audio import owner_reference_audio_root, store_reference_audio
+    from songmaker_cli.settings import Settings
+
+    ctx = make_router_ctx(tmp_path, seed_db=_seed_users)
+    root = owner_reference_audio_root(ctx.audio_dir, "user-a")
+    root.mkdir(parents=True)
+    if entry_kind == "nested-directory":
+        (root / "nested").mkdir()
+    elif entry_kind == "fifo":
+        os.mkfifo(root / "pipe")
+    else:
+        unreadable = root / "unreadable.wav"
+        unreadable.write_bytes(b"retained")
+        unreadable.chmod(0)
+    try:
+        stored = store_reference_audio(
+            ctx.db, ctx.audio_dir, "user-a", ".wav", b"a" * 100, Settings(), "ref.wav",
+        )
+    finally:
+        if entry_kind == "unreadable-file":
+            unreadable.chmod(0o600)
+    assert (ctx.audio_dir / stored.storage_path).read_bytes() == b"a" * 100
+
+
+def test_missing_reference_owner_is_refused_before_directory_creation(tmp_path):
+    """Q8: no directory and no row for an owner without a user row."""
+    from support.web_app import make_router_ctx
+
+    from songmaker_cli.db.models import ReferenceRecording
+    from songmaker_cli.reference_audio import ReferenceAudioStorageError, store_reference_audio
+    from songmaker_cli.settings import Settings
+
+    ctx = make_router_ctx(tmp_path)
+    settings = Settings()
+    with pytest.raises(ReferenceAudioStorageError):
+        store_reference_audio(
+            ctx.db, ctx.audio_dir, "missing", ".wav", b"a", settings, "ref.wav",
+        )
+    assert not ctx.audio_dir.exists()
+    with ctx.db() as session:
+        assert session.query(ReferenceRecording).count() == 0
