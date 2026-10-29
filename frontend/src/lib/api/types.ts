@@ -398,6 +398,7 @@ export interface HealthResponse {
 	claude_cli_tool_surface: 'ok' | 'drift' | 'unverified';
 	codex_image_sandbox_runtime: 'ready' | 'not_set_up' | 'unverified';
 	background_loops: Record<'cover_runner' | 'session_cleanup' | 'resource_event_cleanup' | 'score_backfill' | 'stale_job_reaper' | 'provider_status_refresh', BackgroundLoopResponse>;
+	release: ReleaseInfo;
 }
 
 export interface JobItem {
@@ -730,6 +731,11 @@ export interface RegistryModelItem {
 
 export interface RegistryResponse {
 	models: RegistryModelItem[];
+}
+
+export interface ReleaseInfo {
+	tag: string;
+	commit: string;
 }
 
 export interface ReorderPlaylistEntryRequest {
