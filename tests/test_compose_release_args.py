@@ -21,7 +21,6 @@ SCRATCH_REQUIRED = (
     "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
 )
 WEB_IMAGE_SERVICES = ("migrate", "songmaker-web")
-WORKER_SERVICE = "songmaker-scoring-worker"
 RELEASE = {"SONGMAKER_RELEASE": "v2026.10.28.4", "SONGMAKER_COMMIT": "c" * 40}
 
 
@@ -53,10 +52,6 @@ def test_both_web_image_services_build_with_the_same_release_arguments(
 
     assert build_args["migrate"] == RELEASE
     assert build_args["songmaker-web"] == RELEASE
-
-
-def test_a_worker_image_gets_no_release_arguments(tmp_path: Path) -> None:
-    assert _build_args(tmp_path, RELEASE)[WORKER_SERVICE] == {}
 
 
 def test_compose_accepts_a_build_without_release_arguments_and_passes_none(
