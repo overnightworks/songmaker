@@ -55,6 +55,7 @@
 	.bg-grid {
 		position: absolute;
 		inset: 0;
+		--glow-primary: color-mix(in srgb, var(--primary) 4%, transparent);
 		background-image:
 			linear-gradient(var(--glow-primary) 1px, transparent 1px),
 			linear-gradient(90deg, var(--glow-primary) 1px, transparent 1px);

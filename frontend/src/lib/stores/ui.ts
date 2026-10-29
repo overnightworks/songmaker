@@ -117,10 +117,18 @@ const DEFAULT_RAIL_WIDTH_PX = 264;
 
 const VALID_THEMES: ReadonlySet<string> = new Set<Theme>(['dark', 'light']);
 
-function getInitialTheme(): Theme {
-	if (typeof window === 'undefined') return 'dark';
+function getStoredTheme(): Theme | null {
+	if (typeof window === 'undefined') return null;
 	const stored = readStorage(STORAGE_KEY);
-	return stored && VALID_THEMES.has(stored) ? (stored as Theme) : 'dark';
+	return stored && VALID_THEMES.has(stored) ? (stored as Theme) : null;
+}
+
+/** The theme in effect: the stored choice, else the device, else the kit's light default. */
+function getInitialTheme(): Theme {
+	const stored = getStoredTheme();
+	if (stored) return stored;
+	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light';
+	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 export const theme = writable<Theme>(getInitialTheme());
@@ -205,7 +213,8 @@ export function toggleTheme(): void {
 }
 
 export function initTheme(): void {
-	const t = getInitialTheme();
-	document.documentElement.dataset.theme = t;
-	theme.set(t);
+	const stored = getStoredTheme();
+	if (stored) document.documentElement.dataset.theme = stored;
+	else delete document.documentElement.dataset.theme;
+	theme.set(getInitialTheme());
 }

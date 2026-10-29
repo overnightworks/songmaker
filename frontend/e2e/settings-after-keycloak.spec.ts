@@ -14,7 +14,7 @@ import {
 	RAIL_NAV_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SETTINGS_NAV_LABEL,
-	THEME_SWITCH_TO_LIGHT_LABEL
+	THEME_SWITCH_TO_DARK_LABEL
 } from '../src/lib/constants';
 import {
 	accountCircle,
@@ -65,7 +65,7 @@ test('the account circle opens a menu with the name, Settings, the theme, Sign o
 	await expect(name).toHaveAttribute('target', '_blank');
 	await expect(menu.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })).toBeVisible();
 	await expect(
-		menu.getByRole('button', { name: THEME_SWITCH_TO_LIGHT_LABEL, exact: true })
+		menu.getByRole('button', { name: THEME_SWITCH_TO_DARK_LABEL, exact: true })
 	).toBeVisible();
 	await expect(
 		menu.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })

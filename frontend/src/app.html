@@ -11,8 +11,7 @@
 				try {
 					t = localStorage.getItem('theme');
 				} catch (e) {}
-				t = t || 'dark';
-				document.documentElement.dataset.theme = t;
+				if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
 				if (typeof window.matchMedia !== 'function') {
 					document.documentElement.dataset.pointer = 'fine';
 					return;

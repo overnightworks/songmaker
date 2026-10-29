@@ -77,6 +77,7 @@ test('the signed-out page says so and starts the sign-in only when Log in is pre
 	await expect(page.getByRole('heading', { name: SIGNED_OUT_HEADING })).toBeVisible();
 	const logIn = page.getByRole('link', { name: SIGN_IN_ACTION_LABEL, exact: true });
 	await expect(logIn).toHaveAttribute('href', '/login/oidc');
+	await expect(page.locator('.bg-grid')).not.toHaveCSS('background-image', 'none');
 	await page.waitForLoadState('networkidle');
 	expect(started, 'the page redirects by itself').toEqual([]);
 	expect(new URL(page.url()).pathname).toBe('/login');
