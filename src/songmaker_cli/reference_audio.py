@@ -167,13 +167,18 @@ def _record_reference(
         session.commit()
     except BaseException as exc:
         # The commit may have succeeded with its confirmation lost: keep the file.
-        log.error("Reference audio commit failed for user %s: %s", user_id, type(exc).__name__)
+        _log_commit_failure(user_id, exc)
         raise
     log.info(
         "Reference audio stored for user %s: reference %s, %d bytes",
         user_id, recording.id, size_bytes,
     )
     return storage_path
+
+
+def _log_commit_failure(user_id: str, failure: BaseException) -> None:
+    """Log the user and the error kind only: the message and traceback can carry paths."""
+    log.error("Reference audio commit failed for user %s: %s", user_id, type(failure).__name__)
 
 
 def store_reference_audio(
