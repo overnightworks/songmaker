@@ -7,6 +7,7 @@ import ipaddress
 import itertools
 import json
 import os
+import posixpath
 import re
 import shlex
 import subprocess
@@ -498,7 +499,12 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
         bind_mounts: list[dict[str, object]] = []
         for volume in volumes:
             if isinstance(volume, str):
-                source, target, *_ = volume.split(":")
+                source, *rest = volume.split(":")
+                assert rest, (
+                    f"{service_name} declares the anonymous volume {volume!r}; "
+                    f"mount a declared named volume instead"
+                )
+                target = posixpath.normpath(rest[0])
                 if any(Path(target).is_relative_to(root) for root in AGENT_CLI_MOUNT_ROOTS):
                     assert source in declared_named_volumes, (
                         f"{service_name} must mount {target!r} through Compose "
