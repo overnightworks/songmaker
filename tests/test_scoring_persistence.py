@@ -255,3 +255,53 @@ def test_scoring_job_logs_every_scorer_outcome(
 
     assert "text_accuracy=timed_out" in caplog.text
     assert "silence=ok" in caplog.text
+
+
+def _transcribe(factory) -> None:
+    with factory() as session:
+        session.get(Generation, GENERATION_ID).whisper_text = "hello"
+        session.commit()
+
+
+def test_a_verdict_saved_over_a_stale_take_keeps_the_scoring_runs_new_keys(scored_generation):
+    from songmaker_cli.cowriter.tools import execute_cowriter_tool
+    from songmaker_cli.mcp_server import auth
+
+    _transcribe(scored_generation)
+    with scored_generation() as stale, scored_generation() as scoring:
+        stale.get(Generation, GENERATION_ID).scores  # loaded before the run commits
+        save_scores(scoring, GENERATION_ID, {"silence_gaps": 9}, {"silence_gaps"})
+        scoring.commit()
+
+        outcome = execute_cowriter_tool(
+            stale, auth.load_user(stale, "u1"), "save_coherence_verdict",
+            {"generation_id": GENERATION_ID, "score": 4, "summary": "garbled"},
+        )
+
+    assert outcome.is_error is False
+    with scored_generation() as session:
+        stored = session.query(Score).one().value
+    assert stored["silence_gaps"] == 9
+    assert (stored["lyrical_coherence"], stored["lyrical_summary"]) == (4, "garbled")
+
+
+def test_a_refreshed_scoring_run_over_a_stale_take_keeps_the_committed_verdict(
+    scored_generation,
+):
+    from songmaker_cli.cowriter.tools import execute_cowriter_tool
+    from songmaker_cli.mcp_server import auth
+
+    _transcribe(scored_generation)
+    with scored_generation() as stale, scored_generation() as verdict:
+        stale.get(Generation, GENERATION_ID).scores  # loaded before the verdict commits
+        execute_cowriter_tool(
+            verdict, auth.load_user(verdict, "u1"), "save_coherence_verdict",
+            {"generation_id": GENERATION_ID, "score": 2, "summary": "stuck loop"},
+        )
+        save_scores(stale, GENERATION_ID, {"silence_gaps": 5}, {"silence_gaps"})
+        stale.commit()
+
+    with scored_generation() as session:
+        stored = session.query(Score).one().value
+    assert (stored["lyrical_coherence"], stored["lyrical_summary"]) == (2, "stuck loop")
+    assert stored["silence_gaps"] == 5

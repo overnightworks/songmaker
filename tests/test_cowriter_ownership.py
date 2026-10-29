@@ -12,7 +12,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, Generation, Job, Song, User, UserSongWork, Version
+from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, UserSongWork, Version
 from songmaker_cli.mcp_server import auth, server
 
 
@@ -37,10 +37,17 @@ def ownership_factory(tmp_path):
             session.add(Generation(
                 id=f"generation-{identity}", song_id=f"song-{identity}",
                 version_id=f"version-{identity}", generation_number=1,
-                mp3_path=f"{identity}/take.mp3",
+                mp3_path=f"{identity}/take.mp3", whisper_text="sung words",
+            ))
+            session.add(Score(
+                generation_id=f"generation-{identity}", scorer="batch",
+                value={"bpm_detected": 96.0},
             ))
         session.commit()
     return factory
+
+
+VERDICT_TOOL = "save_coherence_verdict"
 
 
 def _ownership_arguments(identity):
@@ -59,6 +66,9 @@ def _ownership_arguments(identity):
         "update_song_style": {**song, "bpm": 90},
         "rename_song": {**song, "title": "Renamed"},
         "suggest_album_cover": album,
+        VERDICT_TOOL: {
+            "generation_id": f"generation-{identity}", "score": 8, "summary": "Coherent.",
+        },
     }
 
 
@@ -86,8 +96,9 @@ def _dispatch_ownership_tool(factory, monkeypatch, route, name, arguments):
 def test_ownership_matrix_covers_every_registered_tool(ownership_factory):
     """1301-F2-TOOLS, 1301-F2-ENTRY: adding a tool requires an ownership row."""
     registered = asyncio.run(server.build_server(session_factory=ownership_factory).list_tools())
-    assert set(_ownership_arguments("actor")) == MCP_TOOL_NAMES
-    assert {tool.name for tool in COWRITER_TOOLS} == MCP_TOOL_NAMES
+    catalog = {tool.name for tool in COWRITER_TOOLS}
+    assert catalog == MCP_TOOL_NAMES | {VERDICT_TOOL}
+    assert set(_ownership_arguments("actor")) == catalog
     assert {tool.name for tool in registered} == MCP_TOOL_NAMES
 
 
@@ -202,3 +213,36 @@ def test_admin_foreign_context_loads_but_tool_access_is_denied(
     assert "original" in context
     assert observed["tool"].is_error is True
     assert observed["tool"].content == "Song not found"
+
+
+@pytest.mark.parametrize("role", ["user", "admin"])
+@pytest.mark.parametrize("identity", ["actor", "foreign"])
+def test_the_coherence_verdict_is_stored_only_on_the_actors_own_take(
+    ownership_factory, monkeypatch, role, identity,
+):
+    """REQ-COWRITER-34: the verdict reaches the owner's take and nothing else."""
+    with ownership_factory() as session:
+        session.get(User, "actor").role = role
+        session.commit()
+    is_error, payload = _dispatch_ownership_tool(
+        ownership_factory, monkeypatch, "in-process", VERDICT_TOOL,
+        _ownership_arguments(identity)[VERDICT_TOOL],
+    )
+
+    own = identity == "actor"
+    assert is_error is not own
+    if not own:
+        assert payload == "Generation not found"
+    with ownership_factory() as session:
+        stored = {
+            row.generation_id: dict(row.value) for row in session.query(Score).all()
+        }
+        assert stored["generation-foreign"] == {"bpm_detected": 96.0}
+        assert stored["generation-actor"] == (
+            {"bpm_detected": 96.0, "lyrical_coherence": 8, "lyrical_summary": "Coherent."}
+            if own else {"bpm_detected": 96.0}
+        )
+        assert session.query(Version).count() == 2
+        assert session.query(UserSongWork).count() == 0
+        assert session.query(Job).count() == 0
+        assert session.query(Song).count() == 2

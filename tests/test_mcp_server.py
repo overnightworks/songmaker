@@ -202,12 +202,13 @@ def test_get_version_blocks_other_user(db_session: Session):
         )
 
 
-BATCH_SCORES = {
-    "text_accuracy": 86.2,
-    "lyrical_coherence": 8,
-    "lyrical_summary": "Coherent verses.",
-    "bpm_detected": 96.0,
-}
+def _batch_scores() -> dict:
+    return {
+        "text_accuracy": 86.2,
+        "lyrical_coherence": 8,
+        "lyrical_summary": "Coherent verses.",
+        "bpm_detected": 96.0,
+    }
 
 
 def _seed_take(db_session: Session, batch_value: dict | None):
@@ -225,21 +226,22 @@ def _seed_take(db_session: Session, batch_value: dict | None):
 
 
 def test_get_generation_returns_stored_batch_keys_flat(db_session: Session):
-    owner = _seed_take(db_session, BATCH_SCORES)
+    owner = _seed_take(db_session, _batch_scores())
     detail = tools.tool_get_generation(db_session, owner, generation_id="gen1")
     assert detail.is_picked is True
-    assert detail.scores == BATCH_SCORES
+    assert detail.scores == _batch_scores()
     assert isinstance(detail.scores["lyrical_coherence"], int)
 
 
 def test_cowriter_get_generation_keeps_integer_score_in_json(db_session: Session):
-    owner = _seed_take(db_session, BATCH_SCORES)
+    owner = _seed_take(db_session, _batch_scores())
     outcome = execute_cowriter_tool(
         db_session, owner, "get_generation", {"generation_id": "gen1"},
     )
     assert not outcome.is_error
-    assert json.loads(outcome.content)["scores"]["lyrical_coherence"] == 8
-    assert "8.0" not in outcome.content.split("lyrical_coherence")[1].split(",")[0]
+    shown = json.loads(outcome.content)["scores"]["lyrical_coherence"]
+    assert shown == 8
+    assert type(shown) is int
 
 
 def test_get_generation_without_score_row_has_no_scores(db_session: Session):

@@ -37,7 +37,7 @@ from songmaker_cli.cowriter.mcp_endpoint import (
 )
 from songmaker_cli.cowriter.service_runs import RunPerson
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS
-from songmaker_cli.db.models import Album, Job, Song, User, Version
+from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.server import run_server
 from songmaker_cli.settings import get_settings
 
@@ -193,6 +193,15 @@ def _seed(session) -> None:
             id=f"version-{identity}", song_id=f"song-{identity}",
             version_number=1, lyrics="original", prompt="rock",
         ))
+        session.add(Generation(
+            id=f"generation-{identity}", song_id=f"song-{identity}",
+            version_id=f"version-{identity}", generation_number=1,
+            mp3_path=f"{identity}/take.mp3", whisper_text="sung words",
+        ))
+        session.add(Score(
+            generation_id=f"generation-{identity}", scorer="batch",
+            value={"bpm_detected": 96.0},
+        ))
 
 
 @dataclass
@@ -314,6 +323,30 @@ def test_m3_a_call_on_another_persons_song_is_not_found_and_changes_no_row(
     assert write[0] is True
     assert "not found" in write[1]
     assert endpoint.snapshot() == before
+
+
+@pytest.mark.parametrize(
+    ("owner", "stored"), [("anna", True), ("ben", False)], ids=["own take", "foreign take"],
+)
+def test_the_coherence_verdict_is_stored_on_the_persons_own_take_only(
+    endpoint, capability, run_id, owner, stored,
+):
+    with running_run(run_id):
+        is_error, text = endpoint.call(
+            capability, "save_coherence_verdict",
+            generation_id=f"generation-{owner}", score=8, summary="Coherent.",
+        ).tool_result()
+
+    assert is_error is not stored
+    with endpoint.factory() as session:
+        values = {row.generation_id: dict(row.value) for row in session.query(Score)}
+    assert values["generation-ben"] == {"bpm_detected": 96.0}
+    if stored:
+        assert values["generation-anna"]["lyrical_coherence"] == 8
+        assert json.loads(text)["scores"]["lyrical_coherence"] == 8
+    else:
+        assert text == "Generation not found"
+        assert values["generation-anna"] == {"bpm_detected": 96.0}
 
 
 def _refused_write(endpoint: Endpoint, token: str) -> tuple[bool, str]:
