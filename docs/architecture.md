@@ -1232,7 +1232,7 @@ tool loop's round cap `COWRITER_MAX_TOOL_ROUNDS` in `tool_loop.py` — stays a
 named constant beside its owner, exactly as it was before the move, and is not
 a value the host and the library could disagree about.
 
-`tests/test_agent_providers_constants.py` reads this table and holds both
+`tests/songmaker_cli/test_constants_agent_providers.py` reads this table and holds both
 modules to it in both directions, so a constant cannot quietly change sides.
 
 | Constant | Side | Reason |
