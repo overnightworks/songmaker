@@ -223,11 +223,13 @@ def create_app(
     app.state.ctx = ctx
     from webauth.config import install_web_auth_config
 
+    from songmaker_cli.auth_api import install_sign_in
     from songmaker_cli.redis_client import RedisHttpMetrics
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)
     app.state.oidc_sign_in = build_oidc_sign_in(get_settings())
+    install_sign_in(app)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
     # Middleware execution order (Starlette LIFO -- last added runs first):
@@ -296,12 +298,10 @@ def create_app(
         )
 
     from songmaker_cli.api import router as api_router
-    from songmaker_cli.auth_api import sign_in_router
     from songmaker_cli.health_api import router as health_router
     from songmaker_cli.sharing_api import router as sharing_router
 
     app.include_router(api_router)
-    app.include_router(sign_in_router)
     app.include_router(health_router)
     app.include_router(sharing_router)
 

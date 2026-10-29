@@ -108,7 +108,7 @@ def test_no_configured_proxy_trusts_nobody(monkeypatch: pytest.MonkeyPatch) -> N
 
     proxies = parse_trusted_proxies(get_settings())
 
-    assert not proxies
+    assert proxies == TrustedProxies()
     assert "172.18.0.1" not in proxies
 
 
