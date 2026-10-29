@@ -71,7 +71,8 @@ class ReferenceAudioStorageError(OSError):
 
 
 def _lock_reference_owner(session: Session, user_id: str) -> None:
-    """Serializes one owner's reference work: upload admission now, remnant reconciliation later.
+    """Serializes one owner's reference work: upload admission, explicit version saves
+    (`resolve_owned_reference_audio_under_lock`) and later remnant reconciliation.
 
     The lock lasts until the caller commits or rolls back.
     """
