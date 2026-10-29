@@ -1,197 +1,94 @@
-"""Auth endpoints — sign-in through the Keycloak realm, logout, and the signed-in account."""
+"""Auth endpoints: the signed-in account, and the composition of webauth's sign-in routes."""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Annotated, Final
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Request, Response
-from sqlalchemy.orm import Session
-from starlette.concurrency import run_in_threadpool
-from webauth.config import WebAuthConfig, web_auth_config
-from webauth.cookies import issue_session_cookies
+from fastapi import APIRouter, Depends, FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from webauth.oidc import OidcRefusal
-from webauth.oidc_login import (
-    AdmissionRefusal,
-    BackchannelLogoutResult,
-    finish_login,
-    log_out,
-    open_session,
-    receive_backchannel_logout,
-    start_login,
-)
 from webauth.ports import AuthenticatedUser
+from webauth.sign_in_routes import (
+    RefusalPage,
+    SignInRefusal,
+    install_sign_in_routes,
+)
 
 from songmaker_cli.api_helpers import resolve_public_base_url
 from songmaker_cli.api_models import AuthMeResponse
-from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
-from songmaker_cli.auth_stores import (
-    DatabaseAuditSink,
-    DatabaseSessionRecordStore,
-    DatabaseSubjectUserStore,
-    DatabaseWriteLock,
-)
-from songmaker_cli.constants import (
-    LOGOUT_PATH,
-    NO_ACCESS_PATH,
-    OIDC_CALLBACK_PATH,
-    OIDC_START_PATH,
-)
+from songmaker_cli.auth_stores import DatabaseSignInTransaction
+from songmaker_cli.constants import NO_ACCESS_PATH
 from songmaker_cli.oidc_client import normalised_oidc_issuer
-from songmaker_cli.request_policies import BACKCHANNEL_LOGOUT_PATH
+from songmaker_cli.request_policies import SIGN_IN_PATHS
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, get_settings
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import sessionmaker
-
-    from songmaker_cli.oidc_client import OidcSignIn
+    from webauth.oidc import OidcRelyingParty
 
 log = logging.getLogger(__name__)
 
 SIGN_IN_FAILED_STATUS: int = 403
-DEFAULT_LANDING_PATH = "/"
 # Shown on the logout page only where no script runs; the account menu words the same button.
 LOGOUT_BUTTON_LABEL: Final[str] = "Sign out"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-sign_in_router = APIRouter(tags=["auth"])
 
 
-def _sign_in(request: Request) -> OidcSignIn:
-    return request.app.state.oidc_sign_in
+# A handler answers it; it is never an error to name.
+class BackchannelHostMismatch(Exception):  # noqa: N818
+    """The back-channel call carries a Host other than the private network's."""
 
 
-@sign_in_router.get(OIDC_START_PATH)
-def start_sign_in(
-    request: Request,
-    next: str | None = None,
-    config: WebAuthConfig = Depends(web_auth_config),
-) -> Response:
-    response = Response(status_code=303)
-    response.headers["location"] = start_login(
-        _sign_in(request).relying_party, request, response, config, return_to=next,
-    )
-    return response
-
-
-@sign_in_router.get(OIDC_CALLBACK_PATH)
-def finish_sign_in(
-    request: Request,
-    db: Session = Depends(get_db_session),
-    config: WebAuthConfig = Depends(web_auth_config),
-) -> Response:
-    sign_in = _sign_in(request)
-    # The library writes its cookie changes onto this response, so every outcome
-    # is answered with it.
-    response = Response()
-    lock = DatabaseWriteLock(db)
-    outcome = finish_login(
-        sign_in.relying_party, request, response, config,
-        admission=sign_in.admission,
-        accounts=DatabaseSubjectUserStore(db),
-        lock=lock,
-        audit=DatabaseAuditSink(db),
-    )
-    if isinstance(outcome, (OidcRefusal, AdmissionRefusal)):
-        db.rollback()
-        return _refused(request, response, outcome)
-    session = open_session(
-        request, config, outcome,
-        sessions=DatabaseSessionRecordStore(db),
-        lock=lock,
-        max_sessions=get_settings().max_concurrent_sessions_per_user,
-        keeps_id_token=True,
-    )
-    db.commit()
-    issue_session_cookies(response, session.id, config)
-    return _redirect(response, outcome.return_to or DEFAULT_LANDING_PATH)
-
-
-def _redirect(response: Response, location: str) -> Response:
-    response.status_code = 303
-    response.headers["location"] = location
-    return response
-
-
-def _refused(
-    request: Request, response: Response, refusal: OidcRefusal | AdmissionRefusal,
-) -> Response:
-    if refusal is AdmissionRefusal.NOT_A_MEMBER:
-        log.info("Sign-in refused: not a member")
-        return _redirect(response, NO_ACCESS_PATH)
-    log.info("Sign-in refused: %s", refusal.reason if isinstance(refusal, OidcRefusal) else refusal)
-    shell = request.app.state.spa_index
-    response.status_code = SIGN_IN_FAILED_STATUS
-    if shell.exists():
-        body = shell.read_bytes()
-        response.body = body
-        response.headers["content-type"] = "text/html; charset=utf-8"
-    else:
-        response.body = b'{"detail":"Login failed"}'
-        response.headers["content-type"] = "application/json"
-    response.headers["content-length"] = str(len(response.body))
-    return response
-
-
-@sign_in_router.post(LOGOUT_PATH)
-def sign_out(
-    request: Request,
-    db: Session = Depends(get_db_session),
-    config: WebAuthConfig = Depends(web_auth_config),
-) -> Response:
-    answer = log_out(
-        _sign_in(request).relying_party, request, config,
-        sessions=DatabaseSessionRecordStore(db),
-        lock=DatabaseWriteLock(db),
-        button_label=LOGOUT_BUTTON_LABEL,
-    )
-    db.commit()
-    return answer
-
-
-def _end_subject_sessions(
-    sign_in: OidcSignIn, factory: sessionmaker[Session], form_body: bytes, content_type: str | None,
-) -> bool:
-    """Run the logout in its own session and transaction; True only once committed."""
-    try:
-        with factory() as db:
-            result = receive_backchannel_logout(
-                sign_in.relying_party, form_body, content_type,
-                accounts=DatabaseSubjectUserStore(db),
-                sessions=DatabaseSessionRecordStore(db),
-                lock=DatabaseWriteLock(db),
-                audit=DatabaseAuditSink(db),
-            )
-            if result is not BackchannelLogoutResult.ACCEPTED:
-                db.rollback()
-                return False
-            db.commit()
-    except Exception:
-        log.exception("Back-channel logout failed")
-        return False
-    return True
-
-
-def _backchannel_logout_host() -> str:
+def backchannel_logout_host() -> str:
     """The Host the realm's call carries: the public host on the container port."""
     return f"{urlsplit(resolve_public_base_url()).hostname}:{DEFAULT_SERVER_PORT}"
 
 
-@sign_in_router.post(BACKCHANNEL_LOGOUT_PATH)
-async def end_sessions_on_realm_logout(request: Request) -> Response:
+def _require_backchannel_host(request: Request) -> None:
     """Keycloak's back-channel logout; only the private network's Host reaches it."""
-    if request.headers.get("host") != _backchannel_logout_host():
-        return Response(status_code=404)
-    accepted = await run_in_threadpool(
-        _end_subject_sessions,
-        _sign_in(request),
-        request.app.state.ctx.db,
-        await request.body(),
-        request.headers.get("content-type"),
+    if request.headers.get("host") != backchannel_logout_host():
+        raise BackchannelHostMismatch
+
+
+def _answer_backchannel_host_mismatch(_request: Request, _exc: Exception) -> Response:
+    return Response(status_code=404)
+
+
+def _relying_party(request: Request) -> OidcRelyingParty:
+    return request.app.state.oidc_sign_in.relying_party
+
+
+def _refuse_sign_in(request: Request, refusal: SignInRefusal) -> Response:
+    if refusal.page is RefusalPage.NO_ACCESS:
+        log.info("Sign-in refused: not a member")
+        return RedirectResponse(NO_ACCESS_PATH, status_code=303)
+    cause = refusal.cause
+    log.info("Sign-in refused: %s", cause.reason if isinstance(cause, OidcRefusal) else cause)
+    shell = request.app.state.spa_index
+    if shell.exists():
+        return HTMLResponse(shell.read_bytes(), status_code=SIGN_IN_FAILED_STATUS)
+    return JSONResponse({"detail": "Login failed"}, status_code=SIGN_IN_FAILED_STATUS)
+
+
+def install_sign_in(app: FastAPI) -> None:
+    """Register webauth's start, callback, logout and back-channel routes on the app."""
+    settings = get_settings()
+    app.add_exception_handler(BackchannelHostMismatch, _answer_backchannel_host_mismatch)
+    install_sign_in_routes(
+        app,
+        paths=SIGN_IN_PATHS,
+        relying_party=_relying_party,
+        admission=app.state.oidc_sign_in.admission,
+        transaction=DatabaseSignInTransaction(app.state.ctx.db),
+        refused=_refuse_sign_in,
+        keeps_id_token=True,
+        max_sessions=settings.max_concurrent_sessions_per_user,
+        logout_button_label=lambda _request: LOGOUT_BUTTON_LABEL,
+        backchannel_dependencies=[Depends(_require_backchannel_host)],
     )
-    return Response(status_code=200 if accepted else 400)
 
 
 def _account_console_url() -> str | None:
@@ -201,7 +98,7 @@ def _account_console_url() -> str | None:
 
 @router.get("/me")
 def me(
-    current_user: AuthenticatedUser = Depends(get_current_user),
+    current_user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> AuthMeResponse:
     return AuthMeResponse(
         id=current_user.id,

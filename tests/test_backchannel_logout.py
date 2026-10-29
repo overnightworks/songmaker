@@ -9,6 +9,7 @@ from httpx import Response
 from oidc_world import World
 from sqlalchemy.orm import Session
 
+from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.db.models import AuditLog, UserSession
 
 MEMBER = "/apps/songmaker"
@@ -28,7 +29,9 @@ def _member(subject: str) -> Person:
 def _backchannel(world: World, token: str | None, **headers: str) -> Response:
     sent = {"host": BACKCHANNEL_HOST, **FORM, **headers}
     data = None if token is None else {"logout_token": token}
-    return world.client.post(BACKCHANNEL_PATH, data=data, headers=sent)
+    # The library answers a failing transaction with 400 and then re-raises it.
+    realm = web_client(world.client.app, raise_server_exceptions=False, cookies={})
+    return realm.post(BACKCHANNEL_PATH, data=data, headers=sent)
 
 
 def _sign_in_twice(world: World, subject: str = SUBJECT) -> None:
@@ -70,26 +73,33 @@ def test_a_failing_deleting_transaction_answers_400_and_keeps_the_sessions(
         assert session.query(AuditLog).filter_by(resource_id=SUBJECT, action="delete").count() == 0
 
 
-@pytest.mark.parametrize(
-    "failing_step",
-    [
-        pytest.param("__init__", id="session-construction"),
-        pytest.param("rollback", id="rollback"),
-        pytest.param("close", id="session-exit"),
-    ],
-)
-def test_a_failure_around_the_database_session_answers_400_and_keeps_the_sessions(
-    world: World, monkeypatch: pytest.MonkeyPatch, failing_step: str,
+def test_an_audit_failure_after_the_deletion_answers_400_and_keeps_the_sessions(
+    world: World, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _sign_in_twice(world)
-    refused_token = world.issuer.logout_token(SUBJECT, nonce="n")
+
+    def fail(*_args, **_kwargs) -> None:
+        raise RuntimeError("audit sink failed")
+
+    monkeypatch.setattr(DatabaseAuditSink, "account_event", fail)
+    response = _backchannel(world, world.issuer.logout_token(SUBJECT))
+
+    assert (response.status_code, response.content) == (400, b"")
+    assert world.session_count() == 2
+
+
+def test_a_failure_to_build_the_database_session_answers_400_and_keeps_the_sessions(
+    world: World, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _sign_in_twice(world)
+    valid_token = world.issuer.logout_token(SUBJECT)
 
     def fail(*_args, **_kwargs) -> None:
         raise RuntimeError("database session failed")
 
     with monkeypatch.context() as failing:
-        failing.setattr(Session, failing_step, fail)
-        response = _backchannel(world, refused_token)
+        failing.setattr(Session, "__init__", fail)
+        response = _backchannel(world, valid_token)
 
     assert (response.status_code, response.content) == (400, b"")
     assert world.session_count() == 2

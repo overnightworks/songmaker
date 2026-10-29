@@ -964,7 +964,7 @@ starts with the creator's account id: a stream track carries `seed: null` and
 | Layer | Responsibility | Key files |
 |-------|---------------|-----------|
 | HTTP | FastAPI app, CORS, security headers, body size limit, gzip compression (JSON/text/JS by Content-Type, never binary media or a `Content-Range` response, proper `Accept-Encoding` q-value negotiation), SPA fallback | `server.py`, `middleware/gzip.py` |
-| Auth | Sign-in through Keycloak (start, callback, logout), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
+| Auth | Sign-in through Keycloak (webauth's start, callback, logout and back-channel routes, composed in `install_sign_in`), session dependencies bound to the database | `auth_dependencies.py`, `auth_api.py`, `auth_stores.py` |
 | API | REST endpoints split by domain: albums, songs, generations, playlists, library search, LoRAs, live co-writer chat, settings and capabilities, admin | `api.py` (aggregator), `album_api.py`, `song_api.py`, `generation_api.py`, `playlist_api.py`, `library_api.py`, `lora_api.py`, `conversation_api.py`, `settings_api.py`, `admin_api.py` |
 | Helpers | Shared access checks, rate limiting, slug generation | `api_helpers.py` |
 | Models | Pydantic request/response with `from_orm()` | `api_models/` |
@@ -1077,7 +1077,7 @@ until its own move.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.23.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.24.0`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
@@ -1086,11 +1086,10 @@ Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
 decision, `ports.py` names the stores, rate backend and audit sink the host
 supplies, `policies.py` the four request policies it supplies, `oidc.py` and
 `oidc_login.py` the OpenID Connect relying party and the transaction-free parts
-of signing in and out (`start_login`, `finish_login`, `open_session`,
-`log_out`), `rate_limit.py` the sliding-window counter, `middleware/` the
+of signing in and out, `sign_in_routes.py` the start, callback, logout and back-channel routes with
+the `SignInPaths` that derive their policies, `rate_limit.py` the sliding-window counter, `middleware/` the
 rate-limit, CSRF, body-size and security-header middlewares, and
-`dependencies.py` the `current_user_dependency` factory. The routes and the
-transaction around them stay in the application.
+`dependencies.py` the `current_user_dependency` factory. The sign-in transaction and the pages a refusal shows stay in the application.
 
 The auth layer never reads songmaker's settings or its `AppContext`. The
 session secret, trusted proxies, rate backend, session lifetime (idle and
@@ -1104,20 +1103,21 @@ remains the rate-limit backend; session validity comes from the DB on every
 authenticated request. `session_cleanup_loop` periodically deletes expired DB
 sessions without Redis.
 
-Sign-in is songmaker's own composition of that library, in `auth_api.py` and
-`oidc_client.py`. `oidc_client.build_oidc_sign_in(settings)` builds the relying
+Sign-in is songmaker's composition of that library, in `auth_api.py` (`install_sign_in`),
+`auth_stores.py` (`DatabaseSignInTransaction`) and `oidc_client.py`. `oidc_client.build_oidc_sign_in(settings)` builds the relying
 party at the Keycloak realm named by `OIDC_ISSUER` (endpoints derived from the
 issuer, client id from `OIDC_CLIENT_ID`, client secret read from the file
 `OIDC_CLIENT_SECRET_FILE`, redirect addresses from `PUBLIC_BASE_URL`) and the
 `AdmissionConfig` (the bound issuer and the groups `/apps/songmaker` and
 `/apps/songmaker/admin`). It is built once in `server.create_app`, so the workers
 and the migrate step, which never create the web app, start without the realm's
-settings. `GET /login/oidc` starts the login; `GET /auth/callback` runs
-`finish_login` (admission, account creation or role change) and `open_session`
-under `DatabaseWriteLock` in one transaction and commits before
-`issue_session_cookies`; `POST /auth/logout` runs `log_out` and answers its page. A refusal at the
-callback is answered with the SPA shell and 403 (the path is the marker the SPA
-reads), except a non-member, who is redirected to `/no-access`.
+settings. `install_sign_in` (called by `server.create_app`) hands the library the paths, the relying
+party, the admission and the transaction. `GET /login/oidc` starts the login; `GET /auth/callback`
+writes the account and the session in one `DatabaseSignInTransaction` entry (a fresh database
+session under `DatabaseWriteLock`, committed on a clean exit, rolled back when the block raises)
+and the library issues the cookies after it; `POST /auth/logout` and the back-channel route
+enter the same transaction. A refusal at the callback is answered with the SPA shell and 403 (the
+path is the marker the SPA reads), except a non-member, who is redirected to `/no-access`.
 
 Songmaker's own data — accounts, sessions, audit entries — reaches the library
 through the `webauth.ports` protocols, implemented in
