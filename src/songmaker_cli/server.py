@@ -64,7 +64,7 @@ from songmaker_cli.lifecycle import (
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
-from songmaker_cli.oidc_client import build_bearer_gate, build_oidc_sign_in
+from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
 from songmaker_cli.request_policies import (
     SPA_SHELL_HEADERS,
     build_body_size_policy,
@@ -207,6 +207,7 @@ def create_app(
     data_dir: Path,
     project_root: Path,
     ctx: AppContext | None = None,
+    oidc_sign_in: OidcSignIn | None = None,
 ) -> FastAPI:
     configure_agent_providers(get_settings())
     app = FastAPI(
@@ -216,7 +217,6 @@ def create_app(
         openapi_url=None,
         lifespan=_lifespan,
     )
-
     if ctx is None:
         ctx = _create_default_context(audio_dir, data_dir)
 
@@ -228,7 +228,7 @@ def create_app(
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)
-    app.state.oidc_sign_in = build_oidc_sign_in(get_settings())
+    app.state.oidc_sign_in = oidc_sign_in or build_oidc_sign_in(get_settings())
     install_sign_in(app)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 

@@ -7,12 +7,14 @@ fake issuer's. Matrix cells T1 to T26 of the work item are named in the case ids
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import threading
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import ClassVar
 from urllib.parse import urlsplit
 
 import pytest
@@ -22,11 +24,14 @@ from postgres_lock_harness import in_thread
 from pydantic import ValidationError
 from sqlalchemy import event
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.requests import ClientDisconnect
+from starlette.types import ASGIApp
 from support.compose_config import run_compose_config
 from support.oidc_world import World
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, seed_user
 
 from songmaker_cli.auth_stores import DatabaseAuditSink
+from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LEEWAY_SECONDS, OIDC_LOGIN_GROUP
 from songmaker_cli.db.models import (
     Album,
     AuditLog,
@@ -38,21 +43,20 @@ from songmaker_cli.db.models import (
     UserSession,
     Version,
 )
-
-MEMBER: Final = "/apps/songmaker"
-ADMIN: Final = "/apps/songmaker/admin"
-HAL: Final = "hal"
-ALICE: Final = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
-BOB: Final = "0a9b8c7d-dddd-4eee-8fff-ba9876543210"
-TOKEN_LIFETIME_SECONDS: Final = 300
-BEYOND_LEEWAY_SECONDS: Final = 31
-CROSS_ORIGIN: Final = {"Origin": "https://evil.example"}
-CHAT_REFUSAL: Final = {"detail": "The co-writer needs a browser sign-in."}
+from songmaker_cli.db.queries.resource_events import create_generation_created_event
 
 
 @dataclass
 class TokenWorld:
-    """The full app with the person-path gate on, a fake realm, and a header-exact client."""
+    """The full app with the person-path gate on, a fake realm, and a header-exact client.
+
+    It also owns the scenario's people and token values.
+    """
+
+    HAL: ClassVar = "hal"
+    ALICE: ClassVar = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
+    BOB: ClassVar = "0a9b8c7d-dddd-4eee-8fff-ba9876543210"
+    TOKEN_LIFETIME_SECONDS: ClassVar = 300
 
     client: TestClient
     factory: sessionmaker[Session]
@@ -63,7 +67,7 @@ class TokenWorld:
         self,
         subject: str = ALICE,
         *,
-        groups: tuple[str, ...] = (MEMBER,),
+        groups: tuple[str, ...] = (OIDC_LOGIN_GROUP,),
         username: str = "alice",
         **claims: object,
     ) -> str:
@@ -72,11 +76,11 @@ class TokenWorld:
             "iss": self.issuer.issuer,
             "aud": self.issuer.client_id,
             "sub": subject,
-            "azp": HAL,
+            "azp": self.HAL,
             "preferred_username": username,
             "groups": list(groups),
             "iat": now,
-            "exp": now + TOKEN_LIFETIME_SECONDS,
+            "exp": now + self.TOKEN_LIFETIME_SECONDS,
             **claims,
         }
         return self.issuer.sign(
@@ -132,7 +136,7 @@ class TokenWorld:
 
 @pytest.fixture
 def token_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TokenWorld:
-    monkeypatch.setenv("TOKEN_CLIENTS", HAL)
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
     return _world(tmp_path, monkeypatch)
 
 
@@ -143,10 +147,9 @@ def _world(
 
     get_settings.cache_clear()
     issuer = a_fake_issuer()
-    monkeypatch.setattr(
-        "songmaker_cli.server.build_oidc_sign_in", lambda _settings: issuer.relying_party_for_app(),
+    app_client, factory = make_test_app(
+        tmp_path, factory=factory, oidc_sign_in=issuer.relying_party_for_app(),
     )
-    app_client, factory = make_test_app(tmp_path, factory=factory)
     # A client that adds no Fetch Metadata: a request names exactly the headers a test gives it.
     client = TestClient(app_client.app, base_url=TEST_ORIGIN, cookies={},
                         raise_server_exceptions=False)
@@ -159,26 +162,26 @@ def _world(
 def test_t1_a_members_token_lists_only_their_songs_and_makes_the_account_without_a_session(
     token_world: TokenWorld,
 ) -> None:
-    token_world.seed_take(BOB, "bobs")
+    token_world.seed_take(TokenWorld.BOB, "bobs")
 
-    first = token_world.client.get("/api/songs", headers=token_world.bearer(ALICE))
-    token_world.seed_take(ALICE, "alices")
-    second = token_world.client.get("/api/songs", headers=token_world.bearer(ALICE))
+    first = token_world.client.get("/api/songs", headers=token_world.bearer(TokenWorld.ALICE))
+    token_world.seed_take(TokenWorld.ALICE, "alices")
+    second = token_world.client.get("/api/songs", headers=token_world.bearer(TokenWorld.ALICE))
 
     assert first.json()["items"] == []
     assert [song["title"] for song in second.json()["items"]] == ["Song alices"]
-    assert token_world.users().count((ALICE, "alice", "user")) == 1
-    assert token_world.audits().count((None, "create", "user", ALICE)) == 1
+    assert token_world.users().count((TokenWorld.ALICE, "alice", "user")) == 1
+    assert token_world.audits().count((None, "create", "user", TokenWorld.ALICE)) == 1
     assert token_world.rows(UserSession, "id") == []
 
 
 def test_t2_a_token_reaches_its_own_take_file_and_not_anothers(token_world: TokenWorld) -> None:
-    token_world.seed_take(ALICE, "alices")
-    token_world.seed_take(BOB, "bobs")
-    headers = token_world.bearer(ALICE)
+    token_world.seed_take(TokenWorld.ALICE, "alices")
+    token_world.seed_take(TokenWorld.BOB, "bobs")
+    headers = token_world.bearer(TokenWorld.ALICE)
 
-    own = token_world.client.get(f"/audio/{ALICE}/alices.mp3", headers=headers)
-    other = token_world.client.get(f"/audio/{BOB}/bobs.mp3", headers=headers)
+    own = token_world.client.get(f"/audio/{TokenWorld.ALICE}/alices.mp3", headers=headers)
+    other = token_world.client.get(f"/audio/{TokenWorld.BOB}/bobs.mp3", headers=headers)
 
     assert (own.status_code, own.content) == (200, b"ID3 not really audio")
     assert other.status_code == 404
@@ -196,7 +199,7 @@ def test_t2_a_token_reaches_its_own_take_file_and_not_anothers(token_world: Toke
         pytest.param({"azp": None}, id="t3-no-azp"),
         pytest.param({"aud": "another-app"}, id="t4-foreign-audience"),
         pytest.param({"aud": ["songmaker-test", "another-app"]}, id="t25-shared-audience"),
-        pytest.param({"exp": -BEYOND_LEEWAY_SECONDS}, id="t5-expired-past-leeway"),
+        pytest.param({"exp": -(OIDC_LEEWAY_SECONDS + 1)}, id="t5-expired-past-leeway"),
     ],
 )
 def test_a_token_that_is_not_for_this_app_is_refused_as_invalid(
@@ -227,7 +230,8 @@ def test_t6_a_token_of_a_non_member_is_refused_and_writes_nothing(token_world: T
 def test_t7_an_admin_route_needs_the_admin_group(token_world: TokenWorld) -> None:
     refused = token_world.client.get("/api/admin/voices", headers=token_world.bearer())
     admitted = token_world.client.get(
-        "/api/admin/voices", headers=token_world.bearer(BOB, groups=(MEMBER, ADMIN)),
+        "/api/admin/voices",
+        headers=token_world.bearer(TokenWorld.BOB, groups=(OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP)),
     )
 
     assert (refused.status_code, refused.json()) == (403, {"detail": "Admin access required"})
@@ -247,17 +251,17 @@ def test_t8_a_token_write_without_provenance_passes_csrf_and_is_committed(
 
     assert without_token.status_code == 403
     assert with_token.status_code == 200
-    assert token_world.albums() == [("From the CLI", ALICE)]
+    assert token_world.albums() == [("From the CLI", TokenWorld.ALICE)]
 
 
 def test_t9_a_cookie_only_cross_origin_write_is_still_refused(token_world: TokenWorld) -> None:
     with token_world.factory() as session:
-        seed_user(session, "cookie-user", user_id=BOB)
+        seed_user(session, "cookie-user", user_id=TokenWorld.BOB)
         session.commit()
     seed_session(token_world.client, "cookie-user")
 
     response = token_world.client.post(
-        "/api/albums", json={"title": "Forged"}, headers=CROSS_ORIGIN,
+        "/api/albums", json={"title": "Forged"}, headers={"Origin": "https://evil.example"},
     )
 
     assert response.status_code == 403
@@ -266,7 +270,7 @@ def test_t9_a_cookie_only_cross_origin_write_is_still_refused(token_world: Token
 
 def _a_session_of_bob(token_world: TokenWorld) -> tuple:
     with token_world.factory() as session:
-        seed_user(session, "bob", user_id=BOB)
+        seed_user(session, "bob", user_id=TokenWorld.BOB)
         session.commit()
     seed_session(token_world.client, "bob")
     return token_world.rows(UserSession, "id", "user_id", "expires_at")
@@ -277,9 +281,9 @@ def test_t10_a_token_beside_a_valid_cookie_decides_and_leaves_the_session_alone(
 ) -> None:
     session_before = _a_session_of_bob(token_world)
 
-    response = token_world.client.get("/api/auth/me", headers=token_world.bearer(ALICE))
+    response = token_world.client.get("/api/auth/me", headers=token_world.bearer(TokenWorld.ALICE))
 
-    assert response.json()["id"] == ALICE
+    assert response.json()["id"] == TokenWorld.ALICE
     assert token_world.rows(UserSession, "id", "user_id", "expires_at") == session_before
 
 
@@ -289,12 +293,12 @@ def test_t19_a_token_write_beside_another_persons_cookie_belongs_to_the_token(
     session_before = _a_session_of_bob(token_world)
 
     response = token_world.client.post(
-        "/api/albums", json={"title": "Alices"}, headers=token_world.bearer(ALICE),
+        "/api/albums", json={"title": "Alices"}, headers=token_world.bearer(TokenWorld.ALICE),
     )
 
     assert response.status_code == 200
-    assert token_world.albums() == [("Alices", ALICE)]
-    assert (ALICE, "create", "album", response.json()["id"]) in token_world.audits()
+    assert token_world.albums() == [("Alices", TokenWorld.ALICE)]
+    assert (TokenWorld.ALICE, "create", "album", response.json()["id"]) in token_world.audits()
     assert token_world.rows(UserSession, "id", "user_id", "expires_at") == session_before
 
 
@@ -353,7 +357,9 @@ def test_t13_the_co_writer_turn_refuses_a_token_before_writing_any_chat_state(
         "/api/chat/turn", json={"message": "hello"}, headers=token_world.bearer(),
     )
 
-    assert (response.status_code, response.json()) == (403, CHAT_REFUSAL)
+    assert (response.status_code, response.json()) == (
+        403, {"detail": "The co-writer needs a browser sign-in."},
+    )
     assert token_world.rows(Job, "id") == []
     assert token_world.rows(ChatMessage, "id") == []
 
@@ -404,7 +410,7 @@ def test_t15_compose_hands_token_clients_to_the_web_service_only(tmp_path: Path)
     env_file.write_text(
         "GRAFANA_PASSWORD=scratch-grafana-password-not-a-secret\n"
         "OIDC_ISSUER=https://keycloak.invalid/realms/scratch\n"
-        f"TOKEN_CLIENTS={HAL}\n",
+        f"TOKEN_CLIENTS={TokenWorld.HAL}\n",
     )
 
     result: subprocess.CompletedProcess[str] = run_compose_config(
@@ -418,7 +424,7 @@ def test_t15_compose_hands_token_clients_to_the_web_service_only(tmp_path: Path)
     services = json.loads(result.stdout)["services"]
     carrying = {
         name for name, service in services.items()
-        if service.get("environment", {}).get("TOKEN_CLIENTS") == HAL
+        if service.get("environment", {}).get("TOKEN_CLIENTS") == TokenWorld.HAL
     }
     assert carrying == {"songmaker-web"}
 
@@ -429,22 +435,22 @@ def test_t15_compose_hands_token_clients_to_the_web_service_only(tmp_path: Path)
 @pytest.mark.parametrize(
     ("before", "groups", "after"),
     [
-        pytest.param("user", (MEMBER, ADMIN), "admin", id="promoted"),
-        pytest.param("admin", (MEMBER,), "user", id="demoted"),
+        pytest.param("user", (OIDC_LOGIN_GROUP, OIDC_ADMIN_GROUP), "admin", id="promoted"),
+        pytest.param("admin", (OIDC_LOGIN_GROUP,), "user", id="demoted"),
     ],
 )
 def test_t16_the_groups_of_a_token_rewrite_the_stored_role_and_audit_it(
     token_world: TokenWorld, before: str, groups: tuple[str, ...], after: str,
 ) -> None:
     with token_world.factory() as session:
-        seed_user(session, "alice", before, user_id=ALICE)
+        seed_user(session, "alice", before, user_id=TokenWorld.ALICE)
         session.commit()
 
     response = token_world.client.get("/api/songs", headers=token_world.bearer(groups=groups))
 
     assert response.status_code == 200
-    assert token_world.users() == [(ALICE, "alice", after)]
-    assert (None, "update", "user", ALICE) in token_world.audits()
+    assert token_world.users() == [(TokenWorld.ALICE, "alice", after)]
+    assert (None, "update", "user", TokenWorld.ALICE) in token_world.audits()
 
 
 def _fail_the_audit(_world: TokenWorld, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -455,10 +461,15 @@ def _fail_the_audit(_world: TokenWorld, monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def _fail_the_commit(world: TokenWorld, monkeypatch: pytest.MonkeyPatch) -> None:
-    def refuse(_session: Session) -> None:
-        raise RuntimeError("the transaction cannot commit")
+    """Let the lock's preliminary commit pass; refuse the one that persists the admission."""
+    commits_seen: list[Session] = []
 
-    event.listen(world.factory, "before_commit", refuse)
+    def refuse_the_admission_commit(session: Session) -> None:
+        commits_seen.append(session)
+        if len(commits_seen) == 2:
+            raise RuntimeError("the transaction cannot commit")
+
+    event.listen(world.factory, "before_commit", refuse_the_admission_commit)
 
 
 @pytest.mark.parametrize(
@@ -480,7 +491,7 @@ def test_t17_a_failing_admission_is_a_500_with_no_account_and_no_session(
 def test_t18_a_first_token_call_and_a_first_sign_in_race_into_one_account_and_one_audit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
 ) -> None:
-    monkeypatch.setenv("TOKEN_CLIENTS", HAL)
+    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
     world = _world(tmp_path, monkeypatch, factory=pg_factory)
     browser = World(world.client, pg_factory, world.issuer)
     started = browser.start()
@@ -493,7 +504,7 @@ def test_t18_a_first_token_call_and_a_first_sign_in_race_into_one_account_and_on
 
     def sign_in() -> object:
         start_together.wait()
-        return browser.callback(Person(ALICE, "alice"), started)
+        return browser.callback(Person(TokenWorld.ALICE, "alice"), started)
 
     threads = [in_thread(answers, "token", token_call), in_thread(answers, "sign-in", sign_in)]
     for thread in threads:
@@ -502,23 +513,23 @@ def test_t18_a_first_token_call_and_a_first_sign_in_race_into_one_account_and_on
         thread.join()
 
     assert (answers["token"].status_code, answers["sign-in"].status_code) == (200, 303)
-    assert [row[0] for row in world.users()] == [ALICE]
-    assert world.audits().count((None, "create", "user", ALICE)) == 1
+    assert [row[0] for row in world.users()] == [TokenWorld.ALICE]
+    assert world.audits().count((None, "create", "user", TokenWorld.ALICE)) == 1
 
 
 # -- T21, T22: deletion and sharing ----------------------------------------------------
 
 
 def test_t21_a_token_deletes_its_own_album_and_not_anothers(token_world: TokenWorld) -> None:
-    token_world.seed_take(ALICE, "alices")
-    token_world.seed_take(BOB, "bobs")
-    headers = token_world.bearer(ALICE)
+    token_world.seed_take(TokenWorld.ALICE, "alices")
+    token_world.seed_take(TokenWorld.BOB, "bobs")
+    headers = token_world.bearer(TokenWorld.ALICE)
 
     own = token_world.client.delete("/api/albums/album-alices", headers=headers)
     other = token_world.client.delete("/api/albums/album-bobs", headers=headers)
 
     assert own.status_code == 200
-    assert other.status_code in {403, 404}
+    assert other.status_code == 404
     assert token_world.client.get("/api/albums/album-alices", headers=headers).status_code == 404
     with token_world.factory() as session:
         assert session.get(Album, "album-bobs").deleted_at is None
@@ -527,13 +538,13 @@ def test_t21_a_token_deletes_its_own_album_and_not_anothers(token_world: TokenWo
 def test_t22_another_persons_shared_take_stays_private_under_audio_and_public_under_shared(
     token_world: TokenWorld,
 ) -> None:
-    take = token_world.seed_take(BOB, "bobs")
-    bob = token_world.bearer(BOB, username="bob")
+    take = token_world.seed_take(TokenWorld.BOB, "bobs")
+    bob = token_world.bearer(TokenWorld.BOB, username="bob")
     shared = token_world.client.post(f"/api/generations/{take}/share", headers=bob)
     slug = shared.json()["share_slug"]
 
     through_audio = token_world.client.get(
-        f"/audio/{BOB}/bobs.mp3", headers=token_world.bearer(ALICE),
+        f"/audio/{TokenWorld.BOB}/bobs.mp3", headers=token_world.bearer(TokenWorld.ALICE),
     )
     public_url = token_world.client.get(f"/shared/gen/{slug}").json()["audio_url"]
     through_share = token_world.client.get(public_url)
@@ -560,25 +571,65 @@ def test_t23_a_bearer_alone_does_not_register_a_worker_and_the_internal_token_st
         "/api/internal/workers/register", json=worker, headers=internal,
     )
 
-    assert bearer_only.status_code in {401, 422}
+    assert bearer_only.status_code == 422
     assert worker_request.status_code == 200
 
 
+async def _read_stream_until(
+    app: ASGIApp, path: str, headers: dict[str, str], *, until: str,
+) -> tuple[int, str]:
+    """GET a stream through the app's ASGI interface; the client leaves once `until` has arrived."""
+    status = 0
+    body = ""
+    # The request arrives once; a second read of the receive channel never returns.
+    receive: asyncio.Queue[dict] = asyncio.Queue()
+    receive.put_nowait({"type": "http.request", "body": b"", "more_body": False})
+
+    async def send(message: dict) -> None:
+        nonlocal status, body
+        if message["type"] == "http.response.start":
+            status = message["status"]
+        else:
+            body += message.get("body", b"").decode()
+            if until in body:
+                raise OSError("client disconnected")
+
+    scope = {
+        "type": "http", "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "http_version": "1.1", "method": "GET", "scheme": "https", "path": path,
+        "raw_path": path.encode(), "query_string": b"", "root_path": "",
+        "headers": [(b"host", urlsplit(TEST_ORIGIN).netloc.encode())]
+        + [(name.lower().encode(), value.encode()) for name, value in headers.items()],
+        "client": ("testclient", 50_000), "server": ("testserver", 443),
+    }
+    with suppress(ClientDisconnect):
+        await asyncio.wait_for(app(scope, receive.get, send), timeout=10)
+    return status, body
+
+
 def test_t24_the_event_streams_admit_a_token_and_keep_their_per_person_filter(
-    token_world: TokenWorld, monkeypatch: pytest.MonkeyPatch,
+    token_world: TokenWorld,
 ) -> None:
-    async def own_frames(_ctx, user_id, *_rest):
-        yield f"data: {user_id}\n\n"
-
-    monkeypatch.setattr("songmaker_cli.resource_event_api._resource_event_generator", own_frames)
     with token_world.factory() as session:
-        seed_user(session, "bob", user_id=BOB)
-        session.add(Job(id="bobs-job", type="generate", status="completed", user_id=BOB))
+        seed_user(session, "bob", user_id=TokenWorld.BOB)
+        session.add(Job(id="bobs-job", type="generate", status="completed", user_id=TokenWorld.BOB))
         session.commit()
-    headers = token_world.bearer(ALICE)
+    for owner, name in ((TokenWorld.BOB, "bobs"), (TokenWorld.ALICE, "alices")):
+        token_world.seed_take(owner, name)
+        with token_world.factory() as session:
+            create_generation_created_event(
+                session, user_id=owner, song_id=f"song-{name}", generation_id=f"take-{name}",
+            )
+            session.commit()
+    headers = token_world.bearer(TokenWorld.ALICE)
 
-    resource = token_world.client.get("/api/resource-events/stream", headers=headers)
+    status, frames = asyncio.run(_read_stream_until(
+        token_world.client.app, "/api/resource-events/stream",
+        {**headers, "Last-Event-ID": "0"}, until="take-alices",
+    ))
     foreign_job = token_world.client.get("/api/jobs/bobs-job/stream", headers=headers)
 
-    assert (resource.status_code, resource.text) == (200, f"data: {ALICE}\n\n")
+    assert (status, "event: generation.created" in frames, "take-bobs" in frames) == (
+        200, True, False,
+    )
     assert foreign_job.status_code == 404
