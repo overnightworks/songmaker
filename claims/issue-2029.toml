@@ -1,8 +1,0 @@
-claim_id = "19238e9a0b374534b4bf6fcef864c034"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "09bc7ed145d4d902d38a14f5bfce5f77de504874"
-branch = "claude/issue-2029-deepmerge-leaves-the-lock-typescript-6-a"
-scope = ["Dockerfile", "frontend/package.json", "frontend/patches", "frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml", "frontend/src", "frontend/svelte.config.js", "frontend/vite.config.ts", "frontend/vitest.config.ts"]
-opened_commit = "dc905439dcb208892d181b4290eca5f568601a84"
-whole_reason = "Three small kit-2 toolchain slices that share the lock: the deepmerge patch, TypeScript 6 and the config move; frontend/src only for edits TypeScript 6 forces."
