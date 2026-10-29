@@ -1,8 +1,0 @@
-claim_id = "8fea36402bb946c8839dd2fbc56b0ae5"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "15d8557508fe726d732335875a524b6a817e4621"
-branch = "claude/issue-2005-admin-models-tab-renamed-agents"
-scope = ["docs/architecture.md", "docs/design/README.md", "docs/design/admin-models.html", "docs/design/song-page-phone.html", "docs/design/vocabulary.html", "frontend/e2e/README.md", "frontend/e2e/admin-models.spec.ts", "frontend/src/app.css", "frontend/src/lib/adminTabs.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/settings/+layout.svelte", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts", "src/songmaker_cli/provider_status.py", "tests/test_cowriter_providers.py"]
-opened_commit = "0c6cb70cdfd4cc0a149b9f506b9334598b9ed872"
-whole_reason = "One wording rename whose label, id, tests, picture and docs must agree in the same landing."
