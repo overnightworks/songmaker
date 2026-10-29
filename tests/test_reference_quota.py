@@ -202,6 +202,14 @@ def test_upload_refusals_are_exact_and_add_nothing(quota_context, state, status,
     assert _files(ctx) == []
 
 
+def _owner_with_room_for_one_more(ctx, capacity):
+    if capacity == "files":
+        _seed_rows(ctx, "owner", 49)
+        return Settings()
+    _seed_rows(ctx, "owner", 1, 900)
+    return Settings(reference_audio_quota_bytes=1000)
+
+
 @pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
 @pytest.mark.parametrize("capacity", ["bytes", "files"])
 def test_postgresql_reference_admission_is_atomic(
@@ -209,12 +217,7 @@ def test_postgresql_reference_admission_is_atomic(
 ):
     """1301-F3-Q-CONCURRENT: observe contention before allowing the first write."""
     ctx = quota_context
-    if capacity == "files":
-        _seed_rows(ctx, "owner", 49)
-        settings = Settings()
-    else:
-        _seed_rows(ctx, "owner", 1, 900)
-        settings = Settings(reference_audio_quota_bytes=1000)
+    settings = _owner_with_room_for_one_more(ctx, capacity)
     entered, release = held_reference_owner
     engine = create_engine(
         ctx.db.kw["bind"].url,
