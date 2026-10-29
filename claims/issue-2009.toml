@@ -1,0 +1,8 @@
+claim_id = "d80f889d86e9448790b5a149e0d2d15b"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "15d8557508fe726d732335875a524b6a817e4621"
+branch = "claude/issue-2009-image-and-health-report-the-release"
+scope = [".github/workflows/e2e.yml", "Dockerfile", "docker-compose.yml", "docs/architecture.md", "docs/security.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/test-utils/factories.ts", "quality/baseline.toml", "quality/config.toml", "scripts/auto-deploy.sh", "src/songmaker_cli/api_models/health.py", "src/songmaker_cli/api_models/release.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/settings.py", "tests/auto_deploy_harness.py", "tests/test_auto_deploy_releases.py", "tests/test_compose_release_args.py", "tests/test_health_api.py", "tests/test_settings.py"]
+opened_commit = "ec8279d5596798a1d4fb58f814ecc9c3ded96b98"
+whole_reason = "One chain (build argument, image ENV, Settings, ReleaseInfo, /health, generated type) that proves nothing until whole; the delivery files are one to four lines each."
