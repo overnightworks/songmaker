@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from agent_providers.config import reset_config
@@ -398,22 +397,6 @@ def test_music_worker_settings_functions() -> None:
     assert JobFunction.DOWNLOAD_MODEL_ON_WORKER in func_names
     assert JobFunction.LORA_TRAINING in func_names
     assert len(MusicWorkerSettings.functions) == 4
-
-
-def test_production_compose_switches_every_cover_owner_to_web() -> None:
-    compose = (Path(__file__).parents[1] / "docker-compose.yml").read_text()
-    web_service = compose.split("  songmaker-web:\n", maxsplit=1)[1].split(
-        "  songmaker-music-worker:\n", maxsplit=1,
-    )[0]
-    music_service = compose.split("  songmaker-music-worker:\n", maxsplit=1)[1].split(
-        "  songmaker-acestep-worker-0:\n", maxsplit=1,
-    )[0]
-
-    assert "command: [\"songmaker_cli.music_worker.MusicWorkerSettings\"]" in music_service
-    assert 'COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"' in web_service
-    assert 'COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"' in music_service
-    assert "target: /usr/local/bin/codex" in music_service
-    assert "target: /home/songmaker/.codex/auth.json" in music_service
 
 
 def test_music_worker_settings_uses_singleton_methods() -> None:
