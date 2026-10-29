@@ -44,6 +44,7 @@ from auto_deploy_support import (
     git,
     git_output,
     has_commit,
+    prometheus_rules_response,
     stops_running,
     write_executable,
 )
@@ -1037,18 +1038,17 @@ def test_an_alert_rule_count_mismatch_is_logged_after_a_successful_deploy(
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
-    checkout.set_prometheus_rules_response(
-        '{"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":['
-        '{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}] }]}}',
-    )
+    configured = checkout.configured_alerting_rules
+    loaded = configured - 1
+    checkout.set_prometheus_rules_response(prometheus_rules_response(loaded))
     checkout.move_main_forward_with_changed_alert_rules()
 
     result = checkout.tick()
 
     assert result.returncode == 0
     assert (
-        "Prometheus alert rule count mismatch after reload: configured 4, loaded 3; "
-        "deploy remains successful"
+        f"Prometheus alert rule count mismatch after reload: configured {configured}, "
+        f"loaded {loaded}; deploy remains successful"
     ) in checkout.journal
     assert checkout.failure_count_file.read_text() == "0"
 

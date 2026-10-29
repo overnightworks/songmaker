@@ -26,7 +26,6 @@ from auto_deploy_support import (
     MIGRATIONS_PATH,
     PROMETHEUS_METRICS_RESPONSE,
     PROMETHEUS_RULE_PATH,
-    PROMETHEUS_RULES_RESPONSE,
     PRUNE_TIMEOUT_SECONDS,
     REPO_ROOT,
     VALID_ALERT_ENV,
@@ -34,8 +33,10 @@ from auto_deploy_support import (
     ComposeConfigRefusal,
     FailingTransport,
     check_runs_response,
+    count_alerting_rules,
     git,
     git_output,
+    prometheus_rules_response,
     write_executable,
 )
 
@@ -77,7 +78,7 @@ class Checkout:
         self._prometheus_reload_exit_code = 0
         self._prometheus_rules_exit_code = 0
         self._prometheus_metrics_exit_code = 0
-        self._prometheus_rules_response = PROMETHEUS_RULES_RESPONSE
+        self._prometheus_rules_response: str | None = None
         self._prometheus_metrics_response = PROMETHEUS_METRICS_RESPONSE
         self._prometheus_container = "0123456789ab"
         self.compose_stderr = ""
@@ -190,6 +191,16 @@ class Checkout:
         self._prometheus_metrics_exit_code = exit_code
         self._write_curl_stub()
 
+    @property
+    def configured_alerting_rules(self) -> int:
+        return count_alerting_rules(self.root / PROMETHEUS_RULE_PATH)
+
+    @property
+    def _loaded_rules_response(self) -> str:
+        if self._prometheus_rules_response is None:
+            return prometheus_rules_response(self.configured_alerting_rules)
+        return self._prometheus_rules_response
+
     def set_prometheus_rules_response(self, response: str) -> None:
         self._prometheus_rules_response = response
         self._write_curl_stub()
@@ -218,7 +229,7 @@ class Checkout:
             "fi\n"
             'if [[ "$*" == "--fail --silent --show-error --max-time 30 '
             'http://127.0.0.1:9090/api/v1/rules" ]]; then\n'
-            f"    printf '%s' {shlex.quote(self._prometheus_rules_response)}\n"
+            f"    printf '%s' {shlex.quote(self._loaded_rules_response)}\n"
             f"    exit {self._prometheus_rules_exit_code}\n"
             "fi\n"
             'echo "unexpected curl invocation: $*" >&2\n'
