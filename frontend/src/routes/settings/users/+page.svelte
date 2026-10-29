@@ -57,7 +57,7 @@
 		MODELS_COLUMN_ROUTE_LABEL,
 		MODELS_COLUMN_STATUS_LABEL,
 		MODELS_COLUMN_TASK_LABEL,
-		MODELS_HEADING,
+		AGENTS_HEADING,
 		MODELS_HISTORY_TAIL_LABEL,
 		MODELS_RETRY_LABEL,
 		modelsRowStatus,
@@ -107,8 +107,8 @@
 			void loadVoices();
 		} else if (next === 'generation' || next === 'acestep') {
 			void loadGenDefaults();
-		} else if (next === 'models') {
-			void loadModelsTab();
+		} else if (next === 'agents') {
+			void loadAgentsTab();
 		}
 	}
 
@@ -174,8 +174,8 @@
 	};
 	const PAGE_WIDE_LOADS = {
 		rateLimits: ['ratelimits'],
-		cowriter: ['models'],
-		cover: ['models']
+		cowriter: ['agents'],
+		cover: ['agents']
 	} satisfies Partial<Record<AdminLoad, AdminTab[]>>;
 
 	const loadReloads: Record<AdminLoad, ReturnType<typeof reloadWhileUnreachable>> = {
@@ -279,7 +279,7 @@
 
 	const FALLBACK_ROUTE: ModelsRouteKey = 'cli';
 
-	function loadModelsTab(): void {
+	function loadAgentsTab(): void {
 		void loadProviderStatuses();
 		void loadCowriterSettings();
 		void loadCoverSettings();
@@ -644,9 +644,9 @@
 			</section>
 		{/if}
 
-		{#if tab === 'models'}
+		{#if tab === 'agents'}
 			<section class="models-table-frame">
-				<h2>{MODELS_HEADING}</h2>
+				<h2>{AGENTS_HEADING}</h2>
 				<div class="tt">
 					<div class="tt-head">
 						<span>{MODELS_COLUMN_TASK_LABEL}</span>

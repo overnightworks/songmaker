@@ -131,7 +131,7 @@ function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSe
 	};
 }
 
-const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Models', 'ACE-Step', 'Cleanup'];
+const TAB_LABELS = ['Voices', 'Rate Limits', 'Generation', 'Agents', 'ACE-Step', 'Cleanup'];
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -314,7 +314,7 @@ afterEach(async () => {
 describe('C2: requested admin tab', () => {
 	it.each([
 		['?tab=acestep', 'acestep'],
-		['?tab=models', 'models'],
+		['?tab=agents', 'agents'],
 		['', 'voices'],
 		['?tab=unknown', 'voices']
 	] as const)('C2: selects %s on arrival and later navigation', async (query, expected) => {
@@ -443,8 +443,8 @@ describe('admin error ownership (#1447)', () => {
 
 	it.each([
 		{ load: 'rateLimits', request: 'fetchRateLimits', start: 'ratelimits', tabs: ['ratelimits'] },
-		{ load: 'cowriter', request: 'fetchCowriterSettings', start: 'models', tabs: ['models'] },
-		{ load: 'cover', request: 'fetchCoverSettings', start: 'models', tabs: ['models'] }
+		{ load: 'cowriter', request: 'fetchCowriterSettings', start: 'agents', tabs: ['agents'] },
+		{ load: 'cover', request: 'fetchCoverSettings', start: 'agents', tabs: ['agents'] }
 	] as const)(
 		'defect:#920-12 shows $load failures only on their data tabs',
 		async ({ load, request, start, tabs }) => {
@@ -453,7 +453,7 @@ describe('admin error ownership (#1447)', () => {
 			const target = await renderPage(true);
 			await selectTab(target, start);
 			expect(target.textContent).toContain(message);
-			for (const destination of ['ratelimits', 'models', 'voices', 'generation', 'acestep']) {
+			for (const destination of ['ratelimits', 'agents', 'voices', 'generation', 'acestep']) {
 				await selectTab(target, destination);
 				expect(target.textContent?.includes(message), destination).toBe(
 					(tabs as readonly string[]).includes(destination)
@@ -481,7 +481,7 @@ describe('admin reads and actions that fail', () => {
 	it('names a save the network swallowed without browser text', async () => {
 		api.updateCowriterSettings.mockRejectedValue(lostNetwork());
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 		const budget = requireElement<HTMLInputElement>(target, '#cowriter-budget');
 		budget.value = '32000';
 		budget.dispatchEvent(new Event('change', { bubbles: true }));
@@ -492,22 +492,22 @@ describe('admin reads and actions that fail', () => {
 	});
 });
 
-describe('admin models tab', () => {
+describe('admin agents tab', () => {
 	it('answers who does what in one row per task', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
-		const models = sectionByHeading(target, 'Models');
-		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover']);
-		expect(columnNames(models)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
+		const agents = sectionByHeading(target, 'Agents');
+		expect(taskNames(agents)).toEqual(['Co-Writer', 'Cover']);
+		expect(columnNames(agents)).toEqual(['Task', 'Provider', 'Route', 'Model', 'Status']);
 		expect(headings(target)).not.toContain('Providers');
-		expect(models.querySelector('.route-card')).toBeNull();
-		expect(saveButtons(models)).toEqual([]);
+		expect(agents.querySelector('.route-card')).toBeNull();
+		expect(saveButtons(agents)).toEqual([]);
 	});
 
 	it('offers every provider in the cover task with the state that task gives it', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · no image tool',
@@ -519,7 +519,7 @@ describe('admin models tab', () => {
 	it('keeps every provider offered and names a failed reachability probe in the row', async () => {
 		api.fetchProviderStatus.mockRejectedValue(serverRefusal('Provider probe failed'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · Provider probe failed',
@@ -531,7 +531,7 @@ describe('admin models tab', () => {
 
 	it('shows the cover row its live models and greys a route that is not set up', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const cover = rowNamed(target, 'Cover');
 		expect(optionLabels(modelSelect(target, 'Cover'))).toEqual(['gpt-5-codex']);
@@ -542,17 +542,17 @@ describe('admin models tab', () => {
 	it('keeps every provider offered while the reachability probe runs', async () => {
 		api.fetchProviderStatus.mockReturnValue(new Promise(() => {}));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
-		const models = sectionByHeading(target, 'Models');
-		expect(taskNames(models)).toEqual(['Co-Writer', 'Cover']);
+		const agents = sectionByHeading(target, 'Agents');
+		expect(taskNames(agents)).toEqual(['Co-Writer', 'Cover']);
 		expect(optionLabels(providerSelect(target, 'Cover'))[0]).toBe('Claude · Checking…');
 		expect(statusText(rowNamed(target, 'Cover'))).toBe('○Checking…');
 	});
 
 	it('C16 shows the co-writer row as set by the agent service, without a choice', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const row = rowNamed(target, 'Co-Writer');
 		expect(row.textContent).toContain('Set by the agent service');
@@ -562,7 +562,7 @@ describe('admin models tab', () => {
 	it('lists the cover row providers from the cover settings when the co-writer settings do not load', async () => {
 		api.fetchCowriterSettings.mockRejectedValue(serverRefusal('Co-writer settings failed'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		expect(optionLabels(providerSelect(target, 'Cover'))).toEqual([
 			'Claude · no image tool',
@@ -576,11 +576,11 @@ describe('admin models tab', () => {
 		let arrive: (settings: Awaited<ReturnType<typeof api.fetchCoverSettings>>) => void = () => {};
 		api.fetchCoverSettings.mockReturnValue(new Promise((resolve) => (arrive = resolve)));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		expect(target.querySelector(selectFor('Cover', 'provider'))).toBeNull();
 		expect(rowNamed(target, 'Co-Writer')).toBeTruthy();
-		expect(sectionByHeading(target, 'Models').textContent).toContain('Loading…');
+		expect(sectionByHeading(target, 'Agents').textContent).toContain('Loading…');
 		arrive({
 			provider: 'codex',
 			route: 'cli',
@@ -595,7 +595,7 @@ describe('admin models tab', () => {
 	it('shows the load error and no cover select when the cover settings fail', async () => {
 		api.fetchCoverSettings.mockRejectedValue(serverRefusal('cover unavailable'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 		expect(target.textContent).toContain('cover unavailable');
 		expect(target.textContent).not.toContain('Loading…');
 		expect(target.querySelector(selectFor('Cover', 'provider'))).toBeNull();
@@ -603,7 +603,7 @@ describe('admin models tab', () => {
 
 	it('saves the cover row with its own provider, route and model', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		await choose(providerSelect(target, 'Cover'), 'claude');
 
@@ -801,11 +801,11 @@ describe('admin models tab', () => {
 			)
 		);
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		await choose(providerSelect(target, 'Cover'), 'claude');
 
-		const failure = requireElement(sectionByHeading(target, 'Models'), '.tt-sub.bad');
+		const failure = requireElement(sectionByHeading(target, 'Agents'), '.tt-sub.bad');
 		expect(failure.textContent).toContain(sentence);
 		expect(failure.textContent).not.toContain('Something went wrong');
 		expect(requireElement(failure, '.retry').textContent?.trim()).toBe('Retry');
@@ -814,10 +814,10 @@ describe('admin models tab', () => {
 	it('names a rejected history-tail save next to the field with a retry', async () => {
 		api.updateCowriterSettings.mockRejectedValue(serverRefusal('Tail budget out of range'));
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Models'),
+			sectionByHeading(target, 'Agents'),
 			'details'
 		);
 		const budget = requireElement<HTMLInputElement>(disclosure, '#cowriter-budget');
@@ -838,10 +838,10 @@ describe('admin models tab', () => {
 
 	it('keeps the history tail under a collapsed Advanced disclosure and saves it there', async () => {
 		const target = await renderPage(true);
-		await selectTab(target, 'models');
+		await selectTab(target, 'agents');
 
 		const disclosure = requireElement<HTMLDetailsElement>(
-			sectionByHeading(target, 'Models'),
+			sectionByHeading(target, 'Agents'),
 			'details'
 		);
 		expect(disclosure.open).toBe(false);

@@ -4,7 +4,7 @@ The provider layer answers per provider and per route. Songmaker projects
 these snapshots onto the co-writer's catalog and the cover's capability.
 
 Probing is expensive, so a background loop refreshes one snapshot per provider
-and every reader — the settings API, the admin "Models" table — projects that
+and every reader — the settings API, the admin Agents table — projects that
 snapshot instead of probing inside a request.
 """
 

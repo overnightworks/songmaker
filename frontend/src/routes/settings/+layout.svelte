@@ -7,7 +7,7 @@
 
 	const pathname = $derived(page.url.pathname);
 	// Admin carries tables, not forms; the reading width the other settings
-	// pages share leaves the Models table too narrow for its five columns.
+	// pages share leaves the Agents table too narrow for its five columns.
 	const wide = $derived(pathname === ADMIN_PATHNAME);
 </script>
 

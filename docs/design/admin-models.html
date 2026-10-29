@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Admin · Models — Fassung 2</title>
+<title>Admin · Agents — Fassung 2</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Oswald:wght@400;500&family=Open+Sans:wght@400;600&display=swap">
 <style>
 	:root {
@@ -1275,7 +1275,7 @@
 </head>
 <body>
 <p class="freeze-note">
-	Bildbesitzer für den Admin-Tab „Models" — <strong>Fassung 2, am 06.09.2026 freigegeben</strong> nach
+	Bildbesitzer für den Admin-Tab „Agents" — <strong>Fassung 2, am 06.09.2026 freigegeben</strong> nach
 	dem Operator-Ruling desselben Tages und am selben Tag nachgeschärft (alle Aufgaben mit allen
 	Anbietern, Gründe im Select). Die Scoring-Zeile ist <strong>am 28.10.2026 entfallen</strong>
 	(#1974): der automatische Kohärenz-Judge hat die App verlassen, die Seite hat keine Scoring-Steuerung mehr.
@@ -1296,13 +1296,13 @@
 </p>
 <p class="freeze-note">
 	<strong>Gesegnet am 26.10.2026 für #1895:</strong> Der Abschnitt
-	<a href="#agent-service">„Neu · #1895 — der Agent-Service übernimmt"</a> zeichnet die Models-Tabelle für
+	<a href="#agent-service">„Neu · #1895 — der Agent-Service übernimmt"</a> zeichnet die Agents-Tabelle für
 	#1476 (Punkte 1–6 von „The pictures must show") in jedem Zwischenstand der Landung, am Desktop und bei
 	390&nbsp;px. Er überschreibt die Co-Writer- und Cover-Zeilen von Fassung 2.
 </p>
 <div class="wrap">
 	<header>
-		<div class="eyebrow">Songmaker · Admin · Models · Fassung 2</div>
+		<div class="eyebrow">Songmaker · Admin · Agents · Fassung 2</div>
 		<h1>One table: who does what, and does it work?</h1>
 		<p class="lede">
 			Zwei Aufgaben, eine Tabelle, eine Zeile pro Aufgabe. Die Seite erklärt nicht mehr die
@@ -1378,9 +1378,9 @@
 				</p>
 
 				<div class="screen">
-					<div class="screen-top"><span>Settings › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="screen-top"><span>Settings › <strong>Agents</strong></span><span>Admin</span></div>
 					<div class="screen-body">
-						<h4 class="screen-title">Models</h4>
+						<h4 class="screen-title">Agents</h4>
 						<div class="tt">
 							<div class="tt-head">
 								<span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span>
@@ -1597,7 +1597,7 @@
 				</p>
 
 				<div class="phone">
-					<div class="ph-top"><span>Settings › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-top"><span>Settings › <strong>Agents</strong></span><span>Admin</span></div>
 					<div class="ph-body">
 						<div class="tcard">
 							<h4>Co-Writer</h4>
@@ -1646,7 +1646,7 @@
 				</p>
 
 				<div class="phone">
-					<div class="ph-top"><span>Settings › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-top"><span>Settings › <strong>Agents</strong></span><span>Admin</span></div>
 					<div class="ph-body">
 						<div class="tcard">
 							<h4>Co-Writer</h4>
@@ -1748,10 +1748,10 @@
 			</ul>
 			<p class="ruling after-list">Was der Code-Check am 16.10.2026 gegenüber dem Issue-Text zurechtrückt:</p>
 			<ul>
-				<li><strong>Die Worker-Karten stehen heute im Tab „ACE-Step"</strong>, nicht im Tab „Models"
+				<li><strong>Die Worker-Karten stehen heute im Tab „ACE-Step"</strong>, nicht im Tab „Agents"
 					(<code class="loc">routes/settings/users/+page.svelte</code>: <code>WorkerPoolPanel</code>
 					und <code>ModelRegistryPanel</code> hängen unter <code>tab === 'acestep'</code>). Der
-					Models-Tab oben auf dieser Seite ist die Aufgaben-Tabelle und bleibt unberührt. Die Karte
+					Agents-Tab oben auf dieser Seite ist die Aufgaben-Tabelle und bleibt unberührt. Die Karte
 					zeigt die VRAM-Zeile heute schon, aber nur, wenn die Zahlen da sind; sie ist sonst weg.</li>
 				<li><strong>Ohne NVML ist die Zahl eine Schätzung, nicht „unbekannt":</strong> der Worker
 					meldet dann die Größen der geladenen Modelle gegen das Budget mit
@@ -2350,7 +2350,7 @@
 				<strong>Take Retention</strong>). Der Vorschlag: <strong>Cleanup wird ein Abschnitt der Admin-Seite</strong>,
 				der letzte Tab hinter ACE-Step — dort, wo ein Admin Wartung sucht: Rate Limits, Worker, jetzt auch das
 				Aufräumen alter Takes. Der Settings-Eintrag fällt weg (<code>navigation.html</code> (j)). Die Fläche
-				selbst ändert sich nicht: Vorschau, „Run now“ mit Bestätigung, automatischer Lauf. <strong>Models bleibt
+				selbst ändert sich nicht: Vorschau, „Run now“ mit Bestätigung, automatischer Lauf. <strong>Agents bleibt
 				unverändert</strong>; #1476 zeichnet den Abschnitt neu.
 			</p>
 			<p>
@@ -2372,7 +2372,7 @@
 				</p>
 				<div class="screen">
 					<div class="screen-top"><span>Settings › Admin › <strong>Cleanup</strong></span><span>Admin</span></div>
-					<div class="atabs"><span>Voices</span><span>Rate Limits</span><span>Generation</span><span>Models</span><span>ACE-Step</span><span class="on new">Cleanup</span></div>
+					<div class="atabs"><span>Voices</span><span>Rate Limits</span><span>Generation</span><span>Agents</span><span>ACE-Step</span><span class="on new">Cleanup</span></div>
 					<div class="screen-body">
 						<div class="cl-head"><h4 class="screen-title" style="margin:0">Take Retention</h4><i class="info" aria-label="What this does">i</i><span class="auto">↻ Auto · daily 03:00 UTC</span></div>
 						<div class="cl-grid">
@@ -2395,7 +2395,7 @@
 				</p>
 				<div class="screen">
 					<div class="screen-top"><span>Settings › Admin › <strong>Cleanup</strong></span><span>Admin</span></div>
-					<div class="atabs"><span>Voices</span><span>Rate Limits</span><span>Generation</span><span>Models</span><span>ACE-Step</span><span class="on">Cleanup</span></div>
+					<div class="atabs"><span>Voices</span><span>Rate Limits</span><span>Generation</span><span>Agents</span><span>ACE-Step</span><span class="on">Cleanup</span></div>
 					<div class="screen-body">
 						<div class="cl-head"><h4 class="screen-title" style="margin:0">Take Retention</h4><i class="info" aria-label="What this does">i</i><span class="auto">↻ Auto · daily 03:00 UTC</span></div>
 						<div class="cl-grid">
@@ -2474,9 +2474,9 @@
 					Cover läuft an diesem Tag noch auf dem alten Weg und ist bedienbar wie in (a).
 				</p>
 				<div class="screen">
-					<div class="screen-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="screen-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
 					<div class="screen-body">
-						<h4 class="screen-title">Models</h4>
+						<h4 class="screen-title">Agents</h4>
 						<div class="tt-scroll"><div class="tt">
 							<div class="tt-head"><span>Task</span><span>Provider</span><span>Route</span><span>Model</span><span>Status</span></div>
 
@@ -2534,7 +2534,7 @@
 				<div class="state-head"><h3>(w′) Cutover-Tag · gestapelt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1895</span></div>
 				<p class="state-note">Dieselben Zustände wie (w), eine Karte je Aufgabe. Die Co-Writer-Karte hat kein Select mehr.</p>
 				<div class="phone p390">
-					<div class="ph-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
 					<div class="ph-body">
 						<div class="tcard">
 							<h4>Co-Writer</h4>
@@ -2558,7 +2558,7 @@
 				<div class="state-head"><h3>(y′) Nach Slice 6 · gestapelt</h3><span class="tag tag-state">390 px</span><span class="proposed-tag flush">New · #1895</span></div>
 				<p class="state-note">Alles liest nur; Cover grau mit seinem Grund, vollständig, nicht gekürzt.</p>
 				<div class="phone p390">
-					<div class="ph-top"><span>Settings › Admin › <strong>Models</strong></span><span>Admin</span></div>
+					<div class="ph-top"><span>Settings › Admin › <strong>Agents</strong></span><span>Admin</span></div>
 					<div class="ph-body">
 						<div class="tcard">
 							<h4>Co-Writer</h4>

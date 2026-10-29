@@ -1030,14 +1030,14 @@ named (`<Provider> · no image tool`) instead of quietly running Codex.
 Codex CLI route reads its model catalogue from the mounted CLI's
 `codex debug models` JSON output. The settings responses project the selected
 route for legacy callers while also returning route-keyed readiness and
-catalogue snapshots. The Models page has no Scoring control. Saving a Models row is a question of
+catalogue snapshots. The Agents page has no Scoring control. Saving an Agents row is a question of
 form — a known provider, a known route, and a model the provider lists, the one
 the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
 unusable one stays saved until its next turn or job fails with the named reason.
 
 The Cover is what asks that one dispatch; the Co-Writer runs at
-the agent service. Settings › Admin › **Models** shows the Co-Writer and Cover: one table, one
+the agent service. Settings › Admin › **Agents** shows the Co-Writer and Cover: one table, one
 row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
 read-only (`ModelsCowriterRow.svelte`): "Set by the agent service" in the Provider
 and Model cells, Agent service as the route, no status, and the history tail under

@@ -805,7 +805,7 @@ def test_settings_requests_do_not_start_a_provider_probe_without_a_snapshot(
 
 # ── Provider-status response pin (A9, #873) ─────────────────────────
 #
-# ``GET /api/settings/providers`` feeds the admin "Models" table.  The pin
+# ``GET /api/settings/providers`` feeds the admin "Agents" table.  The pin
 # drives it from one fixed snapshot set so the whole response body — not a
 # field the assertion happens to name — is compared byte for byte.
 
