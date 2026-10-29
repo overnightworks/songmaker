@@ -61,7 +61,7 @@ _REDACTED_CODEX_LOGIN = {
     },
 }
 A_COVER_POLICY = COVER_IMAGE_POLICY
-_FIXTURES = Path(__file__).parent / "fixtures"
+_FIXTURES = Path(__file__).parents[1] / "fixtures"
 
 
 def _codex_cover_dispatch(model: str = "") -> CoverImageDispatch:
