@@ -186,6 +186,40 @@ def test_restore_song_410_after_window(seeded: Session) -> None:
         restore_song(seeded, "s1")
 
 
+@pytest.mark.parametrize("age_days", [6, 8])
+def test_song_restore_window_follows_the_final_deletion_setting(
+    seeded: Session, monkeypatch: pytest.MonkeyPatch, fresh_settings, age_days: int,
+) -> None:
+    monkeypatch.setenv("FINAL_DELETION_DAYS", "7")
+    soft_delete_song(seeded, "s1")
+    song = get_song(seeded, "s1", include_deleted_rows=True)
+    song.deleted_at = datetime.now(timezone.utc) - timedelta(days=age_days)
+    seeded.commit()
+
+    if age_days > 7:
+        with pytest.raises(RestoreWindowExpiredError):
+            restore_song(seeded, "s1")
+    else:
+        assert restore_song(seeded, "s1").deleted_at is None
+
+
+@pytest.mark.parametrize("age_days", [6, 8])
+def test_album_restore_window_follows_the_final_deletion_setting(
+    seeded: Session, monkeypatch: pytest.MonkeyPatch, fresh_settings, age_days: int,
+) -> None:
+    monkeypatch.setenv("FINAL_DELETION_DAYS", "7")
+    soft_delete_album(seeded, "rock")
+    album = get_album(seeded, "rock", include_deleted_rows=True)
+    album.deleted_at = datetime.now(timezone.utc) - timedelta(days=age_days)
+    seeded.commit()
+
+    if age_days > 7:
+        with pytest.raises(RestoreWindowExpiredError):
+            restore_album(seeded, "rock")
+    else:
+        assert restore_album(seeded, "rock").deleted_at is None
+
+
 def test_restore_song_rejects_deleted_album(seeded: Session) -> None:
     soft_delete_album(seeded, "rock")
     seeded.commit()
@@ -422,8 +456,7 @@ def test_trashed_song_is_purged_exactly_at_the_final_deletion_setting(
     song = get_song(db_session, "s1", include_deleted_rows=True)
     song.deleted_at = datetime.now(timezone.utc) - timedelta(days=final_deletion_days + days_offset)
     db_session.commit()
-    factory = lambda: db_session  # noqa: E731 - run_cleanup_expired opens a session per call
 
-    _, song_count = run_cleanup_expired(factory, tmp_path / "audio")
+    _, song_count = run_cleanup_expired(lambda: db_session, tmp_path / "audio")
 
     assert song_count == (1 if days_offset >= 0 else 0)
