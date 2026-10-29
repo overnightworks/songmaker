@@ -1,8 +1,0 @@
-claim_id = "19c218fe7d14452ea46ba6e1869b8ce4"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3fc8227bf1a8e88ac8f55e005653f765e9237ccb"
-branch = "claude/issue-2020-the-pre-apply-backup-finds-uv-auto-deplo"
-scope = ["docs/architecture.md", "scripts/auto-deploy.sh", "tests/auto_deploy_harness.py", "tests/test_auto_deploy_releases.py"]
-opened_commit = "1da966544be1da0ad6779cbcb2b4672965f62208"
-whole_reason = "The fix, the harness stand-in that behaves like edge's launcher, the test that needs both, and the one doc clause describing the same call prove one environment entry together."
