@@ -12,8 +12,8 @@ from songmaker_cli.cowriter.tools import (
 )
 
 
-def test_the_co_writer_tools_are_exactly_the_mcp_server_tools():
-    assert {tool.name for tool in COWRITER_TOOLS} == MCP_TOOL_NAMES
+def test_the_co_writer_tools_are_the_mcp_server_tools_plus_the_coherence_verdict():
+    assert {tool.name for tool in COWRITER_TOOLS} == MCP_TOOL_NAMES | {"save_coherence_verdict"}
 
 
 def test_executing_an_unknown_tool_is_a_refused_outcome_not_a_crash():
@@ -34,6 +34,16 @@ def test_executing_an_unknown_tool_is_a_refused_outcome_not_a_crash():
         ("get_song", {"song_id": "s1", "extra": 1}, "extra"),
         ("list_albums", {"album_id": "a1"}, "album_id"),
         ("search_songs", {"query": 7}, "query"),
+        ("save_coherence_verdict", {"generation_id": "g", "score": "8", "summary": "s"}, "score"),
+        ("save_coherence_verdict", {"generation_id": "g", "score": 8.0, "summary": "s"}, "score"),
+        ("save_coherence_verdict", {"generation_id": "g", "score": True, "summary": "s"}, "score"),
+        ("save_coherence_verdict", {"generation_id": "g", "score": 8, "summary": 5}, "summary"),
+        ("save_coherence_verdict", {"generation_id": "g", "summary": "s"}, "score"),
+        (
+            "save_coherence_verdict",
+            {"generation_id": "g", "score": 8, "summary": "s", "extra": 1},
+            "extra",
+        ),
     ],
 )
 def test_arguments_that_break_the_declaration_are_refused_naming_the_field_before_any_handler_runs(
