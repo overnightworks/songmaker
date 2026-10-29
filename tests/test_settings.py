@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
+from support.web_app import make_test_app, seed_session, seed_user
 
 from songmaker_cli.api_models.songs import generation_expiry
 from songmaker_cli.constants import DEFAULT_COVER_EXECUTOR
@@ -131,6 +132,25 @@ def test_final_deletion_days_sets_the_archived_take_expiry(
     assert get_settings().final_deletion_days == expected_days
     assert generation_expiry(archived) == now + timedelta(days=expected_days)
     assert get_settings().generation_retention_days == 7
+
+
+@pytest.mark.parametrize(("configured", "expected_days"), [(None, 30), ("7", 7)])
+def test_retention_preview_reports_the_final_deletion_setting(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, fresh_settings,
+    configured: str | None, expected_days: int,
+) -> None:
+    monkeypatch.delenv("FINAL_DELETION_DAYS", raising=False)
+    if configured is not None:
+        monkeypatch.setenv("FINAL_DELETION_DAYS", configured)
+    client, _ = make_test_app(tmp_path)
+    with client.app.state.ctx.db() as session:
+        seed_user(session, "admin", "admin")
+        session.commit()
+    seed_session(client, "admin")
+
+    response = client.get("/api/admin/generation-retention/preview")
+
+    assert response.json()["hard_delete_days"] == expected_days
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "soon", "1.5"])
