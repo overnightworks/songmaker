@@ -111,6 +111,9 @@ Quelle: DESK — Issue #34 locked-in Songmaker tool catalog (song read/write, no
 ### REQ-COWRITER-33: A Co-Writer turn includes the musician's user memory; when a song is open, the turn also includes that song's memory and, when present, that album's notes.
 Quelle: OPERATOR — Issue #35, “Verhalten” and Acceptance.
 
+### REQ-COWRITER-34: When the musician asks, the Co-Writer stores its coherence verdict, a whole number from 1 to 10 and one sentence, on one of their takes that has a sung transcription; only a later Co-Writer verdict replaces it.
+Quelle: OPERATOR — chat, 28.10.2026 (the Co-Writer rates a take's coherence as one more tool), Issue #2017.
+
 ## Non-goals
 
 - Pick and Keep meanings belong to `0001-creative-catalog-and-takes.md`;
@@ -127,7 +130,7 @@ Quelle: OPERATOR — Issue #35, “Verhalten” and Acceptance.
 - Exact tail-budget numbers, token-count algorithm, SSE event types, and the
   agent-service and `/mcp` transport.
 - Scoring: a scoring run has no provider and no model; the Co-Writer judges a
-  take only when asked (REQ-COWRITER-27).
+  take only when asked (REQ-COWRITER-34).
 - Legacy per-song chat endpoints and user-applied songmaker blocks.
 - Vector RAG and automatic copying of take facts into memory.
 - This document does not prescribe database, API, or provider-adapter mechanisms.
