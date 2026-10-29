@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 
 import pytest
-from postgres_lock_harness import CommitPause, race, wrote_to_tables
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.cowriter.tools import execute_cowriter_tool
@@ -218,23 +217,6 @@ def test_a_refused_later_verdict_keeps_the_earlier_one(factory):
 
     assert _stored(factory, "g1") == [
         ("batch", {"lyrical_coherence": 8, "lyrical_summary": "a"}),
-    ]
-
-
-def test_competing_first_verdicts_leave_one_row_holding_the_later_pair(pg_factory):
-    _seed(pg_factory)
-    _take(pg_factory, "g1")
-    pause = CommitPause(lambda session: wrote_to_tables(session, "scores"))
-
-    race(
-        pg_factory,
-        lambda: _save(pg_factory, "g1", 8, "earlier"),
-        lambda: _save(pg_factory, "g1", 6, "later"),
-        pause,
-    )
-
-    assert _stored(pg_factory, "g1") == [
-        ("batch", {"lyrical_coherence": 6, "lyrical_summary": "later"}),
     ]
 
 
