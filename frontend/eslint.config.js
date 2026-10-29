@@ -8,7 +8,7 @@ import ts from 'typescript-eslint';
 // never reaches into stores, components, services, history or the router.
 // After a leading `./`, a `.` or `..` path segment is refused wherever it
 // stands, so no path can step out and back in; dots inside a name are fine.
-// A module in a lib/api subfolder imports upwards as `$lib/api/…`. Forms whose
+// A module in a lib/api subfolder imports upwards as `#lib/api/…`. Forms whose
 // target cannot be read from the source -- import(), an import() type,
 // import.meta.glob -- are refused outright rather than checked.
 // The wire shapes come from the generator: a hand-written interface or object
@@ -22,15 +22,16 @@ const PATH_SEGMENT = String.raw`(?!\.\.?(?:/|$))[\w.+-]+`;
 const PATH = `${PATH_SEGMENT}(?:/${PATH_SEGMENT})*`;
 const TRANSPORT_MAY_IMPORT = [
 	String.raw`\./${PATH}`,
-	String.raw`\$lib/(?:api|constants)(?:/${PATH})?`,
-	String.raw`\$lib/routes/${PATH}`,
-	String.raw`\$lib/utils/recency`,
+	String.raw`#lib/api/${PATH}`,
+	String.raw`#lib/constants(?:\.ts|/${PATH})`,
+	String.raw`#lib/routes/${PATH}`,
+	String.raw`#lib/utils/recency\.ts`,
 	String.raw`(?:@[a-z0-9][\w.-]*/)?[a-z0-9][\w.-]*(?:/${PATH})?`
 ];
 const OUTSIDE_THE_TRANSPORT = `^(?!(?:${TRANSPORT_MAY_IMPORT.join('|')})$)`;
 const TRANSPORT_LAYER_MESSAGE =
-	'lib/api is the transport (#925 G2): import only from ./, $lib/api, $lib/constants, ' +
-	'$lib/routes/, $lib/utils/recency or a package, with no "." or ".." path segment ' +
+	'lib/api is the transport (#925 G2): import only from ./, #lib/api, #lib/constants, ' +
+	'#lib/routes/, #lib/utils/recency or a package, with no "." or ".." path segment ' +
 	'after a leading "./". Hand the app what it needs through a reaction it installs.';
 const TRANSPORT_LOADS_NOTHING_LAZILY =
 	'lib/api is the transport (#925 G2): import() hides its target from lint. ' +
