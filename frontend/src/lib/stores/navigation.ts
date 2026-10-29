@@ -191,7 +191,7 @@ let addressedSong: { id: string; slug: string } | null = null;
 function syncSongAddressToRename(song: SongItem): void {
 	const previous = addressedSong;
 	addressedSong = { id: song.id, slug: song.slug };
-	if (!previous || previous.id !== song.id || previous.slug === song.slug) return;
+	if (previous?.id !== song.id || previous.slug === song.slug) return;
 	if (!isSongRoutePath(window.location.pathname)) return;
 	void replaceLibraryHistory();
 }
@@ -214,7 +214,7 @@ let addressedPlaylist: { id: string; slug: string } | null = null;
 function syncPlaylistAddressToRename(playlist: PlaylistItem): void {
 	const previous = addressedPlaylist;
 	addressedPlaylist = { id: playlist.id, slug: playlist.slug };
-	if (!previous || previous.id !== playlist.id || previous.slug === playlist.slug) return;
+	if (previous?.id !== playlist.id || previous.slug === playlist.slug) return;
 	if (!isPlaylistRoutePath(window.location.pathname)) return;
 	void replaceLibraryHistory();
 }
