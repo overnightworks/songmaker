@@ -4,7 +4,8 @@
 SvelteKit 3 drops the `$lib` alias; `#lib/*` is declared in frontend/package.json
 `imports` and resolves to `src/lib/*` with the target's real extension. A merge
 conflict with this rewrite is resolved by running this script again, never by hand.
-The script formats what it touched with prettier and is idempotent. A specifier whose target does not exist fails loudly.
+The script formats what it touched with prettier and is idempotent. A specifier whose
+target does not exist fails loudly.
 """
 
 import re
@@ -36,7 +37,9 @@ def resolve_target(relative: str) -> str:
 
 
 def rewrite(source: str) -> str:
-    imports_rewritten = SPECIFIER.sub(lambda match: f"#lib/{resolve_target(match.group(1))}", source)
+    imports_rewritten = SPECIFIER.sub(
+        lambda match: f"#lib/{resolve_target(match.group(1))}", source
+    )
     return MENTION.sub("#lib/", imports_rewritten)
 
 
