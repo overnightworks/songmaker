@@ -201,10 +201,61 @@ def test_a_commit_failure_leaves_no_cookie_account_or_session(
             "/auth/callback", params={"code": code, "state": state}, follow_redirects=False,
         )
 
-    assert response.status_code == 500
+    assert (response.status_code, response.headers["content-type"]) == (
+        500, "text/plain; charset=utf-8",
+    )
     assert SESSION_COOKIE not in _set_cookies(response)
     assert world.users() == []
     assert world.session_count() == 0
+
+
+def test_a_refusal_without_the_page_shell_answers_the_json_failure(
+    world: World, tmp_path: Path,
+) -> None:
+    world.client.app.state.spa_index = tmp_path / "missing-index.html"
+
+    response = world.client.get("/auth/callback", follow_redirects=False)
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Login failed"}
+    assert response.headers["content-type"].startswith("application/json")
+    assert world.session_count() == 0
+
+
+def _session_ids(world: World) -> set[str]:
+    with world.factory() as session:
+        return {row.id for row in session.query(UserSession)}
+
+
+def test_signing_in_past_the_session_limit_keeps_only_the_limit_and_the_newest_works(
+    world: World,
+) -> None:
+    from songmaker_cli.settings import get_settings
+
+    limit = get_settings().max_concurrent_sessions_per_user
+    last_browser = world.client
+    for _ in range(limit + 1):
+        last_browser = web_client(world.client.app, cookies={})
+        started = last_browser.get("/login/oidc", follow_redirects=False)
+        state, code = world.issuer.remember_authorization(started.headers["location"])
+        world.issuer.person = _member()
+        last_browser.get(
+            "/auth/callback", params={"code": code, "state": state}, follow_redirects=False,
+        )
+
+    assert world.session_count() == limit
+    assert last_browser.get("/api/auth/me").status_code == 200
+
+
+def test_signing_in_again_in_the_same_browser_ends_its_previous_session(world: World) -> None:
+    world.sign_in(_member())
+    before = _session_ids(world)
+
+    world.sign_in(_member())
+
+    after = _session_ids(world)
+    assert len(after) == 1
+    assert not before & after
 
 
 # -- M7: where the sign-in returns -----------------------------------------------
@@ -299,6 +350,25 @@ def test_logging_out_ends_the_session_and_answers_the_page_that_posts_the_stored
     assert world.session_count() == 0
     reused = web_client(world.client.app, cookies={SESSION_COOKIE: session_cookie})
     assert reused.get("/api/auth/me").status_code == 401
+
+
+def test_a_logout_database_failure_answers_a_plain_500_and_clears_no_cookie(
+    world: World, session_commit_failure,
+) -> None:
+    world.sign_in(_member())
+    failing = web_client(
+        world.client.app, raise_server_exceptions=False,
+        cookies={SESSION_COOKIE: world.client.cookies.get(SESSION_COOKIE)},
+    )
+
+    with session_commit_failure(world.factory, message="commit failed"):
+        response = failing.post("/auth/logout", headers=_same_origin())
+
+    assert (response.status_code, response.headers["content-type"]) == (
+        500, "text/plain; charset=utf-8",
+    )
+    assert not _cleared(response, SESSION_COOKIE)
+    assert world.session_count() == 1
 
 
 def test_logging_out_without_a_session_still_clears_the_cookie_and_posts_no_hint(

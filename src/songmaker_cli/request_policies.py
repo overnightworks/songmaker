@@ -25,6 +25,7 @@ from webauth.policies import (
     SecurityHeadersPolicy,
     default_content_security_policy,
 )
+from webauth.sign_in_routes import SignInPaths
 
 from songmaker_cli.constants import (
     LOGOUT_PATH,
@@ -88,12 +89,12 @@ AUDIO_ROUTE_PATTERNS: Final[tuple[re.Pattern[str], ...]] = (
 # "<public host>:<port>" only filters routing: any other admitted Host gets an empty 404, an
 # unlisted one TrustedHost's 400.
 BACKCHANNEL_LOGOUT_PATH: Final = "/auth/backchannel-logout"
-BACKCHANNEL_LOGOUT_MAX_BODY_BYTES: Final = 32 * 1024
 
 # Static PWA root assets are fetched by the browser and the service worker
 # outside of user-driven navigation, so they must not compete with `/api/*`
-# calls for any class's budget. No API path belongs in this allowlist, except the
-# realm's back-channel call, which a throttled caller must not be able to starve.
+# calls for any class's budget. The set holds static assets only; the realm's
+# back-channel call, which a throttled caller must not be able to starve, is exempted in
+# `build_rate_limit_policy` from `SIGN_IN_PATHS`.
 #
 # `/health` is deliberately NOT here: it is the most expensive anonymous
 # endpoint (a DB query plus ~6 Redis round trips for worker/queue state),
@@ -102,18 +103,19 @@ BACKCHANNEL_LOGOUT_MAX_BODY_BYTES: Final = 32 * 1024
 # exempting it would let an anonymous caller hammer the priciest endpoint
 # for free. It stays in the API class.
 RATE_LIMIT_EXEMPT_PATHS: Final[frozenset[str]] = frozenset({
-    BACKCHANNEL_LOGOUT_PATH,
     "/manifest.webmanifest",
     "/robots.txt",
     "/favicon.svg",
     "/service-worker.js",
 }) | PWA_ICON_PATHS
 
-# The sign-in routes answer redirects and refusals that no cache may keep.
-SIGN_IN_PATHS: Final[frozenset[str]] = frozenset({
-    OIDC_START_PATH, OIDC_CALLBACK_PATH, LOGOUT_PATH, BACKCHANNEL_LOGOUT_PATH,
-})
-SIGN_IN_CACHE_CONTROL: Final = "no-store"
+# The four sign-in routes; webauth derives their CSRF, rate-limit, body-size and cache rules.
+SIGN_IN_PATHS: Final = SignInPaths(
+    start=OIDC_START_PATH,
+    callback=OIDC_CALLBACK_PATH,
+    logout=LOGOUT_PATH,
+    backchannel_logout=BACKCHANNEL_LOGOUT_PATH,
+)
 
 # Large multipart uploads are a path-exact allowlist, never a suffix match:
 # an unrelated route ending in `/reimport` must not inherit an upload budget.
@@ -155,7 +157,8 @@ def build_rate_limit_policy(settings: Settings) -> RateLimitPolicy:
             ),
         ),
         exempt=PathRules(
-            exact=RATE_LIMIT_EXEMPT_PATHS, prefixes=(STATIC_ASSET_PREFIX,),
+            exact=RATE_LIMIT_EXEMPT_PATHS | SIGN_IN_PATHS.backchannel.exact,
+            prefixes=(STATIC_ASSET_PREFIX,),
         ),
     )
 
@@ -168,7 +171,7 @@ def build_csrf_origin_policy() -> CsrfPolicy:
     """
     return CsrfPolicy(
         exempt=PathRules(
-            exact=frozenset({BACKCHANNEL_LOGOUT_PATH}), prefixes=(INTERNAL_API_PREFIX,),
+            exact=SIGN_IN_PATHS.backchannel.exact, prefixes=(INTERNAL_API_PREFIX,),
         ),
     )
 
@@ -178,10 +181,7 @@ def build_body_size_policy(settings: Settings) -> BodySizePolicy:
     return BodySizePolicy(
         default_max_bytes=settings.max_request_body_bytes,
         rules=(
-            BodySizeRule(
-                paths=PathRules(exact=frozenset({BACKCHANNEL_LOGOUT_PATH})),
-                max_bytes=BACKCHANNEL_LOGOUT_MAX_BODY_BYTES,
-            ),
+            SIGN_IN_PATHS.backchannel_body_size_rule,
             BodySizeRule(
                 paths=PathRules(exact=frozenset({AUDIO_UPLOAD_PATH})),
                 max_bytes=settings.max_upload_body_bytes,
@@ -229,9 +229,6 @@ def build_security_headers_policy(script_hashes: Sequence[str]) -> SecurityHeade
                 paths=PathRules(prefixes=(API_PATH_PREFIX,)),
                 value=API_CACHE_CONTROL,
             ),
-            CacheControlRule(
-                paths=PathRules(exact=SIGN_IN_PATHS),
-                value=SIGN_IN_CACHE_CONTROL,
-            ),
+            SIGN_IN_PATHS.cache_control_rule,
         ),
     )

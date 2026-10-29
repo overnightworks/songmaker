@@ -219,7 +219,7 @@ request budget per shell.
   this doc the way it did before issue #326.
 - **One seeded session per run.** There is no Keycloak in the CI stack, so no
   flow types a password. `frontend/e2e/support/seed_sessions.py` runs inside the
-  web container and opens database sessions whose cookie the 0.23.0 library
+  web container and opens database sessions whose cookie the pinned library
   signs, and it creates the e2e admin (`E2E_ADMIN_USERNAME`) because the stack
   has no admin bootstrap. Global setup seeds an album, songs, takes, a pick and
   a share link through the public API with that admin's session and hands it to
@@ -236,7 +236,7 @@ request budget per shell.
   is a throwaway file (`KEYCLOAK_CLIENT_SECRET_FILE`); web boots without
   reaching the issuer. The spec's numbers live in `frontend/e2e/README.md`.
 - **Sign-in routes run against a fake issuer.** `tests/test_oidc_sign_in.py`
-  drives `/login/oidc`, `/auth/callback` and `/auth/logout` through the real
+  drives `/login/oidc`, `/auth/callback` and `/auth/logout` (webauth's routes) through the real
   relying party; only the token request and the key set come from
   `tests/fake_oidc_issuer.py`, which signs ID tokens with a test RSA key, so
   every token is verified as in production.
@@ -401,8 +401,8 @@ frontend/e2e/
 
 The auth library's own tests are not in this repository. They moved with
 `webauth` to [overnightworks/webauth](https://github.com/overnightworks/webauth)
-in #879 and run in that repository's CI; songmaker installs the released wheel
-(tag `v0.23.0`) and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
+in #879 and run in that repository's CI; songmaker installs the release wheel of `v0.24.0`
+and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
 `test_auth_api.py`, `test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
 The provider library's own tests likewise left with it. They moved with
