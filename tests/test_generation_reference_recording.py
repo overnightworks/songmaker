@@ -34,9 +34,13 @@ def _run_job(
     tmp_path: Path,
     *,
     count: int = 1,
+    on_dispatch=None,
     **task,
 ) -> None:
-    dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto(seed=42))
+    """Run the job; ``on_dispatch`` replaces the worker dispatch with a callable."""
+    dispatch, post_process, defaults = patch_generation_dispatch(
+        on_dispatch or make_generation_dto(seed=42)
+    )
     with dispatch, post_process, defaults:
         run_async(
             run_generation_job(
@@ -182,15 +186,7 @@ def _run_recording_dispatch(seeded_db, tmp_path: Path) -> list[str]:
         received.append(kwargs["ace_config"].reference_audio_path)
         return make_generation_dto(seed=42)
 
-    dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch)
-    with dispatch_patch, post_process, defaults:
-        run_async(
-            run_generation_job(
-                "j1", "s1", "v1", 1, "u1",
-                db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-                redis=MagicMock(), target_model="sft",
-            )
-        )
+    _run_job(seeded_db, tmp_path, on_dispatch=dispatch)
     return received
 
 
