@@ -193,15 +193,12 @@ def _seed(session) -> None:
             id=f"version-{identity}", song_id=f"song-{identity}",
             version_number=1, lyrics="original", prompt="rock",
         ))
+        take = f"generation-{identity}"
         session.add(Generation(
-            id=f"generation-{identity}", song_id=f"song-{identity}",
-            version_id=f"version-{identity}", generation_number=1,
-            mp3_path=f"{identity}/take.mp3", whisper_text="sung words",
+            id=take, song_id=f"song-{identity}", version_id=f"version-{identity}",
+            generation_number=1, mp3_path=f"{identity}/take.mp3", whisper_text="sung words",
         ))
-        session.add(Score(
-            generation_id=f"generation-{identity}", scorer="batch",
-            value={"bpm_detected": 96.0},
-        ))
+        session.add(Score(generation_id=take, scorer="batch", value={"bpm_detected": 96.0}))
 
 
 @dataclass
@@ -326,27 +323,22 @@ def test_m3_a_call_on_another_persons_song_is_not_found_and_changes_no_row(
 
 
 @pytest.mark.parametrize(
-    ("owner", "stored"), [("anna", True), ("ben", False)], ids=["own take", "foreign take"],
-)
+    ("owner", "stored"), [("anna", True), ("ben", False)], ids=["own take", "foreign take"])
 def test_the_coherence_verdict_is_stored_on_the_persons_own_take_only(
     endpoint, capability, run_id, owner, stored,
 ):
     with running_run(run_id):
         is_error, text = endpoint.call(
             capability, "save_coherence_verdict",
-            generation_id=f"generation-{owner}", score=8, summary="Coherent.",
-        ).tool_result()
+            generation_id=f"generation-{owner}", score=8, summary="Coherent.").tool_result()
 
     assert is_error is not stored
     with endpoint.factory() as session:
         values = {row.generation_id: dict(row.value) for row in session.query(Score)}
     assert values["generation-ben"] == {"bpm_detected": 96.0}
-    if stored:
-        assert values["generation-anna"]["lyrical_coherence"] == 8
-        assert json.loads(text)["scores"]["lyrical_coherence"] == 8
-    else:
-        assert text == "Generation not found"
-        assert values["generation-anna"] == {"bpm_detected": 96.0}
+    assert (values["generation-anna"].get("lyrical_coherence") == 8) is stored
+    assert stored or text == "Generation not found"
+    assert not stored or json.loads(text)["scores"]["lyrical_coherence"] == 8
 
 
 def _refused_write(endpoint: Endpoint, token: str) -> tuple[bool, str]:
