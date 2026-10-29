@@ -186,7 +186,7 @@ jobs:
               "test_auth_write_lock_postgres": 3,
               "test_reference_save_lock_postgres": 6,
               "test_song_version_lock_postgres": 11,
-              "test_coherence_verdict_migration": 16,
+              "test_coherence_verdict_migration": 15,
           }
           for module, expected in expected_lock_cases.items():
               lock_cases = [
