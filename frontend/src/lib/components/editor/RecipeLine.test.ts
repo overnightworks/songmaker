@@ -9,7 +9,8 @@ import {
 	discardDraft,
 	loadSongData,
 	setDraftBpm,
-	setDraftGenParams
+	setDraftGenParams,
+	setDraftReference
 } from '$lib/stores/editor';
 import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
 import { activeModels, builtinDefaults, loadActiveModels, presets } from '$lib/stores/presets';
@@ -112,10 +113,10 @@ describe('RecipeLine', () => {
 	});
 
 	it.each([
-		['a voice', { user_lora_id: 'mara' }],
-		['a reference', { reference_audio_path: 'ref.wav' }]
-	])('requests no list for a closed line whose draft holds only %s', async (_name, genParams) => {
-		setDraftGenParams(genParams);
+		['a voice', () => setDraftGenParams({ user_lora_id: 'mara' })],
+		['a reference', () => setDraftReference({ id: 'r1', filename: 'ref.wav' })]
+	])('requests no list for a closed line whose draft holds only %s', async (_name, hold) => {
+		hold();
 		await renderLine();
 		await tick();
 		await tick();

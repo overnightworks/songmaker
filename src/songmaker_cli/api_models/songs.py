@@ -434,7 +434,7 @@ class VersionResponse(BaseModel):
     audio_duration: int
     key_scale: str
     generation_params: dict | None
-    reference: ReferenceResponse | None
+    reference: ReferenceResponse | None = None
     created_at: str
 
     @classmethod

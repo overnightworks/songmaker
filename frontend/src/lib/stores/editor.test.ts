@@ -22,6 +22,8 @@ vi.mock('$lib/stores/player', async () => {
 import {
 	editGenParams,
 	editLyrics,
+	editReference,
+	setDraftReference,
 	editPrompt,
 	editBpm,
 	editAudioDuration,
@@ -99,6 +101,46 @@ describe('editGenParams dirty tracking', () => {
 		loadSongData(makeSong({ ...songDefaults, generation_params: { shift: 2.0 } }));
 		setDraftLyrics('changed');
 		expect(get(isDirty)).toBe(true);
+	});
+});
+
+describe('the version reference', () => {
+	const reference = { id: 'reference-1', filename: 'demo.wav' };
+
+	it('loads from the song and from an older version', () => {
+		loadSongData(makeSong({ ...songDefaults, reference }));
+		expect(get(editReference)).toEqual(reference);
+		expect(get(isDirty)).toBe(false);
+		const older = makeVersion({ id: 'v1', version_number: 1, reference: null });
+		versions.set([makeVersion({ id: 'v2', version_number: 2, reference }), older]);
+		loadVersionAsDraft(older);
+		expect(get(editReference)).toBeNull();
+	});
+
+	it.each([
+		{ change: 'attaching one', saved: null, draft: reference, dirty: true },
+		{ change: 'clearing it', saved: reference, draft: null, dirty: true },
+		{ change: 'the same row again', saved: reference, draft: { ...reference }, dirty: false }
+	])('is dirty after $change: $dirty', ({ saved, draft, dirty }) => {
+		loadSongData(makeSong({ ...songDefaults, reference: saved }));
+		setDraftReference(draft);
+		expect(get(isDirty)).toBe(dirty);
+	});
+
+	it('is saved by its key, and null clears it', async () => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValue(makeSong({ ...songDefaults, id: 's1' }));
+		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		setDraftReference(reference);
+		await handleSave('s1');
+		expect(vi.mocked(updateSong).mock.lastCall?.[1]).toMatchObject({
+			reference_recording_id: 'reference-1'
+		});
+		setDraftReference(null);
+		await handleSave('s1');
+		expect(vi.mocked(updateSong).mock.lastCall?.[1]).toMatchObject({
+			reference_recording_id: null
+		});
 	});
 });
 
