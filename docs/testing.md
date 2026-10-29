@@ -401,8 +401,8 @@ frontend/e2e/
 
 The auth library's own tests are not in this repository. They moved with
 `webauth` to [overnightworks/webauth](https://github.com/overnightworks/webauth)
-in #879 and run in that repository's CI; songmaker installs the 0.24.0 candidate commit `961627f`
-(the release wheel of `v0.24.0` replaces it) and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
+in #879 and run in that repository's CI; songmaker installs the release wheel of `v0.24.0`
+and proves the auth surface it builds on it through `test_oidc_sign_in.py`,
 `test_auth_api.py`, `test_middleware.py`, `test_server_middleware.py`, and `e2e/auth-flows.spec.ts`.
 
 The provider library's own tests likewise left with it. They moved with

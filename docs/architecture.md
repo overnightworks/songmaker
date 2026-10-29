@@ -1077,10 +1077,9 @@ until its own move.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the commit `961627f` of its 0.24.0 candidate
-(a git pin, so the image builds cannot install it); the release wheel of tag
-`v0.24.0` replaces it, and `uv.lock` then records that wheel's hash, so every image
-installs the same bytes and no image needs `git`. The import package is `webauth`. Its own tests live in its repository.
+pinned in the `server` extra to the release wheel of tag `v0.24.0`; `uv.lock`
+records that wheel's hash, so every image installs the same bytes and no image
+needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
 Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
 `cookies.py`/`proxies.py` own the cookie crypto and the client-identity
