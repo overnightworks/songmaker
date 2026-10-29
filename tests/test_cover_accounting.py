@@ -194,14 +194,13 @@ def test_late_cancellation_preserves_publication_with_a_preloaded_job(
         assert count_cover_jobs_since(verification, "album", STARTED) == 1
 
 
+@pytest.mark.parametrize("accounting_factory", ["postgresql"], indirect=True)
 @pytest.mark.parametrize("winner", ["publication", "cancellation"])
 def test_postgresql_serializes_publication_and_cancellation(
     accounting_factory, running_cover, monkeypatch, winner,
 ):
     """1301-F3-C1-ATOMIC: the first terminal transition owns image and charge."""
     engine = accounting_factory.kw["bind"]
-    if engine.dialect.name != "postgresql":
-        pytest.skip("Row-lock ordering requires PostgreSQL")
     publication_locked = threading.Event()
     allow_publication = threading.Event()
     contender_started = threading.Event()

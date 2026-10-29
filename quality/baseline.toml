@@ -199,7 +199,7 @@
 "test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime" = 81
 
 [function_lines."tests/test_cover_accounting.py"]
-"test_postgresql_serializes_publication_and_cancellation" = 94
+"test_postgresql_serializes_publication_and_cancellation" = 92
 
 [function_lines."tests/test_db.py"]
 "test_acestep_canonical_names_migration_renames_json_keys" = 68
