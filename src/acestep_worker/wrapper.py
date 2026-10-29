@@ -6,6 +6,7 @@ import json
 import logging
 import shutil
 from collections.abc import AsyncIterator, Callable
+from concurrent.futures import Future
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -1055,32 +1056,18 @@ async def default_generate_runner(
     await task_store.mark_running(task_id)
     try:
         client = AceStepClient(host="http://127.0.0.1", port=port)
-
         loop = asyncio.get_running_loop()
-
-        scheduled_updates: list[asyncio.Future[None]] = []
+        scheduled_updates: list[Future[None]] = []
 
         def _on_progress(progress: AceStepProgress) -> None:
-            scheduled_updates.append(
-                asyncio.wrap_future(
-                    asyncio.run_coroutine_threadsafe(
-                        task_store.update_progress(
-                            task_id, progress.fraction, phase=progress.phase,
-                        ),
-                        loop,
-                    ),
-                    loop=loop,
-                ),
-            )
+            scheduled_updates.append(asyncio.run_coroutine_threadsafe(
+                task_store.update_progress(task_id, progress.fraction, phase=progress.phase), loop,
+            ))
 
         try:
-            result = await asyncio.to_thread(
-                client.generate,
-                config,
-                on_progress=_on_progress,
-            )
+            result = await asyncio.to_thread(client.generate, config, on_progress=_on_progress)
         finally:
-            await asyncio.gather(*scheduled_updates)
+            await asyncio.gather(*map(asyncio.wrap_future, scheduled_updates))
         audio_output_dir.mkdir(parents=True, exist_ok=True)
         out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"
         out_path.write_bytes(result.wav_bytes)
