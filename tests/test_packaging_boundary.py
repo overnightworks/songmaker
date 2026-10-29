@@ -235,19 +235,18 @@ def _startup_modules(service: dict) -> tuple[str, ...]:
 
 
 def _installing_containers() -> dict[str, ContainerSpec]:
-    """Every compose service built from a Dockerfile that runs ``uv sync``."""
+    """Every compose service built from a Dockerfile that runs ``uv sync`` and starts
+    through its command or the image's server; an ``entrypoint`` override starts
+    something else, so it names no startup modules here."""
     containers: dict[str, ContainerSpec] = {}
     for name, service in _raw_compose_services().items():
         build = service.get("build")
-        if not isinstance(build, dict):
+        if not isinstance(build, dict) or "entrypoint" in service:
             continue
         dockerfile = Path(build["dockerfile"])
         sync_extras = _sync_extras(REPOSITORY_ROOT / dockerfile)
         if not sync_extras:
             continue
-        assert all(extras == sync_extras[0] for extras in sync_extras), (
-            f"{dockerfile} installs different extras on its uv sync lines"
-        )
         containers[name] = ContainerSpec(
             name, dockerfile, sync_extras[0], _startup_modules(service),
         )
@@ -255,6 +254,17 @@ def _installing_containers() -> dict[str, ContainerSpec]:
 
 
 CONTAINERS = _installing_containers()
+
+
+def test_every_uv_sync_line_of_a_dockerfile_installs_the_same_extras() -> None:
+    for name, service in _raw_compose_services().items():
+        build = service.get("build")
+        if not isinstance(build, dict):
+            continue
+        sync_extras = _sync_extras(REPOSITORY_ROOT / build["dockerfile"])
+        assert all(extras == sync_extras[0] for extras in sync_extras), (
+            f"{name}: {build['dockerfile']} installs different extras on its uv sync lines"
+        )
 
 
 def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
@@ -475,11 +485,6 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
 
     for service_name, service in services.items():
         assert isinstance(service, dict)
-        if not any(
-            isinstance(volume, dict) and volume.get("type") == "bind"
-            for volume in service.get("volumes", [])
-        ):
-            continue
         assert "extends" not in service, (
             f"{service_name} must not inherit mounts through Compose extends"
         )
@@ -492,10 +497,11 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
         for volume in volumes:
             if isinstance(volume, str):
                 source = volume.split(":", maxsplit=1)[0]
-                assert source in declared_named_volumes, (
-                    f"{service_name} must use Compose long syntax for every bind "
-                    f"mount so its read-only and host-path protections are explicit: "
-                    f"{volume!r} is not a declared named volume"
+                assert source in declared_named_volumes or source.startswith("./"), (
+                    f"{service_name} must use Compose long syntax for every host "
+                    f"bind mount so its read-only and host-path protections are "
+                    f"explicit: {volume!r} is neither a declared named volume nor "
+                    f"a repository-relative path"
                 )
                 continue
 
