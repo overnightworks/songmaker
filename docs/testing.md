@@ -441,7 +441,7 @@ a growth fails, including with `--update`. After consolidation, run
 `scripts/test_helper_ratchet.sh --update` to commit the smaller baseline; normal
 checks never rewrite it. Router-only API tests use `make_router_ctx` from
 `tests/support/web_app.py` to prepare a context with an optional database and seed callback,
-then `make_router_app(ctx, user=...)` to mount the router. `make_authenticated_user` (`tests/support/accounts.py`)
+then `make_router_app(ctx, user=...)` to mount the router. `make_authenticated_user` (`tests/support/web_app.py`)
 builds active users with an explicit ID and optional role and username. Full
 middleware and lifecycle tests continue to use `make_test_app`.
 

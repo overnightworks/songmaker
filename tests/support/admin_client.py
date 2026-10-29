@@ -25,12 +25,6 @@ def build_admin_client(
     ``seed_db`` must add the account ``user_id``; the router app takes the
     authenticated user from the builder, not from a session cookie.
     """
-    factory = init_test_db(tmp_path / database_name)
-    with factory() as session:
-        seed_db(session)
-        session.commit()
-    app = make_router_app(
-        make_router_ctx(tmp_path, db=factory),
-        user=make_authenticated_user(user_id, role="admin", username=username),
-    )
-    return web_client(app), factory
+    ctx = make_router_ctx(tmp_path, db=init_test_db(tmp_path / database_name), seed_db=seed_db)
+    app = make_router_app(ctx, user=make_authenticated_user(user_id, role="admin", username=username))
+    return web_client(app), ctx.db

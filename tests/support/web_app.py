@@ -56,7 +56,6 @@ def install_app_context(app, ctx) -> None:
     install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
 
 
-
 def make_router_ctx(
     tmp_path: Path,
     *,
