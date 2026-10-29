@@ -16,9 +16,7 @@ LOCAL_SCORES = {"bpm_detected": 96.0, "text_accuracy": 86.2}
 SUMMARY = "Coherent verses; the bridge loops one phrase."
 
 
-@pytest.fixture
-def factory(tmp_path):
-    session_factory = init_test_db(tmp_path / "verdict.db")
+def _seed(session_factory):
     with session_factory() as session:
         session.add_all([
             User(id="anna", username="anna", role="user"),
@@ -33,6 +31,11 @@ def factory(tmp_path):
         ))
         session.commit()
     return session_factory
+
+
+@pytest.fixture
+def factory(tmp_path):
+    return _seed(init_test_db(tmp_path / "verdict.db"))
 
 
 def _take(factory, generation_id, *, whisper_text="la la", batch=None, archived=False):
@@ -219,15 +222,7 @@ def test_a_refused_later_verdict_keeps_the_earlier_one(factory):
 
 
 def test_competing_first_verdicts_leave_one_row_holding_the_later_pair(pg_factory):
-    with pg_factory() as session:
-        session.add(User(id="anna", username="anna", role="user"))
-        session.flush()
-        session.add(Album(id="album-anna", title="Nachtzug", artist="Anna", created_by="anna"))
-        session.add(Song(id="song-anna", title="Nachtzug", album_id="album-anna", track_number=1))
-        session.add(Version(
-            id="version-anna", song_id="song-anna", version_number=1, lyrics="la la", prompt="rock",
-        ))
-        session.commit()
+    _seed(pg_factory)
     _take(pg_factory, "g1")
     pause = CommitPause(lambda session: wrote_to_tables(session, "scores"))
 
