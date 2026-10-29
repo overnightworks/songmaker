@@ -1,7 +1,7 @@
 # Measured by `quality baseline write`. Entries only ever go down.
 
 [ccn."src/songmaker_cli/db/queries/songs.py"]
-"update_song" = 17
+"update_song" = 14
 
 [ccn."src/songmaker_cli/scoring/pipeline.py"]
 "run_scoring_pipeline" = 16
@@ -63,7 +63,7 @@
 "src/acestep_worker/wrapper.py" = 1089
 "src/songmaker_cli/constants.py" = 814
 "src/songmaker_cli/conversation_api.py" = 975
-"src/songmaker_cli/jobs/generation.py" = 1201
+"src/songmaker_cli/jobs/generation.py" = 1200
 "src/songmaker_cli/jobs/lora_training.py" = 1552
 "src/songmaker_cli/queue_streams.py" = 976
 "src/songmaker_cli/sharing_api.py" = 868
@@ -76,7 +76,7 @@
 "tests/test_conversation_api.py" = 853
 "tests/test_cowriter_providers.py" = 972
 "tests/test_db.py" = 3624
-"tests/test_jobs.py" = 3259
+"tests/test_jobs.py" = 3215
 "tests/test_jobs_lora_training.py" = 1933
 "tests/test_library_api.py" = 1627
 "tests/test_lora_api.py" = 1297
@@ -126,7 +126,7 @@
 "_shared_pick_take_stored_path" = 63
 
 [function_lines."src/songmaker_cli/db/queries/songs.py"]
-"update_song" = 78
+"update_song" = 62
 
 [function_lines."src/songmaker_cli/generation_api.py"]
 "api_repaint_generation" = 60
@@ -136,7 +136,7 @@
 "metrics_endpoint" = 70
 
 [function_lines."src/songmaker_cli/jobs/generation.py"]
-"_build_generation_context" = 60
+"_build_generation_context" = 58
 "post_process_generation" = 79
 "run_generation_job" = 109
 

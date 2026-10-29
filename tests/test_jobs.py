@@ -38,7 +38,6 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import (
     Generation,
     Job,
-    ReferenceRecording,
     ResourceEvent,
     Score,
     User,
@@ -727,57 +726,6 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert "Version not found" in job.error
-
-
-def test_generation_job_rejects_foreign_reference_before_dispatch(
-    seeded_db,
-    tmp_path: Path,
-) -> None:
-    foreign_ref = tmp_path / "audio" / "u2" / "refs" / "secret.wav"
-    foreign_ref.parent.mkdir(parents=True)
-    foreign_ref.write_bytes(b"SECRET")
-    with seeded_db() as session:
-        session.add(User(id="u2", username="user2", role="user"))
-        session.flush()
-        secret = ReferenceRecording(
-            user_id="u2", storage_path="u2/refs/secret.wav",
-            original_filename="secret.wav", size_bytes=6,
-        )
-        session.add(secret)
-        session.flush()
-        session.query(Version).filter_by(id="v1").one().reference_recording_id = secret.id
-        session.commit()
-
-    dispatch = AsyncMock()
-    with (
-        patch(
-            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
-        ),
-        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-    ):
-        run_async(
-            run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=tmp_path / "audio",
-                data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-            )
-        )
-
-    dispatch.assert_not_awaited()
-    with seeded_db() as session:
-        job = get_job(session, "j1")
-        assert job.status == "failed"
-        assert job.error_type == "setup_error"
-        assert job.error == "Reference audio not found"
 
 
 async def _run_peer_generation(factory, peer, count):

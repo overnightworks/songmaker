@@ -174,9 +174,8 @@ def test_repaint_and_cover_takes_record_the_reference(seeded_db, tmp_path: Path,
     assert _recorded_references(seeded_db) == [REFERENCE_A]
 
 
-def test_the_worker_receives_the_file_of_the_linked_row(seeded_db, tmp_path: Path) -> None:
-    _write_reference(tmp_path, REFERENCE_A)
-    _name_version_reference(seeded_db, REFERENCE_A)
+def _run_recording_dispatch(seeded_db, tmp_path: Path) -> list[str]:
+    """Run the job and return the reference path of each config the worker was sent."""
     received: list[str] = []
 
     def dispatch(**kwargs):
@@ -192,18 +191,24 @@ def test_the_worker_receives_the_file_of_the_linked_row(seeded_db, tmp_path: Pat
                 redis=MagicMock(), target_model="sft",
             )
         )
+    return received
 
-    assert received == [str(tmp_path / "audio" / REFERENCE_A)]
+
+def test_the_worker_receives_the_file_of_the_linked_row(seeded_db, tmp_path: Path) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    _name_version_reference(seeded_db, REFERENCE_A)
+
+    assert _run_recording_dispatch(seeded_db, tmp_path) == [str(tmp_path / "audio" / REFERENCE_A)]
 
 
-def test_a_job_whose_version_links_another_users_row_fails_with_the_reference_error(
+def test_a_job_whose_version_links_another_users_row_fails_before_dispatch(
     seeded_db, tmp_path: Path,
 ) -> None:
     foreign = "u2/refs/dddddddd-0000-0000-0000-000000000004.wav"
     _write_reference(tmp_path, foreign)
     _name_version_reference_of(seeded_db, foreign, "u2")
 
-    _run_job(seeded_db, tmp_path)
+    assert _run_recording_dispatch(seeded_db, tmp_path) == []
 
     with seeded_db() as session:
         job = get_job(session, "j1")

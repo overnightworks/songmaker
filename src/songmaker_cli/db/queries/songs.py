@@ -300,8 +300,7 @@ def create_song(
         song_id=song.id, version_number=1,
         lyrics=lyrics, prompt=prompt, bpm=bpm,
         audio_duration=audio_duration, key_scale=key_scale,
-        generation_params=generation_params,
-        reference_recording_id=reference_recording_id,
+        generation_params=generation_params, reference_recording_id=reference_recording_id,
     )
     session.add(version)
     session.flush()

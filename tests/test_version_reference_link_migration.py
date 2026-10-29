@@ -29,37 +29,47 @@ def _alembic_config() -> Config:
     return Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
 
 
-@pytest.fixture(params=["sqlite", "postgresql"])
-def database(request, tmp_path, isolated_logging):
-    """Yield (config, engine) of an empty database; PostgreSQL gets its own schema."""
-    if request.param == "sqlite":
-        url = make_url(f"sqlite:///{tmp_path / 'version-link.db'}")
-        schema = None
-    else:
-        base_url = os.environ.get("TEST_DATABASE_URL", "")
-        if not base_url.startswith("postgresql"):
-            pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
-        schema = "version_reference_link_" + uuid.uuid4().hex
-        admin = create_engine(base_url)
-        with admin.begin() as connection:
-            connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-        url = make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
+def _configured(url) -> Config:
     config = _alembic_config()
     config.set_main_option(
         "sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%"),
     )
-    engine = create_engine(url)
-    if request.param == "sqlite":
-        # Alembic's engine does not enable foreign keys; this connection does, as init_test_db does.
-        event.listen(
-            engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"),
-        )
-    yield config, engine
+    return config
+
+
+@pytest.fixture
+def sqlite_database(tmp_path):
+    engine = create_engine(f"sqlite:///{tmp_path / 'version-link.db'}")
+    # Alembic's engine does not enable foreign keys; this connection does, as init_test_db does.
+    event.listen(
+        engine, "connect", lambda connection, _: connection.execute("PRAGMA foreign_keys=ON"),
+    )
+    yield _configured(engine.url), engine
     engine.dispose()
-    if schema is not None:
-        with admin.begin() as connection:
-            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        admin.dispose()
+
+
+@pytest.fixture
+def postgresql_database():
+    base_url = os.environ.get("TEST_DATABASE_URL", "")
+    if not base_url.startswith("postgresql"):
+        pytest.skip("TEST_DATABASE_URL not set to PostgreSQL")
+    schema = "version_reference_link_" + uuid.uuid4().hex
+    admin = create_engine(base_url)
+    with admin.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+    url = make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
+    engine = create_engine(url)
+    yield _configured(url), engine
+    engine.dispose()
+    with admin.begin() as connection:
+        connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+    admin.dispose()
+
+
+@pytest.fixture(params=["sqlite_database", "postgresql_database"])
+def database(request, isolated_logging):
+    """Yield (config, engine) of an empty database."""
+    return request.getfixturevalue(request.param)
 
 
 @pytest.fixture
