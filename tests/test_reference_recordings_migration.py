@@ -123,8 +123,9 @@ def test_the_constraints_are_enforced_by_the_database(database, migration):
         _insert_recording(connection)
     with pytest.raises(IntegrityError), engine.begin() as connection:
         _insert_recording(connection, user_id="missing", storage_path="missing/refs/a.wav")
+    delete_user = text("DELETE FROM users WHERE id = 'u1'")
     with pytest.raises(IntegrityError), engine.begin() as connection:
-        connection.execute(text("DELETE FROM users WHERE id = 'u1'"))
+        connection.execute(delete_user)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM users")).scalar() == 1
         if engine.dialect.name == "sqlite":

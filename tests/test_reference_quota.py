@@ -147,8 +147,9 @@ def test_default_reference_admission_boundaries(quota_context, rows, row_bytes, 
         stored = _upload(ctx, "owner", b"a", Settings())
         assert (ctx.audio_dir / stored).read_bytes() == b"a"
     else:
+        settings = Settings()
         with pytest.raises(ReferenceAudioQuotaExceeded):
-            _upload(ctx, "owner", b"a", Settings())
+            _upload(ctx, "owner", b"a", settings)
     assert _row_count(ctx) == rows + int(accepted)
     assert len(_files(ctx)) == int(accepted)
 

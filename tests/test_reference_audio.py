@@ -180,11 +180,12 @@ def test_admission_rejects_a_symlinked_owner_root_or_ancestor(tmp_path, entry_ki
     else:
         root.parent.symlink_to(foreign.parent.parent, target_is_directory=True)
     before = set(ctx.audio_dir.rglob("*"))
+    settings = Settings()
     with pytest.raises(
         ReferenceAudioStorageError, match="Reference audio storage could not be checked"
     ):
         store_reference_audio(
-            ctx.db, ctx.audio_dir, "user-a", ".wav", b"a" * 100, Settings(), "ref.wav",
+            ctx.db, ctx.audio_dir, "user-a", ".wav", b"a" * 100, settings, "ref.wav",
         )
     assert foreign.read_bytes() == b"SECRET"
     assert set(ctx.audio_dir.rglob("*")) == before
