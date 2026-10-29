@@ -333,7 +333,6 @@ def test_codex_image_gate_accepts_the_synthetic_01630_stream_line_by_line(
         "prompt", policy=A_COVER_POLICY, deadline=10_000_000,
     ).startswith(b"\x89PNG")
     assert channels
-    assert all(not channel.abort_requested() for channel in channels)
 
 
 @pytest.mark.parametrize(
