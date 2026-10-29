@@ -220,8 +220,10 @@ def test_release_settings_resolve_missing_values_to_named_constants(
 
 @pytest.mark.parametrize("malformed", ["hal,", ",hal", "hal,,other", " "])
 def test_token_clients_with_an_empty_entry_fail_loud(malformed: str) -> None:
+    required = _required_settings()
+
     with pytest.raises(ValidationError, match="TOKEN_CLIENTS has an empty entry"):
-        Settings(**_required_settings(), token_clients=malformed)
+        Settings(**required, token_clients=malformed)
 
 
 @pytest.mark.parametrize(
