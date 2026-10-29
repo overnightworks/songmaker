@@ -16,7 +16,7 @@ from acestep_worker.wrapper import default_generate_runner
 
 @pytest.mark.parametrize(("engine_error", "expected_state", "expected_error"), [
     (None, "done", None),
-    ("engine exploded", "failed", "engine exploded"),
+    ("engine exploded", "error", "engine exploded"),
 ])
 def test_runner_outcome_ignores_a_failed_progress_write(
     tmp_path: Path,
