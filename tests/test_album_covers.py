@@ -418,7 +418,7 @@ def test_cleanup_expired_removes_album_cover_files(tmp_path: Path) -> None:
         album = get_album(session, "expired-album", include_deleted_rows=True)
         assert album is not None
         album.deleted_at = datetime.now(timezone.utc) - timedelta(
-            days=get_settings().soft_delete_retention_days + 1,
+            days=get_settings().final_deletion_days + 1,
         )
         session.commit()
 

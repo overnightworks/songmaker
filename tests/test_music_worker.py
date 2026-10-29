@@ -176,7 +176,7 @@ def test_file_cleanup_cron_audits_orphans_and_expires_files(tmp_path, caplog) ->
     orphan.parent.mkdir(parents=True)
     orphan.touch()
     cutoff = datetime.now(timezone.utc) - timedelta(
-        days=get_settings().soft_delete_retention_days + 1,
+        days=get_settings().final_deletion_days + 1,
     )
     with factory() as session:
         session.add(User(id="u1", username="u1"))

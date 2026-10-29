@@ -463,7 +463,7 @@ def _retention_report_response(
         archived_count=report.archived_count,
         deleted_count=report.deleted_count,
         retention_days=settings.generation_retention_days,
-        hard_delete_days=settings.generation_hard_delete_days,
+        hard_delete_days=settings.final_deletion_days,
         scheduled_hour_utc=GENERATION_RETENTION_HOUR_UTC,
         dry_run=dry_run,
     )

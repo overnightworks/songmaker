@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.auth_dependencies import get_current_user
+from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -48,7 +49,7 @@ from songmaker_cli.db.queries.songs import (
 )
 from songmaker_cli.settings import get_settings
 
-RESTORE_WINDOW = timedelta(days=get_settings().soft_delete_retention_days)
+RESTORE_WINDOW = timedelta(days=get_settings().final_deletion_days)
 
 _DEFAULT_USER_ID = "u-test"
 _OTHER_USER_ID = "u-other"
@@ -183,6 +184,40 @@ def test_restore_song_410_after_window(seeded: Session) -> None:
     seeded.commit()
     with pytest.raises(RestoreWindowExpiredError):
         restore_song(seeded, "s1")
+
+
+@pytest.mark.parametrize("age_days", [6, 8])
+def test_song_restore_window_follows_the_final_deletion_setting(
+    seeded: Session, monkeypatch: pytest.MonkeyPatch, fresh_settings, age_days: int,
+) -> None:
+    monkeypatch.setenv("FINAL_DELETION_DAYS", "7")
+    soft_delete_song(seeded, "s1")
+    song = get_song(seeded, "s1", include_deleted_rows=True)
+    song.deleted_at = datetime.now(timezone.utc) - timedelta(days=age_days)
+    seeded.commit()
+
+    if age_days > 7:
+        with pytest.raises(RestoreWindowExpiredError):
+            restore_song(seeded, "s1")
+    else:
+        assert restore_song(seeded, "s1").deleted_at is None
+
+
+@pytest.mark.parametrize("age_days", [6, 8])
+def test_album_restore_window_follows_the_final_deletion_setting(
+    seeded: Session, monkeypatch: pytest.MonkeyPatch, fresh_settings, age_days: int,
+) -> None:
+    monkeypatch.setenv("FINAL_DELETION_DAYS", "7")
+    soft_delete_album(seeded, "rock")
+    album = get_album(seeded, "rock", include_deleted_rows=True)
+    album.deleted_at = datetime.now(timezone.utc) - timedelta(days=age_days)
+    seeded.commit()
+
+    if age_days > 7:
+        with pytest.raises(RestoreWindowExpiredError):
+            restore_album(seeded, "rock")
+    else:
+        assert restore_album(seeded, "rock").deleted_at is None
 
 
 def test_restore_song_rejects_deleted_album(seeded: Session) -> None:
@@ -407,3 +442,21 @@ def test_api_unique_album_id_skips_soft_deleted(tmp_path: Path) -> None:
     assert r.status_code == 200
     new_id = r.json()["id"]
     assert new_id != "rock"
+
+
+@pytest.mark.parametrize("final_deletion_days", [30, 7])
+@pytest.mark.parametrize("days_offset", [-1, 0, 1])
+def test_trashed_song_is_purged_exactly_at_the_final_deletion_setting(
+    db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_settings,
+    final_deletion_days: int, days_offset: int,
+) -> None:
+    monkeypatch.setenv("FINAL_DELETION_DAYS", str(final_deletion_days))
+    _seed(db_session)
+    soft_delete_song(db_session, "s1")
+    song = get_song(db_session, "s1", include_deleted_rows=True)
+    song.deleted_at = datetime.now(timezone.utc) - timedelta(days=final_deletion_days + days_offset)
+    db_session.commit()
+
+    _, song_count = run_cleanup_expired(lambda: db_session, tmp_path / "audio")
+
+    assert song_count == (1 if days_offset >= 0 else 0)
