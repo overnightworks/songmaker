@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
 from songmaker_cli.api_models.health import HealthResponse, HealthSignals
+from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     PROM_ACESTEP_WORKER_LOADED_MODELS,
@@ -359,4 +360,5 @@ async def health_check(request: Request) -> HealthResponse:
         claude_cli_tool_surface=provider.claude_cli_tool_surface_health(),
         codex_image_sandbox_runtime=codex_image_sandbox_runtime_health(),
         background_loops=request.app.state.background_loop_registry.loop_health(),
+        release=ReleaseInfo.from_settings(config),
     ))

@@ -6,7 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from songmaker_cli.constants import DEFAULT_COVER_EXECUTOR
-from songmaker_cli.settings import CoverExecutor, Settings, get_settings
+from songmaker_cli.settings import (
+    UNKNOWN_COMMIT,
+    UNRELEASED_TAG,
+    CoverExecutor,
+    Settings,
+    get_settings,
+)
 
 
 def _required_settings() -> dict[str, str]:
@@ -132,3 +138,29 @@ def test_a_dotenv_with_a_misspelt_key_still_raises(tmp_path) -> None:
 
     with pytest.raises(ValidationError):
         Settings(_env_file=env_file, **required_settings)
+
+
+@pytest.mark.parametrize(
+    ("release", "commit", "expected_release", "expected_commit"),
+    [
+        (None, None, UNRELEASED_TAG, UNKNOWN_COMMIT),
+        ("v2026.10.28.4", "a" * 40, "v2026.10.28.4", "a" * 40),
+        ("", "", UNRELEASED_TAG, UNKNOWN_COMMIT),
+        ("  ", "  ", UNRELEASED_TAG, UNKNOWN_COMMIT),
+    ],
+    ids=["unset", "set", "empty", "blank"],
+)
+def test_release_settings_resolve_missing_values_to_named_constants(
+    monkeypatch: pytest.MonkeyPatch,
+    release: str | None, commit: str | None, expected_release: str, expected_commit: str,
+) -> None:
+    for name, value in (("SONGMAKER_RELEASE", release), ("SONGMAKER_COMMIT", commit)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+
+    settings = Settings(**_required_settings())
+
+    assert settings.songmaker_release == expected_release
+    assert settings.songmaker_commit == expected_commit

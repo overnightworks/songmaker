@@ -32,6 +32,7 @@ from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.db.models import AceStepWorker
 from songmaker_cli.health_api import _format_prometheus, _PrometheusMetrics
 from songmaker_cli.health_types import BackgroundLoopName
+from songmaker_cli.settings import UNKNOWN_COMMIT, UNRELEASED_TAG, get_settings
 
 _ALL_SONGMAKER_TOOLS = sorted(f"mcp__songmaker__{name}" for name in MCP_TOOL_NAMES)
 
@@ -416,7 +417,9 @@ def expected_health_json() -> bytes:
         b'"resource_event_cleanup":{"state":"ok","consecutive_failures":0,"last_error":null},'
         b'"score_backfill":{"state":"failing","consecutive_failures":3,"last_error":"RuntimeError"},'
         b'"stale_job_reaper":{"state":"ok","consecutive_failures":0,"last_error":null},'
-        b'"provider_status_refresh":{"state":"ok","consecutive_failures":0,"last_error":null}}}'
+        b'"provider_status_refresh":{"state":"ok","consecutive_failures":0,"last_error":null}},'
+        b'"release":{"tag":"' + UNRELEASED_TAG.encode() + b'","commit":"'
+        + UNKNOWN_COMMIT.encode() + b'"}}'
     )
 
 
@@ -427,11 +430,15 @@ def expected_health_json() -> bytes:
     ids=["worker-online", "worker-offline"],
 )
 def test_health_preserves_response_bytes(
-    health_client, expected_health_json, monkeypatch,
+    health_client, expected_health_json, monkeypatch, fresh_settings,
     tool_surface, worker_online, overall_status, acestep_status,
 ) -> None:
     # defect:#1590 — health exposes only current service signals.
     import songmaker_cli.arq_pool as arq_mod
+
+    monkeypatch.delenv("SONGMAKER_RELEASE", raising=False)
+    monkeypatch.delenv("SONGMAKER_COMMIT", raising=False)
+    get_settings.cache_clear()
 
     now = datetime(2026, 9, 20, tzinfo=timezone.utc)
     health_client.app.state.startup_time = now - timedelta(seconds=123)
@@ -464,6 +471,28 @@ def test_health_preserves_response_bytes(
     )
     assert response.status_code == 200
     assert response.content == expected
+
+
+@pytest.mark.parametrize(
+    ("release", "commit", "expected"),
+    [
+        ("v2026.10.28.4", "a" * 40, {"tag": "v2026.10.28.4", "commit": "a" * 40}),
+        (None, "b" * 40, {"tag": UNRELEASED_TAG, "commit": "b" * 40}),
+        ("v2026.10.28.4", None, {"tag": "v2026.10.28.4", "commit": UNKNOWN_COMMIT}),
+    ],
+    ids=["release-build", "commit-without-tag", "tag-without-commit"],
+)
+def test_health_reports_the_release_the_image_was_built_for(
+    health_client, monkeypatch, fresh_settings, release, commit, expected,
+) -> None:
+    for name, value in (("SONGMAKER_RELEASE", release), ("SONGMAKER_COMMIT", commit)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    get_settings.cache_clear()
+
+    assert _get_health(health_client)["release"] == expected
 
 
 def test_worker_with_broken_gpu_is_not_counted_online(health_client) -> None:
