@@ -14,9 +14,11 @@ from typing import TYPE_CHECKING, overload
 from fastapi import HTTPException
 from pydantic import SecretStr
 from webauth.https_client import fetch_key_set_over_https
+from webauth.middleware.bearer_gate import BearerGate, PersonPaths
 from webauth.oidc import OidcClientConfig, OidcRelyingParty
 from webauth.oidc_login import AdmissionConfig
 from webauth.oidc_transport import post_token_request_over_https
+from webauth.policies import AuthorizedParties, PathRules
 
 from songmaker_cli.api_helpers import resolve_public_base_url
 from songmaker_cli.constants import (
@@ -24,11 +26,14 @@ from songmaker_cli.constants import (
     OIDC_CALLBACK_PATH,
     OIDC_LEEWAY_SECONDS,
     OIDC_LOGIN_GROUP,
+    PERSON_PATH_PREFIXES,
     SIGNED_OUT_PATH,
 )
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from webauth.ports import SignInTransaction
 
     from songmaker_cli.settings import Settings
 
@@ -110,4 +115,21 @@ def build_oidc_sign_in(settings: Settings) -> OidcSignIn:
     return OidcSignIn(
         relying_party=build_relying_party(client_config),
         admission=build_admission_config(client_config),
+    )
+
+
+def build_bearer_gate(
+    settings: Settings,
+    oidc_sign_in: OidcSignIn,
+    transaction: SignInTransaction,
+) -> BearerGate | None:
+    """The gate that admits a person's token on the person paths; none while no client is named."""
+    if not settings.token_client_ids:
+        return None
+    return BearerGate(
+        paths=PathRules(),
+        relying_party=oidc_sign_in.relying_party,
+        admission=oidc_sign_in.admission,
+        authorized_parties=AuthorizedParties(settings.token_client_ids),
+        person_paths=PersonPaths(PathRules(prefixes=PERSON_PATH_PREFIXES), transaction),
     )

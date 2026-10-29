@@ -117,6 +117,10 @@ def _find_env_file() -> Path | None:
     return None
 
 
+def _split_token_clients(value: str) -> list[str]:
+    return [entry.strip() for entry in value.split(",")]
+
+
 class Settings(BaseSettings):
     """Validated application settings, loaded from env + .env.
 
@@ -146,6 +150,21 @@ class Settings(BaseSettings):
         if isinstance(value, str) and not value.strip():
             return _RELEASE_FIELD_DEFAULTS[info.field_name or ""]
         return value
+
+    @field_validator("token_clients")
+    @classmethod
+    def token_clients_have_no_empty_entry(cls, value: str) -> str:
+        """An empty list admits no client; an empty entry in a non-empty list is a typo."""
+        if value and "" in _split_token_clients(value):
+            raise ValueError("TOKEN_CLIENTS has an empty entry")
+        return value
+
+    @property
+    def token_client_ids(self) -> frozenset[str]:
+        """The admitted `azp` values, trimmed; matched exactly and case-sensitively."""
+        if not self.token_clients:
+            return frozenset()
+        return frozenset(_split_token_clients(self.token_clients))
 
     @model_validator(mode="after")
     def validate_job_timeout_orders(self) -> Settings:
@@ -193,6 +212,9 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = Field(default=30, alias="REQUEST_TIMEOUT")
     allowed_hosts: str = ""
     cors_origin: str | None = None
+    # Comma list of the `azp` values of the OAuth clients whose access tokens
+    # reach the person paths as the person behind them. Empty admits no token.
+    token_clients: str = ""
     trusted_proxies: str = ""
     # The one owner of "what address am I reachable at from outside" for
     # share links (#339). Empty means unconfigured: share endpoints then

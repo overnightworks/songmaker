@@ -539,8 +539,10 @@ async def api_chat_turn(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    prepared = _prepare_chat_turn(req, request, user, session)
     session_id = session_id_from_request(request, installed_web_auth_config(request.app))
+    if session_id is None:
+        raise HTTPException(status_code=403, detail="The co-writer needs a browser sign-in.")
+    prepared = _prepare_chat_turn(req, request, user, session)
     frames = _start_chat_turn(req, TurnCaller(request.app, session_id, user), prepared)
     return StreamingResponse(
         frames.relay(),

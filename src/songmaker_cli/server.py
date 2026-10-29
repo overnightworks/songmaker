@@ -33,6 +33,7 @@ from songmaker_cli.app_context import (
     parse_trusted_proxies,
 )
 from songmaker_cli.audio_paths import AudioPathRejectedError
+from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.config import find_project_root
 from songmaker_cli.constants import (
     APP_NAME,
@@ -64,7 +65,7 @@ from songmaker_cli.lifecycle import (
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
-from songmaker_cli.oidc_client import build_oidc_sign_in
+from songmaker_cli.oidc_client import build_bearer_gate, build_oidc_sign_in
 from songmaker_cli.request_policies import (
     SPA_SHELL_HEADERS,
     build_body_size_policy,
@@ -239,9 +240,11 @@ def create_app(
     #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
     #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
     #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   7. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #   8. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #   9. AccessLogMiddleware        -- log all requests (after security checks)
+    #   7. BearerGateMiddleware       -- only with TOKEN_CLIENTS: a verified token on a
+    #                                    person path is the person and skips CSRF
+    #   8. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  10. AccessLogMiddleware        -- log all requests (after security checks)
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the true outermost layer) and outside everything else, on purpose:
@@ -271,6 +274,11 @@ def create_app(
         body_size=build_body_size_policy(settings),
         rate_limit=build_rate_limit_policy(settings),
         csrf_origin=build_csrf_origin_policy(),
+        bearer_gate=build_bearer_gate(
+            settings,
+            app.state.oidc_sign_in,
+            DatabaseSignInTransaction(ctx.db),
+        ),
     )
 
     app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.
