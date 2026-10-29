@@ -35,8 +35,6 @@ SCORING_WORKER_SERVICE = "songmaker-scoring-worker"
 
 @dataclass(frozen=True)
 class ContainerSpec:
-    compose_service: str
-    dockerfile: Path
     extras: frozenset[str]
     startup_modules: tuple[str, ...]
 
@@ -248,7 +246,7 @@ def _installing_containers() -> dict[str, ContainerSpec]:
         if not sync_extras:
             continue
         containers[name] = ContainerSpec(
-            name, dockerfile, sync_extras[0], _startup_modules(service),
+            sync_extras[0], _startup_modules(service),
         )
     return containers
 
@@ -480,6 +478,9 @@ def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
     )
 
 
+AGENT_CLI_MOUNT_ROOTS = (Path("/home/songmaker"), Path("/usr/local"))
+
+
 def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None:
     services = _raw_compose_services()
     declared_named_volumes = _declared_named_volumes()
@@ -497,7 +498,13 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
         bind_mounts: list[dict[str, object]] = []
         for volume in volumes:
             if isinstance(volume, str):
-                source = volume.split(":", maxsplit=1)[0]
+                source, target, *_ = volume.split(":")
+                if any(Path(target).is_relative_to(root) for root in AGENT_CLI_MOUNT_ROOTS):
+                    assert source in declared_named_volumes, (
+                        f"{service_name} must mount {target!r} through Compose "
+                        f"long syntax (read-only, no host path creation) or a "
+                        f"declared named volume: {volume!r}"
+                    )
                 assert source in declared_named_volumes or (
                     source.startswith("./") and ".." not in Path(source).parts
                 ), (
