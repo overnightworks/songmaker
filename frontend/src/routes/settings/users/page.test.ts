@@ -492,7 +492,7 @@ describe('admin reads and actions that fail', () => {
 	});
 });
 
-describe('admin models tab', () => {
+describe('admin agents tab', () => {
 	it('answers who does what in one row per task', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'agents');
