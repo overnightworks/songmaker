@@ -504,7 +504,8 @@ class Checkout:
         write_executable(
             self._hal_path,
             "#!/bin/bash\n"
-            "command -v uv >/dev/null || { echo 'uv: not found' >&2; exit 3; }\n"
+            f'[ "$(command -v uv)" = {shlex.quote(str(user_executables / "uv"))} ] || '
+            "{ echo 'uv: not found' >&2; exit 3; }\n"
             'printf "hal %s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
             f"exit {exit_code}\n",
         )
