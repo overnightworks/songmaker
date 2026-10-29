@@ -229,9 +229,6 @@
 [function_lines."tests/test_music_worker.py"]
 "test_startup_recovers_music_job_types_and_reconciles_lora_once" = 70
 
-[function_lines."tests/test_packaging_boundary.py"]
-"test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles" = 106
-
 [function_lines."tests/test_postgresql.py"]
 "test_alembic_migrations_on_postgresql" = 149
 "test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql" = 65

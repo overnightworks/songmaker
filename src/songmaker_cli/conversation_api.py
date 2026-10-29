@@ -528,23 +528,23 @@ def _sse_format(event: BaseModel) -> str:
 @router.post(
     "/chat/turn",
     responses={
+        403: {"description": "The co-writer needs a browser sign-in"},
         404: {"description": "Mentioned album or version does not exist"},
         409: {"description": "Another co-writer turn is still running"},
         422: {"description": "Chat context or co-writer configuration is invalid"},
     },
 )
 async def api_chat_turn(
-    req: ChatTurnV2Request,
-    request: Request,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
+    req: ChatTurnV2Request, request: Request,
+    user: AuthenticatedUser = Depends(get_current_user), session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    prepared = _prepare_chat_turn(req, request, user, session)
     session_id = session_id_from_request(request, installed_web_auth_config(request.app))
+    if session_id is None:
+        raise HTTPException(status_code=403, detail="The co-writer needs a browser sign-in.")
+    prepared = _prepare_chat_turn(req, request, user, session)
     frames = _start_chat_turn(req, TurnCaller(request.app, session_id, user), prepared)
     return StreamingResponse(
-        frames.relay(),
-        media_type=SSE_MEDIA_TYPE,
+        frames.relay(), media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 

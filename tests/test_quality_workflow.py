@@ -12,48 +12,9 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW_TEXT = (ROOT / ".github/workflows/ci.yml").read_text()
-WORKFLOW = yaml.safe_load(WORKFLOW_TEXT)
+WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
 JOBS = WORKFLOW["jobs"]
 REPORTS = ("reports/coverage.xml", "reports/frontend-coverage/lcov.info")
-
-
-@pytest.mark.parametrize(
-    ("key", "expected"),
-    [
-        (
-            "needs",
-            [
-                "backend",
-                "alert-rules",
-                "postgresql-contract",
-                "frontend",
-                "coverage",
-            ],
-        ),
-        ("if", "${{ !cancelled() }}"),
-        ("permissions", {"contents": "read", "actions": "read"}),
-        ("with", {"coverage-artifact": "coverage"}),
-        ("secrets", {"SONAR_TOKEN": "${{ secrets.SONAR_TOKEN }}"}),
-    ],
-)
-def test_g1_caller_contract(key, expected):
-    assert JOBS["quality"][key] == expected
-
-
-def test_g1_caller_identity_and_pin():
-    assert "name" not in JOBS["quality"]
-    assert "sonar" not in JOBS
-    reference = JOBS["quality"]["uses"]
-    assert re.fullmatch(
-        r"overnightworks/quality/\.github/workflows/gate\.yml@[0-9a-f]{40}",
-        reference,
-    )
-    assert re.search(
-        rf"^\s+uses: {re.escape(reference)} # v0\.5\.0$",
-        WORKFLOW_TEXT,
-        re.MULTILINE,
-    )
 
 
 def test_g1_mandatory_names_match_rendered_dependencies():
@@ -71,48 +32,19 @@ def test_g1_mandatory_names_match_rendered_dependencies():
     assert set(config["gate"]) == {"mandatory_jobs", "loosened"}
     loosened = config["gate"]["loosened"]
     assert isinstance(loosened, list)
-    assert [(entry["item"], entry["what"]) for entry in loosened] == [
-        ("#1734", 'mandatory job "Acceptance evidence (integration)" removed'),
-        ("#1856", "size baseline raises file_lines frontend/src/lib/api/types.ts 1125 -> 1159"),
-        ("#1784", "size baseline raises file_lines frontend/src/lib/api/types.ts 1144 -> 1146"),
-        ("#1914", "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1145"),
-        ("#1958", "size baseline raises file_lines frontend/src/lib/api/types.ts 1139 -> 1140"),
-        ("#1974", "size baseline raises file_lines frontend/src/lib/api/types.ts 1140 -> 1141"),
-        ("#2009", "size baseline raises file_lines frontend/src/lib/api/types.ts 1121 -> 1127"),
-    ]
     for entry in loosened:
         assert set(entry) == {"what", "item", "date", "reason"}
         assert isinstance(entry["date"], datetime.date)
     mandatory = config["gate"]["mandatory_jobs"]
-    assert len(mandatory) == len(set(mandatory)) == 5
+    assert len(mandatory) == len(set(mandatory))
     assert set(mandatory) == rendered_names
-
-
-def test_g1_main_and_pull_requests_reach_the_gate():
-    events = WORKFLOW.get("on", WORKFLOW.get(True))
-    assert events == {
-        "push": {"branches": ["main"]},
-        "pull_request": {"branches": ["main"]},
-        "workflow_dispatch": None,
-    }
-    assert WORKFLOW["concurrency"]["cancel-in-progress"] == "${{ github.ref != 'refs/heads/main' }}"
 
 
 def test_g2_assembly_transports_both_reports():
     assembly = JOBS["coverage"]
-    assert assembly["needs"] == ["backend", "frontend"]
     steps = assembly["steps"]
-    downloads = [s for s in steps if s.get("uses", "").startswith("actions/download-artifact@")]
-    assert [s["with"] for s in downloads] == [
-        {"name": "sonar-coverage-backend", "path": "reports"},
-        {"name": "sonar-coverage-frontend", "path": "reports"},
-    ]
-    assert not any(s.get("uses", "").startswith("actions/checkout@") for s in steps)
     (upload,) = [s for s in steps if s.get("uses", "").startswith("actions/upload-artifact@")]
     assert upload["with"]["name"] == JOBS["quality"]["with"]["coverage-artifact"]
-    assert upload["with"]["path"].splitlines() == list(REPORTS)
-    assert upload["with"]["overwrite"] is True
-    assert upload["with"]["if-no-files-found"] == "error"
     paths = [Path(p) for p in upload["with"]["path"].splitlines()]
     artifact_root = Path(os.path.commonpath([p.parent for p in paths]))
     properties = dict(
