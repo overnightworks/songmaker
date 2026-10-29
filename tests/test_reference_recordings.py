@@ -126,14 +126,21 @@ def test_a_failed_unlink_leaves_an_uncounted_remnant_and_logs_only_ids_and_error
         assert forbidden not in caplog.text
 
 
-def test_a_commit_that_raises_before_committing_keeps_the_file_as_an_uncounted_remnant(ctx):
-    """Q10b, no row."""
+def test_a_commit_that_raises_before_committing_keeps_the_file_as_an_uncounted_remnant(
+    ctx, caplog
+):
+    """Q10b, no row; the log carries the user id and error kind only."""
     def refuse(session):
-        raise _database_error("commit refused")
+        raise _database_error("refs/owner/private-name.wav unreachable")
 
     event.listen(ctx.db, "before_commit", refuse)
-    with pytest.raises(ReferenceAudioStorageError):
-        _store(ctx)
+    with caplog.at_level(logging.INFO, logger="songmaker_cli.reference_audio"):
+        with pytest.raises(ReferenceAudioStorageError):
+            _store(ctx, filename="private-name.wav")
+    assert "user owner" in caplog.text
+    assert "OperationalError" in caplog.text
+    for forbidden in ("unreachable", "private-name", "refs/", ".wav"):
+        assert forbidden not in caplog.text
     event.remove(ctx.db, "before_commit", refuse)
     assert _rows(ctx) == []
     assert len(_files(ctx)) == 1

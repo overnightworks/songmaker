@@ -163,17 +163,12 @@ def _record_reference(
     except BaseException:
         _remove_unrecorded_file(directory, name, user_id)
         raise
-    commit_failure = None
     try:
         session.commit()
     except BaseException as exc:
-        commit_failure = exc
-    if commit_failure is not None:
         # The commit may have succeeded with its confirmation lost: keep the file.
-        log.error(
-            "Reference audio commit failed for user %s: %s", user_id, type(commit_failure).__name__,
-        )
-        raise commit_failure
+        log.error("Reference audio commit failed for user %s: %s", user_id, type(exc).__name__)
+        raise
     log.info(
         "Reference audio stored for user %s: reference %s, %d bytes",
         user_id, recording.id, size_bytes,
