@@ -1037,7 +1037,7 @@ reachability: whether the choice runs is what the row's status says, and an
 unusable one stays saved until its next turn or job fails with the named reason.
 
 The Cover is what asks that one dispatch; the Co-Writer runs at
-the agent service. Settings › Admin › **Models** shows the Co-Writer and Cover: one table, one
+the agent service. Settings › Admin › **Agents** shows the Co-Writer and Cover: one table, one
 row per task, with Task, Provider, Route, Model and Status. The Co-Writer row is
 read-only (`ModelsCowriterRow.svelte`): "Set by the agent service" in the Provider
 and Model cells, Agent service as the route, no status, and the history tail under
