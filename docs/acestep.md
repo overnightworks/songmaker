@@ -151,7 +151,8 @@ python:3.12-slim
 
 python:3.14-slim
   ├── songmaker-music-worker     (server extras only — no torch, no scoring)
-  └── songmaker-scoring-worker   (server + scoring + whisper, CPU torch)
+  ├── songmaker-scoring-worker   (server + scoring + whisper, CPU torch)
+  └── songmaker-web              (server extras + frontend build, no torch)
 ```
 
 **The rule:** if you edit any `docker/base/*.Dockerfile`, run `scripts/build_images.sh` first before `docker compose up --build`. Otherwise compose fails with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
