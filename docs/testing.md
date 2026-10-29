@@ -12,7 +12,7 @@ excludes the base-image label.
 ```bash
 # Backend — targeted (local / agents)
 pytest tests/test_api.py -q --tb=short
-pytest tests/test_queue_streams.py tests/test_playlists.py -q
+pytest tests/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
@@ -85,7 +85,7 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 - **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the three heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci.ini`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
 - **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`.
 - **CI PostgreSQL contract**: the modules listed in the `postgresql-contract` job's `POSTGRESQL_CONTRACT_MODULES` (`.github/workflows/ci.yml`) run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent writes and the locks that order them, transactional rollback, retention gaps and accounting; SQLite tests do not stand in for these guarantees. A job step fails the build unless every listed module executed at least one case and skipped none, and unless the reference quota PostgreSQL cases ran unskipped (one step, two checks); collection alone is not evidence. The write-lock modules share `tests/postgres_lock_harness.py` (hold one writer at its commit, start the second, require through `pg_blocking_pids` that it waits behind the first). Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
-- **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
+- **Resource-event transport**: `tests/songmaker_cli/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
 GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, and `security.yml`) run on push/PR to `main`.
 Security verification also runs weekly. The live checks are:
@@ -340,12 +340,12 @@ tests/
 ├── test_config.py                 ACE-Step config building, defaults, path resolution
 ├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
 ├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
-├── test_resource_event_api.py      Authenticated SSE replay, gaps, limits, headers, isolation
 ├── test_generation*.py            Generation params, retention, LoRA integration
 └── test_*                         Lifecycle, middleware, parser, Redis, scheduler,
                                    soft delete, constants, MCP server
 
 tests/acestep_engine/              ACE-Step client, progress and training client
+tests/songmaker_cli/               Route modules, request policies and server tests, named for their subject
 tests/audio_engine/                Audio I/O and mastering
 tests/support/                     Shared test helpers and pytest plugins; tests import them
                                    as `support.<module>`, never from `conftest`
