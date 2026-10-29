@@ -528,6 +528,7 @@ def _sse_format(event: BaseModel) -> str:
 @router.post(
     "/chat/turn",
     responses={
+        403: {"description": "The co-writer needs a browser sign-in"},
         404: {"description": "Mentioned album or version does not exist"},
         409: {"description": "Another co-writer turn is still running"},
         422: {"description": "Chat context or co-writer configuration is invalid"},
