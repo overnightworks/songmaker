@@ -72,7 +72,7 @@ from songmaker_cli.request_policies import (
     build_rate_limit_policy,
     build_security_headers_policy,
 )
-from songmaker_cli.settings import DEFAULT_SERVER_PORT, CoverExecutor, get_settings
+from songmaker_cli.settings import DEFAULT_SERVER_PORT, CoverExecutor, Settings, get_settings
 
 log = logging.getLogger(__name__)
 
@@ -202,6 +202,10 @@ def audio_path_rejected_handler(
     return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
 
 
+def _oidc_sign_in_or_default(given: OidcSignIn | None, settings: Settings) -> OidcSignIn:
+    return build_oidc_sign_in(settings) if given is None else given
+
+
 def create_app(
     audio_dir: Path,
     data_dir: Path,
@@ -228,7 +232,7 @@ def create_app(
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)
-    app.state.oidc_sign_in = oidc_sign_in or build_oidc_sign_in(get_settings())
+    app.state.oidc_sign_in = _oidc_sign_in_or_default(oidc_sign_in, get_settings())
     install_sign_in(app)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
