@@ -117,7 +117,7 @@ def test_rejects_non_positive_voice_capacity(setting: str) -> None:
 
 
 @pytest.mark.parametrize(("configured", "expected_days"), [(None, 30), ("7", 7)])
-def test_final_deletion_days_governs_every_deletion_window(
+def test_final_deletion_days_sets_the_archived_take_expiry(
     monkeypatch: pytest.MonkeyPatch, fresh_settings, configured: str | None, expected_days: int,
 ) -> None:
     monkeypatch.delenv("FINAL_DELETION_DAYS", raising=False)
