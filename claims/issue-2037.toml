@@ -1,8 +1,0 @@
-claim_id = "305452955ce04d388178a58f4596a1e2"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "544da8c7a502bc2c040b069157b9036b4b2a3347"
-branch = "claude/issue-2037-compose-unit-agent-file-font-and-pyproje"
-scope = ["frontend/e2e/self-hosted-fonts.spec.ts", "tests/scripts/test_copy_kit_assets.py", "tests/test_compose_release_args.py", "tests/test_cowriter_service_turn.py", "tests/test_install_autostart.py", "tests/test_music_worker.py"]
-opened_commit = "61de8d59145432f407ce4f69c69558449496ca5d"
-whole_reason = "Seven test-only findings of one ruling across six small test files; each file holds one or two findings, too small to lane alone."
