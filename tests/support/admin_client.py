@@ -26,5 +26,6 @@ def build_admin_client(
     authenticated user from the builder, not from a session cookie.
     """
     ctx = make_router_ctx(tmp_path, db=init_test_db(tmp_path / database_name), seed_db=seed_db)
-    app = make_router_app(ctx, user=make_authenticated_user(user_id, role="admin", username=username))
+    admin = make_authenticated_user(user_id, role="admin", username=username)
+    app = make_router_app(ctx, user=admin)
     return web_client(app), ctx.db
