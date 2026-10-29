@@ -1,7 +1,0 @@
-claim_id = "f08e70ef145e4e43b3cdb20ed40e24a1"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "3f72d2db6f4165ba1d6a263b589c3c681c71e49d"
-branch = "docs/freeze-blessed-pictures"
-scope = ["docs/design/README.md", "docs/design/about.html", "docs/design/references.html"]
-opened_commit = "17f38db8e8088738c2bae2dd5eaa128a6c418c7a"
