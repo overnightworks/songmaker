@@ -137,6 +137,21 @@ def test_archived_generations_are_not_re_archived(
     assert "g1" not in report.archived_ids
 
 
+@pytest.mark.parametrize("final_deletion_days", [30, 7])
+@pytest.mark.parametrize("days_offset", [-1, 0, 1])
+def test_archived_take_is_deleted_exactly_at_the_final_deletion_setting(
+    retention_factory, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_settings,
+    final_deletion_days: int, days_offset: int,
+) -> None:
+    monkeypatch.setenv("FINAL_DELETION_DAYS", str(final_deletion_days))
+    _age(retention_factory, "g1", created_days_ago=90,
+         archived_days_ago=final_deletion_days + days_offset)
+
+    report = run_generation_retention(retention_factory, tmp_path / "audio")
+
+    assert ("g1" in report.deleted_ids) is (days_offset >= 0)
+
+
 def test_live_generation_expires_after_the_retention_window(retention_factory) -> None:
     with retention_factory() as session:
         gen = get_generation(session, "g1")

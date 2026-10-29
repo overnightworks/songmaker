@@ -57,7 +57,7 @@ def run_cleanup_expired(db_factory, audio_dir) -> tuple[int, int]:
     songs deleted earlier than their (still-live) album.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(
-        days=get_settings().soft_delete_retention_days,
+        days=get_settings().final_deletion_days,
     )
     paths: list[str] = []
     album_count = 0
@@ -113,7 +113,7 @@ def run_generation_retention(
     than `generation_retention_days`.
 
     Stage 2 — hard-delete (files + row) generations archived longer
-    than `generation_hard_delete_days` ago, unless referenced as a
+    than `final_deletion_days` ago, unless referenced as a
     reproducibility anchor by another generation.
 
     `dry_run=True` returns the IDs that would be affected without
@@ -122,7 +122,7 @@ def run_generation_retention(
     settings = get_settings()
     now = datetime.now(timezone.utc)
     archive_cutoff = now - timedelta(days=settings.generation_retention_days)
-    delete_cutoff = now - timedelta(days=settings.generation_hard_delete_days)
+    delete_cutoff = now - timedelta(days=settings.final_deletion_days)
     report = GenerationRetentionReport()
     paths: list[str] = []
 

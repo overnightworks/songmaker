@@ -275,7 +275,7 @@ def generation_expiry(gen: Generation) -> datetime | None:
         return None
     settings = get_settings()
     if gen.is_archived and gen.archived_at:
-        return gen.archived_at + timedelta(days=settings.generation_hard_delete_days)
+        return gen.archived_at + timedelta(days=settings.final_deletion_days)
     return gen.created_at + timedelta(days=settings.generation_retention_days)
 
 
