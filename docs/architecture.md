@@ -175,7 +175,7 @@ person has agreed to leave. 🔍 on every page
 opens the one search, `RailSearch`, in a sheet. The Library and the Playlists page carry the brand
 and a 44px account circle at the right edge (the desktop: top right of the main area). Its menu
 (`AccountMenu.svelte`) holds the name (opens `/api/auth/me`'s `account_console_url` in a new tab),
-Settings, the theme switch, Sign out and a quiet row of legal links; the song carries its title,
+Settings, the theme switch (with no stored choice the page follows the device; the switch stores a choice), Sign out and a quiet row of legal links; the song carries its title,
 share and song menu instead. Choosing
 Settings in the account menu while `/settings` is already on screen only
 closes the menu.
