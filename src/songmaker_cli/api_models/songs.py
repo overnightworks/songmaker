@@ -30,7 +30,7 @@ from songmaker_cli.whisper_cues import (
 log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from songmaker_cli.db.models import Album, Generation, Song, Version
+    from songmaker_cli.db.models import Album, Generation, ReferenceRecording, Song, Version
 
 
 def generation_version_lyrics(gen: Generation) -> str | None:
@@ -410,6 +410,21 @@ def public_song_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
     )
 
 
+class ReferenceResponse(BaseModel):
+    id: str
+    filename: str
+
+    @classmethod
+    def from_orm(cls, recording: ReferenceRecording) -> ReferenceResponse:
+        return cls(id=recording.id, filename=recording.original_filename)
+
+
+def _reference_of(version: Version | None) -> ReferenceResponse | None:
+    if version is None or version.reference_recording is None:
+        return None
+    return ReferenceResponse.from_orm(version.reference_recording)
+
+
 class VersionResponse(BaseModel):
     id: str
     version_number: int
@@ -419,6 +434,7 @@ class VersionResponse(BaseModel):
     audio_duration: int
     key_scale: str
     generation_params: dict | None
+    reference: ReferenceResponse | None
     created_at: str
 
     @classmethod
@@ -433,6 +449,7 @@ class VersionResponse(BaseModel):
             audio_duration=ver.audio_duration,
             key_scale=ver.key_scale,
             generation_params=generation_params,
+            reference=_reference_of(ver),
             created_at=ver.created_at.isoformat(),
         )
 
@@ -452,6 +469,7 @@ class SongSummaryResponse(BaseModel):
     audio_duration: int | None = None
     key_scale: str | None = None
     generation_params: dict | None = None
+    reference: ReferenceResponse | None = None
     version_count: int = 0
     generation_count: int = 0
     is_shared: bool = False
@@ -484,6 +502,7 @@ class SongSummaryResponse(BaseModel):
             audio_duration=ver.audio_duration if ver else None,
             key_scale=ver.key_scale if ver else None,
             generation_params=generation_params,
+            reference=_reference_of(ver),
             version_count=len(song.versions),
             generation_count=generation_count,
             is_shared=song.is_shared,
@@ -565,6 +584,7 @@ class SongCreateRequest(BaseModel):
     key_scale: str = Field("", max_length=10)
     vocal_language: str = Field("", max_length=10)
     generation_params: GenerationParams | None = None
+    reference_recording_id: str | None = Field(None, max_length=36)
 
 
 class SongUpdateRequest(BaseModel):
@@ -575,6 +595,11 @@ class SongUpdateRequest(BaseModel):
     key_scale: str | None = Field(None, max_length=10)
     vocal_language: str | None = Field(None, max_length=10)
     generation_params: GenerationParams | None = None
+    reference_recording_id: str | None = Field(
+        None,
+        max_length=36,
+        description="Absent keeps the latest version's reference, null clears it.",
+    )
     new_version: bool = Field(
         False,
         description=(
@@ -709,5 +734,6 @@ class BulkDeleteResponse(BaseModel):
 
 
 class ReferenceAudioResponse(BaseModel):
+    id: str
     path: str
     filename: str

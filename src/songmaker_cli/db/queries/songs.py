@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
@@ -257,6 +258,7 @@ def create_song(
     key_scale: str = "",
     vocal_language: str = "",
     generation_params: dict | None = None,
+    reference_recording_id: str | None = None,
     created_by: str | None = None,
 ) -> Song:
     """Create a song and its first version.
@@ -299,10 +301,37 @@ def create_song(
         lyrics=lyrics, prompt=prompt, bpm=bpm,
         audio_duration=audio_duration, key_scale=key_scale,
         generation_params=generation_params,
+        reference_recording_id=reference_recording_id,
     )
     session.add(version)
     session.flush()
     return song
+
+
+@dataclass(frozen=True)
+class _VersionContent:
+    """What a version holds besides its identity: the next snapshot of a song's content."""
+
+    lyrics: str
+    prompt: str
+    bpm: int
+    audio_duration: int
+    key_scale: str
+    generation_params: dict | None
+    reference_recording_id: str | None
+
+    def creative_differs_from(self, version: Version) -> bool:
+        return any(
+            getattr(self, field) != getattr(version, field)
+            for field in ("lyrics", "prompt", "bpm", "audio_duration", "key_scale")
+        )
+
+    def differs_from(self, version: Version) -> bool:
+        return (
+            self.creative_differs_from(version)
+            or self.generation_params != version.generation_params
+            or self.reference_recording_id != version.reference_recording_id
+        )
 
 
 def update_song(
@@ -315,6 +344,7 @@ def update_song(
     key_scale: str | None = None,
     vocal_language: str | None = None,
     generation_params: dict | None | _Unset = UNSET,
+    reference_recording_id: str | None | _Unset = UNSET,
     force_new_version: bool = False,
     edited_by: str | None = None,
 ) -> Version:
@@ -327,32 +357,28 @@ def update_song(
     version it renders. A save that changes the content
     counts as ``edited_by``'s own work on the song: a lyrics edit when the
     lyrics changed, a style edit otherwise. One that changes nothing does not.
+    A reference left ``UNSET`` stays linked; ``None`` clears the link.
     """
     song = lock_song_row(session, song_id)
 
     song.updated_at = datetime.now(timezone.utc)
 
     prev = song.latest_version
-    new_gen_params = _version_generation_params(generation_params, prev)
-    new_lyrics = _version_value(lyrics, prev, "lyrics", "")
-    new_prompt = _version_value(prompt, prev, "prompt", "")
-    new_bpm = _version_value(bpm, prev, "bpm", 0)
-    new_audio_duration = _version_value(audio_duration, prev, "audio_duration", AUTO_LENGTH_SECONDS)
-    new_key_scale = _version_value(key_scale, prev, "key_scale", "")
-
-    creative_changed = prev is None or (
-        new_lyrics != prev.lyrics
-        or new_prompt != prev.prompt
-        or new_bpm != prev.bpm
-        or new_audio_duration != prev.audio_duration
-        or new_key_scale != prev.key_scale
+    content = _VersionContent(
+        lyrics=_version_value(lyrics, prev, "lyrics", ""),
+        prompt=_version_value(prompt, prev, "prompt", ""),
+        bpm=_version_value(bpm, prev, "bpm", 0),
+        audio_duration=_version_value(audio_duration, prev, "audio_duration", AUTO_LENGTH_SECONDS),
+        key_scale=_version_value(key_scale, prev, "key_scale", ""),
+        generation_params=_version_generation_params(generation_params, prev),
+        reference_recording_id=_carried_unless_set(reference_recording_id, prev),
     )
+
+    creative_changed = prev is None or content.creative_differs_from(prev)
     language_changed = vocal_language is not None and vocal_language != song.vocal_language
     if language_changed:
         song.vocal_language = vocal_language
-    content_changed = (
-        creative_changed or language_changed or new_gen_params != prev.generation_params
-    )
+    content_changed = creative_changed or language_changed or content.differs_from(prev)
     if edited_by is not None and content_changed:
         record_song_edit(
             session, user_id=edited_by, song_id=song_id,
@@ -360,26 +386,13 @@ def update_song(
         )
 
     if prev and not force_new_version and (not prev.generations or not creative_changed):
-        prev.lyrics = new_lyrics
-        prev.prompt = new_prompt
-        prev.bpm = new_bpm
-        prev.audio_duration = new_audio_duration
-        prev.key_scale = new_key_scale
-        prev.generation_params = new_gen_params
+        for field, value in asdict(content).items():
+            setattr(prev, field, value)
         session.flush()
         return prev
 
     next_num = (prev.version_number + 1) if prev else 1
-    version = Version(
-        song_id=song_id,
-        version_number=next_num,
-        lyrics=new_lyrics,
-        prompt=new_prompt,
-        bpm=new_bpm,
-        audio_duration=new_audio_duration,
-        key_scale=new_key_scale,
-        generation_params=new_gen_params,
-    )
+    version = Version(song_id=song_id, version_number=next_num, **asdict(content))
     song.versions.append(version)
     session.flush()
     return version
@@ -407,6 +420,14 @@ def _version_generation_params(
     previous_number = previous.version_number if previous else 0
     log.debug("generation_params not provided, carrying forward from v%d", previous_number)
     return previous.generation_params if previous else None
+
+
+def _carried_unless_set(
+    reference_recording_id: str | None | _Unset, previous: Version | None,
+) -> str | None:
+    if not isinstance(reference_recording_id, _Unset):
+        return reference_recording_id
+    return previous.reference_recording_id if previous else None
 
 
 def delete_song(session: Session, song_id: str) -> list[str]:

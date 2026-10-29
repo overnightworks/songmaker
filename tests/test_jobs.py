@@ -38,6 +38,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import (
     Generation,
     Job,
+    ReferenceRecording,
     ResourceEvent,
     Score,
     User,
@@ -736,8 +737,15 @@ def test_generation_job_rejects_foreign_reference_before_dispatch(
     foreign_ref.parent.mkdir(parents=True)
     foreign_ref.write_bytes(b"SECRET")
     with seeded_db() as session:
-        version = session.query(Version).filter_by(id="v1").one()
-        version.generation_params = {"reference_audio_path": "u2/refs/secret.wav"}
+        session.add(User(id="u2", username="user2", role="user"))
+        session.flush()
+        secret = ReferenceRecording(
+            user_id="u2", storage_path="u2/refs/secret.wav",
+            original_filename="secret.wav", size_bytes=6,
+        )
+        session.add(secret)
+        session.flush()
+        session.query(Version).filter_by(id="v1").one().reference_recording_id = secret.id
         session.commit()
 
     dispatch = AsyncMock()

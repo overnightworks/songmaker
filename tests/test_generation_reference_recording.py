@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import wave
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -15,14 +14,13 @@ from support.generation_job_world import (
 )
 
 from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
-from songmaker_cli.config import save_generation_defaults
-from songmaker_cli.db.models import Generation, GenerationPreset, Version
+from songmaker_cli.db.models import Generation, ReferenceRecording, User, Version
+from songmaker_cli.db.queries.jobs import get_job
 from songmaker_cli.db.queries.songs import update_song
 from songmaker_cli.jobs import run_generation_job
 
 REFERENCE_A = "u1/refs/aaaaaaaa-0000-0000-0000-000000000001.wav"
 REFERENCE_B = "u1/refs/bbbbbbbb-0000-0000-0000-000000000002.wav"
-REFERENCE_C = "u1/refs/cccccccc-0000-0000-0000-000000000003.wav"
 
 
 def _write_reference(tmp_path: Path, relative: str) -> None:
@@ -36,12 +34,9 @@ def _run_job(
     tmp_path: Path,
     *,
     count: int = 1,
-    stored_global_defaults: bool = False,
     **task,
 ) -> None:
     dispatch, post_process, defaults = patch_generation_dispatch(make_generation_dto(seed=42))
-    if stored_global_defaults:
-        defaults = contextlib.nullcontext()
     with dispatch, post_process, defaults:
         run_async(
             run_generation_job(
@@ -70,45 +65,42 @@ def _recorded_references(seeded_db) -> list[str | None]:
         return [take.generation_params.get("reference_audio_path") for take in takes]
 
 
-def _name_version_reference(seeded_db, relative: str) -> None:
+def _record_reference(seeded_db, relative: str, user_id: str = "u1") -> str:
     with seeded_db() as session:
-        version = session.query(Version).filter_by(id="v1").one()
-        version.generation_params = {"reference_audio_path": relative}
+        if session.get(User, user_id) is None:
+            session.add(User(id=user_id, username=user_id))
+            session.flush()
+        recording = ReferenceRecording(
+            user_id=user_id, storage_path=relative, original_filename="ref.wav", size_bytes=44,
+        )
+        session.add(recording)
+        session.commit()
+        return recording.id
+
+
+def _link_version_reference(seeded_db, reference_id: str) -> None:
+    with seeded_db() as session:
+        session.query(Version).filter_by(id="v1").one().reference_recording_id = reference_id
         session.commit()
 
 
-@pytest.mark.parametrize(
-    ("source", "expected"),
-    [
-        ("version", REFERENCE_A),
-        ("preset", REFERENCE_C),
-        ("global default", REFERENCE_C),
-        ("none", ""),
-    ],
-)
+def _name_version_reference_of(seeded_db, relative: str, user_id: str) -> None:
+    _link_version_reference(seeded_db, _record_reference(seeded_db, relative, user_id))
+
+
+def _name_version_reference(seeded_db, relative: str) -> None:
+    _name_version_reference_of(seeded_db, relative, "u1")
+
+
+@pytest.mark.parametrize(("linked", "expected"), [(True, REFERENCE_A), (False, "")])
 def test_take_records_the_reference_the_job_resolved(
-    seeded_db, tmp_path: Path, source: str, expected: str
+    seeded_db, tmp_path: Path, linked: bool, expected: str
 ) -> None:
     _write_reference(tmp_path, REFERENCE_A)
-    _write_reference(tmp_path, REFERENCE_C)
-    if source == "version":
+    if linked:
         _name_version_reference(seeded_db, REFERENCE_A)
-    if source == "preset":
-        with seeded_db() as session:
-            session.add(
-                GenerationPreset(
-                    name="p",
-                    model_mode="sft",
-                    is_default=True,
-                    created_by="u1",
-                    params={"reference_audio_path": REFERENCE_C},
-                )
-            )
-            session.commit()
-    if source == "global default":
-        save_generation_defaults(seeded_db, {"sft": {"reference_audio_path": REFERENCE_C}})
 
-    _run_job(seeded_db, tmp_path, stored_global_defaults=source == "global default")
+    _run_job(seeded_db, tmp_path)
 
     assert _recorded_references(seeded_db) == [expected]
 
@@ -119,16 +111,15 @@ def test_take_keeps_its_reference_after_the_version_is_edited_in_place(
     _write_reference(tmp_path, REFERENCE_A)
     _write_reference(tmp_path, REFERENCE_B)
     _name_version_reference(seeded_db, REFERENCE_A)
+    replacement = _record_reference(seeded_db, REFERENCE_B)
     _run_job(seeded_db, tmp_path)
 
     with seeded_db() as session:
-        update_song(session, "s1", generation_params={"reference_audio_path": REFERENCE_B})
+        update_song(session, "s1", reference_recording_id=replacement)
         session.commit()
 
     with seeded_db() as session:
-        assert session.query(Version).filter_by(id="v1").one().generation_params == {
-            "reference_audio_path": REFERENCE_B
-        }
+        assert session.query(Version).filter_by(id="v1").one().reference_recording_id == replacement
     assert _recorded_references(seeded_db) == [REFERENCE_A]
 
 
@@ -181,3 +172,42 @@ def test_repaint_and_cover_takes_record_the_reference(seeded_db, tmp_path: Path,
     _run_job(seeded_db, tmp_path, **options)
 
     assert _recorded_references(seeded_db) == [REFERENCE_A]
+
+
+def test_the_worker_receives_the_file_of_the_linked_row(seeded_db, tmp_path: Path) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    _name_version_reference(seeded_db, REFERENCE_A)
+    received: list[str] = []
+
+    def dispatch(**kwargs):
+        received.append(kwargs["ace_config"].reference_audio_path)
+        return make_generation_dto(seed=42)
+
+    dispatch_patch, post_process, defaults = patch_generation_dispatch(dispatch)
+    with dispatch_patch, post_process, defaults:
+        run_async(
+            run_generation_job(
+                "j1", "s1", "v1", 1, "u1",
+                db_factory=seeded_db, audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+                redis=MagicMock(), target_model="sft",
+            )
+        )
+
+    assert received == [str(tmp_path / "audio" / REFERENCE_A)]
+
+
+def test_a_job_whose_version_links_another_users_row_fails_with_the_reference_error(
+    seeded_db, tmp_path: Path,
+) -> None:
+    foreign = "u2/refs/dddddddd-0000-0000-0000-000000000004.wav"
+    _write_reference(tmp_path, foreign)
+    _name_version_reference_of(seeded_db, foreign, "u2")
+
+    _run_job(seeded_db, tmp_path)
+
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        assert (job.status, job.error_type, job.error) == (
+            "failed", "setup_error", "Reference audio not found",
+        )
+    assert _recorded_references(seeded_db) == []
