@@ -94,7 +94,7 @@ def _seed_world(
     _execute(
         engine,
         "INSERT INTO albums (id, title, artist, subtitle, year, colors, created_at, created_by) "
-        "VALUES ('album', 'A', 'B', '', 0, '', CURRENT_TIMESTAMP, :owner)",
+        "VALUES ('album', 'A', 'B', '', 0, '{}', CURRENT_TIMESTAMP, :owner)",
         owner=album_owner,
     )
     _execute(
