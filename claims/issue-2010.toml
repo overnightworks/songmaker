@@ -1,0 +1,8 @@
+claim_id = "2879f21ca83a4ddbbcac10637561a513"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "15d8557508fe726d732335875a524b6a817e4621"
+branch = "claude/issue-2010-stored-coherence-verdicts-are-deleted"
+scope = [".github/workflows/ci.yml", "docs/testing.md", "src/songmaker_cli/db/migrations/versions/c4e8a1f72d95_stored_coherence_verdicts_are_deleted.py", "tests/test_coherence_verdict_migration.py"]
+opened_commit = "26b2b9361fdb7b4872c27e96c72bda6de8fca664"
+whole_reason = "One irreversible migration, its dialect-parametrized test module, and the two files that must name the new PostgreSQL contract module (the CI line with its skip guard, and the testing document); without the CI line the PostgreSQL cases would never run."
