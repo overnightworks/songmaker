@@ -1,0 +1,8 @@
+claim_id = "c5764d8f51224b4288e374bd4972bd80"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6303f1d156217bc129d1af567d99218a3065efcb"
+branch = "claude/issue-2025-the-frontend-runs-sveltekit-3-and-drops"
+scope = [".github/dependabot.yml", "Dockerfile", "frontend/e2e", "frontend/package.json", "frontend/patches", "frontend/pnpm-lock.yaml", "frontend/pnpm-workspace.yaml", "frontend/src", "frontend/svelte.config.js", "frontend/tsconfig.json", "frontend/vite.config.ts", "frontend/vitest.config.ts"]
+opened_commit = "6baf7e28f5cc774c8c18554aeb7f2e6a24a142b8"
+whole_reason = "One toolchain move: kit 3 refuses the old config file, so the config, lock, patch, image copy step and the edits the new compiler forces land together."
