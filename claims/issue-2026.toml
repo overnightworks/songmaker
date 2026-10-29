@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "09bc7ed145d4d902d38a14f5bfce5f77de504874"
 branch = "claude/issue-2026-songmaker-on-webauth-0-25-0"
-scope = [".github/workflows/ci.yml", "AGENTS.md", "docker-compose.yml", "docker/.env.docker.example", "docs/architecture.md", "docs/security.md", "docs/testing.md", "pyproject.toml", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/oidc_client.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "tests/test_conversation_api.py", "tests/test_person_token_paths.py", "tests/test_server_middleware.py", "tests/test_settings.py", "uv.lock"]
+scope = [".github/workflows/ci.yml", "AGENTS.md", "docker-compose.yml", "docker/.env.docker.example", "docs/architecture.md", "docs/security.md", "docs/testing.md", "pyproject.toml", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/oidc_client.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "tests/support/web_app.py", "tests/test_conversation_api.py", "tests/test_person_token_paths.py", "tests/test_server_middleware.py", "tests/test_settings.py", "uv.lock"]
 opened_commit = "bfee7b740216d079f53cd7507b633a3a4bd0640b"
 whole_reason = "One release adoption: the pin, the gate's wiring, its setting and pass-through, the one session-bound route and their proofs belong together."
