@@ -34,4 +34,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Deleting the stored coherence verdicts is irreversible; restore a backup instead")
+    raise RuntimeError(
+        "Deleting the stored coherence verdicts is irreversible; restore a backup instead",
+    )

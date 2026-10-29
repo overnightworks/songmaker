@@ -18,7 +18,9 @@ from sqlalchemy.orm import sessionmaker
 
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 
-MIGRATION = "songmaker_cli.db.migrations.versions.c4e8a1f72d95_stored_coherence_verdicts_are_deleted"
+MIGRATION = (
+    "songmaker_cli.db.migrations.versions.c4e8a1f72d95_stored_coherence_verdicts_are_deleted"
+)
 PREVIOUS_REVISION = "a1d7c5e93b60"
 KEYS = {"lyrical_coherence": 8, "lyrical_summary": "a summary"}
 UNRELATED = {"bpm_detected": 96.0, "silence_ratio": 0.0}
@@ -40,7 +42,8 @@ def database(request, tmp_path):
             connection.execute(text(f'CREATE SCHEMA "{schema}"'))
         url = make_url(base_url).update_query_dict({"options": f"-csearch_path={schema}"})
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-    config.set_main_option("sqlalchemy.url", url.render_as_string(hide_password=False).replace("%", "%%"))
+    rendered_url = url.render_as_string(hide_password=False).replace("%", "%%")
+    config.set_main_option("sqlalchemy.url", rendered_url)
     engine = create_engine(url)
     yield config, engine
     engine.dispose()
@@ -55,14 +58,18 @@ def migration():
     return importlib.import_module(MIGRATION)
 
 
-def _seed(engine, values: dict[str, dict | list | None], scorers: dict[str, str] | None = None) -> None:
+def _seed(
+    engine, values: dict[str, dict | list | None], scorers: dict[str, str] | None = None,
+) -> None:
     factory = sessionmaker(bind=engine)
     with factory() as session:
         session.add(User(id="u1", username="u1"))
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Band", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))
-        session.add(Version(id="v1", song_id="s1", version_number=1, lyrics="x", prompt="y", bpm=120))
+        session.add(Version(
+            id="v1", song_id="s1", version_number=1, lyrics="x", prompt="y", bpm=120,
+        ))
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1, mp3_path="g1.mp3", seed=1,
         ))
@@ -72,6 +79,10 @@ def _seed(engine, values: dict[str, dict | list | None], scorers: dict[str, str]
                 id=name, generation_id="g1", scorer=(scorers or {}).get(name, "batch"), value=value,
             ))
         session.commit()
+
+
+def _alembic_messages(caplog) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name.startswith("alembic")]
 
 
 def _stored_text(engine) -> dict[str, str]:
@@ -118,7 +129,8 @@ def test_upgrade_deletes_both_keys_and_keeps_every_other_key(database, migration
 
 def test_rows_without_a_verdict_key_stay_byte_equal(database, migration):
     before, after = _upgrade_with(database, migration, {
-        "plain": {"bpm_detected": 96.0}, "empty": {}, "json_null": None, "listed": ["lyrical_coherence"],
+        "plain": {"bpm_detected": 96.0}, "empty": {}, "json_null": None,
+        "listed": ["lyrical_coherence"],
     })
     assert after == before
 
@@ -134,7 +146,7 @@ def test_upgrade_logs_how_many_rows_it_changed(database, migration, caplog):
             "one": dict(KEYS), "two": {"lyrical_coherence": 3}, "three": {"lyrical_summary": "s"},
             "four": dict(UNRELATED), "five": {}, "six": None, "seven": [],
         })
-    messages = [record.getMessage() for record in caplog.records if record.name.startswith("alembic")]
+    messages = _alembic_messages(caplog)
     assert any("changed 3 scores rows" in message for message in messages)
 
 
@@ -145,7 +157,7 @@ def test_a_second_upgrade_changes_nothing_and_logs_zero(database, migration, cap
     with caplog.at_level(logging.INFO, logger="alembic"):
         command.upgrade(config, migration.revision)
     assert _stored_text(engine) == once
-    assert any("changed 0 scores rows" in record.getMessage() for record in caplog.records if record.name.startswith("alembic"))
+    assert any("changed 0 scores rows" in message for message in _alembic_messages(caplog))
 
 
 def test_downgrade_raises_and_leaves_database_and_rows_as_upgraded(database, migration):
@@ -155,7 +167,8 @@ def test_downgrade_raises_and_leaves_database_and_rows_as_upgraded(database, mig
         command.downgrade(config, migration.down_revision)
     assert _stored_text(engine) == once
     with engine.connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar() == migration.revision
+        version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    assert version == migration.revision
 
 
 def test_upgrade_changes_no_table_and_no_column(database, migration):
@@ -165,7 +178,9 @@ def test_upgrade_changes_no_table_and_no_column(database, migration):
     def shape():
         inspector = inspect(engine)
         return {
-            table: [(c["name"], str(c["type"]), c["nullable"]) for c in inspector.get_columns(table)]
+            table: [
+                (c["name"], str(c["type"]), c["nullable"]) for c in inspector.get_columns(table)
+            ]
             for table in inspector.get_table_names()
         }
 
