@@ -111,10 +111,12 @@ def _upgrade_with(database, migration, values, scorers=None):
     return before, _stored_text(engine)
 
 
-def test_the_migration_is_the_single_head_above_the_session_token_revision(migration):
-    config = _alembic_config()
+def test_the_migration_follows_the_session_token_revision_on_the_single_chain(migration):
+    scripts = ScriptDirectory.from_config(_alembic_config())
+    (head,) = scripts.get_heads()
+    ancestors = {script.revision for script in scripts.iterate_revisions(head, "base")}
     assert migration.down_revision == PREVIOUS_REVISION
-    assert ScriptDirectory.from_config(config).get_heads() == [migration.revision]
+    assert migration.revision in ancestors
 
 
 def test_upgrade_deletes_both_keys_and_keeps_every_other_key(database, migration):
