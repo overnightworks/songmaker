@@ -1,8 +1,0 @@
-claim_id = "9442dda80c4346e58776ebf69c525dcc"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "d19450c4e13df0269a9def9962d1be11fba80eb8"
-branch = "claude/issue-2013-appkit-0-6-0-follow-the-device"
-scope = ["docs/architecture.md", "frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/offline-boot.spec.ts", "frontend/e2e/settings-after-keycloak.spec.ts", "frontend/src/app.css", "frontend/src/app.html", "frontend/src/lib/components/SignInCard.svelte", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "pyproject.toml", "uv.lock"]
-opened_commit = "cea8f1d9425f1eecf7c56af21330bfda392c8ba2"
-whole_reason = "The pin makes the kit follow the device in the same build; app.html, ui.ts and app.css must change with it or the app shows the kit's light surface under its own dark tokens, so the move does not split."
