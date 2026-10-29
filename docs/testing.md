@@ -329,8 +329,7 @@ and `docker compose ... down -v`.
 ```
 tests/
 ├── conftest.py                    Shared fixtures (DB, WAV/audio factories, arq mocks)
-├── test_*_api.py                  Domain API coverage: admin, auth, conversation, generation,
-│                                  internal, LoRA, playlist, reimport, sharing, server
+├── test_*_api.py                  Domain API coverage: auth, conversation, health
 ├── test_*_queries.py              DB query coverage for workers and LoRAs
 ├── test_jobs*.py                  Generation, scoring, model lifecycle, LoRA training jobs
 ├── test_*worker*.py               Music/scoring worker classes
@@ -340,7 +339,7 @@ tests/
 ├── test_config.py                 ACE-Step config building, defaults, path resolution
 ├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
 ├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
-├── test_generation*.py            Generation params, retention, LoRA integration
+├── test_generation*.py            Generation params, retention, failure, reference recording
 └── test_*                         Lifecycle, middleware, parser, Redis, scheduler,
                                    soft delete, constants, MCP server
 
