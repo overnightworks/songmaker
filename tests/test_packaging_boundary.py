@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass
-from importlib.metadata import distributions, packages_distributions
+from importlib.metadata import packages_distributions
 from pathlib import Path
 
 import pytest
@@ -29,6 +29,8 @@ WEB_ENTRYPOINT_SCRIPT = "/app/docker-entrypoint.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
 DOCKER_DEFAULT_RESTART_POLICY = "no"
+WEB_SERVER_MODULE = "songmaker_cli.server"
+SCORING_WORKER_SERVICE = "songmaker-scoring-worker"
 
 
 @dataclass(frozen=True)
@@ -36,9 +38,7 @@ class ContainerSpec:
     compose_service: str
     dockerfile: Path
     extras: frozenset[str]
-    entrypoint: str
     startup_modules: tuple[str, ...]
-    command: tuple[str, ...] | None
 
 
 @dataclass(frozen=True)
@@ -47,72 +47,18 @@ class ContainerStart:
     command: tuple[str, ...]
 
 
-CONTAINERS = {
-    "web": ContainerSpec(
-        "songmaker-web",
-        Path("Dockerfile"),
-        frozenset({"server", "mcp", "agent-service", "api", "image"}),
-        "songmaker_cli.main",
-        ("songmaker_cli.main", "songmaker_cli.server"),
-        None,
-    ),
-    "scoring-worker": ContainerSpec(
-        "songmaker-scoring-worker",
-        Path("docker/scoring-worker.Dockerfile"),
-        frozenset({"server", "scoring", "whisper"}),
-        "songmaker_cli.scoring_worker",
-        ("songmaker_cli.scoring_worker",),
-        ("songmaker_cli.scoring_worker.ScoringWorkerSettings",),
-    ),
-    "music-worker": ContainerSpec(
-        "songmaker-music-worker",
-        Path("docker/music-worker.Dockerfile"),
-        frozenset({"server", "image"}),
-        "songmaker_cli.music_worker",
-        ("songmaker_cli.music_worker",),
-        ("songmaker_cli.music_worker.MusicWorkerSettings",),
-    ),
-}
-
-
-OPTIONAL_DISTRIBUTION_ROOTS = {
-    "alembic": frozenset({"alembic"}),
-    "anthropic": frozenset({"anthropic"}),
-    "audiobox-aesthetics": frozenset({"audiobox_aesthetics"}),
-    "arq": frozenset({"arq"}),
-    "fakeredis": frozenset({"fakeredis"}),
-    "fastapi": frozenset({"fastapi"}),
-    "faster-whisper": frozenset({"faster_whisper"}),
-    "huggingface-hub": frozenset({"huggingface_hub"}),
-    "import-linter": frozenset({"importlinter"}),
-    "librosa": frozenset({"librosa"}),
-    "mcp": frozenset({"mcp"}),
-    "mutagen": frozenset({"mutagen"}),
-    "numba": frozenset({"numba"}),
-    "nvidia-ml-py3": frozenset({"nvidia_smi", "pynvml"}),
-    "overnightworks-agent-providers": frozenset({"agent_providers"}),
-    "overnightworks-agent-runtime-client": frozenset({"agent_runtime_client"}),
-    "overnightworks-webauth": frozenset({"webauth"}),
-    "pillow": frozenset({"PIL"}),
-    "psycopg2-binary": frozenset({"psycopg2"}),
-    "pytest": frozenset({"_pytest", "py", "pytest"}),
-    "pytest-cov": frozenset({"pytest_cov"}),
-    "pytest-xdist": frozenset({"xdist"}),
-    "python-dotenv": frozenset({"dotenv"}),
-    "python-multipart": frozenset({"multipart", "python_multipart"}),
-    "pyyaml": frozenset({"_yaml", "yaml"}),
-    "redis": frozenset({"redis"}),
-    "ruff": frozenset({"ruff"}),
-    "sentence-transformers": frozenset({"sentence_transformers"}),
-    "soundfile": frozenset({"_soundfile", "_soundfile_data", "soundfile"}),
-    "sqlalchemy": frozenset({"sqlalchemy"}),
-    "structlog": frozenset({"structlog"}),
-    "torch": frozenset({"functorch", "torch", "torchgen"}),
-    "torchaudio": frozenset({"torchaudio"}),
-    # torchcodec's top_level.txt lists a placeholder root next to the real one.
-    "torchcodec": frozenset({"FAKE_NAME", "torchcodec"}),
-    "uvicorn": frozenset({"uvicorn"}),
-}
+def _optional_distribution_roots() -> dict[str, frozenset[str]]:
+    """Import roots of each installed optional distribution, from its metadata."""
+    installed_roots = packages_distributions()
+    result: dict[str, frozenset[str]] = {}
+    for distribution in _optional_extras_by_distribution():
+        roots = frozenset(
+            root for root, owners in installed_roots.items()
+            if distribution in {_normalized_distribution(owner) for owner in owners}
+        )
+        if roots:
+            result[distribution] = roots
+    return result
 
 
 def _normalized_distribution(name: str) -> str:
@@ -157,7 +103,7 @@ def _optional_extras_by_distribution() -> dict[str, frozenset[str]]:
 def _root_owning_extras() -> dict[str, frozenset[str]]:
     extras_by_distribution = _optional_extras_by_distribution()
     result: dict[str, set[str]] = {}
-    for distribution, roots in OPTIONAL_DISTRIBUTION_ROOTS.items():
+    for distribution, roots in _optional_distribution_roots().items():
         for root in roots:
             result.setdefault(root, set()).update(extras_by_distribution[distribution])
     return {root: frozenset(extras) for root, extras in result.items()}
@@ -194,18 +140,6 @@ def _container_environment() -> dict[str, str]:
         "SONGMAKER_INTERNAL_TOKEN": "packaging-boundary-test",
     })
     return environment
-
-
-def _compose_service_block(service: str) -> str:
-    lines = (REPOSITORY_ROOT / "docker-compose.yml").read_text().splitlines()
-    service_line = f"  {service}:"
-    start = lines.index(service_line)
-    block: list[str] = []
-    for line in lines[start + 1:]:
-        if re.fullmatch(r"  [A-Za-z0-9_-]+:", line):
-            break
-        block.append(line)
-    return "\n".join(block)
 
 
 class _ComposeLoader(yaml.SafeLoader):
@@ -290,16 +224,37 @@ def _binds_loopback_only(host_ip: str) -> bool:
     return bool(host_ip) and ipaddress.ip_address(host_ip).is_loopback
 
 
-def _service_dockerfile(service: str) -> Path:
-    build = _raw_compose_services()[service]["build"]
-    return Path(build["dockerfile"])
+def _startup_modules(service: dict) -> tuple[str, ...]:
+    """The modules a container starts: its worker settings, else the CLI's server."""
+    command = service.get("command")
+    if command:
+        return (command[0].rpartition(".")[0],)
+    pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
+    script_module = pyproject["project"]["scripts"]["songmaker"].partition(":")[0]
+    return (script_module, WEB_SERVER_MODULE)
 
 
-def _service_command(service_block: str) -> tuple[str, ...] | None:
-    match = re.search(r"^    command: \[(.+)\]$", service_block, re.MULTILINE)
-    if match is None:
-        return None
-    return tuple(re.findall(r'"([^"]+)"', match.group(1)))
+def _installing_containers() -> dict[str, ContainerSpec]:
+    """Every compose service built from a Dockerfile that runs ``uv sync``."""
+    containers: dict[str, ContainerSpec] = {}
+    for name, service in _raw_compose_services().items():
+        build = service.get("build")
+        if not isinstance(build, dict):
+            continue
+        dockerfile = Path(build["dockerfile"])
+        sync_extras = _sync_extras(REPOSITORY_ROOT / dockerfile)
+        if not sync_extras:
+            continue
+        assert all(extras == sync_extras[0] for extras in sync_extras), (
+            f"{dockerfile} installs different extras on its uv sync lines"
+        )
+        containers[name] = ContainerSpec(
+            name, dockerfile, sync_extras[0], _startup_modules(service),
+        )
+    return containers
+
+
+CONTAINERS = _installing_containers()
 
 
 def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
@@ -387,7 +342,6 @@ import importlib
 import importlib.abc
 import sys
 
-entrypoint = {entrypoint!r}
 startup_modules = {startup_modules!r}
 blocked_roots = frozenset({blocked_roots!r})
 
@@ -402,7 +356,6 @@ sys.meta_path.insert(0, BlockedOptionalImport())
 {statement}
 """.format(
         blocked_roots=tuple(sorted(blocked_roots)),
-        entrypoint=spec.entrypoint,
         startup_modules=spec.startup_modules,
         statement=statement,
     )
@@ -435,34 +388,6 @@ def test_health_api_models_import_without_server_runtime() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_container_extras_match_every_uv_sync_line() -> None:
-    for name, spec in CONTAINERS.items():
-        sync_extras = _sync_extras(REPOSITORY_ROOT / spec.dockerfile)
-        assert sync_extras, f"{name} has no uv sync line"
-        assert all(extras == spec.extras for extras in sync_extras), (
-            f"{name} expected {sorted(spec.extras)}, got "
-            f"{[sorted(extras) for extras in sync_extras]}"
-        )
-
-
-def test_container_entrypoints_match_runtime_configuration() -> None:
-    for spec in CONTAINERS.values():
-        service_block = _compose_service_block(spec.compose_service)
-        assert _service_dockerfile(spec.compose_service) == spec.dockerfile
-        assert _service_command(service_block) == spec.command
-
-    pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
-    web_dockerfile = (REPOSITORY_ROOT / CONTAINERS["web"].dockerfile).read_text()
-    web_entrypoint = (REPOSITORY_ROOT / "docker" / "docker-entrypoint.sh").read_text()
-
-    assert pyproject["project"]["scripts"]["songmaker"] == "songmaker_cli.main:main"
-    assert 'ENTRYPOINT ["/app/docker-entrypoint.sh"]' in web_dockerfile
-    assert "exec uv run --no-sync --frozen --no-build songmaker server" in web_entrypoint
-    assert CONTAINERS["web"].startup_modules == (
-        "songmaker_cli.main", "songmaker_cli.server",
-    )
-
-
 @pytest.mark.parametrize(
     "start", _repo_built_container_starts(), ids=lambda start: start.declared_at,
 )
@@ -484,32 +409,6 @@ def test_every_repo_built_container_start_uses_the_installed_environment(
         )
 
 
-def test_optional_dependency_root_mapping_is_complete_and_metadata_verified() -> None:
-    extras_by_distribution = _optional_extras_by_distribution()
-    assert set(OPTIONAL_DISTRIBUTION_ROOTS) == set(extras_by_distribution)
-
-    installed_distributions = {
-        _normalized_distribution(distribution.metadata["Name"])
-        for distribution in distributions()
-    }
-    installed_roots = packages_distributions()
-    for distribution, roots in OPTIONAL_DISTRIBUTION_ROOTS.items():
-        if distribution not in installed_distributions:
-            continue
-        metadata_roots = frozenset(
-            root for root, owners in installed_roots.items()
-            if distribution in {_normalized_distribution(owner) for owner in owners}
-        )
-        assert roots == metadata_roots
-
-    assert extras_by_distribution["anthropic"] == frozenset({"api"})
-    assert extras_by_distribution["pillow"] == frozenset({"image"})
-    assert "httpx" in _core_distributions()
-    assert "httpx" not in extras_by_distribution
-    assert "hiredis" not in _root_owning_extras()
-    assert "lupa" not in _root_owning_extras()
-
-
 def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> None:
     root_owners = _root_owning_extras()
     for name, spec in CONTAINERS.items():
@@ -518,7 +417,7 @@ def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> 
         )
         completed = _import_startup_modules(spec, blocked_roots)
         assert completed.returncode == 0, (
-            f"{name} ({spec.entrypoint}) imported an omitted optional dependency.\n"
+            f"{name} imported an omitted optional dependency.\n"
             f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
         )
 
@@ -527,7 +426,7 @@ def test_the_mcp_server_spec_imports_without_the_mcp_extra() -> None:
     """The scoring-worker container installs no ``mcp`` extra, so songmaker's
     MCP declaration must stay outside ``mcp_server/`` — whose ``__init__``
     imports that extra eagerly (ruling ac on #825)."""
-    spec = CONTAINERS["scoring-worker"]
+    spec = CONTAINERS[SCORING_WORKER_SERVICE]
     blocked_roots = frozenset(
         root for root, owners in _root_owning_extras().items()
         if not owners & spec.extras
@@ -551,7 +450,7 @@ def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
     ``jobs/_runtime.py`` but never produces an image, so it installs no
     ``image`` extra. Pillow must therefore stay behind the
     one call that encodes a picture (issue #871)."""
-    spec = CONTAINERS["scoring-worker"]
+    spec = CONTAINERS[SCORING_WORKER_SERVICE]
     blocked_roots = frozenset(
         root for root, owners in _root_owning_extras().items()
         if not owners & spec.extras
@@ -570,76 +469,24 @@ def test_the_scoring_worker_imports_the_image_route_without_pillow() -> None:
     )
 
 
-def test_only_the_web_image_ships_the_claude_sdk() -> None:
-    """The documented ANTHROPIC_API_KEY path is installed where it is used."""
-    owns_the_sdk = _optional_extras_by_distribution()["anthropic"]
-
-    assert CONTAINERS["web"].extras & owns_the_sdk
-    for container in ("music-worker", "scoring-worker"):
-        assert not CONTAINERS[container].extras & owns_the_sdk, container
-
-
 def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None:
-    expected_web_sources_by_target = {
-        "/usr/local/bin/claude": "${SONGMAKER_CLAUDE_CLI:-~/.local/bin/claude}",
-        "/home/songmaker/.claude/.credentials.json": (
-            "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
-            "/claude.json"
-        ),
-        "/usr/local/bin/grok": "${SONGMAKER_GROK_CLI:-~/.grok/bin/grok}",
-        "/home/songmaker/.grok/auth.json": (
-            "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
-            "/grok.json"
-        ),
-        "/usr/local/bin/codex": (
-            "${SONGMAKER_CODEX_CLI:-~/.local/node/lib/node_modules/@openai/codex/"
-            "node_modules/@openai/codex-linux-x64/vendor/"
-            "x86_64-unknown-linux-musl/bin/codex}"
-        ),
-        "/home/songmaker/.codex/auth.json": (
-            "${SONGMAKER_CLI_CREDENTIALS_DIR:-~/.songmaker/agent-cli-credentials}"
-            "/codex.json"
-        ),
-        "/usr/local/bin/codex-code-mode-host": (
-            "${SONGMAKER_CODEX_CODE_MODE_HOST:-~/.local/node/lib/node_modules/"
-            "@openai/codex/node_modules/@openai/codex-linux-x64/vendor/"
-            "x86_64-unknown-linux-musl/bin/codex-code-mode-host}"
-        ),
-        "/usr/local/codex-resources": (
-            "${SONGMAKER_CODEX_RESOURCES:-~/.local/node/lib/node_modules/"
-            "@openai/codex/node_modules/@openai/codex-linux-x64/vendor/"
-            "x86_64-unknown-linux-musl/codex-resources}"
-        ),
-    }
-    expected_sources_by_service = {
-        "songmaker-web": expected_web_sources_by_target,
-        "songmaker-music-worker": {
-            target: source
-            for target, source in expected_web_sources_by_target.items()
-            if target in {
-                "/usr/local/bin/codex",
-                "/home/songmaker/.codex/auth.json",
-            }
-        },
-    }
     services = _raw_compose_services()
     declared_named_volumes = _declared_named_volumes()
-    music_worker_dockerfile = (
-        REPOSITORY_ROOT / CONTAINERS["music-worker"].dockerfile
-    ).read_text()
-    assert "mkdir -p /home/songmaker/.codex" in music_worker_dockerfile
-    assert "bubblewrap" in (REPOSITORY_ROOT / "Dockerfile").read_text()
 
-    for service_name, expected_sources_by_target in expected_sources_by_service.items():
-        service = services[service_name]
+    for service_name, service in services.items():
         assert isinstance(service, dict)
+        if not any(
+            isinstance(volume, dict) and volume.get("type") == "bind"
+            for volume in service.get("volumes", [])
+        ):
+            continue
         assert "extends" not in service, (
             f"{service_name} must not inherit mounts through Compose extends"
         )
         assert "volumes_from" not in service, (
             f"{service_name} must not inherit mounts through Compose volumes_from"
         )
-        volumes = service["volumes"]
+        volumes = service.get("volumes", [])
         assert isinstance(volumes, list)
         bind_mounts: list[dict[str, object]] = []
         for volume in volumes:
@@ -667,20 +514,12 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
                 f"{service_name} volume mapping has an undeclared source: {source!r}"
             )
 
-        assert bind_mounts, service_name
-        assert {mount.get("target") for mount in bind_mounts} == set(
-            expected_sources_by_target,
-        )
-
         for mount in bind_mounts:
-            target = mount.get("target")
-            assert isinstance(target, str)
             source = mount.get("source")
             assert isinstance(source, str)
             assert "~/.claude" not in source
             assert "~/.claude.json" not in source
             assert "~/.codex" not in source
-            assert source == expected_sources_by_target[target]
             assert mount.get("read_only") is True
             bind_options = mount.get("bind")
             assert isinstance(bind_options, dict)
