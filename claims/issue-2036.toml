@@ -1,7 +1,0 @@
-claim_id = "caa343150afc4415827b16a563c668a5"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "544da8c7a502bc2c040b069157b9036b4b2a3347"
-branch = "claude/issue-2036-quality-workflow-and-packaging-tests-sto"
-scope = ["tests/test_packaging_boundary.py", "tests/test_quality_workflow.py"]
-opened_commit = "6462d1df333a05fe4660188d96576bfe7a79c9bf"
