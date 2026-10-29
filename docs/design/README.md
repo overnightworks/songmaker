@@ -135,3 +135,12 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   Abweisungen: `ACCOUNT_DEACTIVATED` → „No access“; `FOREIGN_ISSUER` und
   `USERNAME_TAKEN` → „Login failed“. Das Verhalten gehört dem webauth-README,
   Abschnitt „Signed out and refused“.
+- `about.html` — die About-Seite (Settings › About): welcher Release und
+  welcher Commit laufen (#2008). Freigegeben am 29.10.2026 (Operator: „ja bild
+  passt“).
+- `references.html` — Referenzaufnahmen: ansehen, abspielen, behalten (♥),
+  löschen und die angekündigte automatische Löschung unbenutzter (⏳), verwaltet
+  unter Settings › References und gewählt in der Zeile „Reference track“ des
+  Recipes (#1988). Freigegeben am 29.10.2026 (Operator: „passt für mich! alles
+  wie empfohlen!“); die neun offenen Entscheidungen sind wie empfohlen gerult
+  und auf #1988 festgehalten.
