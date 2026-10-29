@@ -60,24 +60,41 @@ def test_update_preset_naming_a_reference_is_refused_and_keeps_the_stored_params
 
 
 @pytest.mark.parametrize(
-    "update",
+    ("update", "expected_change"),
     [
-        pytest.param({"name": "renamed"}, id="name-only"),
-        pytest.param({"is_default": True}, id="is-default-only"),
-        pytest.param({"params": None}, id="null-params"),
-        pytest.param({"params": {"inference_steps": 9}}, id="params-without-key"),
-        pytest.param({"params": {"reference_audio_path": ""}}, id="empty-reference"),
-        pytest.param({"params": {"reference_audio_path": None}}, id="null-reference"),
+        pytest.param({"name": "renamed"}, {"name": "renamed"}, id="name-only"),
+        pytest.param({"is_default": True}, {"is_default": True}, id="is-default-only"),
+        pytest.param({"params": None}, {}, id="null-params"),
+        pytest.param(
+            {"params": {"inference_steps": 9}},
+            {"inference_steps": 9},
+            id="params-without-key",
+        ),
+        pytest.param(
+            {"params": {"inference_steps": 9, "reference_audio_path": ""}},
+            {"inference_steps": 9},
+            id="empty-reference",
+        ),
+        pytest.param(
+            {"params": {"inference_steps": 9, "reference_audio_path": None}},
+            {"inference_steps": 9},
+            id="null-reference",
+        ),
     ],
 )
-def test_update_preset_without_a_reference_is_accepted(
-    admin_client: TestClient, update: dict
+def test_update_preset_without_a_reference_is_stored(
+    admin_client: TestClient, update: dict, expected_change: dict
 ) -> None:
     preset = _create_preset(admin_client, {"inference_steps": 8}).json()
 
     response = admin_client.put(f"{PRESETS}/{preset['id']}", json=update)
 
     assert response.status_code == 200
+    stored = next(item for item in admin_client.get(PRESETS).json() if item["id"] == preset["id"])
+    assert stored["name"] == expected_change.get("name", preset["name"])
+    assert stored["is_default"] == expected_change.get("is_default", preset["is_default"])
+    assert stored["params"]["inference_steps"] == expected_change.get("inference_steps", 8)
+    assert not stored["params"].get("reference_audio_path")
 
 
 @pytest.mark.parametrize("reference", REFUSED_REFERENCES)
@@ -107,5 +124,5 @@ def test_defaults_without_a_reference_are_stored_as_sent(
 
     assert response.status_code == 200
     stored = admin_client.get(DEFAULTS).json()
-    assert stored == response.json()
-    assert stored["sft"].get("reference_audio_path", "") in ("", None)
+    assert stored["sft"].get("inference_steps") == sft.get("inference_steps")
+    assert not stored["sft"].get("reference_audio_path")
