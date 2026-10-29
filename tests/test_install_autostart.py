@@ -150,7 +150,10 @@ def test_installer_runs_the_argumentless_preflight_as_the_operator(
     result = run_autostart()
 
     assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    unit = (run_autostart.units / "songmaker.service").read_text()
     checkout = run_autostart.checkout
+    assert f"WorkingDirectory={checkout}" in unit
+    assert f"ExecStartPre={checkout}/scripts/check_agent_cli_mounts.sh" in unit
     assert (
         f"sudo -u operator {checkout}/scripts/check_agent_cli_mounts.sh"
         in run_autostart.recording.read_text().splitlines()

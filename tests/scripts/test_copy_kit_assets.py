@@ -32,7 +32,7 @@ def test_a_file_removed_from_the_source_is_gone_after_the_next_copy(tmp_path: Pa
     ]
 
 
-def test_uv_installs_no_dependency_group_by_default() -> None:
+def test_the_frontend_group_is_not_installed_by_default() -> None:
     pyproject = tomllib.loads((REPOSITORY_ROOT / "pyproject.toml").read_text())
 
     assert "default-groups" not in pyproject["tool"]["uv"]

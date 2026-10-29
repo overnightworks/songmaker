@@ -117,6 +117,7 @@ test('precached fonts are served as woff2', { tag: ONLY_IN_SHELL.desktop }, asyn
 	const fontPaths = await precachedFontPaths(page);
 
 	expect(fontPaths.length).toBeGreaterThan(0);
+	for (const path of fontPaths) expect(path).toMatch(/\.woff2$/);
 	const font = await page.request.get(fontPaths[0]);
 	expect(font.ok()).toBe(true);
 	expect(font.headers()['content-type']).toBe('font/woff2');
