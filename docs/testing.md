@@ -326,7 +326,7 @@ and `docker compose ... down -v`.
 
 ## Test Structure
 
-Backend tests mirror the code they test: a test for `src/songmaker_cli/db/queries/loras.py` lives in `tests/songmaker_cli/db/queries/` and is named for it, and the engine packages mirror under `tests/acestep_engine/`, `tests/audio_engine/` and `tests/acestep_worker/`. Quality's test-layout rule judges the placement in CI. `tests/conftest.py` holds the shared fixtures, and `tests/support/` the helpers and pytest plugins that tests import as `support.<module>`, never from `conftest`.
+New and moved backend tests mirror the code they test: a test for `src/songmaker_cli/db/queries/loras.py` lives in `tests/songmaker_cli/db/queries/` and is named for it, and the engine packages mirror under `tests/acestep_engine/`, `tests/audio_engine/` and `tests/acestep_worker/`. Older flat test modules in `tests/` are moved as their subject is touched. `tests/conftest.py` holds the shared fixtures, and `tests/support/` the helpers and pytest plugins that tests import as `support.<module>`, never from `conftest`.
 
 ```
 frontend/src/
