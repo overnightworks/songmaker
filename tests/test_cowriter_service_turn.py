@@ -212,7 +212,9 @@ def test_c1_a_turn_starts_a_cowriter_run_with_the_agent_files_roles_tools_and_bo
     assert run.body["v"] == PROTOCOL_VERSION
     assert run.body["agent"] == CAPABILITY_AGENT
     assert "purpose" not in run.body
-    assert run.body["roles"] == ["admin", "user"]
+    assert run.body["roles"] == list(
+        load_agent(AGENT_FILE, cowriter_tool_declarations()).roles
+    )
     assert run.body["tools"] == {
         tool.name: "side_effecting" if tool.write else "read_only" for tool in COWRITER_TOOLS
     }
