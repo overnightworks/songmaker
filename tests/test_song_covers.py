@@ -8,10 +8,10 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app, seed_session, seed_user, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy.orm import Session
+from support.web_app import make_test_app, seed_session, seed_user, web_client
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (

@@ -7,30 +7,38 @@ the test names.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
 import uuid
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-import jwt
 import pytest
-from agent_runtime_client.capability import CAPABILITY_TOKEN_TYPE
 from agent_runtime_client.mcp_server import CapabilityVerificationKey, UnsoundVerificationKey
-from conftest import make_test_app
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
+from support.mcp_endpoint_driver import (
+    ISSUER,
+    LIFETIME,
+    ORIGIN,
+    Reply,
+    call_body,
+    drive,
+    headers_for,
+    mint,
+    private_pem,
+    public_pem,
+    rpc,
+    running_run,
+    settings_now,
+)
+from support.web_app import make_test_app
 
 from songmaker_cli.cowriter import service_runs
 from songmaker_cli.cowriter.mcp_endpoint import (
-    CAPABILITY_AGENT,
     McpKeyProblem,
     compose_mcp_endpoint,
     cowriter_mcp_availability,
@@ -41,27 +49,7 @@ from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, V
 from songmaker_cli.server import run_server
 from songmaker_cli.settings import get_settings
 
-ORIGIN = "https://songmaker.mcp.internal"
-HOST = b"songmaker.mcp.internal"
-ISSUER = "https://issuer.test/realms/test"
-VERSION = "2025-11-25"
-LIFETIME = 600
-ALL_TOOLS = tuple(tool.name for tool in COWRITER_TOOLS)
 MEGABYTE = 1024 * 1024
-
-
-def _public_pem(private_key: rsa.RSAPrivateKey) -> bytes:
-    return private_key.public_key().public_bytes(
-        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-
-
-def _private_pem(private_key: rsa.RSAPrivateKey) -> bytes:
-    return private_key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
-    )
 
 
 @pytest.fixture(scope="module")
@@ -72,110 +60,6 @@ def signing_key() -> rsa.RSAPrivateKey:
 @pytest.fixture(scope="module")
 def foreign_key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=3072)
-
-
-def settings_now():
-    """Settings as the environment stands now, whatever an earlier fixture cached."""
-    get_settings.cache_clear()
-    return get_settings()
-
-
-def mint(
-    signing_key: rsa.RSAPrivateKey,
-    run_id: str,
-    *,
-    person: tuple[str, str] = (ISSUER, "anna"),
-    app: str = "songmaker",
-    agent: str | None = CAPABILITY_AGENT,
-    token_type: str = CAPABILITY_TOKEN_TYPE,
-    extra_claims: dict[str, Any] | None = None,
-    audience: str = ORIGIN,
-    tools: tuple[str, ...] = ALL_TOOLS,
-    issued_at: float | None = None,
-    lifetime: int = LIFETIME,
-) -> str:
-    issued = int(time.time() if issued_at is None else issued_at)
-    claims = {
-        "iss": "agent-service",
-        "aud": audience,
-        "sub": run_id,
-        "iat": issued,
-        "exp": issued + lifetime,
-        "app": app,
-        "principal": {"iss": person[0], "sub": person[1]},
-        "tools": list(tools),
-        **({} if agent is None else {"agent": agent}),
-        **(extra_claims or {}),
-    }
-    return jwt.encode(
-        claims,
-        _private_pem(signing_key),
-        algorithm="RS256",
-        headers={"kid": "test-key", "typ": token_type},
-    )
-
-
-@dataclass
-class Reply:
-    status: int
-    body: bytes
-
-    def tool_result(self) -> tuple[bool, str]:
-        assert self.status == 200, self.body
-        result = json.loads(self.body)["result"]
-        return result["isError"], result["content"][0]["text"]
-
-
-def drive(
-    app: Any,
-    headers: list[tuple[bytes, bytes]],
-    body: bytes = b"",
-    *,
-    path: str = "/mcp",
-    method: str = "POST",
-    receive: Callable[[], Any] | None = None,
-) -> Reply:
-    sent: list[dict[str, Any]] = []
-    inbox = [{"type": "http.request", "body": body, "more_body": False}]
-
-    async def default_receive() -> dict[str, Any]:
-        return inbox.pop(0) if inbox else {"type": "http.disconnect"}
-
-    async def send(message: dict[str, Any]) -> None:
-        sent.append(message)
-
-    scope = {
-        "type": "http",
-        "method": method,
-        "path": path,
-        "query_string": b"",
-        "headers": headers,
-        "client": ("172.18.0.5", 40000),
-    }
-    asyncio.run(app(scope, receive or default_receive, send))
-    start = next(message for message in sent if message["type"] == "http.response.start")
-    reply_body = b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
-    return Reply(start["status"], reply_body)
-
-
-def headers_for(
-    token: str | None, *, host: bytes = HOST, extra: tuple[tuple[bytes, bytes], ...] = (),
-) -> list[tuple[bytes, bytes]]:
-    headers = [(b"host", host), (b"mcp-protocol-version", VERSION.encode()), *extra]
-    if token is not None:
-        headers.append((b"authorization", f"Bearer {token}".encode()))
-    return headers
-
-
-def rpc(method: str, params: dict[str, Any] | None = None) -> bytes:
-    message: dict[str, Any] = {"jsonrpc": "2.0", "id": 1, "method": method}
-    if params is not None:
-        message["params"] = params
-    return json.dumps(message).encode()
-
-
-def call_body(name: str, **arguments: Any) -> bytes:
-    return rpc("tools/call", {"name": name, "arguments": arguments})
 
 
 def _seed(session) -> None:
@@ -220,7 +104,7 @@ class Endpoint:
 @pytest.fixture
 def mcp_environment(tmp_path, monkeypatch, signing_key):
     key_file = tmp_path / "public.pem"
-    key_file.write_bytes(_public_pem(signing_key))
+    key_file.write_bytes(public_pem(signing_key))
     monkeypatch.setenv("AGENT_SERVICE_MCP_ORIGIN", ORIGIN)
     monkeypatch.setenv("AGENT_SERVICE_CAPABILITY_KEY_FILE", str(key_file))
     return key_file
@@ -238,15 +122,6 @@ def endpoint(web, mcp_environment) -> Endpoint:
     wrapped, verdict = compose_mcp_endpoint(app, settings_now())
     assert verdict.problem is None
     return Endpoint(wrapped, factory)
-
-
-@contextmanager
-def running_run(run_id: str, person: str = "anna") -> Iterator[None]:
-    service_runs.register(run_id, RunPerson(ISSUER, person))
-    try:
-        yield
-    finally:
-        service_runs.release(run_id)
 
 
 @pytest.fixture
@@ -594,18 +469,18 @@ def test_m11_neither_the_logs_nor_the_answers_carry_the_capability(
 
 
 def _two_blocks(signing_key: rsa.RSAPrivateKey) -> bytes:
-    return _public_pem(signing_key) + _public_pem(signing_key)
+    return public_pem(signing_key) + public_pem(signing_key)
 
 
 KEY_FILE_CASES = {
     "empty": (lambda path, key: path.write_bytes(b""), McpKeyProblem.UNSOUND_KEY),
     "two-blocks": (lambda path, key: path.write_bytes(_two_blocks(key)), McpKeyProblem.UNSOUND_KEY),
     "private-key": (
-        lambda path, key: path.write_bytes(_private_pem(key)), McpKeyProblem.UNSOUND_KEY,
+        lambda path, key: path.write_bytes(private_pem(key)), McpKeyProblem.UNSOUND_KEY,
     ),
     "rsa-2048": (
         lambda path, key: path.write_bytes(
-            _public_pem(rsa.generate_private_key(public_exponent=65537, key_size=2048)),
+            public_pem(rsa.generate_private_key(public_exponent=65537, key_size=2048)),
         ),
         McpKeyProblem.UNSOUND_KEY,
     ),

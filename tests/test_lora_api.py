@@ -7,9 +7,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (

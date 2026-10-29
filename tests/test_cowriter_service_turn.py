@@ -28,9 +28,11 @@ from agent_runtime_client.wire import (
     RouteKind,
     TurnMessage,
 )
-from conftest import make_authenticated_user, make_test_app, seed_user
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fake_agent_service import (
+from fake_oidc_issuer import USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN
+from fastapi.testclient import TestClient
+from sqlalchemy import event
+from support.fake_agent_service import (
     A_REFRESH_TOKEN,
     SERVICE_URL,
     STARTED_MODEL,
@@ -44,19 +46,17 @@ from fake_agent_service import (
     refuses,
     streams,
 )
-from fake_oidc_issuer import USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN
-from fastapi.testclient import TestClient
-from sqlalchemy import event
-from test_cowriter_mcp_endpoint import (
+from support.mcp_endpoint_driver import (
     HOST,
     ORIGIN,
     VERSION,
-    _public_pem,
     call_body,
     mint,
+    public_pem,
     running_run,
     settings_now,
 )
+from support.web_app import make_authenticated_user, make_test_app, seed_user
 
 from songmaker_cli.api_models import AssistantTextEvent
 from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE, GET_SONG_ONLY_FOR_OTHER_SONGS
@@ -106,7 +106,7 @@ def _seed(session) -> None:
 @pytest.fixture
 def mcp_key(tmp_path, monkeypatch, signing_key) -> Path:
     key_file = tmp_path / "public.pem"
-    key_file.write_bytes(_public_pem(signing_key))
+    key_file.write_bytes(public_pem(signing_key))
     monkeypatch.setenv("AGENT_SERVICE_MCP_ORIGIN", ORIGIN)
     monkeypatch.setenv("AGENT_SERVICE_CAPABILITY_KEY_FILE", str(key_file))
     return key_file

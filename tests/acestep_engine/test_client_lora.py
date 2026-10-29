@@ -6,7 +6,7 @@ import json
 from unittest.mock import patch
 
 import pytest
-from conftest import mock_http_response
+from support.acestep_http import mock_http_response
 
 from acestep_engine.client import AceStepClient
 from acestep_engine.errors import TaskSubmissionError

@@ -21,124 +21,42 @@ os.environ.setdefault(
 os.environ.setdefault("OIDC_ISSUER", "https://issuer.test/realms/test")
 os.environ.setdefault("OIDC_CLIENT_ID", "songmaker-test")
 
-import functools  # noqa: E402
-import shutil  # noqa: E402
 import struct  # noqa: E402
-import subprocess  # noqa: E402
-import tempfile  # noqa: E402
 import wave  # noqa: E402
-from collections.abc import Callable, Mapping, Sequence  # noqa: E402
 from contextlib import contextmanager  # noqa: E402
-from http.client import HTTPResponse  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
-from typing import Final  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402
 
-import fakeredis  # noqa: E402
-import httpx  # noqa: E402
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402
 import structlog  # noqa: E402
-from fastapi import FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import event  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
-from webauth.ports import AuthenticatedUser  # noqa: E402
+from support.fake_cli_process import close_fake_cli_processes  # noqa: E402
+from support.generation_failures import SONGMAKER_FAILURE_CASES  # noqa: E402
+from support.oidc_client import write_test_client_secret  # noqa: E402
+from support.provider_runtime import (  # noqa: E402
+    override_provider_runtime,
+    refresh_provider_snapshots,
+)
+from support.web_app import make_fake_redis  # noqa: E402
 from worker_http_peer import generation_worker_peer  # noqa: E402, F401
 
-from acestep_engine.errors import AudioDownloadError  # noqa: E402
-from songmaker_cli.app_context import AppContext  # noqa: E402
 from songmaker_cli.scheduler import (  # noqa: E402
-    NoCapacityError,
     WorkerGenerationUnavailable,
     WorkerGpuOutOfMemory,
 )
 
-pytest_plugins = ["redis_server", "oidc_world", "fake_acestep_child", "admin_client_fixture"]
-
-TEST_CLIENT_SECRET = "test-client-secret"
-
-
-def _write_test_client_secret() -> str:
-    with tempfile.NamedTemporaryFile("w", suffix=".secret", delete=False) as secret_file:
-        secret_file.write(TEST_CLIENT_SECRET)
-    return secret_file.name
-
-
-os.environ.setdefault("OIDC_CLIENT_SECRET_FILE", _write_test_client_secret())
-
-TEST_SECRET = b"a" * 64
-TEST_ORIGIN: Final = "https://testserver"
-REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[1]
-COMPOSE_CONFIG_TIMEOUT_SECONDS: Final = 60
-
-
-GENERATION_SETUP_MESSAGES = [
-    "Song not found",
-    "Version not found",
-    "Reference audio not found",
-    "Selected voice is unavailable for this generation",
+pytest_plugins = [
+    "support.redis_server",
+    "support.oidc_world",
+    "support.fake_acestep_child",
+    "support.admin_client_fixture",
+    "support.generation_job_world",
 ]
 
-OTHER_GENERATION_ERROR_TYPES = [
-    None,
-    "server_restart",
-    "no_worker_alive",
-    "queued_full_queue_bound",
-    "queued_too_long",
-    "setup_error",
-    "unknown",
-]
-
-
-SONGMAKER_FAILURE_CASES = [
-    pytest.param(
-        (
-            TimeoutError, "private timeout",
-            "Generation timed out", "Generation timed out", "generation_error",
-        ),
-        id="S5-B-D-timeout",
-    ),
-    pytest.param(
-        (
-            AudioDownloadError, "private download",
-            "Failed to download generated audio", "Failed to download generated audio",
-            "generation_error",
-        ),
-        id="S5-B-D-download",
-    ),
-    pytest.param(
-        (
-            ConnectionError, "private connection",
-            "ACE-Step server not reachable", "ACE-Step server not reachable", "generation_error",
-        ),
-        id="S5-B-D-connection",
-    ),
-    pytest.param(
-        (
-            NoCapacityError, "private capacity",
-            "No ACE-Step workers available", "Generating isn't available right now.",
-            "generation_unavailable",
-        ),
-        id="S5-B-L10-capacity",
-    ),
-    pytest.param(
-        (
-            RuntimeError, "private runtime",
-            "Internal error during processing", "Internal error during processing",
-            "generation_error",
-        ),
-        id="S5-B-D-runtime",
-    ),
-    pytest.param(
-        (
-            ValueError, "private unknown",
-            "An unexpected error occurred", "An unexpected error occurred", "generation_error",
-        ),
-        id="S5-B-D-unknown",
-    ),
-]
+os.environ.setdefault("OIDC_CLIENT_SECRET_FILE", write_test_client_secret())
 
 
 @pytest.fixture(params=SONGMAKER_FAILURE_CASES)
@@ -174,45 +92,6 @@ def generation_write_failure_case(request):
     return error_class(cause), message, error_type
 
 
-def queries_without_session_auth(statements: Sequence[str]) -> list[str]:
-    """defect:#1590: route budgets exclude DB session lookup and touch SQL.
-
-    Session authentication owns this per-request cost independently of the
-    route's row count; all other statements remain in the route budget.
-    """
-    session_prefixes = ("select user_sessions.", "update user_sessions set ")
-    removed, kept = [], []
-    for statement in statements:
-        normalized = " ".join(statement.lower().split())
-        if normalized.startswith(session_prefixes):
-            removed.append(normalized)
-        else:
-            kept.append(statement)
-    expected = ("select user_sessions.", "update user_sessions set expires_at")
-    assert len(removed) == 2 and all(
-        sum(statement.startswith(prefix) for statement in removed) == 1 for prefix in expected
-    ), f"Expected exactly one {expected[0]!r} and one {expected[1]!r}; removed: {removed!r}"
-    return kept
-
-
-def web_client(app, **kwargs) -> TestClient:
-    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin.
-
-    A request naming neither `Origin` nor `Sec-Fetch-Site` carries what a same-origin
-    browser sends; one naming either goes out as written."""
-    client = TestClient(app, base_url=TEST_ORIGIN, **kwargs)
-    client.event_hooks = {"request": [_add_same_origin_fetch_metadata]}
-    return client
-
-
-def _add_same_origin_fetch_metadata(request: httpx.Request) -> None:
-    if "origin" not in request.headers and "sec-fetch-site" not in request.headers:
-        request.headers["Sec-Fetch-Site"] = "same-origin"
-
-
-_fake_cli_processes: list[MagicMock] = []
-
-
 @pytest.fixture
 def isolated_logging():
     managed_loggers = (
@@ -241,46 +120,7 @@ def isolated_logging():
 def _close_fake_cli_pipes():
     """Close the pipe-backed fake Claude CLI streams after each test module."""
     yield
-    for proc in _fake_cli_processes:
-        for stream_name in (
-            "stdin", "stdout", "stderr", "_stdin_reader", "_stdout_writer", "_stderr_writer",
-        ):
-            stream = getattr(proc, stream_name)
-            if not stream.closed:
-                stream.close()
-    _fake_cli_processes.clear()
-
-
-def fake_cli_process(
-    first_line: bytes | None, *, still_running: bool = False, stdin_blocked: bool = False,
-) -> MagicMock:
-    """Build a pipe-backed stand-in for the ``subprocess.Popen`` CLI handle."""
-    proc = MagicMock()
-    proc.pid = 4343
-    proc.poll.return_value = None if still_running else 0
-    stdin_reader, stdin_writer = os.pipe()
-    stdout_reader, stdout_writer = os.pipe()
-    stderr_reader, stderr_writer = os.pipe()
-    proc.stdin = os.fdopen(stdin_writer, "wb", buffering=0)
-    proc.stdout = os.fdopen(stdout_reader, "rb", buffering=0)
-    proc.stderr = os.fdopen(stderr_reader, "rb", buffering=0)
-    proc._stdin_reader = os.fdopen(stdin_reader, "rb", buffering=0)
-    proc._stdout_writer = os.fdopen(stdout_writer, "wb", buffering=0)
-    proc._stderr_writer = os.fdopen(stderr_writer, "wb", buffering=0)
-    proc._stderr_writer.close()
-    if stdin_blocked:
-        os.set_blocking(proc.stdin.fileno(), False)
-        try:
-            while True:
-                os.write(proc.stdin.fileno(), b"x" * 65536)
-        except BlockingIOError:
-            pass
-    if first_line is not None:
-        proc._stdout_writer.write(first_line)
-        proc._stdout_writer.close()
-    proc.wait.return_value = None
-    _fake_cli_processes.append(proc)
-    return proc
+    close_fake_cli_processes()
 
 
 @pytest.fixture
@@ -321,47 +161,6 @@ def _configure_agent_provider_runtime():
     configure_agent_providers(Settings())
     yield
     reset_config()
-
-
-def override_provider_runtime(**deployment_facts) -> None:
-    """Replace named provider deployment facts for the current test only.
-
-    Test doubles for a mounted binary, credential mirror, or resource
-    directory belong here rather than in a patched module constant: the
-    provider layer reads them from the injected configuration, which the
-    autouse fixture above rebuilds for every test.
-
-    Deliberately replaces the installation rather than adding to it, because
-    ``configure()`` refuses a differing second value. A test that overrides
-    before building its app therefore fails loudly when ``create_app``
-    installs songmaker's own facts over it, instead of silently losing them.
-    """
-    from agent_providers.config import (
-        ProviderRuntimeConfig,
-        configure,
-        current_config,
-        reset_config,
-    )
-
-    replacement = ProviderRuntimeConfig(
-        **{**current_config().model_dump(), **deployment_facts},
-    )
-    reset_config()
-    configure(replacement)
-
-
-def use_codex_process_pool(monkeypatch, process_pool) -> None:
-    """Give every Codex module that admits a process the same test pool.
-
-    Admission is asked for in three places — the tool transport, the image
-    route, and the shared runner that binds and reaps a reservation — so a
-    test that sizes the pool has to reach all three or it silently measures
-    the process-wide one.
-    """
-    from agent_providers.codex import image, protocol, transport
-
-    for module in (image, protocol, transport):
-        monkeypatch.setattr(module, "get_codex_process_pool", lambda: process_pool)
 
 
 @pytest.fixture(autouse=True)
@@ -487,90 +286,7 @@ def fresh_settings():
 @pytest.fixture
 def fake_redis():
     """Provide a fresh fakeredis instance for tests that need Redis."""
-    return fakeredis.FakeRedis(decode_responses=True)
-
-
-def make_fake_redis():
-    """Non-fixture factory for test helpers that build AppContext directly."""
-    return fakeredis.FakeRedis(decode_responses=True)
-
-
-def install_app_context(app, ctx) -> None:
-    """Give a bare test app what ``create_app`` installs on the real one.
-
-    An app that serves any auth-protected or rate-limited route needs both the
-    context and the ``WebAuthConfig`` built from it, or it fails loudly on the
-    first request. The settings are read uncached, so a test that shapes its
-    environment after building its app still gets its own values back from
-    ``get_settings()``.
-    """
-    from webauth.config import install_web_auth_config
-
-    from songmaker_cli.app_context import build_web_auth_config
-    from songmaker_cli.settings import Settings
-
-    app.state.ctx = ctx
-    install_web_auth_config(app, build_web_auth_config(ctx, Settings()))
-
-
-def issued_cookies(session_id: str, config) -> dict[str, str]:
-    """The session cookie the library issues for ``session_id``, by name."""
-    from fastapi import Response
-    from webauth.cookies import issue_session_cookies
-
-    carrier = Response()
-    issue_session_cookies(carrier, session_id, config)
-    return {
-        name: rest.partition(";")[0]
-        for name, _, rest in (h.partition("=") for h in carrier.headers.getlist("set-cookie"))
-    }
-
-
-def seed_session(client, username: str) -> None:
-    """Open a session for the seeded ``username``.
-
-    Writes the session row straight to the database and issues the cookies the
-    callback would, because signing in itself needs the issuer.
-    """
-    from datetime import datetime, timedelta, timezone
-
-    from webauth.config import installed_web_auth_config
-
-    from songmaker_cli.auth_stores import DatabaseSessionRecordStore
-    from songmaker_cli.db.models import User
-
-    config = installed_web_auth_config(client.app)
-    now = datetime.now(timezone.utc)
-    with client.app.state.ctx.db() as session:
-        user_id = session.query(User).filter_by(username=username).one().id
-        idle = timedelta(seconds=config.session_lifetime.idle_seconds)
-        record = DatabaseSessionRecordStore(session).create(
-            user_id, now=now, expires_at=now + idle, refresh_token=None, id_token=None,
-        )
-        session.commit()
-        session_id = record.id
-    for name, value in issued_cookies(session_id, config).items():
-        client.cookies.set(name, value)
-
-
-def mock_http_response(data: bytes, status: int = 200) -> MagicMock:
-    """Build a mock urllib HTTPResponse for ACE-Step client tests.
-
-    Supports both full reads (``resp.read()``) and chunked reads
-    (``resp.read(n)``) so the same mock works with the deadline-based
-    chunked download in ``_download_audio``.
-    """
-    resp = MagicMock(spec=HTTPResponse)
-    resp.status = status
-    buf = BytesIO(data)
-
-    def _read(size: int = -1) -> bytes:
-        return buf.read(size) if size != -1 else buf.read()
-
-    resp.read = _read
-    resp.__enter__ = MagicMock(return_value=resp)
-    resp.__exit__ = MagicMock(return_value=False)
-    return resp
+    return make_fake_redis()
 
 
 @pytest.fixture
@@ -633,144 +349,6 @@ def make_stereo_wav_bytes():
     return _make
 
 
-def write_wav(path: Path, audio: np.ndarray, sr: int) -> None:
-    """Write a float32/float64 numpy array to a 16-bit WAV file (stdlib only)."""
-    int16 = np.clip(audio * 32768.0, -32768.0, 32767.0).astype(np.int16)
-    with wave.open(str(path), "w") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(sr)
-        wf.writeframes(int16.tobytes())
-
-
-def read_wav(path: Path) -> tuple[np.ndarray, int]:
-    """Read a WAV file into a float32 numpy array + sample rate (stdlib only)."""
-    with wave.open(str(path), "r") as wf:
-        sr = wf.getframerate()
-        frames = wf.readframes(wf.getnframes())
-        int16 = np.frombuffer(frames, dtype=np.int16)
-        return int16.astype(np.float32) / 32768.0, sr
-
-
-def make_authenticated_user(
-    user_id: str,
-    *,
-    role: str = "user",
-    username: str | None = None,
-) -> AuthenticatedUser:
-    """Build a user, using the ID as the default username."""
-    return AuthenticatedUser(
-        id=user_id,
-        username=user_id if username is None else username,
-        role=role,
-    )
-
-
-def make_router_ctx(
-    tmp_path: Path,
-    *,
-    db: sessionmaker[Session] | None = None,
-    seed_db: Callable[[Session], None] | None = None,
-) -> AppContext:
-    """Build a router context, preserving an existing DB and committing seed data."""
-    from songmaker_cli.db.engine import init_test_db
-
-    ctx = AppContext(
-        db=db if db is not None else init_test_db(tmp_path / "test.db"),
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-    )
-    if seed_db is not None:
-        with ctx.db() as session:
-            seed_db(session)
-            session.commit()
-    return ctx
-
-
-def make_router_app(ctx: AppContext, *, user: AuthenticatedUser | None = None) -> FastAPI:
-    """Mount the API router on an existing context, without middleware or lifecycle.
-
-    Without a user override, requests exercise real authentication.
-    """
-    from songmaker_cli.api import router
-    from songmaker_cli.audio_paths import AudioPathRejectedError
-    from songmaker_cli.auth_dependencies import get_current_user
-    from songmaker_cli.server import audio_path_rejected_handler
-
-    app = FastAPI()
-    app.add_exception_handler(AudioPathRejectedError, audio_path_rejected_handler)
-    install_app_context(app, ctx)
-    if user is not None:
-        app.dependency_overrides[get_current_user] = lambda: user
-    app.include_router(router)
-    return app
-
-
-def seed_user(
-    session: Session, username: str, role: str = "user", *, user_id: str | None = None,
-):
-    """Add an account the way admission would: its id is the issuer's subject."""
-    import uuid
-
-    from songmaker_cli.db.queries.auth import create_user
-
-    return create_user(session, user_id or str(uuid.uuid4()), username, role)
-
-
-def make_test_app(
-    tmp_path: Path,
-    seed_db: Callable | None = None,
-    index_html: str = "<html>Songmaker</html>",
-    factory: sessionmaker[Session] | None = None,
-) -> tuple:
-    """Create a full test app with real middleware on ``factory`` or a fresh SQLite file.
-
-    Returns (TestClient, sessionmaker) so callers can seed data or log in.
-    ``seed_db`` receives a Session to add models before the app starts;
-    ``index_html`` is the built page whose inline scripts the policy hashes.
-    """
-    from songmaker_cli.app_context import AppContext
-    from songmaker_cli.db.engine import init_test_db as init_db
-    from songmaker_cli.server import create_app
-
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir(exist_ok=True)
-    data_dir = tmp_path / "data"
-    data_dir.mkdir(exist_ok=True)
-    project_root = tmp_path
-    (project_root / "pyproject.toml").write_text("[project]\nname = 'test'\n")
-    sk_dir = project_root / "frontend" / "build"
-    sk_dir.mkdir(parents=True, exist_ok=True)
-    (sk_dir / "index.html").write_text(index_html)
-
-    factory = factory or init_db(data_dir / "songmaker.db")
-    with factory() as session:
-        if seed_db is not None:
-            seed_db(session)
-        session.commit()
-
-    redis = make_fake_redis()
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=redis,
-    )
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = web_client(app, cookies={})
-    return client, factory
-
-
-def refresh_provider_snapshots() -> None:
-    """Refresh every provider after a test changes its catalog dependencies."""
-    from agent_providers.constants import COWRITER_PROVIDERS
-
-    from songmaker_cli.provider_status import refresh_provider_snapshot
-
-    for provider in COWRITER_PROVIDERS:
-        refresh_provider_snapshot(provider)
-
-
 @pytest.fixture
 def every_provider_is_configured(monkeypatch):
     override_provider_runtime(
@@ -787,47 +365,6 @@ def every_provider_is_configured(monkeypatch):
         lambda: True,
     )
     refresh_provider_snapshots()
-
-
-@functools.cache
-def _require_docker_compose() -> None:
-    if shutil.which("docker") is None:
-        pytest.fail("docker is not on PATH; this test drives the real `docker compose config`")
-    version = subprocess.run(
-        ["docker", "compose", "version"],
-        capture_output=True,
-        text=True,
-        timeout=COMPOSE_CONFIG_TIMEOUT_SECONDS,
-        check=False,
-    )
-    if version.returncode != 0:
-        pytest.fail(f"`docker compose` is unavailable: {version.stderr.strip()}")
-
-
-def run_compose_config(
-    compose_args: Sequence[str],
-    config_args: Sequence[str],
-    *,
-    env_file: Path,
-    environment: Mapping[str, str],
-) -> subprocess.CompletedProcess[str]:
-    """Run the real ``docker compose config`` from the repository root.
-
-    ``--env-file`` replaces the project's ``.env`` and the process environment is
-    cleared down to PATH and HOME plus ``environment``, so neither the operator's
-    file nor the test session's own environment reaches the rendering. ``config``
-    needs only the Docker CLI's compose plugin, not a daemon.
-    """
-    _require_docker_compose()
-    return subprocess.run(
-        ["docker", "compose", "--env-file", str(env_file), *compose_args, "config", *config_args],
-        cwd=REPOSITORY_ROOT,
-        env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], **environment},
-        capture_output=True,
-        text=True,
-        timeout=COMPOSE_CONFIG_TIMEOUT_SECONDS,
-        check=False,
-    )
 
 
 @pytest.fixture

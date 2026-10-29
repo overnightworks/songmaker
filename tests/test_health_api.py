@@ -24,7 +24,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from agent_providers.claude import provider
 from agent_providers.claude.provider import verify_cli_tool_surface as _real_verify_cli_tool_surface
-from conftest import fake_cli_process, make_test_app
+from support.fake_cli_process import fake_cli_process
+from support.web_app import make_test_app
 
 from songmaker_cli.acestep_state import lm_failure_key
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD

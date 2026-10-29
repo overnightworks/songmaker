@@ -9,7 +9,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from conftest import make_test_app, override_provider_runtime
+from support.provider_runtime import override_provider_runtime
+from support.web_app import make_test_app
 
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app, seed_user
 from fastapi.testclient import TestClient
+from support.web_app import make_test_app, seed_user
 
 from songmaker_cli.cleanup import GENERATION_RETENTION_HOUR_UTC
 from songmaker_cli.constants import INTERNAL_TOKEN_HEADER
@@ -20,7 +20,7 @@ def client(tmp_path: Path) -> TestClient:
 
 
 def _login_as_admin(client: TestClient) -> None:
-    from conftest import seed_session
+    from support.web_app import seed_session
     factory = client.app.state.ctx.db
     with factory() as session:
         seed_user(session, "admin", "admin")
@@ -29,7 +29,7 @@ def _login_as_admin(client: TestClient) -> None:
 
 
 def _login_as_user(client: TestClient) -> None:
-    from conftest import seed_session
+    from support.web_app import seed_session
     factory = client.app.state.ctx.db
     with factory() as session:
         seed_user(session, "regular", "user")

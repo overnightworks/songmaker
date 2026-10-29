@@ -19,8 +19,8 @@ from agent_providers.codex.image import (
 from agent_providers.codex.pool import CodexProcessPool
 from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
-from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
+from support.provider_runtime import override_provider_runtime, use_codex_process_pool
 from xmp_packet import read_digital_source_type
 
 import songmaker_cli.cover_runner as cover_runner

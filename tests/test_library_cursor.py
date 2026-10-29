@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from conftest import TEST_SECRET
+from support.web_app import TEST_SECRET
 
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,

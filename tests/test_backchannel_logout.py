@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from conftest import web_client
 from fake_oidc_issuer import Person
 from httpx import Response
-from oidc_world import World
 from sqlalchemy.orm import Session
+from support.oidc_world import World
+from support.web_app import web_client
 
 from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.db.models import AuditLog, UserSession

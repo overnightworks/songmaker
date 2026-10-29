@@ -12,11 +12,11 @@ from pathlib import Path
 
 import anyio
 import pytest
-from conftest import issued_cookies, make_test_app
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from support.web_app import issued_cookies, make_test_app
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.middleware import (
     BodySizeLimitMiddleware,

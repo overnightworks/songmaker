@@ -175,7 +175,7 @@ def test_discovers_routes_from_included_routers() -> None:
 
 
 def test_route_routers_discover_every_openapi_path_in_the_real_app(tmp_path: Path) -> None:
-    from conftest import make_test_app
+    from support.web_app import make_test_app
 
     client, _ = make_test_app(tmp_path)
     discovered_route_paths = {

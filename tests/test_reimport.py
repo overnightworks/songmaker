@@ -6,14 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import (
-    make_authenticated_user,
-    make_router_app,
-    make_router_ctx,
-    web_client,
-)
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli import audio_files
 from songmaker_cli.db.engine import init_test_db

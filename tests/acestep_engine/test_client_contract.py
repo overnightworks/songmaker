@@ -21,7 +21,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import mock_http_response as _mock_response
+from support.acestep_http import mock_http_response as _mock_response
 
 from acestep_engine.client import (
     _AUDIO_UPLOAD_FIELDS,

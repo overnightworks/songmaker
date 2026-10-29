@@ -3,11 +3,8 @@
 from pathlib import Path
 
 import pytest
-from conftest import (
-    make_test_app,
-    seed_session,
-)
 from sqlalchemy import select
+from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import AuditAction, ResourceType
 from songmaker_cli.db.models import Album, AuditLog, Generation, Song, User

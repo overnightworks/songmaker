@@ -7,8 +7,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from conftest import write_wav
 from sqlalchemy.orm import Session
+from support.wav_files import write_wav
 
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Song

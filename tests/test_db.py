@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import seed_user
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy.orm import Session
+from support.web_app import seed_user
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli import audio_files

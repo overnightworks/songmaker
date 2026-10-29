@@ -7,10 +7,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import install_app_context, make_fake_redis, seed_user, web_client
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from support.web_app import install_app_context, make_fake_redis, seed_user, web_client
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.ports import AuthenticatedUser
 

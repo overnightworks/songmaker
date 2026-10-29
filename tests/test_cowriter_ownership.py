@@ -5,9 +5,9 @@ import asyncio
 import json
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
-from fake_agent_service import attach_cowriter_service, streams
 from mcp.server.mcpserver.exceptions import ToolError
+from support.fake_agent_service import attach_cowriter_service, streams
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS, execute_cowriter_tool

@@ -8,10 +8,10 @@ from functools import partial
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from slugify import slugify
 from sqlalchemy import event, select
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,

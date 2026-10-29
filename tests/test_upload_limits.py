@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_test_app, seed_session
 from fastapi.testclient import TestClient
+from support.web_app import make_test_app, seed_session
 
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,

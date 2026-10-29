@@ -6,10 +6,10 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
-from fake_agent_service import CowriterStack, attach_cowriter_service, streams
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
+from support.fake_agent_service import CowriterStack, attach_cowriter_service, streams
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.constants import (
     TURN_BLOCK_ALBUM_NOTES,

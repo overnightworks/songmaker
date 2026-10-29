@@ -34,8 +34,8 @@ from agent_runtime_client.wire import (
     ToolCall,
     ToolResult,
 )
-from conftest import issued_cookies
 from fake_oidc_issuer import FakeIssuer, a_fake_issuer
+from support.web_app import issued_cookies
 
 from songmaker_cli.cowriter import service_turn
 from songmaker_cli.cowriter.mcp_endpoint import AVAILABILITY_ATTRIBUTE, McpEndpointAvailability

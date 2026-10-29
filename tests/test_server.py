@@ -15,7 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from conftest import (
+from fastapi.testclient import TestClient
+from support.web_app import (
     TEST_SECRET,
     make_fake_redis,
     make_test_app,
@@ -23,7 +24,6 @@ from conftest import (
     seed_user,
     web_client,
 )
-from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import sign_session_id
 from webauth.proxies import TrustedProxies
@@ -228,7 +228,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import seed_session
+    from support.web_app import seed_session
     seed_session(client, "admin6")
     resp = client.get(f"/audio/{admin_id}/data.mp3")
     assert resp.status_code == 404
@@ -533,7 +533,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path, fresh_settings) -> 
         )
         app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
         client = web_client(app, cookies={})
-        from conftest import seed_session
+        from support.web_app import seed_session
         seed_session(client, "admin2")
 
         resp = client.post(
@@ -1105,7 +1105,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    from conftest import seed_session
+    from support.web_app import seed_session
     seed_session(client, "admin5")
     resp = client.get("/audio/other-user-id/song.mp3")
     assert resp.status_code == 404

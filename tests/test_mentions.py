@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
-from fake_agent_service import CowriterStack, attach_cowriter_service
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from support.fake_agent_service import CowriterStack, attach_cowriter_service
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.api_models import ChatTurnV2Request
 from songmaker_cli.db.engine import init_test_db as init_db

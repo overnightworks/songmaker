@@ -8,10 +8,10 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 
 import pytest
-from conftest import make_authenticated_user, seed_user
 from sqlalchemy import create_engine, event, insert, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from support.web_app import make_authenticated_user, seed_user
 
 import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _USER_MANAGEMENT_LOCK_ID, _begin_exclusive

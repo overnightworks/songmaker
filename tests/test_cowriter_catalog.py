@@ -20,7 +20,7 @@ from agent_providers.errors import (
     SafeRouteReasonCode,
 )
 from agent_providers.process import AgentCliUnavailableError
-from conftest import override_provider_runtime
+from support.provider_runtime import override_provider_runtime
 
 from songmaker_cli.provider_status import (
     refresh_provider_snapshot,

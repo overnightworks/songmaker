@@ -10,7 +10,7 @@ import pytest
 
 librosa = pytest.importorskip("librosa")
 
-from conftest import write_wav
+from support.wav_files import write_wav
 from songmaker_cli.parser import SongMeta
 from songmaker_cli.scoring.bpm_accuracy import (
     _closest_octave_match,

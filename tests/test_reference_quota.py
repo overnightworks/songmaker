@@ -13,13 +13,13 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
+from support.web_app import make_authenticated_user, make_router_app, make_router_ctx
 
 from songmaker_cli.db.models import Album, Song, User, Version
 from songmaker_cli.generation_api import api_upload_reference_audio
