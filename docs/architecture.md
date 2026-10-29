@@ -1077,7 +1077,7 @@ until its own move.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.24.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.25.0`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
@@ -1099,8 +1099,9 @@ absolute), cookie and header names and the Origin allowlist arrive as one frozen
 installed on the application in `server.create_app`. Middleware and endpoints
 read it through `webauth.config.web_auth_config(request)`; an application that
 never installed one fails loudly at its first auth-protected request. Redis
-remains the rate-limit backend; session validity comes from the DB on every
-authenticated request. `session_cleanup_loop` periodically deletes expired DB
+remains the rate-limit backend; a request is admitted by its DB session, which is
+loaded on every authenticated request, or by a verified token on a person path
+(`/api/` and `/audio/`) when `TOKEN_CLIENTS` names the token's client. `session_cleanup_loop` periodically deletes expired DB
 sessions without Redis.
 
 Sign-in is songmaker's composition of that library, in `auth_api.py` (`install_sign_in`),
@@ -1148,8 +1149,8 @@ JSON body cap, and the CSP line with its inline-script hashes and cacheability
 rules. `server.create_app` installs them with one
 `install_web_auth_middleware()` call; no middleware reads songmaker's settings.
 The pure-ASGI request order, outside to inside, is ResourceStreamDeadline →
-SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → CsrfOrigin →
-TrustedHost → AccessLog → Router. The Host check is Starlette's
+SelectiveGZip → CORS → SecurityHeaders → BodySize → IpRateLimit → [BearerGate →] CsrfOrigin →
+TrustedHost → AccessLog → Router. The bracketed bearer layer exists only while `TOKEN_CLIENTS` names a client. The Host check is Starlette's
 `TrustedHostMiddleware` over `ALLOWED_HOSTS`, songmaker's own because the
 library's host lists are Origin allowlists only. Library refusals therefore carry security
 headers; CORS preflights remain outside the library stack.
