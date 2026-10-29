@@ -4,7 +4,7 @@
 SvelteKit 3 drops the `$lib` alias; `#lib/*` is declared in frontend/package.json
 `imports` and resolves to `src/lib/*` with the target's real extension. A merge
 conflict with this rewrite is resolved by running this script again, never by hand.
-The script is idempotent. A specifier whose target does not exist fails loudly.
+The script formats what it touched with prettier and is idempotent. A specifier whose target does not exist fails loudly.
 """
 
 import re
@@ -52,12 +52,22 @@ def tracked_frontend_sources() -> list[Path]:
     return [REPOSITORY_ROOT / name for name in names if name not in HAND_MAINTAINED]
 
 
+def format_with_prettier(paths: list[Path]) -> None:
+    """A changed specifier changes line widths, so prettier decides the final layout."""
+    if paths:
+        command = ["pnpm", "exec", "prettier", "--write", "--log-level", "warn", *map(str, paths)]
+        subprocess.run(command, cwd=REPOSITORY_ROOT / "frontend", check=True)
+
+
 def main() -> int:
+    changed = []
     for path in tracked_frontend_sources():
         original = path.read_text(encoding="utf-8")
         rewritten = rewrite(original)
         if rewritten != original:
             path.write_text(rewritten, encoding="utf-8")
+            changed.append(path)
+    format_with_prettier(changed)
     return 0
 
 
