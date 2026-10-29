@@ -1058,19 +1058,29 @@ async def default_generate_runner(
 
         loop = asyncio.get_running_loop()
 
+        scheduled_updates: list[asyncio.Future[None]] = []
+
         def _on_progress(progress: AceStepProgress) -> None:
-            asyncio.run_coroutine_threadsafe(
-                task_store.update_progress(
-                    task_id, progress.fraction, phase=progress.phase,
+            scheduled_updates.append(
+                asyncio.wrap_future(
+                    asyncio.run_coroutine_threadsafe(
+                        task_store.update_progress(
+                            task_id, progress.fraction, phase=progress.phase,
+                        ),
+                        loop,
+                    ),
+                    loop=loop,
                 ),
-                loop,
             )
 
-        result = await asyncio.to_thread(
-            client.generate,
-            config,
-            on_progress=_on_progress,
-        )
+        try:
+            result = await asyncio.to_thread(
+                client.generate,
+                config,
+                on_progress=_on_progress,
+            )
+        finally:
+            await asyncio.gather(*scheduled_updates)
         audio_output_dir.mkdir(parents=True, exist_ok=True)
         out_path = audio_output_dir / f"{task_id}-{uuid4().hex[:8]}.wav"
         out_path.write_bytes(result.wav_bytes)
