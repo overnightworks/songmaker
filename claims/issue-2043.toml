@@ -1,0 +1,8 @@
+claim_id = "7c910bb76398456282f4bccaafbeee35"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "8ef1d4f821d73ccb19819f859ef6abd091640d11"
+branch = "claude/issue-2043-ci-tests-stop-pinning-proof-counts"
+scope = [".github/workflows/ci.yml", "docs/testing.md", "tests/auto_deploy_support.py", "tests/support/token_world.py", "tests/test_auto_deploy_alerting.py", "tests/test_packaging_boundary.py", "tests/test_person_token_paths.py", "tests/test_person_token_paths_postgres.py"]
+opened_commit = "22ab79713620123e97d9b522bc536fb031f8a8bc"
+whole_reason = "Five small test and CI corrections from one review distributor; each touches one or two files, and splitting them would pay five lanes' overhead for a few lines each."
