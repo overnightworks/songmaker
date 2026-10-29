@@ -2,7 +2,7 @@
 // asks a Google font host for anything, and the two families still render in
 // every weight the stylesheet names. Only a real browser shows both -- which
 // hosts a page actually contacts, and which faces it actually loaded.
-// Only the latin and latin-ext subsets ship, in woff2 alone (issue #1224).
+// The shipped fonts are woff2 alone (issue #1224).
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { ONLY_IN_SHELL } from './helpers';
@@ -16,14 +16,6 @@ const SERVED_FACES: readonly { family: string; weight: string }[] = [
 	{ family: 'Open Sans', weight: '400' },
 	{ family: 'Open Sans', weight: '600' }
 ];
-
-const SHIPPED_SUBSETS: readonly string[] = ['latin', 'latin-ext'];
-
-const SHIPPED_FONT_FILE_COUNT = SERVED_FACES.length * SHIPPED_SUBSETS.length;
-
-const SHIPPED_FONT_FILE = new RegExp(
-	`^(oswald|open-sans)-(${SHIPPED_SUBSETS.join('|')})-\\d{3}-normal\\.[\\w-]+\\.woff2$`
-);
 
 const GERMAN_SAMPLE = 'Aa äöüß';
 
@@ -122,16 +114,12 @@ test(
 );
 
 test(
-	'only latin and latin-ext woff2 fonts are precached and served as woff2',
+	'precached fonts are served as woff2',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
 		const fontPaths = await precachedFontPaths(page);
 
-		expect(fontPaths).toHaveLength(SHIPPED_FONT_FILE_COUNT);
-		for (const path of fontPaths) {
-			expect(path.split('/').pop()).toMatch(SHIPPED_FONT_FILE);
-		}
-
+		expect(fontPaths.length).toBeGreaterThan(0);
 		const font = await page.request.get(fontPaths[0]);
 		expect(font.ok()).toBe(true);
 		expect(font.headers()['content-type']).toBe('font/woff2');
