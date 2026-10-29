@@ -10,150 +10,36 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
-import threading
 from contextlib import suppress
-from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
 from urllib.parse import urlsplit
 
 import pytest
-from fake_oidc_issuer import FakeIssuer, Person, a_fake_issuer
-from fastapi.testclient import TestClient
-from postgres_lock_harness import in_thread
 from pydantic import ValidationError
 from sqlalchemy import event
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from starlette.requests import ClientDisconnect
 from starlette.types import ASGIApp
 from support.compose_config import run_compose_config
-from support.oidc_world import World
+from support.token_world import TokenWorld, make_token_world
 from support.web_app import TEST_ORIGIN, make_test_app, seed_session, seed_user
 
 from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.constants import OIDC_ADMIN_GROUP, OIDC_LEEWAY_SECONDS, OIDC_LOGIN_GROUP
 from songmaker_cli.db.models import (
     Album,
-    AuditLog,
     ChatMessage,
-    Generation,
     Job,
-    Song,
-    User,
     UserSession,
-    Version,
 )
 from songmaker_cli.db.queries.resource_events import create_generation_created_event
-
-
-@dataclass
-class TokenWorld:
-    """The full app with the person-path gate on, a fake realm, and a header-exact client.
-
-    It also owns the scenario's people and token values.
-    """
-
-    HAL: ClassVar = "hal"
-    ALICE: ClassVar = "6f1d2c3b-aaaa-4bbb-8ccc-0123456789ab"
-    BOB: ClassVar = "0a9b8c7d-dddd-4eee-8fff-ba9876543210"
-    TOKEN_LIFETIME_SECONDS: ClassVar = 300
-
-    client: TestClient
-    factory: sessionmaker[Session]
-    issuer: FakeIssuer
-    audio_dir: Path
-
-    def token(
-        self,
-        subject: str = ALICE,
-        *,
-        groups: tuple[str, ...] = (OIDC_LOGIN_GROUP,),
-        username: str = "alice",
-        **claims: object,
-    ) -> str:
-        now = int(self.issuer.now)
-        body: dict[str, object] = {
-            "iss": self.issuer.issuer,
-            "aud": self.issuer.client_id,
-            "sub": subject,
-            "azp": self.HAL,
-            "preferred_username": username,
-            "groups": list(groups),
-            "iat": now,
-            "exp": now + self.TOKEN_LIFETIME_SECONDS,
-            **claims,
-        }
-        return self.issuer.sign(
-            {name: value for name, value in body.items() if value is not None},
-            token_type="at+jwt",
-        )
-
-    def bearer(self, subject: str = ALICE, **options: object) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self.token(subject, **options)}"}
-
-    def rows(self, model: type, *columns: str) -> list[tuple]:
-        with self.factory() as session:
-            found = [
-                tuple(getattr(row, column) for column in columns)
-                for row in session.query(model).all()
-            ]
-        return sorted(found, key=repr)
-
-    def users(self) -> list[tuple[str, str, str]]:
-        return self.rows(User, "id", "username", "role")
-
-    def audits(self) -> list[tuple[str | None, str, str, str]]:
-        return [
-            (user_id, action, resource, resource_id)
-            for user_id, action, resource, resource_id in self.rows(
-                AuditLog, "user_id", "action", "resource_type", "resource_id",
-            )
-        ]
-
-    def albums(self) -> list[tuple[str, str | None]]:
-        return self.rows(Album, "title", "created_by")
-
-    def seed_take(self, owner: str, name: str) -> str:
-        """An album with one song and one take whose file exists; returns the take's id."""
-        with self.factory() as session:
-            if session.get(User, owner) is None:
-                seed_user(session, f"user-{owner[:4]}", user_id=owner)
-            session.add(Album(
-                id=f"album-{name}", title=f"Album {name}", artist="", created_by=owner,
-            ))
-            session.add(Song(id=f"song-{name}", title=f"Song {name}", album_id=f"album-{name}",
-                             track_number=1, slug=f"song-{name}"))
-            session.add(Version(id=f"version-{name}", song_id=f"song-{name}", version_number=1,
-                                lyrics="la", prompt="pop"))
-            session.add(Generation(id=f"take-{name}", song_id=f"song-{name}",
-                                   version_id=f"version-{name}", generation_number=1,
-                                   mp3_path=f"{owner}/{name}.mp3", seed=1))
-            session.commit()
-        (self.audio_dir / owner).mkdir(parents=True, exist_ok=True)
-        (self.audio_dir / owner / f"{name}.mp3").write_bytes(b"ID3 not really audio")
-        return f"take-{name}"
 
 
 @pytest.fixture
 def token_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TokenWorld:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    return _world(tmp_path, monkeypatch)
+    return make_token_world(tmp_path)
 
-
-def _world(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, factory: sessionmaker | None = None,
-) -> TokenWorld:
-    from songmaker_cli.settings import get_settings
-
-    get_settings.cache_clear()
-    issuer = a_fake_issuer()
-    app_client, factory = make_test_app(
-        tmp_path, factory=factory, oidc_sign_in=issuer.relying_party_for_app(),
-    )
-    # A client that adds no Fetch Metadata: a request names exactly the headers a test gives it.
-    client = TestClient(app_client.app, base_url=TEST_ORIGIN, cookies={},
-                        raise_server_exceptions=False)
-    return TokenWorld(client, factory, issuer, tmp_path / "audio")
 
 
 # -- T1, T2: the token is the person -------------------------------------------------
@@ -326,7 +212,7 @@ def test_t11_without_token_clients_a_bearer_is_not_admitted_and_the_app_starts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", "")
-    world = _world(tmp_path, monkeypatch)
+    world = make_token_world(tmp_path)
 
     response = world.client.get("/api/songs", headers=world.bearer())
 
@@ -486,35 +372,6 @@ def test_t17_a_failing_admission_is_a_500_with_no_account_and_no_session(
     assert (token_world.users(), token_world.audits(), token_world.rows(UserSession, "id")) == (
         [], [], [],
     )
-
-
-def test_t18_a_first_token_call_and_a_first_sign_in_race_into_one_account_and_one_audit(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
-) -> None:
-    monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = _world(tmp_path, monkeypatch, factory=pg_factory)
-    browser = World(world.client, pg_factory, world.issuer)
-    started = browser.start()
-    start_together = threading.Barrier(2)
-    answers: dict[str, object] = {}
-
-    def token_call() -> object:
-        start_together.wait()
-        return world.client.get("/api/songs", headers=world.bearer())
-
-    def sign_in() -> object:
-        start_together.wait()
-        return browser.callback(Person(TokenWorld.ALICE, "alice"), started)
-
-    threads = [in_thread(answers, "token", token_call), in_thread(answers, "sign-in", sign_in)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
-    assert (answers["token"].status_code, answers["sign-in"].status_code) == (200, 303)
-    assert [row[0] for row in world.users()] == [TokenWorld.ALICE]
-    assert world.audits().count((None, "create", "user", TokenWorld.ALICE)) == 1
 
 
 # -- T21, T22: deletion and sharing ----------------------------------------------------

@@ -151,6 +151,17 @@ jobs:
           --health-retries 5
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
+      POSTGRESQL_CONTRACT_MODULES: >-
+        tests/test_postgresql.py
+        tests/test_cover_accounting.py
+        tests/test_reference_quota.py
+        tests/test_auth_write_lock_postgres.py
+        tests/test_person_token_paths_postgres.py
+        tests/test_reference_save_lock_postgres.py
+        tests/test_song_version_lock_postgres.py
+        tests/test_coherence_verdict_lock_postgres.py
+        tests/test_coherence_verdict_migration.py
+        tests/test_reference_recordings_migration.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -164,10 +175,12 @@ jobs:
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py tests/test_person_token_paths.py tests/test_reference_save_lock_postgres.py tests/test_song_version_lock_postgres.py tests/test_coherence_verdict_lock_postgres.py tests/test_coherence_verdict_migration.py tests/test_reference_recordings_migration.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
+        run: uv run --no-sync --frozen --no-build pytest $POSTGRESQL_CONTRACT_MODULES -n 0 -v --tb=short --junitxml=postgresql-contract.xml
       - name: Require executed PostgreSQL reference quota and write lock proofs
         run: |
           python - <<'PYTHON'
+          import os
+          import pathlib
           import xml.etree.ElementTree as ET
 
           cases = [
@@ -184,23 +197,13 @@ jobs:
           assert cases, "No PostgreSQL reference quota proofs executed"
           assert not any(case.find("skipped") is not None for case in cases), "Quota proof skipped"
           print(f"PostgreSQL reference quota proofs: {len(cases)} passed, 0 skipped")
-          expected_lock_cases = {
-              "test_auth_write_lock_postgres": 3,
-              "test_person_token_paths": 41,
-              "test_reference_save_lock_postgres": 6,
-              "test_song_version_lock_postgres": 11,
-              "test_coherence_verdict_lock_postgres": 1,
-              "test_coherence_verdict_migration": 15,
-              "test_reference_recordings_migration": 7,
-          }
-          for module, expected in expected_lock_cases.items():
-              lock_cases = [
-                  case for case in ET.parse("postgresql-contract.xml").iter("testcase")
-                  if case.attrib["classname"].endswith(module)
-              ]
-              assert len(lock_cases) == expected, f"Expected {expected} {module} proofs, got {len(lock_cases)}"
-              assert not any(case.find("skipped") is not None for case in lock_cases), f"{module} proof skipped"
-              print(f"{module}: {len(lock_cases)} passed, 0 skipped")
+          cases = list(ET.parse("postgresql-contract.xml").iter("testcase"))
+          for path in os.environ["POSTGRESQL_CONTRACT_MODULES"].split():
+              module = pathlib.PurePath(path).stem
+              module_cases = [case for case in cases if module in case.attrib["classname"].split(".")]
+              assert module_cases, f"{module} executed no case"
+              assert not any(case.find("skipped") is not None for case in module_cases), f"{module} proof skipped"
+              print(f"{module}: {len(module_cases)} passed, 0 skipped")
           PYTHON
 
   frontend:

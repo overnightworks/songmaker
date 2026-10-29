@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import stat
 import subprocess
 import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "auto-deploy.sh"
@@ -33,14 +36,25 @@ HUNG_FETCH_TIMEOUT_SECONDS = 3
 # than the tick's own ceiling so the failure is an assertion, not a timeout.
 HUNG_TRANSPORT_SECONDS = 40
 HUNG_TICK_CEILING_SECONDS = 20
-PROMETHEUS_RULES_RESPONSE = """\
-{"status":"success","data":{"groups":[{"file":"/etc/prometheus/rules/alert.rules.yml","rules":[{"type":"alerting"},{"type":"alerting"},{"type":"alerting"},{"type":"alerting"}]}]}}
-"""
 PROMETHEUS_METRICS_RESPONSE = """\
 # HELP prometheus_config_last_reload_successful Whether the last reload succeeded.
 # TYPE prometheus_config_last_reload_successful gauge
 prometheus_config_last_reload_successful 1
 """
+
+
+def count_alerting_rules(rule_file: Path) -> int:
+    groups = yaml.safe_load(rule_file.read_text())["groups"]
+    return sum("alert" in rule for group in groups for rule in group["rules"])
+
+
+def prometheus_rules_response(alerting_rules: int) -> str:
+    """What Prometheus's /api/v1/rules answers when it has loaded this many alerting rules."""
+    rules = [{"type": "alerting"}] * alerting_rules
+    groups = [{"file": f"/etc/prometheus/rules/{PROMETHEUS_RULE_PATH.name}", "rules": rules}]
+    return json.dumps({"status": "success", "data": {"groups": groups}}) + "\n"
+
+
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
 CHECK_RUN_FIELD_SEPARATOR = "\x1f"
