@@ -55,7 +55,7 @@ from songmaker_cli.scheduler import (  # noqa: E402
     WorkerGpuOutOfMemory,
 )
 
-pytest_plugins = ["redis_server", "oidc_world", "fake_acestep_child"]
+pytest_plugins = ["redis_server", "oidc_world", "fake_acestep_child", "admin_client_fixture"]
 
 TEST_CLIENT_SECRET = "test-client-secret"
 
