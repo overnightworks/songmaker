@@ -1,8 +1,0 @@
-claim_id = "e2d6639536b344e4a8f18230e55152ae"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "5200debde6fee34403af9c3460fbe2353c11c072"
-branch = "claude/issue-1957-webauth-0-24-sign-in-routes"
-scope = ["docs/architecture.md", "docs/security.md", "docs/testing.md", "pyproject.toml", "scripts/dead-symbols.allow", "scripts/generate_types.py", "src/songmaker_cli/auth_api.py", "src/songmaker_cli/auth_stores.py", "src/songmaker_cli/request_policies.py", "src/songmaker_cli/server.py", "tests/test_app_context.py", "tests/test_auth_write_lock_postgres.py", "tests/test_backchannel_logout.py", "tests/test_oidc_sign_in.py", "uv.lock"]
-opened_commit = "acd16ed0625f13261cc9314c96c64a4230767414"
-whole_reason = "The library's routes and songmaker's own cannot both be mounted, and the policies, scripts, tests and docs must name the same paths and owners in the same landing."
