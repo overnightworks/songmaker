@@ -129,7 +129,9 @@ describe('the version reference', () => {
 
 	it('is saved by its key, and null clears it', async () => {
 		const { updateSong } = await import('$lib/api/client');
-		vi.mocked(updateSong).mockResolvedValue(makeSong({ ...songDefaults, id: 's1' }));
+		vi.mocked(updateSong)
+			.mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }))
+			.mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
 		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
 		setDraftReference(reference);
 		await handleSave('s1');
