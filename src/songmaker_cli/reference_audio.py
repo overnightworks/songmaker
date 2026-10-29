@@ -11,6 +11,7 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Final
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from songmaker_cli.api_helpers import _begin_exclusive
@@ -205,11 +206,12 @@ def store_reference_audio(
                 return _record_reference(
                     session, directory, audio_dir, user_id, name, original_filename, len(content),
                 )
-        except OSError as exc:
-            kind = (
-                str(exc)
-                if isinstance(exc, ReferenceAudioStorageError)
-                else f"{entry_kind}: {type(exc).__name__}"
-            )
+        except (OSError, SQLAlchemyError) as exc:
+            if isinstance(exc, ReferenceAudioStorageError):
+                kind = str(exc)
+            elif isinstance(exc, SQLAlchemyError):
+                kind = f"database: {type(exc).__name__}"
+            else:
+                kind = f"{entry_kind}: {type(exc).__name__}"
             log.error("Reference audio storage refused for user %s: %s", user_id, kind)
             raise ReferenceAudioStorageError(REFERENCE_AUDIO_STORAGE_DETAIL) from exc

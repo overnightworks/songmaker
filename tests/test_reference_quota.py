@@ -17,7 +17,6 @@ from fastapi import UploadFile
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from support.web_app import make_authenticated_user, make_router_app, make_router_ctx
 
@@ -26,6 +25,7 @@ from songmaker_cli.db.queries.reference_recordings import create_reference_recor
 from songmaker_cli.generation_api import api_upload_reference_audio
 from songmaker_cli.reference_audio import (
     ReferenceAudioQuotaExceeded,
+    ReferenceAudioStorageError,
     owner_reference_audio_root,
     store_reference_audio,
 )
@@ -258,9 +258,9 @@ def test_postgresql_reference_admission_is_atomic(
                             time.sleep(0.01)
                     assert not second.done()
                 else:
-                    # SQLite exposes exhausted busy waiting as SQLITE_BUSY, not a lock catalog.
-                    with pytest.raises(OperationalError, match="database is locked"):
+                    with pytest.raises(ReferenceAudioStorageError) as refused:
                         second.result(timeout=5)
+                    assert "database is locked" in str(refused.value.__cause__)
                 assert not _files(ctx)
             finally:
                 release.set()
