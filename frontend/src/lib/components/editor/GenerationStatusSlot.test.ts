@@ -1,28 +1,28 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import {
 	clearHitboxStyles,
 	clearPointer,
 	injectHitboxStyles,
 	minSquarePx,
 	setPointer
-} from '$lib/test-utils/hitbox';
-import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL, HITBOX_FREQUENT_PX } from '$lib/constants';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { failed, queued, running } from '$lib/test-utils/generate-states';
+} from '#lib/test-utils/hitbox.ts';
+import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL, HITBOX_FREQUENT_PX } from '#lib/constants.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
+import { failed, queued, running } from '#lib/test-utils/generate-states.ts';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
 	return writable<GenerateState>({ kind: 'idle' });
 });
-vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/generateAction.ts')>()),
 	generateAction: action,
 	cancelGeneration: vi.fn()
 }));
 
-import { cancelGeneration, type GenerateState } from '$lib/stores/generateAction';
+import { cancelGeneration, type GenerateState } from '#lib/stores/generateAction.ts';
 import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 import generationStatusSlotSource from './GenerationStatusSlot.svelte?raw';
 

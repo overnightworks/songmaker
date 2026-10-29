@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { currentUser } from '$lib/stores/auth';
-import { makeGeneration, makeSong } from '$lib/test-utils/factories';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { currentUser } from '#lib/stores/auth.ts';
+import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
 import {
 	followPlaybackForResume,
 	forgetPlaybackResume,

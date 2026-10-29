@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
-import type { GenerationItem } from '$lib/api/types';
-import { takeVersion, type TakeVersion } from '$lib/constants/now-playing';
-import { selectedSongId } from '$lib/stores/player';
+import type { GenerationItem } from '#lib/api/types.ts';
+import { takeVersion, type TakeVersion } from '#lib/constants/now-playing.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
 
 type TakeGroupKey = `v${number}` | 'imported';
 

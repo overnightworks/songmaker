@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
-	import type { TransportButtonFace } from '$lib/services/audioPlayer.svelte';
+	import type { TransportButtonFace } from '#lib/services/audioPlayer.svelte.ts';
 
 	interface Props {
 		/** The face `transportButtonFace` chose for the transport this button acts on. */

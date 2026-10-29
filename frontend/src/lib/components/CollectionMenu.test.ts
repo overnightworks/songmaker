@@ -1,9 +1,9 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ShareResult } from '$lib/api/types';
-import { COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
-import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
+import type { ShareResult } from '#lib/api/types.ts';
+import { COLLECTION_MENU_RENAME_LABEL } from '#lib/constants.ts';
+import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import CollectionMenu from './CollectionMenu.svelte';
 import { openCollectionMenu } from './shell/rail-test-fixtures';
 

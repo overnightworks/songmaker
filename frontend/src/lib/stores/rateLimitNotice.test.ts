@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 
-import { RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
-import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
-import { dismissToast, toasts } from '$lib/stores/toast';
+import { RATE_LIMITED_TOAST_MESSAGE } from '#lib/constants.ts';
+import { notifyRateLimited } from '#lib/stores/rateLimitNotice.ts';
+import { dismissToast, toasts } from '#lib/stores/toast.ts';
 
 describe('the throttle notice', () => {
 	function throttleToasts() {

@@ -6,7 +6,7 @@ const VRAM_CAUSE =
 
 const mockRequestSongRefresh = vi.fn();
 
-vi.mock('$lib/stores/resourceSync', () => ({
+vi.mock('#lib/stores/resourceSync.ts', () => ({
 	requestSongRefresh: (...args: unknown[]) => mockRequestSongRefresh(...args)
 }));
 
@@ -14,7 +14,7 @@ const mockFetchLastFailedGeneration = vi.fn();
 const mockFetchActiveGeneration = vi.fn();
 const mockFetchJob = vi.fn();
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchActiveGeneration: (...args: unknown[]) => mockFetchActiveGeneration(...args),
 	fetchJob: (...args: unknown[]) => mockFetchJob(...args),
 	fetchLastFailedGeneration: (...args: unknown[]) => mockFetchLastFailedGeneration(...args)
@@ -33,8 +33,8 @@ import {
 } from './jobs';
 import { toasts } from './toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
-import type { JobStatus } from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import type { JobStatus } from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
@@ -42,7 +42,7 @@ import {
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
-} from '$lib/constants';
+} from '#lib/constants.ts';
 
 // Jitter only adds to the exponential delay (never subtracts, see
 // `sseReconnect.ts`), so a delay at the backoff ceiling can run up to

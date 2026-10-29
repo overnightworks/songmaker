@@ -9,7 +9,7 @@ import {
 	stackedLayers,
 	type Layer,
 	type LayerHistory
-} from '$lib/stores/layers';
+} from '#lib/stores/layers.ts';
 
 // The one owner of the tab's history (issue #1006, ruling of 01.10.2026): only
 // this module writes or traverses history. Every entry it writes carries an

@@ -1,9 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WhisperCue } from '$lib/api/types';
-import { TRANSPORT_PLAY_LABEL } from '$lib/constants';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import type { WhisperCue } from '#lib/api/types.ts';
+import { TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-gen' } } }));
 

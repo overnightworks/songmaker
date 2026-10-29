@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatTime } from '$lib/utils/format';
+	import { formatTime } from '#lib/utils/format.ts';
 
 	const TICK_MS = 1000;
 

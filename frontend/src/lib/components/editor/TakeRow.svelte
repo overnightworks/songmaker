@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { flushSync } from 'svelte';
-	import type { SongItem, GenerationItem, UserLoraItem } from '$lib/api/types';
-	import type { SourceMode } from '$lib/stores/recipe';
+	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
+	import type { SourceMode } from '#lib/stores/recipe.ts';
 	import {
 		EXPIRY_WARN_DAYS,
 		TAKE_ARCHIVED_TITLE,
@@ -11,28 +11,31 @@
 		TAKE_PICK_LABEL,
 		TAKE_UNKEEP_LABEL,
 		TAKE_RESCORING_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		nowPlayingTakeLabel,
 		takeBatchReductionLabel,
 		takeRowLabel,
 		TAKE_SELECT_LABEL,
 		NOW_PLAYING_UNPICK_LABEL
-	} from '$lib/constants/now-playing';
-	import { playTake, playTakeAndShowNowPlaying } from '$lib/stores/player';
-	import { rescoringTakeIds } from '$lib/stores/takeActions';
+	} from '#lib/constants/now-playing.ts';
+	import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
+	import { rescoringTakeIds } from '#lib/stores/takeActions.ts';
 	import {
 		audioPlayer,
 		transportButtonFace,
 		transportButtonLabel,
 		transportIsBusy
-	} from '$lib/services/audioPlayer.svelte';
-	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '$lib/utils/scores';
-	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
-	import { selectionMode, selectedIds, toggleSelection } from '$lib/stores/selection';
-	import { revealTakeGroup, takeGroupKey } from '$lib/stores/takeFolds';
-	import { followPlainClick, jumpToTake } from '$lib/stores/navigation';
-	import { formatTime } from '$lib/utils/format';
+	} from '#lib/services/audioPlayer.svelte.ts';
+	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '#lib/utils/scores.ts';
+	import {
+		getGenerationActions,
+		type GenerationActions
+	} from '#lib/contexts/generation-actions.ts';
+	import { selectionMode, selectedIds, toggleSelection } from '#lib/stores/selection.ts';
+	import { revealTakeGroup, takeGroupKey } from '#lib/stores/takeFolds.ts';
+	import { followPlainClick, jumpToTake } from '#lib/stores/navigation.ts';
+	import { formatTime } from '#lib/utils/format.ts';
 	import Icon from '../Icon.svelte';
 	import TransportButtonIcon from '../TransportButtonIcon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';

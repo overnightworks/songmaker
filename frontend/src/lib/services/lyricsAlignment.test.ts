@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WhisperCue } from '$lib/api/types';
+import type { WhisperCue } from '#lib/api/types.ts';
 import { stateProxy } from '../../tests/reactive-fixtures.svelte';
-import { alignLyricsToCues, type AlignedLyricLine } from '$lib/utils/lyrics-align';
+import { alignLyricsToCues, type AlignedLyricLine } from '#lib/utils/lyrics-align.ts';
 import type { AlignmentRequest, AlignmentResult } from './lyricsAlignment.svelte';
 
 const LYRICS = ['the lantern hums quietly tonight', 'we count the fading city lights'].join('\n');

@@ -1,9 +1,9 @@
 import { writable, get } from 'svelte/store';
-import type { GenerationItem } from '$lib/api/types';
-import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
-import { RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
-import { takeUseSeedToast } from '$lib/constants/take-task';
-import { addToast } from '$lib/stores/toast';
+import type { GenerationItem } from '#lib/api/types.ts';
+import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '#lib/constants.ts';
+import { RECIPE_TAKES_STANDARD } from '#lib/constants/recipe.ts';
+import { takeUseSeedToast } from '#lib/constants/take-task.ts';
+import { addToast } from '#lib/stores/toast.ts';
 
 export type SourceMode = 'repaint' | 'cover';
 export type RepaintMode = 'conservative' | 'balanced' | 'aggressive';

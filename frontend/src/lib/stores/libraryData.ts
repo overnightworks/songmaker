@@ -1,12 +1,12 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
-import { describeFailure, NetworkError } from '$lib/api/fetch';
-import { fetchAlbums, fetchSongs } from '$lib/api/client';
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
+import { fetchAlbums, fetchSongs } from '#lib/api/client.ts';
+import type { AlbumItem, GenerationItem, SongItem } from '#lib/api/types.ts';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE,
 	RAIL_LIBRARY_LOAD_ERROR
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import { reloadWhileUnreachable } from './connectivity';
 import { forgetWritten, restoreWritten } from './libraryWrite';
 

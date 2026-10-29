@@ -4,7 +4,7 @@ import {
 	makePlaylistDetail as makeDetail,
 	makePlaylistEntry,
 	makeSong
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
@@ -15,24 +15,24 @@ import type {
 	PlaylistDetailItem,
 	PlaylistEntryItem,
 	SongItem
-} from '$lib/api/types';
-import type { PlaybackInfo } from '$lib/services/playbackTypes';
+} from '#lib/api/types.ts';
+import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import {
 	fetchLastFailedGeneration,
 	fetchLibraryPoolQueue,
 	fetchPlaylist,
 	fetchSong,
 	fetchSongs
-} from '$lib/api/client';
-import { toasts } from '$lib/stores/toast';
+} from '#lib/api/client.ts';
+import { toasts } from '#lib/stores/toast.ts';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST
-} from '$lib/constants';
+} from '#lib/constants.ts';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 const lockScreen = vi.hoisted(() => ({
 	handlers: null as { play: () => void; pause: () => void } | null
@@ -52,8 +52,8 @@ function pressLockScreenPlay(): void {
 	lockScreenActions().play();
 }
 
-vi.mock('$lib/services/mediaSession', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/services/mediaSession')>();
+vi.mock('#lib/services/mediaSession.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/services/mediaSession.ts')>();
 	return {
 		...actual,
 		setupMediaSessionHandlers: (
@@ -64,7 +64,7 @@ vi.mock('$lib/services/mediaSession', async (importOriginal) => {
 		}
 	};
 });
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchLibraryPoolQueue: vi.fn(),
 	fetchPlaylist: vi.fn(),
 	fetchSong: vi.fn(),
@@ -77,7 +77,7 @@ vi.mock('$lib/api/client', () => ({
 	}),
 	fetchLastFailedGeneration: vi.fn()
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	recordSongListen: vi.fn().mockResolvedValue(undefined)
 }));
 import { albumList, songList, upsertSongInList } from './libraryData';
@@ -142,32 +142,35 @@ import {
 	audioPlayer,
 	RECOVERY_DEADLINE_MS,
 	transportOffersPause
-} from '$lib/services/audioPlayer.svelte';
-import { recordSongListen } from '$lib/api/songs';
-import { SharePlayback } from '$lib/share/sharePlayback.svelte';
-import { fromSharedSong, type SharedCollectionView } from '$lib/share/sharedCollection';
-import { currentUser } from '$lib/stores/auth';
+} from '#lib/services/audioPlayer.svelte.ts';
+import { recordSongListen } from '#lib/api/songs.ts';
+import { SharePlayback } from '#lib/share/sharePlayback.svelte.ts';
+import { fromSharedSong, type SharedCollectionView } from '#lib/share/sharedCollection.ts';
+import { currentUser } from '#lib/stores/auth.ts';
 import {
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
-} from '$lib/history/historyController';
-import { documentLoads } from '$lib/test-utils/document-loads';
-import type { ResumeQueueSource } from '$lib/stores/playbackResume';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+} from '#lib/history/historyController.ts';
+import { documentLoads } from '#lib/test-utils/document-loads.ts';
+import type { ResumeQueueSource } from '#lib/stores/playbackResume.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
 import {
 	libraryTakePool,
 	setDesktopNowPlayingSurface,
 	setLibraryTakePool,
 	type LibraryTakePool
-} from '$lib/stores/playbackSettings';
+} from '#lib/stores/playbackSettings.ts';
 import {
 	loadPlaylistDetail,
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
-} from '$lib/stores/playlists';
-import { openCollection } from '$lib/stores/collection';
-import { PLAYLIST_LOADING_LABEL, LIBRARY_PAGE_LABEL } from '$lib/constants';
+} from '#lib/stores/playlists.ts';
+import { openCollection } from '#lib/stores/collection.ts';
+import { PLAYLIST_LOADING_LABEL, LIBRARY_PAGE_LABEL } from '#lib/constants.ts';
 
 const genDefaults = {
 	mp3_path: 'a1/song_v1.mp3',
@@ -307,7 +310,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetConnectivityForTests();
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now: the
-	// module-level vi.fn() stubs from the vi.mock('$lib/api/client', ...)
+	// module-level vi.fn() stubs from the vi.mock('#lib/api/client.ts', ...)
 	// factory above need an explicit clear or their call history from one
 	// test leaks a "was it called" assertion into the next.
 	vi.clearAllMocks();

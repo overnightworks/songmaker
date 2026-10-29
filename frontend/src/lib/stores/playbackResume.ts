@@ -1,10 +1,10 @@
 import { untrack } from 'svelte';
 import { get, toStore } from 'svelte/store';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import type { PlaybackInfo } from '$lib/services/playbackTypes';
-import { currentUser } from '$lib/stores/auth';
-import { LIBRARY_TAKE_POOLS, type LibraryTakePool } from '$lib/stores/playbackSettings';
-import { readStorage, removeStorage, writeStorage } from '$lib/utils/storage';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
+import { currentUser } from '#lib/stores/auth.ts';
+import { LIBRARY_TAKE_POOLS, type LibraryTakePool } from '#lib/stores/playbackSettings.ts';
+import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts';
 
 // What the app was playing, kept per user on this device, so that reopening
 // a page Android killed can show the same take at the same position (#1187

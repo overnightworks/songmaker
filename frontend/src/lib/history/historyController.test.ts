@@ -24,16 +24,16 @@ import {
 	stepBackOrGoTo,
 	stepBackTo,
 	type HistoryEntry
-} from '$lib/history/historyController';
-import { holdLayer, resetLayersForTests, stackedLayers } from '$lib/stores/layers';
+} from '#lib/history/historyController.ts';
+import { holdLayer, resetLayersForTests, stackedLayers } from '#lib/stores/layers.ts';
 import {
 	fakePage,
 	followBeforeNavigate,
 	holdRouteLoads,
 	reportedNavigations,
 	startFakeRouter
-} from '$lib/test-utils/app-navigation';
-import { pressBack, watchBack } from '$lib/test-utils/library-history';
+} from '#lib/test-utils/app-navigation.ts';
+import { pressBack, watchBack } from '#lib/test-utils/library-history.ts';
 
 type Ledger = Parameters<typeof land>[0];
 type Landing = ReturnType<typeof land>;
@@ -355,7 +355,7 @@ describe('history adapter', () => {
 			});
 			vi.resetModules();
 
-			const loaded = await import('$lib/history/historyController');
+			const loaded = await import('#lib/history/historyController.ts');
 			const pushed = ['/album/a', '/album/b'].map((url) => loaded.pushEntry(url, {}).id);
 
 			expect(pushed).toEqual(ids);

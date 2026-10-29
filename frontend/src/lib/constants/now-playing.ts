@@ -1,5 +1,5 @@
-import type { GenerationParams } from '$lib/api/types';
-import { formatTime } from '$lib/utils/format';
+import type { GenerationParams } from '#lib/api/types.ts';
+import { formatTime } from '#lib/utils/format.ts';
 
 // Now Playing copy and layout constants (issue #101). Kept separate from
 // lib/constants.ts, which #100 owns for the same landing window — see the

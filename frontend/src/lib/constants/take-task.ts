@@ -1,5 +1,5 @@
-import type { RepaintMode } from '$lib/stores/recipe';
-import { formatTime } from '$lib/utils/format';
+import type { RepaintMode } from '#lib/stores/recipe.ts';
+import { formatTime } from '#lib/utils/format.ts';
 
 // The task card under a take (Repaint, Cover): copy not shared with the recipe.
 export const TAKE_TASK_CLOSE_LABEL = 'Close';

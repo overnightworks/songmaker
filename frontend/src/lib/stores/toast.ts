@@ -1,7 +1,7 @@
 import { get, writable, type Readable } from 'svelte/store';
 
-import { NetworkError } from '$lib/api/fetch';
-import { offline, whenBackOnline } from '$lib/stores/connectivity';
+import { NetworkError } from '#lib/api/fetch.ts';
+import { offline, whenBackOnline } from '#lib/stores/connectivity.ts';
 
 const TOAST_DURATION_MS = 5000;
 

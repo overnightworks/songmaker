@@ -5,10 +5,10 @@ import {
 	fetchActiveModels,
 	fetchGenerationDefaults,
 	uploadReferenceAudio
-} from '$lib/api/client';
+} from '#lib/api/client.ts';
 import { goto } from '$app/navigation';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import type { PresetItem } from '$lib/api/types';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import type { PresetItem } from '#lib/api/types.ts';
 import {
 	activeModels,
 	activeModelsError,
@@ -16,27 +16,27 @@ import {
 	builtinDefaults,
 	generationDefaultsError,
 	presets
-} from '$lib/stores/presets';
-import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
-import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { recipeModel } from '$lib/stores/recipe';
-import { makeSong } from '$lib/test-utils/factories';
+} from '#lib/stores/presets.ts';
+import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
+import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
+import { recipeModel } from '#lib/stores/recipe.ts';
+import { makeSong } from '#lib/test-utils/factories.ts';
 import { get } from 'svelte/store';
-import { loras } from '$lib/stores/loras';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import type { RecipeStandard, RecipeValues } from '$lib/utils/recipe-standard';
+import { loras } from '#lib/stores/loras.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import type { RecipeStandard, RecipeValues } from '#lib/utils/recipe-standard.ts';
 import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
 import RecipeTabs from './RecipeTabs.svelte';
 
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchActiveModels: vi.fn().mockResolvedValue([{ id: 'turbo', is_active: true }]),
 	fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
 	fetchVersions: vi.fn().mockResolvedValue([]),
 	uploadReferenceAudio: vi.fn(),
 	createPreset: vi.fn()
 }));
-vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
+vi.mock('#lib/api/loras.ts', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 
 const modelStandard: RecipeStandard = {
 	model: 'turbo',

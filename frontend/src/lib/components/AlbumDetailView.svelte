@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { CoverSuggestionDiscard } from '$lib/api/albums';
+	import type { CoverSuggestionDiscard } from '#lib/api/albums.ts';
 	import {
 		archiveAlbum,
 		deleteAlbum,
@@ -10,9 +10,9 @@
 		unshareAlbum,
 		updateAlbum,
 		uploadAlbumCover
-	} from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
-	import { fetchSongs } from '$lib/api/songs';
+	} from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { fetchSongs } from '#lib/api/songs.ts';
 	import {
 		albumList,
 		albumSongsLoad,
@@ -24,27 +24,27 @@
 		removeAlbumFromList,
 		removeSongsForAlbum,
 		updateAlbumInList
-	} from '$lib/stores/libraryData';
+	} from '#lib/stores/libraryData.ts';
 	import {
 		curateAlbum,
 		isSongCurrent,
 		playAlbum,
 		playAlbumSong,
 		selectedAlbumId
-	} from '$lib/stores/player';
-	import { selectSong } from '$lib/stores/navigation';
-	import { historyLayerState, holdOpenWhile } from '$lib/stores/layers';
-	import { setOpenCollection } from '$lib/stores/collection';
-	import { forgetListenedPlace, readRestoredPlace } from '$lib/stores/libraryOrder';
-	import { addToast, addUndoToast } from '$lib/stores/toast';
-	import { addAlbumToPlaylist } from '$lib/stores/playlists';
+	} from '#lib/stores/player.ts';
+	import { selectSong } from '#lib/stores/navigation.ts';
+	import { historyLayerState, holdOpenWhile } from '#lib/stores/layers.ts';
+	import { setOpenCollection } from '#lib/stores/collection.ts';
+	import { forgetListenedPlace, readRestoredPlace } from '#lib/stores/libraryOrder.ts';
+	import { addToast, addUndoToast } from '#lib/stores/toast.ts';
+	import { addAlbumToPlaylist } from '#lib/stores/playlists.ts';
 	import {
 		coverStanding,
 		discardCoverSuggestions,
 		knownAfterSave,
 		knownCoverSuggestions,
 		watchCoverActivity
-	} from '$lib/stores/coverActivity';
+	} from '#lib/stores/coverActivity.ts';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
@@ -58,11 +58,11 @@
 		LIBRARY_RETRY_LABEL,
 		NEW_SONG_ROW_LABEL,
 		PLACE_LINE_SEPARATOR
-	} from '$lib/constants';
-	import { titleInitials } from '$lib/utils/format';
-	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '$lib/utils/playable';
-	import type { SongItem } from '$lib/api/types';
-	import { usableAlbumPrimary } from '$lib/utils/contrast';
+	} from '#lib/constants.ts';
+	import { titleInitials } from '#lib/utils/format.ts';
+	import { albumHasPlayableTake, albumSongsSettled, songPlayability } from '#lib/utils/playable.ts';
+	import type { SongItem } from '#lib/api/types.ts';
+	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
 	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';

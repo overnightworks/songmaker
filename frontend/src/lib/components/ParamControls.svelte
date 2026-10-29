@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { VersionGenerationParams } from '$lib/api/types';
+	import type { VersionGenerationParams } from '#lib/api/types.ts';
 	import {
 		DIT_BOOL_FIELDS,
 		DIT_NUMBER_FIELDS,
@@ -12,12 +12,12 @@
 		type NumberParamField,
 		type SelectParamField,
 		type TextParamField
-	} from '$lib/constants/acestep-param-fields';
-	import { ACESTEP_PARAM_DESCRIPTIONS } from '$lib/constants/acestep-params';
-	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { addToast } from '$lib/stores/toast';
-	import { RECIPE_ENGINE_RESET_TITLE, RECIPE_RESET_GLYPH } from '$lib/constants/recipe';
+	} from '#lib/constants/acestep-param-fields.ts';
+	import { ACESTEP_PARAM_DESCRIPTIONS } from '#lib/constants/acestep-params.ts';
+	import { ensureCompactUiStyles } from '#lib/styles/compact-ui.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { RECIPE_ENGINE_RESET_TITLE, RECIPE_RESET_GLYPH } from '#lib/constants/recipe.ts';
 
 	interface Props {
 		values: VersionGenerationParams;

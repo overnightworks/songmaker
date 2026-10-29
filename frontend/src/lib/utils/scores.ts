@@ -1,4 +1,4 @@
-import type { GenerationItem, TrackScores } from '$lib/api/types';
+import type { GenerationItem, TrackScores } from '#lib/api/types.ts';
 
 interface ScoreThreshold {
 	good: number;

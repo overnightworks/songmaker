@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { collectionActionLabel, type CollectionPlayKind } from '$lib/constants';
+	import { collectionActionLabel, type CollectionPlayKind } from '#lib/constants.ts';
 	import CoverActivityMark, { type CoverMark } from './CoverActivityMark.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import {
@@ -8,7 +8,7 @@
 		transportButtonLabel,
 		transportIsBusy,
 		type TransportState
-	} from '$lib/services/audioPlayer.svelte';
+	} from '#lib/services/audioPlayer.svelte.ts';
 
 	interface Props {
 		coverUrl: string | null;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { filterMentionItems, mentionQueryAtCursor, replaceMentionToken } from './mentions';
-import type { SongItem, VersionItem } from '$lib/api/types';
+import type { SongItem, VersionItem } from '#lib/api/types.ts';
 
 const songs = [
 	{ id: 's1', title: 'Thunder', album_id: 'a1', album_title: 'Rock' },

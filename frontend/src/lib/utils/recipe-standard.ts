@@ -1,5 +1,5 @@
-import type { VersionGenerationParams } from '$lib/api/types';
-import { RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
+import type { VersionGenerationParams } from '#lib/api/types.ts';
+import { RECIPE_TAKES_STANDARD } from '#lib/constants/recipe.ts';
 // The one owner of "this recipe field differs from its standard". The
 // standard is the model default for every field, never the saved version, so
 // saving does not clear a mark. Pure: surfaces read it, nothing else decides.

@@ -1,8 +1,8 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { detailTab, type DetailTab } from '$lib/stores/navigation';
-import { makeSong } from '$lib/test-utils/factories';
+import { detailTab, type DetailTab } from '#lib/stores/navigation.ts';
+import { makeSong } from '#lib/test-utils/factories.ts';
 import ListenTabs from './ListenTabs.svelte';
 import listenTabsSource from './ListenTabs.svelte?raw';
 

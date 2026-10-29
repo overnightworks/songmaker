@@ -1,6 +1,6 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
 import MenuPopover from './MenuPopover.svelte';
 
 const PANEL_WIDTH = 220;

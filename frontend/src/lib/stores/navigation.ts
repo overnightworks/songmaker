@@ -1,9 +1,9 @@
-import { listOfPage, SETTINGS_HREF } from '$lib/routes/pageBack';
+import { listOfPage, SETTINGS_HREF } from '#lib/routes/pageBack.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { get, writable } from 'svelte/store';
-import { layerSwitch, resetLayersForTests } from '$lib/stores/layers';
-import { fetchAlbum } from '$lib/api/albums';
+import { layerSwitch, resetLayersForTests } from '#lib/stores/layers.ts';
+import { fetchAlbum } from '#lib/api/albums.ts';
 import {
 	historyComesToRest,
 	attachLandingHandler,
@@ -12,12 +12,12 @@ import {
 	stepBackOr,
 	stepBackOrGoTo,
 	type Landing
-} from '$lib/history/historyController';
-import { describeFailure, isNotFound } from '$lib/api/fetch';
-import { draftHasUnversionedChanges, pendingVersionLoad } from '$lib/stores/editor';
-import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/jobs';
-import { addToast } from '$lib/stores/toast';
-import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
+} from '#lib/history/historyController.ts';
+import { describeFailure, isNotFound } from '#lib/api/fetch.ts';
+import { draftHasUnversionedChanges, pendingVersionLoad } from '#lib/stores/editor.ts';
+import { hydrateActiveGeneration, hydrateGenerationFailure } from '#lib/stores/jobs.ts';
+import { addToast } from '#lib/stores/toast.ts';
+import { albumList, loadSongsForAlbum, songList } from '#lib/stores/libraryData.ts';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -27,28 +27,28 @@ import {
 	ensureGenerationsLoaded,
 	escapeNowPlaying,
 	nowPlayingFullChosen
-} from '$lib/stores/player';
+} from '#lib/stores/player.ts';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
 	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
 	selectedPlaylist
-} from '$lib/stores/playlists';
-import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
-import type { PlaylistItem, SongItem } from '$lib/api/types';
-import type { RailSearchTarget } from '$lib/stores/railSearch';
+} from '#lib/stores/playlists.ts';
+import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
+import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
+import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
 import {
 	ADMIN_WORKER_POOL_HREF,
 	API_ERROR_GENERIC_MESSAGE,
 	SONG_LINK_NOT_FOUND_TOAST
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	isPlaylistRoutePath,
 	isSongRoutePath,
 	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	PLAYLISTS_ROUTE_PATH
-} from '$lib/routes/addresses';
+} from '#lib/routes/addresses.ts';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
@@ -70,7 +70,7 @@ import {
 	snapshotLibraryHistory,
 	writeLibraryHistory,
 	type DetailTab
-} from '$lib/stores/libraryContext';
+} from '#lib/stores/libraryContext.ts';
 
 export type { DetailTab };
 export { detailTab };

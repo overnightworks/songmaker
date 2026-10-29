@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { WorkerInfoItem } from '$lib/api/types';
+	import type { WorkerInfoItem } from '#lib/api/types.ts';
 	import {
 		WORKER_POOL_VRAM_LABEL,
 		WORKER_POOL_VRAM_OFFLINE,
@@ -10,7 +10,7 @@
 		WORKER_POOL_VRAM_NO_HEARTBEAT,
 		WORKER_POOL_VRAM_NO_FIELDS,
 		WORKER_POOL_VRAM_NO_TOTAL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 
 	let { state, offline }: { state: WorkerInfoItem['state']; offline: boolean } = $props();
 	const used = $derived(state?.vram_used_gb);

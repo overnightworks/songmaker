@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SongItem, VersionItem } from '$lib/api/types';
+	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 
 	type MentionItem =
 		{ type: 'album' } | { type: 'version'; item: VersionItem } | { type: 'song'; item: SongItem };

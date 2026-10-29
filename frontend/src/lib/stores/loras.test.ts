@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { NetworkError } from '$lib/api/fetch';
+import { NetworkError } from '#lib/api/fetch.ts';
 
 const mockListLoras = vi.fn();
 const mockGetLora = vi.fn();
@@ -8,7 +8,7 @@ const mockCreateLora = vi.fn();
 const mockSoftDelete = vi.fn();
 const mockTrainLora = vi.fn();
 
-vi.mock('$lib/api/loras', () => ({
+vi.mock('#lib/api/loras.ts', () => ({
 	listLoras: (...a: unknown[]) => mockListLoras(...a),
 	getLora: (...a: unknown[]) => mockGetLora(...a),
 	createLora: (...a: unknown[]) => mockCreateLora(...a),

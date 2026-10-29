@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { QueueStreamManifest } from '$lib/api/types';
+import type { QueueStreamManifest } from '#lib/api/types.ts';
 import { QueueStreamEngine } from './queueStreamEngine';
 
 function manifest(windowed: boolean): QueueStreamManifest {

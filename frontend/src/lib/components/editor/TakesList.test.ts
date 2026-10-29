@@ -1,9 +1,9 @@
-import { failed } from '$lib/test-utils/generate-states';
-import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
+import { failed } from '#lib/test-utils/generate-states.ts';
+import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GenerationItem, SongItem } from '$lib/api/types';
-import type { GenerationActions } from '$lib/contexts/generation-actions';
+import type { GenerationItem, SongItem } from '#lib/api/types.ts';
+import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
 import {
 	HITBOX_FREQUENT_PX,
 	TAKE_ARCHIVED_TITLE,
@@ -14,23 +14,23 @@ import {
 	TAKES_LOADING,
 	TAKES_MOBILE_HINT,
 	TAKES_RETRY_LABEL
-} from '$lib/constants';
-import { menuRow } from '$lib/test-utils/collection-menu';
+} from '#lib/constants.ts';
+import { menuRow } from '#lib/test-utils/collection-menu.ts';
 import {
 	clearHitboxStyles,
 	clearPointer,
 	injectHitboxStyles,
 	minSquarePx,
 	setPointer
-} from '$lib/test-utils/hitbox';
+} from '#lib/test-utils/hitbox.ts';
 import {
 	currentVersionHeadLabel,
 	foldedGroupLabel,
 	openVersionLabel
-} from '$lib/constants/now-playing';
-import { selectedSongId } from '$lib/stores/player';
+} from '#lib/constants/now-playing.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
 import { get } from 'svelte/store';
-import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
+import { clearSelection, selectedIds, toggleSelection } from '#lib/stores/selection.ts';
 
 function enterSelectionMode(id = 'g1'): void {
 	toggleSelection(id);
@@ -52,8 +52,8 @@ function stubCoarsePointer(isCoarse: boolean): void {
 	);
 }
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		bulkDeleteGenerations: vi.fn(),
@@ -63,21 +63,21 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 const generateState = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
 	return writable<GenerateState>({ kind: 'idle' });
 });
-vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/generateAction.ts')>()),
 	generateAction: generateState
 }));
-vi.mock('$lib/stores/navigation', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/navigation.ts')>();
 	return { ...actual, persistLibraryHistory: vi.fn() };
 });
-vi.mock('$lib/stores/player', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/player')>();
+vi.mock('#lib/stores/player.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/player.ts')>();
 	return {
 		...actual,
 		playTake: vi.fn(async () => undefined),
@@ -85,16 +85,16 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	};
 });
 
-import { addToast } from '$lib/stores/toast';
-import { bulkDeleteGenerations } from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import type { GenerateState } from '$lib/stores/generateAction';
-import { activeJobs, generationFailures } from '$lib/stores/jobs';
-import { playTake, playTakeAndShowNowPlaying } from '$lib/stores/player';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { playlistList, playlistLoad } from '$lib/stores/playlists';
+import { addToast } from '#lib/stores/toast.ts';
+import { bulkDeleteGenerations } from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import type { GenerateState } from '#lib/stores/generateAction.ts';
+import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
+import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import TakesListHarness from './tests/TakesListHarness.svelte';
-import { shownTransportFace } from '$lib/test-utils/transport-face';
+import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
 
 function measuredTakeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { audio_duration: 195 }, audio_duration_sec: 195 };
@@ -180,8 +180,8 @@ function clickMenuItem(root: ParentNode, label: string): void {
 	menuRow(root, label).click();
 }
 
-vi.mock('$lib/stores/playlists', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/playlists')>();
+vi.mock('#lib/stores/playlists.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/playlists.ts')>();
 	return { ...actual, ensurePlaylistsLoaded: vi.fn(async () => undefined) };
 });
 

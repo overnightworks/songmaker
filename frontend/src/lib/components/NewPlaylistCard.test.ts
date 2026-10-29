@@ -1,35 +1,35 @@
-import { makePlaylist as playlist } from '$lib/test-utils/factories';
+import { makePlaylist as playlist } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
-import { addToast } from '$lib/stores/toast';
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
+import { addToast } from '#lib/stores/toast.ts';
+import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 import {
 	captureUnhandledRejections,
 	createButton,
 	createSettled,
 	field,
 	type
-} from '$lib/test-utils/new-place-card';
+} from '#lib/test-utils/new-place-card.ts';
 
 const createPlaylist = vi.fn();
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	createPlaylist: (...args: unknown[]) => createPlaylist(...args),
 	fetchPlaylists: vi.fn().mockResolvedValue([]),
 	fetchPlaylist: vi.fn().mockResolvedValue({ ...ROAD_TRIP, entries: [] })
 }));
-vi.mock('$lib/api/songs', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
+vi.mock('#lib/api/songs.ts', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
 
 import NewPlaylistCard from './NewPlaylistCard.svelte';
 

@@ -1,25 +1,25 @@
-import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
+import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { resetCollectionForTests } from '$lib/stores/collection';
-import { detailTab } from '$lib/stores/libraryContext';
-import { songList } from '$lib/stores/libraryData';
-import { selectedSongId } from '$lib/stores/player';
-import { toasts } from '$lib/stores/toast';
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
-import { createButton, createSettled, field, type } from '$lib/test-utils/new-place-card';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { resetCollectionForTests } from '#lib/stores/collection.ts';
+import { detailTab } from '#lib/stores/libraryContext.ts';
+import { songList } from '#lib/stores/libraryData.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { toasts } from '#lib/stores/toast.ts';
+import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
+import { createButton, createSettled, field, type } from '#lib/test-utils/new-place-card.ts';
 
 const createSong = vi.fn();
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	createSong: (...args: unknown[]) => createSong(...args)
 }));
 

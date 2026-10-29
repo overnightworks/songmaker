@@ -5,7 +5,7 @@
 		MODELS_COLUMN_MODEL_LABEL,
 		MODELS_COLUMN_PROVIDER_LABEL,
 		MODELS_COLUMN_ROUTE_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 
 	interface Props {
 		task: string;

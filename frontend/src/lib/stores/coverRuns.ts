@@ -1,7 +1,7 @@
-import { discardAlbumCoverSuggestions, type CoverSuggestionDiscard } from '$lib/api/albums';
-import { ApiError } from '$lib/api/fetch';
-import { cancelJob } from '$lib/api/jobs';
-import { removeJob } from '$lib/stores/jobs';
+import { discardAlbumCoverSuggestions, type CoverSuggestionDiscard } from '#lib/api/albums.ts';
+import { ApiError } from '#lib/api/fetch.ts';
+import { cancelJob } from '#lib/api/jobs.ts';
+import { removeJob } from '#lib/stores/jobs.ts';
 
 const HTTP_CONFLICT = 409;
 

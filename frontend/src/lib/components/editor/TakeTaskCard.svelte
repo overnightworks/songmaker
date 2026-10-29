@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { GenerationItem } from '$lib/api/types';
-	import { TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '$lib/constants';
+	import type { GenerationItem } from '#lib/api/types.ts';
+	import { TAKE_COVER_LABEL, TAKE_REPAINT_LABEL } from '#lib/constants.ts';
 	import {
 		TAKE_TASK_CLOSE_LABEL,
 		TAKE_TASK_CLOSE_TITLE,
@@ -22,8 +22,8 @@
 		takeTaskLandingLabel,
 		takeTaskSeedLine,
 		takeTaskRepaintButtonLabel
-	} from '$lib/constants/take-task';
-	import { generateAction, isGenerateBusy, runSourceTask } from '$lib/stores/generateAction';
+	} from '#lib/constants/take-task.ts';
+	import { generateAction, isGenerateBusy, runSourceTask } from '#lib/stores/generateAction.ts';
 	import {
 		clearSource,
 		coverNoiseStrength,
@@ -35,8 +35,8 @@
 		seedFromTake,
 		sourceMode,
 		sourceTakeDurationSeconds
-	} from '$lib/stores/recipe';
-	import { formatTime } from '$lib/utils/format';
+	} from '#lib/stores/recipe.ts';
+	import { formatTime } from '#lib/utils/format.ts';
 	import Icon from '../Icon.svelte';
 	import WaveformRangePicker from '../WaveformRangePicker.svelte';
 

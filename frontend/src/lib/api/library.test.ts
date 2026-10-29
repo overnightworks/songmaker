@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
-import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
+import { LIBRARY_QUERY_REQUIRED } from '#lib/constants.ts';
 import {
 	fetchLibraryListen,
 	fetchLibraryPoolQueue,

@@ -1,6 +1,6 @@
 <script module lang="ts">
-	import type { ListenReadState } from '$lib/stores/libraryOrder';
-	import type { WriteReadState } from '$lib/stores/libraryWrite';
+	import type { ListenReadState } from '#lib/stores/libraryOrder.ts';
+	import type { WriteReadState } from '#lib/stores/libraryWrite.ts';
 	export type HomeListPhase = 'loading' | 'failed' | 'empty' | 'rows';
 
 	export function homeListPhase(
@@ -15,7 +15,7 @@
 
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { LIBRARY_RETRY_LABEL } from '$lib/constants';
+	import { LIBRARY_RETRY_LABEL } from '#lib/constants.ts';
 
 	type Props = {
 		label: string;

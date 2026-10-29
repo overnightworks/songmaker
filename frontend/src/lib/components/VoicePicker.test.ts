@@ -1,36 +1,36 @@
-import { makeSong } from '$lib/test-utils/factories';
+import { makeSong } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 const listLoras = vi.fn();
 
-vi.mock('$lib/api/songs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/songs')>()),
+vi.mock('#lib/api/songs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/songs.ts')>()),
 	fetchVersions: vi.fn().mockResolvedValue([])
 }));
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$lib/api/loras', () => ({
+vi.mock('#lib/api/loras.ts', () => ({
 	listLoras: (...args: unknown[]) => listLoras(...args)
 }));
 
 import { goto } from '$app/navigation';
-import type { UserLoraItem } from '$lib/api/types';
+import type { UserLoraItem } from '#lib/api/types.ts';
 import {
 	discardDraft,
 	loadSongData,
 	editGenParams,
 	setDraftGenParams,
 	setDraftLyrics
-} from '$lib/stores/editor';
-import { loras } from '$lib/stores/loras';
-import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { recipeModel } from '$lib/stores/recipe';
-import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+} from '#lib/stores/editor.ts';
+import { loras } from '#lib/stores/loras.ts';
+import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
+import { recipeModel } from '#lib/stores/recipe.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
+import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
 import VoicePicker from './VoicePicker.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;

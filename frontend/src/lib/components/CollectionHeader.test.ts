@@ -1,7 +1,7 @@
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import { get } from 'svelte/store';
 import {
@@ -9,10 +9,13 @@ import {
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_PAUSE_LABEL
-} from '$lib/constants';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { albumList, songList } from '$lib/stores/libraryData';
+} from '#lib/constants.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
 	queueContext,
 	setShuffle,
@@ -21,14 +24,14 @@ import {
 	playStartNotice,
 	pendingStart,
 	toggleOrStartCollection
-} from '$lib/stores/player';
-import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
-import { makeAlbum, makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+} from '#lib/stores/player.ts';
+import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { makeAlbum, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import CollectionHeader from './CollectionHeader.svelte';
 import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import { openCollectionMenu } from './shell/rail-test-fixtures';
-import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
+import { getByRoleButton, getByRoleHeading } from '#lib/test-utils/accessible-name.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 

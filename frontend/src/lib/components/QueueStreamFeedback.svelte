@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { QueueStreamSkipItem } from '$lib/api/types';
+	import type { QueueStreamSkipItem } from '#lib/api/types.ts';
 	import {
 		NOW_PLAYING_STREAM_CHECK_INCOMPLETE,
 		NOW_PLAYING_STREAM_ENDED,
@@ -9,7 +9,7 @@
 		NOW_PLAYING_STREAM_MORE_NOT_LOADED,
 		NOW_PLAYING_STREAM_SKIPPED_SUFFIX,
 		NOW_PLAYING_STREAM_UNREADABLE_FILE_SUFFIX
-	} from '$lib/constants/now-playing';
+	} from '#lib/constants/now-playing.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {

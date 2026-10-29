@@ -14,12 +14,12 @@ import {
 	installHistoryController,
 	replaceEntry,
 	resetHistoryControllerForTests
-} from '$lib/history/historyController';
-import { startFakeRouter } from '$lib/test-utils/app-navigation';
-import { standingHistoryEntry } from '$lib/test-utils/library-history';
+} from '#lib/history/historyController.ts';
+import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
+import { standingHistoryEntry } from '#lib/test-utils/library-history.ts';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
 interface Pending {

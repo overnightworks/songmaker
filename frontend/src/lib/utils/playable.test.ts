@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { makeAlbum, makeGeneration, makeSong } from '$lib/test-utils/factories';
-import type { GenerationItem } from '$lib/api/types';
-import type { AlbumSongsLoadStatus } from '$lib/stores/libraryData';
+import { makeAlbum, makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import type { GenerationItem } from '#lib/api/types.ts';
+import type { AlbumSongsLoadStatus } from '#lib/stores/libraryData.ts';
 import {
 	albumHasPlayableTake,
 	albumRowOffersPlay,

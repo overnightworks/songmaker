@@ -1,11 +1,11 @@
-import type { QueueStreamManifest } from '$lib/api/types';
+import type { QueueStreamManifest } from '#lib/api/types.ts';
 import {
 	PLAYER_WAITING_FOR_NETWORK,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL,
 	type TransportLabel
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';

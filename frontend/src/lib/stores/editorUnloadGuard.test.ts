@@ -1,7 +1,7 @@
-import { makeSong, makeVersion } from '$lib/test-utils/factories';
+import { makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchVersions: vi.fn().mockResolvedValue([]),
 	updateSong: vi.fn(),
 	deleteVersion: vi.fn(),

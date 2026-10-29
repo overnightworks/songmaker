@@ -1,9 +1,9 @@
-import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '$lib/constants';
-import { makeGeneration as generation } from '$lib/test-utils/factories';
+import { RECIPE_SOURCE_DURATION_DEFAULT_SECONDS } from '#lib/constants.ts';
+import { makeGeneration as generation } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { toasts } from '$lib/stores/toast';
-import type { GenerationItem } from '$lib/api/types';
+import { toasts } from '#lib/stores/toast.ts';
+import type { GenerationItem } from '#lib/api/types.ts';
 import {
 	clearSource,
 	coverStrength,

@@ -1,7 +1,7 @@
 import { untrack } from 'svelte';
 import { get, writable } from 'svelte/store';
 import { page } from '$app/state';
-import { fetchAlbum } from '$lib/api/albums';
+import { fetchAlbum } from '#lib/api/albums.ts';
 import {
 	historyMoves,
 	historyStandsStill,
@@ -17,14 +17,14 @@ import {
 	showStandingPage,
 	standingHistoryState,
 	standingPageEntryId
-} from '$lib/history/historyController';
-import { fetchPlaylists } from '$lib/api/client';
-import { isNotFound } from '$lib/api/fetch';
-import type { LibrarySort } from '$lib/api/library';
-import { fetchSong, fetchSongs } from '$lib/api/songs';
-import type { PlaylistItem, SongItem } from '$lib/api/types';
-import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
-import { type OpenCollection, openCollection, setOpenCollection } from '$lib/stores/collection';
+} from '#lib/history/historyController.ts';
+import { fetchPlaylists } from '#lib/api/client.ts';
+import { isNotFound } from '#lib/api/fetch.ts';
+import type { LibrarySort } from '#lib/api/library.ts';
+import { fetchSong, fetchSongs } from '#lib/api/songs.ts';
+import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
+import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '#lib/constants.ts';
+import { type OpenCollection, openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import {
 	libraryBrowse,
 	librarySearch,
@@ -32,21 +32,21 @@ import {
 	restoreLibraryBrowse,
 	restoreLibrarySearch,
 	searchQuery
-} from '$lib/stores/librarySearch';
+} from '#lib/stores/librarySearch.ts';
 import {
 	albumList,
 	loadSongsForAlbum,
 	rereadAllAlbums,
 	songList,
 	upsertSongInList
-} from '$lib/stores/libraryData';
+} from '#lib/stores/libraryData.ts';
 import {
 	ensureGenerationsLoaded,
 	selectedAlbumId,
 	selectedGenerationId,
 	selectedSongId
-} from '$lib/stores/player';
-import { deselectPlaylist, loadPlaylistDetail, playlistList } from '$lib/stores/playlists';
+} from '#lib/stores/player.ts';
+import { deselectPlaylist, loadPlaylistDetail, playlistList } from '#lib/stores/playlists.ts';
 import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,
@@ -61,11 +61,11 @@ import {
 	standsOnLibraryPage,
 	standsOnPlaylistsPage,
 	takeRoutePath
-} from '$lib/routes/addresses';
-import { standingPathname } from '$lib/routes/standingAddress';
-import type { RailSearchTarget } from '$lib/stores/railSearch';
-import { CREATED_SORTS } from '$lib/utils/recency';
-import { songTakesLoaded } from '$lib/utils/playable';
+} from '#lib/routes/addresses.ts';
+import { standingPathname } from '#lib/routes/standingAddress.ts';
+import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
+import { CREATED_SORTS } from '#lib/utils/recency.ts';
+import { songTakesLoaded } from '#lib/utils/playable.ts';
 
 // 'home' shows Home (LibraryHome: Listen), 'browse' the library wall (the
 // LibraryWall component), 'playlists' the Playlists page's wall of playlists

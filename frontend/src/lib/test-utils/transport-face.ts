@@ -1,6 +1,6 @@
 import { mount, unmount } from 'svelte';
-import Icon from '$lib/components/Icon.svelte';
-import type { TransportButtonFace } from '$lib/services/audioPlayer.svelte';
+import Icon from '#lib/components/Icon.svelte';
+import type { TransportButtonFace } from '#lib/services/audioPlayer.svelte.ts';
 
 const ICON_FACES: readonly TransportButtonFace[] = ['play', 'pause', 'refresh-cw'];
 

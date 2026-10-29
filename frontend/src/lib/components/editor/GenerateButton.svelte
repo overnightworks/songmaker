@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
-	import { isAdmin } from '$lib/stores/auth';
-	import { followAppPageLink } from '$lib/stores/navigation';
+	import { isAdmin } from '#lib/stores/auth.ts';
+	import { followAppPageLink } from '#lib/stores/navigation.ts';
 	import {
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 		EDITOR_GENERATE_LABEL,
 		EDITOR_OPEN_WORKER_POOL_LABEL,
 		ADMIN_WORKER_POOL_HREF
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		cancelGeneration,
 		generate,
@@ -16,7 +16,7 @@
 		isGenerateBusy,
 		offersCancel,
 		type GenerateState
-	} from '$lib/stores/generateAction';
+	} from '#lib/stores/generateAction.ts';
 	import Icon from '../Icon.svelte';
 	import SeedChip from './SeedChip.svelte';
 

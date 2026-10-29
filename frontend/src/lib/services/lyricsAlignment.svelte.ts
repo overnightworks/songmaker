@@ -7,8 +7,8 @@
 // with `null` right away, so a late result can never overwrite the lyrics of
 // the take now playing. The worker cannot be interrupted mid-take, so its
 // answer for a superseded request is dropped on arrival by request id.
-import type { WhisperCue } from '$lib/api/types';
-import { alignLyricsToCues, type AlignedLyricLine } from '$lib/utils/lyrics-align';
+import type { WhisperCue } from '#lib/api/types.ts';
+import { alignLyricsToCues, type AlignedLyricLine } from '#lib/utils/lyrics-align.ts';
 
 /** One take handed to the worker, identified for the latest-wins check. */
 export interface AlignmentRequest {

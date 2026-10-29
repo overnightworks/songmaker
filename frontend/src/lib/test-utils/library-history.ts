@@ -1,5 +1,5 @@
 import { tick } from 'svelte';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	restoreLibraryHistoryOnRouterStart,
@@ -7,8 +7,12 @@ import {
 	openLibraryAddress,
 	loadLibraryHistoryPageForTests,
 	type LibraryHistoryState
-} from '$lib/stores/libraryContext';
-import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
+} from '#lib/stores/libraryContext.ts';
+import {
+	followShellLayers,
+	initNavigation,
+	resetNavigationForTests
+} from '#lib/stores/navigation.ts';
 import {
 	historyComesToRest,
 	installHistoryController,
@@ -18,14 +22,14 @@ import {
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
 	type HistoryEntry
-} from '$lib/history/historyController';
-import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
+} from '#lib/history/historyController.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import {
 	fakePage,
 	reportedNavigations,
 	startFakeRouter,
 	writeHistoryEntry
-} from '$lib/test-utils/app-navigation';
+} from '#lib/test-utils/app-navigation.ts';
 
 // The one place tests touch the browser history: they seed and read entries,
 // and press Back and Forward, through these helpers, so the shape an entry is

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { onScreenKeyboardHeightPx, typingOnPhone } from '$lib/stores/ui';
+	import { onScreenKeyboardHeightPx, typingOnPhone } from '#lib/stores/ui.ts';
 
 	interface Props {
 		value: string;

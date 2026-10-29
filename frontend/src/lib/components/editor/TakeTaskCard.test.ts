@@ -1,16 +1,16 @@
 import { mount, tick, unmount } from 'svelte';
 import { get, writable } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeGeneration } from '$lib/test-utils/factories';
-import { TAKE_TASK_PROMPT_HINT } from '$lib/constants/take-task';
-import type { GenerateState } from '$lib/stores/generateAction';
+import { makeGeneration } from '#lib/test-utils/factories.ts';
+import { TAKE_TASK_PROMPT_HINT } from '#lib/constants/take-task.ts';
+import type { GenerateState } from '#lib/stores/generateAction.ts';
 
 const runSourceTask = vi.hoisted(() => vi.fn());
 const state = vi.hoisted(() => ({ current: null as unknown }));
 
-vi.mock('$lib/stores/generateAction', async (importOriginal) => {
+vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => {
 	const { writable: store } = await import('svelte/store');
-	const actual = await importOriginal<typeof import('$lib/stores/generateAction')>();
+	const actual = await importOriginal<typeof import('#lib/stores/generateAction.ts')>();
 	const generateAction = store({ kind: 'idle' });
 	state.current = generateAction;
 	return {
@@ -29,7 +29,7 @@ import {
 	seedFromTake,
 	setSourceFromGeneration,
 	sourceGeneration
-} from '$lib/stores/recipe';
+} from '#lib/stores/recipe.ts';
 import TakeTaskCard from './TakeTaskCard.svelte';
 
 let card: ReturnType<typeof mount> | undefined;

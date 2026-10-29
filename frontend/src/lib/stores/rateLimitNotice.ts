@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 
-import { RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
-import { addToast, toasts } from '$lib/stores/toast';
+import { RATE_LIMITED_TOAST_MESSAGE } from '#lib/constants.ts';
+import { addToast, toasts } from '#lib/stores/toast.ts';
 
 // A path whose own 429 is already visible some other way, so the generic
 // toast would only repeat it.

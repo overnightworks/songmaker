@@ -1,14 +1,14 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
-	import { isAdmin } from '$lib/stores/auth';
-	import { followAppPageLink } from '$lib/stores/navigation';
+	import { isAdmin } from '#lib/stores/auth.ts';
+	import { followAppPageLink } from '#lib/stores/navigation.ts';
 	import {
 		RAIL_SETTINGS_LABEL,
 		RAIL_SETTINGS_OPEN_STORAGE_KEY,
 		SETTINGS_NAV_LABEL
-	} from '$lib/constants';
-	import { visibleSettingsSections } from '$lib/settingsSections';
+	} from '#lib/constants.ts';
+	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import RailGroup from './RailGroup.svelte';
 
 	const admin = $derived($isAdmin);

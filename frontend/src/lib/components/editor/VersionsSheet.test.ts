@@ -1,8 +1,8 @@
-import { makeGeneration, makeSong, makeVersion } from '$lib/test-utils/factories';
+import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchVersions: vi.fn().mockResolvedValue([]),
 	updateSong: vi.fn(),
 	deleteVersion: vi.fn(),
@@ -10,20 +10,20 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { get } from 'svelte/store';
-import { fetchVersions } from '$lib/api/client';
+import { fetchVersions } from '#lib/api/client.ts';
 import {
 	discardDraft,
 	loadSongData,
 	setDraftLyrics,
 	versionDeleteRequest,
 	versions
-} from '$lib/stores/editor';
-import { closeTopLayer, resetLayersForTests } from '$lib/stores/layers';
+} from '#lib/stores/editor.ts';
+import { closeTopLayer, resetLayersForTests } from '#lib/stores/layers.ts';
 import {
 	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
 	versionsChipAccessibleLabel
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import VersionsSheet from './VersionsSheet.svelte';
 
 const NOW = new Date(2026, 9, 2, 15, 0);
