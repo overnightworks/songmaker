@@ -1,0 +1,8 @@
+claim_id = "048828fdc44f4649aa49a735c963d866"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "09bc7ed145d4d902d38a14f5bfce5f77de504874"
+branch = "claude/issue-2028-every-reference-upload-is-a-record-and-t"
+scope = [".github/workflows/ci.yml", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "src/songmaker_cli/db/migrations/versions/5b2e9d4a7c31_reference_recordings_are_records.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/reference_audio.py", "tests/test_db.py", "tests/test_reference_audio.py", "tests/test_reference_quota.py", "tests/test_reference_recordings.py", "tests/test_reference_recordings_migration.py"]
+opened_commit = "ec6ef48298d0593f965c7215b98835bd0d063eb5"
+whole_reason = "The table, its query owner, its one writer and the quota's proofs are one contract; splitting would leave the quota counting files while rows exist."
