@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import fakeredis
 import httpx
@@ -14,6 +14,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from webauth.ports import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
+
+if TYPE_CHECKING:
+    from songmaker_cli.oidc_client import OidcSignIn
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
@@ -114,6 +117,7 @@ def make_test_app(
     seed_db: Callable | None = None,
     index_html: str = "<html>Songmaker</html>",
     factory: sessionmaker[Session] | None = None,
+    oidc_sign_in: OidcSignIn | None = None,
 ) -> tuple:
     """Create a full test app with real middleware on ``factory`` or a fresh SQLite file.
 
@@ -145,7 +149,7 @@ def make_test_app(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=redis,
     )
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
+    app = create_app(audio_dir, data_dir, project_root, ctx=ctx, oidc_sign_in=oidc_sign_in)
     client = web_client(app, cookies={})
     return client, factory
 

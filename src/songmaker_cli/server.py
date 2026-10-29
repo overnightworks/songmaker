@@ -64,7 +64,7 @@ from songmaker_cli.lifecycle import (
 from songmaker_cli.middleware.access_log import AccessLogMiddleware
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 from songmaker_cli.middleware.resource_stream_deadline import ResourceStreamDeadlineMiddleware
-from songmaker_cli.oidc_client import build_oidc_sign_in
+from songmaker_cli.oidc_client import OidcSignIn, build_bearer_gate, build_oidc_sign_in
 from songmaker_cli.request_policies import (
     SPA_SHELL_HEADERS,
     build_body_size_policy,
@@ -72,7 +72,7 @@ from songmaker_cli.request_policies import (
     build_rate_limit_policy,
     build_security_headers_policy,
 )
-from songmaker_cli.settings import DEFAULT_SERVER_PORT, CoverExecutor, get_settings
+from songmaker_cli.settings import DEFAULT_SERVER_PORT, CoverExecutor, Settings, get_settings
 
 log = logging.getLogger(__name__)
 
@@ -202,11 +202,16 @@ def audio_path_rejected_handler(
     return JSONResponse({"detail": HTTP_NOT_FOUND}, status_code=404)
 
 
+def _oidc_sign_in_or_default(given: OidcSignIn | None, settings: Settings) -> OidcSignIn:
+    return build_oidc_sign_in(settings) if given is None else given
+
+
 def create_app(
     audio_dir: Path,
     data_dir: Path,
     project_root: Path,
     ctx: AppContext | None = None,
+    oidc_sign_in: OidcSignIn | None = None,
 ) -> FastAPI:
     configure_agent_providers(get_settings())
     app = FastAPI(
@@ -216,7 +221,6 @@ def create_app(
         openapi_url=None,
         lifespan=_lifespan,
     )
-
     if ctx is None:
         ctx = _create_default_context(audio_dir, data_dir)
 
@@ -228,7 +232,7 @@ def create_app(
 
     web_auth = build_web_auth_config(ctx, get_settings())
     install_web_auth_config(app, web_auth)
-    app.state.oidc_sign_in = build_oidc_sign_in(get_settings())
+    app.state.oidc_sign_in = _oidc_sign_in_or_default(oidc_sign_in, get_settings())
     install_sign_in(app)
     app.state.http_metrics = RedisHttpMetrics(ctx.redis)
 
@@ -239,9 +243,10 @@ def create_app(
     #   4. SecurityHeadersMiddleware  -- cover library refusals and unhandled errors
     #   5. BodySizeLimitMiddleware    -- reject oversized bodies before processing
     #   6. IpRateLimitMiddleware      -- rate-limit before auth/CSRF to bound cost
-    #   7. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
-    #   8. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
-    #   9. AccessLogMiddleware        -- log all requests (after security checks)
+    #   7. BearerGateMiddleware       -- with TOKEN_CLIENTS: a verified person-path token skips CSRF
+    #   8. CsrfOriginMiddleware       -- reject cross-origin state-changing requests
+    #   9. TrustedHostMiddleware      -- refuse a Host that is not in ALLOWED_HOSTS
+    #  10. AccessLogMiddleware        -- log all requests (after security checks)
     # WARNING: reordering these lines changes security behavior.
     # SelectiveGZipMiddleware sits just inside ResourceStreamDeadlineMiddleware
     # (the true outermost layer) and outside everything else, on purpose:
@@ -266,11 +271,10 @@ def create_app(
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(allowed_hosts(settings)))
     install_web_auth_middleware(
-        app,
-        security_headers=build_security_headers_policy(script_hashes),
-        body_size=build_body_size_policy(settings),
-        rate_limit=build_rate_limit_policy(settings),
+        app, security_headers=build_security_headers_policy(script_hashes),
+        body_size=build_body_size_policy(settings), rate_limit=build_rate_limit_policy(settings),
         csrf_origin=build_csrf_origin_policy(),
+        bearer_gate=build_bearer_gate(settings, app.state.oidc_sign_in, ctx.db),
     )
 
     app.add_middleware(  # NOSONAR(S8414) CORS order is security-critical; see block above.

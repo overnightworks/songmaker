@@ -164,7 +164,7 @@ jobs:
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
       - name: Run PostgreSQL contracts serially
-        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py tests/test_reference_save_lock_postgres.py tests/test_song_version_lock_postgres.py tests/test_coherence_verdict_lock_postgres.py tests/test_coherence_verdict_migration.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
+        run: uv run --no-sync --frozen --no-build pytest tests/test_postgresql.py tests/test_cover_accounting.py tests/test_reference_quota.py tests/test_auth_write_lock_postgres.py tests/test_person_token_paths.py tests/test_reference_save_lock_postgres.py tests/test_song_version_lock_postgres.py tests/test_coherence_verdict_lock_postgres.py tests/test_coherence_verdict_migration.py -n 0 -v --tb=short --junitxml=postgresql-contract.xml
       - name: Require executed PostgreSQL reference quota and write lock proofs
         run: |
           python - <<'PYTHON'
@@ -186,6 +186,7 @@ jobs:
           print(f"PostgreSQL reference quota proofs: {len(cases)} passed, 0 skipped")
           expected_lock_cases = {
               "test_auth_write_lock_postgres": 3,
+              "test_person_token_paths": 41,
               "test_reference_save_lock_postgres": 6,
               "test_song_version_lock_postgres": 11,
               "test_coherence_verdict_lock_postgres": 1,
