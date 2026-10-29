@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "09bc7ed145d4d902d38a14f5bfce5f77de504874"
 branch = "claude/issue-2027-one-final-deletion-setting-governs-the-t"
-scope = ["docker-compose.yml", "docker/.env.docker.example", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/settings.py", "tests/test_album_covers.py", "tests/test_music_worker.py", "tests/test_settings.py", "tests/test_soft_delete.py", "tests/test_song_covers.py"]
+scope = ["docker-compose.yml", "docker/.env.docker.example", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/albums.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/settings.py", "tests/test_album_covers.py", "tests/test_generation_retention.py", "tests/test_music_worker.py", "tests/test_settings.py", "tests/test_soft_delete.py", "tests/test_song_covers.py"]
 opened_commit = "4c00bee354ab7f8565d0d397d4fe06b9210663a5"
 whole_reason = "One setting name read in six production places, its compose pass-through and the four tests that read it; splitting would leave two names for one value."
