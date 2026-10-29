@@ -271,7 +271,7 @@ def restore_album(session: Session, album_id: str) -> Album:
         return album
     deleted_at = aware_timestamp(album.deleted_at)
     age = datetime.now(timezone.utc) - deleted_at
-    window = timedelta(days=get_settings().soft_delete_retention_days)
+    window = timedelta(days=get_settings().final_deletion_days)
     if age > window:
         raise RestoreWindowExpiredError(
             f"Album {album_id} was deleted {age.days} days ago, "
