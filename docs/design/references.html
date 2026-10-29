@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Songmaker Reference Recordings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600&family=Oswald:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* page tokens (notes for the operator) and app tokens (frontend/src/app.css values), both themes */
+:root{
+  --paper:#f3f2f6;--panel:#ffffff;--ink:#1b1a20;--ink-soft:#4f4b58;--rule:#e2dfe8;--violet:#5a2fc2;
+  --action:#7a18c0;--on-accent:#ffffff;--tint:#f2e8f9;--tint2:#f7f1fb;--line:#dcc4ee;
+  --bg:#f4f4f6;--surface:#ffffff;--headbg:#f0f0f2;--border:#d0d0d4;--text:#1a1a1e;--muted:#555555;--disabled:#9a9a9a;--hover:#ebebed;
+  --good:#1e7a1e;--bad:#c02020;--keep:#c03040;
+  --warn-ink:#a86400;--warn-bg:rgba(220,140,20,.15);--warn-line:rgba(220,140,20,.5);
+  --shadow:0 2px 4px rgba(0,0,0,.08),0 14px 40px rgba(0,0,0,.12);
+  --fd:'Oswald',Impact,sans-serif;--fb:'Open Sans',Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#131218;--panel:#1c1a22;--ink:#eeecf2;--ink-soft:#b3aebe;--rule:#302c3a;--violet:#b49cff;
+    --action:#b45cf5;--on-accent:#111111;--tint:rgba(180,92,245,.18);--tint2:rgba(180,92,245,.09);--line:#4a3560;
+    --bg:#111111;--surface:#1a1a1e;--headbg:#161618;--border:#34333a;--text:#ececee;--muted:#a3a2aa;--disabled:#66656c;--hover:#26252b;
+    --good:#4a4;--bad:#f44;--keep:#e04050;
+    --warn-ink:#f0a030;--warn-bg:rgba(220,140,20,.15);--warn-line:rgba(220,140,20,.5);
+    --shadow:0 2px 4px rgba(0,0,0,.4),0 14px 40px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#131218;--panel:#1c1a22;--ink:#eeecf2;--ink-soft:#b3aebe;--rule:#302c3a;--violet:#b49cff;
+  --action:#b45cf5;--on-accent:#111111;--tint:rgba(180,92,245,.18);--tint2:rgba(180,92,245,.09);--line:#4a3560;
+  --bg:#111111;--surface:#1a1a1e;--headbg:#161618;--border:#34333a;--text:#ececee;--muted:#a3a2aa;--disabled:#66656c;--hover:#26252b;
+  --good:#4a4;--bad:#f44;--keep:#e04050;
+  --warn-ink:#f0a030;--warn-bg:rgba(220,140,20,.15);--warn-line:rgba(220,140,20,.5);
+  --shadow:0 2px 4px rgba(0,0,0,.4),0 14px 40px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5;padding:28px 16px 72px;overflow-x:hidden}
+.wrap{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:26px;min-width:0}
+.eyebrow{font-family:var(--fd);font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);font-weight:500}
+.top h1{font-family:var(--fd);font-weight:500;font-size:clamp(28px,5vw,40px);letter-spacing:.02em;margin:4px 0 10px;line-height:1.1}
+.lede{max-width:92ch;color:var(--ink-soft);margin:0 0 8px}
+.lede b,.lede q{color:var(--ink)}
+.part{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px clamp(12px,2vw,24px);display:flex;flex-direction:column;gap:18px;min-width:0}
+.part>h2{font-family:var(--fd);font-weight:500;font-size:24px;letter-spacing:.03em;text-transform:uppercase;margin:0;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.part>h2 small{font-size:15px;text-transform:none;letter-spacing:0;color:var(--ink-soft);font-family:var(--fb);font-weight:400}
+.keyline{font-size:14.5px;color:var(--ink);background:color-mix(in srgb,var(--violet) 8%,transparent);border-left:3px solid var(--violet);padding:8px 14px;border-radius:0 6px 6px 0;max-width:110ch}
+.keyline b{font-weight:600}
+.frames{display:flex;flex-wrap:wrap;gap:28px 32px;align-items:flex-start}
+figure{margin:0;display:flex;flex-direction:column;gap:8px;min-width:0;max-width:100%}
+figure.w1440{width:1440px}figure.w390{width:390px}figure.w665{width:665px}figure.w300{width:300px}
+figcaption{font-size:14px;color:var(--ink-soft);line-height:1.45}
+figcaption b{color:var(--ink);font-weight:600}
+figcaption.tag{font-family:var(--fd);font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+figcaption.tag.alt{color:var(--warn-ink)}
+.fit{width:100%}
+.plain{margin:0;padding-left:1.15rem;color:var(--ink-soft);display:flex;flex-direction:column;gap:6px;font-size:14.5px;max-width:110ch}
+.plain b{color:var(--ink);font-weight:600}
+ol.dec{margin:0;padding-left:1.4rem;display:flex;flex-direction:column;gap:12px;max-width:110ch;font-size:14.5px;color:var(--ink-soft)}
+ol.dec li::marker{font-family:var(--fd);color:var(--violet)}
+ol.dec b{color:var(--ink);font-weight:600}
+ol.dec .r{display:block}ol.dec .a{display:block;color:var(--ink-soft)}
+.r::before{content:"Empfehlung: ";font-weight:600;color:var(--violet)}
+.a::before{content:"Alternative: ";font-weight:600;color:var(--warn-ink)}
+
+/* ── the app, drawn in its own tokens ── */
+.app{position:relative;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px;line-height:1.4;border-radius:10px;overflow:hidden;box-shadow:var(--shadow);text-align:left}
+.app button{font:inherit;color:inherit;background:none;border:none;padding:0;margin:0;text-align:left;cursor:default}
+.ic{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.sm{width:15px;height:15px}.ic.xs{width:13px;height:13px}.ic.f{fill:currentColor;stroke:none}
+.grow{flex:1;min-width:0}
+.icon-btn{width:32px;height:32px;display:inline-flex !important;align-items:center;justify-content:center;color:var(--muted);flex:none;border-radius:4px}
+.ph .icon-btn{width:44px;height:44px}
+.c-act{color:var(--action) !important}.c-keep{color:var(--keep) !important}
+.btn-primary{height:36px;padding:0 18px !important;border:1px solid var(--action) !important;border-radius:4px;background:var(--action) !important;color:var(--on-accent) !important;font-family:var(--fd) !important;font-size:.95rem;letter-spacing:.5px;text-transform:uppercase;display:inline-flex !important;align-items:center;justify-content:center;gap:8px;flex:none;white-space:nowrap}
+.btn-primary.busy{background:linear-gradient(90deg,var(--on-accent) 0 var(--p),color-mix(in srgb,var(--on-accent) 30%,transparent) var(--p) 100%) bottom/100% 4px no-repeat,var(--action) !important;text-transform:none;font-family:var(--fb) !important;font-size:.9rem;letter-spacing:0}
+.btn-primary.failed{background:transparent !important;border-color:var(--bad) !important;color:var(--bad) !important}
+.btn-sec{height:36px;padding:0 16px !important;border:1px solid var(--border) !important;border-radius:4px;font-family:var(--fd) !important;font-size:.9rem;letter-spacing:.5px;text-transform:uppercase;display:inline-flex !important;align-items:center;color:var(--text) !important}
+.btn-del{height:36px;padding:0 16px !important;border:1px solid var(--bad) !important;border-radius:4px;font-family:var(--fd) !important;font-size:.9rem;letter-spacing:.5px;text-transform:uppercase;display:inline-flex !important;align-items:center;color:var(--bad) !important}
+.info{width:20px;height:20px;border:1.5px solid var(--muted) !important;border-radius:50% !important;display:inline-flex !important;align-items:center;justify-content:center;font-family:Georgia,serif !important;font-style:italic;font-size:12px !important;color:var(--muted) !important;flex:none}
+.ph .info{width:24px;height:24px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--tint);color:var(--action);display:inline-flex;align-items:center;justify-content:center;font-family:var(--fd);font-size:15px;flex:none}
+/* desktop shell (navigation.html J4) */
+.desk{width:1440px;height:500px;display:grid;grid-template-columns:232px 1fr}
+.rail{background:var(--headbg);border-right:1px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;gap:2px;font-size:.88rem}
+.rail .brand{font-family:var(--fd);font-size:1.1rem;letter-spacing:1px;margin-bottom:10px;padding:0 8px}
+.rail .it{padding:6px 8px;border-radius:4px;color:var(--text);display:flex;gap:6px}
+.rail .it .n{margin-left:auto;color:var(--disabled)}
+.rail .it.sub{padding-left:20px;font-size:.84rem}
+.rail .sec{font-family:var(--fd);font-size:.72rem;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-top:12px;padding:6px 8px}
+.rail .on{background:var(--tint);color:var(--action);box-shadow:inset 3px 0 0 var(--action)}
+.rail .new{position:relative}
+.dmain{display:flex;flex-direction:column;min-width:0}
+.dhead{display:flex;align-items:center;gap:10px;height:60px;padding:0 20px;border-bottom:1px solid var(--border);background:var(--headbg)}
+.dhead h1,.appbar h1{font-family:var(--fd);font-weight:500;font-size:1.4rem;letter-spacing:.5px;margin:0;text-transform:uppercase}
+.crumb{font-size:.84rem;color:var(--muted)}
+.dbody{padding:20px 24px;max-width:688px;display:flex;flex-direction:column;gap:12px}
+/* phone shell */
+.device{width:390px;display:flex;flex-direction:column}
+.device.tall{height:700px}.device.mid{height:auto}.device.short{height:520px}.device.mid .pbody{min-height:300px}.device.mid.menu .pbody{min-height:330px}.device.mid.modal{height:520px}
+.appbar{height:52px;display:flex;align-items:center;gap:2px;background:var(--headbg);border-bottom:1px solid var(--border);padding:0 6px 0 2px;flex:none}
+.appbar h1{font-size:1.2rem;padding:0 4px}
+.pbody{padding:12px;display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;position:relative}
+.actionbar{padding:8px 12px;border-top:1px solid var(--border);background:var(--headbg);display:flex;flex-direction:column;gap:6px}
+.actionbar .btn-primary{width:100%;height:44px}
+.ptabs{height:56px;display:flex;border-top:1px solid var(--border);background:var(--headbg)}
+.ptabs span{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:var(--muted)}
+/* the one row component: references in one bordered card, a divider between rows */
+.list{background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.rr{display:flex;align-items:center;gap:8px;min-height:56px;padding:6px 4px 6px 10px;border-bottom:1px solid var(--border);position:relative}
+.list>.rr:last-child,.list>.rrwrap:last-child>.rr{border-bottom:none}
+.ph .rr{min-height:64px;gap:4px;padding-left:8px}
+.face{width:32px;height:32px;border:1px solid var(--border) !important;border-radius:50%;display:inline-flex !important;align-items:center;justify-content:center;color:var(--text);flex:none}
+.ph .face{width:40px;height:40px}
+.rr.playing{background:var(--tint2)}
+.rr.playing .face{border-color:var(--action);color:var(--action)}
+.nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding-left:4px}
+.fn{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.use{color:var(--action);display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.use.open{text-decoration:underline;text-underline-offset:2px}
+.exp{font-size:12px;line-height:18px;padding:0 5px;border-radius:3px;border:1px solid var(--border);background:var(--bg);color:var(--muted);white-space:nowrap}
+.exp.warn{border-color:var(--warn-line);background:var(--warn-bg);color:var(--warn-ink)}
+.heart-out{color:var(--disabled)}
+.hl{box-shadow:inset 3px 0 0 var(--action);background:var(--tint2)}
+/* usage unfolded under a row */
+.usage{background:var(--bg);border-bottom:1px solid var(--border);padding:4px 0 6px}
+.usage .uh{display:flex;align-items:center;gap:6px;padding:4px 12px 2px 52px;font-family:var(--fd);font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.ph .usage .uh{padding-left:56px}
+.usage .ur{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 10px 0 52px;font-size:.88rem}
+.ph .usage .ur{min-height:44px;padding-left:56px}
+.usage .ur small{color:var(--muted);font-size:.8rem}
+.usage .ur .ic{color:var(--disabled);margin-left:auto}
+/* empty state */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;color:var(--muted);padding:24px}
+.empty .ic{width:40px;height:40px;color:var(--disabled)}
+.empty p{margin:0;font-size:.95rem;max-width:28ch}
+/* quota meter: shown only when nearly full */
+.quota{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:6px}
+.quota .qt{display:flex;justify-content:space-between;gap:10px;font-size:.84rem;color:var(--warn-ink);font-variant-numeric:tabular-nums}
+.bar{height:4px;border-radius:2px;background:color-mix(in srgb,var(--warn-ink) 22%,transparent)}
+.bar i{display:block;height:100%;border-radius:2px;background:var(--warn-ink)}
+.why{font-size:.84rem;color:var(--bad);display:flex;gap:6px;align-items:flex-start;line-height:1.35}
+/* popover menu (vocabulary §6) */
+.lmenu{width:244px;display:flex;flex-direction:column;gap:2px;padding:8px;background:var(--headbg);border:1px solid var(--border);border-radius:6px;font-size:16px;line-height:1.4;color:var(--text);box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.lmenu.floating{position:absolute;right:8px;top:52px;z-index:5}
+.lhead{margin:0 0 4px;padding:.3rem .6rem .5rem;font-family:var(--fd);font-size:.7rem;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lmi{display:flex;align-items:center;gap:.5rem;min-height:44px;padding:.5rem .6rem;border-radius:4px;font-size:.87rem;width:100%}
+.lmi.destructive{color:var(--bad)}
+.lmi.off{color:var(--disabled)}
+.lmi .lhint{margin-left:auto;font-size:.75rem;color:var(--muted);white-space:nowrap}
+.lmi.dashed{border:1px dashed var(--warn-line);color:var(--warn-ink)}
+/* modal */
+.scrim{position:absolute;inset:0;background:rgba(10,8,14,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:6}
+.dlg{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.dlg h3{margin:0;font-family:var(--fd);font-weight:500;font-size:1.15rem;letter-spacing:.3px}
+.dlg p{margin:0;font-size:.9rem;line-height:1.45}
+.dlg .muted{color:var(--muted);font-size:.84rem}
+.dlg .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+/* tooltip behind ⓘ */
+.tip{position:absolute;z-index:4;width:290px;padding:10px 12px;background:var(--text);color:var(--bg);border-radius:6px;font-size:.84rem;line-height:1.45;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+/* recipe card (song-page.html) */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.vtabs{display:flex;border-bottom:1px solid var(--border)}
+.vt{display:inline-flex !important;align-items:center;min-height:44px;padding:0 16px !important;border-bottom:2px solid transparent !important;font-family:var(--fd) !important;font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted) !important}
+.vt.on{border-bottom-color:var(--action) !important;background:var(--tint2);color:var(--action) !important}
+.kv{display:flex;align-items:center;gap:10px;min-height:42px;padding:0 10px 0 14px;border-bottom:1px solid var(--border)}
+.ph .kv{min-height:48px}
+.kv .k{flex:1;min-width:0;color:var(--muted);font-size:.87rem}
+.kv .v{display:inline-flex;align-items:center;gap:6px;font-size:.9rem;min-width:0}
+.kv .v .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.kv.open{background:var(--tint2)}
+.inp{display:inline-flex;align-items:center;min-height:30px;width:92px;padding:0 9px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:.85rem}
+.inp.ph{color:var(--disabled)}
+.pick{border-bottom:1px solid var(--border);background:var(--bg)}
+.po{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 10px 0 14px;font-size:.9rem}
+.ph .po{min-height:52px}
+.po .fn{font-size:.9rem;flex:1}
+.po small{color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
+.po .face{width:28px;height:28px}
+.ph .po .face{width:36px;height:36px}
+.rdot{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--disabled);flex:none;position:relative}
+.po.on .rdot{border-color:var(--action)}
+.po.on .rdot::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--action)}
+.po.on .fn{color:var(--action)}
+.po.up{color:var(--action)}
+.po.more{justify-content:flex-end;font-size:.84rem;color:var(--action);min-height:38px;border-top:1px solid var(--border)}
+.vfoot{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px;padding:4px 14px;font-size:.74rem;color:var(--muted);background:var(--bg)}
+.reset{font-family:var(--fd) !important;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--action) !important}
+.colframe{padding:14px;background:var(--bg)}
+/* a take's recipe lines (Now Playing · This take) */
+.rlines{padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.rlines .gh{font-family:var(--fd);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.rl{display:flex;justify-content:space-between;gap:12px;font-size:.88rem;min-height:30px;align-items:center}
+.rl span:first-child{color:var(--muted)}
+.rl a{color:var(--action);text-decoration:none;display:inline-flex;align-items:center;gap:2px}
+.rl s{color:var(--disabled)}
+.strike{opacity:.55}
+@media (max-width:480px){figcaption{font-size:13.5px}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5s-7.5-4.6-7.5-10A4.2 4.2 0 0 1 12 8a4.2 4.2 0 0 1 7.5 2.5c0 5.4-7.5 10-7.5 10z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h0"/></symbol>
+  <symbol id="i-tri" viewBox="0 0 24 24"><path d="M12 3.5L22 20H2z" fill="currentColor" stroke="none"/><path d="M12 10v4.5M12 17v.01" stroke="#fff" stroke-width="2"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16 5l4 1-3 14-4-1z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h12M4 12h12M4 18h8M18 15v6M15 18h6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></symbol>
+</svg>
+
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">Songmaker · Bild zur Freigabe · Entwurf 29.10.2026</div>
+  <h1>Referenzaufnahmen sehen, behalten, löschen</h1>
+  <p class="lede">Operator, 29.10.2026: <q>ich muss die in der app sehen und löschen können! darüber hinaus werden unbenutzte referenzen automatisch gelöscht? so wie takes? … ansonsten ist das ja Hintergrundarbeit von der ich nix weiß … das wäre sauberer</q>. Ruling 18.10.2026: Unbenutzte Referenz-Uploads werden nach 30 Tagen gelöscht; was an einer Version oder einem Take hängt, bleibt immer.</p>
+  <p class="lede"><b>Heute:</b> Eine Referenz ist nur eine Datei unter <code>{audio}/{user}/refs/</code>. Niemand kann sie in der App auflisten, abspielen oder löschen. Die Rezept-Zeile „Reference track“ zeigt nach dem Upload den Dateinamen und nach dem Neuladen den gespeicherten Pfad; das Rezept eines Takes sagt nur „Reference track: used“. Live gibt es noch keine Referenz.</p>
+  <p class="lede"><b>Dieses Bild:</b> Eine Liste der eigenen Referenzen mit denselben Zeichen, die Takes schon tragen: ♥ heißt behalten, <span class="exp" style="font-size:12px;padding:0 5px;border:1px solid var(--border);border-radius:3px">⏳ 28d</span> heißt, dass sie automatisch gelöscht wird, und die Kette mit „Used in 2 takes“ heißt, dass sie benutzt wird. App-Beschriftungen sind englisch, die Notizen deutsch. Die Beispieldaten sind vom 29.10.2026.</p>
+</header>
+
+<div class="keyline"><b>Wo es lebt:</b> In <b>Settings › References</b>, direkt unter <b>Voices</b>. Voices ist schon genau dieses Muster: eigene Aufnahmen werden in den Settings verwaltet und im Rezept über eine Auswahlzeile gewählt („Your voice“). Library ist nach (i) nur Alben, und Cleanup gehört dem Admin. Gewählt wird weiter im Rezept, dort steht auch der Weg „All references ›“ hierher. Die zweite glaubwürdige Stelle, die Verwaltung nur in der Auswahl im Rezept, steht klein in Abschnitt 4.</div>
+
+<!-- ───────────── 1 · main state ───────────── -->
+<section class="part">
+  <h2>1 · Die Liste <small>Hauptzustand: Desktop 1440 und Telefon 390</small></h2>
+  <ul class="plain">
+    <li><b>Eine Zeile pro Referenz</b>, wie eine Take-Zeile: ▶ zum Abspielen, der Originaldateiname als Name, darunter Länge · Upload-Datum · wo sie benutzt wird. Rechts ♥ und ⋯. Ein Tipp auf die Zeile spielt sie ab.</li>
+    <li><b>Drei Zustände in drei Formen</b>, auch in Graustufen lesbar: <b>benutzt</b> = Kette + „Used in 2 takes“ (ein Link; er klappt auf, wo genau), <b>behalten</b> = gefülltes ♥ in der Keep-Farbe, <b>wird gelöscht</b> = ⏳ mit den restlichen Tagen. Das ⏳ ist grau und wird in den letzten 3 Tagen bernsteinfarben, wie beim Take (<code>EXPIRY_WARN_DAYS = 3</code>). Das genaue Datum steht im Tooltip: „Deleted on 26 Nov — keep to preserve“.</li>
+    <li><b>Die Uhr</b> (Empfehlung, Entscheidung 2): 30 Tage ab dem Moment, in dem eine Referenz unbenutzt ist, also ab dem Upload oder ab dem Verschwinden des letzten Takes bzw. der letzten Version, die sie trägt. <i>old-demo-bounce.wav</i> zeigt das: hochgeladen am 1. September, unbenutzt seit dem 2. Oktober, noch 3 Tage.</li>
+    <li><b>Upload</b> ist die eine Hauptaktion der Seite: am Desktop oben rechts, am Telefon breit in der Aktionsleiste. Die Regel steht hinter dem ⓘ am Titel, nicht als Text auf der Seite.</li>
+  </ul>
+
+  <div class="frames">
+    <figure class="w1440">
+      <figcaption class="tag">D1 · Desktop 1440 · Settings › References</figcaption>
+      <div class="fit"><div class="app desk" data-w="1440">
+        <aside class="rail">
+          <div class="brand">HALLUCINAI</div>
+          <div class="it">Home</div>
+          <div class="it">Library <span class="n">12</span></div>
+          <div class="it">Playlists <span class="n">2</span></div>
+          <div class="sec">Settings</div>
+          <div class="it sub">Generation</div>
+          <div class="it sub">Voices</div>
+          <div class="it sub on">References</div>
+          <div class="it sub">Admin</div>
+        </aside>
+        <div class="dmain">
+          <div class="dhead">
+            <h1>References</h1>
+            <button class="info" aria-label="How references are kept">i</button>
+            <span class="grow"></span>
+            <button class="btn-primary"><svg class="ic sm"><use href="#i-up"/></svg>Upload</button>
+            <span class="avatar">F</span>
+          </div>
+          <div class="dbody" style="position:relative">
+            <div class="list">
+              <div class="rr playing">
+                <button class="face" aria-label="Pause"><svg class="ic sm"><use href="#i-pause"/></svg></button>
+                <div class="nm"><span class="fn">voice-memo-0412.mp3</span><span class="meta">0:31 · 27 Oct <span class="exp" title="Deleted on 26 Nov — keep to preserve">⏳ 28d</span></span></div>
+                <button class="icon-btn heart-out" aria-label="Keep"><svg class="ic"><use href="#i-heart"/></svg></button>
+                <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+              </div>
+              <div class="rr">
+                <button class="face" aria-label="Play"><svg class="ic sm"><use href="#i-play"/></svg></button>
+                <div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used in 2 takes</span></span></div>
+                <button class="icon-btn heart-out" aria-label="Keep"><svg class="ic"><use href="#i-heart"/></svg></button>
+                <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+              </div>
+              <div class="rr">
+                <button class="face" aria-label="Play"><svg class="ic sm"><use href="#i-play"/></svg></button>
+                <div class="nm"><span class="fn">berlin-night-pad.flac</span><span class="meta">1:58 · 2 Sep</span></div>
+                <button class="icon-btn c-keep" aria-label="Unkeep"><svg class="ic f"><use href="#i-heart"/></svg></button>
+                <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+              </div>
+              <div class="rr">
+                <button class="face" aria-label="Play"><svg class="ic sm"><use href="#i-play"/></svg></button>
+                <div class="nm"><span class="fn">old-demo-bounce.wav</span><span class="meta">3:20 · 1 Sep <span class="exp warn" title="Deleted on 1 Nov — keep to preserve">⏳ 3d</span></span></div>
+                <button class="icon-btn heart-out" aria-label="Keep"><svg class="ic"><use href="#i-heart"/></svg></button>
+                <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption>Die Settings-Gruppe in der Leiste hat jetzt <b>Generation · Voices · References · Admin</b> (Admin nur für Admins). Der Inhalt bleibt in der Settings-Spaltenbreite (640 px). Oben die gerade spielende Referenz, im Vordergrund-Ton wie ein spielender Take.</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag">P1 · Telefon 390 · dieselbe Liste</figcaption>
+      <div class="fit"><div class="app device tall ph" data-w="390">
+        <div class="appbar">
+          <button class="icon-btn" aria-label="Back"><svg class="ic"><use href="#i-back"/></svg></button>
+          <h1>References</h1>
+          <button class="info" aria-label="How references are kept">i</button>
+          <span class="grow"></span>
+          <span class="avatar">F</span>
+        </div>
+        <div class="pbody">
+          <div class="list">
+            <div class="rr">
+              <button class="face" aria-label="Play"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">voice-memo-0412.mp3</span><span class="meta">0:31 · 27 Oct <span class="exp">⏳ 28d</span></span></div>
+              <button class="icon-btn heart-out" aria-label="Keep"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+            <div class="rr">
+              <button class="face" aria-label="Play"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used in 2 takes</span></span></div>
+              <button class="icon-btn heart-out" aria-label="Keep"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+            <div class="rr">
+              <button class="face" aria-label="Play"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">berlin-night-pad.flac</span><span class="meta">1:58 · 2 Sep</span></div>
+              <button class="icon-btn c-keep" aria-label="Unkeep"><svg class="ic f"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+            <div class="rr">
+              <button class="face" aria-label="Play"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">old-demo-bounce.wav</span><span class="meta">3:20 · 1 Sep <span class="exp warn">⏳ 3d</span></span></div>
+              <button class="icon-btn heart-out" aria-label="Keep"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn" aria-label="More"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="actionbar"><button class="btn-primary"><svg class="ic sm"><use href="#i-up"/></svg>Upload</button></div>
+        <div class="ptabs"><span><svg class="ic"><use href="#i-home"/></svg>Home</span><span><svg class="ic"><use href="#i-lib"/></svg>Library</span><span><svg class="ic"><use href="#i-list"/></svg>Playlists</span></div>
+      </div></div>
+      <figcaption>Der Weg hierher: Konto-Kreis › Settings › <b>References</b> (die Settings-Liste aus J2 bekommt diese eine Zeile). 44-px-Flächen, ‹ zurück. Der Player über den Tabs fehlt hier nur, damit das Bild ruhig bleibt.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ───────────── 2 · states ───────────── -->
+<section class="part">
+  <h2>2 · Zustände <small>Telefon 390; am Desktop dieselbe Liste in der Spalte aus D1</small></h2>
+  <div class="frames">
+
+    <figure class="w390">
+      <figcaption class="tag">a · Leer · das ⓘ ist geöffnet</figcaption>
+      <div class="fit"><div class="app device short ph" data-w="390">
+        <div class="appbar"><button class="icon-btn"><svg class="ic"><use href="#i-back"/></svg></button><h1>References</h1><button class="info">i</button><span class="grow"></span><span class="avatar">F</span></div>
+        <div class="pbody">
+          <div class="tip" style="left:60px;top:8px">Unused references are deleted 30 days after their last use — the ⏳ counts down. ♥ keeps one for good. A reference a version or a take uses always stays.</div>
+          <div class="empty"><svg class="ic"><use href="#i-wave"/></svg><p>No references yet — upload a recording to guide a song's sound.</p></div>
+        </div>
+        <div class="actionbar"><button class="btn-primary"><svg class="ic sm"><use href="#i-up"/></svg>Upload</button></div>
+      </div></div>
+      <figcaption>Ein Zeichen und ein ehrlicher Satz (Vokabular §7). Das geöffnete ⓘ zeigt den Wortlaut der Regel, auf jeder Breite am Titel. Das Laden ist der übliche Skeleton aus Zeilen mit „Loading references…“, ein Ladefehler der übliche Kasten mit dem Pfeil „Try again“. Beides ist nicht neu gezeichnet.</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag">b · Upload läuft</figcaption>
+      <div class="fit"><div class="app device short ph" data-w="390">
+        <div class="appbar"><button class="icon-btn"><svg class="ic"><use href="#i-back"/></svg></button><h1>References</h1><button class="info">i</button><span class="grow"></span><span class="avatar">F</span></div>
+        <div class="pbody">
+          <div class="list">
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used in 2 takes</span></span></div>
+              <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">berlin-night-pad.flac</span><span class="meta">1:58 · 2 Sep</span></div>
+              <button class="icon-btn c-keep"><svg class="ic f"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="actionbar"><button class="btn-primary busy" style="--p:64%">Uploading synth-hook.wav · 64%</button></div>
+      </div></div>
+      <figcaption>Der Knopf zeigt den Fortschritt (Vokabular §1 „Busy“): Prozent im Wort, der Streifen am unteren Rand wächst. Wenn der Upload fertig ist, steht die neue Zeile oben mit <span class="exp" style="border:1px solid var(--border);border-radius:3px;padding:0 4px;font-size:12px">⏳ 30d</span>. Schlägt er fehl, kommt der Fehlerzustand aus c2 mit dem Grund.</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag">c · Speicher fast voll</figcaption>
+      <div class="fit"><div class="app device short ph" data-w="390">
+        <div class="appbar"><button class="icon-btn"><svg class="ic"><use href="#i-back"/></svg></button><h1>References</h1><button class="info">i</button><span class="grow"></span><span class="avatar">F</span></div>
+        <div class="pbody">
+          <div class="quota">
+            <div class="qt"><span>47 of 50 files</span><span>431 of 500 MB</span></div>
+            <div class="bar"><i style="width:94%"></i></div>
+          </div>
+          <div class="list">
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">old-demo-bounce.wav</span><span class="meta">3:20 · 1 Sep <span class="exp warn">⏳ 3d</span></span></div>
+              <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">take-sketch-07.wav</span><span class="meta">2:44 · 30 Aug · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used by v3</span></span></div>
+              <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <div class="actionbar"><button class="btn-primary"><svg class="ic sm"><use href="#i-up"/></svg>Upload</button></div>
+      </div></div>
+      <figcaption>Die Füllanzeige erscheint erst <b>ab 80 %</b> einer der beiden Grenzen (500 MB / 50 Dateien, aus <code>settings.py</code>) und ist bernsteinfarben, weil sie warnt und noch nichts kaputt ist. Darunter liegt kein Rot. „Used by v3“ zeigt den Fall, dass eine Version die Referenz trägt, aber noch kein Take.</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag">c2 · Speicher voll</figcaption>
+      <div class="fit"><div class="app device ph" data-w="390" style="height:auto">
+        <div class="actionbar" style="border-top:none">
+          <button class="btn-primary failed"><svg class="ic sm"><use href="#i-tri"/></svg>Upload</button>
+          <div class="why">Reference storage is full (50 of 50 files) — delete one first.</div>
+        </div>
+      </div></div>
+      <figcaption>Der volle Speicher erscheint am Knopf, der den Upload gestartet hat: der Fehlerzustand aus Vokabular §1, mit gleichem Wort und dem Grund darunter. Der Server lehnt schon heute ab (<code>REFERENCE_AUDIO_QUOTA_DETAIL</code>). Dasselbe gilt für den Upload aus dem Rezept.</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag">d1 · Löschen verweigert (A, Empfehlung) · das Menü</figcaption>
+      <div class="fit"><div class="app device mid menu ph" data-w="390">
+        <div class="appbar"><button class="icon-btn"><svg class="ic"><use href="#i-back"/></svg></button><h1>References</h1><button class="info">i</button><span class="grow"></span><span class="avatar">F</span></div>
+        <div class="pbody">
+          <div class="list">
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">voice-memo-0412.mp3</span><span class="meta">0:31 · 27 Oct <span class="exp">⏳ 28d</span></span></div>
+              <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used in 2 takes</span></span></div>
+              <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn" style="color:var(--action);border:1px solid var(--action);background:var(--tint2)"><svg class="ic"><use href="#i-more"/></svg></button>
+              <div class="lmenu floating" style="top:56px">
+                <div class="lhead">storytime-drums.wav</div>
+                <div class="lmi">Show takes<span class="lhint">2</span></div>
+                <div class="lmi off"><svg class="ic sm"><use href="#i-trash"/></svg>Delete<span class="lhint">In use</span></div>
+              </div>
+            </div>
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">berlin-night-pad.flac</span><span class="meta">1:58 · 2 Sep</span></div>
+              <button class="icon-btn c-keep"><svg class="ic f"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption>Bei einer benutzten Referenz ist <b>Delete</b> ausgegraut und trägt den Hinweis „In use“. „Show takes“ klappt auf, wo sie benutzt wird (d2). Bei einer unbenutzten Referenz ist Delete die rote letzte Zeile und öffnet die einfache Bestätigung: „Delete reference? voice-memo-0412.mp3 — its audio file. This cannot be undone.“</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag">d2 · Löschen verweigert (A) · wo sie benutzt wird</figcaption>
+      <div class="fit"><div class="app device mid ph" data-w="390">
+        <div class="appbar"><button class="icon-btn"><svg class="ic"><use href="#i-back"/></svg></button><h1>References</h1><button class="info">i</button><span class="grow"></span><span class="avatar">F</span></div>
+        <div class="pbody">
+          <div class="list">
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">voice-memo-0412.mp3</span><span class="meta">0:31 · 27 Oct <span class="exp">⏳ 28d</span></span></div>
+              <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+            <div class="rrwrap">
+              <div class="rr" style="background:var(--tint2)">
+                <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+                <div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use open"><svg class="ic xs"><use href="#i-link"/></svg>Used in 2 takes</span></span></div>
+                <button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button>
+                <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+              </div>
+              <div class="usage">
+                <div class="uh">Storytime · v6 <button class="info" style="width:16px;height:16px;font-size:10px !important;margin-left:4px" aria-label="Why it stays">i</button></div>
+                <div class="ur">Take 11 <small>3:13</small><svg class="ic sm"><use href="#i-right"/></svg></div>
+                <div class="ur">Take 9 <small>3:21</small><svg class="ic sm"><use href="#i-right"/></svg></div>
+              </div>
+            </div>
+            <div class="rr">
+              <button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button>
+              <div class="nm"><span class="fn">berlin-night-pad.flac</span><span class="meta">1:58 · 2 Sep</span></div>
+              <button class="icon-btn c-keep"><svg class="ic f"><use href="#i-heart"/></svg></button>
+              <button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption>Der Link „Used in 2 takes“ (oder „Show takes“) klappt die Takes unter der Zeile auf. Jeder Take führt zu seiner Songseite. Das ⓘ sagt: „It stays while a take or version uses it. Delete those takes — or let them expire — and its 30 days start.“ So bleibt die Regel „was an einem Take hängt, bleibt immer“ wahr, und der Musiker sieht, wie er die Referenz frei bekommt.</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag alt">e · Alternative B · Löschen trotz Benutzung</figcaption>
+      <div class="fit"><div class="app device mid modal ph" data-w="390">
+        <div class="appbar"><button class="icon-btn"><svg class="ic"><use href="#i-back"/></svg></button><h1>References</h1><button class="info">i</button><span class="grow"></span><span class="avatar">F</span></div>
+        <div class="pbody">
+          <div class="list">
+            <div class="rr"><button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button><div class="nm"><span class="fn">voice-memo-0412.mp3</span><span class="meta">0:31 · 27 Oct <span class="exp">⏳ 28d</span></span></div><button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button><button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button></div>
+            <div class="rr"><button class="face"><svg class="ic sm"><use href="#i-play"/></svg></button><div class="nm"><span class="fn">storytime-drums.wav</span><span class="meta">0:42 · 14 Oct · <span class="use"><svg class="ic xs"><use href="#i-link"/></svg>Used in 2 takes</span></span></div><button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button><button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button></div>
+          </div>
+          <div class="scrim">
+            <div class="dlg">
+              <h3>Delete reference?</h3>
+              <p><b>storytime-drums.wav</b> — 2 takes keep their audio but can no longer be regenerated exactly.</p>
+              <p class="muted">This cannot be undone.</p>
+              <div class="acts"><button class="btn-sec">Cancel</button><button class="btn-del">Delete</button></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption><b>Nur als Alternative:</b> Delete ist erlaubt, nach der Bestätigung aus Vokabular §6 (ohne Tippen, weil nichts mitgelöscht wird). Danach zeigt das Rezept der beiden Takes „Reference track: deleted“ (Abschnitt 3, R2). Das widerspricht dem Satz vom 18.10. „was an einem Take hängt, bleibt immer“. Deshalb empfehle ich A.</figcaption>
+    </figure>
+
+  </div>
+</section>
+
+<!-- ───────────── 3 · picking ───────────── -->
+<section class="part">
+  <h2>3 · Wählen im Rezept <small>die Zeile „Reference track“ im Tab Song (song-page.html)</small></h2>
+  <ul class="plain">
+    <li>Die Zeile wird eine <b>Auswahlzeile mit Pfeil</b>, wie „Your voice“ direkt darüber. Statt Dateiname oder Pfad steht dort immer der <b>Name</b>, also der Originaldateiname, auch nach dem Neuladen.</li>
+    <li>Geöffnet klappt sie <b>in der Karte</b> auf, nicht als Dialog: <b>None</b>, die eigenen Referenzen (neueste zuerst, jede mit ▶ zum Vorhören und ihrem ⏳, falls sie läuft), <b>Upload audio</b> und unten <b>All references ›</b> nach Settings › References. Behalten und Löschen gibt es nur dort; hier wird nur gewählt.</li>
+    <li>Die Wahl gilt ab dem Speichern mit der Version („Saved with the version“). Ab dann ist die Referenz benutzt und ihr ⏳ verschwindet.</li>
+  </ul>
+  <div class="frames">
+    <figure class="w665">
+      <figcaption class="tag">R1 · Desktop · Write-Spalte, Rezept offen, Reference track aufgeklappt</figcaption>
+      <div class="fit"><div class="app colframe" data-w="665" style="width:665px">
+        <div class="card">
+          <div class="vtabs"><button class="vt on">Song</button><button class="vt">Generate</button><button class="vt">Engine</button></div>
+          <div class="kv"><span class="k">BPM</span><span class="v"><span class="inp">145</span></span></div>
+          <div class="kv"><span class="k">Duration</span><span class="v"><span class="inp ph">Auto</span></span></div>
+          <div class="kv"><span class="k">Key</span><span class="v"><span class="inp ph">—</span></span></div>
+          <div class="kv"><span class="k">Your voice</span><span class="v">None <svg class="ic sm"><use href="#i-down"/></svg></span></div>
+          <div class="kv open"><span class="k">Reference track</span><span class="v c-act"><span class="t">storytime-drums.wav</span><svg class="ic sm" style="transform:rotate(180deg)"><use href="#i-down"/></svg></span></div>
+          <div class="pick">
+            <div class="po"><span class="rdot"></span><span class="fn">None</span></div>
+            <div class="po on"><span class="rdot"></span><button class="face"><svg class="ic xs"><use href="#i-play"/></svg></button><span class="fn">storytime-drums.wav</span><small>0:42</small></div>
+            <div class="po"><span class="rdot"></span><button class="face"><svg class="ic xs"><use href="#i-play"/></svg></button><span class="fn">voice-memo-0412.mp3</span><span class="exp">⏳ 28d</span><small>0:31</small></div>
+            <div class="po"><span class="rdot"></span><button class="face"><svg class="ic xs"><use href="#i-play"/></svg></button><span class="fn">berlin-night-pad.flac</span><small>1:58</small></div>
+            <div class="po"><span class="rdot"></span><button class="face"><svg class="ic xs"><use href="#i-play"/></svg></button><span class="fn">old-demo-bounce.wav</span><span class="exp warn">⏳ 3d</span><small>3:20</small></div>
+            <div class="po up"><svg class="ic sm"><use href="#i-up"/></svg>Upload audio</div>
+            <div class="po more">All references <svg class="ic sm"><use href="#i-right"/></svg></div>
+          </div>
+          <div class="vfoot"><span>Saved with the version</span><button class="reset">Reset all</button></div>
+        </div>
+      </div></div>
+      <figcaption>Bei vielen Referenzen (bis zu 50) zeigt die Liste etwa sechs Zeilen und scrollt in sich. Upload audio läuft wie heute direkt aus dem Rezept und landet in derselben Liste. Ist der Speicher voll, steht der Grund aus c2 unter dieser Zeile.</figcaption>
+    </figure>
+
+    <figure class="w390">
+      <figcaption class="tag">R1 · Telefon 390 · dasselbe</figcaption>
+      <div class="fit"><div class="app ph" data-w="390" style="width:390px">
+        <div class="colframe" style="padding:12px">
+        <div class="card">
+          <div class="vtabs"><button class="vt on">Song</button><button class="vt">Generate</button><button class="vt">Engine</button></div>
+          <div class="kv"><span class="k">Your voice</span><span class="v">None <svg class="ic sm"><use href="#i-down"/></svg></span></div>
+          <div class="kv open"><span class="k">Reference track</span><span class="v c-act"><span class="t" style="max-width:170px">storytime-drums.wav</span><svg class="ic sm" style="transform:rotate(180deg)"><use href="#i-down"/></svg></span></div>
+          <div class="pick">
+            <div class="po"><span class="rdot"></span><span class="fn">None</span></div>
+            <div class="po on"><span class="rdot"></span><button class="face"><svg class="ic xs"><use href="#i-play"/></svg></button><span class="fn">storytime-drums.wav</span><small>0:42</small></div>
+            <div class="po"><span class="rdot"></span><button class="face"><svg class="ic xs"><use href="#i-play"/></svg></button><span class="fn">voice-memo-0412.mp3</span><span class="exp">⏳ 28d</span></div>
+            <div class="po"><span class="rdot"></span><button class="face"><svg class="ic xs"><use href="#i-play"/></svg></button><span class="fn">old-demo-bounce.wav</span><span class="exp warn">⏳ 3d</span></div>
+            <div class="po up"><svg class="ic sm"><use href="#i-up"/></svg>Upload audio</div>
+            <div class="po more">All references <svg class="ic sm"><use href="#i-right"/></svg></div>
+          </div>
+          <div class="vfoot"><span>Saved with the version</span><button class="reset">Reset all</button></div>
+        </div>
+        </div>
+      </div></div>
+      <figcaption>Wenn es eng wird, fällt am Telefon die Länge weg. Das ⏳ bleibt, weil es einen Zustand trägt.</figcaption>
+    </figure>
+
+    <figure class="w300">
+      <figcaption class="tag">R2 · Das Rezept eines Takes</figcaption>
+      <div class="fit"><div class="app" data-w="300" style="width:300px">
+        <div class="card" style="border:none;border-radius:0">
+          <div class="rlines">
+            <div class="gh">Version</div>
+            <div class="rl"><span>BPM</span><span>145</span></div>
+            <div class="rl"><span>Reference track</span><a>storytime-drums.wav <svg class="ic xs"><use href="#i-right"/></svg></a></div>
+          </div>
+          <div class="rlines" style="border-top:1px solid var(--border)">
+            <div class="gh">Heute</div>
+            <div class="rl strike"><span>Reference track</span><span>used</span></div>
+          </div>
+          <div class="rlines" style="border-top:1px dashed var(--warn-line)">
+            <div class="gh" style="color:var(--warn-ink)">Nur mit B</div>
+            <div class="rl"><span>Reference track</span><s>deleted</s></div>
+          </div>
+        </div>
+      </div></div>
+      <figcaption>Statt „used“ steht der <b>Name</b>, und er führt zur Zeile in Settings › References, dort hervorgehoben. Mit A gibt es „deleted“ nie, solange der Take lebt.</figcaption>
+    </figure>
+
+    <figure class="w300">
+      <figcaption class="tag">R3 · „Use as reference“ am Take</figcaption>
+      <div class="fit"><div class="app" data-w="300" style="width:300px;padding:14px;background:var(--bg)">
+        <div class="lmenu" style="width:100%">
+          <div class="lhead">Take 11</div>
+          <div class="lmi">Repaint</div>
+          <div class="lmi">Cover</div>
+          <div class="lmi">Use seed<span class="lhint">4127730</span></div>
+          <div class="lmi">Add to playlist</div>
+          <div class="lmi">Share<span class="lhint">Off</span></div>
+          <div class="lmi destructive">Delete</div>
+          <div class="lmi dashed">Use as reference<span class="lhint" style="color:var(--warn-ink)">alt.</span></div>
+        </div>
+      </div></div>
+      <figcaption><b>Empfehlung: das Menü bleibt bei sechs Zeilen.</b> „Use as reference“ gibt es heute nicht mehr. Es war bis #1815 der versteckte Weg zu Repaint, und auf einem Take aufbauen heißt heute <b>Cover</b>. Die Liste enthält nur hochgeladene Aufnahmen. <b>Alternative</b> (gestrichelt): eine siebte Zeile, die den Take als neue Referenz in die Liste kopiert, mit ⏳ und gegen das Kontingent gezählt.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ───────────── 4 · alternative placement ───────────── -->
+<section class="part">
+  <h2>4 · Alternative Stelle <small>klein: Verwaltung nur in der Auswahl im Rezept</small></h2>
+  <div class="frames">
+    <figure class="w390">
+      <figcaption class="tag alt">Alt · alles in der aufgeklappten Rezept-Zeile, keine Settings-Zeile</figcaption>
+      <div class="fit"><div class="app ph" data-w="390" style="width:390px">
+        <div class="colframe" style="padding:12px">
+        <div class="card">
+          <div class="kv open"><span class="k">Reference track</span><span class="v c-act"><span class="t" style="max-width:170px">storytime-drums.wav</span><svg class="ic sm" style="transform:rotate(180deg)"><use href="#i-down"/></svg></span></div>
+          <div class="pick">
+            <div class="po"><span class="rdot"></span><span class="fn">None</span></div>
+            <div class="po on"><span class="rdot"></span><span class="fn">storytime-drums.wav</span><button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button><button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button></div>
+            <div class="po"><span class="rdot"></span><span class="fn">voice-memo-0412.mp3</span><span class="exp">⏳ 28d</span><button class="icon-btn heart-out"><svg class="ic"><use href="#i-heart"/></svg></button><button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button></div>
+            <div class="po"><span class="rdot"></span><span class="fn">berlin-night-pad.flac</span><button class="icon-btn c-keep"><svg class="ic f"><use href="#i-heart"/></svg></button><button class="icon-btn"><svg class="ic"><use href="#i-more"/></svg></button></div>
+            <div class="po up"><svg class="ic sm"><use href="#i-up"/></svg>Upload audio</div>
+          </div>
+        </div>
+        </div>
+      </div></div>
+      <figcaption><b>Dafür:</b> Es gibt keine neue Seite, alles liegt dort, wo der Musiker sowieso hinschaut. <b>Dagegen:</b> Man muss einen Song öffnen, um aufzuräumen. Die Zeilen werden zu voll (Wahl, Vorhören, ♥, ⋯). Für „wo benutzt“ und den vollen Speicher ist im Rezept kein Platz. Und es bricht mit Voices, das schon in den Settings verwaltet wird.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ───────────── 5 · open decisions ───────────── -->
+<section class="part">
+  <h2>Offene Entscheidungen <small>für die Optionskarten</small></h2>
+  <ol class="dec">
+    <li><b>Ort der Verwaltung.</b>
+      <span class="r">Settings › References unter Voices, gewählt wird im Rezept, „All references ›“ verbindet beide (D1, P1, R1).</span>
+      <span class="a">Verwaltung nur in der aufgeklappten Rezept-Zeile, ohne eigene Seite (Abschnitt 4).</span></li>
+    <li><b>Wann die 30 Tage beginnen.</b>
+      <span class="r">Ab dem Moment, in dem die Referenz unbenutzt ist: beim Upload oder wenn der letzte Take bzw. die letzte Version mit ihr verschwindet. Archivierte Takes zählen, bis sie endgültig gelöscht sind. So hat jede Referenz die vollen 30 Tage angekündigt vor sich.</span>
+      <span class="a">Stur ab Upload (Wortlaut 18.10.). Dann kann eine lange benutzte Referenz in der Nacht nach dem Löschen ihres letzten Takes verschwinden, ohne dass ein ⏳ je zu sehen war.</span></li>
+    <li><b>Form der Ankündigung.</b>
+      <span class="r">Takes haben schon „⏳ Nd“. Bei unbenutzten, nicht behaltenen Referenzen steht es immer: grau, in den letzten 3 Tagen bernsteinfarben, das Datum im Tooltip („Deleted on 26 Nov — keep to preserve“).</span>
+      <span class="a">a) Datum als Text: „Deleted 26 Nov“. b) Wie bei Takes nur in den letzten 3 Tagen. Dann ist die Referenz 27 Tage lang ohne Hinweis.</span></li>
+    <li><b>Löschen einer benutzten Referenz.</b>
+      <span class="r">A: Delete ist ausgegraut mit „In use“, „Show takes“ führt zu den Takes (d1, d2).</span>
+      <span class="a">B: Löschen nach Bestätigung. Die Takes behalten ihr Audio, sind aber nicht mehr exakt reproduzierbar, und ihr Rezept zeigt „deleted“ (e, R2).</span></li>
+    <li><b>Füllanzeige des Speichers.</b>
+      <span class="r">Erst ab 80 % einer der beiden Grenzen, bernsteinfarben. Bei 100 % steht der Grund am Upload-Knopf (c, c2).</span>
+      <span class="a">Immer eine leise Zeile „4 of 50 files · 41 of 500 MB“ über der Liste.</span></li>
+    <li><b>„Use as reference“ am Take.</b>
+      <span class="r">Keine neue Menüzeile, das Take-Menü bleibt bei sechs Zeilen. Auf einem Take aufbauen heißt Cover, und die Liste enthält nur Uploads (R3).</span>
+      <span class="a">Eine siebte Zeile kopiert den Take als neue Referenz in die Liste; sie zählt gegen das Kontingent.</span></li>
+    <li><b>Ankündigung außerhalb der Liste.</b>
+      <span class="r">Keine. Das ⏳ steht in der Liste und in der Auswahl im Rezept, wo man Referenzen sowieso sieht.</span>
+      <span class="a">Eine Sammelzeile wie der Take-Hinweis auf der Songseite, etwa „2 references are deleted in 3 days — keep to preserve“, an einer zentralen Stelle (Home).</span></li>
+    <li><b>Was „benutzt“ heißt.</b>
+      <span class="r">An einer gespeicherten Version oder einem Take, wie im Ruling vom 18.10. Ein ungespeicherter Entwurf zählt nicht. Die Auswahl zeigt das ⏳ weiter, bis gespeichert ist.</span>
+      <span class="a">Auch die Wahl im Entwurf zählt als Benutzung. Das braucht einen gespeicherten Entwurf als Besitzer.</span></li>
+    <li><b>Name.</b>
+      <span class="r">Der Originaldateiname, nicht umbenennbar (kein neuer Begriff).</span>
+      <span class="a">Umbenennen im ⋯-Menü.</span></li>
+  </ol>
+  <p class="lede" style="font-size:14px">Am Rand bemerkt, nicht Teil dieses Bildes: Takes zeigen ihr ⏳ nur in den letzten 3 Tagen. Wenn Entscheidung 3 so fällt wie empfohlen, kündigen Referenzen früher an als Takes. Ob Takes nachziehen, ist eine eigene Frage für <code>song-page.html</code>.</p>
+</section>
+
+</div>
+<script>
+// Scale each fixed-width app frame down to the width its figure has, so nothing scrolls sideways.
+function fitFrames(){
+  document.querySelectorAll('.fit').forEach(function(box){
+    var frame = box.firstElementChild; if(!frame) return;
+    var natural = Number(frame.dataset.w) || frame.offsetWidth;
+    frame.style.zoom = '';
+    var scale = Math.min(1, box.clientWidth / natural);
+    frame.style.zoom = String(scale);
+  });
+}
+window.addEventListener('resize', fitFrames);
+fitFrames();
+</script>
+</body>
+</html>

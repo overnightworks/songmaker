@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Settings — About</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=Open+Sans:wght@400;600&display=swap">
+<style>
+/* Tokens as in frontend/src/app.css and docs/design/vocabulary.html: light, and the app's default dark. */
+:root{
+	--primary:#d41a0a; --accent:#7a18c0; --bg:#f4f4f6; --surface:#fff; --surface-hover:#ebebed; --border:#d0d0d4;
+	--text:#1a1a1e; --text-muted:#555; --text-subtle:#555; --header-bg:#f0f0f2; --paper:#e6e5ea;
+	--font-display:'Oswald',Impact,sans-serif; --font-body:'Open Sans',Arial,sans-serif; --card-radius:6px;
+}
+@media (prefers-color-scheme:dark){
+	:root:not([data-theme="light"]){
+		--primary:#ff3220; --accent:#b45cf5; --bg:#0d0d0d; --surface:#111; --surface-hover:#1a1a1a; --border:#333;
+		--text:#e0e0e0; --text-muted:#888; --text-subtle:#888; --header-bg:#0a0a0a; --paper:#050505;
+	}
+}
+:root[data-theme="dark"]{
+	--primary:#ff3220; --accent:#b45cf5; --bg:#0d0d0d; --surface:#111; --surface-hover:#1a1a1a; --border:#333;
+	--text:#e0e0e0; --text-muted:#888; --text-subtle:#888; --header-bg:#0a0a0a; --paper:#050505;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);color:var(--text);font:15px/1.5 var(--font-body);padding:24px 16px 40px}
+.page{max-width:1760px;margin:0 auto;display:flex;flex-direction:column;gap:30px}
+h1.doc{font:500 1.5rem var(--font-display);letter-spacing:.06em;text-transform:uppercase}
+h2{font:500 1rem var(--font-display);letter-spacing:.06em;text-transform:uppercase}
+.sub,.cap{font-size:.85rem;color:var(--text-muted);max-width:980px}
+.cap b{color:var(--text);font-weight:600}
+code{font-size:.9em}
+.board{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;overflow-x:auto;padding:6px 6px 10px;margin-top:10px}
+.ic{width:20px;height:20px;flex:none;display:block;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:16px;height:16px}
+
+/* ── frames: phone 390 px, desktop 1280 px ─────────────────────────────── */
+.phone,.desk{flex:none;display:flex;background:var(--bg);overflow:hidden;border-radius:10px;
+	box-shadow:0 2px 4px rgba(0,0,0,.08),0 14px 40px rgba(0,0,0,.12)}
+.phone{width:390px;height:540px;flex-direction:column}
+.desk{width:1280px;height:430px;font-size:14px}
+.bar{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding-right:2px;
+	background:var(--header-bg);border-bottom:1px solid var(--border)}
+.back{display:flex;align-items:center;height:44px;padding-right:10px;font:500 1.1rem var(--font-display);letter-spacing:.03em}
+.acct{width:30px;height:30px;margin:0 7px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+	background:var(--surface-hover);border:1px solid var(--border);font:.85rem var(--font-display)}
+.body{flex:1;min-height:0;padding:0 12px}
+.title{min-height:64px;display:flex;align-items:center;font:500 1.6rem var(--font-display);letter-spacing:.06em;text-transform:uppercase}
+.tabs{height:54px;flex:none;display:grid;grid-template-columns:repeat(3,1fr);background:var(--header-bg)}
+.tabs span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--text-muted);
+	font:.72rem var(--font-display);letter-spacing:.12em;text-transform:uppercase}
+
+/* the label/value list of the vocabulary (settings rows: 52 high, muted value right, chevron or ↗ at the end) */
+.list{margin:4px 0;border:1px solid var(--border);border-radius:var(--card-radius);background:var(--surface);overflow:hidden}
+.kv{display:flex;align-items:center;gap:10px;min-height:52px;padding:0 12px 0 14px;font-size:.93rem;color:var(--text);text-decoration:none}
+.kv+.kv{border-top:1px solid var(--border)}
+.kv .ic{color:var(--text-muted)}
+.kv .v{margin-left:auto;font-size:.85rem;color:var(--text-muted);text-align:right}
+.kv .v+.ic,.kv .grow+.ic{margin-left:0}
+.kv .grow{flex:1;min-width:0}
+a.kv:hover,a.kv:focus-visible{background:var(--surface-hover)}
+a.kv:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.mono{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:.02em;color:var(--text)}
+.dim{font-style:normal;color:var(--text-subtle)}
+.desk .kv{min-height:44px}
+
+.rail{width:264px;flex:none;display:flex;flex-direction:column;padding:14px 0 12px;background:var(--surface);border-right:1px solid var(--border)}
+.brand{padding:2px 16px 12px;color:var(--accent);font:700 1rem var(--font-display);letter-spacing:.5px;text-transform:uppercase}
+.search{margin:0 12px 8px;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--border);border-radius:4px;color:var(--text-subtle);font-size:.8rem}
+.rg{display:flex;align-items:center;gap:8px;padding:10px 16px;color:var(--text-muted);font:.85rem var(--font-display);letter-spacing:.5px;text-transform:uppercase}
+.rg.end{margin-top:auto}
+.rr{display:flex;align-items:center;gap:8px;min-height:30px;padding:4px 16px 4px 32px;border-left:3px solid transparent;color:var(--text-muted);font-size:.8rem}
+.rr.on{border-left-color:var(--primary);color:var(--text);background:color-mix(in srgb,var(--primary) 8%,transparent)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.top{height:46px;flex:none;display:flex;align-items:center;gap:10px;padding:0 24px 0 20px;border-bottom:1px solid var(--border);background:var(--header-bg)}
+.top .dt{font:500 1.2rem var(--font-display);letter-spacing:.06em;text-transform:uppercase}
+.top .acct{margin:0 0 0 auto}
+.content{max-width:704px;padding:22px 32px}
+
+.new{outline:1px dashed var(--accent);outline-offset:-3px}  /* drawing aid: marks what is new in this picture */
+@media (max-width:640px){body{padding:16px 10px 32px}}
+</style>
+</head>
+<body>
+<svg style="display:none" aria-hidden="true">
+<symbol id="back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5.5H4.5V6H10"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+<symbol id="wave" viewBox="0 0 24 24"><path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/></symbol>
+<symbol id="voice" viewBox="0 0 24 24"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+<symbol id="home" viewBox="0 0 24 24"><path d="M4 11l8-6.5 8 6.5"/><path d="M6.5 9.5V19h11V9.5"/></symbol>
+<symbol id="grid" viewBox="0 0 24 24"><rect x="4.5" y="4.5" width="6" height="6" rx="1"/><rect x="13.5" y="4.5" width="6" height="6" rx="1"/><rect x="4.5" y="13.5" width="6" height="6" rx="1"/><rect x="13.5" y="13.5" width="6" height="6" rx="1"/></symbol>
+<symbol id="note" viewBox="0 0 24 24"><path d="M9 17.5V6l10-2v11.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/></symbol>
+</svg>
+<div class="page">
+	<header>
+		<h1 class="doc">Settings — About</h1>
+		<p class="sub">A dedicated <b>About</b> entry in Settings for every signed-in person, member or admin. It is the last entry: a row in the phone list, the last row of the settings group in the desktop rail. It opens a small page that says what is running; the loose line at the foot of Settings is gone. A row with ↗ opens GitHub in a new tab (public repository). The dashed outline only marks what is new in this picture.</p>
+	</header>
+
+	<section>
+		<h2>(a) Release build</h2>
+		<p class="cap"><b>The list gains one row; the page names the release, its day and its commit.</b> A member sees Generation, Voices, About; an admin also sees Admin before About (drawn). “What’s new” opens the release’s page on GitHub, which shows the tag’s own message. “Released” is the day in the tag name <code>vYYYY.MM.DD.N</code>.</p>
+		<div class="board">
+			<div class="phone">
+				<header class="bar"><span class="back"><svg class="ic"><use href="#back"/></svg>Home</span><span class="acct">F</span></header>
+				<div class="body"><h3 class="title">Settings</h3>
+					<div class="list">
+						<div class="kv"><svg class="ic"><use href="#wave"/></svg><span class="grow">Generation</span><svg class="ic sm"><use href="#chev"/></svg></div>
+						<div class="kv"><svg class="ic"><use href="#voice"/></svg><span class="grow">Voices</span><svg class="ic sm"><use href="#chev"/></svg></div>
+						<div class="kv"><svg class="ic"><use href="#shield"/></svg><span class="grow">Admin</span><span class="v">admins only</span><svg class="ic sm"><use href="#chev"/></svg></div>
+						<div class="kv new"><svg class="ic"><use href="#info"/></svg><span class="grow">About</span><svg class="ic sm"><use href="#chev"/></svg></div>
+					</div>
+				</div>
+				<nav class="tabs" aria-label="Places"><span><svg class="ic"><use href="#home"/></svg>Home</span><span><svg class="ic"><use href="#grid"/></svg>Library</span><span><svg class="ic"><use href="#note"/></svg>Playlists</span></nav>
+			</div>
+			<div class="phone">
+				<header class="bar"><span class="back"><svg class="ic"><use href="#back"/></svg>Settings</span><span class="acct">F</span></header>
+				<div class="body"><h1 class="title">About</h1>
+					<div class="list new">
+						<div class="kv"><span class="grow">App</span><span class="v">Hallucinai</span></div>
+						<div class="kv"><span class="grow">Version</span><span class="v">v2026.10.28.4</span></div>
+						<div class="kv"><span class="grow">Released</span><span class="v">28 Oct 2026</span></div>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/commit/15d8557508fe726d732335875a524b6a817e4621" target="_blank" rel="noopener"><span class="grow">Commit</span><span class="v mono">15d85575</span><svg class="ic sm"><use href="#ext"/></svg></a>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/releases/tag/v2026.10.28.4" target="_blank" rel="noopener"><span class="grow">What’s new</span><svg class="ic sm"><use href="#ext"/></svg></a>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/blob/main/LICENSE" target="_blank" rel="noopener"><span class="grow">Licence</span><span class="v">MIT</span><svg class="ic sm"><use href="#ext"/></svg></a>
+					</div>
+				</div>
+				<nav class="tabs" aria-label="Places"><span><svg class="ic"><use href="#home"/></svg>Home</span><span><svg class="ic"><use href="#grid"/></svg>Library</span><span><svg class="ic"><use href="#note"/></svg>Playlists</span></nav>
+			</div>
+			<div class="desk">
+				<aside class="rail"><span class="brand">Hallucinai</span><div class="search"><svg class="ic sm"><use href="#search"/></svg>Search or go to…</div>
+					<div class="rg"><svg class="ic sm"><use href="#home"/></svg>Home</div><div class="rg"><svg class="ic sm"><use href="#grid"/></svg>Library</div><div class="rg"><svg class="ic sm"><use href="#note"/></svg>Playlists</div>
+					<div class="rg end"><svg class="ic sm"><use href="#gear"/></svg>Settings</div><div class="rr">Generation</div><div class="rr">Voices</div><div class="rr">Admin</div><div class="rr on new">About</div></aside>
+				<section class="main"><div class="top"><svg class="ic sm"><use href="#back"/></svg><span class="dt">About</span><span class="acct">F</span></div>
+					<div class="content"><div class="list new">
+						<div class="kv"><span class="grow">App</span><span class="v">Hallucinai</span></div>
+						<div class="kv"><span class="grow">Version</span><span class="v">v2026.10.28.4</span></div>
+						<div class="kv"><span class="grow">Released</span><span class="v">28 Oct 2026</span></div>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/commit/15d8557508fe726d732335875a524b6a817e4621" target="_blank" rel="noopener"><span class="grow">Commit</span><span class="v mono">15d85575</span><svg class="ic sm"><use href="#ext"/></svg></a>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/releases/tag/v2026.10.28.4" target="_blank" rel="noopener"><span class="grow">What’s new</span><svg class="ic sm"><use href="#ext"/></svg></a>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/blob/main/LICENSE" target="_blank" rel="noopener"><span class="grow">Licence</span><span class="v">MIT</span><svg class="ic sm"><use href="#ext"/></svg></a>
+					</div></div>
+				</section>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2>(b) Build without a release tag</h2>
+		<p class="cap"><b>No tag means no release to name: “Version” says “No release”, and “Released” and “What’s new” are not shown</b> (nothing to date, nothing to open). The commit still says what runs. A build with neither tag nor commit (the named constants <code>unreleased</code> and <code>unknown</code>) is only this page with “Commit” reading “Unknown” as plain text, no link; nothing else changes.</p>
+		<div class="board">
+			<div class="phone">
+				<header class="bar"><span class="back"><svg class="ic"><use href="#back"/></svg>Settings</span><span class="acct">F</span></header>
+				<div class="body"><h1 class="title">About</h1>
+					<div class="list">
+						<div class="kv"><span class="grow">App</span><span class="v">Hallucinai</span></div>
+						<div class="kv"><span class="grow">Version</span><span class="v dim">No release</span></div>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/commit/15d8557508fe726d732335875a524b6a817e4621" target="_blank" rel="noopener"><span class="grow">Commit</span><span class="v mono">15d85575</span><svg class="ic sm"><use href="#ext"/></svg></a>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/blob/main/LICENSE" target="_blank" rel="noopener"><span class="grow">Licence</span><span class="v">MIT</span><svg class="ic sm"><use href="#ext"/></svg></a>
+					</div>
+				</div>
+				<nav class="tabs" aria-label="Places"><span><svg class="ic"><use href="#home"/></svg>Home</span><span><svg class="ic"><use href="#grid"/></svg>Library</span><span><svg class="ic"><use href="#note"/></svg>Playlists</span></nav>
+			</div>
+			<div class="desk">
+				<aside class="rail"><span class="brand">Hallucinai</span><div class="search"><svg class="ic sm"><use href="#search"/></svg>Search or go to…</div>
+					<div class="rg"><svg class="ic sm"><use href="#home"/></svg>Home</div><div class="rg"><svg class="ic sm"><use href="#grid"/></svg>Library</div><div class="rg"><svg class="ic sm"><use href="#note"/></svg>Playlists</div>
+					<div class="rg end"><svg class="ic sm"><use href="#gear"/></svg>Settings</div><div class="rr">Generation</div><div class="rr">Voices</div><div class="rr on">About</div></aside>
+				<section class="main"><div class="top"><svg class="ic sm"><use href="#back"/></svg><span class="dt">About</span><span class="acct">F</span></div>
+					<div class="content"><div class="list">
+						<div class="kv"><span class="grow">App</span><span class="v">Hallucinai</span></div>
+						<div class="kv"><span class="grow">Version</span><span class="v dim">No release</span></div>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/commit/15d8557508fe726d732335875a524b6a817e4621" target="_blank" rel="noopener"><span class="grow">Commit</span><span class="v mono">15d85575</span><svg class="ic sm"><use href="#ext"/></svg></a>
+						<a class="kv" href="https://github.com/overnightworks/songmaker/blob/main/LICENSE" target="_blank" rel="noopener"><span class="grow">Licence</span><span class="v">MIT</span><svg class="ic sm"><use href="#ext"/></svg></a>
+					</div></div>
+				</section>
+			</div>
+		</div>
+	</section>
+</div>
+</body>
+</html>
