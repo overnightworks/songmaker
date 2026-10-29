@@ -536,8 +536,7 @@ def _sse_format(event: BaseModel) -> str:
 )
 async def api_chat_turn(
     req: ChatTurnV2Request, request: Request,
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
+    user: AuthenticatedUser = Depends(get_current_user), session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
     session_id = session_id_from_request(request, installed_web_auth_config(request.app))
     if session_id is None:
