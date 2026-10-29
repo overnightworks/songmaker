@@ -420,6 +420,7 @@ def test_every_repo_built_container_start_uses_the_installed_environment(
 
 
 def test_container_entrypoints_do_not_import_omitted_optional_dependencies() -> None:
+    assert CONTAINERS, "_installing_containers derived no container from compose"
     root_owners = _root_owning_extras()
     for name, spec in CONTAINERS.items():
         blocked_roots = frozenset(
@@ -497,7 +498,9 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
         for volume in volumes:
             if isinstance(volume, str):
                 source = volume.split(":", maxsplit=1)[0]
-                assert source in declared_named_volumes or source.startswith("./"), (
+                assert source in declared_named_volumes or (
+                    source.startswith("./") and ".." not in Path(source).parts
+                ), (
                     f"{service_name} must use Compose long syntax for every host "
                     f"bind mount so its read-only and host-path protections are "
                     f"explicit: {volume!r} is neither a declared named volume nor "
