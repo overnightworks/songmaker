@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-import pytest
 from fake_oidc_issuer import FakeIssuer, a_fake_issuer
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
@@ -105,7 +104,7 @@ class TokenWorld:
 
 
 def make_token_world(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, factory: sessionmaker | None = None,
+    tmp_path: Path, *, factory: sessionmaker | None = None,
 ) -> TokenWorld:
     from songmaker_cli.settings import get_settings
 

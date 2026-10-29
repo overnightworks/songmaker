@@ -17,7 +17,7 @@ def test_t18_a_first_token_call_and_a_first_sign_in_race_into_one_account_and_on
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pg_factory: sessionmaker,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    world = make_token_world(tmp_path, monkeypatch, factory=pg_factory)
+    world = make_token_world(tmp_path, factory=pg_factory)
     browser = World(world.client, pg_factory, world.issuer)
     started = browser.start()
     start_together = threading.Barrier(2)

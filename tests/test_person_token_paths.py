@@ -38,7 +38,7 @@ from songmaker_cli.db.queries.resource_events import create_generation_created_e
 @pytest.fixture
 def token_world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TokenWorld:
     monkeypatch.setenv("TOKEN_CLIENTS", TokenWorld.HAL)
-    return make_token_world(tmp_path, monkeypatch)
+    return make_token_world(tmp_path)
 
 
 
@@ -212,7 +212,7 @@ def test_t11_without_token_clients_a_bearer_is_not_admitted_and_the_app_starts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("TOKEN_CLIENTS", "")
-    world = make_token_world(tmp_path, monkeypatch)
+    world = make_token_world(tmp_path)
 
     response = world.client.get("/api/songs", headers=world.bearer())
 
