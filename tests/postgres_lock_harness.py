@@ -25,14 +25,19 @@ _ADVISORY_WAITERS = text("""
 """)
 
 
-def wrote_song_data(session: Session) -> bool:
-    """True once the session's transaction inserted, updated or deleted a song or a version."""
+def wrote_to_tables(session: Session, *table_names: str) -> bool:
+    """True once the session's transaction wrote a row of one of the tables."""
     return session.execute(text("""
         SELECT coalesce(bool_or(true), false)
         FROM pg_locks AS held JOIN pg_class AS locked_table ON locked_table.oid = held.relation
         WHERE held.pid = pg_backend_pid() AND held.granted AND held.mode = 'RowExclusiveLock'
-          AND locked_table.relname IN ('songs', 'versions')
-    """)).scalar_one()
+          AND locked_table.relname = ANY(:table_names)
+    """), {"table_names": list(table_names)}).scalar_one()
+
+
+def wrote_song_data(session: Session) -> bool:
+    """True once the session's transaction inserted, updated or deleted a song or a version."""
+    return wrote_to_tables(session, "songs", "versions")
 
 
 class CommitPause:
