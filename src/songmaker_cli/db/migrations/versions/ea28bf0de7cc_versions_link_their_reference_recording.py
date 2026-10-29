@@ -51,9 +51,11 @@ def _linked_path(params: object) -> str | None:
     return None if value in (None, "") else str(value)
 
 
-def _without_path(params: Mapping[str, object]) -> dict[str, object] | None:
+def _without_path(
+    params: Mapping[str, object], emptied: dict[str, object] | None
+) -> dict[str, object] | None:
     remaining = {key: value for key, value in params.items() if key != PATH_KEY}
-    return remaining or None
+    return remaining or emptied
 
 
 def _owner_of_each_version(bind: sa.Connection) -> dict[str, str | None]:
@@ -112,12 +114,21 @@ def _refuse_unmappable(failures: Mapping[str, Sequence[str]]) -> None:
     raise RuntimeError(msg)
 
 
-def _strip_path_key(bind: sa.Connection, table: sa.TableClause, column: str) -> None:
-    """Drop the key from every JSON object that still holds it, once the link carries it."""
+def _strip_path_key(
+    bind: sa.Connection,
+    table: sa.TableClause,
+    column: str,
+    emptied: dict[str, object] | None,
+) -> None:
+    """Drop the key from every JSON object that still holds it, once the link carries it.
+
+    ``emptied`` is what a column holds when the key was its only entry: NULL for
+    versions, ``{}`` for the NOT NULL preset parameters.
+    """
     for row_id, params in list(bind.execute(sa.select(table.c.id, table.c[column]))):
         if isinstance(params, dict) and PATH_KEY in params:
             bind.execute(
-                sa.update(table).where(table.c.id == row_id).values({column: _without_path(params)})
+                sa.update(table).where(table.c.id == row_id).values({column: _without_path(params, emptied)})
             )
 
 
@@ -137,8 +148,8 @@ def upgrade() -> None:
             .where(versions.c.id == version_id)
             .values({COLUMN: recording_id})
         )
-    _strip_path_key(bind, versions, "generation_params")
-    _strip_path_key(bind, presets, "params")
+    _strip_path_key(bind, versions, "generation_params", None)
+    _strip_path_key(bind, presets, "params", {})
 
 
 def downgrade() -> None:

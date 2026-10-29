@@ -259,14 +259,22 @@ def test_upgrade_fails_loud_for_a_path_on_a_preset_or_a_global_default(database,
     assert PATH not in str(refusal.value)
 
 
-def test_upgrade_strips_an_empty_path_from_a_preset(database, migration):
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({"reference_audio_path": "", "shift": 3.0}, {"shift": 3.0}),
+        ({"reference_audio_path": ""}, {}),
+        ({"reference_audio_path": None}, {}),
+    ],
+)
+def test_upgrade_strips_an_empty_path_from_a_preset(database, migration, params, expected):
     config, engine = database
     command.upgrade(config, PREVIOUS_REVISION)
-    _insert_preset(engine, "preset", {"reference_audio_path": "", "shift": 3.0}, None)
+    _insert_preset(engine, "preset", params, None)
     command.upgrade(config, migration.revision)
     with engine.connect() as connection:
         stored = connection.execute(text("SELECT params FROM generation_presets")).scalar()
-    assert _json(stored) == {"shift": 3.0}
+    assert _json(stored) == expected
 
 
 def test_downgrade_writes_the_path_back_and_drops_the_column(database, migration):
