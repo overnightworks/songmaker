@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "15d8557508fe726d732335875a524b6a817e4621"
 branch = "claude/issue-2004-presets-and-generation-defaults-refuse-a"
-scope = ["docs/acestep.md", "docs/security.md", "src/songmaker_cli/api_models/settings.py", "tests/admin_client_fixture.py", "tests/test_settings_reference_refusal.py"]
+scope = ["docs/acestep.md", "docs/security.md", "src/songmaker_cli/api_models/settings.py", "tests/admin_client_fixture.py", "tests/conftest.py", "tests/test_settings_reference_refusal.py"]
 opened_commit = "e84a996c5ad7808665a04d2d0a15b22a3cf48d74"
 whole_reason = "One validator change with its proof and the two documents that state the contract; the pieces are one decision and do not land apart."
