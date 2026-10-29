@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "694629bab9021b76fc35e9bd270dd175835be460"
 branch = "claude/issue-2041-frontend-imports-name-lib-instead-of-lib"
-scope = ["docs/architecture.md", "frontend", "scripts"]
+scope = ["docs/architecture.md", "frontend", "quality/baseline.toml", "quality/config.toml", "scripts"]
 opened_commit = "f7c084763ae753e4a58266b061037aabe5ec501c"
 whole_reason = "One mechanical rename across 368 frontend files plus the two files outside frontend that pin the specifier; a partial rename would leave two import styles."
