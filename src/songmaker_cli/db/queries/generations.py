@@ -24,6 +24,8 @@ from songmaker_cli.whisper_cues import WhisperCue
 log = logging.getLogger(__name__)
 
 INITIAL_GENERATION_NUMBER: Final[int] = 1
+COHERENCE_SCORE_KEY: Final = "lyrical_coherence"
+COHERENCE_SUMMARY_KEY: Final = "lyrical_summary"
 
 
 def _probe_audio_duration_or_none(audio_dir: Path, mp3_rel: str) -> float | None:
@@ -190,6 +192,7 @@ def save_scores(
         session.query(Score)
         .filter_by(generation_id=generation_id, scorer="batch")
         .with_for_update()
+        .populate_existing()
         .first()
     )
     if existing is None:
@@ -204,6 +207,14 @@ def save_scores(
     existing.value = merged
     flag_modified(existing, "value")
     session.flush()
+
+
+def save_coherence_verdict(
+    session: Session, generation_id: str, score: int, summary: str,
+) -> None:
+    """Store the co-writer's coherence verdict as one pair beside the take's other scores."""
+    pair = {COHERENCE_SCORE_KEY: score, COHERENCE_SUMMARY_KEY: summary}
+    save_scores(session, generation_id, pair, pair.keys())
 
 
 def set_generation_transcript(

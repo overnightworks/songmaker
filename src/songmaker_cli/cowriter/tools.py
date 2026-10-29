@@ -32,6 +32,7 @@ from songmaker_cli.mcp_server.tools import (
     tool_list_albums,
     tool_list_songs,
     tool_rename_song,
+    tool_save_coherence_verdict,
     tool_search_songs,
     tool_suggest_album_cover,
     tool_update_song_lyrics,
@@ -191,6 +192,19 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
         _object({"album_id": _STRING}, ["album_id"]),
         True,
         tool_suggest_album_cover,
+    ),
+    CowriterTool(
+        "save_coherence_verdict",
+        (
+            "Store your coherence verdict on one of the person's takes that has a "
+            "transcription: score 1 to 10 and a one-line summary. Replaces an earlier verdict."
+        ),
+        _object(
+            {"generation_id": _STRING, "score": _INT, "summary": _STRING},
+            ["generation_id", "score", "summary"],
+        ),
+        True,
+        tool_save_coherence_verdict,
     ),
 )
 

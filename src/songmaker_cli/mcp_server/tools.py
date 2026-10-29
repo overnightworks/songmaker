@@ -14,6 +14,8 @@ speaking the MCP protocol.
 """
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from webauth.ports import AuthenticatedUser
@@ -31,6 +33,7 @@ from songmaker_cli.cover_suggestions import (
 )
 from songmaker_cli.db.models import Song
 from songmaker_cli.db.queries.albums import get_album, list_albums
+from songmaker_cli.db.queries.generations import save_coherence_verdict
 from songmaker_cli.db.queries.songs import (
     count_songs,
     list_songs,
@@ -146,6 +149,34 @@ def tool_get_generation(
         gen = check_generation_access(session, generation_id, user, require_owner=True)
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
+    return GenerationDetail.from_orm(gen)
+
+
+COHERENCE_SUMMARY_MAX_CHARS: Final = 300
+
+
+def tool_save_coherence_verdict(
+    session: Session, user: AuthenticatedUser, generation_id: str, score: int, summary: str,
+) -> GenerationDetail:
+    if not 1 <= score <= 10:
+        raise MCPToolError("score must be between 1 and 10")
+    summary = summary.strip()
+    if not summary:
+        raise MCPToolError("summary cannot be empty")
+    if len(summary.splitlines()) > 1:
+        raise MCPToolError("summary must be one line")
+    if len(summary) > COHERENCE_SUMMARY_MAX_CHARS:
+        raise MCPToolError(f"summary must be at most {COHERENCE_SUMMARY_MAX_CHARS} characters")
+    try:
+        gen = check_generation_access(session, generation_id, user, require_owner=True)
+    except HTTPException as exc:
+        raise _to_tool_error(exc) from exc
+    if gen.whisper_text is None:
+        raise MCPToolError("this take has no transcription yet")
+    if gen.whisper_text == "":
+        raise MCPToolError("this take has no sung words to judge")
+    save_coherence_verdict(session, gen.id, score, summary)
+    session.expire(gen, ["scores"])
     return GenerationDetail.from_orm(gen)
 
 
