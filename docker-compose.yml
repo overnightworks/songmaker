@@ -4,6 +4,14 @@ x-logging: &service-logging
     max-size: "10m"
     max-file: "5"
 
+# Bare args take the value from compose's environment and are omitted when unset.
+x-web-image-build: &web-image-build
+  context: .
+  dockerfile: Dockerfile
+  args:
+    - SONGMAKER_RELEASE
+    - SONGMAKER_COMMIT
+
 services:
   postgres:
     image: postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
@@ -47,9 +55,7 @@ services:
       - SETGID
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: *web-image-build
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,9 +68,7 @@ services:
       - ALL
 
   songmaker-web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: *web-image-build
     restart: unless-stopped
     # uv run as PID 1 never reaps exited children (bwrap zombies); tini does.
     init: true
