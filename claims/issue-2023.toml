@@ -1,8 +1,0 @@
-claim_id = "2ade13aa09004013aa57c766b32adb3c"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6303f1d156217bc129d1af567d99218a3065efcb"
-branch = "claude/issue-2023-test-helpers-live-in-tests-support-no-te"
-scope = [".github/workflows/ci.yml", "docs/testing.md", "quality/baseline.toml", "scripts/dead-symbols.allow", "tests"]
-opened_commit = "b8766c7f1e2319914d3eb4d7e9d8e1d359e61124"
-whole_reason = "A mechanical import move across about 85 test modules, their plugins and tests/support; splitting it would leave half the suite importing conftest and double the conflicts."
