@@ -283,7 +283,7 @@ export const PROVIDER_STATUS_UNAVAILABLE_DETAIL = 'Provider status is unavailabl
 export const PROVIDER_ROUTE_CLI_LABEL = 'CLI';
 export const PROVIDER_ROUTE_API_LABEL = 'API';
 
-export const MODELS_HEADING = 'Models';
+export const AGENTS_HEADING = 'Agents';
 const MODELS_LOADING_LABEL = 'Loading…';
 const MODELS_UNAVAILABLE_LABEL = 'Unavailable';
 export const modelsRowStatus = (loadFailure: string | null): string =>

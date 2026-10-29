@@ -1,4 +1,4 @@
-// The admin Models tab, driven the way the admin drives it (issues #820, #846).
+// The admin Agents tab, driven the way the admin drives it (issues #820, #846).
 // It replaces `admin-routes.spec.ts`, which drove Fassung 1's per-provider route
 // cards; Fassung 2 is one table with one row per task, so the flow it pinned no
 // longer exists on the page.
@@ -70,20 +70,20 @@ const DESKTOP_HEIGHT = 900;
 const NAMED_TURN_FAILURES =
 	/The co-writer is unavailable|The co-writer is busy|The co-writer is not enabled for your account|Sign in again to use the co-writer/;
 
-// The co-writer row of the Models table: words, no control, no model and no status (#1949):
+// The co-writer row of the Agents table: words, no control, no model and no status (#1949):
 // the agent service decides the model, so the row says so.
 const COWRITER_ROW_WORDS = ['Set by the agent service', 'Agent service'];
 const SELECTABLE_TASKS = [MODELS_TASK_COVER_LABEL];
 
-async function openModelsTab(page: Page): Promise<void> {
+async function openAgentsTab(page: Page): Promise<void> {
 	await page.goto('/settings/users');
 	await expect(page.getByRole('heading', { name: 'Admin', exact: true })).toBeVisible();
 
 	const compactTabs = page.getByRole('combobox', { name: ADMIN_TABS_LABEL, exact: true });
 	if (await compactTabs.count()) {
-		await compactTabs.selectOption('models');
+		await compactTabs.selectOption('agents');
 	} else {
-		await page.getByRole('button', { name: 'Models', exact: true }).click();
+		await page.getByRole('button', { name: 'Agents', exact: true }).click();
 	}
 }
 
@@ -199,7 +199,7 @@ test.beforeEach(({ page }) => {
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
 test.afterEach(({}, testInfo) => {
-	console.log(`Models flow /api requests (${testInfo.title}): ${guard.apiRequestCount}`);
+	console.log(`Agents flow /api requests (${testInfo.title}): ${guard.apiRequestCount}`);
 	guard.assertClean();
 	guard.assertWithinBudget(MODELS_FLOW_API_REQUEST_BUDGET);
 });
@@ -217,10 +217,10 @@ async function attachShot(
 
 // The phone shell shows cards; they have their own test below.
 test(
-	'the Models table keeps every task, route, model and status on screen at every desktop width',
+	'the Agents table keeps every task, route, model and status on screen at every desktop width',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }, testInfo) => {
-		await openModelsTab(page);
+		await openAgentsTab(page);
 
 		// One row per task, and nothing else; the co-writer's row only reads, because
 		// the agent service chooses (#1476, lines 1 and 2).
@@ -279,7 +279,7 @@ test(
 	'a task keeps the provider it was given, even one no route can run',
 	{ tag: ONLY_IN_SHELL.desktop },
 	async ({ page }) => {
-		await openModelsTab(page);
+		await openAgentsTab(page);
 
 		// Cover is the row whose selection the server keeps whatever the routes can
 		// do (#820, lines 2, 3 and 8), so this is where a real save can be driven
@@ -307,7 +307,7 @@ test(
 			await expect(cover).toHaveValue(options[neighbour]);
 			await expectSaved(page, MODELS_TASK_COVER_LABEL);
 
-			await openModelsTab(page);
+			await openAgentsTab(page);
 			await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toHaveValue(options[neighbour]);
 		} finally {
 			// The selection is instance-wide and outlives the test, so it is put back
@@ -343,7 +343,7 @@ test(
 		await expect(failure).toBeVisible();
 		await expect(failure).toContainText(NAMED_TURN_FAILURES);
 
-		await openModelsTab(page);
+		await openAgentsTab(page);
 		await expectCowriterRowReadOnly(page);
 	}
 );
@@ -354,7 +354,7 @@ test(
 	{ tag: ONLY_IN_SHELL.mobile },
 	async ({ page }, testInfo) => {
 		await page.setViewportSize(PHONE_VIEWPORT);
-		await openModelsTab(page);
+		await openAgentsTab(page);
 
 		// The table's one header row gives way to a label on every line of every
 		// card, so each value still says what it is (#820, line 12).

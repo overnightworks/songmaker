@@ -33,7 +33,7 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   mit Menü samt Rechtliches-Zeile; (j) überschreibt dort die Settings-Zeilen
   von (e) und (h), das Konto-Menü von (h) und (i) und die Konto-Zeile der
   Desktop-Leiste.
-- `admin-models.html` — der Admin-Tab „Models" (#317). Fassung 1 wurde am
+- `admin-models.html` — der Admin-Tab „Agents" (#317). Fassung 1 wurde am
   01.09.2026 freigegeben; Fassung 2 wurde am 06.09.2026 freigegeben: eine
   Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
   Auswahl und Status. Die Scoring-CLI/API-Zeile (10.09.2026, #844) ist am
