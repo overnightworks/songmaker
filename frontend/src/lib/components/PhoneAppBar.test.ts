@@ -22,6 +22,7 @@ import {
 } from '#lib/constants.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
+import type { PathnameWithSearchOrHash } from '$app/types';
 import {
 	historyStandsStill,
 	installHistoryController,
@@ -127,7 +128,7 @@ function stampNavigationsReportedSince(count: number): void {
 	for (const { type } of reportedNavigations.slice(count)) stampNavigatedEntry(type);
 }
 
-async function followLinkTo(address: string): Promise<void> {
+async function followLinkTo(address: PathnameWithSearchOrHash): Promise<void> {
 	const reported = reportedNavigations.length;
 	// `resolve` has one overload per route; TypeScript cannot relate a union
 	// this wide to them, so the address is narrowed to one static route.
@@ -137,7 +138,10 @@ async function followLinkTo(address: string): Promise<void> {
 
 // History as a person left it: `from` the page they opened `opened` from, or
 // with no `from` the page the tab was entered on, with nothing of its own below.
-async function standOn(opened: string, from?: string): Promise<void> {
+async function standOn(
+	opened: PathnameWithSearchOrHash,
+	from?: PathnameWithSearchOrHash
+): Promise<void> {
 	if (from === undefined) {
 		await enterAppOn(opened);
 		return;
@@ -285,7 +289,12 @@ describe('PhoneAppBar', () => {
 
 	// #1402, #1506: Home and the Playlists page are places the app opens on, as
 	// the Library is.
-	it.each<{ place: string; address: string; entered: string; from?: string }>([
+	it.each<{
+		place: string;
+		address: PathnameWithSearchOrHash;
+		entered: string;
+		from?: PathnameWithSearchOrHash;
+	}>([
 		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'fresh' },
 		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'from an album', from: '/album/a1' },
 		{ place: 'the Playlists page', address: '/playlists', entered: 'fresh' },
@@ -327,7 +336,12 @@ describe('PhoneAppBar', () => {
 
 	// #1354 rule 25: ‹ is named after where it goes, and a page opened from
 	// another one carries no account circle (navigation.html, frame I3).
-	it.each<{ page: string; opened: string; from?: string; name: string }>([
+	it.each<{
+		page: string;
+		opened: PathnameWithSearchOrHash;
+		from?: PathnameWithSearchOrHash;
+		name: string;
+	}>([
 		{
 			page: 'an album opened from the Library',
 			opened: '/album/a1',
