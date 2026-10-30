@@ -2382,10 +2382,10 @@ def test_shared_cover_endpoints_hide_missing_media(
     assert response.status_code == 404
 
 
-# ── Public base URL (#339, #2070) ────────────────────────────────────
+# ── Public base URL ──────────────────────────────────────────────────
 #
-# Share links no longer trust request.base_url: behind a TLS-terminating proxy
-# it always reads "http" (#328, docs/security.md "Proxy trust").
+# Share links never read request.base_url: behind a TLS-terminating proxy
+# it reads "http" (docs/security.md "Proxy trust").
 # PUBLIC_BASE_URL, validated once by the Settings field, is the one owner of
 # "what address am I reachable at from outside", and public_share_url() is the
 # one builder of an absolute share address.
