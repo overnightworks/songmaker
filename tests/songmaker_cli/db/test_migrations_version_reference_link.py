@@ -185,9 +185,9 @@ def test_upgrade_adds_an_indexed_nullable_key_that_the_database_restricts(databa
 def test_deleting_a_linked_recording_is_refused_by_the_database(database, migration):
     engine = _upgraded_after_seeding(database, migration, version_params=None)
     _execute(engine, f"UPDATE versions SET {COLUMN} = 'recording'")
-    with engine.begin() as connection:
-        with pytest.raises(IntegrityError):
-            connection.execute(text("DELETE FROM reference_recordings"))
+    delete_recordings = text("DELETE FROM reference_recordings")
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        connection.execute(delete_recordings)
     with engine.connect() as connection:
         assert connection.execute(text("SELECT count(*) FROM reference_recordings")).scalar() == 1
         if engine.dialect.name == "sqlite":
