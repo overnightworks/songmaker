@@ -6,18 +6,25 @@ and strips the JSON key. A path that maps to no row of the take's creator stops 
 upgrade before anything changes.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 import sqlalchemy as sa
 from alembic import op
+
+from songmaker_cli.db.migrations.reference_link import (
+    COLUMN,
+    PATH_KEY,
+    linked_path,
+    recordings,
+    refuse_unmappable,
+    restore_paths,
+)
 
 revision = "c4d7e1a9b3f6"
 down_revision = "ea28bf0de7cc"
 branch_labels = None
 depends_on = None
 
-PATH_KEY = "reference_audio_path"
-COLUMN = "reference_recording_id"
 INDEX = "ix_generations_reference_recording_id"
 FOREIGN_KEY = "fk_generations_reference_recording_id_reference_recordings"
 
@@ -28,20 +35,6 @@ generations = sa.table(
     sa.column("generation_params", sa.JSON(none_as_null=True)),
     sa.column(COLUMN, sa.String),
 )
-recordings = sa.table(
-    "reference_recordings",
-    sa.column("id", sa.String),
-    sa.column("user_id", sa.String),
-    sa.column("storage_path", sa.Text),
-)
-
-
-def _linked_path(params: object) -> str | None:
-    """The non-empty path a JSON parameter object names, or None for absent, null and ""."""
-    if not isinstance(params, dict):
-        return None
-    value = params.get(PATH_KEY)
-    return None if value in (None, "") else str(value)
 
 
 def _without_path(params: Mapping[str, object]) -> dict[str, object] | None:
@@ -64,7 +57,7 @@ def _take_links(bind: sa.Connection) -> tuple[dict[str, str], dict[str, list[str
         sa.select(generations.c.id, generations.c.created_by, generations.c.generation_params)
     )
     for take_id, owner, params in rows:
-        path = _linked_path(params)
+        path = linked_path(params)
         if path is None:
             continue
         recording = recording_by_path.get(path)
@@ -79,20 +72,10 @@ def _take_links(bind: sa.Connection) -> tuple[dict[str, str], dict[str, list[str
     return links, {kind: ids for kind, ids in failures.items() if ids}
 
 
-def _refuse_unmappable(failures: Mapping[str, Sequence[str]]) -> None:
-    if not failures:
-        return
-    detail = "; ".join(
-        f"{kind}: {len(ids)} (ids {', '.join(ids)})" for kind, ids in failures.items()
-    )
-    msg = f"Reference paths cannot be linked by key, nothing was changed. {detail}"
-    raise RuntimeError(msg)
-
-
 def upgrade() -> None:
     bind = op.get_bind()
     links, failures = _take_links(bind)
-    _refuse_unmappable(failures)
+    refuse_unmappable(failures)
     with op.batch_alter_table("generations") as batch:
         batch.add_column(sa.Column(COLUMN, sa.String(length=36), nullable=True))
         batch.create_index(INDEX, [COLUMN])
@@ -115,17 +98,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    linked = bind.execute(
-        sa.select(generations.c.id, generations.c.generation_params, recordings.c.storage_path)
-        .select_from(generations.join(recordings, generations.c[COLUMN] == recordings.c.id))
-    ).all()
-    for take_id, params, storage_path in linked:
-        bind.execute(
-            sa.update(generations)
-            .where(generations.c.id == take_id)
-            .values(generation_params={**(params or {}), PATH_KEY: storage_path})
-        )
+    restore_paths(op.get_bind(), generations, "generation_params")
     with op.batch_alter_table("generations") as batch:
         batch.drop_constraint(FOREIGN_KEY, type_="foreignkey")
         batch.drop_index(INDEX)

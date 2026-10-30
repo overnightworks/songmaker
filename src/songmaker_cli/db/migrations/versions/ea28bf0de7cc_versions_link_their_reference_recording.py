@@ -6,18 +6,25 @@ path and strips the JSON key. A path that maps to no row of the album's owner, o
 a path on a preset or a global default, stops the upgrade before anything changes.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 import sqlalchemy as sa
 from alembic import op
+
+from songmaker_cli.db.migrations.reference_link import (
+    COLUMN,
+    PATH_KEY,
+    linked_path,
+    recordings,
+    refuse_unmappable,
+    restore_paths,
+)
 
 revision = "ea28bf0de7cc"
 down_revision = "5b2e9d4a7c31"
 branch_labels = None
 depends_on = None
 
-PATH_KEY = "reference_audio_path"
-COLUMN = "reference_recording_id"
 INDEX = "ix_versions_reference_recording_id"
 FOREIGN_KEY = "fk_versions_reference_recording_id_reference_recordings"
 
@@ -35,20 +42,6 @@ presets = sa.table(
     sa.column("id", sa.String),
     sa.column("params", sa.JSON(none_as_null=True)),
 )
-recordings = sa.table(
-    "reference_recordings",
-    sa.column("id", sa.String),
-    sa.column("user_id", sa.String),
-    sa.column("storage_path", sa.Text),
-)
-
-
-def _linked_path(params: object) -> str | None:
-    """The non-empty path a JSON parameter object names, or None for absent, null and ""."""
-    if not isinstance(params, dict):
-        return None
-    value = params.get(PATH_KEY)
-    return None if value in (None, "") else str(value)
 
 
 def _without_path(
@@ -85,7 +78,7 @@ def _version_links(
         kind: [] for kind in ("unmapped path", "owner mismatch", "NULL owner", "preset or default")
     }
     for version_id, params in bind.execute(sa.select(versions.c.id, versions.c.generation_params)):
-        path = _linked_path(params)
+        path = linked_path(params)
         if path is None:
             continue
         owner = owners[version_id]
@@ -99,19 +92,9 @@ def _version_links(
         else:
             links[version_id] = recording[0]
     for preset_id, params in bind.execute(sa.select(presets.c.id, presets.c.params)):
-        if _linked_path(params) is not None:
+        if linked_path(params) is not None:
             failures["preset or default"].append(preset_id)
     return links, {kind: ids for kind, ids in failures.items() if ids}
-
-
-def _refuse_unmappable(failures: Mapping[str, Sequence[str]]) -> None:
-    if not failures:
-        return
-    detail = "; ".join(
-        f"{kind}: {len(ids)} (ids {', '.join(ids)})" for kind, ids in failures.items()
-    )
-    msg = f"Reference paths cannot be linked by key, nothing was changed. {detail}"
-    raise RuntimeError(msg)
 
 
 def _strip_path_key(
@@ -134,7 +117,7 @@ def _strip_path_key(
 def upgrade() -> None:
     bind = op.get_bind()
     links, failures = _version_links(bind)
-    _refuse_unmappable(failures)
+    refuse_unmappable(failures)
     with op.batch_alter_table("versions") as batch:
         batch.add_column(sa.Column(COLUMN, sa.String(length=36), nullable=True))
         batch.create_index(INDEX, [COLUMN])
@@ -152,19 +135,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    bind = op.get_bind()
-    linked = bind.execute(
-        sa.select(versions.c.id, versions.c.generation_params, recordings.c.storage_path)
-        .select_from(
-            versions.join(recordings, versions.c[COLUMN] == recordings.c.id)
-        )
-    ).all()
-    for version_id, params, storage_path in linked:
-        bind.execute(
-            sa.update(versions)
-            .where(versions.c.id == version_id)
-            .values(generation_params={**(params or {}), PATH_KEY: storage_path})
-        )
+    restore_paths(op.get_bind(), versions, "generation_params")
     with op.batch_alter_table("versions") as batch:
         batch.drop_constraint(FOREIGN_KEY, type_="foreignkey")
         batch.drop_index(INDEX)
