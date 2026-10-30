@@ -195,10 +195,11 @@ def test_a_job_for_a_version_that_is_gone_or_belongs_to_another_song_answers_404
     client, version_id,
 ):
     with _database(client) as session:
+        redis = make_fake_redis()
         with pytest.raises(HTTPException) as refusal:
             create_job_with_rate_limit(
                 session, OWNER, JobType.GENERATE, song_id="song", version_id=version_id,
-                redis=make_fake_redis(),
+                redis=redis,
             )
     assert (refusal.value.status_code, refusal.value.detail) == (404, "Version not found")
     with _database(client) as session:
