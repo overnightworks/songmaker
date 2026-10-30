@@ -9,7 +9,7 @@
 [ccn."tests/test_cover_suggestion_job.py"]
 "test_cover_job_generates_one_normalized_png_through_isolated_fake_cli" = 20
 
-[ccn."tests/test_cowriter_ownership.py"]
+[ccn."tests/songmaker_cli/cowriter/test_tools_ownership.py"]
 "test_tools_only_reach_owned_resources" = 18
 
 [ccn."tests/test_postgresql.py"]
@@ -73,8 +73,8 @@
 "tests/songmaker_cli/test_admin_api.py" = 1055
 "tests/test_api.py" = 4751
 "tests/test_auto_deploy_alerting.py" = 1389
-"tests/test_conversation_api.py" = 853
-"tests/test_cowriter_providers.py" = 972
+"tests/songmaker_cli/test_conversation_api.py" = 853
+"tests/songmaker_cli/test_settings_api_providers.py" = 972
 "tests/test_db.py" = 3624
 "tests/test_jobs.py" = 3259
 "tests/test_jobs_lora_training.py" = 1933
@@ -394,19 +394,19 @@ test_rename_album_strips_whitespace = [["tests/songmaker_cli/test_lora_api.py", 
 test_rename_song_strips_whitespace = [["tests/songmaker_cli/test_lora_api.py", "test_create_lora_slug_collision_appends_suffix"]]
 test_song_detail_response_uncompressed_without_client_support = [["tests/songmaker_cli/test_server_middleware.py", "test_tiny_json_response_is_not_gzip_compressed"]]
 
-[clones."tests/test_conversation_api.py"]
-_seed_owned = [["tests/test_memory.py", "_seed"], ["tests/test_mentions.py", "_seed"]]
-client = [["tests/test_memory.py", "client"], ["tests/test_takes.py", "client"]]
-stranger_client = [["tests/test_memory.py", "stranger_client"]]
+[clones."tests/songmaker_cli/test_conversation_api.py"]
+_seed_owned = [["tests/songmaker_cli/test_conversation_api_memory.py", "_seed"], ["tests/songmaker_cli/test_conversation_api_mentions.py", "_seed"]]
+client = [["tests/songmaker_cli/test_conversation_api_memory.py", "client"], ["tests/songmaker_cli/test_conversation_api_takes.py", "client"]]
+stranger_client = [["tests/songmaker_cli/test_conversation_api_memory.py", "stranger_client"]]
 
 [clones."tests/test_cover_runner.py"]
 _png_bytes = [["tests/songmaker_cli/test_playlist_api.py", "_png_bytes"]]
 
-[clones."tests/test_cowriter_mcp_endpoint.py"]
-mcp_environment = [["tests/test_cowriter_service_turn.py", "mcp_key"]]
+[clones."tests/songmaker_cli/cowriter/test_mcp_endpoint.py"]
+mcp_environment = [["tests/songmaker_cli/cowriter/test_service_turn.py", "mcp_key"]]
 
-[clones."tests/test_cowriter_providers.py"]
-_stream_events = [["tests/test_memory.py", "_stream_events"], ["tests/test_mentions.py", "_stream_events"], ["tests/test_takes.py", "_stream_events"]]
+[clones."tests/songmaker_cli/test_settings_api_providers.py"]
+_stream_events = [["tests/songmaker_cli/test_conversation_api_memory.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_mentions.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"]]
 
 [clones."tests/test_db.py"]
 test_delete_album = [["tests/test_soft_delete.py", "test_soft_delete_album_cascades_to_live_songs"], ["tests/test_soft_delete.py", "test_soft_delete_song_hides_single_song"]]
@@ -417,13 +417,13 @@ ctx = [["tests/test_lifecycle_queue_stream_cleanup.py", "ctx"], ["tests/test_lif
 [clones."tests/test_lifecycle_queue_stream_cleanup.py"]
 ctx = [["tests/test_lifecycle_reconciliation.py", "ctx"]]
 
-[clones."tests/test_memory.py"]
-_seed = [["tests/test_mentions.py", "_seed"]]
-_stream_events = [["tests/test_mentions.py", "_stream_events"], ["tests/test_takes.py", "_stream_events"]]
-client = [["tests/test_takes.py", "client"]]
+[clones."tests/songmaker_cli/test_conversation_api_memory.py"]
+_seed = [["tests/songmaker_cli/test_conversation_api_mentions.py", "_seed"]]
+_stream_events = [["tests/songmaker_cli/test_conversation_api_mentions.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"]]
+client = [["tests/songmaker_cli/test_conversation_api_takes.py", "client"]]
 
-[clones."tests/test_mentions.py"]
-_stream_events = [["tests/test_takes.py", "_stream_events"]]
+[clones."tests/songmaker_cli/test_conversation_api_mentions.py"]
+_stream_events = [["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"]]
 
 [clones."tests/test_music_worker.py"]
 _make_worker = [["tests/test_scoring_worker.py", "_make_worker"]]
