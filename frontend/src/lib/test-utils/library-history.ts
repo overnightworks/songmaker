@@ -18,11 +18,11 @@ import {
 	installHistoryController,
 	mountRouteOfLandedAddress,
 	ownStepBacksUnderwayForTests,
-	pageStateOfHistoryState,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
 	type HistoryEntry
 } from '#lib/history/historyController.ts';
+import { pageStateOfHistoryState } from '#lib/history/routerHistoryState.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import {
 	fakePage,

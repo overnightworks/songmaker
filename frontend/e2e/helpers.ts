@@ -31,6 +31,7 @@ import {
 } from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
 import { PHONE_TABS_NAV_LABEL } from '../src/lib/constants/phone-tabs';
+import { routerHistoryEntryOf } from '../src/lib/test-utils/router-history-layout';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -191,10 +192,7 @@ function isClosedOnPurpose(url: string): boolean {
 const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_EVENT_STREAM_PATH;
 
 // SvelteKit's shallow routing keeps, beside the entry it writes, the address
-// of the page it leaves mounted, and a navigation writes its entry without it
-// (the router stand-in in src/lib/test-utils/app-navigation.ts keeps the same
-// key).
-const ROUTER_MOUNTED_PAGE_KEY = 'sveltekit:pageurl';
+// of the page it leaves mounted, and a navigation writes its entry without it.
 
 /** The path history stands on, and the path of the page the router has mounted. */
 interface RouterStanding {
@@ -202,17 +200,16 @@ interface RouterStanding {
 	mountedPage: string;
 }
 
-function routerStanding(page: Page): Promise<RouterStanding> {
-	return page.evaluate((mountedPageKey) => {
-		const mountedPage: unknown = (history.state as Record<string, unknown> | null)?.[
-			mountedPageKey
-		];
-		return {
-			address: location.pathname,
-			mountedPage:
-				typeof mountedPage === 'string' ? new URL(mountedPage).pathname : location.pathname
-		};
-	}, ROUTER_MOUNTED_PAGE_KEY);
+async function routerStanding(page: Page): Promise<RouterStanding> {
+	const { address, state } = await page.evaluate(() => ({
+		address: location.pathname,
+		state: history.state as unknown
+	}));
+	const mountedPage = routerHistoryEntryOf(state)?.pageUrl;
+	return {
+		address,
+		mountedPage: mountedPage === undefined ? address : new URL(mountedPage).pathname
+	};
 }
 
 /**
