@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "a1429244bafbffa355d41f13d83b1a52e7fc202c"
 branch = "claude/issue-2093-automatic-retention-re-checks-pick-and-k"
-scope = [".github/workflows/ci.yml", "docs/requirements/0001-creative-catalog-and-takes.md", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/generations.py", "tests/songmaker_cli/test_cleanup_generation_retention.py", "tests/test_generation_retention_lock_postgres.py"]
+scope = [".github/workflows/ci.yml", "docs/requirements/0001-creative-catalog-and-takes.md", "src/songmaker_cli/cleanup.py", "src/songmaker_cli/db/queries/generations.py", "tests/songmaker_cli/test_cleanup_generation_retention.py", "tests/songmaker_cli/test_db.py", "tests/test_generation_retention_lock_postgres.py"]
 opened_commit = "4588577d2c1744e192da0f805dd4f46a2d2ce6e6"
 whole_reason = "One retention guard: the per-take writers, the stage-2 selection and the manual delete's lock order change together with the PostgreSQL proof that orders them."
