@@ -105,7 +105,7 @@ describe('localWeekday', () => {
 });
 
 describe('releaseDayLabel', () => {
-	beforeAll(() => vi.stubEnv('TZ', 'Pacific/Auckland'));
+	beforeAll(() => vi.stubEnv('TZ', 'America/Los_Angeles'));
 	afterAll(() => vi.unstubAllEnvs());
 
 	it.each([
