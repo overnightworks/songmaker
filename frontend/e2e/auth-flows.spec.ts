@@ -13,14 +13,6 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { ACCOUNT_MENU_LOGOUT_LABEL, SETTINGS_NAV_LABEL } from '../src/lib/constants';
 import {
-	NO_ACCESS_BACK_LABEL,
-	NO_ACCESS_HEADING,
-	SIGN_IN_ACTION_LABEL,
-	SIGN_IN_FAILED_HEADING,
-	SIGN_IN_RETRY_LABEL,
-	SIGNED_OUT_HEADING
-} from '../src/lib/constants/auth';
-import {
 	FlowGuard,
 	leftTheApp,
 	nameStartingWith,
@@ -63,6 +55,14 @@ test('the sign-in start sends the browser to the issuer with a pending login tha
 	expect(pendingLogin?.value, 'the start leaves a pending-login cookie').toMatch(/samesite=lax/i);
 });
 
+// The words appkit's SignInPage shows; the kit exports none.
+const SIGNED_OUT_HEADING = 'You are logged out.';
+const LOG_IN_LABEL = 'Log in';
+const LOG_OUT_LABEL = 'Log out';
+const NO_ACCESS_HEADING = 'No access';
+const SIGN_IN_FAILED_HEADING = 'Login failed';
+const TRY_AGAIN_LABEL = 'Try again';
+
 test('the signed-out page says so and starts the sign-in only when Log in is pressed', async ({
 	page
 }) => {
@@ -75,9 +75,8 @@ test('the signed-out page says so and starts the sign-in only when Log in is pre
 	await page.goto('/login');
 
 	await expect(page.getByRole('heading', { name: SIGNED_OUT_HEADING })).toBeVisible();
-	const logIn = page.getByRole('link', { name: SIGN_IN_ACTION_LABEL, exact: true });
+	const logIn = page.getByRole('link', { name: LOG_IN_LABEL, exact: true });
 	await expect(logIn).toHaveAttribute('href', '/login/oidc');
-	await expect(page.locator('.bg-grid')).not.toHaveCSS('background-image', 'none');
 	await page.waitForLoadState('networkidle');
 	expect(started, 'the page redirects by itself').toEqual([]);
 	expect(new URL(page.url()).pathname).toBe('/login');
@@ -127,24 +126,19 @@ for (const address of ['/share/song/no-such-share']) {
 	});
 }
 
-test('no access offers Sign out and Back, and Back leads to the signed-out page', async ({
-	page
-}) => {
+test('no access offers Log out and nothing else to press', async ({ page }) => {
 	const guard = new FlowGuard(page);
 
 	await page.goto('/no-access');
 
 	await expect(page.getByRole('heading', { name: NO_ACCESS_HEADING })).toBeVisible();
-	await expect(page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL })).toBeVisible();
-	await page.getByRole('link', { name: NO_ACCESS_BACK_LABEL, exact: true }).click();
-
-	await expect(page).toHaveURL(/\/login$/);
-	await expect(page.getByRole('heading', { name: SIGNED_OUT_HEADING })).toBeVisible();
+	await expect(page.getByRole('button', { name: LOG_OUT_LABEL })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Back', exact: true })).toHaveCount(0);
 	guard.assertClean();
 });
 
 // Cell 20 (K3, E2).
-test('Sign out on no access posts to the server and the answer sends the browser on to the issuer', async ({
+test('Log out on no access posts to the server and the answer sends the browser on to the issuer', async ({
 	page
 }) => {
 	// The sign-out first reads the session; this browser has none, and a 401 passes that check.
@@ -160,7 +154,7 @@ test('Sign out on no access posts to the server and the answer sends the browser
 				address.pathname.endsWith(LOGOUT_ENDPOINT_SUFFIX)
 			);
 		}),
-		page.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL }).click()
+		page.getByRole('button', { name: LOG_OUT_LABEL }).click()
 	]);
 
 	expect(answer.request().method()).toBe('POST');
@@ -225,7 +219,7 @@ for (const [refusal, query] of [
 		await expect(page.getByRole('alert')).toBeVisible();
 		const [start] = await Promise.all([
 			nextSignInStart(page),
-			page.getByRole('link', { name: SIGN_IN_RETRY_LABEL, exact: true }).click()
+			page.getByRole('link', { name: TRY_AGAIN_LABEL, exact: true }).click()
 		]);
 		expect(start.status).toBe(303);
 		await expect.poll(() => leftTheApp(page)).toBe(true);

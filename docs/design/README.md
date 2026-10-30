@@ -129,9 +129,11 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   19.10.2026, Artefakt https://claude.ai/artifact/6xvoJezFbApz7ygKfCe9we. Die
   Tafeln sind in presentators Aussehen gezeichnet; songmaker übernimmt Aufbau
   und Wortlaut in den eigenen Farben (Operator: „Gleicher Aufbau, App-Farben“).
-  K12 (#1620) baut gegen diese Abschnitte: Weiterleitung, abgemeldet, kein
-  Zugang, Anmeldung fehlgeschlagen, Personenmenü; die
-  presentator-spezifischen Tafeln gelten nicht. Standard-Zuordnung der
+  K12 (#1620) baut gegen diese Abschnitte: Weiterleitung, Personenmenü; die
+  presentator-spezifischen Tafeln gelten nicht. Die drei Seiten abgemeldet, kein
+  Zugang und Anmeldung fehlgeschlagen zeigt seit appkit v0.8.0 deren
+  `SignInPage`; ihr Bild ist `docs/family.html`, Abschnitt 3, in
+  overnightworks/appkit (#2075), die Tafeln 2 bis 4 hier sind überholt. Standard-Zuordnung der
   Abweisungen: `ACCOUNT_DEACTIVATED` → „No access“; `FOREIGN_ISSUER` und
   `USERNAME_TAKEN` → „Login failed“. Das Verhalten gehört dem webauth-README,
   Abschnitt „Signed out and refused“.
