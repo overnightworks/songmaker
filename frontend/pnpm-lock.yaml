@@ -16,6 +16,10 @@ patchedDependencies:
 importers:
 
   .:
+    dependencies:
+      overnightworks-appkit:
+        specifier: https://github.com/overnightworks/appkit/releases/download/v0.7.0/overnightworks-appkit-0.7.0.tgz
+        version: https://github.com/overnightworks/appkit/releases/download/v0.7.0/overnightworks-appkit-0.7.0.tgz
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -1224,6 +1228,10 @@ packages:
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
+
+  overnightworks-appkit@https://github.com/overnightworks/appkit/releases/download/v0.7.0/overnightworks-appkit-0.7.0.tgz:
+    resolution: {integrity: sha512-gApOlHNPW+rLDfguGADjasRm3dm2odlZ/o2/RQFMxvWZHvkl3AeciOLNaSl7JyIl6Lpma3o+hFm02CFAEXj1DQ==, tarball: https://github.com/overnightworks/appkit/releases/download/v0.7.0/overnightworks-appkit-0.7.0.tgz}
+    version: 0.7.0
 
   p-limit@3.1.0:
     resolution: {integrity: sha512-TYOanM3wGwNGsZN2cVTYPArw454xnXj5qmWF1bEoAc4+cU/ol7GVh7odevjp1FNHduHc3KZMcFduxU5Xc6uJRQ==}
@@ -2658,6 +2666,8 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
       word-wrap: 1.2.5
+
+  overnightworks-appkit@https://github.com/overnightworks/appkit/releases/download/v0.7.0/overnightworks-appkit-0.7.0.tgz: {}
 
   p-limit@3.1.0:
     dependencies:

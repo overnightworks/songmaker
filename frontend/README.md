@@ -27,10 +27,7 @@ src/
 The dev server needs a backend: boot a probe stack as [`e2e/README.md`](e2e/README.md#running-it-locally) describes (never the live stack on 8080) and name it in `SONGMAKER_API_TARGET`; without it `pnpm dev` refuses to start. It proxies `/api`, `/ws`, `/audio`, `/shared`, `/login/oidc` and `/auth/logout` there.
 
 ```bash
-# One-time, and after every appkit pin change: copy the family look (tokens and fonts)
-# out of the pinned wheel into frontend/kit-assets/ (from the project root)
 pnpm install
-(cd .. && uv run --frozen --only-group frontend python scripts/copy_kit_assets.py)
 
 # Dev server with HMR, proxying to the probe stack
 SONGMAKER_API_TARGET=http://localhost:18080 pnpm dev
