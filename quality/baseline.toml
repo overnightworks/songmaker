@@ -98,7 +98,7 @@
 "_register_protected_routes" = 76
 
 [function_lines."src/songmaker_cli/api_helpers.py"]
-"create_job_with_rate_limit" = 64
+"create_job_with_rate_limit" = 48
 
 [function_lines."src/songmaker_cli/config.py"]
 "build_ace_config" = 65

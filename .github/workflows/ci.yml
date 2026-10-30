@@ -163,6 +163,7 @@ jobs:
         tests/songmaker_cli/db/test_migrations_coherence_verdict.py
         tests/songmaker_cli/db/test_migrations_reference_recordings.py
         tests/songmaker_cli/db/test_migrations_reference_link.py
+        tests/songmaker_cli/db/test_migrations_job_version.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:

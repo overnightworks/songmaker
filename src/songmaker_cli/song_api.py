@@ -77,7 +77,7 @@ from songmaker_cli.db.queries.songs import (
     soft_delete_song,
     update_song,
 )
-from songmaker_cli.db.queries.versions import delete_version
+from songmaker_cli.db.queries.versions import VersionInUseError, delete_version
 
 
 def _attach_reference(session: Session, user_id: str, reference_id: str | None) -> None:
@@ -94,6 +94,9 @@ def _attach_reference(session: Session, user_id: str, reference_id: str | None) 
 router = APIRouter()
 
 SONG_NOT_FOUND_DETAIL: Final = "Song not found"
+VERSION_IN_USE_DETAIL: Final = (
+    "This version has a take rendering; wait for it to finish or cancel it."
+)
 
 
 @router.get("/songs")
@@ -468,7 +471,10 @@ def api_song_versions(
 
 @router.delete(
     "/versions/{version_id}",
-    responses={404: {"description": "Version not found"}},
+    responses={
+        404: {"description": "Version not found"},
+        409: {"description": "A queued or running job renders this version"},
+    },
 )
 def api_delete_version(
     version_id: str,
@@ -488,6 +494,8 @@ def api_delete_version(
             session, version_id,
             delete_generations=delete_generations,
         )
+    except VersionInUseError:
+        raise HTTPException(409, VERSION_IN_USE_DETAIL)
     except ValueError:
         raise HTTPException(404, "Version not found")
     record_audit(session, user.id, AuditAction.DELETE, ResourceType.VERSION, version_id)
