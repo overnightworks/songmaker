@@ -81,18 +81,17 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
  * run against `library.spec.ts`'s own first test: 42 requests on desktop and
  * 35 on mobile, budgeted at 42 and 40 respectively (27.09.2026). Home's
  * Listen list fetching fresh on the return to the wall brought desktop to 41
- * (05.09.2026).
- * The flow's round trip to Settings stops the live stream, so the snapshot on
- * the return follows a gap and reads every album again (#1102): one request
- * per 50 albums, one more on each shell. Both projects
+ * (05.09.2026). The flow's round trip to Settings stops the live stream, so
+ * the snapshot on the return follows a gap and reads every album again
+ * (#1102): one request per 50 albums, one more on each shell. Both projects
  * share one IP rate-limit window, so a flow that suddenly needs more round
  * trips is a regression — find the extra requests instead of raising this
  * number. Every other mention of this budget (the `e2e/README.md` table,
- * `docs/testing.md`)
- * points back here rather than restating it, which is exactly how those
- * three numbers drifted apart before: #312 and #325 each added a request per
- * page load (`ensureAllAlbumsLoaded`, `ensurePlaylistsLoaded`) without this
- * constant, or its callers, ever being re-measured.
+ * `docs/testing.md`) points back here rather than restating it, which is
+ * exactly how those three numbers drifted apart before: #312 and #325 each
+ * added a request per page load (`ensureAllAlbumsLoaded`,
+ * `ensurePlaylistsLoaded`) without this constant, or its callers, ever being
+ * re-measured.
  */
 export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	desktop: 42,
@@ -212,6 +211,12 @@ async function routerStanding(page: Page): Promise<RouterStanding> {
 	};
 }
 
+export async function standsOnLayerEntry(page: Page): Promise<boolean> {
+	const state = await page.evaluate(() => history.state as unknown);
+	const entry = routerHistoryEntryOf(state)?.pageState?.entry as App.PageState['entry'];
+	return entry?.layer !== undefined;
+}
+
 /**
  * Waits until the router has mounted the route of the address the page
  * stands on. Opening a song writes the song's address first and loads its
@@ -232,16 +237,14 @@ async function routeOfAddressMounted(page: Page): Promise<void> {
 }
 
 /**
- * Takes the page's network away the way a phone loses it, once the route of
- * the address the page stands on has mounted: a route module the cut catches
- * loading fails the whole app into SvelteKit's error page, a product gap
- * #1160 owns, while these flows lose the network on a page that is open.
- * `setOffline` alone leaves a live event stream the page already holds
- * running (see docs/testing.md), so the page's open loads are stopped the way
- * a dropped network ends them, and every reopen of the library's resource
- * stream is refused until `regainNetwork`. `keepOpenStreams` leaves the
- * streams already open running and refuses only new requests: the moment a
- * stream's last event is already on its way when the network goes.
+ * Takes the page's network away the way a phone loses it, once the route of the address the page
+ * stands on has mounted: a route module the cut catches loading fails the whole app into
+ * SvelteKit's error page, a product gap #1160 owns, while these flows lose the network on a page
+ * that is open. `setOffline` alone leaves a live event stream the page already holds running (see
+ * docs/testing.md), so the page's open loads are stopped the way a dropped network ends them, and
+ * every reopen of the library's resource stream is refused until `regainNetwork`. `keepOpenStreams`
+ * leaves the streams already open running and refuses only new requests: the moment a stream's last
+ * event is already on its way when the network goes.
  */
 export async function loseNetwork(
 	page: Page,
@@ -256,10 +259,9 @@ export async function loseNetwork(
 }
 
 /**
- * Waits until the service worker has installed and controls the page, so that
- * what it precached (the route code of every address) answers once the
- * network is cut. A cut inside the install window, the first seconds after a
- * first-ever load, is owned by #1160.
+ * Waits until the service worker has installed and controls the page, so that what it precached
+ * (the route code of every address) answers once the network is cut. A cut inside the install
+ * window, the first seconds after a first-ever load, is owned by #1160.
  */
 export async function waitForServiceWorkerControl(page: Page): Promise<void> {
 	await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
@@ -529,15 +531,13 @@ const SUCCESSOR_REFETCH_TIMEOUT_MS = 30_000;
 export const SUCCESSOR_TAKES_TEST_TIMEOUT_MS = 120_000;
 
 /**
- * Passes once the media element the app last started has played on from where
- * it stands when this is called, so call it right after the tap's playing mark
- * shows. A paused element has not played on: a take the app only marked as
- * playing, or the one it just left, does not pass. Position alone proves
- * nothing, because on the continuous deck `currentTime` is the position in the
- * whole stream and a tap on a take the deck already holds is a seek that moves
- * it without a frame played. It does not fit a load with a start position
- * (`pendingRecoverySeek` in `audioPlayer.svelte.ts`): that load seeks, so its
- * first frames are a jump rather than a play-on from where it stood.
+ * Passes once the media element the app last started has played on from where it stands when this
+ * is called, so call it right after the tap's playing mark shows. A paused element has not played
+ * on: a take the app only marked as playing, or the one it just left, does not pass. Position alone
+ * proves nothing, because on the continuous deck `currentTime` is the position in the whole stream
+ * and a tap on a take the deck already holds is a seek that moves it without a frame played. It
+ * does not fit a load with a start position (`pendingRecoverySeek` in `audioPlayer.svelte.ts`):
+ * that load seeks, so its first frames are a jump rather than a play-on from where it stood.
  */
 async function expectPlaybackAdvances(page: Page): Promise<void> {
 	const { time: startedAt } = await playingAudioState(page);

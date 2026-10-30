@@ -50,6 +50,7 @@ import {
 	openSettingsSectionFromSearch,
 	playlistEntryRows,
 	shellOf,
+	standsOnLayerEntry,
 	workspace,
 	type Shell,
 	HOME_PATH,
@@ -645,15 +646,14 @@ test.describe('Back and Forward between the library and Settings', () => {
 			const guard = new FlowGuard(page);
 			const { pages } = await openSeededPlaylist(page, request);
 			await openSearchSheet(page);
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(true);
 
 			await page.reload();
 
 			await expect(searchSheet(page)).toBeHidden();
 			await expectPlaylistStands(page, pages);
 			// The library steps off the sheet's own entry by itself once it runs.
-			await expect
-				.poll(() => page.evaluate(() => JSON.stringify(history.state).includes('"layer"')))
-				.toBe(false);
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
 			await page.goBack();
 			await expectReached(page, pages, 'wall');
 			guard.assertClean();
@@ -1089,10 +1089,6 @@ test(
 test.describe('Back closes the open overlay outside the library', () => {
 	const VOICE_DELETE_TITLE = 'Delete voice?';
 
-	function standsOnLayerEntry(page: Page): Promise<boolean> {
-		return page.evaluate(() => JSON.stringify(history.state).includes('"layer"'));
-	}
-
 	async function openVoicesOverTheWall(page: Page, shell: Shell): Promise<void> {
 		await page.goto(LIBRARY_PATH);
 		await expect(workspace(page).getByRole('heading', { name: LIBRARY_PAGE_LABEL })).toBeVisible();
@@ -1227,6 +1223,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 			const guard = new FlowGuard(page);
 			await openVoicesOverTheWall(page, 'mobile');
 			await openSearchSheet(page);
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(true);
 
 			await page.reload();
 
