@@ -11,7 +11,6 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, overload
 
-from fastapi import HTTPException
 from pydantic import SecretStr
 from webauth.https_client import fetch_key_set_over_https
 from webauth.middleware.bearer_gate import BearerGate, PersonPaths
@@ -20,7 +19,6 @@ from webauth.oidc_login import AdmissionConfig
 from webauth.oidc_transport import post_token_request_over_https
 from webauth.policies import AuthorizedParties, PathRules
 
-from songmaker_cli.api_helpers import resolve_public_base_url
 from songmaker_cli.auth_stores import DatabaseSignInTransaction
 from songmaker_cli.constants import (
     OIDC_ADMIN_GROUP,
@@ -65,10 +63,8 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         raise ValueError("OIDC_ISSUER and OIDC_CLIENT_ID are required to serve the web app")
     if settings.oidc_client_secret_file is None:
         raise ValueError("OIDC_CLIENT_SECRET_FILE is required to serve the web app")
-    try:
-        public_base_url = resolve_public_base_url()
-    except HTTPException as error:
-        raise ValueError(f"PUBLIC_BASE_URL is required for sign-in: {error.detail}") from None
+    if not settings.public_base_url:
+        raise ValueError("PUBLIC_BASE_URL is required to serve the web app")
     issuer = normalised_oidc_issuer(settings.oidc_issuer)
     endpoints = f"{issuer}/{_REALM_ENDPOINT_PREFIX}"
     audience_scope = settings.agent_service_audience_scope
@@ -81,8 +77,8 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         end_session_endpoint=f"{endpoints}/logout",
         client_id=settings.oidc_client_id,
         client_secret=read_client_secret(settings.oidc_client_secret_file),
-        redirect_uri=f"{public_base_url}{OIDC_CALLBACK_PATH}",
-        post_logout_redirect_uri=f"{public_base_url}{SIGNED_OUT_PATH}",
+        redirect_uri=f"{settings.public_base_url}{OIDC_CALLBACK_PATH}",
+        post_logout_redirect_uri=f"{settings.public_base_url}{SIGNED_OUT_PATH}",
         leeway_seconds=OIDC_LEEWAY_SECONDS,
         **scopes,
     )

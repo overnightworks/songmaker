@@ -292,7 +292,7 @@ export E2E_ADMIN_USERNAME=e2e-ci-admin
 export OIDC_ISSUER=https://keycloak.invalid/realms/e2e
 export KEYCLOAK_CLIENT_SECRET_FILE="$(mktemp)" && echo e2e-ci-client-secret > "$KEYCLOAK_CLIENT_SECRET_FILE"
 export GRAFANA_PASSWORD=e2e-ci-grafana-password    # compose refuses up/down without it
-export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or global-setup's seed 500s
+export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or the web app refuses to start
 docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
   up -d --build --wait postgres redis migrate songmaker-web
 

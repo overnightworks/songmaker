@@ -912,6 +912,7 @@ export interface SongItem {
 	generation_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	share_url?: string | null;
 	best_scores?: TrackScores | null;
 	best_rating?: number | null;
 	cover?: AlbumCoverUrls | null;
@@ -947,6 +948,7 @@ export interface SongSummaryResponse {
 	generation_count: number;
 	is_shared: boolean;
 	share_slug?: string | null;
+	share_url?: string | null;
 	best_scores?: Record<string, unknown> | null;
 	best_rating?: number | null;
 	cover?: AlbumCoverUrls | null;

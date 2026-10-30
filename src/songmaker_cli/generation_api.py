@@ -23,7 +23,6 @@ from songmaker_cli.api_helpers import (
     check_song_access,
     cleanup_generation_files,
     create_job_with_rate_limit,
-    resolve_public_base_url,
 )
 from songmaker_cli.api_models import (
     BulkDeleteRequest,
@@ -45,6 +44,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
+from songmaker_cli.api_models.songs import public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import (
     get_arq_pool,
@@ -60,6 +60,7 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
     ResourceType,
+    ShareKind,
 )
 from songmaker_cli.db.models import Generation, Version
 from songmaker_cli.db.queries.auth import record_audit
@@ -679,15 +680,15 @@ def api_share_generation(
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     check_generation_access(session, gen_id, user)
-    base_url = resolve_public_base_url()
     try:
         gen = enable_generation_sharing(session, gen_id)
     except ValueError:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
+    share_url = public_share_url(ShareKind.GENERATION, gen.share_slug)
     session.commit()
     return ShareResponse(
-        share_url=f"{base_url}/share/gen/{gen.share_slug}",
+        share_url=share_url,
         share_slug=gen.share_slug,
     )
 

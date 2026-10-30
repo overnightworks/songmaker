@@ -567,8 +567,10 @@ def test_an_unusable_secret_file_stops_the_web_app_and_names_only_its_path(
     assert TEST_CLIENT_SECRET not in str(stopped.value)
 
 
-@pytest.mark.parametrize("missing", ["OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE"])
-def test_a_missing_realm_setting_stops_the_web_app_but_not_the_settings(
+@pytest.mark.parametrize(
+    "missing", ["OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET_FILE", "PUBLIC_BASE_URL"],
+)
+def test_a_missing_sign_in_setting_stops_the_web_app_but_not_the_settings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fresh_settings, missing: str,
 ) -> None:
     from songmaker_cli.settings import get_settings

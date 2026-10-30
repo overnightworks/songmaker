@@ -20,7 +20,6 @@ from songmaker_cli.api_helpers import (
     owner_filter,
     page_has_more,
     parse_optional_search_query,
-    resolve_public_base_url,
     unique_song_slug,
 )
 from songmaker_cli.api_models import (
@@ -37,7 +36,7 @@ from songmaker_cli.api_models import (
     TitleUpdateRequest,
     VersionResponse,
 )
-from songmaker_cli.api_models.songs import SongListenRequest
+from songmaker_cli.api_models.songs import SongListenRequest, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -47,6 +46,7 @@ from songmaker_cli.constants import (
     COVER_VERSION_QUERY,
     AuditAction,
     ResourceType,
+    ShareKind,
 )
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,
@@ -361,15 +361,15 @@ def api_share_song(
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
     check_song_access(session, song_id, user)
-    base_url = resolve_public_base_url()
     try:
         song = enable_song_sharing(session, song_id)
     except ValueError:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.SONG, song_id)
+    share_url = public_share_url(ShareKind.SONG, song.share_slug)
     session.commit()
     return ShareResponse(
-        share_url=f"{base_url}/share/song/{song.share_slug}",
+        share_url=share_url,
         share_slug=song.share_slug,
     )
 
