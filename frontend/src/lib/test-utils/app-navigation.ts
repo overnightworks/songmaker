@@ -69,6 +69,11 @@ export const fakePage = stateProxy<{
 	route: { id: FAKE_ROUTE_ID }
 });
 
+// The navigation under way, as `$app/state` hands it out: kit 3 sets it for
+// every navigation but the router's start, and clears it right after the
+// `afterNavigate` callbacks ran.
+const fakeNavigating = stateProxy<{ to: NavigationTarget | null }>({ to: null });
+
 // Declares the addresses no route matches: the page at one shows the error
 // page (no route ID), and a `goto` or shallow write to one rejects.
 export function renderNoRouteAddresses(...pathnames: string[]): void {
@@ -119,6 +124,7 @@ function reportNavigation(
 	} as AfterNavigate;
 	reportedNavigations.push({ type, pathname: to.pathname });
 	for (const callback of afterNavigateCallbacks) callback(navigation);
+	fakeNavigating.to = null;
 }
 
 // SvelteKit's single-page start: it takes its place from the entry the page
@@ -127,6 +133,7 @@ function reportNavigation(
 export function startFakeRouter(): void {
 	hasNavigated = false;
 	unmatchedPathnames.clear();
+	fakeNavigating.to = null;
 	reportedNavigations.length = 0;
 	const loaded = routerHistoryEntryOf(history.state);
 	currentHistoryIndex = loaded?.historyIndex ?? highestHistoryIndex + 1;
@@ -197,6 +204,7 @@ export async function landed<T>(write: T): Promise<T> {
 async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<void> {
 	refuseUnmatched(url);
 	navigationsStarted += 1;
+	fakeNavigating.to = navigationTarget(new URL(url, location.href));
 	const navigation = navigationsStarted;
 	if (heldRouteLoad !== null) {
 		await heldRouteLoad;
@@ -347,5 +355,5 @@ export function fakeAppNavigation() {
 }
 
 export function fakeAppState() {
-	return { page: fakePage };
+	return { page: fakePage, navigating: fakeNavigating };
 }

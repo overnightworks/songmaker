@@ -139,6 +139,17 @@ describe('settings index on the desktop', () => {
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledOnce());
 	});
 
+	it('redirects a page that mounts after the router landed, which `afterNavigate` never reports', async () => {
+		landOnPage();
+		await laterTask();
+
+		await render();
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith('/settings/generation', { replace: true })
+		);
+	});
+
 	it('does not redirect once the page was left before its navigation was stamped', async () => {
 		await render();
 		if (mounted) await unmount(mounted);
