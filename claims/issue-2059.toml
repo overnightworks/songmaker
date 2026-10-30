@@ -1,8 +1,0 @@
-claim_id = "90da682f58d547079a1a0ee4679dbace"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "6c2a933580b31fa4a769fb9de543bd641d6b178a"
-branch = "claude/issue-2059-kit-s-private-history-entry-layout-has-o"
-scope = ["docs/architecture.md", "frontend/e2e/helpers.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/eslint.config.js", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/history/routerHistoryState.test.ts", "frontend/src/lib/history/routerHistoryState.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/test-utils/app-navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/lib/test-utils/router-history-layout.ts", "quality/baseline.toml"]
-opened_commit = "23a1e719d76c62527fe2d2d9f0fe6b2600bb7c09"
-whole_reason = "One owner for kit's private history-entry layout replaces six readers and fakes; a split would leave a second reader standing that slice 7 must find again."
