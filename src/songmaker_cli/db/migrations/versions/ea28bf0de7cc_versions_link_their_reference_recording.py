@@ -14,10 +14,11 @@ from alembic import op
 from songmaker_cli.db.migrations.reference_link import (
     COLUMN,
     PATH_KEY,
+    add_link_column,
     linked_path,
     recordings,
     refuse_unmappable,
-    restore_paths,
+    remove_link_column,
 )
 
 revision = "ea28bf0de7cc"
@@ -25,8 +26,6 @@ down_revision = "5b2e9d4a7c31"
 branch_labels = None
 depends_on = None
 
-INDEX = "ix_versions_reference_recording_id"
-FOREIGN_KEY = "fk_versions_reference_recording_id_reference_recordings"
 
 versions = sa.table(
     "versions",
@@ -118,12 +117,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     links, failures = _version_links(bind)
     refuse_unmappable(failures)
-    with op.batch_alter_table("versions") as batch:
-        batch.add_column(sa.Column(COLUMN, sa.String(length=36), nullable=True))
-        batch.create_index(INDEX, [COLUMN])
-        batch.create_foreign_key(
-            FOREIGN_KEY, "reference_recordings", [COLUMN], ["id"], ondelete="RESTRICT",
-        )
+    add_link_column("versions")
     for version_id, recording_id in links.items():
         bind.execute(
             sa.update(versions)
@@ -135,8 +129,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    restore_paths(op.get_bind(), versions, "generation_params")
-    with op.batch_alter_table("versions") as batch:
-        batch.drop_constraint(FOREIGN_KEY, type_="foreignkey")
-        batch.drop_index(INDEX)
-        batch.drop_column(COLUMN)
+    remove_link_column(versions, "generation_params")

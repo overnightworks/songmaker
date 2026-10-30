@@ -7,6 +7,7 @@ behaviour must not drift; it changes only together with both.
 from collections.abc import Mapping, Sequence
 
 import sqlalchemy as sa
+from alembic import op
 
 PATH_KEY = "reference_audio_path"
 COLUMN = "reference_recording_id"
@@ -51,3 +52,26 @@ def restore_paths(bind: sa.Connection, table: sa.TableClause, params_column: str
             .where(table.c.id == row_id)
             .values({params_column: {**(params or {}), PATH_KEY: storage_path}})
         )
+
+
+def add_link_column(table_name: str) -> None:
+    """Add the nullable key, its index and the foreign key that restricts recording deletion."""
+    with op.batch_alter_table(table_name) as batch:
+        batch.add_column(sa.Column(COLUMN, sa.String(length=36), nullable=True))
+        batch.create_index(f"ix_{table_name}_{COLUMN}", [COLUMN])
+        batch.create_foreign_key(
+            f"fk_{table_name}_{COLUMN}_reference_recordings",
+            "reference_recordings",
+            [COLUMN],
+            ["id"],
+            ondelete="RESTRICT",
+        )
+
+
+def remove_link_column(table: sa.TableClause, params_column: str) -> None:
+    """Write the paths back, then drop the key with its foreign key and index."""
+    restore_paths(op.get_bind(), table, params_column)
+    with op.batch_alter_table(table.name) as batch:
+        batch.drop_constraint(f"fk_{table.name}_{COLUMN}_reference_recordings", type_="foreignkey")
+        batch.drop_index(f"ix_{table.name}_{COLUMN}")
+        batch.drop_column(COLUMN)
