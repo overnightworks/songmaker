@@ -4,7 +4,11 @@ import type { BeforeNavigate, NavigationType } from '$app/navigation';
 import { page } from '$app/state';
 import { browserDocumentLoads, documentAddress, type DocumentLoads } from './documentLoads';
 import { tabStorage, type TabStorage } from './tabStorage';
-import { pageStateOfHistoryState, routerIndexOf } from '#lib/history/routerHistoryState.ts';
+import {
+	pageStateOfHistoryState,
+	pageUrlOfHistoryState,
+	routerIndexOf
+} from '#lib/history/routerHistoryState.ts';
 import {
 	dropLayersFrom,
 	keepLayerHistory,
@@ -198,9 +202,8 @@ let ledger: HistoryLedger = EMPTY_LEDGER;
 // see its landing as reaching its target. A landing leaves the top as far as
 // the controller can tell, a push reaches it again.
 let standsOnTop = standsOnTopOnLoad();
-// Where history stood when the controller last looked: the router's place,
-// which tells a router push from a router replace, and the address, which is
-// the page a router push stands over.
+// Where history stood when the controller last looked: the router's place, which
+// tells a push from a replace, and the address a push stands over.
 let lastRouterIndex = routerIndexOf(history.state);
 let lastAddress = location.href;
 const stepBackWaiters = new Map<number, (() => void)[]>();
@@ -233,8 +236,7 @@ function standsOnTopOnLoad(): boolean {
 }
 
 // A reload, or a Back or Forward from another document, returns to an entry
-// that may have entries above it; any other load is a new entry on top (jsdom
-// reports no navigation timing, which reads as one).
+// that may have entries above it; any other load (jsdom too) is a new top entry.
 function documentReturnedTo(): boolean {
 	const [timing] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
 	return timing?.type === 'reload' || timing?.type === 'back_forward';
@@ -297,9 +299,9 @@ function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	return entry;
 }
 
-// The server sends `strict-origin-when-cross-origin`, so a page of the app's
-// own origin names itself, by its whole address, as the referrer, and another
-// site or a typed address leaves either a foreign origin or nothing.
+// The server sends `strict-origin-when-cross-origin`, so a page of the app's own
+// origin names itself as the referrer; another site or a typed address leaves
+// a foreign origin or nothing.
 function appPageEnteredFrom(): string | null {
 	const referrer = document.referrer;
 	if (referrer === '' || new URL(referrer).origin !== location.origin) return null;
@@ -479,7 +481,7 @@ export function mountRouteOfLandedAddress(
 ): void {
 	navigationsStarted += 1;
 	if (navigation.type === 'popstate' && navigation.to !== null) {
-		mountAddressOver(navigation.to.url.href);
+		mountAddressOver(pageUrlOfHistoryState(history.state) ?? navigation.to.url.href);
 	}
 	const startedAs = navigationsStarted;
 	navigation.complete.catch(() => {
@@ -778,8 +780,7 @@ export function loadAfresh(url: string): Promise<void> {
 	});
 }
 
-// The address history stands on, loaded afresh. Over a page entry this is a
-// reload, which keeps the entry's id and loads whatever `#` part the address has.
+// The address history stands on, loaded afresh; over a page entry a reload.
 export function reloadAfresh(): Promise<void> {
 	return leaveOnce(() => {
 		if (standsOnLayerEntry()) documentLoads.replace(documentAddress(location.href));
@@ -787,9 +788,8 @@ export function reloadAfresh(): Promise<void> {
 	});
 }
 
-// A form POST cannot replace an entry, so it is pushed over the standing one,
-// a page's or a layer's; Back then reaches the entry it left, which a restore
-// from the cache loads afresh and a plain load asks the server about.
+// A form POST cannot replace an entry, so it is pushed over the standing one;
+// Back then reaches the entry it left, loaded afresh or asked of the server.
 export function leaveByPostingForm(action: string): Promise<void> {
 	return leaveOnce(() => documentLoads.submitPost(action));
 }

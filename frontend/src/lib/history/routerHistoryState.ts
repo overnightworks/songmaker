@@ -7,6 +7,7 @@ import { parse } from 'devalue';
 
 interface RouterHistoryRecord {
 	readonly historyIndex?: unknown;
+	readonly pageUrl?: unknown;
 	readonly state?: unknown;
 }
 
@@ -31,4 +32,11 @@ export function pageStateOfHistoryState(state: unknown): Record<string, unknown>
 export function routerIndexOf(state: unknown): number | undefined {
 	const index = routerRecordOf(state)?.historyIndex;
 	return typeof index === 'number' ? index : undefined;
+}
+
+// The page the router loaded the entry's route for, which differs from the
+// entry's address when shallow routing wrote the entry over another page.
+export function pageUrlOfHistoryState(state: unknown): string | undefined {
+	const url = routerRecordOf(state)?.pageUrl;
+	return typeof url === 'string' ? url : undefined;
 }
