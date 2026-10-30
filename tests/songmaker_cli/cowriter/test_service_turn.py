@@ -26,6 +26,7 @@ from agent_runtime_client.wire import (
     FailureCode,
     RejectionCode,
     RouteKind,
+    RunFile,
     TurnMessage,
 )
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -306,6 +307,42 @@ def test_c3_a_run_started_without_a_model_ends_unavailable(web):
     async def frames(_run: RecordedRun, script: RunScript) -> AsyncIterator[bytes]:
         yield script.started().replace(f'"model":"{STARTED_MODEL}",'.encode(), b"")
         yield script.succeeded("Never stored.")
+
+    web.agent.reply_with(streams(frames))
+
+    assert_ended_with(
+        web, web.turn(), "unavailable", status=503, detail=ViolationKind.SCHEMA_MISMATCH.value,
+    )
+
+
+def test_c3_a_succeeded_run_with_text_and_a_file_stores_the_text_and_ignores_the_file(web):
+    async def frames(_run: RecordedRun, script: RunScript) -> AsyncIterator[bytes]:
+        yield script.started()
+        yield script.succeeded("Here is the chorus.", (RunFile(name="notes.txt", content=b"x"),))
+
+    web.agent.reply_with(streams(frames))
+
+    relayed = web.turn()
+
+    assert types_of(relayed) == ["final"]
+    assert web.messages()[-1] == ("assistant", "Here is the chorus.")
+    assert web.job().status == "completed"
+
+
+def test_c3_a_succeeded_run_with_a_file_and_no_text_ends_unavailable_and_stores_nothing(web):
+    async def frames(_run: RecordedRun, script: RunScript) -> AsyncIterator[bytes]:
+        yield script.started()
+        yield script.succeeded("", (RunFile(name="notes.txt", content=b"x"),))
+
+    web.agent.reply_with(streams(frames))
+
+    assert_ended_with(web, web.turn(), "unavailable", status=503, detail="no answer text")
+
+
+def test_c3_a_succeeded_frame_without_files_ends_unavailable_and_stores_nothing(web):
+    async def frames(_run: RecordedRun, script: RunScript) -> AsyncIterator[bytes]:
+        yield script.started()
+        yield script.succeeded("Never stored.").replace(b',"files":[]', b"")
 
     web.agent.reply_with(streams(frames))
 

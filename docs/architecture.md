@@ -1015,7 +1015,8 @@ through `cowriter/service_turn.py`:
    when the stream ends, whatever ends it.
 5. It yields `assistant_text`, `tool_call` and `tool_result` frames in
    songmaker's own models (heartbeats are not relayed), the answer of
-   `succeeded` that `_complete_chat_turn` stores, or one typed problem that ends
+   `succeeded` that `_complete_chat_turn` stores (a succeeded run without words
+   ends unavailable; the co-writer reads no files), or one typed problem that ends
    the turn with an error frame: `unavailable`, `busy`, `not_enabled` or
    `sign_in_again`. The run client never falls back to a local provider.
 
