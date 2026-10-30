@@ -50,5 +50,8 @@
 			"cookie": "1.1.1",
 			"deepmerge": "-"
 		}
+	},
+	"dependencies": {
+		"overnightworks-appkit": "https://github.com/overnightworks/appkit/releases/download/v0.7.0/overnightworks-appkit-0.7.0.tgz"
 	}
 }

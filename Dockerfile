@@ -1,11 +1,5 @@
-# Stage 1: Copy the appkit look (tokens and fonts) out of its pinned wheel
+# Stage 1: uv binary for the backend stage
 FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
-FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999 AS kit-assets
-COPY --from=uv /uv /uvx /usr/local/bin/
-WORKDIR /app
-COPY pyproject.toml uv.lock ./
-COPY scripts/copy_kit_assets.py scripts/
-RUN uv run --frozen --only-group frontend python scripts/copy_kit_assets.py
 
 # Stage 2: Build frontend
 FROM node:22.23.4-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend-builder
@@ -18,7 +12,6 @@ COPY frontend/patches/ ./patches/
 RUN pnpm install --frozen-lockfile
 
 COPY frontend/ ./
-COPY --from=kit-assets /app/frontend/kit-assets ./kit-assets
 RUN pnpm build
 
 # Stage 3: Python backend
