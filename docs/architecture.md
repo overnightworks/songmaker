@@ -997,7 +997,8 @@ through `cowriter/service_turn.py`:
 2. It turns the session's refresh token into a fresh user access token
    (`fresh_access_token` through `DatabaseSessionTransaction` in
    `auth_stores.py`) and takes songmaker's workload token from the same
-   relying party.
+   relying party, asking only for the agent service's audience scope
+   (`AGENT_SERVICE_AUDIENCE_SCOPE`).
 3. It posts the `RunRequest` of `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
    everything else in the messages; no model) to `AGENT_SERVICE_URL`.

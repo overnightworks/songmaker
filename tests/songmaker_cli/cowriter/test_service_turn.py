@@ -34,6 +34,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import event
 from support.fake_agent_service import (
     A_REFRESH_TOKEN,
+    SERVICE_AUDIENCE_SCOPE,
     SERVICE_URL,
     STARTED_MODEL,
     CowriterStack,
@@ -611,6 +612,25 @@ def test_c8_a_realm_that_cannot_issue_a_token_ends_the_turn_unavailable(web, fai
 
     assert_ended_with(web, frames, "unavailable", status=503)
     assert web.agent.runs == []
+
+
+def test_c8_the_workload_grant_asks_for_the_configured_agent_service_scope(web):
+    web.turn()
+
+    assert web.issuer.workload_scopes_seen == [SERVICE_AUDIENCE_SCOPE]
+
+
+def test_c8_an_unset_agent_service_scope_ends_the_turn_unavailable_and_fetches_no_token(
+    web, monkeypatch,
+):
+    monkeypatch.delenv("AGENT_SERVICE_AUDIENCE_SCOPE")
+    get_settings.cache_clear()
+
+    frames = web.turn()
+
+    assert_ended_with(web, frames, "unavailable", status=503)
+    assert web.agent.runs == []
+    assert web.issuer.grants_seen == []
 
 
 def test_c11_a_rotated_refresh_token_is_stored_before_the_stream_starts(web):

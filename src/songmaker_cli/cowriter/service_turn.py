@@ -134,8 +134,10 @@ async def run_cowriter_turn(
     if isinstance(unusable, TurnProblem):
         yield unusable
         return
-    agent, service_url = unusable
-    tokens = await asyncio.to_thread(_fetch_tokens, caller.app, caller.session_id)
+    agent, service_url, audience_scope = unusable
+    tokens = await asyncio.to_thread(
+        _fetch_tokens, caller.app, caller.session_id, audience_scope,
+    )
     if isinstance(tokens, TurnProblem):
         yield tokens
         return
@@ -146,23 +148,29 @@ async def run_cowriter_turn(
             yield outcome
 
 
-def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition, str]:
+def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition, str, str]:
     from songmaker_cli.cowriter.mcp_endpoint import cowriter_mcp_availability
 
     availability = cowriter_mcp_availability(app)
     if availability.problem is not None:
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, f"mcp {availability.problem.value}")
-    service_url = get_settings().agent_service_url
+    settings = get_settings()
+    service_url = settings.agent_service_url
     if not service_url:
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "no agent service url")
+    audience_scope = settings.agent_service_audience_scope
+    if not audience_scope:
+        return TurnProblem(ChatTurnProblem.UNAVAILABLE, "no agent service audience scope")
     try:
-        return _cowriter_agent(), service_url
+        return _cowriter_agent(), service_url, audience_scope
     except AgentFileError:
         log.exception("The co-writer's agent file is refused")
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "agent file refused")
 
 
-def _fetch_tokens(app: FastAPI, session_id: str | None) -> _RunTokens | TurnProblem:
+def _fetch_tokens(
+    app: FastAPI, session_id: str | None, audience_scope: str,
+) -> _RunTokens | TurnProblem:
     """The person's fresh access token, then songmaker's workload token; never both unchecked."""
     if session_id is None:
         return TurnProblem(ChatTurnProblem.SIGN_IN_AGAIN, "no session")
@@ -175,7 +183,7 @@ def _fetch_tokens(app: FastAPI, session_id: str | None) -> _RunTokens | TurnProb
     )
     if isinstance(user, AccessTokenRefusal):
         return _problem_of_refusal(user)
-    workload = relying_party.workload_access_token()
+    workload = relying_party.workload_access_token(scopes=(audience_scope,))
     if isinstance(workload, OidcRefusal):
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "workload token refused")
     return _RunTokens(user, workload)

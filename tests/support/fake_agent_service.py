@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from fastapi.testclient import TestClient
 
 SERVICE_URL = "http://agent-service.test:8080"
+SERVICE_AUDIENCE_SCOPE = "agent-service-audience.test"
 A_REFRESH_TOKEN = "fake-refresh-token"  # noqa: S105
 HEARTBEAT_SECONDS = 15
 STARTED_MODEL = "anthropic/opus"
@@ -240,6 +241,7 @@ def attach_cowriter_service(
 
     app = client.app
     monkeypatch.setenv("AGENT_SERVICE_URL", SERVICE_URL)
+    monkeypatch.setenv("AGENT_SERVICE_AUDIENCE_SCOPE", SERVICE_AUDIENCE_SCOPE)
     get_settings.cache_clear()
     setattr(app.state, AVAILABILITY_ATTRIBUTE, McpEndpointAvailability())
     issuer = a_fake_issuer()

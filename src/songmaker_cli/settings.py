@@ -13,6 +13,7 @@ Tests construct ``Settings(...)`` directly with explicit kwargs and bypass
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -53,6 +54,9 @@ _RELEASE_FIELD_DEFAULTS: Final = {
     "songmaker_release": UNRELEASED_TAG,
     "songmaker_commit": UNKNOWN_COMMIT,
 }
+
+# RFC 6749 section 3.3 scope-token: printable ASCII without space, double quote and backslash.
+_SCOPE_TOKEN: Final = re.compile(r"[\x21\x23-\x5b\x5d-\x7e]+")
 
 
 @dataclass(frozen=True)
@@ -159,6 +163,14 @@ class Settings(BaseSettings):
             raise ValueError("TOKEN_CLIENTS has an empty entry")
         return value
 
+    @field_validator("agent_service_audience_scope")
+    @classmethod
+    def agent_service_audience_scope_is_one_scope_token(cls, value: str | None) -> str | None:
+        """A scope is one RFC 6749 scope-token; a space would request two services."""
+        if value is not None and _SCOPE_TOKEN.fullmatch(value) is None:
+            raise ValueError("AGENT_SERVICE_AUDIENCE_SCOPE is not one RFC 6749 scope-token")
+        return value
+
     @property
     def token_client_ids(self) -> frozenset[str]:
         """The admitted `azp` values, trimmed; matched exactly and case-sensitively."""
@@ -263,6 +275,9 @@ class Settings(BaseSettings):
     # Where the co-writer turn starts its runs; checked where the turn runs, so workers and the
     # migrate step start without it.
     agent_service_url: str | None = None
+    # The OAuth scope of the agent service's audience; the workload grant asks for exactly this, so
+    # the token names only the service it is for. Checked where the turn runs.
+    agent_service_audience_scope: str | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 30

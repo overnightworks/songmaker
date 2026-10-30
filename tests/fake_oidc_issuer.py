@@ -68,6 +68,8 @@ class FakeIssuer:
     refuses_refresh_with: str | None = None
     refuses_workload_grant: bool = False
     grants_seen: list[str] = field(default_factory=list)
+    # The scope each client-credentials grant asked for.
+    workload_scopes_seen: list[str] = field(default_factory=list)
     # Runs when a refresh-token grant arrives, before the realm answers it.
     before_renewal: Callable[[], None] | None = None
 
@@ -96,6 +98,7 @@ class FakeIssuer:
         if grant == "refresh_token":
             return self._renewal()
         if grant == "client_credentials":
+            self.workload_scopes_seen.append(request.form["scope"])
             return self._workload_grant()
         assert self.person is not None, "the test names who signs in"
         nonce = self._nonce_by_code[request.form["code"]]

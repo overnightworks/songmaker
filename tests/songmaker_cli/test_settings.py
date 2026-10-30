@@ -237,3 +237,17 @@ def test_token_clients_with_an_empty_entry_fail_loud(malformed: str) -> None:
 )
 def test_token_clients_are_trimmed_and_matched_exactly(given: str, admitted: set[str]) -> None:
     assert Settings(**_required_settings(), token_clients=given).token_client_ids == admitted
+
+
+@pytest.mark.parametrize("malformed", ["two scopes", " padded", "tab\tseparated", '"quoted"', ""])
+def test_an_agent_service_audience_scope_that_is_not_one_scope_token_fails_loud(
+    malformed: str,
+) -> None:
+    with pytest.raises(ValidationError, match="AGENT_SERVICE_AUDIENCE_SCOPE"):
+        Settings(**_required_settings(), agent_service_audience_scope=malformed)
+
+
+def test_an_agent_service_audience_scope_of_one_scope_token_is_kept() -> None:
+    settings = Settings(**_required_settings(), agent_service_audience_scope="audience:agent")
+
+    assert settings.agent_service_audience_scope == "audience:agent"
