@@ -117,6 +117,13 @@ def service_client(base_url: str) -> httpx.AsyncClient:
     )
 
 
+@dataclass(frozen=True)
+class _RunTarget:
+    agent: AgentDefinition
+    service_url: str
+    audience_scope: str
+
+
 @functools.cache
 def _cowriter_agent() -> AgentDefinition:
     # Imported here: the endpoint's tool catalog needs the optional `mcp` library, which the
@@ -134,21 +141,22 @@ async def run_cowriter_turn(
     if isinstance(unusable, TurnProblem):
         yield unusable
         return
-    agent, service_url, audience_scope = unusable
     tokens = await asyncio.to_thread(
-        _fetch_tokens, caller.app, caller.session_id, audience_scope,
+        _fetch_tokens, caller.app, caller.session_id, unusable.audience_scope,
     )
     if isinstance(tokens, TurnProblem):
         yield tokens
         return
     person = RunPerson(normalised_oidc_issuer(get_settings().oidc_issuer) or "", caller.user.id)
     # Closing this generator must end the run's stream at once, so its release runs now.
-    async with aclosing(_stream_run(service_url, agent.request(messages), tokens, person)) as run:
+    async with aclosing(_stream_run(
+        unusable.service_url, unusable.agent.request(messages), tokens, person,
+    )) as run:
         async for outcome in run:
             yield outcome
 
 
-def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition, str, str]:
+def _problem_before_the_run(app: FastAPI) -> TurnProblem | _RunTarget:
     from songmaker_cli.cowriter.mcp_endpoint import cowriter_mcp_availability
 
     availability = cowriter_mcp_availability(app)
@@ -162,7 +170,7 @@ def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition
     if not audience_scope:
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "no agent service audience scope")
     try:
-        return _cowriter_agent(), service_url, audience_scope
+        return _RunTarget(_cowriter_agent(), service_url, audience_scope)
     except AgentFileError:
         log.exception("The co-writer's agent file is refused")
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "agent file refused")

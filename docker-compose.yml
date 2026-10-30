@@ -97,7 +97,7 @@ services:
       AGENT_SERVICE_CAPABILITY_KEY_FILE: /run/secrets/agent_service_signing_public_key
       # The co-writer turn starts its runs here, on hal_agent_songmaker.
       AGENT_SERVICE_URL: ${AGENT_SERVICE_URL:-http://agent-service:8080}
-      # The workload token asks for exactly the agent service's audience scope.
+      # Both the workload grant and the person sign-in request the agent service's audience scope.
       AGENT_SERVICE_AUDIENCE_SCOPE: ${AGENT_SERVICE_AUDIENCE_SCOPE:-agent-service-audience}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
       TOKEN_CLIENTS: ${TOKEN_CLIENTS:-}
