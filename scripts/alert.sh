@@ -71,21 +71,23 @@ CURL_CREDENTIALS="$(curl_credentials_config "$SMTP_USER" "$SMTP_PASSWORD")" || {
     exit 1
 }
 
-# `wait "$!"` collects the credential write: a write that failed (curl closed
-# the pipe first) does not count as sent.
-if ! CURL_OUTPUT="$(curl --silent --show-error --fail \
+# curl's exit status alone decides: curl reads its --config to EOF before any
+# transfer, so a curl that exits 0 has read the credentials.
+CURL_STATUS=0
+CURL_OUTPUT="$(curl --silent --show-error --fail \
     --ssl-reqd \
     --url "smtp://${SMTP_HOST}:${SMTP_PORT}" \
     --mail-from "$SMTP_USER" \
     --mail-rcpt "$ALERT_EMAIL_TO" \
     --config <(printf '%s' "$CURL_CREDENTIALS") \
-    --upload-file - <<<"$MESSAGE" 2>&1 && wait "$!")"; then
+    --upload-file - <<<"$MESSAGE" 2>&1)" || CURL_STATUS=$?
+if ((CURL_STATUS != 0)); then
     # Defense in depth: curl does not echo back credentials on a protocol
     # error, but scrub the password from whatever it did print before this
     # line reaches the journal, in case a future curl version ever changes
     # what an error message includes.
     CURL_OUTPUT="${CURL_OUTPUT//"$SMTP_PASSWORD"/[REDACTED]}"
-    echo "alert.sh: SMTP send to $SMTP_HOST:$SMTP_PORT failed: $CURL_OUTPUT" >&2
+    echo "alert.sh: SMTP send to $SMTP_HOST:$SMTP_PORT failed (curl exit $CURL_STATUS): $CURL_OUTPUT" >&2
     exit 1
 fi
 
