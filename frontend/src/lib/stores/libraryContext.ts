@@ -386,7 +386,7 @@ export function currentLibraryHistoryState(): unknown {
 export function libraryHistoryEntry(entry?: unknown): unknown {
 	const standing = entry === undefined;
 	const pageState = standing ? standingPageState() : pageStateOfHistoryState(entry);
-	const raw = entry ?? standingHistoryState();
+	const raw = standing ? standingHistoryState() : entry;
 	const written = pageState === null ? raw : (pageState.library ?? null);
 	return entryForAddress(written, (standing ? standingAddress() : window.location).pathname);
 }

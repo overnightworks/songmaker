@@ -18,6 +18,7 @@ import {
 	installHistoryController,
 	mountRouteOfLandedAddress,
 	ownStepBacksUnderwayForTests,
+	standingPageState,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
 	type HistoryEntry
@@ -145,7 +146,8 @@ export function reloadLibraryPage(): Promise<void> {
 // controller has underway lands -- below the one it stands on now, which is
 // as far as a test needs to tell them apart.
 export function plannedHistoryIndex(): number {
-	const standing = standingHistoryEntry()?.id ?? Number.NEGATIVE_INFINITY;
+	const standing =
+		(standingPageState()?.entry as HistoryEntry | undefined)?.id ?? Number.NEGATIVE_INFINITY;
 	return ownStepBacksUnderwayForTests() ? standing - 1 : standing;
 }
 

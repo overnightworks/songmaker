@@ -265,7 +265,7 @@ function writeShallowEntry(url: string, state: App.PageState, replace: boolean):
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	const write = (): unknown => (replace ? replaceState(url, state) : pushState(url, state));
 	const landing = writesUnderway === 0 ? Promise.resolve(write()) : writesLanded.then(write);
-	unlandedWrite = { href: new URL(url, location.href).href, state };
+	unlandedWrite = { href: new URL(url, standingAddress()).href, state };
 	writesUnderway += 1;
 	const settled = landing.finally(() => {
 		writesUnderway -= 1;

@@ -21,7 +21,7 @@ import { standingHistoryEntry, watchBack } from '#lib/test-utils/library-history
 // has, the controller answers where history stands from what it wrote, and
 // starts nothing that would land before it.
 describe('writes the router has not landed yet', () => {
-	let releaseWrites: () => void;
+	let releaseWrites: () => Promise<void>;
 	let backs: ReturnType<typeof watchBack>;
 
 	beforeEach(async () => {
@@ -38,14 +38,22 @@ describe('writes the router has not landed yet', () => {
 		releaseWrites = holdShallowWrites();
 	});
 
-	afterEach(() => {
-		releaseWrites();
+	afterEach(async () => {
+		await releaseWrites();
 		resetHistoryControllerForTests();
 		resetLayersForTests();
 		vi.restoreAllMocks();
 	});
 
 	const address = (pathname: string): string => `${location.origin}${pathname}`;
+
+	async function stepBack(): Promise<void> {
+		const arrived = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await arrived;
+	}
 
 	it('builds each write of one task on the one before it, and starts a move only after all landed', async () => {
 		const first = pushEntry('/album/b', {});
@@ -61,17 +69,24 @@ describe('writes the router has not landed yet', () => {
 		expect(second).toEqual(first);
 		expect(third.below).toBe(address('/album/b?filter=x'));
 		expect(goto).not.toHaveBeenCalled();
-		releaseWrites();
+		void releaseWrites();
 		await moved;
 
 		expect(goto).toHaveBeenCalledOnce();
 		expect(location.pathname).toBe('/settings');
 		expect(standingHistoryEntry()?.below).toBe(address('/album/c'));
+		backs.stop();
+		await stepBack();
+		expect(location.href).toBe(address('/album/c'));
+		await stepBack();
+		expect(location.href).toBe(address('/album/b?filter=x'));
+		await stepBack();
+		expect(location.pathname).toBe('/album/a');
 	});
 
 	it('stands a link push over the page a shallow push wrote', async () => {
 		pushEntry('/album/b', {});
-		releaseWrites();
+		await releaseWrites();
 		await historyComesToRest();
 
 		await vi.mocked(goto)('/settings');
@@ -88,7 +103,8 @@ describe('writes the router has not landed yet', () => {
 		startFakeRouter();
 		stampNavigatedEntry('enter');
 		await laterTask();
-		releaseWrites();
+		expect(history.state).not.toEqual(written);
+		await releaseWrites();
 		await historyComesToRest();
 
 		expect(standingHistoryEntry()).toEqual(written);
@@ -121,7 +137,7 @@ describe('writes the router has not landed yet', () => {
 			await laterTask();
 
 			expect(started()).toBe(0);
-			releaseWrites();
+			await releaseWrites();
 			await vi.waitFor(() => expect(started()).toBe(1));
 		}
 	);
@@ -132,7 +148,7 @@ describe('writes the router has not landed yet', () => {
 		leave();
 		await laterTask();
 		expect(backs.presses()).toBe(0);
-		releaseWrites();
+		await releaseWrites();
 
 		await vi.waitFor(() => expect(backs.presses()).toBe(1));
 	});
