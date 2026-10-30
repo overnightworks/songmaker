@@ -26,7 +26,7 @@ PATH = "u1/refs/a.wav"
 
 
 def _alembic_config() -> Config:
-    return Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    return Config(str(Path(__file__).resolve().parents[3] / "alembic.ini"))
 
 
 def _configured(url) -> Config:
