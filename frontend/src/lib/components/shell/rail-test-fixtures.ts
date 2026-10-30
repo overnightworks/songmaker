@@ -252,7 +252,12 @@ export function songsPage(
 }
 
 export function railPathsMock() {
-	return { resolve: vi.fn((path: string) => path) };
+	// Like the real `resolve`, a route ID loses its route groups: `/(library)?song=s1` is `/?song=s1`.
+	return {
+		resolve: vi.fn((routeId: string) =>
+			routeId.replace(/\/\([^/)]+\)/g, '').replace(/^(?=\?)/, '/')
+		)
+	};
 }
 
 export function railLibraryApiMock() {
