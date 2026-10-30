@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -72,8 +73,10 @@ def _seed(
         session.flush()
         session.add(Album(id="a1", title="Album", artist="Band", created_by="u1"))
         session.add(Song(id="s1", title="Song", album_id="a1", track_number=1))
-        session.add(Version(
+        session.flush()
+        session.execute(Version.__table__.insert().values(
             id="v1", song_id="s1", version_number=1, lyrics="x", prompt="y", bpm=120,
+            audio_duration=0, key_scale="", created_at=datetime.now(UTC),
         ))
         session.add(Generation(
             id="g1", song_id="s1", version_id="v1", generation_number=1, mp3_path="g1.mp3", seed=1,

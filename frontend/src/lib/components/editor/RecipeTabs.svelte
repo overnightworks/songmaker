@@ -83,7 +83,6 @@
 	const TABS_SAVED_WITH_VERSION: readonly RecipeTab[] = ['song', 'engine'];
 
 	let selected = $state<RecipeTab>('song');
-	let referenceFilename = $state<string | null>(null);
 	let referenceUploading = $state(false);
 	let referenceError = $state<string | null>(null);
 	let savingPreset = $state(false);
@@ -100,7 +99,6 @@
 	const sharedPresets = $derived(matchingPresets.filter((preset) => preset.is_shared));
 	const chosenPreset = $derived(matchingEnginePreset(values, $presets));
 	const hasEngineChange = $derived(changedFields.has('preset'));
-	const referencePath = $derived(values.genParams?.reference_audio_path ?? null);
 
 	function change(field: RecipeField): void {
 		onchange(resetRecipeField(values, field, standard));
@@ -147,11 +145,7 @@
 		referenceError = null;
 		try {
 			const result = await uploadReferenceAudio(file);
-			onchange({
-				...values,
-				genParams: { ...values.genParams, reference_audio_path: result.path }
-			});
-			referenceFilename = result.filename;
+			onchange({ ...values, reference: { id: result.id, filename: result.filename } });
 		} catch (error) {
 			referenceError = describeFailure(error, RECIPE_REFERENCE_UPLOAD_ERROR);
 		} finally {
@@ -238,8 +232,8 @@
 {/snippet}
 
 {#snippet referenceControl()}
-	{#if referencePath}
-		<span class="reference-name">{referenceFilename ?? referencePath}</span>
+	{#if values.reference}
+		<span class="reference-name">{values.reference.filename}</span>
 	{:else}
 		<label class="upload"
 			>{referenceUploading ? RECIPE_REFERENCE_UPLOADING : RECIPE_REFERENCE_UPLOAD}<input

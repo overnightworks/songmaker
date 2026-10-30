@@ -79,9 +79,10 @@ def _seed_rows(ctx, user_id, count, size_each=1):
 
 
 def _upload(ctx, user_id, content, settings, filename="ref.wav"):
-    return store_reference_audio(
+    stored = store_reference_audio(
         ctx.db, ctx.audio_dir, user_id, ".wav", content, settings, filename,
     )
+    return stored.storage_path
 
 
 def _row_count(ctx, user_id="owner"):
@@ -265,7 +266,7 @@ def test_postgresql_reference_admission_is_atomic(
                 assert not _files(ctx)
             finally:
                 release.set()
-            assert (ctx.audio_dir / first.result(timeout=5)).read_bytes() == b"a" * 100
+            assert (ctx.audio_dir / first.result(timeout=5).storage_path).read_bytes() == b"a" * 100
             if backend == "postgresql":
                 with pytest.raises(ReferenceAudioQuotaExceeded):
                     second.result(timeout=5)
@@ -315,10 +316,10 @@ def test_postgresql_reference_owners_do_not_block_each_other(quota_context, held
                 store_reference_audio, ctx.db, ctx.audio_dir, "other", ".wav", b"b", Settings(),
                 "b.wav",
             )
-            assert (ctx.audio_dir / second.result(timeout=5)).read_bytes() == b"b"
+            assert (ctx.audio_dir / second.result(timeout=5).storage_path).read_bytes() == b"b"
         finally:
             release.set()
-        assert (ctx.audio_dir / first.result(timeout=5)).read_bytes() == b"a"
+        assert (ctx.audio_dir / first.result(timeout=5).storage_path).read_bytes() == b"a"
 
 
 def test_postgresql_unrelated_user_write_completes_during_upload(
@@ -346,7 +347,7 @@ def test_postgresql_unrelated_user_write_completes_during_upload(
             assert workers.submit(write_song).result(timeout=5) == "song"
         finally:
             release.set()
-        assert (ctx.audio_dir / upload.result(timeout=5)).read_bytes() == b"a"
+        assert (ctx.audio_dir / upload.result(timeout=5).storage_path).read_bytes() == b"a"
     with ctx.db() as session:
         assert session.get(Song, "song").album.created_by == "owner"
 
@@ -444,7 +445,7 @@ assert len(partials) == int(cleanup_denied)
 with factory() as session:
     assert session.query(ReferenceRecording).count() == 0
 stored = store_reference_audio(factory, root, "owner", ".wav", b"a" * 10000, settings, "full.wav")
-assert (root / stored).read_bytes() == b"a" * 10000
+assert (root / stored.storage_path).read_bytes() == b"a" * 10000
 assert retained.read_bytes() == b"r" * 100
 try:
     store_reference_audio(factory, root, "owner", ".wav", b"b", settings, "over.wav")

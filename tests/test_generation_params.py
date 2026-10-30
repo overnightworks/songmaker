@@ -18,13 +18,18 @@ def test_base_extra_forbid_rejects_typo() -> None:
         BaseGenerationParams.model_validate({"infrence_steps": 50})
 
 
-def test_base_reference_audio_path_rejects_traversal() -> None:
+def test_base_refuses_the_reference_path_a_version_no_longer_carries() -> None:
+    with pytest.raises(ValidationError, match="extra|not permitted"):
+        BaseGenerationParams.model_validate({"reference_audio_path": "user1/clip.wav"})
+
+
+def test_stored_reference_audio_path_rejects_traversal() -> None:
     with pytest.raises(ValidationError, match="must not contain"):
-        BaseGenerationParams(reference_audio_path="../etc/passwd")
+        StoredGenerationParams(reference_audio_path="../etc/passwd")
 
 
-def test_base_reference_audio_path_accepts_safe() -> None:
-    params = BaseGenerationParams(reference_audio_path="user1/clip.wav")
+def test_stored_reference_audio_path_accepts_safe() -> None:
+    params = StoredGenerationParams(reference_audio_path="user1/clip.wav")
     assert params.reference_audio_path == "user1/clip.wav"
 
 

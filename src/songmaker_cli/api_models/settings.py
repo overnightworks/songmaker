@@ -16,22 +16,7 @@ if TYPE_CHECKING:
     from songmaker_cli.db.models import GenerationPreset
 
 
-def _refuse_reference_audio(params: GenerationParams | None) -> GenerationParams | None:
-    """A reference upload is authored only on a version, never on a preset or a default."""
-    if params is not None and params.reference_audio_path:
-        msg = "reference_audio_path is set on a version, not on a preset or a generation default"
-        raise ValueError(msg)
-    return params
-
-
 class GenerationDefaultsRequest(RootModel[dict[str, GenerationParams]]):
-
-    @field_validator("root")
-    @classmethod
-    def _refuse_references(cls, modes: dict[str, GenerationParams]) -> dict[str, GenerationParams]:
-        for params in modes.values():
-            _refuse_reference_audio(params)
-        return modes
 
     @model_validator(mode="before")
     @classmethod
@@ -58,15 +43,11 @@ class PresetCreateRequest(BaseModel):
             raise ValueError(msg)
         return v
 
-    _refuse_reference = field_validator("params")(_refuse_reference_audio)
-
 
 class PresetUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     params: GenerationParams | None = None
     is_default: bool | None = None
-
-    _refuse_reference = field_validator("params")(_refuse_reference_audio)
 
 
 class PresetResponse(BaseModel):

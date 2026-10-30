@@ -11,6 +11,7 @@ import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 import { addToast } from '#lib/stores/toast.ts';
 import type {
 	GenerationItem,
+	ReferenceResponse,
 	SongItem,
 	VersionGenerationParams,
 	VersionItem
@@ -25,6 +26,8 @@ interface SongData {
 	audio_duration: number;
 	key_scale: string;
 	genParams: VersionGenerationParams | null;
+	/** The reference recording the version links, outside genParams: it is a row, not a knob. */
+	reference: ReferenceResponse | null;
 }
 
 const EMPTY_SONG_DATA: SongData = {
@@ -33,7 +36,8 @@ const EMPTY_SONG_DATA: SongData = {
 	bpm: 0,
 	audio_duration: 0,
 	key_scale: '',
-	genParams: null
+	genParams: null,
+	reference: null
 };
 
 interface EditorState {
@@ -68,7 +72,8 @@ function songDataEqual(a: SongData, b: SongData): boolean {
 		a.bpm === b.bpm &&
 		a.audio_duration === b.audio_duration &&
 		a.key_scale === b.key_scale &&
-		genParamsEqual(a.genParams, b.genParams)
+		genParamsEqual(a.genParams, b.genParams) &&
+		a.reference?.id === b.reference?.id
 	);
 }
 
@@ -110,6 +115,10 @@ export const editGenParams = derived(
 	editorState,
 	(s) => s?.draft.genParams ?? EMPTY_SONG_DATA.genParams
 );
+export const editReference = derived(
+	editorState,
+	(s) => s?.draft.reference ?? EMPTY_SONG_DATA.reference
+);
 
 function updateDraft(changes: Partial<SongData>): void {
 	editorState.update((s) => {
@@ -140,6 +149,10 @@ export function setDraftKeyScale(key_scale: string): void {
 
 export function setDraftGenParams(genParams: VersionGenerationParams | null): void {
 	updateDraft({ genParams });
+}
+
+export function setDraftReference(reference: ReferenceResponse | null): void {
+	updateDraft({ reference });
 }
 
 // --- Versions ---
@@ -214,7 +227,8 @@ function songDataFromSong(s: SongItem): SongData {
 		bpm: s.bpm ?? 0,
 		audio_duration: s.audio_duration ?? 0,
 		key_scale: s.key_scale ?? '',
-		genParams: s.generation_params ?? null
+		genParams: s.generation_params ?? null,
+		reference: s.reference ?? null
 	};
 }
 
@@ -225,7 +239,8 @@ function songDataFromVersion(v: VersionItem): SongData {
 		bpm: v.bpm,
 		audio_duration: v.audio_duration,
 		key_scale: v.key_scale,
-		genParams: v.generation_params
+		genParams: v.generation_params,
+		reference: v.reference ?? null
 	};
 }
 
@@ -431,6 +446,7 @@ export async function handleSave(songId: string): Promise<SongItem> {
 		audio_duration: draft.audio_duration,
 		key_scale: draft.key_scale,
 		generation_params: draft.genParams,
+		reference_recording_id: draft.reference?.id ?? null,
 		new_version: get(draftSavesAsNewVersion)
 	});
 	editorState.update((s) =>

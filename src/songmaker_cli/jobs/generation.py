@@ -63,7 +63,7 @@ from songmaker_cli.generate import (
 )
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.parser import AlbumMeta, SongMeta
-from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_owned_reference_audio
+from songmaker_cli.reference_audio import ReferenceAudioRejected, resolve_linked_reference_audio
 from songmaker_cli.scheduler import (
     AllWorkersHeld,
     GenerationProgressCallback,
@@ -275,8 +275,8 @@ def _load_song_meta(
     song_id: str,
     version_id: str,
     db_factory: sessionmaker[Session],
-) -> tuple[SongMeta, AlbumMeta]:
-    """Load song and version from DB and return domain models."""
+) -> tuple[SongMeta, AlbumMeta, str | None]:
+    """Load song and version from DB: domain models and the version's reference link."""
     with db_factory() as session:
         song = get_song(session, song_id)
         if not song:
@@ -307,6 +307,7 @@ def _load_song_meta(
             title=album_name,
             artist=album.artist if album else "",
         )
+        reference_recording_id = version.reference_recording_id
 
     log.debug(
         "Loaded: '%s' (album=%s, params=%s)",
@@ -314,7 +315,7 @@ def _load_song_meta(
         album_name,
         meta.generation_params or "none",
     )
-    return meta, album_meta
+    return meta, album_meta, reference_recording_id
 
 
 def _load_preset_params(
@@ -401,7 +402,7 @@ def _build_generation_context(
 
     ``target_model`` is the user-requested mode (e.g. "sft", "xl-sft").
     """
-    meta, album_meta = _load_song_meta(song_id, version_id, db_factory)
+    meta, album_meta, reference_recording_id = _load_song_meta(song_id, version_id, db_factory)
 
     model_name = resolve_model_mode(target_model)
     log.debug("Target ACE-Step model: %s", model_name)
@@ -416,15 +417,13 @@ def _build_generation_context(
     )
     ace_config = replace(ace_config, model=model_name)
 
-    recorded_reference_path = ace_config.reference_audio_path
-    if ace_config.reference_audio_path:
-        try:
-            abs_ref = resolve_owned_reference_audio(
-                audio_dir, user_id, ace_config.reference_audio_path
-            )
-        except ReferenceAudioRejected as exc:
-            raise GenerationSetupError(JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND) from exc
-        ace_config = replace(ace_config, reference_audio_path=str(abs_ref))
+    try:
+        reference = resolve_linked_reference_audio(
+            db_factory, audio_dir, user_id, reference_recording_id,
+        )
+    except ReferenceAudioRejected as exc:
+        raise GenerationSetupError(JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND) from exc
+    ace_config = replace(ace_config, reference_audio_path=reference.absolute_path)
 
     ace_config = _apply_user_lora_path(
         ace_config,
@@ -444,7 +443,7 @@ def _build_generation_context(
         audio_dir=audio_dir,
         user_id=user_id,
         model_name=model_name,
-        reference_audio_path=recorded_reference_path,
+        reference_audio_path=reference.storage_path,
         base_params=meta.generation_params,
     )
 

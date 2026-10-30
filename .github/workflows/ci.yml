@@ -157,11 +157,12 @@ jobs:
         tests/test_reference_quota.py
         tests/test_auth_write_lock_postgres.py
         tests/test_person_token_paths_postgres.py
-        tests/test_reference_save_lock_postgres.py
+        tests/test_reference_attach_lock_postgres.py
         tests/test_song_version_lock_postgres.py
         tests/songmaker_cli/mcp_server/test_tools_coherence_verdict_lock_postgres.py
         tests/songmaker_cli/db/test_migrations_coherence_verdict.py
         tests/songmaker_cli/db/test_migrations_reference_recordings.py
+        tests/songmaker_cli/db/test_migrations_version_reference_link.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:

@@ -45,7 +45,6 @@ class BaseGenerationParams(BaseModel):
     lm_negative_prompt: str | None = Field(None, max_length=_GEN_PARAM_MAX_STRING_LENGTH)
     infer_method: Literal["ode", "sde"] | None = None
     batch_size: int | None = Field(None, ge=1, le=8)
-    reference_audio_path: str | None = Field(None, max_length=500)
     repaint_mode: Literal["conservative", "balanced", "aggressive"] | None = None
     repaint_strength: float | None = Field(None, ge=0, le=1)
     lm_repetition_penalty: float | None = Field(None, ge=0.5, le=5)
@@ -62,13 +61,6 @@ class BaseGenerationParams(BaseModel):
     audio_cover_strength: float | None = Field(None, ge=0, le=1)
     user_lora_id: str | None = Field(None, max_length=36)
 
-    @field_validator("reference_audio_path")
-    @classmethod
-    def _validate_reference_audio_path(cls, v: str | None) -> str | None:
-        if v is not None and ".." in v:
-            raise ValueError("reference_audio_path must not contain '..'")
-        return v
-
 
 class StoredGenerationParams(BaseGenerationParams):
     """Persisted on Generation.generation_params after a run completes.
@@ -78,10 +70,11 @@ class StoredGenerationParams(BaseGenerationParams):
     actual task knobs that were applied).
 
     ``reference_audio_path`` is the reference the job resolved and uploaded (from
-    the version, the user preset or the global default), ``""`` when it used
-    none; a take persisted earlier has no such key.
+    the version's linked recording), ``""`` when it used none; a take persisted
+    earlier has no such key.
     """
 
+    reference_audio_path: str | None = Field(None, max_length=500)
     seed: int | None = None
     acestep_model: str | None = None
     bpm: int | None = None
@@ -98,6 +91,13 @@ class StoredGenerationParams(BaseGenerationParams):
     cot_caption: str | None = None
     cot_lyrics: str | None = None
     delivered_batch_size: int | None = None
+
+    @field_validator("reference_audio_path")
+    @classmethod
+    def _validate_reference_audio_path(cls, v: str | None) -> str | None:
+        if v is not None and ".." in v:
+            raise ValueError("reference_audio_path must not contain '..'")
+        return v
 
     @field_validator("timesteps")
     @classmethod

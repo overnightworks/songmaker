@@ -728,50 +728,6 @@ def test_generation_job_version_not_found(seeded_db, tmp_path: Path) -> None:
         assert "Version not found" in job.error
 
 
-def test_generation_job_rejects_foreign_reference_before_dispatch(
-    seeded_db,
-    tmp_path: Path,
-) -> None:
-    foreign_ref = tmp_path / "audio" / "u2" / "refs" / "secret.wav"
-    foreign_ref.parent.mkdir(parents=True)
-    foreign_ref.write_bytes(b"SECRET")
-    with seeded_db() as session:
-        version = session.query(Version).filter_by(id="v1").one()
-        version.generation_params = {"reference_audio_path": "u2/refs/secret.wav"}
-        session.commit()
-
-    dispatch = AsyncMock()
-    with (
-        patch(
-            "songmaker_cli.jobs.admit_generation_worker", AsyncMock(return_value=MagicMock(id="w1"))
-        ),
-        patch("songmaker_cli.jobs.dispatch_generation_on_worker", dispatch),
-        patch("songmaker_cli.jobs.generation.decr_queue_depth", AsyncMock()),
-        patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
-    ):
-        run_async(
-            run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=tmp_path / "audio",
-                data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-            )
-        )
-
-    dispatch.assert_not_awaited()
-    with seeded_db() as session:
-        job = get_job(session, "j1")
-        assert job.status == "failed"
-        assert job.error_type == "setup_error"
-        assert job.error == "Reference audio not found"
-
-
 async def _run_peer_generation(factory, peer, count):
     await run_generation_job(
         "j1", "s1", "v1", count, "u1", db_factory=factory,
