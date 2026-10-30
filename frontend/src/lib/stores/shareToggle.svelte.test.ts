@@ -1,9 +1,13 @@
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { ShareKind } from '#lib/routes/addresses.ts';
 import { get } from 'svelte/store';
 import { ApiError } from '#lib/api/fetch.ts';
 import { toasts } from '#lib/stores/toast.ts';
 import { createShareToggle } from './shareToggle.svelte';
+
+beforeEach(() => {
+	toasts.set([]);
+});
 
 it.each<{ kind: ShareKind; address: string }>([
 	{ kind: 'album', address: '/share/abc' },
