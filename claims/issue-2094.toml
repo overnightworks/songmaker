@@ -1,0 +1,8 @@
+claim_id = "67c6ebd9d0274a4c95db872faea7c0a4"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "9cc26afe549a1f45ded83885860ebf80f817d4dc"
+branch = "claude/issue-2094-keep-pick-share-and-playlist-add-refuse"
+scope = ["docs/architecture.md", "docs/requirements/0001-creative-catalog-and-takes.md", "frontend/src/lib/api/client.ts", "frontend/src/lib/api/generations.ts", "frontend/src/lib/components/editor/TakeMenu.svelte", "frontend/src/lib/components/editor/TakeMenu.test.ts", "frontend/src/lib/components/editor/TakeRow.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/shareToggle.svelte.test.ts", "frontend/src/lib/stores/shareToggle.svelte.ts", "frontend/src/lib/stores/takeActions.test.ts", "frontend/src/lib/stores/takeActions.ts", "quality/baseline.toml", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/playlists.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/playlist_api.py", "tests/songmaker_cli/test_archived_take_refusal.py", "tests/songmaker_cli/test_cleanup_generation_retention.py", "tests/test_generation_retention_lock_postgres.py"]
+opened_commit = "ffa4314f4e26faa0bf71c07abb0184a72ff01ab6"
+whole_reason = "One rule, restore first: the locked refusal, its 409s and the Restore in the take menu land together, so every 409 names a step the web UI offers."
