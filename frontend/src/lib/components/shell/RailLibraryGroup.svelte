@@ -39,7 +39,7 @@
 		RAIL_LIBRARY_NAV_LABEL
 	} from '#lib/constants.ts';
 	import type { SongItem } from '#lib/api/types.ts';
-	import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+	import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 	import { standingPathname } from '#lib/routes/standingAddress.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import PlayingMark from '../PlayingMark.svelte';
@@ -197,7 +197,7 @@
 	count={albumCount}
 	expandTrigger={libraryWallIsSurface || isAlbumDetail || loadFailure !== null || filtering}
 	page={{
-		href: resolve(LIBRARY_ROUTE_PATH),
+		href: resolve(LIBRARY_ROUTE_ID),
 		current: onLibraryPage,
 		open: () => void openRailSearchTarget({ kind: 'page', href: LIBRARY_ROUTE_PATH })
 	}}

@@ -15,7 +15,7 @@
 	import { resolve } from '$app/paths';
 	import { describeFailure } from '#lib/api/fetch.ts';
 	import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
-	import { LIBRARY_ROUTE_PATH, readLegacySongQuery } from '#lib/routes/addresses.ts';
+	import { LIBRARY_ROUTE_ID, readLegacySongQuery } from '#lib/routes/addresses.ts';
 	import {
 		currentLibraryHistoryState,
 		isLibraryHistoryState,
@@ -123,7 +123,7 @@
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_SONG_HEADING}</h1>
 		<p>{UNKNOWN_SONG_MESSAGE}</p>
-		<a class="address-action" href={resolve(LIBRARY_ROUTE_PATH)}>{BACK_TO_LIBRARY_LABEL}</a>
+		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
 {:else if addressState === 'unreachable'}
 	<div class="address-overlay" role="alert">

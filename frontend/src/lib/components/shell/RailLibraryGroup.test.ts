@@ -11,7 +11,7 @@ import {
 	RAIL_LIBRARY_LOAD_ERROR,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '#lib/constants.ts';
-import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { openCollection } from '#lib/stores/collection.ts';
 import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import {
@@ -95,7 +95,7 @@ beforeEach(async () => {
 	setShuffle(false);
 	closeNowPlaying();
 	// The default surface, browse, stands on the Library's address.
-	await goto(resolve(LIBRARY_ROUTE_PATH));
+	await goto(resolve(LIBRARY_ROUTE_ID));
 	vi.spyOn(audioPlayer, 'load').mockImplementation((playback) => {
 		audioPlayer.current = playback;
 	});
@@ -184,10 +184,10 @@ describe('RailLibraryGroup', () => {
 	});
 
 	it.each([
-		{ address: LIBRARY_ROUTE_PATH, current: true },
+		{ address: LIBRARY_ROUTE_ID, current: true },
 		{ address: '/settings', current: false },
-		{ address: '/playlists', current: false },
-		{ address: '/?song=s1', current: false }
+		{ address: '/(library)/playlists', current: false },
+		{ address: '/(library)?song=s1', current: false }
 	] as const)(
 		'defect:#1523: with the surface still on browse, the word Library is current: $current and its group is unfolded at $address',
 		async ({ address, current }) => {

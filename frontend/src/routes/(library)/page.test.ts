@@ -60,7 +60,10 @@ vi.mock('$app/navigation', async () => {
 		})
 	};
 });
-vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
+// Like the real `resolve`, a route ID loses its route groups and keeps a leading slash.
+vi.mock('$app/paths', () => ({
+	resolve: vi.fn((routeId: string) => routeId.replace(/\/\([^/)]+\)/g, '').replace(/^(?!\/)/, '/'))
+}));
 vi.mock('#lib/api/songs.ts', async (importOriginal) => ({
 	...(await importOriginal<typeof import('#lib/api/songs.ts')>()),
 	fetchSong: api.fetchSong,
