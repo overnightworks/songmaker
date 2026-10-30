@@ -36,6 +36,7 @@ import {
 } from '#lib/stores/playlists.ts';
 import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
 import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
+import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
 import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
 import {
 	ADMIN_WORKER_POOL_HREF,
@@ -295,15 +296,13 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // dirty-draft question as every other way out before it navigates. Pending
 // history-layer steps must land before pushing the page: a step back landing
 // after the push would take the address back to the song (#1143).
-type AppPageHref =
-	Extract<RailSearchTarget, { kind: 'page' }>['href'] | typeof ADMIN_WORKER_POOL_HREF;
+type AppPageHref = SettingsSectionRoute | typeof SETTINGS_HREF | typeof ADMIN_WORKER_POOL_HREF;
 
 export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		await historyComesToRest();
 		await keepLibraryPageAsLeft();
-		const args: [AppPageHref] = [href];
-		await goto(resolve(...(args as Parameters<typeof resolve>)));
+		await goto(resolve(href));
 	});
 }
 

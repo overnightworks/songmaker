@@ -349,10 +349,10 @@ frontend/src/
 ├── routes/share/**/page.test.ts   Album/playlist/song/take share pages through their real
 │                                  +page.svelte entry points (loading/error/retry, stream vs
 │                                  classic playback, windowed-stream stop, Now Playing)
-└── service-worker.test.ts         The build-time worker-chunk precache injection
-                                   (`scripts/inject_worker_precache.mjs`): the placeholder rewrite,
-                                   the build failures it refuses to pass on, and that
-                                   `service-worker.ts` still carries the placeholder it rewrites
+└── service-worker-precache.test.ts  The build-time worker-chunk precache injection
+                                     (`scripts/inject_worker_precache.mjs`): the placeholder rewrite,
+                                     the build failures it refuses to pass on, and that
+                                     `service-worker.ts` still carries the placeholder it rewrites
 ```
 
 ```

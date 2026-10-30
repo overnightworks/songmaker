@@ -6,7 +6,7 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { NetworkError } from '#lib/api/fetch.ts';
 import { PLAYING_MARK_LABEL } from '#lib/constants.ts';
-import { PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { LIBRARY_ROUTE_ID, PLAYLISTS_ROUTE_ID } from '#lib/routes/addresses.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
@@ -163,7 +163,7 @@ describe('RailPlaylistsGroup', () => {
 
 	it('#1354 rule 40 (D3): on the Playlists page its group is the current page and unfolded', async () => {
 		librarySurface.set('playlists');
-		await goto(resolve(PLAYLISTS_ROUTE_PATH));
+		await goto(resolve(PLAYLISTS_ROUTE_ID));
 		const target = await render();
 		expect(
 			requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
@@ -176,10 +176,10 @@ describe('RailPlaylistsGroup', () => {
 	});
 
 	it.each([
-		{ address: PLAYLISTS_ROUTE_PATH, current: true },
+		{ address: PLAYLISTS_ROUTE_ID, current: true },
 		{ address: '/settings', current: false },
-		{ address: '/library', current: false },
-		{ address: '/', current: false }
+		{ address: LIBRARY_ROUTE_ID, current: false },
+		{ address: '/(library)', current: false }
 	] as const)(
 		'defect:#1523: with the surface still on playlists, the word Playlists is current: $current and its group is unfolded at $address',
 		async ({ address, current }) => {
@@ -197,7 +197,7 @@ describe('RailPlaylistsGroup', () => {
 
 	it('defect:#1523: the word Playlists is current again after Back from Settings, with no reload', async () => {
 		librarySurface.set('playlists');
-		await goto(resolve(PLAYLISTS_ROUTE_PATH));
+		await goto(resolve(PLAYLISTS_ROUTE_ID));
 		const target = await render();
 		const word = requireElement(target, 'a.page-link');
 		expect(word.getAttribute('aria-current')).toBe('page');

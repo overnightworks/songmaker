@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
+	import { PLAYLISTS_ROUTE_ID, PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
 	import { standingPathname } from '#lib/routes/standingAddress.ts';
 	import { openCollection } from '#lib/stores/collection.ts';
 	import {
@@ -109,7 +109,7 @@
 	count={playlistCount}
 	expandTrigger={playlistsWallIsSurface || openPlaylistId !== null || filtering}
 	page={{
-		href: resolve(PLAYLISTS_ROUTE_PATH),
+		href: resolve(PLAYLISTS_ROUTE_ID),
 		current: onPlaylistsPage,
 		open: () => void openRailSearchTarget({ kind: 'page', href: PLAYLISTS_ROUTE_PATH })
 	}}
