@@ -4,6 +4,7 @@ import {
 	activityTimeLabel,
 	formatTime,
 	localWeekday,
+	releaseDayLabel,
 	songCountLabel,
 	titleInitials
 } from './format.ts';
@@ -100,5 +101,21 @@ describe('localWeekday', () => {
 
 	it('names the local weekday, not the UTC one', () => {
 		expect(localWeekday(new Date('2026-09-26T22:30:00Z'))).toBe('Sun');
+	});
+});
+
+describe('releaseDayLabel', () => {
+	beforeAll(() => vi.stubEnv('TZ', 'Pacific/Auckland'));
+	afterAll(() => vi.unstubAllEnvs());
+
+	it.each([
+		['v2026.10.28.4', '28 Oct 2026'],
+		['v2026.01.01.12', '1 Jan 2026'],
+		['v1.2.3', null],
+		['v2026.13.01.1', null],
+		['v2026.02.30.1', null],
+		['unreleased', null]
+	])('turns the tag %j into %j', (tag, expected) => {
+		expect(releaseDayLabel(tag)).toBe(expected);
 	});
 });

@@ -4,7 +4,12 @@
 	import { navigating } from '$app/state';
 	import { historyComesToRest, standingPageEntryId } from '#lib/history/historyController.ts';
 	import Icon from '#lib/components/Icon.svelte';
-	import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '#lib/constants.ts';
+	import {
+		APP_NAME,
+		RAIL_SETTINGS_LABEL,
+		SETTINGS_ADMIN_ONLY_HINT,
+		SETTINGS_NAV_LABEL
+	} from '#lib/constants.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
 	import { isAdmin } from '#lib/stores/auth.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -59,6 +64,9 @@
 					<a href={section.href} class="settings-row">
 						<Icon name={section.icon} size={20} class="settings-row-icon" />
 						<span class="settings-row-label">{section.label}</span>
+						{#if section.adminOnly}
+							<span class="settings-row-hint">{SETTINGS_ADMIN_ONLY_HINT}</span>
+						{/if}
 						<Icon name="chevron-right" class="settings-row-chevron" />
 					</a>
 				</li>
@@ -116,5 +124,10 @@
 	.settings-row-label {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.settings-row-hint {
+		font-size: 0.85rem;
+		color: var(--text-muted);
 	}
 </style>

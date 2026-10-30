@@ -8,12 +8,17 @@ import type {
 	PresetUpdateRequest,
 	ProviderStatus,
 	RateLimitsResponse,
+	ReleaseInfo,
 	VersionGenerationParams
 } from './types';
 import { apiFetch } from './fetch';
 
 export async function fetchCapabilities(): Promise<Capabilities> {
 	return apiFetch<Capabilities>('/api/capabilities');
+}
+
+export async function fetchRelease(): Promise<ReleaseInfo> {
+	return apiFetch<ReleaseInfo>('/api/release');
 }
 
 export async function fetchGenerationDefaults(): Promise<Record<string, VersionGenerationParams>> {
