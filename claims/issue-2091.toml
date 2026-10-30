@@ -1,8 +1,0 @@
-claim_id = "61e1fef5793346208401971174e5322b"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "a1429244bafbffa355d41f13d83b1a52e7fc202c"
-branch = "claude/issue-2091-six-one-owner-cuts"
-scope = ["frontend/src/lib/components/CoWriterTurnError.svelte", "frontend/src/lib/components/LoraDetail.svelte", "frontend/src/lib/components/LoraDetail.test.ts", "frontend/src/lib/stores/coverActivity.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/db/queries/playlists.py", "src/songmaker_cli/queue_streams.py", "src/songmaker_cli/sharing_api.py"]
-opened_commit = "111c8a8a935fbd2cc25526280e4f6d9e1c427a70"
-whole_reason = "Six behaviour-preserving one-owner cuts from one audit, each one to four lines per file; one lane and one review cost less than six, and no cut depends on another."
