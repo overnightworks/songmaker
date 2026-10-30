@@ -279,6 +279,21 @@ def generation_expiry(gen: Generation) -> datetime | None:
     return gen.created_at + timedelta(days=settings.generation_retention_days)
 
 
+class ReferenceResponse(BaseModel):
+    id: str
+    filename: str
+
+    @classmethod
+    def from_orm(cls, recording: ReferenceRecording) -> ReferenceResponse:
+        return cls(id=recording.id, filename=recording.original_filename)
+
+
+def _reference_of(linking_row: Version | Generation | None) -> ReferenceResponse | None:
+    if linking_row is None or linking_row.reference_recording is None:
+        return None
+    return ReferenceResponse.from_orm(linking_row.reference_recording)
+
+
 class GenerationResponse(BaseModel):
     id: str
     song_id: str
@@ -305,6 +320,7 @@ class GenerationResponse(BaseModel):
     version_lyrics: str | None
     scores: dict | None
     generation_params: dict | None
+    reference: ReferenceResponse | None = None
     audio_duration_sec: float | None
     created_at: str
 
@@ -350,6 +366,7 @@ class GenerationResponse(BaseModel):
             version_lyrics=generation_version_lyrics(gen),
             scores=scores if scores else None,
             generation_params=generation_params,
+            reference=_reference_of(gen),
             audio_duration_sec=gen.audio_duration_sec,
             created_at=gen.created_at.isoformat(),
         )
@@ -408,21 +425,6 @@ def public_song_cover_urls(slug: str, cover_key: str) -> AlbumCoverUrls:
             f"&{COVER_VERSION_QUERY}={cover_key}"
         ),
     )
-
-
-class ReferenceResponse(BaseModel):
-    id: str
-    filename: str
-
-    @classmethod
-    def from_orm(cls, recording: ReferenceRecording) -> ReferenceResponse:
-        return cls(id=recording.id, filename=recording.original_filename)
-
-
-def _reference_of(version: Version | None) -> ReferenceResponse | None:
-    if version is None or version.reference_recording is None:
-        return None
-    return ReferenceResponse.from_orm(version.reference_recording)
 
 
 class VersionResponse(BaseModel):

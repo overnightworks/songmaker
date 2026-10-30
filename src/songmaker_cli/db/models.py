@@ -51,6 +51,8 @@ ALBUMS_ID: Final = "albums.id"
 SONGS_ID: Final = "songs.id"
 GENERATIONS_ID: Final = "generations.id"
 SET_NULL: Final = "SET NULL"
+RESTRICT: Final = "RESTRICT"
+REFERENCE_RECORDINGS_ID: Final = "reference_recordings.id"
 DELETE_ORPHANS: Final = "all, delete-orphan"
 
 
@@ -199,7 +201,7 @@ class Version(Base):
     key_scale: Mapped[str] = mapped_column(String(10), default="")
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     reference_recording_id: Mapped[str | None] = mapped_column(
-        ForeignKey("reference_recordings.id", ondelete="RESTRICT"), nullable=True, index=True,
+        ForeignKey(REFERENCE_RECORDINGS_ID, ondelete=RESTRICT), nullable=True, index=True,
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
@@ -246,6 +248,9 @@ class Generation(ShareMixin, Base):
         ForeignKey(GENERATIONS_ID, ondelete=SET_NULL), nullable=True,
     )
     audio_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reference_recording_id: Mapped[str | None] = mapped_column(
+        ForeignKey(REFERENCE_RECORDINGS_ID, ondelete=RESTRICT), nullable=True, index=True,
+    )
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
@@ -253,6 +258,7 @@ class Generation(ShareMixin, Base):
 
     song: Mapped[Song] = relationship(back_populates="generations")
     version: Mapped[Version | None] = relationship(back_populates="generations")
+    reference_recording: Mapped[ReferenceRecording | None] = relationship(lazy="joined")
     src_generation: Mapped[Generation | None] = relationship(
         remote_side=[id], foreign_keys=[src_generation_id],
     )
@@ -449,7 +455,7 @@ class ReferenceRecording(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(
-        ForeignKey(USERS_ID, ondelete="RESTRICT"), nullable=False, index=True,
+        ForeignKey(USERS_ID, ondelete=RESTRICT), nullable=False, index=True,
     )
     storage_path: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     original_filename: Mapped[str] = mapped_column(
