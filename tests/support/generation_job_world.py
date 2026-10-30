@@ -47,22 +47,36 @@ def persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
     )
 
 
-def persist_with_output_files(*, ctx, generation_id, db_factory, on_outputs_written, **kwargs):
-    """Stand in for post_process_generation's files: outputs first, the worker audio last."""
-    outputs = [
-        ctx.audio_dir / ctx.user_id / f"{generation_id}{suffix}"
-        for suffix in (".mp3", ".wav", ".raw.wav")
-    ]
-    for output in outputs:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(b"audio")
-    on_outputs_written(outputs)
-    try:
-        return persist_via_post_process(
-            ctx=ctx, generation_id=generation_id, db_factory=db_factory, **kwargs,
-        )
-    finally:
-        Path(kwargs["worker_audio_path"]).unlink(missing_ok=True)
+def post_process_with_stubbed_audio(*, on_outputs_written, **kwargs):
+    """Run the real post_process_generation; only the audio encoding is stubbed.
+
+    The stubs write the take's mp3, wav and raw wav, then report them together
+    with the worker's audio, so production's own cleanup is what removes them.
+    """
+    from songmaker_cli.jobs.generation import post_process_generation
+
+    worker_audio = Path(kwargs["worker_audio_path"])
+    outputs: list[Path] = []
+
+    def write_raw_wav(path, *_samples):
+        outputs.append(Path(path))
+        Path(path).write_bytes(b"audio")
+
+    def write_encoded_outputs(_decoded, _seed, mp3_path, wav_path, *_meta):
+        for path in (mp3_path, wav_path):
+            outputs.append(Path(path))
+            Path(path).write_bytes(b"audio")
+        on_outputs_written([*outputs, worker_audio])
+
+    with (
+        patch(
+            "songmaker_cli.jobs.generation._decode_audio",
+            return_value=MagicMock(left=b"", right=b"", sample_rate=44100),
+        ),
+        patch("audio_engine.write_stereo_wav", side_effect=write_raw_wav),
+        patch("songmaker_cli.jobs.generation._write_output", side_effect=write_encoded_outputs),
+    ):
+        return post_process_generation(**kwargs)
 
 
 @pytest.fixture

@@ -13,7 +13,7 @@ from support.generation_job_world import (
     make_generation_dto,
     patch_generation_dispatch,
     persist_via_post_process,
-    persist_with_output_files,
+    post_process_with_stubbed_audio,
     run_async,
 )
 
@@ -132,18 +132,21 @@ def test_take_links_the_reference_the_job_resolved(
     assert _recorded_references(seeded_db) == [reference_id]
 
 
-def test_take_keeps_its_reference_after_the_version_is_edited_in_place(
+def test_take_keeps_the_reference_the_job_captured_when_the_version_changes_mid_take(
     seeded_db, tmp_path: Path
 ) -> None:
     _write_reference(tmp_path, REFERENCE_A)
     _write_reference(tmp_path, REFERENCE_B)
     captured = _name_version_reference(seeded_db, REFERENCE_A)
     replacement = _record_reference(seeded_db, REFERENCE_B)
-    _run_job(seeded_db, tmp_path)
 
-    with seeded_db() as session:
-        update_song(session, "s1", reference_recording_id=replacement)
-        session.commit()
+    def edit_version_in_place() -> None:
+        with seeded_db() as session:
+            update_song(session, "s1", reference_recording_id=replacement)
+            session.commit()
+
+    _, dispatch = _dispatching(tmp_path, [edit_version_in_place])
+    _run_job(seeded_db, tmp_path, on_dispatch=dispatch)
 
     with seeded_db() as session:
         assert session.query(Version).filter_by(id="v1").one().reference_recording_id == replacement
@@ -287,36 +290,25 @@ def test_a_reference_gone_at_persistence_fails_the_job_and_saves_nothing(
 ) -> None:
     _write_reference(tmp_path, REFERENCE_A)
     reference_id = _name_version_reference(seeded_db, REFERENCE_A)
-    outputs: list[Path] = []
-    _, dispatch = _dispatching(tmp_path, [lambda: _delete_reference(seeded_db, reference_id)])
-
-    _run_job(
-        seeded_db, tmp_path, on_dispatch=dispatch,
-        post_process=partial(persist_with_output_files, on_outputs_written=outputs.extend),
-    )
-
-    assert len(outputs) == 3
-    assert not any(path.exists() for path in outputs)
-    assert not (tmp_path / "worker-0.wav").exists()
-    assert _job_outcome(seeded_db) == ("failed", DELETED_DURING_TAKE, "generation_error")
-    assert _saved_takes(seeded_db) == []
-
-
-def test_outputs_exist_before_the_failure_that_removes_them(seeded_db, tmp_path: Path) -> None:
-    _write_reference(tmp_path, REFERENCE_A)
-    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    files: list[Path] = []
     existed: list[bool] = []
 
-    def record_existence(outputs: list[Path]) -> None:
-        existed.extend(path.exists() for path in outputs)
+    def record_files(written: list[Path]) -> None:
+        files.extend(written)
+        existed.extend(path.exists() for path in written)
 
     _, dispatch = _dispatching(tmp_path, [lambda: _delete_reference(seeded_db, reference_id)])
+
     _run_job(
         seeded_db, tmp_path, on_dispatch=dispatch,
-        post_process=partial(persist_with_output_files, on_outputs_written=record_existence),
+        post_process=partial(post_process_with_stubbed_audio, on_outputs_written=record_files),
     )
 
-    assert existed == [True, True, True]
+    assert existed == [True] * 4
+    assert files[-1] == tmp_path / "worker-0.wav"
+    assert not any(path.exists() for path in files)
+    assert _job_outcome(seeded_db) == ("failed", DELETED_DURING_TAKE, "generation_error")
+    assert _saved_takes(seeded_db) == []
 
 
 def test_a_reference_gone_on_the_first_of_three_takes_submits_no_further_take(
