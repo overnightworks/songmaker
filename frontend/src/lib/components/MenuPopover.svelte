@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick, untrack, type Snippet } from 'svelte';
-	import { COMPACT_LAYOUT_MAX_PX } from '$lib/constants';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { COMPACT_LAYOUT_MAX_PX } from '#lib/constants.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 
 	interface Props {
 		/** The history layer Back closes, unique per menu. */

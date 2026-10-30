@@ -1,4 +1,4 @@
-import type { SongItem, VersionItem } from '$lib/api/types';
+import type { SongItem, VersionItem } from '#lib/api/types.ts';
 
 export type MentionItem =
 	{ type: 'album' } | { type: 'version'; item: VersionItem } | { type: 'song'; item: SongItem };

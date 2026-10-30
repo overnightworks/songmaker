@@ -28,7 +28,7 @@ UNRELATED = {"bpm_detected": 96.0, "silence_ratio": 0.0}
 
 
 def _alembic_config() -> Config:
-    return Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    return Config(str(Path(__file__).resolve().parents[3] / "alembic.ini"))
 
 
 @pytest.fixture(params=["sqlite", "postgresql"])

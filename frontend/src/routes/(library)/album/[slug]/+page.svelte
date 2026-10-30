@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { describeFailure } from '$lib/api/fetch';
-	import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
-	import { openAlbumAddress } from '$lib/stores/libraryContext';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+	import { openAlbumAddress } from '#lib/stores/libraryContext.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
 
 	type AddressState = 'resolving' | 'open' | 'unknown' | 'unreachable';
 

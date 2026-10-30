@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { songEditorOpenLabel } from '$lib/constants';
+	import { songEditorOpenLabel } from '#lib/constants.ts';
 	import Icon from './Icon.svelte';
 	import PlayingMark from './PlayingMark.svelte';
 

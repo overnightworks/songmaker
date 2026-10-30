@@ -892,7 +892,7 @@ def _pinned_cover_capability(provider: str, route):
 
 def _pinned_response_body(case: str) -> bytes:
     return (
-        Path(__file__).with_name("fixtures") / f"provider_status_{case}.json"
+        Path(__file__).parents[1] / "fixtures" / f"provider_status_{case}.json"
     ).read_bytes()
 
 

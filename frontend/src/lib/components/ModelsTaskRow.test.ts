@@ -11,7 +11,7 @@ import {
 	MODELS_STATUS_NOT_SAVED_LABEL,
 	MODELS_STATUS_READY_CLI_LABEL,
 	MODELS_STATUS_READY_KEY_LABEL
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import ModelsTaskRow, { MODELS_ROUTE_NOT_AVAILABLE_CODE } from './ModelsTaskRow.svelte';
 import type {
 	ModelsRouteKey,

@@ -763,7 +763,7 @@ non-public page navigates the whole window to `/login/oidc?next=…`; the signed
 page `/login` starts nothing by itself and the public paths never redirect.
 
 Outside its `*.test.ts` files, `lib/api` imports only itself, packages,
-`$lib/constants`, `$lib/routes/` and `$lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
+`#lib/constants`, `#lib/routes/` and `#lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
 and no `import()` or `import.meta`; `eslint.config.js` enforces it (#925 G2).
 
 Only `lib/api/fetch.ts` calls global `fetch`; other modules reach the server
@@ -845,7 +845,7 @@ contract. Each payload carries its take's `generation_id`,
 reads from a generation payload, assembled by
 `api_models/songs.py#share_pick_media`) plus the fields below and nothing
 else: no transcript, no scores, no seed, no sibling takes, no owner — pinned
-by exact-key-set tests in `tests/test_sharing.py`. Album: `title`, `artist`,
+by exact-key-set tests in `tests/songmaker_cli/test_sharing_api.py`. Album: `title`, `artist`,
 `subtitle`, `year`, `cover` and `songs` (each `id`, `title`, `track_number`,
 `audio_url`). Song: `title`, `artist`, `album_title`, `audio_url`, `cover`,
 `album_cover`. Take: `title`, `artist`, `album_title`, `generation_number`
@@ -1232,7 +1232,7 @@ tool loop's round cap `COWRITER_MAX_TOOL_ROUNDS` in `tool_loop.py` — stays a
 named constant beside its owner, exactly as it was before the move, and is not
 a value the host and the library could disagree about.
 
-`tests/test_agent_providers_constants.py` reads this table and holds both
+`tests/songmaker_cli/test_constants_agent_providers.py` reads this table and holds both
 modules to it in both directions, so a constant cannot quietly change sides.
 
 | Constant | Side | Reason |

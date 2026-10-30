@@ -1,12 +1,12 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { onMount } from 'svelte';
-	import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
-	import { loras, loadLoras, isLoraActive } from '$lib/stores/loras';
-	import { followAppPageLink } from '$lib/stores/navigation';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { recipeModel } from '$lib/stores/recipe';
-	import { refocusIfDropped } from '$lib/utils/focus-trap';
+	import { editGenParams, setDraftGenParams } from '#lib/stores/editor.ts';
+	import { loras, loadLoras, isLoraActive } from '#lib/stores/loras.ts';
+	import { followAppPageLink } from '#lib/stores/navigation.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { recipeModel } from '#lib/stores/recipe.ts';
+	import { refocusIfDropped } from '#lib/utils/focus-trap.ts';
 	import {
 		VOICE_PICKER_CREATE_LABEL,
 		VOICE_PICKER_DELETED_LABEL,
@@ -14,8 +14,8 @@
 		VOICE_PICKER_NONE_LABEL,
 		VOICE_PICKER_NOT_AVAILABLE_FOR_MODEL,
 		voicePickerMobileLabel
-	} from '$lib/constants';
-	import type { UserLoraItem, VersionGenerationParams } from '$lib/api/types';
+	} from '#lib/constants.ts';
+	import type { UserLoraItem, VersionGenerationParams } from '#lib/api/types.ts';
 
 	const NONE_VALUE = '__none__';
 

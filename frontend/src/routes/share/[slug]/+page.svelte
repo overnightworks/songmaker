@@ -5,10 +5,10 @@
 		fetchSharedStream,
 		sharedCollectionFailure,
 		type SharedCollectionFailure
-	} from '$lib/api/shared';
-	import { APP_NAME } from '$lib/constants';
-	import SharedCollection from '$lib/components/share/SharedCollection.svelte';
-	import { fromSharedAlbum, type SharedAlbumPayload } from '$lib/share/sharedCollection';
+	} from '#lib/api/shared.ts';
+	import { APP_NAME } from '#lib/constants.ts';
+	import SharedCollection from '#lib/components/share/SharedCollection.svelte';
+	import { fromSharedAlbum, type SharedAlbumPayload } from '#lib/share/sharedCollection.ts';
 
 	let album: SharedAlbumPayload | null = $state(null);
 	let errorKind: SharedCollectionFailure | null = $state(null);

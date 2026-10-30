@@ -1,22 +1,22 @@
-import { mountAddressRoute } from '$lib/test-utils/library-history';
+import { mountAddressRoute } from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makeSong as song
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, SongItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { browserReportsOnline } from '$lib/test-utils/network';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { detailTab, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
-import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
+import type { AlbumItem, SongItem } from '#lib/api/types.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { browserReportsOnline } from '#lib/test-utils/network.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { detailTab, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
+import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
+import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
+import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 
 const ALBUM_SLUG = 'anfield';
 const ALBUM_TITLE = 'Anfield';
@@ -36,7 +36,7 @@ const api = vi.hoisted(() => ({
 const routeParams = vi.hoisted(() => ({ slug: 'anfield', song: 'stadion-lauf-a', n: '1' }));
 
 vi.mock('$app/state', async () => {
-	const { fakePage } = await import('$lib/test-utils/app-navigation');
+	const { fakePage } = await import('#lib/test-utils/app-navigation.ts');
 	return {
 		page: {
 			params: routeParams,
@@ -49,29 +49,29 @@ vi.mock('$app/state', async () => {
 // Stands in for the router the way the real one behaves for this app: it
 // moves the history entry, but nothing here re-resolves the mounted route.
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
+vi.mock('#lib/api/albums.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/albums.ts')>()),
 	fetchAlbum: api.fetchAlbum,
 	fetchAlbums: api.fetchAlbums
 }));
-vi.mock('$lib/api/songs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/songs')>()),
+vi.mock('#lib/api/songs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/songs.ts')>()),
 	fetchSong: api.fetchSong,
 	fetchSongs: api.fetchSongs,
 	fetchVersions: api.fetchVersions
 }));
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
 // player.ts's ensureGenerationsLoaded, which openTakeAddress uses to resolve
 // a take number against the song's full generations, fetches through
-// $lib/api/client rather than $lib/api/songs -- both need the same song back
+// #lib/api/client rather than #lib/api/songs -- both need the same song back
 // so a cold take address (nothing loaded yet) resolves either way.
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchSongs: api.fetchSongs,
 	fetchSong: api.fetchSong,
 	fetchVersions: api.fetchVersions,

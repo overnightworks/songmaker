@@ -1,8 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 
 const mocks = vi.hoisted(() => ({
 	loadLoras: vi.fn(),
@@ -13,8 +16,8 @@ const mocks = vi.hoisted(() => ({
 	addLoraSampleFromGeneration: vi.fn()
 }));
 
-vi.mock('$lib/stores/loras', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/loras')>();
+vi.mock('#lib/stores/loras.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/loras.ts')>();
 	return {
 		...actual,
 		loadLoras: (...args: unknown[]) => mocks.loadLoras(...args),
@@ -24,8 +27,8 @@ vi.mock('$lib/stores/loras', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/api/loras', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/loras')>();
+vi.mock('#lib/api/loras.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/loras.ts')>();
 	return {
 		...actual,
 		listOwnPlayableTakes: (...args: unknown[]) => mocks.listOwnPlayableTakes(...args),
@@ -33,14 +36,14 @@ vi.mock('$lib/api/loras', async (importOriginal) => {
 	};
 });
 
-vi.mock('$lib/stores/toast', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/toast')>();
+vi.mock('#lib/stores/toast.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/toast.ts')>();
 	return { ...actual, addToast: vi.fn() };
 });
 
 import VoicesPage from './+page.svelte';
 import voicesPageSource from './+page.svelte?raw';
-import { loras, lorasLoading } from '$lib/stores/loras';
+import { loras, lorasLoading } from '#lib/stores/loras.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 

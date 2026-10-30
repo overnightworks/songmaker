@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 const fetchLibraryListen = vi.fn();
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	fetchLibraryListen: (...args: unknown[]) => fetchLibraryListen(...args)
 }));
 
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import { chooseLibraryWallOrder } from './ui';
 import {
 	ensureLastPlayedRead,

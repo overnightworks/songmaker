@@ -1,14 +1,14 @@
 import { writable, derived, get, readonly } from 'svelte/store';
-import { ApiError, describeFailure, NetworkError } from '$lib/api/fetch';
-import { fetchLibraryPoolQueue, fetchPlaylist, fetchSong } from '$lib/api/client';
-import { recordSongListen } from '$lib/api/songs';
+import { ApiError, describeFailure, NetworkError } from '#lib/api/fetch.ts';
+import { fetchLibraryPoolQueue, fetchPlaylist, fetchSong } from '#lib/api/client.ts';
+import { recordSongListen } from '#lib/api/songs.ts';
 import {
 	bestTake,
 	isPlayableTake,
 	pickedTake,
 	songHasPlayableTake,
 	songTakesLoaded
-} from '$lib/utils/playable';
+} from '#lib/utils/playable.ts';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -18,7 +18,7 @@ import type {
 	PlaylistItem,
 	QueueStreamSkipItem,
 	SongItem
-} from '$lib/api/types';
+} from '#lib/api/types.ts';
 import {
 	audioPlayer,
 	RECOVERY_DEADLINE_MS,
@@ -27,26 +27,26 @@ import {
 	type PlaybackInfo,
 	type PlayerTenure,
 	type TransportState
-} from '$lib/services/audioPlayer.svelte';
+} from '#lib/services/audioPlayer.svelte.ts';
 import {
 	clearMediaSessionPositionState,
 	type LockScreenTitle,
 	setupMediaSessionHandlers,
 	updateMediaSessionMetadata,
 	updateMediaSessionPlaybackState
-} from '$lib/services/mediaSession';
-import { type OpenCollection, openCollection } from '$lib/stores/collection';
+} from '#lib/services/mediaSession.ts';
+import { type OpenCollection, openCollection } from '#lib/stores/collection.ts';
 import {
 	albumList,
 	albumSongsErrorMessage,
 	loadSongsForAlbum,
 	songList,
 	upsertSongInList
-} from '$lib/stores/libraryData';
-import { handleSessionLost } from '$lib/stores/auth';
-import { addToast } from '$lib/stores/toast';
-import { offline, whenBackOnline } from '$lib/stores/connectivity';
-import { outdateLastPlayedRanking } from '$lib/stores/libraryOrder';
+} from '#lib/stores/libraryData.ts';
+import { handleSessionLost } from '#lib/stores/auth.ts';
+import { addToast } from '#lib/stores/toast.ts';
+import { offline, whenBackOnline } from '#lib/stores/connectivity.ts';
+import { outdateLastPlayedRanking } from '#lib/stores/libraryOrder.ts';
 import {
 	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
@@ -54,19 +54,19 @@ import {
 	setDesktopNowPlayingSurface,
 	setLibraryTakePool,
 	type LibraryTakePool
-} from '$lib/stores/playbackSettings';
+} from '#lib/stores/playbackSettings.ts';
 import {
 	loadPlaylistDetail,
 	playlistDetailLoad,
 	selectedPlaylist,
 	selectedPlaylistDetail
-} from '$lib/stores/playlists';
+} from '#lib/stores/playlists.ts';
 import {
 	followPlaybackForResume,
 	savedPlayback,
 	type ResumeQueueSource,
 	type SavedPlayback
-} from '$lib/stores/playbackResume';
+} from '#lib/stores/playbackResume.ts';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
@@ -77,15 +77,15 @@ import {
 	SHUFFLE_SCOPE_ALBUM,
 	SHUFFLE_SCOPE_LIBRARY,
 	SHUFFLE_SCOPE_PLAYLIST
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	type NowPlayingSurfaceKind,
 	type PlaybackSource
-} from '$lib/constants/now-playing';
-import { shuffled } from '$lib/utils/shuffle';
-import { readStorage, writeStorage } from '$lib/utils/storage';
+} from '#lib/constants/now-playing.ts';
+import { shuffled } from '#lib/utils/shuffle.ts';
+import { readStorage, writeStorage } from '#lib/utils/storage.ts';
 
 // --- Browsing state ---
 export const selectedAlbumId = writable<string | null>(null);

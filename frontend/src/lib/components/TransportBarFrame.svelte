@@ -8,8 +8,8 @@
 		transportButtonLabel,
 		transportIsBusy,
 		type TransportState
-	} from '$lib/services/audioPlayer.svelte';
-	import { NOW_PLAYING_LABEL, NOW_PLAYING_SWIPE_RISE_PX } from '$lib/constants';
+	} from '#lib/services/audioPlayer.svelte.ts';
+	import { NOW_PLAYING_LABEL, NOW_PLAYING_SWIPE_RISE_PX } from '#lib/constants.ts';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -18,7 +18,7 @@
 		titleGlowStyle,
 		playbackVisualizerAllowed,
 		type VizColors
-	} from '$lib/utils/visualizer';
+	} from '#lib/utils/visualizer.ts';
 
 	interface Props {
 		transport: TransportState;

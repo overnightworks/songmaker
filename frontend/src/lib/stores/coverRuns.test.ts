@@ -1,19 +1,19 @@
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError } from '$lib/api/fetch';
-import type { JobItem } from '$lib/api/types';
+import { ApiError } from '#lib/api/fetch.ts';
+import type { JobItem } from '#lib/api/types.ts';
 import { discardMarkOf, markCoverSuggestionsDiscarded, releaseCoverSuggestions } from './coverRuns';
 import { activeJobs } from './jobs';
 
 const cancelJob = vi.fn();
-vi.mock('$lib/api/jobs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/jobs')>()),
+vi.mock('#lib/api/jobs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/jobs.ts')>()),
 	cancelJob: (...args: unknown[]) => cancelJob(...args)
 }));
 const discardAlbumCoverSuggestions = vi.fn();
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
+vi.mock('#lib/api/albums.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/albums.ts')>()),
 	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
 }));
 

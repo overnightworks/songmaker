@@ -1,7 +1,7 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
-import type { HistoryEntry } from '$lib/history/historyController';
-import type { LibraryHistoryState } from '$lib/stores/libraryContext';
+import type { HistoryEntry } from '#lib/history/historyController.ts';
+import type { LibraryHistoryState } from '#lib/stores/libraryContext.ts';
 
 declare global {
 	namespace App {

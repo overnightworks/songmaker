@@ -1,18 +1,18 @@
 import { writable, derived, get } from 'svelte/store';
-import type { AuthUser } from '$lib/api/types';
-import { ApiError, fetchMe } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { RATE_LIMITED_STATUS, SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
-import { leaveByPostingForm, reloadAfresh } from '$lib/history/historyController';
+import type { AuthUser } from '#lib/api/types.ts';
+import { ApiError, fetchMe } from '#lib/api/client.ts';
+import { NetworkError } from '#lib/api/fetch.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { RATE_LIMITED_STATUS, SERVER_UNREACHABLE_STATUSES } from '#lib/constants.ts';
+import { leaveByPostingForm, reloadAfresh } from '#lib/history/historyController.ts';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
 	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
 	AUTH_CHECK_SERVER_ERROR,
 	LOGOUT_ADDRESS
-} from '$lib/constants/auth';
-import { reportSessionCheckReachable } from '$lib/stores/connectivity';
+} from '#lib/constants/auth.ts';
+import { reportSessionCheckReachable } from '#lib/stores/connectivity.ts';
 
 export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
@@ -128,7 +128,7 @@ export function resetAuthForTests(): void {
 // lose: a request refused meanwhile -- a poll -- is this sign-out, not an
 // expiry.
 export async function logout(): Promise<void> {
-	const { forgetPlaybackResume } = await import('$lib/stores/playbackResume');
+	const { forgetPlaybackResume } = await import('#lib/stores/playbackResume.ts');
 	const user = get(currentUser);
 	signingOut = true;
 	signOutFailed.set(false);

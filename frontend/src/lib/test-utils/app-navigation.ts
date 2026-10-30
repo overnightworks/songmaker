@@ -5,9 +5,9 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 
 // A stand-in for SvelteKit's router, shared by every test that mocks it:
 //   vi.mock('$app/navigation', async () =>
-//     (await import('$lib/test-utils/app-navigation')).fakeAppNavigation());
+//     (await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation());
 //   vi.mock('$app/state', async () =>
-//     (await import('$lib/test-utils/app-navigation')).fakeAppState());
+//     (await import('#lib/test-utils/app-navigation.ts')).fakeAppState());
 // It writes history the way SvelteKit does: `goto` adds (or, with
 // `replaceState`, rewrites) a router entry once its route has loaded -- at
 // once, unless a test holds route loads -- and tells every mounted

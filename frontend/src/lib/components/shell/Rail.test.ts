@@ -1,24 +1,24 @@
-import { makeSong } from '$lib/test-utils/factories';
-import { modifiedClicks } from '$lib/test-utils/modified-clicks';
-import { selectedSongId } from '$lib/stores/player';
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { makeSong } from '#lib/test-utils/factories.ts';
+import { modifiedClicks } from '#lib/test-utils/modified-clicks.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { goto } from '$app/navigation';
-import { openCollection, setOpenCollection } from '$lib/stores/collection';
-import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
-import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { albumList } from '$lib/stores/libraryData';
-import { railTreeQuery } from '$lib/stores/librarySearch';
-import { pendingDirtyNavigation } from '$lib/stores/navigation';
+import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
+import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
+import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
+import { albumList } from '#lib/stores/libraryData.ts';
+import { railTreeQuery } from '#lib/stores/librarySearch.ts';
+import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
 import {
 	playlistList,
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
-} from '$lib/stores/playlists';
-import { railCollapsed, railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
+} from '#lib/stores/playlists.ts';
+import { railCollapsed, railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '#lib/stores/ui.ts';
 import {
 	buildAlbum as album,
 	buildPlaylist as playlist,
@@ -28,15 +28,19 @@ import {
 } from './rail-test-fixtures';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
-vi.mock('$lib/api/library', async () =>
+vi.mock('#lib/api/library.ts', async () =>
 	(await import('./rail-test-fixtures')).railLibraryApiMock()
 );
-vi.mock('$lib/api/albums', async () => (await import('./rail-test-fixtures')).railAlbumsApiMock());
-vi.mock('$lib/api/songs', async () => (await import('./rail-test-fixtures')).railSongsApiMock());
-vi.mock('$lib/api/client', async () => (await import('./rail-test-fixtures')).railClientApiMock());
+vi.mock('#lib/api/albums.ts', async () =>
+	(await import('./rail-test-fixtures')).railAlbumsApiMock()
+);
+vi.mock('#lib/api/songs.ts', async () => (await import('./rail-test-fixtures')).railSongsApiMock());
+vi.mock('#lib/api/client.ts', async () =>
+	(await import('./rail-test-fixtures')).railClientApiMock()
+);
 
 import Rail from './Rail.svelte';
 

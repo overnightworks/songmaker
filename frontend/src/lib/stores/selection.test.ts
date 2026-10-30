@@ -1,4 +1,4 @@
-import { makeGeneration as generation } from '$lib/test-utils/factories';
+import { makeGeneration as generation } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 import { selectedSongId } from './player';

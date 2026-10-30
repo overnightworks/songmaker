@@ -1,24 +1,24 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { detailTab, type DetailTab } from '$lib/stores/navigation';
+import { detailTab, type DetailTab } from '#lib/stores/navigation.ts';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
 	return writable<GenerateState>({ kind: 'idle' });
 });
-vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/generateAction.ts')>()),
 	generateAction: action
 }));
 
-import type { GenerateState } from '$lib/stores/generateAction';
+import type { GenerateState } from '#lib/stores/generateAction.ts';
 import DetailTabs from './DetailTabs.svelte';
 import detailTabsSource from './DetailTabs.svelte?raw';
-import { watchTypingOnPhone } from '$lib/stores/ui';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
-import { failed, running } from '$lib/test-utils/generate-states';
+import { watchTypingOnPhone } from '#lib/stores/ui.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
+import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
+import { failed, running } from '#lib/test-utils/generate-states.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 

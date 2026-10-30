@@ -11,8 +11,8 @@ excludes the base-image label.
 
 ```bash
 # Backend — targeted (local / agents)
-pytest tests/test_api.py -q --tb=short
-pytest tests/test_queue_streams.py tests/test_playlists.py -q
+pytest tests/songmaker_cli/db -q --tb=short
+pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
@@ -82,10 +82,10 @@ CI runs tests in parallel via `pytest-xdist` (`-n auto` uses all CPU cores). All
 
 ## Coverage Targets
 
-- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the three heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci.ini`). CI also installs the `mcp` extra so `tests/test_mcp_server.py` collects.
+- **CI backend**: 93% overall across `songmaker_cli` + `audio_engine` + `acestep_engine` + `acestep_worker` (the three heavy scoring modules are excluded; lightweight scoring modules remain measured, see `.github/workflows/coveragerc-ci.ini`). CI also installs the `mcp` extra so `tests/songmaker_cli/test_mcp_server.py` collects.
 - **CI frontend**: `pnpm test:coverage` (90% statement and 93% line floors on `src/lib/**/*.ts`, generated `types.ts` excluded) plus `pnpm build`.
 - **CI PostgreSQL contract**: the modules listed in the `postgresql-contract` job's `POSTGRESQL_CONTRACT_MODULES` (`.github/workflows/ci.yml`) run serially (`-n 0`) against PostgreSQL 16. It is the mandatory proof for migrations, concurrent writes and the locks that order them, transactional rollback, retention gaps and accounting; SQLite tests do not stand in for these guarantees. A job step fails the build unless every listed module executed at least one case and skipped none, and unless the reference quota PostgreSQL cases ran unskipped (one step, two checks); collection alone is not evidence. The write-lock modules share `tests/postgres_lock_harness.py` (hold one writer at its commit, start the second, require through `pg_blocking_pids` that it waits behind the first). Component tables preserve draft references on the exact 409; desktop and 390px browser proof remains a separate landing requirement.
-- **Resource-event transport**: `tests/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
+- **Resource-event transport**: `tests/songmaker_cli/test_resource_event_api.py` proves the full auth/session boundary, fresh/replay/gap/ahead protocol, paged retention races, exact user isolation, BIGINT-safe wire values, final production headers, 60-second termination (including a blocked outer ASGI send), Redis leases, and fail-closed limits. Protocol-generator tests remain deterministic and route tests use the real app/middleware stack.
 
 GitHub workflows (`.github/workflows/ci.yml`, `e2e.yml`, and `security.yml`) run on push/PR to `main`.
 Security verification also runs weekly. The live checks are:
@@ -326,43 +326,9 @@ and `docker compose ... down -v`.
 
 ## Test Structure
 
+New and moved backend tests mirror the code they test: a test for `src/songmaker_cli/db/queries/loras.py` lives in `tests/songmaker_cli/db/queries/` and is named for it, and the engine packages mirror under `tests/acestep_engine/`, `tests/audio_engine/` and `tests/acestep_worker/`. `tests/conftest.py` holds the shared fixtures, and `tests/support/` the helpers and pytest plugins that tests import as `support.<module>`, never from `conftest`.
+
 ```
-tests/
-├── conftest.py                    Shared fixtures (DB, WAV/audio factories, arq mocks)
-├── test_*_api.py                  Domain API coverage: admin, auth, conversation, generation,
-│                                  internal, LoRA, playlist, reimport, sharing, server
-├── test_*_queries.py              DB query coverage for workers and LoRAs
-├── test_jobs*.py                  Generation, scoring, model lifecycle, LoRA training jobs
-├── test_*worker*.py               Music/scoring worker classes
-├── test_scoring*.py               Scorer registry, pipeline, subprocess, and scorer modules
-├── test_*client*.py               CLI client tests
-├── test_auth*.py                  Auth utilities and auth endpoints
-├── test_config.py                 ACE-Step config building, defaults, path resolution
-├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
-├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
-├── test_resource_event_api.py      Authenticated SSE replay, gaps, limits, headers, isolation
-├── test_generation*.py            Generation params, retention, LoRA integration
-└── test_*                         Lifecycle, middleware, parser, Redis, scheduler,
-                                   soft delete, constants, MCP server
-
-tests/acestep_engine/              ACE-Step client, progress and training client
-tests/audio_engine/                Audio I/O and mastering
-tests/support/                     Shared test helpers and pytest plugins; tests import them
-                                   as `support.<module>`, never from `conftest`
-
-tests/acestep_worker/
-├── test_downloads.py
-├── test_heartbeat.py
-├── test_main.py
-├── test_model_cache.py
-├── test_registry_client.py
-├── test_settings_startup_timeout.py
-├── test_subprocess_runner.py
-├── test_task_store.py
-├── test_wrapper.py
-├── test_wrapper_train_lora.py
-└── test_wrapper_training_child_stop.py
-
 frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
 │                                  resource-event decimal SSE payloads

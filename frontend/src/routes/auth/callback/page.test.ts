@@ -4,7 +4,7 @@ import {
 	SIGN_IN_FAILED_HEADING,
 	SIGN_IN_FAILED_MESSAGE,
 	SIGN_IN_RETRY_LABEL
-} from '$lib/constants/auth';
+} from '#lib/constants/auth.ts';
 import Page from './+page.svelte';
 
 let component: ReturnType<typeof mount> | undefined;

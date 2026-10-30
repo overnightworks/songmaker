@@ -1,13 +1,13 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeHealthResponse } from '$lib/test-utils/factories';
+import { makeHealthResponse } from '#lib/test-utils/factories.ts';
 
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
 const fetchHealth = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		fetchConversations: (...args: Parameters<typeof fetchConversations>) =>
@@ -19,7 +19,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import CoWriterPanel from './CoWriterPanel.svelte';
-import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
+import { startHealthPolling, stopHealthPolling } from '#lib/stores/health.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 

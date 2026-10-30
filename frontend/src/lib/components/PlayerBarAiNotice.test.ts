@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeGeneration } from '$lib/test-utils/factories';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { makeGeneration } from '#lib/test-utils/factories.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import PlayerBar from './PlayerBar.svelte';
 
 class SilentAudio {

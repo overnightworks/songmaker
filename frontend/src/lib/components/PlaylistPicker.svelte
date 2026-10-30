@@ -6,15 +6,15 @@
 		loadPlaylists,
 		playlistList,
 		playlistLoad
-	} from '$lib/stores/playlists';
-	import { addToast } from '$lib/stores/toast';
-	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
-	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	} from '#lib/stores/playlists.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
+	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 	import {
 		LIBRARY_PLAYLISTS_ERROR,
 		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_RETRY_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 
 	interface Props {
 		onselect: (playlistId: string) => void;

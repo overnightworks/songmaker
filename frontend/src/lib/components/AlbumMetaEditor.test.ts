@@ -2,10 +2,10 @@ import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import AlbumMetaEditor from './AlbumMetaEditor.svelte';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { field, type } from '$lib/test-utils/new-place-card';
-import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
-import { holdLayer, resetLayersForTests, stackedLayers } from '$lib/stores/layers';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { field, type } from '#lib/test-utils/new-place-card.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
+import { holdLayer, resetLayersForTests, stackedLayers } from '#lib/stores/layers.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 

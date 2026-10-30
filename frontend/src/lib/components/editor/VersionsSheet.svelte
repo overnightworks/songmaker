@@ -7,12 +7,12 @@
 		versionDeleteEditorLoss,
 		versionDeleteRequest,
 		versions
-	} from '$lib/stores/editor';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
-	import { activityTimeLabel } from '$lib/utils/format';
-	import { isSungLine } from '$lib/utils/lyrics-align';
-	import type { SongItem, VersionItem } from '$lib/api/types';
+	} from '#lib/stores/editor.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
+	import { activityTimeLabel } from '#lib/utils/format.ts';
+	import { isSungLine } from '#lib/utils/lyrics-align.ts';
+	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import {
 		VERSION_CURRENT_TAG,
 		VERSION_NO_LYRICS,
@@ -24,8 +24,8 @@
 		versionLabel,
 		versionTakesLabel,
 		versionsChipAccessibleLabel
-	} from '$lib/constants';
-	import { takeVersion } from '$lib/constants/now-playing';
+	} from '#lib/constants.ts';
+	import { takeVersion } from '#lib/constants/now-playing.ts';
 	import Icon from '../Icon.svelte';
 
 	interface Props {

@@ -2,7 +2,7 @@
 // (#45/#142), which a 56-line take keeps busy for a few hundred milliseconds —
 // long enough to freeze Now Playing when it runs on the main thread (#158).
 // The protocol belongs to lyricsAlignment.svelte.ts, which owns this worker.
-import type { AlignmentRequest, AlignmentResult } from '$lib/services/lyricsAlignment.svelte';
+import type { AlignmentRequest, AlignmentResult } from '#lib/services/lyricsAlignment.svelte.ts';
 import { alignLyricsToCues } from './lyrics-align';
 
 addEventListener('message', (event: MessageEvent<AlignmentRequest>) => {

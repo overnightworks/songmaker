@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
-	import type { WhisperCue } from '$lib/api/types';
-	import type { PlaybackInfo } from '$lib/services/playbackTypes';
+	import type { WhisperCue } from '#lib/api/types.ts';
+	import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 	import {
 		audioPlayer,
 		transportButtonFace,
 		transportButtonLabel,
 		transportIsBusy,
 		transportWaitingNotice
-	} from '$lib/services/audioPlayer.svelte';
+	} from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		HITBOX_FREQUENT_PX,
 		NOW_PLAYING_CLOSE,
@@ -17,7 +17,7 @@
 		NOW_PLAYING_NO_LYRICS,
 		SONG_NEXT_LABEL,
 		SONG_PREVIOUS_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		NOW_PLAYING_COLLAPSE_LABEL,
 		NOW_PLAYING_DOCKED_WIDTH_PX,
@@ -33,11 +33,11 @@
 		nowPlayingTakeLabel,
 		type NowPlayingSource,
 		type NowPlayingSurfaceKind
-	} from '$lib/constants/now-playing';
-	import { formatTime } from '$lib/utils/format';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	} from '#lib/constants/now-playing.ts';
+	import { formatTime } from '#lib/utils/format.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import AiNotice from './AiNotice.svelte';
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';

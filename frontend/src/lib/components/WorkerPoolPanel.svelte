@@ -7,13 +7,13 @@
 		restartWorker,
 		pinModelOnWorker,
 		unpinModelOnWorker
-	} from '$lib/api/client';
-	import { createPollingStore } from '$lib/stores/adminPolling';
-	import { activeJobs, trackJob } from '$lib/stores/jobs';
-	import { addToast } from '$lib/stores/toast';
-	import { ApiError, describeFailure } from '$lib/api/fetch';
-	import type { WorkerPoolResponse, WorkerInfoItem } from '$lib/api/types';
-	import { offline } from '$lib/stores/connectivity';
+	} from '#lib/api/client.ts';
+	import { createPollingStore } from '#lib/stores/adminPolling.ts';
+	import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
+	import type { WorkerPoolResponse, WorkerInfoItem } from '#lib/api/types.ts';
+	import { offline } from '#lib/stores/connectivity.ts';
 	import {
 		DIALOG_CANCEL_LABEL,
 		WORKER_POOL_RESTART_LABEL,
@@ -26,11 +26,11 @@
 		WORKER_POOL_NO_MODEL_LABEL,
 		WORKER_POOL_REFRESH_FAILED,
 		WORKER_TRAINING_REMAINING_TEMPLATE
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 
-	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
-	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
-	import { localClockTime } from '$lib/utils/format';
+	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
+	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
+	import { localClockTime } from '#lib/utils/format.ts';
 
 	import WorkerVramLine from './WorkerVramLine.svelte';
 	import WorkerModelsList from './WorkerModelsList.svelte';

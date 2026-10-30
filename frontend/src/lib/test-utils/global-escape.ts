@@ -1,5 +1,5 @@
-import { closeTopLayer } from '$lib/stores/layers';
-import { handleGlobalEscape } from '$lib/utils/escape-level-up';
+import { closeTopLayer } from '#lib/stores/layers.ts';
+import { handleGlobalEscape } from '#lib/utils/escape-level-up.ts';
 
 // The app layout's window Escape listener, for a component mounted without
 // the layout; `levelUp` stands in for the page level up it would take. The

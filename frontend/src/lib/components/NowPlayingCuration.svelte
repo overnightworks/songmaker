@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { HITBOX_FREQUENT_PX, SONG_NEXT_LABEL } from '$lib/constants';
+	import { HITBOX_FREQUENT_PX, SONG_NEXT_LABEL } from '#lib/constants.ts';
 	import {
 		NOW_PLAYING_CURATE_DONE_LABEL,
 		NOW_PLAYING_CURATE_GROUP_LABEL,
@@ -7,7 +7,7 @@
 		NOW_PLAYING_KEEP_LABEL,
 		NOW_PLAYING_PICK_LABEL,
 		NOW_PLAYING_UNKEEP_LABEL
-	} from '$lib/constants/now-playing';
+	} from '#lib/constants/now-playing.ts';
 	import Icon from './Icon.svelte';
 
 	let {

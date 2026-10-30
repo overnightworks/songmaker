@@ -1,8 +1,8 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { tick, type Snippet } from 'svelte';
-	import { uploadReferenceAudio } from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
+	import { uploadReferenceAudio } from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
 	import {
 		activeModels,
 		activeModelsError,
@@ -13,8 +13,8 @@
 		loadGenerationDefaults,
 		presets,
 		savePreset
-	} from '$lib/stores/presets';
-	import { followAppPageLink } from '$lib/stores/navigation';
+	} from '#lib/stores/presets.ts';
+	import { followAppPageLink } from '#lib/stores/navigation.ts';
 	import {
 		changedRecipeFields,
 		changedRecipeTabs,
@@ -28,8 +28,8 @@
 		type RecipeStandard,
 		type RecipeTab,
 		type RecipeValues
-	} from '$lib/utils/recipe-standard';
-	import { RECIPE_PANEL_LABEL, VOICE_PICKER_NONE_LABEL } from '$lib/constants';
+	} from '#lib/utils/recipe-standard.ts';
+	import { RECIPE_PANEL_LABEL, VOICE_PICKER_NONE_LABEL } from '#lib/constants.ts';
 	import {
 		RECIPE_AUTO_LABEL,
 		RECIPE_BPM_LABEL,
@@ -65,7 +65,7 @@
 		RECIPE_TABS_LABEL,
 		RECIPE_TAKES_LABEL,
 		RECIPE_TAKES_OPTIONS
-	} from '$lib/constants/recipe';
+	} from '#lib/constants/recipe.ts';
 	import ParamControls from '../ParamControls.svelte';
 	import VoicePicker from '../VoicePicker.svelte';
 

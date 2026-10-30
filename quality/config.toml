@@ -48,3 +48,99 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1121 -> 11
 item = "#2009"
 date = 2026-10-29
 reason = "the health response gains the generated release field and ReleaseInfo type; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/AlbumCoverEditor.test.ts 972 -> 975"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/AlbumDetailView.test.ts 1107 -> 1117"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/LibraryWall.test.ts 1134 -> 1137"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/NowPlaying.test.ts 1094 -> 1097"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/PlayerBar.test.ts 1642 -> 1645"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/SongDetailView.svelte 1030 -> 1034"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/SongDetailView.test.ts 2303 -> 2306"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/components/WorkerPoolPanel.test.ts 938 -> 941"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/share/sharePlayback.test.ts 834 -> 837"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/stores/libraryContext.test.ts 2189 -> 2196"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/stores/navigation.test.ts 3045 -> 3047"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/stores/player.test.ts 5283 -> 5286"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/stores/resourceSync.ts 1070 -> 1073"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/routes/layout.test.ts 1403 -> 1416"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/routes/settings/users/+page.svelte 1118 -> 1123"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/routes/settings/users/page.test.ts 858 -> 861"
+item = "#2041"
+date = 2026-10-29
+reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"

@@ -1,10 +1,10 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
-import { currentUser } from '$lib/stores/auth';
-import { makeAuthUser } from '$lib/test-utils/factories';
-import { clearPointer, setPointer } from '$lib/test-utils/hitbox';
+import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '#lib/constants.ts';
+import { currentUser } from '#lib/stores/auth.ts';
+import { makeAuthUser } from '#lib/test-utils/factories.ts';
+import { clearPointer, setPointer } from '#lib/test-utils/hitbox.ts';
 
 const navigation = vi.hoisted(() => ({ goto: vi.fn() }));
 vi.mock('$app/navigation', () => navigation);

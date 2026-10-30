@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { LoadedModelDetailItem } from '$lib/api/types';
+	import type { LoadedModelDetailItem } from '#lib/api/types.ts';
 	import {
 		WORKER_POOL_MODELS_LABEL,
 		WORKER_POOL_MODELS_LOADING_TEMPLATE,
@@ -8,7 +8,7 @@
 		WORKER_POOL_KEEP_LOADED_LABEL,
 		WORKER_POOL_KEEP_LOADED_HINT,
 		WORKER_POOL_UNLOAD_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 
 	interface Props {
 		loaded: LoadedModelDetailItem[];

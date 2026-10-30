@@ -1,39 +1,39 @@
-import { resetLibraryWriteForTests } from '$lib/stores/libraryWrite';
+import { resetLibraryWriteForTests } from '#lib/stores/libraryWrite.ts';
 import {
 	makeAlbum as album,
 	makePlaylist as playlist,
 	makeSong as song
-} from '$lib/test-utils/factories';
-import { browserReportsOnline } from '$lib/test-utils/network';
+} from '#lib/test-utils/factories.ts';
+import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { resetResourceSyncForTests, resourceSync } from '$lib/stores/resourceSync';
-import { resetConnectivityForTests } from '$lib/stores/connectivity';
-import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
+import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
+import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
+import { resetResourceSyncForTests, resourceSync } from '#lib/stores/resourceSync.ts';
+import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
+import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 
 const retryResourceSync = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/stores/resourceSync', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/resourceSync')>()),
+vi.mock('#lib/stores/resourceSync.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/resourceSync.ts')>()),
 	retryResourceSync
 }));
-vi.mock('$lib/api/library', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/library')>()),
+vi.mock('#lib/api/library.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/library.ts')>()),
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchActiveModels: vi.fn().mockResolvedValue([]),
 	fetchVersions: vi.fn().mockResolvedValue([]),
 	fetchSongs: vi

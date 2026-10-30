@@ -1,33 +1,37 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
+	import type { AlbumItem, PlaylistItem, SongItem } from '#lib/api/types.ts';
 	import {
 		albumList,
 		allAlbumsLoad,
 		ensureAllAlbumsLoaded,
 		songList,
 		albumSongsLoad
-	} from '$lib/stores/libraryData';
-	import { collectionTransport, toggleOrStartCollection, playAlbum } from '$lib/stores/player';
-	import { albumRowOffersPlay } from '$lib/utils/playable';
-	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
+	} from '#lib/stores/libraryData.ts';
+	import { collectionTransport, toggleOrStartCollection, playAlbum } from '#lib/stores/player.ts';
+	import { albumRowOffersPlay } from '#lib/utils/playable.ts';
+	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
 		playlistLoad,
 		loadPlaylists
-	} from '$lib/stores/playlists';
-	import { openCollection, type OpenCollection } from '$lib/stores/collection';
+	} from '#lib/stores/playlists.ts';
+	import { openCollection, type OpenCollection } from '#lib/stores/collection.ts';
 	import {
 		captureLibraryScroll,
 		libraryScrollAnchor,
 		libraryScrollRestore,
 		takePlaceReturnedFrom
-	} from '$lib/stores/libraryContext';
-	import { whenBackOnline } from '$lib/stores/connectivity';
-	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
-	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
+	} from '#lib/stores/libraryContext.ts';
+	import { whenBackOnline } from '#lib/stores/connectivity.ts';
+	import { libraryBrowse, loadLibraryBrowse } from '#lib/stores/librarySearch.ts';
+	import {
+		chooseLibraryWallOrder,
+		initLibraryWallOrder,
+		libraryWallOrder
+	} from '#lib/stores/ui.ts';
 	import {
 		ensureLastPlayedRead,
 		inLibraryOrder,
@@ -35,9 +39,9 @@
 		lastPlayedOf,
 		libraryPlaceOrder,
 		readLastPlayed
-	} from '$lib/stores/libraryOrder';
-	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { activityTimeLabel, songCountLabel } from '$lib/utils/format';
+	} from '#lib/stores/libraryOrder.ts';
+	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
+	import { activityTimeLabel, songCountLabel } from '#lib/utils/format.ts';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_NARROW_MEDIA,
@@ -54,7 +58,7 @@
 		PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 		wallHeadingLabel,
 		type LibraryWallOrder
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import LibraryRow from './LibraryRow.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import NewPlaceMenu from './NewPlaceMenu.svelte';

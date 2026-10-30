@@ -1,6 +1,6 @@
 import { derived } from 'svelte/store';
-import { nowPlayingSurface } from '$lib/stores/player';
-import { typingOnPhone } from '$lib/stores/ui';
+import { nowPlayingSurface } from '#lib/stores/player.ts';
+import { typingOnPhone } from '#lib/stores/ui.ts';
 
 // The app's transport bar gives way to the full Now Playing surface, which
 // carries the only transport, and to the on-screen keyboard; the bar and the

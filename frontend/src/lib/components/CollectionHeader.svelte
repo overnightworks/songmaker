@@ -1,16 +1,16 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import type { AlbumCoverUrls, ShareResult } from '$lib/api/types';
+	import type { AlbumCoverUrls, ShareResult } from '#lib/api/types.ts';
 	import CollectionHeaderFrame from './CollectionHeaderFrame.svelte';
 	import CollectionMenu from './CollectionMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
-	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '$lib/constants';
-	import { albumCoverMarkedLabel } from '$lib/constants/album-cover-mark';
+	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '#lib/constants.ts';
+	import { albumCoverMarkedLabel } from '#lib/constants/album-cover-mark.ts';
 	import type { CoverMark } from './CoverActivityMark.svelte';
-	import { songCountLabel } from '$lib/utils/format';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { collectionTransport, toggleOrStartCollection, setShuffle } from '$lib/stores/player';
+	import { songCountLabel } from '#lib/utils/format.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { collectionTransport, toggleOrStartCollection, setShuffle } from '#lib/stores/player.ts';
 
 	interface Props {
 		kind: 'album' | 'playlist';

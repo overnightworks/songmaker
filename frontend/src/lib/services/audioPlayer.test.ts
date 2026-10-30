@@ -1,7 +1,7 @@
-import { makeGeneration as makeGen } from '$lib/test-utils/factories';
+import { makeGeneration as makeGen } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { QueueStreamManifest } from '$lib/api/types';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '$lib/constants';
+import type { QueueStreamManifest } from '#lib/api/types.ts';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
 import {
 	audioPlayer,
 	STALL_RECOVERY_MS,

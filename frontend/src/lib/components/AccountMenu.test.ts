@@ -3,9 +3,11 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 
 import { goto } from '$app/navigation';
 import {
@@ -15,17 +17,17 @@ import {
 	RAIL_SETTINGS_LABEL,
 	THEME_SWITCH_TO_DARK_LABEL,
 	THEME_SWITCH_TO_LIGHT_LABEL
-} from '$lib/constants';
-import { currentUser, signOutFailed } from '$lib/stores/auth';
-import { makeAuthUser } from '$lib/test-utils/factories';
-import { theme } from '$lib/stores/ui';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { startFakeRouter } from '$lib/test-utils/app-navigation';
+} from '#lib/constants.ts';
+import { currentUser, signOutFailed } from '#lib/stores/auth.ts';
+import { makeAuthUser } from '#lib/test-utils/factories.ts';
+import { theme } from '#lib/stores/ui.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import {
 	describeBackClosesOverlay,
 	plannedHistoryIndex,
 	replaceHistoryEntry
-} from '$lib/test-utils/library-history';
+} from '#lib/test-utils/library-history.ts';
 import AccountMenu from './AccountMenu.svelte';
 
 const USERNAME = 'felix';

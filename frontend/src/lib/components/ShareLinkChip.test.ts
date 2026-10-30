@@ -1,9 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SHARE_LINK_COPIED_TOAST, SHARE_LINK_COPY_FAILED_TOAST } from '$lib/constants';
+import { SHARE_LINK_COPIED_TOAST, SHARE_LINK_COPY_FAILED_TOAST } from '#lib/constants.ts';
 
 const addToast = vi.hoisted(() => vi.fn());
-vi.mock('$lib/stores/toast', () => ({ addToast }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast }));
 
 import ShareLinkChip from './ShareLinkChip.svelte';
 

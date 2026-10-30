@@ -5,8 +5,8 @@ import {
 	createLora as apiCreateLora,
 	softDeleteLora as apiSoftDeleteLora,
 	trainLora as apiTrainLora
-} from '$lib/api/loras';
-import type { UserLoraItem } from '$lib/api/types';
+} from '#lib/api/loras.ts';
+import type { UserLoraItem } from '#lib/api/types.ts';
 
 const LORA_STATUS_QUEUED = 'queued';
 const LORA_STATUS_PREPROCESSING = 'preprocessing';

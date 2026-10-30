@@ -1,6 +1,9 @@
 import { writable } from 'svelte/store';
-import { NOW_PLAYING_SURFACE_KINDS, type NowPlayingSurfaceKind } from '$lib/constants/now-playing';
-import { readStorage, removeStorage, writeStorage } from '$lib/utils/storage';
+import {
+	NOW_PLAYING_SURFACE_KINDS,
+	type NowPlayingSurfaceKind
+} from '#lib/constants/now-playing.ts';
+import { readStorage, removeStorage, writeStorage } from '#lib/utils/storage.ts';
 
 // The stream/classic queue choice is gone: a take row always starts a queue
 // and a share plays its stream. Devices that stored the old choice still

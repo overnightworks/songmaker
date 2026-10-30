@@ -1,7 +1,7 @@
 import { mount, tick, unmount, type Component } from 'svelte';
 import { onTestFinished, vi } from 'vitest';
 
-import type { LibraryListenItem, LibrarySearchHit } from '$lib/api/library';
+import type { LibraryListenItem, LibrarySearchHit } from '#lib/api/library.ts';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -11,9 +11,9 @@ import type {
 	PlaylistItem,
 	SongItem,
 	SongSummaryResponse
-} from '$lib/api/types';
-import { REDUCED_MOTION_MEDIA } from '$lib/constants';
-import { makeSongSummary } from '$lib/test-utils/factories';
+} from '#lib/api/types.ts';
+import { REDUCED_MOTION_MEDIA } from '#lib/constants.ts';
+import { makeSongSummary } from '#lib/test-utils/factories.ts';
 
 // Shared across every Rail*.test.ts in this directory. Vitest only hoists
 // vi.mock from the test file, so each test still registers the modules; the

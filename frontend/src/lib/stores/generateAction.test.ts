@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import GenerateButton from '$lib/components/editor/GenerateButton.svelte';
+import GenerateButton from '#lib/components/editor/GenerateButton.svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -7,18 +7,18 @@ import {
 	makeHealthResponse,
 	makeSong,
 	makeVersion
-} from '$lib/test-utils/factories';
-import type { JobItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+} from '#lib/test-utils/factories.ts';
+import type { JobItem } from '#lib/api/types.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
 	EDITOR_GENERATE_CANCEL_FAILED,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_SELECT_MODEL_TITLE
-} from '$lib/constants';
+} from '#lib/constants.ts';
 
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchHealth: vi.fn(),
 	fetchVersions: vi.fn(),
 	updateSong: vi.fn(),
@@ -27,7 +27,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	coverGeneration: vi.fn(),
 	cancelJob: vi.fn()
 }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import {
 	cancelJob,
@@ -37,7 +37,7 @@ import {
 	generateSong,
 	repaintGeneration,
 	updateSong
-} from '$lib/api/client';
+} from '#lib/api/client.ts';
 import {
 	discardDraft,
 	isDirty,
@@ -46,7 +46,7 @@ import {
 	setDraftPrompt,
 	versions
 } from './editor';
-import { browserReportsOnline } from '$lib/test-utils/network';
+import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import { cancelGeneration, generate, generateAction, offersCancel } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';

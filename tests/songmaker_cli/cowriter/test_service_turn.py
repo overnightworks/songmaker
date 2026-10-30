@@ -81,7 +81,7 @@ from songmaker_cli.server import run_server
 from songmaker_cli.settings import get_settings
 
 ROTATED_REFRESH_TOKEN = "fake-rotated-refresh-token"  # noqa: S105
-AGENT_FILE = Path(__file__).parent.parent / "src" / "songmaker_cli" / "agents" / "cowriter.md"
+AGENT_FILE = Path(__file__).parents[3] / "src" / "songmaker_cli" / "agents" / "cowriter.md"
 ALL_SECRETS = (USER_ACCESS_TOKEN, WORKLOAD_ACCESS_TOKEN, A_REFRESH_TOKEN, ROTATED_REFRESH_TOKEN)
 
 

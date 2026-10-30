@@ -1,4 +1,4 @@
-import type { GenerateState } from '$lib/stores/generateAction';
+import type { GenerateState } from '#lib/stores/generateAction.ts';
 
 export const running: Extract<GenerateState, { kind: 'generating' }> = {
 	kind: 'generating',

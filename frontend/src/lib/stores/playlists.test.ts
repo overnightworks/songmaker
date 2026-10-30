@@ -1,4 +1,4 @@
-import { makePlaylist, makePlaylistDetail as makeDetail } from '$lib/test-utils/factories';
+import { makePlaylist, makePlaylistDetail as makeDetail } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
@@ -14,12 +14,15 @@ import {
 	reorderPlaylistEntry,
 	uploadPlaylistCover as uploadPlaylistCoverApi,
 	updatePlaylist
-} from '$lib/api/client';
-import { LIBRARY_PLAYLISTS_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { toasts } from '$lib/stores/toast';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
+} from '#lib/api/client.ts';
+import { LIBRARY_PLAYLISTS_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { toasts } from '#lib/stores/toast.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
 import {
 	createNewPlaylist,
 	deletePlaylist,
@@ -42,7 +45,7 @@ import {
 	uploadPlaylistCover
 } from './playlists';
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchPlaylists: vi.fn(),
 	fetchPlaylist: vi.fn(),
 	createPlaylist: vi.fn(),
@@ -69,7 +72,7 @@ afterEach(() => {
 	resetConnectivityForTests();
 	toasts.set([]);
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now; the
-	// module-level vi.fn() stubs from vi.mock('$lib/api/client', ...) above
+	// module-level vi.fn() stubs from vi.mock('#lib/api/client.ts', ...) above
 	// need an explicit clear or their call counts leak into the next test.
 	vi.clearAllMocks();
 	vi.restoreAllMocks();

@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
-	import { detailTab, navigateToSongTab } from '$lib/stores/navigation';
+	import { detailTab, navigateToSongTab } from '#lib/stores/navigation.ts';
 	import {
 		EDITOR_TAB_TAKES_LABEL,
 		EDITOR_TABS_LABEL,
 		EDITOR_VIEW_COWRITER_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import TakesList from './TakesList.svelte';
 
 	interface Props {

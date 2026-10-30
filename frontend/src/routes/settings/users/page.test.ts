@@ -1,4 +1,4 @@
-import { startFakeRouter } from '$lib/test-utils/app-navigation';
+import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
 import { resolve } from '$app/paths';
 import { goto } from '$app/navigation';
 import { mount, tick, unmount } from 'svelte';
@@ -10,19 +10,22 @@ import type {
 	ProviderRouteStatusResponse,
 	ProviderStatus,
 	SafeRouteReason
-} from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
-import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
+} from '#lib/api/types.ts';
+import { ApiError } from '#lib/api/fetch.ts';
+import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import {
 	ADMIN_TABS_LABEL,
 	ADMIN_VOICES_EMPTY,
 	COMPACT_LAYOUT_MEDIA,
 	MODELS_SAVE_FAILED_FALLBACK,
 	UNREACHABLE_RELOAD_DELAYS_MS
-} from '$lib/constants';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { COMPACT_SELECT_CLASS } from '$lib/styles/compact-ui';
-import { currentUser } from '$lib/stores/auth';
+} from '#lib/constants.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { COMPACT_SELECT_CLASS } from '#lib/styles/compact-ui.ts';
+import { currentUser } from '#lib/stores/auth.ts';
 
 const api = vi.hoisted(() => ({
 	fetchAdminVoices: vi.fn(),
@@ -42,8 +45,8 @@ const api = vi.hoisted(() => ({
 	getRegistry: vi.fn()
 }));
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return { ...actual, ...api };
 });
 

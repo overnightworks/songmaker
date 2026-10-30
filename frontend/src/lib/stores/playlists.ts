@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { describeFailure, isNotFound, NetworkError } from '$lib/api/fetch';
+import { describeFailure, isNotFound, NetworkError } from '#lib/api/fetch.ts';
 import {
 	fetchPlaylists,
 	fetchPlaylist,
@@ -13,13 +13,13 @@ import {
 	reorderPlaylistEntry as apiReorder,
 	uploadPlaylistCover as apiUploadPlaylistCover,
 	deletePlaylistCover as apiDeletePlaylistCover
-} from '$lib/api/client';
-import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
-import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
-import { openCollection, setOpenCollection } from '$lib/stores/collection';
-import { forgetListenedPlace } from '$lib/stores/libraryOrder';
-import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-import { addToast } from '$lib/stores/toast';
+} from '#lib/api/client.ts';
+import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '#lib/api/types.ts';
+import { LIBRARY_PLAYLISTS_ERROR } from '#lib/constants.ts';
+import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
+import { forgetListenedPlace } from '#lib/stores/libraryOrder.ts';
+import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+import { addToast } from '#lib/stores/toast.ts';
 
 type PlaylistLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 // 'unreachable' is a detail load the network swallowed: the offline strip

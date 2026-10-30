@@ -1,9 +1,9 @@
-import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
+import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { SongItem } from '$lib/api/types';
+import type { SongItem } from '#lib/api/types.ts';
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchSong: vi.fn(),
 	pickGeneration: vi.fn(),
 	unpickGeneration: vi.fn(),
@@ -13,8 +13,8 @@ vi.mock('$lib/api/client', () => ({
 	scoreGeneration: vi.fn()
 }));
 
-import type { JobStatus } from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import type { JobStatus } from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
 	fetchSong,
 	keepGeneration,
@@ -23,10 +23,10 @@ import {
 	scoreGeneration,
 	unkeepGeneration,
 	unpickGeneration
-} from '$lib/api/client';
-import { songList } from '$lib/stores/libraryData';
-import { toasts } from '$lib/stores/toast';
-import { activeJobs } from '$lib/stores/jobs';
+} from '#lib/api/client.ts';
+import { songList } from '#lib/stores/libraryData.ts';
+import { toasts } from '#lib/stores/toast.ts';
+import { activeJobs } from '#lib/stores/jobs.ts';
 import { rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';
 
 const unreachableServer = () =>

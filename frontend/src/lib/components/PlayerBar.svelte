@@ -5,7 +5,7 @@
 		songList,
 		albumSongsErrorMessage,
 		albumSongsLoad
-	} from '$lib/stores/libraryData';
+	} from '#lib/stores/libraryData.ts';
 	import {
 		buildQueueViewModel,
 		closeNowPlaying,
@@ -30,23 +30,23 @@
 		transportOfTheStart,
 		toggleShuffle,
 		waitingStartOf
-	} from '$lib/stores/player';
-	import { openAlbum } from '$lib/stores/navigation';
-	import { queueHoldsOneTake } from '$lib/utils/playable';
-	import { addToast } from '$lib/stores/toast';
-	import { openCollection } from '$lib/stores/collection';
+	} from '#lib/stores/player.ts';
+	import { openAlbum } from '#lib/stores/navigation.ts';
+	import { queueHoldsOneTake } from '#lib/utils/playable.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { openCollection } from '#lib/stores/collection.ts';
 	import {
 		playlistDetailLoad,
 		selectedPlaylist,
 		selectedPlaylistDetail
-	} from '$lib/stores/playlists';
-	import { transportBarHidden } from '$lib/stores/transportBar';
+	} from '#lib/stores/playlists.ts';
+	import { transportBarHidden } from '#lib/stores/transportBar.ts';
 	import {
 		audioPlayer,
 		transportIsBusy,
 		transportOffersPause,
 		transportWaitingNotice
-	} from '$lib/services/audioPlayer.svelte';
+	} from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
@@ -58,17 +58,17 @@
 		MINI_PLAYER_WITHOUT_COVER_MEDIA,
 		REDUCED_MOTION_MEDIA,
 		openNowPlayingLabel
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import OfflineStrip from './OfflineStrip.svelte';
 	import {
 		clearMediaSessionPositionState,
 		updateMediaSessionPlaybackState,
 		updateMediaSessionPositionState
-	} from '$lib/services/mediaSession';
-	import { formatTime } from '$lib/utils/format';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { nowPlayingFromLabel, nowPlayingTakeLabel } from '$lib/constants/now-playing';
+	} from '#lib/services/mediaSession.ts';
+	import { formatTime } from '#lib/utils/format.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
+	import { nowPlayingFromLabel, nowPlayingTakeLabel } from '#lib/constants/now-playing.ts';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 

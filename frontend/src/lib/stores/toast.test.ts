@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { NEW_PLACE_OFFLINE } from '$lib/constants';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { NEW_PLACE_OFFLINE } from '#lib/constants.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import { get, writable } from 'svelte/store';
 import { toasts, addToast, addUndoToast, dismissToast } from './toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';

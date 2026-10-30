@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createAlbum } from '$lib/api/client';
-	import { addAlbumToList } from '$lib/stores/libraryData';
-	import { openAlbum } from '$lib/stores/navigation';
+	import { createAlbum } from '#lib/api/client.ts';
+	import { addAlbumToList } from '#lib/stores/libraryData.ts';
+	import { openAlbum } from '#lib/stores/navigation.ts';
 	import {
 		NEW_ALBUM_ARTIST_LABEL,
 		NEW_ALBUM_ARTIST_OPTIONAL,
@@ -13,7 +13,7 @@
 		NEW_ALBUM_REFUSED,
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {

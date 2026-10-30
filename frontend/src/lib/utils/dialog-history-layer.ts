@@ -1,5 +1,5 @@
 import type { Attachment } from 'svelte/attachments';
-import { holdLayer } from '$lib/stores/layers';
+import { holdLayer } from '#lib/stores/layers.ts';
 
 interface DialogHistoryLayer {
 	hold: Attachment;

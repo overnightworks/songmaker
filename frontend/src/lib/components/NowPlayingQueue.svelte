@@ -1,18 +1,18 @@
 <script lang="ts">
-	import type { QueueStreamSkipItem } from '$lib/api/types';
-	import type { QueueViewModel } from '$lib/stores/player';
+	import type { QueueStreamSkipItem } from '#lib/api/types.ts';
+	import type { QueueViewModel } from '#lib/stores/player.ts';
 	import {
 		LIBRARY_TAKE_POOL_LABELS,
 		LIBRARY_TAKE_POOLS,
 		type LibraryTakePool
-	} from '$lib/stores/playbackSettings';
+	} from '#lib/stores/playbackSettings.ts';
 	import {
 		NOW_PLAYING_QUEUE_TAB,
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		nowPlayingQueueHeading,
 		nowPlayingTakeLabel
-	} from '$lib/constants/now-playing';
-	import { formatTime } from '$lib/utils/format';
+	} from '#lib/constants/now-playing.ts';
+	import { formatTime } from '#lib/utils/format.ts';
 	import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
 	let {

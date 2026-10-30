@@ -4,8 +4,9 @@ import { get } from 'svelte/store';
 
 const mockFetchMe = vi.fn();
 
-vi.mock('$lib/api/client', async () => {
-	const { ApiError } = await vi.importActual<typeof import('$lib/api/client')>('$lib/api/client');
+vi.mock('#lib/api/client.ts', async () => {
+	const { ApiError } =
+		await vi.importActual<typeof import('#lib/api/client.ts')>('#lib/api/client.ts');
 	return {
 		ApiError,
 		fetchMe: (...args: unknown[]) => mockFetchMe(...args)
@@ -13,7 +14,7 @@ vi.mock('$lib/api/client', async () => {
 });
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
 import {
@@ -30,21 +31,21 @@ import {
 	signOutFailed
 } from './auth';
 import { offline, resetConnectivityForTests } from './connectivity';
-import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS, LOGOUT_ADDRESS } from '$lib/constants/auth';
-import { ApiError } from '$lib/api/client';
-import { NetworkError, apiFetch, installRefusalReactions, sseFetch } from '$lib/api/fetch';
+import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS, LOGOUT_ADDRESS } from '#lib/constants/auth.ts';
+import { ApiError } from '#lib/api/client.ts';
+import { NetworkError, apiFetch, installRefusalReactions, sseFetch } from '#lib/api/fetch.ts';
 import {
 	navigateTo,
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
-} from '$lib/history/historyController';
-import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
-import { followPlaybackForResume } from '$lib/stores/playbackResume';
-import { audioPlayer, type AudioPlayerCallbacks } from '$lib/services/audioPlayer.svelte';
-import { holdRouteLoads } from '$lib/test-utils/app-navigation';
-import { documentLoads } from '$lib/test-utils/document-loads';
-import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+} from '#lib/history/historyController.ts';
+import { notifyRateLimited } from '#lib/stores/rateLimitNotice.ts';
+import { followPlaybackForResume } from '#lib/stores/playbackResume.ts';
+import { audioPlayer, type AudioPlayerCallbacks } from '#lib/services/audioPlayer.svelte.ts';
+import { holdRouteLoads } from '#lib/test-utils/app-navigation.ts';
+import { documentLoads } from '#lib/test-utils/document-loads.ts';
+import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 
 const AUTH_ME_PATH = '/api/auth/me';
 const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };

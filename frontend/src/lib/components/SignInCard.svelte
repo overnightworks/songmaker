@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import Icon from '$lib/components/Icon.svelte';
-	import LegalLinks from '$lib/components/LegalLinks.svelte';
-	import { APP_NAME } from '$lib/constants';
+	import Icon from '#lib/components/Icon.svelte';
+	import LegalLinks from '#lib/components/LegalLinks.svelte';
+	import { APP_NAME } from '#lib/constants.ts';
 
 	interface Props {
 		heading: string;

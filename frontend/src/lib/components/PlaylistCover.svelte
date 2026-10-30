@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { AlbumCoverUrls } from '$lib/api/types';
-	import { titleInitials } from '$lib/utils/format';
+	import type { AlbumCoverUrls } from '#lib/api/types.ts';
+	import { titleInitials } from '#lib/utils/format.ts';
 
 	interface Props {
 		title: string;

@@ -1,11 +1,11 @@
-import { makeSong, makeVersion } from '$lib/test-utils/factories';
+import { makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import * as api from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { selectedSongId } from '$lib/stores/player';
-import { reportResourceStreamReachable } from '$lib/stores/connectivity';
-import { toasts } from '$lib/stores/toast';
+import * as api from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { reportResourceStreamReachable } from '#lib/stores/connectivity.ts';
+import { toasts } from '#lib/stores/toast.ts';
 import {
 	discardDraft,
 	draftLoadedFrom,
@@ -52,7 +52,7 @@ describe('versions recovery', () => {
 	it.each(['typed', 'loaded'])(
 		'1160-F40-versions reconnect restores versions and preserves a %s draft',
 		async (draft) => {
-			const { fetchVersions } = await import('$lib/api/client');
+			const { fetchVersions } = await import('#lib/api/client.ts');
 			const latest = makeVersion({ id: 'v2', version_number: 2 });
 			const older = makeVersion({ id: 'v1', version_number: 1, lyrics: 'older lyrics' });
 			vi.mocked(fetchVersions).mockRejectedValueOnce(
@@ -84,7 +84,7 @@ describe('versions recovery', () => {
 	it.each(['success', 'network failure', 'refusal'])(
 		'1160-F40-versions ignores an old song response: %s',
 		async (result) => {
-			const { fetchVersions } = await import('$lib/api/client');
+			const { fetchVersions } = await import('#lib/api/client.ts');
 			let finish!: (value: ReturnType<typeof makeVersion>[]) => void;
 			let fail!: (error: Error) => void;
 			vi.mocked(fetchVersions).mockReturnValueOnce(
@@ -115,7 +115,7 @@ describe('versions recovery', () => {
 	);
 
 	it('1160-F40-versions cancels a pending reconnect reload when leaving the song', async () => {
-		const { fetchVersions } = await import('$lib/api/client');
+		const { fetchVersions } = await import('#lib/api/client.ts');
 		vi.mocked(fetchVersions).mockRejectedValueOnce(
 			new NetworkError('/versions', new TypeError('unreachable'))
 		);
@@ -130,7 +130,7 @@ describe('versions recovery', () => {
 	});
 
 	it('1160-F40-versions names a refusal and does not retry on reconnect', async () => {
-		const { fetchVersions } = await import('$lib/api/client');
+		const { fetchVersions } = await import('#lib/api/client.ts');
 		vi.mocked(fetchVersions).mockClear();
 		vi.mocked(fetchVersions).mockRejectedValueOnce(new ApiError(403, 'Forbidden', '/versions'));
 		loadSongData(makeSong({ id: 's1' }));

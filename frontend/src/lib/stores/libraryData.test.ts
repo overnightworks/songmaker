@@ -1,9 +1,9 @@
-import { makeAlbum, makeGeneration as makeGen, makeSong } from '$lib/test-utils/factories';
+import { makeAlbum, makeGeneration as makeGen, makeSong } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { AlbumItem, PaginatedResponse, SongItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { RAIL_LIBRARY_LOAD_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
+import type { AlbumItem, PaginatedResponse, SongItem } from '#lib/api/types.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { RAIL_LIBRARY_LOAD_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests,
@@ -12,7 +12,7 @@ import {
 
 const OFFLINE = new NetworkError('/api/x', new TypeError('Failed to fetch'));
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchSongs: vi.fn().mockResolvedValue({
 		items: [],
 		total: 0,
@@ -29,7 +29,7 @@ vi.mock('$lib/api/client', () => ({
 	})
 }));
 
-import { fetchAlbums, fetchSongs } from '$lib/api/client';
+import { fetchAlbums, fetchSongs } from '#lib/api/client.ts';
 import {
 	albumList,
 	albumSongsLoad,

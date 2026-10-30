@@ -1,4 +1,4 @@
-import type { GenerationItem, GenerationParams, SongItem } from '$lib/api/types';
+import type { GenerationItem, GenerationParams, SongItem } from '#lib/api/types.ts';
 import {
 	DIT_BOOL_FIELDS,
 	DIT_NUMBER_FIELDS,
@@ -6,9 +6,9 @@ import {
 	LM_BOOL_FIELDS,
 	LM_NUMBER_FIELDS,
 	LM_TEXT_FIELDS
-} from '$lib/constants/acestep-param-fields';
-import { RECIPE_REFERENCE_LABEL } from '$lib/constants/recipe';
-import { formatTime } from '$lib/utils/format';
+} from '#lib/constants/acestep-param-fields.ts';
+import { RECIPE_REFERENCE_LABEL } from '#lib/constants/recipe.ts';
+import { formatTime } from '#lib/utils/format.ts';
 
 // A read-only account of what a take actually carries — its model, the
 // generation_params ParamControls knows how to edit, and the version's own

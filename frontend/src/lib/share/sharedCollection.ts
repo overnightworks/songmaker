@@ -6,7 +6,7 @@
 // (scripts/generate_types.py), so a new field on a share response reaches the
 // share surface without a second, hand-maintained copy of the contract here.
 
-import type { SharedCollectionKind } from '$lib/api/shared';
+import type { SharedCollectionKind } from '#lib/api/shared.ts';
 import type {
 	AlbumCoverUrls,
 	GenerationItem,
@@ -15,8 +15,8 @@ import type {
 	SharedPlaylistPayload,
 	SharedSongPayload,
 	WhisperCue
-} from '$lib/api/types';
-import type { PlaybackInfo } from '$lib/services/playbackTypes';
+} from '#lib/api/types.ts';
+import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 
 export type {
 	SharedAlbumPayload,

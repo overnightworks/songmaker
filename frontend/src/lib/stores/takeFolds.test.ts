@@ -1,7 +1,7 @@
-import { makeGeneration } from '$lib/test-utils/factories';
+import { makeGeneration } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import type { GenerationItem } from '$lib/api/types';
+import type { GenerationItem } from '#lib/api/types.ts';
 import { selectedSongId } from './player';
 import {
 	groupTakes,

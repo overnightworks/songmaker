@@ -6,7 +6,7 @@ import {
 	coverSuggestions,
 	deferred,
 	FakeJobEventSource
-} from '$lib/test-utils/album-cover-editor';
+} from '#lib/test-utils/album-cover-editor.ts';
 import {
 	beginCoverSave,
 	beginCoverSuggestion,
@@ -22,18 +22,18 @@ import {
 	showCoverActivityFailure,
 	watchCoverActivity
 } from './coverActivity';
-import { NetworkError } from '$lib/api/fetch';
+import { NetworkError } from '#lib/api/fetch.ts';
 import { activeJobs, removeJob } from './jobs';
 
 const fetchAlbumCoverSuggestions = vi.fn();
 const discardAlbumCoverSuggestions = vi.fn();
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
+vi.mock('#lib/api/albums.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/albums.ts')>()),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
 	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
 }));
-vi.mock('$lib/api/jobs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/jobs')>()),
+vi.mock('#lib/api/jobs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/jobs.ts')>()),
 	cancelJob: async () => coverJob({ status: 'cancelled' })
 }));
 

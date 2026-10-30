@@ -1,12 +1,12 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NO_ACCESS_BACK_LABEL, NO_ACCESS_HEADING, NO_ACCESS_MESSAGE } from '$lib/constants/auth';
-import { ACCOUNT_MENU_LOGOUT_LABEL, SIGN_OUT_FAILED_MESSAGE } from '$lib/constants';
-import { signOutFailed } from '$lib/stores/auth';
+import { NO_ACCESS_BACK_LABEL, NO_ACCESS_HEADING, NO_ACCESS_MESSAGE } from '#lib/constants/auth.ts';
+import { ACCOUNT_MENU_LOGOUT_LABEL, SIGN_OUT_FAILED_MESSAGE } from '#lib/constants.ts';
+import { signOutFailed } from '#lib/stores/auth.ts';
 
 const mockLogout = vi.hoisted(() => vi.fn());
-vi.mock('$lib/stores/auth', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/auth')>()),
+vi.mock('#lib/stores/auth.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/auth.ts')>()),
 	logout: mockLogout
 }));
 

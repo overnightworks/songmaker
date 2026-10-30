@@ -1,28 +1,28 @@
-import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
+import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { GenerationItem, SongItem } from '$lib/api/types';
-import type { GenerationActions } from '$lib/contexts/generation-actions';
-import { TAKE_DELETE_LABEL, TAKE_DELETE_MESSAGE } from '$lib/constants';
-import { bulkDeleteTitle } from '$lib/constants/now-playing';
-import { ApiError } from '$lib/api/fetch';
-import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
+import type { GenerationItem, SongItem } from '#lib/api/types.ts';
+import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
+import { TAKE_DELETE_LABEL, TAKE_DELETE_MESSAGE } from '#lib/constants.ts';
+import { bulkDeleteTitle } from '#lib/constants/now-playing.ts';
+import { ApiError } from '#lib/api/fetch.ts';
+import { clearSelection, selectedIds, toggleSelection } from '#lib/stores/selection.ts';
 import { get } from 'svelte/store';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return { ...actual, bulkDeleteGenerations: vi.fn() };
 });
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
-vi.mock('$lib/stores/navigation', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/navigation.ts')>();
 	return { ...actual, persistLibraryHistory: vi.fn() };
 });
 
-import { bulkDeleteGenerations } from '$lib/api/client';
-import { addToast } from '$lib/stores/toast';
+import { bulkDeleteGenerations } from '#lib/api/client.ts';
+import { addToast } from '#lib/stores/toast.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 

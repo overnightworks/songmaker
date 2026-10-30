@@ -2,15 +2,18 @@ import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makeSong as song
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { CoverSuggestionsResponse } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
-import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+import type { CoverSuggestionsResponse } from '#lib/api/types.ts';
+import { ApiError } from '#lib/api/fetch.ts';
+import { lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_NO_SONGS,
@@ -24,12 +27,19 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_RETRY_LABEL
-} from '$lib/constants';
-import { accessibleName, getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
-import { menuRowLabels } from '$lib/test-utils/collection-menu';
-import { shownTransportFace } from '$lib/test-utils/transport-face';
-import { describeBackClosesOverlay, standingHistoryEntry } from '$lib/test-utils/library-history';
-import { createButton, createSettled, field, type } from '$lib/test-utils/new-place-card';
+} from '#lib/constants.ts';
+import {
+	accessibleName,
+	getByRoleButton,
+	getByRoleHeading
+} from '#lib/test-utils/accessible-name.ts';
+import { menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
+import {
+	describeBackClosesOverlay,
+	standingHistoryEntry
+} from '#lib/test-utils/library-history.ts';
+import { createButton, createSettled, field, type } from '#lib/test-utils/new-place-card.ts';
 import { findElementByRoleAndName, openCollectionMenu } from './shell/rail-test-fixtures';
 import {
 	clearHitboxStyles,
@@ -38,26 +48,26 @@ import {
 	minHeightPx,
 	px,
 	setPointer
-} from '$lib/test-utils/hitbox';
+} from '#lib/test-utils/hitbox.ts';
 import {
 	clearComponentStyles,
 	elementScopeClass,
 	injectComponentStyles
-} from '$lib/test-utils/component-styles';
+} from '#lib/test-utils/component-styles.ts';
 import {
 	albumList,
 	loadSongsForAlbum,
 	resetLibraryDataForTests,
 	songList
-} from '$lib/stores/libraryData';
-import { fetchSongs } from '$lib/api/songs';
+} from '#lib/stores/libraryData.ts';
+import { fetchSongs } from '#lib/api/songs.ts';
 import {
 	curationActive,
 	nowPlayingSurface,
 	queueContext,
 	selectedAlbumId
-} from '$lib/stores/player';
-import { openCollection } from '$lib/stores/collection';
+} from '#lib/stores/player.ts';
+import { openCollection } from '#lib/stores/collection.ts';
 
 const uploadAlbumCover = vi.fn();
 const updateAlbum = vi.fn();
@@ -66,8 +76,8 @@ const unarchiveAlbum = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();
 const createSong = vi.fn();
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		uploadAlbumCover: (...args: unknown[]) => uploadAlbumCover(...args),
@@ -82,34 +92,34 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		createSong: (...args: unknown[]) => createSong(...args)
 	};
 });
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
+vi.mock('#lib/api/albums.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/albums.ts')>()),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
 	discardAlbumCoverSuggestions: async () => undefined
 }));
-vi.mock('$lib/stores/toast', () => ({
+vi.mock('#lib/stores/toast.ts', () => ({
 	addToast: vi.fn(),
 	addUndoToast: vi.fn(),
 	dismissToast: vi.fn()
 }));
-vi.mock('$lib/stores/playlists', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/playlists')>();
+vi.mock('#lib/stores/playlists.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/playlists.ts')>();
 	return {
 		...actual,
 		addAlbumToPlaylist: vi.fn()
 	};
 });
-vi.mock('$lib/stores/navigation', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/navigation.ts')>();
 	return { ...actual, selectSong: vi.fn() };
 });
-vi.mock('$lib/stores/player', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/player')>();
+vi.mock('#lib/stores/player.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/player.ts')>();
 	return {
 		...actual,
 		ensureGenerationsLoaded: vi.fn(),
@@ -120,7 +130,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import songRowSource from './SongRow.svelte?raw';
-import { selectSong } from '$lib/stores/navigation';
+import { selectSong } from '#lib/stores/navigation.ts';
 import {
 	ensureGenerationsLoaded,
 	pendingStart,
@@ -130,9 +140,9 @@ import {
 	setPendingStartForTests,
 	setShuffle,
 	shuffleEnabled
-} from '$lib/stores/player';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { addToast } from '$lib/stores/toast';
+} from '#lib/stores/player.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { addToast } from '#lib/stores/toast.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 

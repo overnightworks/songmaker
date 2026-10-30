@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { GenerationItem, SongItem } from '$lib/api/types';
+	import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 	import {
 		NOW_PLAYING_TAKE_PREFIX,
 		RECIPE_PANEL_LABEL,
@@ -7,7 +7,7 @@
 		TAKE_REPAINT_LABEL,
 		TAKE_RESCORE_LABEL,
 		TAKE_RESCORING_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		NOW_PLAYING_IMPORTED_TAKE_HEADING,
 		NOW_PLAYING_DEVIATIONS_EMPTY,
@@ -29,16 +29,16 @@
 		nowPlayingTakeMeta,
 		openVersionLabel,
 		takeVersion
-	} from '$lib/constants/now-playing';
-	import { openTakeVersion, revealPlayingSong } from '$lib/stores/navigation';
-	import { closeNowPlaying } from '$lib/stores/player';
-	import { TAKE_USE_SEED_LABEL } from '$lib/constants/take-task';
-	import { pendingTakeUse, type TakeUse } from '$lib/stores/recipe';
-	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '$lib/stores/takeActions';
-	import { computeDiffByKey } from '$lib/utils/diff';
-	import { normalizeLyricsToken } from '$lib/utils/lyrics-normalize';
-	import { buildTakeRecipe } from '$lib/utils/recipe-summary';
-	import { formatScore, scoreColor, scoreReadings } from '$lib/utils/scores';
+	} from '#lib/constants/now-playing.ts';
+	import { openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
+	import { closeNowPlaying } from '#lib/stores/player.ts';
+	import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
+	import { pendingTakeUse, type TakeUse } from '#lib/stores/recipe.ts';
+	import { rate, rescore, rescoringTakeIds, setKeep, setPick } from '#lib/stores/takeActions.ts';
+	import { computeDiffByKey } from '#lib/utils/diff.ts';
+	import { normalizeLyricsToken } from '#lib/utils/lyrics-normalize.ts';
+	import { buildTakeRecipe } from '#lib/utils/recipe-summary.ts';
+	import { formatScore, scoreColor, scoreReadings } from '#lib/utils/scores.ts';
 	import Icon from './Icon.svelte';
 
 	let {

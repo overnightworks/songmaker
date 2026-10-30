@@ -1,17 +1,17 @@
-import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { modifiedClicks } from '$lib/test-utils/modified-clicks';
+import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { modifiedClicks } from '#lib/test-utils/modified-clicks.ts';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { GenerationItem, SongItem } from '$lib/api/types';
-import type { GenerationActions } from '$lib/contexts/generation-actions';
+import type { GenerationItem, SongItem } from '#lib/api/types.ts';
+import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
 import {
 	TAKE_DELETE_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKES_EMPTY,
 	takesDraftBanner
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	EARLIER_VERSIONS_LABEL,
 	bulkDeleteTitle,
@@ -19,24 +19,29 @@ import {
 	foldedGroupLabel,
 	openVersionLabel,
 	selectedCountLabel
-} from '$lib/constants/now-playing';
-import { selectedSongId } from '$lib/stores/player';
-import { clearSelection, selectedIds, selectionMode, toggleSelection } from '$lib/stores/selection';
-import { toggleTakeGroup, groupTakes } from '$lib/stores/takeFolds';
+} from '#lib/constants/now-playing.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import {
+	clearSelection,
+	selectedIds,
+	selectionMode,
+	toggleSelection
+} from '#lib/stores/selection.ts';
+import { toggleTakeGroup, groupTakes } from '#lib/stores/takeFolds.ts';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return { ...actual, bulkDeleteGenerations: vi.fn() };
 });
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
-vi.mock('$lib/stores/navigation', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/navigation.ts')>();
 	return { ...actual, persistLibraryHistory: vi.fn(), jumpToTake: vi.fn() };
 });
 
-import { bulkDeleteGenerations } from '$lib/api/client';
-import { jumpToTake } from '$lib/stores/navigation';
+import { bulkDeleteGenerations } from '#lib/api/client.ts';
+import { jumpToTake } from '#lib/stores/navigation.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 let songCounter = 0;

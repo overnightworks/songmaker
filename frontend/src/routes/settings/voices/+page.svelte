@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { describeFailure } from '$lib/api/fetch';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 	import {
 		anyLoraActive,
 		createLora,
@@ -10,18 +10,18 @@
 		loras,
 		lorasLoading,
 		softDeleteLora
-	} from '$lib/stores/loras';
-	import { addToast } from '$lib/stores/toast';
-	import ToastContainer from '$lib/components/ToastContainer.svelte';
-	import LoraDetail from '$lib/components/LoraDetail.svelte';
-	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
+	} from '#lib/stores/loras.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import ToastContainer from '#lib/components/ToastContainer.svelte';
+	import LoraDetail from '#lib/components/LoraDetail.svelte';
+	import ConfirmDeleteDialog from '#lib/components/ConfirmDeleteDialog.svelte';
 	import {
 		APP_NAME,
 		LORA_CREATE_FAILED,
 		LORA_POLL_INTERVAL_MS,
 		VOICES_LOAD_FAILED
-	} from '$lib/constants';
-	import type { UserLoraItem } from '$lib/api/types';
+	} from '#lib/constants.ts';
+	import type { UserLoraItem } from '#lib/api/types.ts';
 
 	let showCreate = $state(false);
 	let creating = $state(false);

@@ -2,12 +2,17 @@
 	import { onDestroy, onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { derived } from 'svelte/store';
-	import { fetchAdminVoices, ApiError, fetchRateLimits, updateRateLimits } from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import type { RateLimitItem, AdminUserLoraItem } from '$lib/api/types';
-	import { isAdmin } from '$lib/stores/auth';
-	import { loadBuiltins, builtinDefaults } from '$lib/stores/presets';
+	import {
+		fetchAdminVoices,
+		ApiError,
+		fetchRateLimits,
+		updateRateLimits
+	} from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import type { RateLimitItem, AdminUserLoraItem } from '#lib/api/types.ts';
+	import { isAdmin } from '#lib/stores/auth.ts';
+	import { loadBuiltins, builtinDefaults } from '#lib/stores/presets.ts';
 	import {
 		fetchGenerationDefaults,
 		updateGenerationDefaults,
@@ -18,23 +23,23 @@
 		fetchCoverSettings,
 		updateCoverSettings,
 		fetchProviderStatus
-	} from '$lib/api/client';
-	import type { AvailableModel } from '$lib/api/client';
+	} from '#lib/api/client.ts';
+	import type { AvailableModel } from '#lib/api/client.ts';
 	import type {
 		CoverSettingsResponse,
 		CowriterSettings,
 		ProviderRouteStatusResponse,
 		ProviderStatus,
 		SafeRouteReason
-	} from '$lib/api/types';
-	import type { VersionGenerationParams } from '$lib/api/types';
-	import ParamControls from '$lib/components/ParamControls.svelte';
-	import { ADMIN_TABS, parseAdminTab, type AdminTab } from '$lib/adminTabs';
-	import WorkerPoolPanel from '$lib/components/WorkerPoolPanel.svelte';
-	import ModelRegistryPanel from '$lib/components/ModelRegistryPanel.svelte';
-	import TakeRetentionPanel from '$lib/components/TakeRetentionPanel.svelte';
-	import ModelsTaskRow, { routeReasonSentence } from '$lib/components/ModelsTaskRow.svelte';
-	import ModelsCowriterRow from '$lib/components/ModelsCowriterRow.svelte';
+	} from '#lib/api/types.ts';
+	import type { VersionGenerationParams } from '#lib/api/types.ts';
+	import ParamControls from '#lib/components/ParamControls.svelte';
+	import { ADMIN_TABS, parseAdminTab, type AdminTab } from '#lib/adminTabs.ts';
+	import WorkerPoolPanel from '#lib/components/WorkerPoolPanel.svelte';
+	import ModelRegistryPanel from '#lib/components/ModelRegistryPanel.svelte';
+	import TakeRetentionPanel from '#lib/components/TakeRetentionPanel.svelte';
+	import ModelsTaskRow, { routeReasonSentence } from '#lib/components/ModelsTaskRow.svelte';
+	import ModelsCowriterRow from '#lib/components/ModelsCowriterRow.svelte';
 	import type {
 		ModelsRouteKey,
 		ModelsRouteReason,
@@ -42,7 +47,7 @@
 		ModelsTaskProvider,
 		ModelsTaskRoute,
 		ModelsTaskSelection
-	} from '$lib/components/ModelsTaskRow.svelte';
+	} from '#lib/components/ModelsTaskRow.svelte';
 	import {
 		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
@@ -66,14 +71,14 @@
 		MODELS_TASK_COVER_LABEL,
 		MODELS_TASK_COWRITER_LABEL,
 		PROVIDER_STATUS_UNAVAILABLE_DETAIL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		COMPACT_SELECT_CLASS,
 		COMPACT_STACK_CLASS,
 		ensureCompactUiStyles
-	} from '$lib/styles/compact-ui';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { providerDisplayName } from '$lib/utils/cowriter-ui';
+	} from '#lib/styles/compact-ui.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
+	import { providerDisplayName } from '#lib/utils/cowriter-ui.ts';
 
 	let voices = $state<AdminUserLoraItem[]>([]);
 	let loadingVoices = $state(false);

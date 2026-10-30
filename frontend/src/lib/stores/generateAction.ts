@@ -1,6 +1,6 @@
 import { derived, get, readable, writable } from 'svelte/store';
-import { cancelJob, generateSong } from '$lib/api/client';
-import type { GenerationItem, JobItem, SongItem } from '$lib/api/types';
+import { cancelJob, generateSong } from '#lib/api/client.ts';
+import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
 import {
 	EDITOR_GENERATE_CANCEL_FAILED,
 	EDITOR_GENERATE_LAST_SEEN_TEMPLATE,
@@ -14,9 +14,9 @@ import {
 	EDITOR_SELECT_MODEL_TITLE,
 	GENERATION_PHASE_LABELS,
 	JOB_TYPE_GENERATE
-} from '$lib/constants';
-import { describeFailure } from '$lib/api/fetch';
-import { formatTime } from '$lib/utils/format';
+} from '#lib/constants.ts';
+import { describeFailure } from '#lib/api/fetch.ts';
+import { formatTime } from '#lib/utils/format.ts';
 import { offline } from './connectivity';
 import {
 	currentVersionIndex,
@@ -368,7 +368,7 @@ async function startSourceJob(
 	source: GenerationItem
 ): Promise<JobItem> {
 	if (get(sourceMode) === 'repaint') {
-		const { repaintGeneration } = await import('$lib/api/client');
+		const { repaintGeneration } = await import('#lib/api/client.ts');
 		const mode = get(repaintMode);
 		return repaintGeneration(source.id, get(repaintStart), get(repaintEnd), {
 			model,
@@ -379,7 +379,7 @@ async function startSourceJob(
 			repaintStrength: mode === 'balanced' ? get(repaintStrength) : undefined
 		});
 	}
-	const { coverGeneration } = await import('$lib/api/client');
+	const { coverGeneration } = await import('#lib/api/client.ts');
 	const noise = get(coverNoiseStrength);
 	return coverGeneration(source.id, get(coverStrength), {
 		model,

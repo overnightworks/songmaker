@@ -1,5 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
-import { describeFailure } from '$lib/api/fetch';
+import { describeFailure } from '#lib/api/fetch.ts';
 import {
 	fetchSong,
 	keepGeneration,
@@ -8,11 +8,11 @@ import {
 	scoreGeneration,
 	unkeepGeneration,
 	unpickGeneration
-} from '$lib/api/client';
-import { JOB_TYPE_SCORE, TAKE_RESCORE_QUEUED_TOAST } from '$lib/constants';
-import { activeJobs, trackJob } from '$lib/stores/jobs';
-import { upsertSongInList } from '$lib/stores/libraryData';
-import { addToast } from '$lib/stores/toast';
+} from '#lib/api/client.ts';
+import { JOB_TYPE_SCORE, TAKE_RESCORE_QUEUED_TOAST } from '#lib/constants.ts';
+import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
+import { upsertSongInList } from '#lib/stores/libraryData.ts';
+import { addToast } from '#lib/stores/toast.ts';
 
 // The one mutation owner for a generation's judged state (pick, keep, rating,
 // pinned seed, re-score) shared by every surface that judges a take. Each

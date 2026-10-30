@@ -58,8 +58,8 @@ function isTypeOnlyClause(clause: string): boolean {
 
 function resolveLocalSpecifier(specifier: string, fromFile: string): string | null {
 	let base: string;
-	if (specifier.startsWith('$lib/')) {
-		base = `/src/lib/${specifier.slice('$lib/'.length)}`;
+	if (specifier.startsWith('#lib/')) {
+		base = `/src/lib/${specifier.slice('#lib/'.length)}`;
 	} else if (specifier.startsWith('.')) {
 		const dirParts = fromFile.split('/').slice(0, -1);
 		for (const segment of specifier.split('/')) {
