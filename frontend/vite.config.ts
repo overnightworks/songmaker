@@ -44,7 +44,6 @@ export default defineConfig({
 		assetsInlineLimit: keepFontsAsFiles
 	},
 	server: {
-		fs: { allow: ['kit-assets'] },
 		proxy: {
 			'/api': {
 				target: API_TARGET,

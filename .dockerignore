@@ -20,7 +20,6 @@ vendor/acestep/acestep_stderr.log
 # Frontend dev artifacts
 frontend/node_modules/
 frontend/.svelte-kit/
-frontend/kit-assets/
 
 # Data
 _output/
