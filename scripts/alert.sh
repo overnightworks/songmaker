@@ -80,9 +80,10 @@ mkfifo "$CREDENTIAL_PIPE"
 # The writer is an ordinary job of this shell, so a plain `wait` on its pid
 # gives its status; a process substitution's pid has no such guarantee. The
 # writer's open blocks until a reader appears, and a curl that failed before
-# reading the pipe never appears: opening it once read-write here releases
-# that writer, and closing it again leaves the writer no reader, so its write
-# fails instead of hanging.
+# reading the pipe never appears: opening it read-write here releases a writer
+# that is already waiting, and closing it again leaves that writer no reader,
+# so its write fails instead of hanging. A writer that has not yet reached its
+# open misses that release, so the release repeats until the writer is gone.
 printf '%s' "$CURL_CREDENTIALS" >"$CREDENTIAL_PIPE" &
 CREDENTIAL_WRITER_PID=$!
 
@@ -95,7 +96,10 @@ CURL_OUTPUT="$(curl --silent --show-error --fail \
     --config "$CREDENTIAL_PIPE" \
     --upload-file - <<<"$MESSAGE" 2>&1)" || CURL_STATUS=$?
 
-exec 3<>"$CREDENTIAL_PIPE" 3<&-
+while kill -0 "$CREDENTIAL_WRITER_PID" 2>/dev/null; do
+    exec 3<>"$CREDENTIAL_PIPE" 3<&-
+    sleep 0.02
+done
 WRITER_STATUS=0
 wait "$CREDENTIAL_WRITER_PID" || WRITER_STATUS=$?
 

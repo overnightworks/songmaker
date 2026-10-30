@@ -349,7 +349,7 @@ def test_failing_credentials_producer_never_reports_sent(
     assert not args_file.exists(), "curl must not start without its credentials"
 
 
-def _assert_failed_with_reason_and_no_credentials(
+def _assert_failed_without_leaking(
     result: subprocess.CompletedProcess[str],
     password: str,
     recorded_files: list[Path],
@@ -374,7 +374,7 @@ def test_silent_curl_failure_names_curl_and_its_status(tmp_path: Path) -> None:
         extra_env={"FAKE_CURL_ARGS_FILE": str(args_file), "FAKE_CURL_ENV_FILE": str(env_file)},
     )
 
-    _assert_failed_with_reason_and_no_credentials(
+    _assert_failed_without_leaking(
         result,
         VALID_ENV["SMTP_PASSWORD"],
         [args_file, env_file],
@@ -399,11 +399,33 @@ def test_failed_credential_write_names_the_write_and_its_status(tmp_path: Path) 
         },
     )
 
-    _assert_failed_with_reason_and_no_credentials(
+    _assert_failed_without_leaking(
         result,
         password_larger_than_a_pipe_buffer,
         [args_file, env_file],
     )
+    assert "curl exit 0, credential write exit" in result.stderr
+    assert "credential write exit 0" not in result.stderr
+
+
+def test_writer_that_starts_after_curl_has_exited_does_not_hang_the_send(tmp_path: Path) -> None:
+    password_larger_than_a_pipe_buffer = "SENTINEL" + "x" * 200_000
+    script = _alert_script_whose_credentials_producer_is(tmp_path, "printf '%s' \"$2\"")
+    writer_start = "printf '%s' \"$CURL_CREDENTIALS\" >\"$CREDENTIAL_PIPE\" &"
+    script_text = script.read_text()
+    assert writer_start in script_text
+    late_writer_start = "(sleep 0.5; " + writer_start[:-2] + ") &"
+    script.write_text(script_text.replace(writer_start, late_writer_start))
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        {**VALID_ENV, "SMTP_PASSWORD": password_larger_than_a_pipe_buffer},
+        extra_env={"FAKE_CURL_UNREAD_CONFIG": "1"},
+        script=script,
+    )
+
+    _assert_failed_without_leaking(result, password_larger_than_a_pipe_buffer, [])
     assert "curl exit 0, credential write exit" in result.stderr
     assert "credential write exit 0" not in result.stderr
 
