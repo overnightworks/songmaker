@@ -267,8 +267,10 @@ def test_public_base_url_is_stored_as_the_bare_origin(given: str, origin: str) -
     ],
 )
 def test_a_malformed_public_base_url_fails_loud_and_names_the_value(malformed: str) -> None:
+    required = _required_settings()
+
     with pytest.raises(ValidationError, match="PUBLIC_BASE_URL") as refused:
-        Settings(**_required_settings(), public_base_url=malformed)
+        Settings(**required, public_base_url=malformed)
 
     assert malformed in str(refused.value)
 
