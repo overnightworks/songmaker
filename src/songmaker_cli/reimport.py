@@ -83,7 +83,6 @@ def reimport_files(
             generation_id=generation_id,
             audio_dir=audio_dir,
             created_by=user_id,
-            generation_params={"reference_audio_path": ""},
         )
         create_generation_created_event(
             session,

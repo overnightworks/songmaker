@@ -133,6 +133,7 @@ def create_generation(
     generation_id: str | None = None,
     *,
     created_by: str,
+    reference_recording_id: str | None = None,
 ) -> Generation:
     """Create the row for a completed generation, naming the user who made it.
 
@@ -164,6 +165,7 @@ def create_generation(
         model_mode=model_mode,
         src_generation_id=src_generation_id,
         created_by=created_by,
+        reference_recording_id=reference_recording_id,
         status=JobStatus.COMPLETED,
     )
     if generation_id is not None:

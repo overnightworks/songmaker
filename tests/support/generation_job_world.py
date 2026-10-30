@@ -47,6 +47,38 @@ def persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
     )
 
 
+def post_process_with_stubbed_audio(*, on_outputs_written, **kwargs):
+    """Run the real post_process_generation; only the audio encoding is stubbed.
+
+    The stubs write the take's mp3, wav and raw wav, then report them together
+    with the worker's audio, so production's own cleanup is what removes them.
+    """
+    from songmaker_cli.jobs.generation import post_process_generation
+
+    worker_audio = Path(kwargs["worker_audio_path"])
+    outputs: list[Path] = []
+
+    def write_raw_wav(path, *_samples):
+        outputs.append(Path(path))
+        Path(path).write_bytes(b"audio")
+
+    def write_encoded_outputs(_decoded, _seed, mp3_path, wav_path, *_meta):
+        for path in (mp3_path, wav_path):
+            outputs.append(Path(path))
+            Path(path).write_bytes(b"audio")
+        on_outputs_written([*outputs, worker_audio])
+
+    with (
+        patch(
+            "songmaker_cli.jobs.generation._decode_audio",
+            return_value=MagicMock(left=b"", right=b"", sample_rate=44100),
+        ),
+        patch("audio_engine.write_stereo_wav", side_effect=write_raw_wav),
+        patch("songmaker_cli.jobs.generation._write_output", side_effect=write_encoded_outputs),
+    ):
+        return post_process_generation(**kwargs)
+
+
 @pytest.fixture
 def db_factory(tmp_path: Path):
     factory = init_db(tmp_path / "test.db")
@@ -94,7 +126,7 @@ def seeded_db(db_factory, tmp_path: Path):
     return db_factory
 
 
-def patch_generation_dispatch(dto_or_side_effect):
+def patch_generation_dispatch(dto_or_side_effect, post_process=persist_via_post_process):
     if isinstance(dto_or_side_effect, list):
         dispatch = AsyncMock(side_effect=dto_or_side_effect)
     elif callable(dto_or_side_effect) or isinstance(dto_or_side_effect, BaseException):
@@ -116,6 +148,6 @@ def patch_generation_dispatch(dto_or_side_effect):
 
     return (
         patch_dispatch(),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     )

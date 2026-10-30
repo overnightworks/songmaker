@@ -314,6 +314,7 @@ export interface GenerationItem {
 	version_lyrics: string | null;
 	scores: TrackScores | null;
 	generation_params: GenerationParams | null;
+	reference?: ReferenceResponse | null;
 	audio_duration_sec: number | null;
 	created_at: string;
 }
@@ -345,7 +346,6 @@ export interface GenerationParams {
 	latent_rescale?: number | null;
 	audio_cover_strength?: number | null;
 	user_lora_id?: string | null;
-	reference_audio_path?: string | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;

@@ -63,7 +63,7 @@
 "src/acestep_worker/wrapper.py" = 1089
 "src/songmaker_cli/constants.py" = 814
 "src/songmaker_cli/conversation_api.py" = 975
-"src/songmaker_cli/jobs/generation.py" = 1200
+"src/songmaker_cli/jobs/generation.py" = 1151
 "src/songmaker_cli/jobs/lora_training.py" = 1552
 "src/songmaker_cli/queue_streams.py" = 976
 "src/songmaker_cli/sharing_api.py" = 868
@@ -136,7 +136,6 @@
 "metrics_endpoint" = 70
 
 [function_lines."src/songmaker_cli/jobs/generation.py"]
-"_build_generation_context" = 58
 "post_process_generation" = 79
 "run_generation_job" = 109
 
