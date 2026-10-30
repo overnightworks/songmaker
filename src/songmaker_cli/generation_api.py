@@ -64,6 +64,8 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.models import Generation, Version
 from songmaker_cli.db.queries.auth import record_audit
 from songmaker_cli.db.queries.generations import (
+    ARCHIVED_TAKE_DETAIL,
+    ArchivedTakeError,
     bulk_delete_generations,
     delete_generation,
     disable_generation_sharing,
@@ -606,13 +608,18 @@ def _toggle_generation(
         action(session, gen_id)
     except ValueError:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     session.commit()
     return StatusResponse()
 
 
 @router.post(
     "/generations/{gen_id}/pick",
-    responses={404: {"description": "Generation does not exist"}},
+    responses={
+        404: {"description": "Generation does not exist"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_pick_generation(
     gen_id: str,
@@ -636,7 +643,10 @@ def api_unpick_generation(
 
 @router.post(
     "/generations/{gen_id}/keep",
-    responses={404: {"description": "Generation does not exist"}},
+    responses={
+        404: {"description": "Generation does not exist"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_keep_generation(
     gen_id: str,
@@ -672,7 +682,10 @@ def api_unarchive_generation(
 
 @router.post(
     "/generations/{gen_id}/share",
-    responses={404: {"description": "Generation does not exist"}},
+    responses={
+        404: {"description": "Generation does not exist"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_share_generation(
     gen_id: str,
@@ -685,6 +698,8 @@ def api_share_generation(
         gen = enable_generation_sharing(session, gen_id)
     except ValueError:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     record_audit(session, user.id, AuditAction.SHARE, ResourceType.GENERATION, gen_id)
     session.commit()
     return ShareResponse(

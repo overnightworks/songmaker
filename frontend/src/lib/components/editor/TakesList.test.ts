@@ -1060,23 +1060,23 @@ describe('TakesList archived takes', () => {
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
-	it('owns and anchors its menu and playlist picker, archived or not', async () => {
-		// Vitest runs with CSS off, so the absent stacking context cannot be
-		// asserted by computed style here — the browser walkthrough covers that
-		// (R1: row opacity 1, picker bottom hit-testable). What jsdom proves is
-		// the structure: the row owns its popovers and anchors them itself.
+	it('owns and anchors its menu, and its playlist picker on a live row', async () => {
+		// CSS is off in Vitest; the browser walkthrough covers stacking (R1). This proves the structure.
 		const { target } = await renderWithArchived();
-		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
-		if (!archivedRow) throw new Error('Expected the archived take row');
+		const [liveRow, archivedRow] = Array.from(target.querySelectorAll<HTMLElement>('.take-row'));
+		if (!liveRow || !archivedRow) throw new Error('Expected a live and an archived take row');
 
 		openTakeMenu(archivedRow);
 		await tick();
 		expect(archivedRow.querySelector('.menu-panel')).not.toBeNull();
-		clickMenuItem(archivedRow, TAKE_PLAYLIST_LABEL);
+		expect(() => clickMenuItem(archivedRow, TAKE_PLAYLIST_LABEL)).toThrow();
+
+		openTakeMenu(liveRow);
+		await tick();
+		clickMenuItem(liveRow, TAKE_PLAYLIST_LABEL);
 		await tick();
 
-		const picker = archivedRow.querySelector('.picker');
-		expect(picker, 'the playlist picker renders inside the archived row').not.toBeNull();
+		const picker = liveRow.querySelector('.picker');
 		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
 		expect(playTake).not.toHaveBeenCalled();
 	});

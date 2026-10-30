@@ -9,6 +9,7 @@
 		TAKE_OVERFLOW_LABEL,
 		TAKE_PLAYLIST_LABEL,
 		TAKE_REPAINT_LABEL,
+		TAKE_RESTORE_LABEL,
 		TAKE_SHARE_LABEL
 	} from '#lib/constants.ts';
 	import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
@@ -24,11 +25,21 @@
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 		onaddtoplaylist: () => void;
+		onrestore: () => void;
 		ondelete: () => void;
 	}
 
-	let { gen, onrepaint, oncover, onuseseed, onshare, onunshare, onaddtoplaylist, ondelete }: Props =
-		$props();
+	let {
+		gen,
+		onrepaint,
+		oncover,
+		onuseseed,
+		onshare,
+		onunshare,
+		onaddtoplaylist,
+		onrestore,
+		ondelete
+	}: Props = $props();
 
 	const takeLabel = $derived(
 		gen.version_number !== null
@@ -76,22 +87,31 @@
 			<span class="menu-item-hint">{gen.seed}</span>
 		</button>
 	{/if}
-	<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
-		<Icon name="list-plus" size={14} />
-		{TAKE_PLAYLIST_LABEL}
-	</button>
-	<button
-		class="menu-item"
-		aria-pressed={gen.is_shared}
-		title={shareToggle.sharedTooltip}
-		onclick={shareToggle.toggle}
-	>
-		<Icon name={shareToggle.iconName} size={14} />
-		{TAKE_SHARE_LABEL}
-		<span class="menu-item-hint" aria-hidden="true">
-			{gen.is_shared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT}
-		</span>
-	</button>
+	{#if gen.is_archived}
+		<button class="menu-item" onclick={() => runAndClose(onrestore)}>
+			<Icon name="refresh-cw" size={14} />
+			{TAKE_RESTORE_LABEL}
+		</button>
+	{:else}
+		<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}>
+			<Icon name="list-plus" size={14} />
+			{TAKE_PLAYLIST_LABEL}
+		</button>
+	{/if}
+	{#if !gen.is_archived || gen.is_shared}
+		<button
+			class="menu-item"
+			aria-pressed={gen.is_shared}
+			title={shareToggle.sharedTooltip}
+			onclick={shareToggle.toggle}
+		>
+			<Icon name={shareToggle.iconName} size={14} />
+			{TAKE_SHARE_LABEL}
+			<span class="menu-item-hint" aria-hidden="true">
+				{gen.is_shared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT}
+			</span>
+		</button>
+	{/if}
 	<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
 		<Icon name="trash" size={14} />
 		{TAKE_DELETE_LABEL}

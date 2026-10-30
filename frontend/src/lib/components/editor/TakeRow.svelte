@@ -20,7 +20,7 @@
 		NOW_PLAYING_UNPICK_LABEL
 	} from '#lib/constants/now-playing.ts';
 	import { playTake, playTakeAndShowNowPlaying } from '#lib/stores/player.ts';
-	import { rescoringTakeIds } from '#lib/stores/takeActions.ts';
+	import { rescoringTakeIds, restoreTake } from '#lib/stores/takeActions.ts';
 	import {
 		audioPlayer,
 		transportButtonFace,
@@ -361,6 +361,7 @@
 				onshare={() => actions.share(gen.id)}
 				onunshare={() => actions.unshare(gen.id)}
 				{onaddtoplaylist}
+				onrestore={() => restoreTake(song.id, gen.id)}
 				{ondelete}
 			/>
 			{#if playlistOpen}
