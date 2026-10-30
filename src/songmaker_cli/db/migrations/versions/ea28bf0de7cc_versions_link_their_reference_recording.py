@@ -15,8 +15,8 @@ from songmaker_cli.db.migrations.reference_link import (
     COLUMN,
     PATH_KEY,
     add_link_column,
+    link_by_path,
     linked_path,
-    recordings,
     refuse_unmappable,
     remove_link_column,
 )
@@ -66,34 +66,23 @@ def _version_links(
 ) -> tuple[dict[str, str], dict[str, list[str]]]:
     """Version id to recording id, plus the failing row ids by kind; never a path."""
     owners = _owner_of_each_version(bind)
-    recording_by_path = {
-        storage_path: (recording_id, user_id)
-        for recording_id, user_id, storage_path in bind.execute(
-            sa.select(recordings.c.id, recordings.c.user_id, recordings.c.storage_path)
-        )
-    }
-    links: dict[str, str] = {}
-    failures: dict[str, list[str]] = {
-        kind: [] for kind in ("unmapped path", "owner mismatch", "NULL owner", "preset or default")
-    }
-    for version_id, params in bind.execute(sa.select(versions.c.id, versions.c.generation_params)):
-        path = linked_path(params)
-        if path is None:
-            continue
-        owner = owners[version_id]
-        recording = recording_by_path.get(path)
-        if owner is None:
-            failures["NULL owner"].append(version_id)
-        elif recording is None:
-            failures["unmapped path"].append(version_id)
-        elif recording[1] != owner or path.split("/", 1)[0] != owner:
-            failures["owner mismatch"].append(version_id)
-        else:
-            links[version_id] = recording[0]
-    for preset_id, params in bind.execute(sa.select(presets.c.id, presets.c.params)):
-        if linked_path(params) is not None:
-            failures["preset or default"].append(preset_id)
-    return links, {kind: ids for kind, ids in failures.items() if ids}
+    rows = bind.execute(sa.select(versions.c.id, versions.c.generation_params))
+    links, failures = link_by_path(
+        bind,
+        [
+            (version_id, owners[version_id], path)
+            for version_id, params in rows
+            if (path := linked_path(params))
+        ],
+    )
+    preset_ids = [
+        preset_id
+        for preset_id, params in bind.execute(sa.select(presets.c.id, presets.c.params))
+        if linked_path(params) is not None
+    ]
+    if preset_ids:
+        failures["preset or default"] = preset_ids
+    return links, failures
 
 
 def _strip_path_key(

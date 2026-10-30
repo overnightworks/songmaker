@@ -15,8 +15,8 @@ from songmaker_cli.db.migrations.reference_link import (
     COLUMN,
     PATH_KEY,
     add_link_column,
+    link_by_path,
     linked_path,
-    recordings,
     refuse_unmappable,
     remove_link_column,
 )
@@ -42,33 +42,17 @@ def _without_path(params: Mapping[str, object]) -> dict[str, object] | None:
 
 def _take_links(bind: sa.Connection) -> tuple[dict[str, str], dict[str, list[str]]]:
     """Take id to recording id, plus the failing take ids by kind; never a path."""
-    recording_by_path = {
-        storage_path: (recording_id, user_id)
-        for recording_id, user_id, storage_path in bind.execute(
-            sa.select(recordings.c.id, recordings.c.user_id, recordings.c.storage_path)
-        )
-    }
-    links: dict[str, str] = {}
-    failures: dict[str, list[str]] = {
-        kind: [] for kind in ("unmapped path", "owner mismatch", "NULL owner")
-    }
     rows = bind.execute(
         sa.select(generations.c.id, generations.c.created_by, generations.c.generation_params)
     )
-    for take_id, owner, params in rows:
-        path = linked_path(params)
-        if path is None:
-            continue
-        recording = recording_by_path.get(path)
-        if owner is None:
-            failures["NULL owner"].append(take_id)
-        elif recording is None:
-            failures["unmapped path"].append(take_id)
-        elif recording[1] != owner or path.split("/", 1)[0] != owner:
-            failures["owner mismatch"].append(take_id)
-        else:
-            links[take_id] = recording[0]
-    return links, {kind: ids for kind, ids in failures.items() if ids}
+    return link_by_path(
+        bind,
+        [
+            (take_id, owner, path)
+            for take_id, owner, params in rows
+            if (path := linked_path(params))
+        ],
+    )
 
 
 def upgrade() -> None:
