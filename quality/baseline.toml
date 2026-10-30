@@ -42,7 +42,7 @@
 "frontend/src/lib/components/SongDetailView.test.ts" = 2306
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
-"frontend/src/lib/history/historyController.test.ts" = 910
+"frontend/src/lib/history/historyController.test.ts" = 906
 "frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
@@ -50,14 +50,14 @@
 "frontend/src/lib/share/sharePlayback.test.ts" = 837
 "frontend/src/lib/stores/generateAction.test.ts" = 817
 "frontend/src/lib/stores/jobs.test.ts" = 906
-"frontend/src/lib/stores/libraryContext.test.ts" = 2195
-"frontend/src/lib/stores/libraryContext.ts" = 1267
-"frontend/src/lib/stores/navigation.test.ts" = 3044
+"frontend/src/lib/stores/libraryContext.test.ts" = 2193
+"frontend/src/lib/stores/libraryContext.ts" = 1266
+"frontend/src/lib/stores/navigation.test.ts" = 3043
 "frontend/src/lib/stores/player.test.ts" = 5286
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
 "frontend/src/lib/stores/resourceSync.ts" = 1073
-"frontend/src/routes/layout.test.ts" = 1416
+"frontend/src/routes/layout.test.ts" = 1415
 "frontend/src/routes/settings/users/+page.svelte" = 1123
 "frontend/src/routes/settings/users/page.test.ts" = 861
 "src/acestep_worker/wrapper.py" = 1089

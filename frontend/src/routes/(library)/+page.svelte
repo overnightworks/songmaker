@@ -105,7 +105,7 @@
 				return;
 			}
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the path is already a resolved library address built by songRoutePath/takeRoutePath
-			await goto(resolved.path, { replaceState: true, noScroll: true, keepFocus: true });
+			await goto(resolved.path, { replace: true, reset: false });
 			// After the landing, not before: the toast reports the take is gone once
 			// the song's own address is already showing, never while the bar still
 			// reads the legacy form the person is leaving.

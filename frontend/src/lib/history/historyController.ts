@@ -1,10 +1,14 @@
-import type { BeforeNavigate, NavigationType } from '@sveltejs/kit';
 import { untrack } from 'svelte';
 import { goto, pushState, replaceState } from '$app/navigation';
+import type { BeforeNavigate, NavigationType } from '$app/navigation';
 import { page } from '$app/state';
 import { browserDocumentLoads, documentAddress, type DocumentLoads } from './documentLoads';
 import { tabStorage, type TabStorage } from './tabStorage';
-import { pageStateOfHistoryState, routerIndexOf } from '#lib/history/routerHistoryState.ts';
+import {
+	pageStateOfHistoryState,
+	pageUrlOfHistoryState,
+	routerIndexOf
+} from '#lib/history/routerHistoryState.ts';
 import {
 	dropLayersFrom,
 	keepLayerHistory,
@@ -16,16 +20,14 @@ import {
 // The one owner of the tab's history (issue #1006, ruling of 01.10.2026): only
 // this module writes or traverses history. Every entry it writes carries an
 // id, so a landing -- a Back, a Forward, a jump of several entries, or one of
-// the controller's own step-backs -- says by itself where history now stands,
-// and which open layers and pending step-backs it has left behind. Installed
-// once by the root layout, on every page, it gives every layer opened on the
-// stack (stores/layers.ts) one entry on top of the page it covers, so Back
-// closes the topmost overlay before it leaves the page.
+// its own step-backs -- says by itself where history now stands and which open
+// layers and pending step-backs it has left behind. Installed once by the root
+// layout, it gives every layer on the stack (stores/layers.ts) one entry on
+// top of the page it covers, so Back closes the topmost overlay first.
 
 // What the controller stamps into an entry's page state. `layer` marks an entry
-// an open layer pushed over the page it covers; `below` is the address of the
-// page a pushed page entry stands over, so a page's own Back can name where it
-// goes (#1389).
+// an open layer pushed over its page; `below` is the address of the page a pushed
+// page entry stands over, so a page's own Back can name where it goes (#1389).
 export interface HistoryEntry {
 	readonly id: number;
 	readonly layer?: string;
@@ -69,8 +71,8 @@ function isSameEntry(a: HistoryEntry | null, b: HistoryEntry | null): boolean {
 // Ids grow with every push, so an entry below the landing has a lower id. An
 // entry without one was not written by the controller -- the page the tab
 // loaded onto, or one from before it -- and ranks below every id. Whoever
-// caused the landing, it settles every step-back it reached, which is how a
-// user's Back racing one of the controller's own converges on the last one.
+// caused the landing, it settles every step-back it reached, so a user's Back
+// racing one of the controller's own converges on the last one.
 export function land(ledger: HistoryLedger, landed: HistoryEntry | null): Landing {
 	const rank = rankOf(landed);
 	const layers = ledger.layers.filter((open) => open.entry <= rank);
@@ -94,9 +96,9 @@ function isUnownedLayerEntry(ledger: HistoryLedger, entry: HistoryEntry | null):
 	return entry?.layer !== undefined && !ledger.layers.some((open) => open.entry === entry.id);
 }
 
-// Read and incremented on every allocation, never cached: a reload, a
-// bfcache restore or a return from another document starts this module afresh
-// in the same tab, and must still never hand out an id an entry already has.
+// Read and incremented on every allocation, never cached: a reload, a bfcache
+// restore or a return from another document starts this module afresh in the
+// same tab, and must never hand out an id an entry already has.
 export function allocateEntryId(storage: TabStorage): number {
 	const id = lastAllocatedEntryId(storage) + 1;
 	storage.setItem(ENTRY_ID_COUNTER_KEY, String(id));
@@ -151,8 +153,8 @@ function entryOfHistoryState(state: unknown): HistoryEntry | null {
 export const standingHistoryState = (): unknown => history.state;
 
 // Where history stands is what the controller wrote last until the router has
-// landed it (the record, see `writeShallowEntry`); only landing, popstate and
-// the router's own stamp read the browser's entry itself.
+// landed it (see `writeShallowEntry`); only landing, popstate and the router's
+// own stamp read the browser's entry itself.
 export function standingAddress(): URL {
 	return new URL(unlandedWrite?.href ?? location.href);
 }
@@ -188,9 +190,8 @@ export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 	return entryOfHistoryState(event.state);
 }
 
-// SvelteKit's start writes its own entry over the one the page loads onto and
-// drops the page state that entry carried, so the state is read while this
-// module loads, before the router starts.
+// SvelteKit's start writes its own entry over the one the page loads onto,
+// dropping its page state, so the state is read as this module loads.
 let historyStorage = tabStorage(() => sessionStorage);
 let stateOnLoad: unknown = readStateOnLoad();
 let ledger: HistoryLedger = EMPTY_LEDGER;
@@ -200,9 +201,8 @@ let ledger: HistoryLedger = EMPTY_LEDGER;
 // see its landing as reaching its target. A landing leaves the top as far as
 // the controller can tell, a push reaches it again.
 let standsOnTop = standsOnTopOnLoad();
-// Where history stood when the controller last looked: the router's place,
-// which tells a router push from a router replace, and the address, which is
-// the page a router push stands over.
+// Where history stood when the controller last looked: the router's place, which
+// tells a push from a replace, and the address a push stands over.
 let lastRouterIndex = routerIndexOf(history.state);
 let lastAddress = location.href;
 const stepBackWaiters = new Map<number, (() => void)[]>();
@@ -211,12 +211,14 @@ let navigationsUnderway = 0;
 let loadingMount: RouteMount | null = null;
 let addressMountedUnderKeptPage: string | null = null;
 const entryOfLayer = new Map<Layer, number>();
+// Layers over an address no route matches own no entry: they close with the page.
+let addressOfLayersWithoutEntry: string | null = null;
 let layersAwaitingEntry: Layer[] = [];
 let routerStarting = false;
 // The last shallow write the router has not landed yet, the writes issued and
-// not yet settled, and the settling of the latest of them. A write lands
-// within the task that issued it as long as routes resolve on the client and
-// no reroute hook exists (docs/architecture.md, Shallow routing).
+// not yet settled, and the settling of the latest. A write lands within the
+// task that issued it while routes resolve on the client and no reroute hook
+// exists (docs/architecture.md, Shallow routing).
 let unlandedWrite: { readonly href: string; readonly state: App.PageState } | null = null;
 let writesUnderway = 0;
 let writesLanded: Promise<void> = Promise.resolve();
@@ -232,9 +234,8 @@ function standsOnTopOnLoad(): boolean {
 	return !documentReturnedTo();
 }
 
-// A reload or a Back or Forward from another document returns to an entry
-// that may have entries above it; any other load is a new entry on top.
-// jsdom reports no navigation timing, which reads as a new entry.
+// A reload, or a Back or Forward from another document, returns to an entry
+// that may have entries above it; any other load (jsdom too) is a new top entry.
 function documentReturnedTo(): boolean {
 	const [timing] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
 	return timing?.type === 'reload' || timing?.type === 'back_forward';
@@ -259,8 +260,7 @@ function afterWritesLanded<T>(move: () => Promise<T> | T): Promise<T> {
 }
 
 // The one caller of the router's shallow writes. Each write counts as underway
-// until the promise its call returns settles -- kit 2's `void` as a settled
-// one -- and a write issued meanwhile waits for the writes before it.
+// until the promise its call returns settles; one issued meanwhile waits.
 function writeShallowEntry(url: string, state: App.PageState, replace: boolean): void {
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	const write = (): unknown => (replace ? replaceState(url, state) : pushState(url, state));
@@ -287,9 +287,8 @@ function lookAtStandingEntry(state: unknown = history.state): void {
 // below which nothing is left to step back to; so is every entry the app is
 // entered on from another site or a typed address, below which that site's
 // pages or the tab's older visits stand -- not the page the person just left.
-// An entry the app is entered on from one of its own pages, by a load of a
-// fresh document, stands over that page, so a page's own Back steps back onto
-// it and can name it (#1389).
+// An entry entered on from one of the app's own pages, by a load of a fresh
+// document, stands over that page: its own Back steps back onto it (#1389).
 function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	if (!standsOnTop) return null;
 	const pageLeft = entering && history.length > 1 ? appPageEnteredFrom() : null;
@@ -299,9 +298,9 @@ function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	return entry;
 }
 
-// The server sends `strict-origin-when-cross-origin`, so a page of the app's
-// own origin names itself, by its whole address, as the referrer, and another
-// site or a typed address leaves either a foreign origin or nothing.
+// The server sends `strict-origin-when-cross-origin`, so a page of the app's own
+// origin names itself as the referrer; another site or a typed address leaves
+// a foreign origin or nothing.
 function appPageEnteredFrom(): string | null {
 	const referrer = document.referrer;
 	if (referrer === '' || new URL(referrer).origin !== location.origin) return null;
@@ -349,9 +348,8 @@ export function replaceEntry(url: string, state: App.PageState): HistoryEntry | 
 }
 
 interface NavigateOptions {
-	readonly replaceState: boolean;
-	readonly noScroll: boolean;
-	readonly keepFocus: boolean;
+	readonly replace: boolean;
+	readonly reset: boolean;
 	readonly state: App.PageState;
 }
 
@@ -364,27 +362,23 @@ interface RouteMount {
 
 // A navigation through the router carries its entry the way a shallow write
 // does: a push a fresh id over the page it leaves, a replace the entry it
-// writes over.
-// While it loads, history is not still: the router writes its entry only
-// once the route has loaded, over whatever entry stands then. A replace to
-// the address history already stands on moves nothing: it mounts the route of
-// the entry standing there, and history stays still meanwhile.
+// writes over. While it loads, history is not still: the router writes its
+// entry once the route has loaded, over whatever entry stands then. A replace
+// to the address history stands on moves nothing: it mounts the route of the
+// entry standing there, and history stays still meanwhile.
 export async function navigateTo(url: string, options: NavigateOptions): Promise<void> {
-	const entry = options.replaceState
+	const entry = options.replace
 		? (standingEntry() ?? firstIdOnTop(false))
 		: newPageEntryOver(standingAddress().href);
 	const mount =
-		options.replaceState && standsOnAddress(url)
-			? { address: standingAddress().href, options }
-			: null;
+		options.replace && standsOnAddress(url) ? { address: standingAddress().href, options } : null;
 	keepTrackOfKeptPage(url);
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
 	try {
 		await startNavigation(url, {
-			replaceState: options.replaceState,
-			noScroll: options.noScroll,
-			keepFocus: options.keepFocus,
+			replace: options.replace,
+			reset: options.reset,
 			state: stampedPageState(options.state, entry)
 		});
 		if (entry !== null && standingEntry()?.id === entry.id) navigatedOnto(entry, options);
@@ -395,10 +389,9 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 	}
 }
 
-// A navigation to the address the router's page names keeps that page, so a
-// route it mounts there stands under the params of the route before
-// (`mountAddressOver`) until the router reports a navigation to another
-// address (`stampNavigatedEntry`).
+// A navigation to the address the router's page names keeps that page: a route
+// mounted there stands under the params of the route before
+// (`mountAddressOver`) until the router reports another address.
 function keepTrackOfKeptPage(url: string): void {
 	const target = new URL(url, standingAddress()).href;
 	if (target === untrack(() => page.url.href)) addressMountedUnderKeptPage = target;
@@ -406,6 +399,14 @@ function keepTrackOfKeptPage(url: string): void {
 
 function standsOnAddress(url: string): boolean {
 	return new URL(url, standingAddress()).href === standingAddress().href;
+}
+
+// An address no route matches shows the router's root error page (no route ID),
+// and the router refuses every write and navigation to it, not to another one.
+function rendersErrorPageAt(url: string): boolean {
+	return untrack(
+		() => page.route.id === null && new URL(url, standingAddress()).href === page.url.href
+	);
 }
 
 // Shallow routing leaves the mounted route where the last navigation put it,
@@ -416,7 +417,6 @@ function standsOnAddress(url: string): boolean {
 // address on while the landed route loads. The address wins (issue #1006, H3):
 // the route of the address history stands on is mounted over it, under the
 // same entry, superseding the other route's load if it is still loading.
-//
 // The router keeps the page it shows -- its route and its params -- when it
 // navigates to the address that page already names, whatever route it mounts
 // there. A Back it routes shallowly moves that page's address on without
@@ -437,19 +437,19 @@ export function mountAddressOver(routeUrl: string): RouteOnAddress {
 }
 
 function mountStandingAddress(): void {
+	if (rendersErrorPageAt(standingAddress().href)) return;
 	void navigateTo(standingAddress().href, {
-		replaceState: true,
-		noScroll: true,
-		keepFocus: true,
+		replace: true,
+		reset: false,
 		state: standingPageState() ?? {}
 	});
 }
 
 // Every navigation started since the page loaded: each one the controller
-// issues, the moment it issues it, and each one the router reports. The router
-// reports a navigation in `beforeNavigate` only once it has resolved its
-// route, and not at all while an aborted one still counts as loading, so a
-// navigation that aborts another is known to have started only here.
+// issues, when it issues it, and each one the router reports. The router
+// reports one in `beforeNavigate` only once it has resolved its route, and not
+// at all while an aborted one still counts as loading, so a navigation that
+// aborts another is known to have started only here.
 let navigationsStarted = 0;
 
 function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> {
@@ -461,31 +461,27 @@ function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> 
 // A Back or Forward that navigates mounts the address it lands on before the
 // router loads anything of the page under it. Every other navigation's target
 // is an address history has yet to move to.
-//
-// The router mounts a route only once a navigation completes, and a Back
-// pressed while one loads aborts it. A Back onto an entry of the navigation
-// the router was heading to -- the first of two quick Backs from Settings
-// lands on the album, the second on the wall shallow routing wrote it over --
-// is shallow routing to the router: it starts no navigation of its own, and
-// the page before stays on screen under the address (issue #1006, H5). Unless
-// a navigation started after it, the route of the address history stands on
-// is mounted then: a navigation started later is the one that aborted it, and
-// a mount issued over that one would abort it in turn (#1340). The mount the
-// landing issues over its own address belongs to its start, not to a later
-// navigation: the next Back of the same task aborts that mount as well, and
-// then nothing else is left to mount the address it lands on (#1340, the
-// song's entry written over the album's page, two Backs from Settings).
-// That mount itself aborts the router's Back navigation -- the router takes
-// it as its current navigation at once and reports nothing of it while the
-// Back still counts as loading -- so a landing that remounts mounts its
-// address a second time. That is harmless: both mounts target the one address
-// history stands on, and the second only supersedes the first (#1006).
+// A Back pressed while a navigation loads aborts it. A Back onto an entry of
+// the navigation the router was heading to -- the first of two quick Backs
+// from Settings lands on the album, the second on the wall shallow routing
+// wrote it over -- is shallow routing to the router: no navigation of its own,
+// and the page before stays on screen under the address (issue #1006, H5).
+// Unless a navigation started after it, the route of the address history
+// stands on is mounted then; one started later is what aborted it, and a mount
+// over that would abort it in turn (#1340). The landing's mount belongs to its
+// start: the next Back of the same task aborts it too, and nothing else is
+// left to mount the address it lands on (#1340). That mount also aborts the
+// router's Back navigation, so a landing that remounts mounts its address
+// twice -- harmless, both target the one history stands on (#1006). The router
+// takes that mount as its current navigation at once and reports none of it
+// while the Back counts as loading, so the catch's `navigationsStarted ===
+// startedAs` still holds.
 export function mountRouteOfLandedAddress(
 	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
 ): void {
 	navigationsStarted += 1;
 	if (navigation.type === 'popstate' && navigation.to !== null) {
-		mountAddressOver(navigation.to.url.href);
+		mountAddressOver(pageUrlOfHistoryState(history.state) ?? navigation.to.url.href);
 	}
 	const startedAs = navigationsStarted;
 	navigation.complete.catch(() => {
@@ -506,7 +502,7 @@ export function remountOverStandingEntry(url: string, state: App.PageState): Pro
 // whose entry stands settles the page.
 function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 	lookAtStandingEntry();
-	if (options.replaceState) settleOnPage(entry);
+	if (options.replace) settleOnPage(entry);
 	else pushedPage(entry);
 }
 
@@ -519,6 +515,7 @@ function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 // installed controller step off a layer entry a reload came back onto
 // (`followRouterStart`). A Back or Forward is the landing listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
+	dropLayersWithoutEntry();
 	if (location.href !== addressMountedUnderKeptPage) addressMountedUnderKeptPage = null;
 	if (type === 'popstate') {
 		lookAtStandingEntry();
@@ -549,7 +546,7 @@ function stampEntryTheNavigationDropped(
 	const loaded = type === 'enter' ? entryOfHistoryState(stateOnLoad) : null;
 	const entry =
 		loaded ?? (pushedOver === null ? firstIdOnTop(type === 'enter') : newPageEntryOver(pushedOver));
-	if (entry !== null) {
+	if (entry !== null && !rendersErrorPageAt(standingAddress().href)) {
 		const pageState = standingPageState() ?? {};
 		writeShallowEntry(standingAddress().href, stampedPageState(pageState, entry), true);
 	}
@@ -605,7 +602,7 @@ export function stepBackOr(openList: () => Promise<void>): Promise<void> {
 
 // The same Back for a page whose list is a plain route, written over it.
 export function stepBackOrGoTo(fallback: string): Promise<void> {
-	return stepBackOr(() => startNavigation(fallback, { replaceState: true }));
+	return stepBackOr(() => startNavigation(fallback, { replace: true }));
 }
 
 // From an entry with an id, any landing below it is the step's; from a
@@ -629,8 +626,8 @@ export { ownStepBacksUnderway as ownStepBacksUnderwayForTests };
 
 // History moves while one of the controller's own step-backs is underway or a
 // navigation is loading the route it writes its entry for: an entry written
-// meanwhile would land under the step's landing, or be superseded along with
-// the navigation's own entry.
+// meanwhile would land under the step's landing or be superseded with the
+// navigation's own entry.
 export function historyMoves(): boolean {
 	return ownStepBacksUnderway() || navigationsUnderway > 0 || routerStarting;
 }
@@ -642,9 +639,8 @@ export function historyStandsStill(): Promise<void> {
 	return new Promise((resolve) => stillnessWaiters.push(resolve));
 }
 
-// Resolves once history has come to rest: a write released when history
-// stands still may navigate and move it again, so the wait starts over until
-// nothing is left to land.
+// Resolves once history has come to rest: a write released when it stands still
+// may move it again, so the wait starts over until nothing is left to land.
 export function historyComesToRest(): Promise<void> {
 	if (!historyMoves()) return writesLanded;
 	return historyStandsStill().then(historyComesToRest);
@@ -652,8 +648,7 @@ export function historyComesToRest(): Promise<void> {
 
 // Once history stands still the layers held meanwhile get their entries
 // first, then the held writes are written over the entry that then stands:
-// each waiter resolves a promise whose callback runs only after this
-// function has pushed the layers.
+// a waiter's callback runs only after this function has pushed the layers.
 function settleStillness(): void {
 	if (historyMoves()) return;
 	const still = stillnessWaiters;
@@ -666,12 +661,11 @@ function settleStillness(): void {
 
 // The controller's side of the layer stack: a layer held while history moves
 // waits for it to stand still, since an entry pushed meanwhile would land
-// under the step's own landing. A layer held while a route only mounts gets
-// its entry at once, or a Back pressed before the route has loaded would
-// leave the page under it instead of closing it. A layer leaving from the
-// entry history stands on steps back off it; one whose entry stands lower
-// leaves it to the landing that reaches it, which steps off an entry no open
-// layer owns.
+// under the step's own landing. One held while a route only mounts gets its
+// entry at once, or a Back pressed before the route has loaded would leave the
+// page under it. A layer leaving from the entry history stands on steps back
+// off it; one whose entry stands lower leaves it to the landing that reaches
+// it, which steps off an entry no open layer owns.
 const layerEntries: LayerHistory = {
 	held(layer) {
 		if (historyMoves()) {
@@ -701,9 +695,19 @@ function pushLayerEntry(layer: Layer): void {
 	untrack(() => {
 		const pageState = standingPageState() ?? {};
 		const address = standingAddress().href;
+		if (rendersErrorPageAt(address)) {
+			addressOfLayersWithoutEntry = address;
+			return;
+		}
 		entryOfLayer.set(layer, pushEntry(address, pageState, layer.id).id);
 		void remountOverStandingEntry(address, pageState);
 	});
+}
+
+function dropLayersWithoutEntry(): void {
+	if (addressOfLayersWithoutEntry === null || addressOfLayersWithoutEntry === location.href) return;
+	addressOfLayersWithoutEntry = null;
+	dropLayersFrom(0);
 }
 
 function dropLayers(open: readonly OpenLayerEntry[]): void {
@@ -722,9 +726,8 @@ function stepOffUnownedLayerEntry(entry: HistoryEntry | null): void {
 	void stepBackTo(entry.id - 1);
 }
 
-// The controller stops owning the open layers' entries -- as a reload leaves
-// it -- and settles every step-back still waiting for a landing that,
-// uninstalled, it no longer hears.
+// The controller stops owning the open layers' entries -- as a reload leaves it
+// -- and settles every step-back waiting for a landing it no longer hears.
 function releaseLayerEntries(): void {
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
@@ -746,9 +749,8 @@ export { releaseLayerEntries as releaseLayerEntriesForTests };
 // meanwhile (#1230). Over a page entry it is pushed, keeping the page, so Back
 // loads it afresh and asks for the session again. With two or more layers
 // open, the lower layers' entries stay (accepted residual of the ruling). A
-// page leaves once: the leave counts from its first call, so a second refusal
-// arriving meanwhile -- two library requests refused together -- loads nothing
-// more, where each further load would abort the one before it.
+// page leaves once, from its first call: a second refusal arriving meanwhile
+// loads nothing more, where each further load would abort the one before it.
 let documentLoads: DocumentLoads = browserDocumentLoads;
 let leftForFreshDocument = false;
 
@@ -777,9 +779,9 @@ export function loadAfresh(url: string): Promise<void> {
 	});
 }
 
-// The address history stands on, loaded afresh. Over a page entry this is a
-// reload: the entry keeps the id the controller stamped into it, and a reload
-// loads the document whatever `#` part the address has.
+// The address history stands on, loaded afresh; over a page entry a reload, which
+// keeps the entry's stamped id and loads the document whatever the `#` part,
+// where `assign` only scrolls on a hash address and pushes an id-less entry.
 export function reloadAfresh(): Promise<void> {
 	return leaveOnce(() => {
 		if (standsOnLayerEntry()) documentLoads.replace(documentAddress(location.href));
@@ -787,16 +789,14 @@ export function reloadAfresh(): Promise<void> {
 	});
 }
 
-// A form POST cannot replace an entry, so it is pushed over the standing one,
-// a page's or a layer's; Back then reaches the entry it left, which a restore
-// from the cache loads afresh and a plain load asks the server about.
+// A form POST cannot replace an entry, so it is pushed over the standing one;
+// Back then reaches the entry it left, loaded afresh or asked of the server.
 export function leaveByPostingForm(action: string): Promise<void> {
 	return leaveOnce(() => documentLoads.submitPost(action));
 }
 
-// A browser that kept the page left for a fresh document in its back-forward
-// cache shows it again, with the signed-in state in memory, on Back; it is
-// loaded afresh instead.
+// A page left for a fresh document and kept in the back-forward cache is
+// shown again on Back with its signed-in state; it is loaded afresh instead.
 function loadAfreshWhenRestored(event: PageTransitionEvent): void {
 	if (event.persisted && leftForFreshDocument) documentLoads.reload();
 }
@@ -808,12 +808,11 @@ let uninstall: (() => void) | null = null;
 
 // Nobody handles landings between two pages of the library -- back from
 // Settings, the library attaches only once its page has loaded -- so a Back
-// pressed meanwhile lands unheard: the second of two quick Backs from
-// Settings stands on the wall while the screen still shows the album the
-// first one reached (issue #1006, H5). A page entry history stands on that is
-// not the page the screen shows is heard as the landing it was once a handler
-// attaches. Before the controller has seen any page there is nothing to tell
-// it from.
+// pressed meanwhile lands unheard: the second of two quick Backs from Settings
+// stands on the wall while the screen still shows the album the first one
+// reached (issue #1006, H5). A page entry history stands on that is not the
+// page the screen shows is heard as the landing it was once a handler attaches.
+// Before the controller has seen any page there is nothing to tell it from.
 function hearLandingMissedWhileDetached(onLanding: LandingHandler): void {
 	const standing = standingEntry();
 	if (standing === null || standing.layer !== undefined || ledger.current === null) return;
@@ -836,6 +835,7 @@ function onPopstate(event: PopStateEvent): void {
 		landingHandler === null ? { ...landing.ledger, current: ledger.current } : landing.ledger;
 	standsOnTop = false;
 	lookAtStandingEntry(event.state);
+	dropLayersWithoutEntry();
 	dropLayers(landing.dropLayers);
 	for (const target of landing.settled) settleStepBack(target);
 	stepOffUnownedLayerEntry(landed);
@@ -843,14 +843,14 @@ function onPopstate(event: PopStateEvent): void {
 	landingHandler?.(landing, event.state);
 }
 
-// The router starts listening for popstate only once the page it started on
-// is mounted, after the root layout has installed the controller. The
+// The router listens for popstate only once the page it started on is
+// mounted, after the root layout has installed the controller. The
 // controller's part of a landing must follow the router's: a write it releases
 // while the router still holds the entry before would carry the router's old
-// place, and the router's own handling would abort a navigation it released.
-// So once the start has run to its end the controller listens again, behind
-// the router, and only then steps off a layer entry a reload came back onto;
-// history moves until then. A controller not installed has no part to follow.
+// place, and the router would abort a navigation it released. So once the
+// start has run to its end the controller listens again, behind the router,
+// and only then steps off a layer entry a reload came back onto; history
+// moves until then. A controller not installed has no part to follow.
 function followRouterStart(): void {
 	if (uninstall === null) return;
 	routerStarting = true;
@@ -865,9 +865,8 @@ function followRouterStart(): void {
 	});
 }
 
-// The root layout installs the controller once for the whole app: from then
-// on every landing is heard and every layer opened owns an entry. The
-// returned function uninstalls it.
+// The root layout installs the controller once for the whole app: from then on
+// every landing is heard, every layer opened owns an entry. Returns uninstall.
 export function installHistoryController(): () => void {
 	if (uninstall !== null) throw new Error('The history controller is already installed');
 	window.addEventListener('popstate', onPopstate);
@@ -925,6 +924,7 @@ export function resetHistoryControllerForTests(): void {
 	addressMountedUnderKeptPage = null;
 	navigationsStarted = 0;
 	entryOfLayer.clear();
+	addressOfLayersWithoutEntry = null;
 	layersAwaitingEntry = [];
 	documentLoads = browserDocumentLoads;
 	leftForFreshDocument = false;

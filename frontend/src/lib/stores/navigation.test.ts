@@ -289,11 +289,10 @@ afterEach(() => {
 // The options a library write that crosses a route boundary navigates with:
 // the library travels as the page state of the entry (issue #1165), beside
 // the entry the history controller stamped, known by its id (issue #1006).
-function crossingWrite(replaceState: boolean) {
+function crossingWrite(replace: boolean) {
 	return {
-		replaceState,
-		noScroll: true,
-		keepFocus: true,
+		replace,
+		reset: false,
 		state: {
 			library: expect.objectContaining({ kind: LIBRARY_HISTORY_KIND }),
 			entry: expect.objectContaining({ id: expect.any(Number) })
@@ -2334,7 +2333,7 @@ describe('full Now Playing owns one history entry', () => {
 
 		await vi.waitFor(() => {
 			expect(standingHistoryEntry()).toEqual(page);
-			expect(currentLibraryHistoryState()).toBe(historyEntry());
+			expect(currentLibraryHistoryState()).toEqual(historyEntry());
 		});
 		expect(get(nowPlayingOpen)).toBe(false);
 		expect(libraryShown()).toEqual({
@@ -2729,7 +2728,7 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		const going = openAlbum('a1');
 		menu.set(false);
 		await going;
-		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toEqual(historyEntry()));
 
 		expect(location.pathname).toBe('/album/a1');
 		expect(historyEntry()).toMatchObject({ collection: { kind: 'album', id: 'a1' } });
