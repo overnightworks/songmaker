@@ -22,7 +22,7 @@ import {
 } from '#lib/constants.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import type { PathnameWithSearchOrHash } from '$app/types';
+import type { ResolvedPathname } from '$app/types';
 import {
 	historyStandsStill,
 	installHistoryController,
@@ -128,7 +128,7 @@ function stampNavigationsReportedSince(count: number): void {
 	for (const { type } of reportedNavigations.slice(count)) stampNavigatedEntry(type);
 }
 
-async function followLinkTo(address: PathnameWithSearchOrHash): Promise<void> {
+async function followLinkTo(address: ResolvedPathname): Promise<void> {
 	const reported = reportedNavigations.length;
 	// `resolve` has one overload per route; TypeScript cannot relate a union
 	// this wide to them, so the address is narrowed to one static route.
@@ -138,10 +138,7 @@ async function followLinkTo(address: PathnameWithSearchOrHash): Promise<void> {
 
 // History as a person left it: `from` the page they opened `opened` from, or
 // with no `from` the page the tab was entered on, with nothing of its own below.
-async function standOn(
-	opened: PathnameWithSearchOrHash,
-	from?: PathnameWithSearchOrHash
-): Promise<void> {
+async function standOn(opened: ResolvedPathname, from?: ResolvedPathname): Promise<void> {
 	if (from === undefined) {
 		await enterAppOn(opened);
 		return;
@@ -291,9 +288,9 @@ describe('PhoneAppBar', () => {
 	// the Library is.
 	it.each<{
 		place: string;
-		address: PathnameWithSearchOrHash;
+		address: ResolvedPathname;
 		entered: string;
-		from?: PathnameWithSearchOrHash;
+		from?: ResolvedPathname;
 	}>([
 		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'fresh' },
 		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'from an album', from: '/album/a1' },
@@ -338,8 +335,8 @@ describe('PhoneAppBar', () => {
 	// another one carries no account circle (navigation.html, frame I3).
 	it.each<{
 		page: string;
-		opened: PathnameWithSearchOrHash;
-		from?: PathnameWithSearchOrHash;
+		opened: ResolvedPathname;
+		from?: ResolvedPathname;
 		name: string;
 	}>([
 		{

@@ -333,9 +333,8 @@ function navigateLibraryRoute(
 	mode: HistoryWriteMode
 ): Promise<void> {
 	return navigateTo(url, {
-		replaceState: mode === 'replace',
-		noScroll: true,
-		keepFocus: true,
+		replace: mode === 'replace',
+		reset: false,
 		state: libraryPageState(state)
 	});
 }

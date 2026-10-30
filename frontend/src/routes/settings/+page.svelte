@@ -1,6 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { historyComesToRest } from '#lib/history/historyController.ts';
 	import Icon from '#lib/components/Icon.svelte';
 	import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '#lib/constants.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
@@ -20,10 +21,24 @@
 
 	const railListsSections = $derived(compact === false);
 
+	// The redirect starts once this page's own navigation has landed: the root
+	// layout stamps it in the same run as this `afterNavigate`, and the redirect
+	// waits for that stamp, so the router's write never overtakes it.
+	let landed = $state(false);
+	afterNavigate(() => {
+		landed = true;
+	});
+
 	$effect(() => {
-		if (!railListsSections) return;
+		if (!railListsSections || !landed) return;
 		const [firstVisible] = sections;
-		goto(firstVisible.href, { replaceState: true });
+		let left = false;
+		void historyComesToRest().then(() => {
+			if (!left) goto(firstVisible.href, { replace: true });
+		});
+		return () => {
+			left = true;
+		};
 	});
 </script>
 

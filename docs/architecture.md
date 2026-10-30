@@ -781,10 +781,10 @@ boundary. `eslint.config.js` enforces this, including `window.fetch`,
 
 Only `lib/history/historyController.ts` writes or traverses history: no other
 module touches the global `history` or imports `pushState` or `replaceState` from
-`$app/navigation` (`goto(…, { replaceState })` stays allowed). Tests may drive
+`$app/navigation` (`goto(…, { replace })` stays allowed). Tests may drive
 and fake it; `eslint.config.js` enforces this (#1006 H6d). Only
 `lib/history/routerHistoryState.ts` reads SvelteKit's private history-entry
-layout (its page state and place), and tests build such entries only through
+record (`sveltekit:metadata`: its page state and place), and tests build such entries only through
 `lib/test-utils/router-history-layout.ts`; eslint refuses a `sveltekit:`
 literal anywhere else.
 

@@ -1,13 +1,26 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { goto, replaceState } from '$app/navigation';
 import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '#lib/constants.ts';
+import {
+	installHistoryController,
+	resetHistoryControllerForTests,
+	stampNavigatedEntry
+} from '#lib/history/historyController.ts';
 import { currentUser } from '#lib/stores/auth.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
+import {
+	holdShallowWrites,
+	laterTask,
+	reportFakeRouterEnter,
+	startFakeRouter
+} from '#lib/test-utils/app-navigation.ts';
 import { clearPointer, setPointer } from '#lib/test-utils/hitbox.ts';
 
-const navigation = vi.hoisted(() => ({ goto: vi.fn() }));
-vi.mock('$app/navigation', () => navigation);
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 
 import SettingsPage from './+page.svelte';
 
@@ -19,6 +32,13 @@ async function render(): Promise<HTMLElement> {
 	mounted = mount(SettingsPage, { target });
 	await tick();
 	return target;
+}
+
+// The root layout stamps what the router reports in its own `afterNavigate`, which
+// the router calls right after the page's.
+function landOnPage(): void {
+	reportFakeRouterEnter();
+	stampNavigatedEntry('enter');
 }
 
 function listRows(target: HTMLElement): HTMLAnchorElement[] {
@@ -34,11 +54,17 @@ function rowLabels(target: HTMLElement): string[] {
 }
 
 beforeEach(() => {
-	navigation.goto.mockReset();
+	vi.mocked(goto).mockClear();
+	vi.mocked(replaceState).mockClear();
+	history.replaceState(null, '', '/settings');
+	resetHistoryControllerForTests();
+	startFakeRouter();
+	installHistoryController();
 	currentUser.set(makeAuthUser({ role: 'admin' }));
 });
 
 afterEach(async () => {
+	resetHistoryControllerForTests();
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
@@ -58,7 +84,7 @@ describe('settings index on the phone', () => {
 			'/settings/voices',
 			'/settings/users'
 		]);
-		expect(navigation.goto).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
 	});
 
 	it('hides the admin-only sections from a non-admin', async () => {
@@ -87,10 +113,38 @@ describe('settings index on the desktop', () => {
 			currentUser.set(user);
 			const rendered = await render();
 
-			expect(navigation.goto).toHaveBeenCalledWith('/settings/generation', {
-				replaceState: true
-			});
+			landOnPage();
+
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith('/settings/generation', { replace: true })
+			);
 			expect(listRows(rendered)).toHaveLength(0);
 		}
 	);
+
+	it('redirects only once its own navigation was stamped and the stamp landed', async () => {
+		const releaseWrites = holdShallowWrites();
+		await render();
+		await laterTask();
+		expect(goto).not.toHaveBeenCalled();
+
+		landOnPage();
+		await laterTask();
+		expect(replaceState).toHaveBeenCalledOnce();
+		expect(goto).not.toHaveBeenCalled();
+
+		await releaseWrites();
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledOnce());
+	});
+
+	it('does not redirect once the page was left before its navigation was stamped', async () => {
+		await render();
+		if (mounted) await unmount(mounted);
+		mounted = undefined;
+
+		landOnPage();
+		await laterTask();
+
+		expect(goto).not.toHaveBeenCalled();
+	});
 });

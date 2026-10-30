@@ -310,7 +310,7 @@ describe('a request refused as a lost session', () => {
 		lyrics: null
 	};
 	const openingTheAlbum = () =>
-		navigateTo('/album/b2', { replaceState: false, noScroll: true, keepFocus: true, state: {} });
+		navigateTo('/album/b2', { replace: false, reset: false, state: {} });
 	// The refusal travels through promises only, so one task later it has been
 	// handed to the reaction and nothing further is pending without history.
 	const refusalIsHandedOver = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
