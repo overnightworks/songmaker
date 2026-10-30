@@ -66,7 +66,7 @@ def _owner_of_each_version(bind: sa.Connection) -> dict[str, str | None]:
             .outerjoin(albums, albums.c.id == songs.c.album_id)
         )
     )
-    return {version_id: owner for version_id, owner in rows}
+    return dict(rows.all())
 
 
 def _version_links(
@@ -125,7 +125,7 @@ def _strip_path_key(
     ``emptied`` is what a column holds when the key was its only entry: NULL for
     versions, ``{}`` for the NOT NULL preset parameters.
     """
-    for row_id, params in list(bind.execute(sa.select(table.c.id, table.c[column]))):
+    for row_id, params in bind.execute(sa.select(table.c.id, table.c[column])).all():
         if isinstance(params, dict) and PATH_KEY in params:
             stripped = _without_path(params, emptied)
             bind.execute(sa.update(table).where(table.c.id == row_id).values({column: stripped}))
