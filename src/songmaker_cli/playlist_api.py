@@ -33,7 +33,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.api_models.songs import public_share_url
+from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.audio_paths import AudioPathRejectedError, resolve_audio_path
 from songmaker_cli.auth_dependencies import get_current_user
@@ -44,7 +44,6 @@ from songmaker_cli.constants import (
     COVER_VERSION_QUERY,
     AuditAction,
     ResourceType,
-    ShareKind,
 )
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,

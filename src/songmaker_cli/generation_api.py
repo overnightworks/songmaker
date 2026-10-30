@@ -44,7 +44,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.api_models.songs import public_share_url
+from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import (
     get_arq_pool,
@@ -60,7 +60,6 @@ from songmaker_cli.constants import (
     JobStatus,
     JobType,
     ResourceType,
-    ShareKind,
 )
 from songmaker_cli.db.models import Generation, Version
 from songmaker_cli.db.queries.auth import record_audit

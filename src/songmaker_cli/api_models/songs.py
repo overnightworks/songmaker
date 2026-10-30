@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from enum import StrEnum
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -16,8 +17,6 @@ from songmaker_cli.constants import (
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
     MODEL_AVAILABLE_MODES,
-    SHARE_PAGE_PREFIXES,
-    ShareKind,
 )
 from songmaker_cli.generation_params import (
     BaseGenerationParams,
@@ -193,6 +192,23 @@ class UnplayableSongSummary(BaseModel):
 
     id: str
     title: str
+
+
+class ShareKind(StrEnum):
+    ALBUM = "album"
+    SONG = "song"
+    GENERATION = "generation"
+    PLAYLIST = "playlist"
+
+
+# The page each kind of share address opens; the web router's `addresses.ts`
+# holds the same prefixes for its relative paths.
+SHARE_PAGE_PREFIXES: Final[dict[ShareKind, str]] = {
+    ShareKind.ALBUM: "/share/",
+    ShareKind.SONG: "/share/song/",
+    ShareKind.GENERATION: "/share/gen/",
+    ShareKind.PLAYLIST: "/share/playlist/",
+}
 
 
 def public_share_url(kind: ShareKind, slug: str) -> str:

@@ -24,13 +24,12 @@ from support.web_app import (
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.api_models.playlists import SharedPlaylistEntryResponse
-from songmaker_cli.api_models.songs import public_share_url
+from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     COVER_DIRNAME,
     PLAYLIST_COVER_DIRNAME,
     SONG_COVER_DIRNAME,
-    ShareKind,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version

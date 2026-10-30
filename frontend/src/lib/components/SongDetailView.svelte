@@ -520,20 +520,18 @@
 		if (!song) throw new Error('No song');
 		const songId = song.id;
 		const result = await shareSong(songId);
-		updateSongInList(songId, (s) => ({
-			...s,
-			is_shared: true,
-			share_slug: result.share_slug,
-			share_url: result.share_url
-		}));
+		const { share_slug, share_url } = result;
+		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug, share_url }));
 		return result;
 	}
+
+	const SONG_UNSHARED = { is_shared: false, share_slug: null, share_url: null };
 
 	async function onSongShareDisable() {
 		if (!song) return;
 		const songId = song.id;
 		await unshareSong(songId);
-		updateSongInList(songId, (s) => ({ ...s, is_shared: false, share_slug: null, share_url: null }));
+		updateSongInList(songId, (s) => ({ ...s, ...SONG_UNSHARED }));
 	}
 
 	async function onDeleteSong(): Promise<void> {
@@ -741,9 +739,7 @@
 	{/snippet}
 
 	{#snippet sharedLink()}
-		{#if song.is_shared && song.share_url}
-			<ShareLinkChip url={song.share_url} />
-		{/if}
+		{#if song.share_url}<ShareLinkChip url={song.share_url} />{/if}
 	{/snippet}
 
 	{#snippet phoneEdit()}

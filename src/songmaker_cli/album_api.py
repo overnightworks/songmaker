@@ -32,7 +32,7 @@ from songmaker_cli.api_models import (
     ShareResponse,
     StatusResponse,
 )
-from songmaker_cli.api_models.songs import UnplayableSongSummary, public_share_url
+from songmaker_cli.api_models.songs import ShareKind, UnplayableSongSummary, public_share_url
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool, is_music_worker_healthy
 from songmaker_cli.audio_paths import AudioPathRejectedError
@@ -49,7 +49,6 @@ from songmaker_cli.constants import (
     JobFunction,
     JobStatus,
     ResourceType,
-    ShareKind,
 )
 from songmaker_cli.cover_suggestions import (
     CoverSuggestionRequestError,

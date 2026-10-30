@@ -706,23 +706,6 @@ def worker_restart_grace_seconds(signal: WorkerLivenessSignal) -> int:
     return grace_seconds.pop()
 
 
-class ShareKind(StrEnum):
-    ALBUM = "album"
-    SONG = "song"
-    GENERATION = "generation"
-    PLAYLIST = "playlist"
-
-
-# The page each kind of share address opens; the web router's `addresses.ts`
-# holds the same prefixes for its relative paths.
-SHARE_PAGE_PREFIXES: Final[dict[ShareKind, str]] = {
-    ShareKind.ALBUM: "/share/",
-    ShareKind.SONG: "/share/song/",
-    ShareKind.GENERATION: "/share/gen/",
-    ShareKind.PLAYLIST: "/share/playlist/",
-}
-
-
 class ResourceType(StrEnum):
     SONG = "song"
     ALBUM = "album"
