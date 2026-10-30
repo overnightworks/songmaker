@@ -3,5 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "dc81c7c7111d7d4fb8d53ec26c774111743da34d"
 branch = "claude/issue-2081-e2e-layer-checks-read-history"
-scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/song-phone.spec.ts"]
+scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/song-phone.spec.ts", "quality/baseline.toml"]
 opened_commit = "8e2748909e0bd718de77a5b806bd05c4818e1591"
+whole_reason = "The three checks share one helper, and the size baseline has to follow the two spec files that shrink with them."
