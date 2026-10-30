@@ -81,20 +81,36 @@ describe('settings index on the phone', () => {
 		landOnPage();
 		await laterTask();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Admin']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Admin', 'About']);
 		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([
 			'/settings/generation',
 			'/settings/voices',
-			'/settings/users'
+			'/settings/users',
+			'/settings/about'
 		]);
 		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('marks only the admin section as for admins only', async () => {
+		const target = await render();
+
+		const hints = listRows(target).map((row) => [
+			row.querySelector('.settings-row-label')?.textContent?.trim(),
+			row.querySelector('.settings-row-hint')?.textContent?.trim() ?? null
+		]);
+		expect(hints).toEqual([
+			['Generation', null],
+			['Voices', null],
+			['Admin', 'admins only'],
+			['About', null]
+		]);
 	});
 
 	it('hides the admin-only sections from a non-admin', async () => {
 		currentUser.set(makeAuthUser());
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Voices']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'About']);
 	});
 
 	it('names the tab after the Settings list', async () => {

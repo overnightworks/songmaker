@@ -1564,6 +1564,7 @@ close the stream.
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
+| GET | `/api/release` | user | The release tag and commit the running image was built for, the `release` object `/health` also reports; Settings › About shows it |
 | * | `/api/admin/*` | admin | ACE-Step control |
 | GET | `/api/auth/me` | user | The signed-in account |
 | GET | `/login/oidc` | public | Start the Keycloak sign-in (303); `next` is a path of this app |

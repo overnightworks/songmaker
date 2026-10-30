@@ -121,6 +121,7 @@ songmaker_cli/settings_api.py:api_get_provider_status # HTTP dispatcher: router.
 songmaker_cli/settings_api.py:api_list_active_models # HTTP dispatcher: router.get('/settings/models')
 songmaker_cli/settings_api.py:api_list_all_models # HTTP dispatcher: router.get('/settings/models/all')
 songmaker_cli/settings_api.py:api_list_presets # HTTP dispatcher: router.get('/settings/presets')
+songmaker_cli/settings_api.py:api_release # HTTP dispatcher: router.get('/release')
 songmaker_cli/settings_api.py:api_set_cover_settings # HTTP dispatcher: router.put('/settings/cover', responses={422: {'description': 'Unknown cover provider or route'}})
 songmaker_cli/settings_api.py:api_set_cowriter_settings # HTTP dispatcher: router.put('/settings/cowriter', responses={422: {'description': 'The tail token budget is out of range or a field is unknown'}})
 songmaker_cli/settings_api.py:api_set_default_config # HTTP dispatcher: router.put('/settings/default-config', responses={400: {'description': 'Default configuration is invalid'}, 404: {'description': 'User does not exist'}})
