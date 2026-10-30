@@ -424,11 +424,12 @@ def test_writer_that_starts_after_curl_has_exited_does_not_hang_the_send(tmp_pat
     fake_sleep = bin_dir / "sleep"
     fake_sleep.write_text(f'#!/bin/bash\ntouch "{first_release_done}"\nexec /usr/bin/sleep "$@"\n')
     fake_sleep.chmod(fake_sleep.stat().st_mode | stat.S_IEXEC)
-    writer_start = "printf '%s' \"$CURL_CREDENTIALS\" >\"$CREDENTIAL_PIPE\" &"
+    writer_start = 'printf \'%s\' "$CURL_CREDENTIALS" >"$CREDENTIAL_PIPE" &'
     script_text = script.read_text()
     assert writer_start in script_text
     wait_for_first_release = (
-        f'for _ in {{1..300}}; do [[ -e "{first_release_done}" ]] && break; /usr/bin/sleep 0.01; done'
+        f'for _ in {{1..300}}; do [[ -e "{first_release_done}" ]] && break; '
+        "/usr/bin/sleep 0.01; done"
     )
     late_writer_start = f"({wait_for_first_release}; {writer_start[:-2]}) &"
     script.write_text(script_text.replace(writer_start, late_writer_start))
