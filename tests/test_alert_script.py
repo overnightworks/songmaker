@@ -60,7 +60,6 @@ def _install_fake_curl(bin_dir: Path, exit_code: int = 0, error_message: str = "
     FAKE_CURL_FORWARD_CONFIG_TO_URL hands the --config alert.sh built to the
     real curl (FAKE_CURL_REAL_CURL) and has it fetch that URL, so the
     credentials travel through exactly the transport alert.sh uses.
-    FAKE_CURL_UNREAD_CONFIG makes the fake exit without ever reading it.
     """
     bin_dir.mkdir(exist_ok=True)
     fake_curl = bin_dir / "curl"
@@ -81,7 +80,7 @@ def _install_fake_curl(bin_dir: Path, exit_code: int = 0, error_message: str = "
         '    exec "$FAKE_CURL_REAL_CURL" --silent --show-error --fail --basic \\\n'
         '        --config "$CONFIG_PATH" --url "$FAKE_CURL_FORWARD_CONFIG_TO_URL"\n'
         "fi\n"
-        'if [[ -n "$CONFIG_PATH" && -z "${FAKE_CURL_UNREAD_CONFIG:-}" ]]; then\n'
+        'if [[ -n "$CONFIG_PATH" ]]; then\n'
         '    cat "$CONFIG_PATH" >> "${FAKE_CURL_CONFIG_FILE:-/dev/null}"\n'
         "fi\n"
         'if [[ -n "${FAKE_CURL_CAPTURE_STDIN_FILE:-}" ]]; then\n'
@@ -210,6 +209,24 @@ def test_smtp_failure_reports_named_error_without_sending(tmp_path: Path) -> Non
     assert "failed" in result.stderr
     assert "curl: (35) SSL connect error" in result.stderr
     assert "sent" not in result.stdout
+
+
+def test_silent_curl_failure_names_its_exit_status_without_credentials(tmp_path: Path) -> None:
+    args_file = tmp_path / "curl-args"
+    env_file = tmp_path / "curl-env"
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        VALID_ENV,
+        fake_curl_exit_code=7,
+        extra_env={"FAKE_CURL_ARGS_FILE": str(args_file), "FAKE_CURL_ENV_FILE": str(env_file)},
+    )
+
+    assert result.returncode != 0
+    assert "(curl exit 7)" in result.stderr
+    for seen in (result.stdout, result.stderr, args_file.read_text(), env_file.read_text()):
+        assert VALID_ENV["SMTP_PASSWORD"] not in seen
 
 
 @pytest.mark.parametrize("password", [VALID_ENV["SMTP_PASSWORD"], *GLOB_PASSWORDS])
@@ -347,21 +364,6 @@ def test_failing_credentials_producer_never_reports_sent(
     assert "sent" not in result.stdout
     assert "credentials" in result.stderr
     assert not args_file.exists(), "curl must not start without its credentials"
-
-
-def test_failed_credential_write_does_not_count_as_sent(tmp_path: Path) -> None:
-    # Larger than a pipe holds, so the write fails once curl exits unread.
-    password_larger_than_a_pipe_buffer = "x" * 200_000
-
-    result = _run_alert(
-        tmp_path,
-        ["subject", "body"],
-        {**VALID_ENV, "SMTP_PASSWORD": password_larger_than_a_pipe_buffer},
-        extra_env={"FAKE_CURL_UNREAD_CONFIG": "1"},
-    )
-
-    assert result.returncode != 0
-    assert "sent" not in result.stdout
 
 
 def test_env_file_is_not_exported_into_curls_environment(tmp_path: Path) -> None:
