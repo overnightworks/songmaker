@@ -25,7 +25,6 @@ import {
 	RAIL_SETTINGS_LABEL,
 	SIGN_IN_NEXT_PARAM
 } from '../src/lib/constants';
-import { SIGN_IN_ACTION_LABEL } from '../src/lib/constants/auth';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
 	routerHistoryEntry,
@@ -353,7 +352,7 @@ test(
 
 		const [start] = await Promise.all([
 			nextSignInStart(page),
-			page.getByRole('link', { name: SIGN_IN_ACTION_LABEL, exact: true }).click()
+			page.getByRole('link', { name: 'Log in', exact: true }).click()
 		]);
 
 		expect(start.status).toBe(303);
