@@ -11,6 +11,8 @@ const SHARE_PAGE_PREFIX: Readonly<Record<ShareKind, string>> = {
 export const HOME_ROUTE_PATH = '/';
 export const LIBRARY_ROUTE_PATH = '/library';
 export const PLAYLISTS_ROUTE_PATH = '/playlists';
+export const LIBRARY_ROUTE_ID = '/(library)/library';
+export const PLAYLISTS_ROUTE_ID = '/(library)/playlists';
 
 export function albumRoutePath(albumId: string): string {
 	return `${ALBUM_ROUTE_PREFIX}${encodeURIComponent(albumId)}`;
@@ -93,7 +95,7 @@ export function standsOnPlaylistsPage(pathname: string): boolean {
 	return libraryRouteShape(pathname) === 'playlists';
 }
 
-export function readLegacySongQuery(searchParams: URLSearchParams): {
+export function readLegacySongQuery(searchParams: Pick<URLSearchParams, 'get'>): {
 	songId: string | null;
 	generationId: string | null;
 } {

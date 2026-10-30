@@ -1,4 +1,3 @@
-import type { Pathname } from '$app/types';
 import { get, writable } from 'svelte/store';
 
 import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
@@ -11,7 +10,7 @@ import {
 	RAIL_SETTINGS_LABEL
 } from '#lib/constants.ts';
 import { LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
-import { visibleSettingsSections } from '#lib/settingsSections.ts';
+import { visibleSettingsSections, type SettingsSectionRoute } from '#lib/settingsSections.ts';
 import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 import { matchesRailQuery, normalizeRailQuery } from '#lib/stores/librarySearch.ts';
 import { compareByCreatedAt } from '#lib/utils/recency.ts';
@@ -20,15 +19,18 @@ const RAIL_SEARCH_RESULT_LIMIT = 100;
 
 type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
 
+type RailSearchPageHref =
+	SettingsSectionRoute | typeof LIBRARY_ROUTE_PATH | typeof PLAYLISTS_ROUTE_PATH;
+
 export type RailSearchTarget =
 	| { kind: 'album'; id: string }
 	| { kind: 'song'; id: string }
 	| { kind: 'playlist'; id: string }
-	| { kind: 'page'; href: Pathname };
+	| { kind: 'page'; href: RailSearchPageHref };
 
 interface RailSearchPage {
 	label: string;
-	href: Pathname;
+	href: RailSearchPageHref;
 	section: string | null;
 	glyph: string;
 }

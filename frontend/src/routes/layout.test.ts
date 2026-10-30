@@ -105,7 +105,7 @@ vi.mock('$app/state', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$app/environment', () => ({
+vi.mock('$app/env', () => ({
 	browser: true,
 	dev: true
 }));
@@ -1020,7 +1020,7 @@ describe('a reload over the phone Now Playing', () => {
 				return USER;
 			});
 			mountLayout(address);
-			await goto(resolve(address));
+			await goto(resolve(address === HOME_ROUTE_PATH ? '/(library)' : '/(library)/library'));
 			await openAddress();
 
 			await vi.waitFor(() =>

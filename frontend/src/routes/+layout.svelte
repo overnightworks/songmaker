@@ -82,7 +82,7 @@
 	import { offline } from '#lib/stores/connectivity.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import { escapeLevelUpTarget, handleGlobalEscape } from '#lib/utils/escape-level-up.ts';
-	import { dev, browser } from '$app/environment';
+	import { dev, browser } from '$app/env';
 	import { get } from 'svelte/store';
 
 	// Installed while the component initialises -- before any child exists and
