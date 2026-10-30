@@ -26,6 +26,7 @@ import { pageStateOfHistoryState } from '#lib/history/routerHistoryState.ts';
 import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import {
 	fakePage,
+	laterTask,
 	reportedNavigations,
 	startFakeRouter,
 	writeHistoryEntry
@@ -93,6 +94,7 @@ export async function pressForward(): Promise<void> {
 // A popstate that lands where history already stands -- what a user's Back
 // from an entry above it delivers -- resolving once the library has reacted.
 export async function landOnStandingEntry(): Promise<void> {
+	await laterTask();
 	window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
 	await tick();
 }
@@ -113,6 +115,7 @@ async function traverseHistory(step: () => void): Promise<void> {
 	const landed = new Promise((resolve) =>
 		window.addEventListener('popstate', resolve, { once: true })
 	);
+	await laterTask();
 	step();
 	await landed;
 	await tick();

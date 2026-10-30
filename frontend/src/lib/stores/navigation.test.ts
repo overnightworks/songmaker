@@ -29,6 +29,7 @@ import {
 	fakePage,
 	followBeforeNavigate,
 	holdRouteLoads,
+	landed,
 	reportedNavigations,
 	startFakeRouter
 } from '#lib/test-utils/app-navigation.ts';
@@ -365,7 +366,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		selectedGenerationId.set('g1');
-		persistLibraryHistory();
+		await landed(persistLibraryHistory());
 
 		// Pinning the take crosses a second time (issue #281: the take is its
 		// own route file too), and stands at once like the song's own write.
@@ -412,7 +413,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 			const album = historyEntry();
 			nextRouteNeverLoads();
 
-			void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+			await landed(void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' })));
 
 			expect(window.location.pathname).toBe('/album/a1/s1');
 			expect(historyEntry().songId).toBe('s1');
@@ -507,12 +508,11 @@ describe('history writes across the route boundary (issue #269)', () => {
 		]);
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		selectedGenerationId.set('g1');
-		persistLibraryHistory();
-		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1/take/1'));
+		await landed(persistLibraryHistory());
 		vi.mocked(goto).mockClear();
 
 		selectedGenerationId.set('g2');
-		persistLibraryHistory();
+		await landed(persistLibraryHistory());
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/album/a1/s1/take/2');
@@ -1019,7 +1019,7 @@ describe('Back and Forward across an app page', () => {
 	it('Back from Settings returns to the playlist left, and Forward to Settings', async () => {
 		await openPlaylist('p1');
 		captureLibraryScroll(320);
-		persistLibraryHistory();
+		await landed(persistLibraryHistory());
 		const left = historyEntry();
 		await goto(resolve(SETTINGS));
 
@@ -1909,12 +1909,12 @@ describe('revealPlayingSong', () => {
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		await vi.waitFor(() =>
-			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
+			expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
+				'/album/a1/s1',
+				'/album/a1/s1/take/1'
+			])
 		);
-		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
-			'/album/a1/s1',
-			'/album/a1/s1/take/1'
-		]);
+		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 
 	// Issue #265's S7 removed the separate ensureLibraryWorkspaceRoute guard
@@ -1927,12 +1927,12 @@ describe('revealPlayingSong', () => {
 		replaceHistoryEntry('/settings');
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		await vi.waitFor(() =>
-			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
+			expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
+				'/album/a1/s1',
+				'/album/a1/s1/take/1'
+			])
 		);
-		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
-			'/album/a1/s1',
-			'/album/a1/s1/take/1'
-		]);
+		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 });
 

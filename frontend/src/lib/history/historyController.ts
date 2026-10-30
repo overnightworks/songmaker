@@ -139,15 +139,31 @@ function isHistoryEntry(value: unknown): value is HistoryEntry {
 	);
 }
 
-function entryOfHistoryState(state: unknown): HistoryEntry | null {
-	const entry = pageStateOfHistoryState(state)?.entry;
+function entryOfPageState(pageState: { entry?: unknown } | null): HistoryEntry | null {
+	const entry = pageState?.entry;
 	return isHistoryEntry(entry) ? entry : null;
+}
+
+function entryOfHistoryState(state: unknown): HistoryEntry | null {
+	return entryOfPageState(pageStateOfHistoryState(state));
 }
 
 export const standingHistoryState = (): unknown => history.state;
 
+// Where history stands is what the controller wrote last until the router has
+// landed it (the record, see `writeShallowEntry`); only landing, popstate and
+// the router's own stamp read the browser's entry itself.
+export function standingAddress(): URL {
+	return new URL(unlandedWrite?.href ?? location.href);
+}
+
+export function standingPageState(): App.PageState | null {
+	if (unlandedWrite !== null) return unlandedWrite.state;
+	return pageStateOfHistoryState(history.state) as App.PageState | null;
+}
+
 // The entry history stands on, as the controller stamped it.
-const standingEntry = (): HistoryEntry | null => entryOfHistoryState(standingHistoryState());
+const standingEntry = (): HistoryEntry | null => entryOfPageState(standingPageState());
 
 // The page entry history stands on: the standing entry, or under an open
 // layer's entry the page that layer covers. An entry without an id has none.
@@ -197,6 +213,13 @@ let addressMountedUnderKeptPage: string | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
 let routerStarting = false;
+// The last shallow write the router has not landed yet, the writes issued and
+// not yet settled, and the settling of the latest of them. A write lands
+// within the task that issued it as long as routes resolve on the client and
+// no reroute hook exists (docs/architecture.md, Shallow routing).
+let unlandedWrite: { readonly href: string; readonly state: App.PageState } | null = null;
+let writesUnderway = 0;
+let writesLanded: Promise<void> = Promise.resolve();
 
 function readStateOnLoad(): unknown {
 	countEntryMet(historyStorage, entryOfHistoryState(history.state));
@@ -228,6 +251,31 @@ function newEntry(layer?: string): HistoryEntry {
 
 function newPageEntryOver(below: string): HistoryEntry {
 	return { ...newEntry(), below };
+}
+
+// A move starts once the writes before it landed, never in front of them.
+function afterWritesLanded<T>(move: () => Promise<T> | T): Promise<T> {
+	return writesUnderway === 0 ? Promise.resolve(move()) : writesLanded.then(move);
+}
+
+// The one caller of the router's shallow writes. Each write counts as underway
+// until the promise its call returns settles -- kit 2's `void` as a settled
+// one -- and a write issued meanwhile waits for the writes before it.
+function writeShallowEntry(url: string, state: App.PageState, replace: boolean): void {
+	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
+	const write = (): unknown => (replace ? replaceState(url, state) : pushState(url, state));
+	const landing = writesUnderway === 0 ? Promise.resolve(write()) : writesLanded.then(write);
+	unlandedWrite = { href: new URL(url, location.href).href, state };
+	writesUnderway += 1;
+	const settled = landing.finally(() => {
+		writesUnderway -= 1;
+		if (writesUnderway === 0) unlandedWrite = null;
+		lookAtStandingEntry();
+	});
+	writesLanded = settled.then(
+		() => undefined,
+		() => undefined
+	);
 }
 
 function lookAtStandingEntry(state: unknown = history.state): void {
@@ -279,10 +327,8 @@ function pushedPage(entry: HistoryEntry): void {
 // A push allocates an id; a page entry remembers the page it stands over, and
 // an entry pushed for a layer belongs to that layer until a landing leaves it.
 export function pushEntry(url: string, state: App.PageState, layer?: string): HistoryEntry {
-	const entry = layer === undefined ? newPageEntryOver(location.href) : newEntry(layer);
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-	pushState(url, stampedPageState(state, entry));
-	lookAtStandingEntry();
+	const entry = layer === undefined ? newPageEntryOver(standingAddress().href) : newEntry(layer);
+	writeShallowEntry(url, stampedPageState(state, entry), false);
 	if (layer === undefined) {
 		pushedPage(entry);
 		return entry;
@@ -296,10 +342,8 @@ export function pushEntry(url: string, state: App.PageState, layer?: string): Hi
 // the id, the layer mark and the page it stands over. An id-less entry gets
 // its first id here while it is the top entry, and stays foreign below it.
 export function replaceEntry(url: string, state: App.PageState): HistoryEntry | null {
-	const entry = entryOfHistoryState(history.state) ?? firstIdOnTop(false);
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-	replaceState(url, stampedPageState(state, entry));
-	lookAtStandingEntry();
+	const entry = standingEntry() ?? firstIdOnTop(false);
+	writeShallowEntry(url, stampedPageState(state, entry), true);
 	settleOnPage(entry);
 	return entry;
 }
@@ -327,10 +371,12 @@ interface RouteMount {
 // the entry standing there, and history stays still meanwhile.
 export async function navigateTo(url: string, options: NavigateOptions): Promise<void> {
 	const entry = options.replaceState
-		? (entryOfHistoryState(history.state) ?? firstIdOnTop(false))
-		: newPageEntryOver(location.href);
+		? (standingEntry() ?? firstIdOnTop(false))
+		: newPageEntryOver(standingAddress().href);
 	const mount =
-		options.replaceState && standsOnAddress(url) ? { address: location.href, options } : null;
+		options.replaceState && standsOnAddress(url)
+			? { address: standingAddress().href, options }
+			: null;
 	keepTrackOfKeptPage(url);
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
@@ -354,12 +400,12 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 // (`mountAddressOver`) until the router reports a navigation to another
 // address (`stampNavigatedEntry`).
 function keepTrackOfKeptPage(url: string): void {
-	const target = new URL(url, location.href).href;
+	const target = new URL(url, standingAddress()).href;
 	if (target === untrack(() => page.url.href)) addressMountedUnderKeptPage = target;
 }
 
 function standsOnAddress(url: string): boolean {
-	return new URL(url, location.href).href === location.href;
+	return new URL(url, standingAddress()).href === standingAddress().href;
 }
 
 // Shallow routing leaves the mounted route where the last navigation put it,
@@ -382,20 +428,20 @@ function standsOnAddress(url: string): boolean {
 type RouteOnAddress = 'stands' | 'remounts' | 'stands-under-kept-page';
 
 export function mountAddressOver(routeUrl: string): RouteOnAddress {
-	if (new URL(routeUrl, location.href).pathname !== location.pathname) {
+	const standing = standingAddress();
+	if (new URL(routeUrl, standing).pathname !== standing.pathname) {
 		mountStandingAddress();
 		return 'remounts';
 	}
-	return addressMountedUnderKeptPage === location.href ? 'stands-under-kept-page' : 'stands';
+	return addressMountedUnderKeptPage === standing.href ? 'stands-under-kept-page' : 'stands';
 }
 
 function mountStandingAddress(): void {
-	const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
-	void navigateTo(location.href, {
+	void navigateTo(standingAddress().href, {
 		replaceState: true,
 		noScroll: true,
 		keepFocus: true,
-		state: pageState
+		state: standingPageState() ?? {}
 	});
 }
 
@@ -409,7 +455,7 @@ let navigationsStarted = 0;
 function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> {
 	navigationsStarted += 1;
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-	return goto(...navigation);
+	return afterWritesLanded(() => goto(...navigation));
 }
 
 // A Back or Forward that navigates mounts the address it lands on before the
@@ -452,7 +498,7 @@ export function mountRouteOfLandedAddress(
 // loaded, so the older mount would land on that entry with the page state it
 // started with, and the entry would lose its own.
 export function remountOverStandingEntry(url: string, state: App.PageState): Promise<void> {
-	if (loadingMount === null) return Promise.resolve();
+	if (loadingMount === null) return writesLanded;
 	return navigateTo(url, { ...loadingMount.options, state });
 }
 
@@ -488,7 +534,7 @@ export function stampNavigatedEntry(type: NavigationType): void {
 
 // An entry the navigation carried keeps its id; the newest id stands on top.
 function entryTheNavigationCarried(): HistoryEntry | null {
-	const carried = entryOfHistoryState(history.state);
+	const carried = standingEntry();
 	if (carried?.id === lastAllocatedEntryId(historyStorage)) standsOnTop = true;
 	return carried;
 }
@@ -504,9 +550,8 @@ function stampEntryTheNavigationDropped(
 	const entry =
 		loaded ?? (pushedOver === null ? firstIdOnTop(type === 'enter') : newPageEntryOver(pushedOver));
 	if (entry !== null) {
-		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
-		replaceState(location.href, stampedPageState(pageState, entry));
+		const pageState = standingPageState() ?? {};
+		writeShallowEntry(standingAddress().href, stampedPageState(pageState, entry), true);
 	}
 	return entry;
 }
@@ -530,7 +575,7 @@ export function stepBackTo(target: number): Promise<void> {
 	const settled = new Promise<void>((resolve) => {
 		stepBackWaiters.set(target, [...(stepBackWaiters.get(target) ?? []), resolve]);
 	});
-	history.back();
+	void afterWritesLanded(() => history.back());
 	return settled;
 }
 
@@ -566,7 +611,7 @@ export function stepBackOrGoTo(fallback: string): Promise<void> {
 // From an entry with an id, any landing below it is the step's; from a
 // foreign one nothing tells the step's landing apart, so the next landing is.
 export function stepBackOffStandingEntry(): Promise<void> {
-	const standing = entryOfHistoryState(history.state);
+	const standing = standingEntry();
 	return stepBackTo(standing === null ? Number.POSITIVE_INFINITY : standing.id - 1);
 }
 
@@ -601,7 +646,7 @@ export function historyStandsStill(): Promise<void> {
 // stands still may navigate and move it again, so the wait starts over until
 // nothing is left to land.
 export function historyComesToRest(): Promise<void> {
-	if (!historyMoves()) return Promise.resolve();
+	if (!historyMoves()) return writesLanded;
 	return historyStandsStill().then(historyComesToRest);
 }
 
@@ -654,9 +699,10 @@ const layerEntries: LayerHistory = {
 // next Back, pushing an entry nobody owns.
 function pushLayerEntry(layer: Layer): void {
 	untrack(() => {
-		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
-		entryOfLayer.set(layer, pushEntry(location.href, pageState, layer.id).id);
-		void remountOverStandingEntry(location.href, pageState);
+		const pageState = standingPageState() ?? {};
+		const address = standingAddress().href;
+		entryOfLayer.set(layer, pushEntry(address, pageState, layer.id).id);
+		void remountOverStandingEntry(address, pageState);
 	});
 }
 
@@ -873,6 +919,9 @@ export function resetHistoryControllerForTests(): void {
 	navigationsUnderway = 0;
 	routerStarting = false;
 	loadingMount = null;
+	unlandedWrite = null;
+	writesUnderway = 0;
+	writesLanded = Promise.resolve();
 	addressMountedUnderKeptPage = null;
 	navigationsStarted = 0;
 	entryOfLayer.clear();

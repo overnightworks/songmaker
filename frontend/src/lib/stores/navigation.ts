@@ -84,8 +84,9 @@ function currentHistoryIndex(): number {
 // Every history write in this module goes through writeLibraryHistory, which
 // owns the choice between shallow routing and a navigation; see the note on
 // it in libraryContext.ts. Its promise settles once a crossing has mounted its
-// route; the entry itself stands at once, unless history the controller has
-// moving still holds it.
+// route; the entry itself stands within the task -- the history controller
+// answers from it until the router lands it -- unless history the controller
+// has moving still holds it.
 function replaceLibraryHistory(): Promise<void> {
 	cancelLibraryHistoryApply();
 	const next = snapshotLibraryHistory(currentHistoryIndex());

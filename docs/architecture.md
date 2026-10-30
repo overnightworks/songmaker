@@ -438,7 +438,13 @@ same-*shape* churn — filter, sort,
 scroll, search cursor, another song of the open album (#275), another take of
 the open song (#281), another open playlist (#286), a history layer over the
 library — is shallow routing (`pushState`/`replaceState` from
-`$app/navigation`): synchronous, no route resolution. `libraryRouteShape`
+`$app/navigation`): it loads no route. The router writes the entry once it has
+resolved the route: at once on kit 2, a few microtasks later on kit 3, within
+the task, because routes resolve on the client and there is no reroute hook
+(a hook or server-side resolution would break that, and with it #1263). Until
+then the history controller answers where history stands from what it wrote,
+and it issues its next write, navigation or step back only after the write
+landed. `libraryRouteShape`
 (home / library / playlists / album / album-song / album-song-take / playlist / external) is what
 the crossing check compares — only the route-file depth decides a crossing,
 never which resource the address names, and `/playlist/[slug]` is one route
