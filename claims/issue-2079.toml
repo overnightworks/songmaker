@@ -1,0 +1,8 @@
+claim_id = "646ee6d4cfb24fa194d848f06876b583"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "dc81c7c7111d7d4fb8d53ec26c774111743da34d"
+branch = "claude/issue-2079-takes-link-their-reference-recording-by"
+scope = [".github/workflows/ci.yml", "docs/acestep.md", "docs/architecture.md", "docs/security.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/utils/recipe-summary.test.ts", "frontend/src/lib/utils/recipe-summary.ts", "quality/baseline.toml", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/reference_recordings.py", "src/songmaker_cli/generation_params.py", "src/songmaker_cli/jobs/_runtime.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/jobs/generation_failure.py", "src/songmaker_cli/reference_audio.py", "src/songmaker_cli/reimport.py", "tests/songmaker_cli/db/test_migrations_coherence_verdict.py", "tests/songmaker_cli/db/test_migrations_take_reference_link.py", "tests/songmaker_cli/jobs/test_generation_failure.py", "tests/songmaker_cli/test_reimport.py", "tests/support/generation_failures.py", "tests/support/generation_job_world.py", "tests/test_generation_params.py", "tests/test_generation_reference_recording.py", "tests/test_jobs.py"]
+opened_commit = "9a85cc223d3f7aecceea5fbfe20d26912403f49e"
+whole_reason = "One link switch for takes: the stored params lose the path while the model, the migration that maps old takes, the job that records the key, reimport and the recipe that shows the name move together, or a take loses its reference record between releases."
