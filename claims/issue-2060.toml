@@ -1,0 +1,8 @@
+claim_id = "53e84f106d46457c819dddb6175f7ca4"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6c2a933580b31fa4a769fb9de543bd641d6b178a"
+branch = "claude/issue-2060-songmaker-takes-the-kit-s-look-from-the"
+scope = [".dockerignore", ".github/workflows/ci.yml", "Dockerfile", "docs/testing.md", "frontend/.gitignore", "frontend/README.md", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/app.css", "frontend/vite.config.ts", "pyproject.toml", "scripts/copy_kit_assets.py", "tests/scripts/test_copy_kit_assets.py", "uv.lock"]
+opened_commit = "7a05365a4c5e8b9248b342edc4a240318d725373"
+whole_reason = "One release adoption: the tarball pin and the removal of the copy path it replaces, which must go in the same change or two installers keep serving one consumer."
