@@ -127,14 +127,20 @@ def _run_alert(
     )
 
 
-def _alert_script_whose_credentials_producer_is(tmp_path: Path, producer_body: str) -> Path:
-    """A copy of alert.sh whose curl_credentials_config runs ``producer_body``."""
+def _alert_script_copy(tmp_path: Path) -> Path:
+    """An unchanged copy of alert.sh beside its config library, free to be edited."""
     scripts_dir = tmp_path / "scripts"
     scripts_dir.mkdir()
     shutil.copy(ALERT_CONFIG_LIB, scripts_dir)
-    with (scripts_dir / ALERT_CONFIG_LIB.name).open("a") as config_lib:
-        config_lib.write(f"\ncurl_credentials_config() {{\n    {producer_body}\n}}\n")
     return Path(shutil.copy(ALERT_SCRIPT, scripts_dir))
+
+
+def _alert_script_whose_credentials_producer_is(tmp_path: Path, producer_body: str) -> Path:
+    """A copy of alert.sh whose curl_credentials_config runs ``producer_body``."""
+    script = _alert_script_copy(tmp_path)
+    with (script.parent / ALERT_CONFIG_LIB.name).open("a") as config_lib:
+        config_lib.write(f"\ncurl_credentials_config() {{\n    {producer_body}\n}}\n")
+    return script
 
 
 def test_sends_mail_via_curl_on_success(tmp_path: Path) -> None:
@@ -410,11 +416,21 @@ def test_failed_credential_write_names_the_write_and_its_status(tmp_path: Path) 
 
 def test_writer_that_starts_after_curl_has_exited_does_not_hang_the_send(tmp_path: Path) -> None:
     password_larger_than_a_pipe_buffer = "SENTINEL" + "x" * 200_000
-    script = _alert_script_whose_credentials_producer_is(tmp_path, "printf '%s' \"$2\"")
+    script = _alert_script_copy(tmp_path)
+    first_release_done = tmp_path / "first-release-done"
+    # alert.sh sleeps only after a pipe release, so the first sleep marks it.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_sleep = bin_dir / "sleep"
+    fake_sleep.write_text(f'#!/bin/bash\ntouch "{first_release_done}"\nexec /usr/bin/sleep "$@"\n')
+    fake_sleep.chmod(fake_sleep.stat().st_mode | stat.S_IEXEC)
     writer_start = "printf '%s' \"$CURL_CREDENTIALS\" >\"$CREDENTIAL_PIPE\" &"
     script_text = script.read_text()
     assert writer_start in script_text
-    late_writer_start = "(sleep 0.5; " + writer_start[:-2] + ") &"
+    wait_for_first_release = (
+        f'for _ in {{1..300}}; do [[ -e "{first_release_done}" ]] && break; /usr/bin/sleep 0.01; done'
+    )
+    late_writer_start = f"({wait_for_first_release}; {writer_start[:-2]}) &"
     script.write_text(script_text.replace(writer_start, late_writer_start))
 
     result = _run_alert(
