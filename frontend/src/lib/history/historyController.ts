@@ -3,6 +3,7 @@ import { untrack } from 'svelte';
 import { goto, pushState, replaceState } from '$app/navigation';
 import { page } from '$app/state';
 import { browserDocumentLoads, documentAddress, type DocumentLoads } from './documentLoads';
+import { pageStateOfHistoryState, routerIndexOf } from '#lib/history/routerHistoryState.ts';
 import {
 	dropLayersFrom,
 	keepLayerHistory,
@@ -51,10 +52,6 @@ export interface Landing {
 	readonly ledger: HistoryLedger;
 }
 
-// SvelteKit keeps an entry's page state under this key; its own constant is
-// internal to the package and not exported.
-const SVELTEKIT_HISTORY_STATES_KEY = 'sveltekit:states';
-const SVELTEKIT_HISTORY_INDEX_KEY = 'sveltekit:history';
 const ENTRY_ID_COUNTER_KEY = 'songmaker:history-entry-id';
 const FIRST_ENTRY_KEY = 'songmaker:history-first-entry';
 const FOREIGN_ENTRY_RANK = Number.NEGATIVE_INFINITY;
@@ -192,15 +189,6 @@ function isHistoryEntry(value: unknown): value is HistoryEntry {
 	);
 }
 
-// The one reader of SvelteKit's page state in a history entry, which it keeps
-// under its own key beside its router bookkeeping; an entry without it was
-// not written by the router.
-export function pageStateOfHistoryState(state: unknown): Record<string, unknown> | null {
-	if (!isRecord(state)) return null;
-	const pageState = state[SVELTEKIT_HISTORY_STATES_KEY];
-	return isRecord(pageState) ? pageState : null;
-}
-
 function entryOfHistoryState(state: unknown): HistoryEntry | null {
 	const entry = pageStateOfHistoryState(state)?.entry;
 	return isHistoryEntry(entry) ? entry : null;
@@ -210,13 +198,6 @@ export const standingHistoryState = (): unknown => history.state;
 
 // The entry history stands on, as the controller stamped it.
 const standingEntry = (): HistoryEntry | null => entryOfHistoryState(standingHistoryState());
-
-// SvelteKit's place for an entry among the tab's entries: one more than the
-// entry it was pushed over, the same as the entry it was written over.
-function routerIndexOf(state: unknown): number | undefined {
-	const index = isRecord(state) ? state[SVELTEKIT_HISTORY_INDEX_KEY] : undefined;
-	return typeof index === 'number' ? index : undefined;
-}
 
 // The page entry history stands on: the standing entry, or under an open
 // layer's entry the page that layer covers. An entry without an id has none.
@@ -404,7 +385,12 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
 	try {
-		await startNavigation(url, { ...options, state: stampedPageState(options.state, entry) });
+		await startNavigation(url, {
+			replaceState: options.replaceState,
+			noScroll: options.noScroll,
+			keepFocus: options.keepFocus,
+			state: stampedPageState(options.state, entry)
+		});
 		if (entry !== null && standingEntry()?.id === entry.id) navigatedOnto(entry, options);
 	} finally {
 		if (mount === null) navigationsUnderway -= 1;

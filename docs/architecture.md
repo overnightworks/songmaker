@@ -776,7 +776,11 @@ boundary. `eslint.config.js` enforces this, including `window.fetch`,
 Only `lib/history/historyController.ts` writes or traverses history: no other
 module touches the global `history` or imports `pushState` or `replaceState` from
 `$app/navigation` (`goto(…, { replaceState })` stays allowed). Tests may drive
-and fake it; `eslint.config.js` enforces this (#1006 H6d).
+and fake it; `eslint.config.js` enforces this (#1006 H6d). Only
+`lib/history/routerHistoryState.ts` reads SvelteKit's private history-entry
+layout (its page state and place), and tests build such entries only through
+`lib/test-utils/router-history-layout.ts`; eslint refuses a `sveltekit:`
+literal anywhere else.
 
 Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new album/playlist, playlist-picker add, the co-writer conversation row's delete ✕) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). Labelled controls (album/playlist header Play, the editor's Generate, the compact Edit | Co-writer | Takes tabs, Now Playing's Queue | This take tabs, the library search field) take the sibling `[data-hitbox='text']` instead: it raises the height to the same touch target and leaves the width to the label and the layout, since forcing the square would clamp a width the layout owns and `data-hitbox-face` — a fixed 24/44px box — cuts straight through a word (#163). A face is only ever drawn on an icon-only control. PlayerBar and the share surface's transport/Now Playing frames are out of this primitive's scope.
 

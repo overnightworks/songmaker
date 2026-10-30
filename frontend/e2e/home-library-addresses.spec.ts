@@ -28,6 +28,10 @@ import {
 import { SIGN_IN_ACTION_LABEL } from '../src/lib/constants/auth';
 import { PLAYLISTS_ROUTE_PATH } from '../src/lib/routes/addresses';
 import {
+	routerHistoryEntry,
+	routerHistoryEntryOf
+} from '../src/lib/test-utils/router-history-layout';
+import {
 	FlowGuard,
 	HOME_PATH,
 	HOME_URL,
@@ -215,16 +219,12 @@ type RetainedCollection = { kind: 'album'; id: string } | null;
 // The entry history stands on becomes what the Library wall wrote at `/` before
 // #1506: surface `browse`, the album it had open (if any), no scroll.
 async function ageEntryToBrowseAtHome(page: Page, collection: RetainedCollection): Promise<void> {
-	await page.evaluate((retained) => {
-		const states = history.state?.['sveltekit:states'];
-		if (!states?.library) throw new Error('The entry carries no library state to age');
-		const library = { ...states.library, surface: 'browse', collection: retained, scrollAnchor: 0 };
-		history.replaceState(
-			{ ...history.state, 'sveltekit:states': { ...states, library } },
-			'',
-			location.href
-		);
-	}, collection);
+	const entry = routerHistoryEntryOf(await page.evaluate(() => history.state as unknown));
+	const states = { ...entry?.pageState };
+	if (!states.library) throw new Error('The entry carries no library state to age');
+	Object.assign(states.library, { surface: 'browse', collection, scrollAnchor: 0 });
+	const aged = routerHistoryEntry(states, entry ?? undefined);
+	await page.evaluate((state) => history.replaceState(state, '', location.href), aged);
 }
 
 interface AppPage {
