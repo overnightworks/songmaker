@@ -1,7 +1,0 @@
-claim_id = "27c4960722414b44811d8595274051a9"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "e5899b8771e808027cc0ea277a837b7f70d932cb"
-branch = "fix/session-lost-nullish-assignment"
-scope = ["frontend/src/lib/stores/auth.ts"]
-opened_commit = "9c7dfecc02c6e121349c393efa2289bf3497d528"
