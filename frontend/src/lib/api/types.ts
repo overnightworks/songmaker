@@ -330,7 +330,6 @@ export interface GenerationParams {
 	lm_negative_prompt?: string | null;
 	infer_method?: 'ode' | 'sde' | null;
 	batch_size?: number | null;
-	reference_audio_path?: string | null;
 	repaint_mode?: RepaintMode | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
@@ -346,6 +345,7 @@ export interface GenerationParams {
 	latent_rescale?: number | null;
 	audio_cover_strength?: number | null;
 	user_lora_id?: string | null;
+	reference_audio_path?: string | null;
 	seed?: number | null;
 	acestep_model?: string | null;
 	bpm?: number | null;
@@ -718,7 +718,13 @@ export interface RateResult {
 }
 
 export interface ReferenceAudioResponse {
+	id: string;
 	path: string;
+	filename: string;
+}
+
+export interface ReferenceResponse {
+	id: string;
 	filename: string;
 }
 
@@ -883,6 +889,7 @@ export interface SongCreateRequest {
 	key_scale: string;
 	vocal_language: string;
 	generation_params?: VersionGenerationParams | null;
+	reference_recording_id?: string | null;
 }
 
 export interface SongItem {
@@ -900,6 +907,7 @@ export interface SongItem {
 	audio_duration?: number | null;
 	key_scale?: string | null;
 	generation_params?: VersionGenerationParams | null;
+	reference?: ReferenceResponse | null;
 	version_count: number;
 	generation_count: number;
 	is_shared: boolean;
@@ -934,6 +942,7 @@ export interface SongSummaryResponse {
 	audio_duration?: number | null;
 	key_scale?: string | null;
 	generation_params?: Record<string, unknown> | null;
+	reference?: ReferenceResponse | null;
 	version_count: number;
 	generation_count: number;
 	is_shared: boolean;
@@ -952,6 +961,7 @@ export interface SongUpdateRequest {
 	key_scale?: string | null;
 	vocal_language?: string | null;
 	generation_params?: VersionGenerationParams | null;
+	reference_recording_id?: string | null;
 	new_version: boolean;
 }
 
@@ -1044,7 +1054,6 @@ export interface VersionGenerationParams {
 	lm_negative_prompt?: string | null;
 	infer_method?: 'ode' | 'sde' | null;
 	batch_size?: number | null;
-	reference_audio_path?: string | null;
 	repaint_mode?: RepaintMode | null;
 	repaint_strength?: number | null;
 	lm_repetition_penalty?: number | null;
@@ -1071,6 +1080,7 @@ export interface VersionItem {
 	audio_duration: number;
 	key_scale: string;
 	generation_params: VersionGenerationParams | null;
+	reference?: ReferenceResponse | null;
 	created_at: string;
 }
 

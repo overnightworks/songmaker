@@ -144,3 +144,9 @@ what = "size baseline raises file_lines frontend/src/routes/settings/users/page.
 item = "#2041"
 date = 2026-10-29
 reason = "prettier wraps the longer #lib import specifiers; the rewrite changes only import lines"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1127 -> 1137"
+item = "#2045"
+date = 2026-10-30
+reason = "versions link references by key: the generated API types gain ReferenceResponse, the upload id and the reference field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"

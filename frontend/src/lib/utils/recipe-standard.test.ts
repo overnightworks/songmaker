@@ -22,6 +22,8 @@ import {
 	type RecipeValues
 } from './recipe-standard';
 
+const REFERENCE = { id: 'reference-1', filename: 'a.wav' };
+
 const standard: RecipeStandard = {
 	model: 'xl-turbo',
 	engineDefaults: { lm_temperature: 0.85, inference_steps: 8, thinking: true, shift: 3 }
@@ -33,6 +35,7 @@ function values(overrides: Partial<RecipeValues> = {}): RecipeValues {
 		audioDuration: 0,
 		keyScale: '',
 		genParams: null,
+		reference: null,
 		model: 'xl-turbo',
 		takes: RECIPE_TAKES_STANDARD,
 		...overrides
@@ -49,7 +52,7 @@ describe('changedRecipeFields', () => {
 		['duration', { audioDuration: 120 }],
 		['key', { keyScale: 'C major' }],
 		['voice', { genParams: { user_lora_id: 'mara' } }],
-		['reference', { genParams: { reference_audio_path: 'refs/a.wav' } }],
+		['reference', { reference: { id: 'r1', filename: 'a.wav' } }],
 		['model', { model: 'sft' }],
 		['takes', { takes: 3 }],
 		['lm_temperature', { genParams: { lm_temperature: 0.5 } }],
@@ -118,23 +121,23 @@ describe('resetRecipeField', () => {
 	});
 
 	it('removes the voice or the reference alone', () => {
-		const start = values({ genParams: { user_lora_id: 'mara', reference_audio_path: 'a.wav' } });
-		expect(resetRecipeField(start, 'voice', standard).genParams).toEqual({
-			reference_audio_path: 'a.wav'
-		});
-		expect(resetRecipeField(start, 'reference', standard).genParams).toEqual({
-			user_lora_id: 'mara'
-		});
+		const start = values({ genParams: { user_lora_id: 'mara' }, reference: REFERENCE });
+		const withoutVoice = resetRecipeField(start, 'voice', standard);
+		expect([withoutVoice.genParams, withoutVoice.reference]).toEqual([null, REFERENCE]);
+		const withoutReference = resetRecipeField(start, 'reference', standard);
+		expect([withoutReference.genParams, withoutReference.reference]).toEqual([
+			{ user_lora_id: 'mara' },
+			null
+		]);
 	});
 
 	it('resets the preset row by emptying every engine field but keeping voice and reference', () => {
 		const start = values({
-			genParams: { shift: 5, lm_temperature: 0.5, user_lora_id: 'mara', reference_audio_path: 'a' }
+			genParams: { shift: 5, lm_temperature: 0.5, user_lora_id: 'mara' },
+			reference: REFERENCE
 		});
-		expect(resetRecipeField(start, 'preset', standard).genParams).toEqual({
-			user_lora_id: 'mara',
-			reference_audio_path: 'a'
-		});
+		const reset = resetRecipeField(start, 'preset', standard);
+		expect([reset.genParams, reset.reference]).toEqual([{ user_lora_id: 'mara' }, REFERENCE]);
 	});
 });
 
@@ -145,7 +148,8 @@ describe('resetRecipeTab', () => {
 		keyScale: 'C',
 		model: 'sft',
 		takes: 3,
-		genParams: { user_lora_id: 'mara', reference_audio_path: 'a', shift: 5 }
+		genParams: { user_lora_id: 'mara', shift: 5 },
+		reference: REFERENCE
 	});
 
 	it('resets every Song field and nothing of Generate or Engine', () => {
@@ -154,7 +158,8 @@ describe('resetRecipeTab', () => {
 			bpm: 0,
 			audioDuration: 0,
 			keyScale: '',
-			genParams: { shift: 5 }
+			genParams: { shift: 5 },
+			reference: null
 		});
 	});
 
@@ -169,30 +174,26 @@ describe('resetRecipeTab', () => {
 	it('resets the engine fields and keeps Voice and Reference', () => {
 		expect(resetRecipeTab(start, 'engine', standard)).toEqual({
 			...start,
-			genParams: { user_lora_id: 'mara', reference_audio_path: 'a' }
+			genParams: { user_lora_id: 'mara' }
 		});
 	});
 });
 
 describe('chooseEnginePreset', () => {
 	const start = values({
-		genParams: { user_lora_id: 'mara', reference_audio_path: 'a', shift: 5, thinking: false }
+		genParams: { user_lora_id: 'mara', shift: 5, thinking: false },
+		reference: REFERENCE
 	});
 
 	it('replaces the engine fields and keeps Voice and Reference', () => {
 		const chosen = chooseEnginePreset(start, { lm_temperature: 0.4, user_lora_id: 'other' });
-		expect(chosen.genParams).toEqual({
-			user_lora_id: 'mara',
-			reference_audio_path: 'a',
-			lm_temperature: 0.4
-		});
+		expect(chosen.genParams).toEqual({ user_lora_id: 'mara', lm_temperature: 0.4 });
+		expect(chosen.reference).toEqual(REFERENCE);
 	});
 
 	it('choosing Default empties the engine fields and keeps Voice and Reference', () => {
-		expect(chooseEnginePreset(start, null).genParams).toEqual({
-			user_lora_id: 'mara',
-			reference_audio_path: 'a'
-		});
+		const chosen = chooseEnginePreset(start, null);
+		expect([chosen.genParams, chosen.reference]).toEqual([{ user_lora_id: 'mara' }, REFERENCE]);
 	});
 
 	it('leaves no params object when nothing is kept', () => {
@@ -203,7 +204,8 @@ describe('chooseEnginePreset', () => {
 describe('engineParams', () => {
 	it('keeps the engine fields and leaves Voice and Reference out of a preset', () => {
 		const start = values({
-			genParams: { user_lora_id: 'mara', reference_audio_path: 'a', shift: 5, thinking: false }
+			genParams: { user_lora_id: 'mara', shift: 5, thinking: false },
+			reference: REFERENCE
 		});
 		expect(engineParams(start)).toEqual({ shift: 5, thinking: false });
 	});

@@ -1048,7 +1048,7 @@ def test_update_song_language_reaches_the_next_generation(client: TestClient) ->
     assert resp.status_code == 200
     assert resp.json()["vocal_language"] == "en"
     version_id = client.get("/api/songs/s1/versions").json()[0]["id"]
-    meta, _ = _load_song_meta("s1", version_id, client.app.state.ctx.db)
+    meta, _, _ = _load_song_meta("s1", version_id, client.app.state.ctx.db)
     assert build_ace_config(meta).vocal_language == "en"
 
 

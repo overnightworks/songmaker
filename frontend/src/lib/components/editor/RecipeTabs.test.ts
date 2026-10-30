@@ -61,6 +61,7 @@ function atStandard(overrides: Partial<RecipeValues> = {}): RecipeValues {
 		audioDuration: 0,
 		keyScale: '',
 		genParams: null,
+		reference: null,
 		model: 'turbo',
 		takes: 1,
 		...overrides
@@ -177,13 +178,15 @@ describe('RecipeTabs', () => {
 	it('Engine Reset all keeps Voice and Reference', async () => {
 		const target = await renderTabs(
 			atStandard({
-				genParams: { user_lora_id: 'mara', reference_audio_path: 'a.wav', lm_temperature: 0.5 }
+				genParams: { user_lora_id: 'mara', lm_temperature: 0.5 },
+				reference: { id: 'r1', filename: 'a.wav' }
 			})
 		);
 		await clickSettled(recipeTabNamed(target, 'Engine'));
 		expect(target.textContent).toContain('Saved with the version');
 		await clickSettled(getByRoleButton(target, 'Reset all'));
-		expect(props.values.genParams).toEqual({ user_lora_id: 'mara', reference_audio_path: 'a.wav' });
+		expect(props.values.genParams).toEqual({ user_lora_id: 'mara' });
+		expect(props.values.reference).toEqual({ id: 'r1', filename: 'a.wav' });
 	});
 
 	it('shows an engine field equal to its grey default as unchanged', async () => {
@@ -320,8 +323,8 @@ describe('RecipeTabs', () => {
 		expect(fetchGenerationDefaults).toHaveBeenCalled();
 	});
 
-	it('puts the uploaded reference path into the draft, with the input disabled while uploading', async () => {
-		const response = Promise.withResolvers<{ path: string; filename: string }>();
+	it('puts the uploaded reference into the draft, with the input disabled while uploading', async () => {
+		const response = Promise.withResolvers<{ id: string; path: string; filename: string }>();
 		vi.mocked(uploadReferenceAudio).mockReturnValueOnce(response.promise);
 		const target = await renderTabs();
 		const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
@@ -329,10 +332,11 @@ describe('RecipeTabs', () => {
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await tick();
 		expect(input.disabled).toBe(true);
-		response.resolve({ path: '/reference.wav', filename: 'ref.wav' });
+		response.resolve({ id: 'reference-1', path: '/reference.wav', filename: 'ref.wav' });
 		await vi.waitFor(() =>
-			expect(props.values.genParams?.reference_audio_path).toBe('/reference.wav')
+			expect(props.values.reference).toEqual({ id: 'reference-1', filename: 'ref.wav' })
 		);
+		expect(props.values.genParams).toBeNull();
 	});
 
 	it.each([
@@ -444,10 +448,14 @@ describe('RecipeTabs', () => {
 
 	it('removes the reference with its reset and keeps the voice', async () => {
 		const target = await renderTabs(
-			atStandard({ genParams: { user_lora_id: 'mara', reference_audio_path: 'a.wav' } })
+			atStandard({
+				genParams: { user_lora_id: 'mara' },
+				reference: { id: 'r1', filename: 'a.wav' }
+			})
 		);
 		await clickSettled(resetButton(target, 'reference') as HTMLElement);
 		expect(props.values.genParams).toEqual({ user_lora_id: 'mara' });
+		expect(props.values.reference).toBeNull();
 	});
 
 	it('offers no Repaint, Off or Source', async () => {
