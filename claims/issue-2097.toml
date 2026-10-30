@@ -1,8 +1,0 @@
-claim_id = "217033417bad4075b382dfa258efd82a"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "e5899b8771e808027cc0ea277a837b7f70d932cb"
-branch = "claude/issue-2097-settings-about-names-the-running-release"
-scope = ["docs/architecture.md", "frontend/e2e/settings-phone.spec.ts", "frontend/src/lib/api/settings.ts", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/settingsSections.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/utils/format.test.ts", "frontend/src/lib/utils/format.ts", "frontend/src/routes/settings/+page.svelte", "frontend/src/routes/settings/about/+page.svelte", "frontend/src/routes/settings/about/page.test.ts", "frontend/src/routes/settings/page.test.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/settings_api.py", "tests/songmaker_cli/test_release_api.py"]
-opened_commit = "c5773c66048e02ab9ae6a420c63d09972c2357fd"
-whole_reason = "One surface the blessed picture draws: the endpoint lands with its only caller, and the section entry, its page and the list's hint reach the phone list, the rail and search from one owner."
