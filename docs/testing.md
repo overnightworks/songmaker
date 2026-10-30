@@ -11,15 +11,14 @@ excludes the base-image label.
 
 ```bash
 # Backend — targeted (local / agents)
-pytest tests/test_api.py -q --tb=short
-pytest tests/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
+pytest tests/songmaker_cli/db -q --tb=short
+pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
 
 # Full suite — CI only, or when the operator asks
 pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_engine --cov=acestep_worker --cov-report=term-missing --cov-fail-under=93 --cov-config=.github/workflows/coveragerc-ci.ini
-uv run --frozen --only-group frontend python scripts/copy_kit_assets.py
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
@@ -326,42 +325,9 @@ and `docker compose ... down -v`.
 
 ## Test Structure
 
+New and moved backend tests mirror the code they test: a test for `src/songmaker_cli/db/queries/loras.py` lives in `tests/songmaker_cli/db/queries/` and is named for it, and the engine packages mirror under `tests/acestep_engine/`, `tests/audio_engine/` and `tests/acestep_worker/`. `tests/conftest.py` holds the shared fixtures, and `tests/support/` the helpers and pytest plugins that tests import as `support.<module>`, never from `conftest`.
+
 ```
-tests/
-├── conftest.py                    Shared fixtures (DB, WAV/audio factories, arq mocks)
-├── test_*_api.py                  Domain API coverage: auth, conversation, health
-├── test_*_queries.py              DB query coverage for workers and LoRAs
-├── test_jobs*.py                  Generation, scoring, model lifecycle, LoRA training jobs
-├── test_*worker*.py               Music/scoring worker classes
-├── test_scoring*.py               Scorer registry, pipeline, subprocess, and scorer modules
-├── test_*client*.py               CLI client tests
-├── test_auth*.py                  Auth utilities and auth endpoints
-├── test_config.py                 ACE-Step config building, defaults, path resolution
-├── test_db.py / test_postgresql.py Database models, migrations, PostgreSQL concurrency
-├── test_resource_events.py         Durable event sequencing, atomicity, retention, lifecycle
-├── test_generation*.py            Generation params, retention, failure, reference recording
-└── test_*                         Lifecycle, middleware, parser, Redis, scheduler,
-                                   soft delete, constants, MCP server
-
-tests/acestep_engine/              ACE-Step client, progress and training client
-tests/songmaker_cli/               Route modules, request policies and server tests, named for their subject
-tests/audio_engine/                Audio I/O and mastering
-tests/support/                     Shared test helpers and pytest plugins; tests import them
-                                   as `support.<module>`, never from `conftest`
-
-tests/acestep_worker/
-├── test_downloads.py
-├── test_heartbeat.py
-├── test_main.py
-├── test_model_cache.py
-├── test_registry_client.py
-├── test_settings_startup_timeout.py
-├── test_subprocess_runner.py
-├── test_task_store.py
-├── test_wrapper.py
-├── test_wrapper_train_lora.py
-└── test_wrapper_training_child_stop.py
-
 frontend/src/
 ├── lib/api/*.test.ts              API client modules: admin, client, fetch, LoRA,
 │                                  resource-event decimal SSE payloads
@@ -383,10 +349,10 @@ frontend/src/
 ├── routes/share/**/page.test.ts   Album/playlist/song/take share pages through their real
 │                                  +page.svelte entry points (loading/error/retry, stream vs
 │                                  classic playback, windowed-stream stop, Now Playing)
-└── service-worker.test.ts         The build-time worker-chunk precache injection
-                                   (`scripts/inject_worker_precache.mjs`): the placeholder rewrite,
-                                   the build failures it refuses to pass on, and that
-                                   `service-worker.ts` still carries the placeholder it rewrites
+└── service-worker-precache.test.ts  The build-time worker-chunk precache injection
+                                     (`scripts/inject_worker_precache.mjs`): the placeholder rewrite,
+                                     the build failures it refuses to pass on, and that
+                                     `service-worker.ts` still carries the placeholder it rewrites
 ```
 
 ```

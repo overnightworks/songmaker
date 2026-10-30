@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { MODELS_SET_BY_AGENT_SERVICE_LABEL, MODELS_TASK_COWRITER_LABEL } from '$lib/constants';
+	import { MODELS_SET_BY_AGENT_SERVICE_LABEL, MODELS_TASK_COWRITER_LABEL } from '#lib/constants.ts';
 	import ModelsServiceRow from './ModelsServiceRow.svelte';
 
 	interface Props {

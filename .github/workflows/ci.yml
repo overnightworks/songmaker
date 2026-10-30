@@ -152,16 +152,17 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
       POSTGRESQL_CONTRACT_MODULES: >-
-        tests/test_postgresql.py
-        tests/test_cover_accounting.py
+        tests/songmaker_cli/test_db_postgresql.py
+        tests/songmaker_cli/test_cover_runner_accounting.py
         tests/test_reference_quota.py
         tests/test_auth_write_lock_postgres.py
         tests/test_person_token_paths_postgres.py
-        tests/test_reference_save_lock_postgres.py
+        tests/test_reference_attach_lock_postgres.py
         tests/test_song_version_lock_postgres.py
-        tests/test_coherence_verdict_lock_postgres.py
-        tests/test_coherence_verdict_migration.py
-        tests/test_reference_recordings_migration.py
+        tests/songmaker_cli/mcp_server/test_tools_coherence_verdict_lock_postgres.py
+        tests/songmaker_cli/db/test_migrations_coherence_verdict.py
+        tests/songmaker_cli/db/test_migrations_reference_recordings.py
+        tests/songmaker_cli/db/test_migrations_version_reference_link.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:
@@ -252,16 +253,6 @@ jobs:
         run: |
           set -o pipefail
           pnpm test:coverage | tee vitest-output.txt
-
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.x
-        with:
-          python-version-file: .python-version
-
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
-
-      - name: Copy the appkit look
-        working-directory: .
-        run: uv run --frozen --only-group frontend python scripts/copy_kit_assets.py
 
       - name: Production build
         run: pnpm build

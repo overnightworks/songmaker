@@ -8,10 +8,10 @@
 
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
-	import { ApiError, describeFailure, isTransientApiFailure } from '$lib/api/fetch';
-	import { dropTitleDraft, keepTitleDraft, titleDraft } from '$lib/stores/titleDrafts';
-	import { addToast, dismissToast } from '$lib/stores/toast';
-	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '$lib/constants';
+	import { ApiError, describeFailure, isTransientApiFailure } from '#lib/api/fetch.ts';
+	import { dropTitleDraft, keepTitleDraft, titleDraft } from '#lib/stores/titleDrafts.ts';
+	import { addToast, dismissToast } from '#lib/stores/toast.ts';
+	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '#lib/constants.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {

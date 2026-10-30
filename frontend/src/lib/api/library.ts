@@ -5,8 +5,8 @@ import type {
 	LibraryWriteResponse
 } from './types';
 import { apiFetch } from './fetch';
-import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
-import type { CreatedSort } from '$lib/utils/recency';
+import { LIBRARY_QUERY_REQUIRED } from '#lib/constants.ts';
+import type { CreatedSort } from '#lib/utils/recency.ts';
 
 const LIBRARY_POOL_QUEUE_PATH = '/api/library/pool-queue';
 const DEFAULT_LIBRARY_POOL: LibraryPoolQueue['pool'] = 'mix';

@@ -1,9 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthUser, PresetItem } from '$lib/api/types';
-import { currentUser } from '$lib/stores/auth';
-import { makeAuthUser } from '$lib/test-utils/factories';
+import type { AuthUser, PresetItem } from '#lib/api/types.ts';
+import { currentUser } from '#lib/stores/auth.ts';
+import { makeAuthUser } from '#lib/test-utils/factories.ts';
 
 import GenerationSettingsPage from './+page.svelte';
 

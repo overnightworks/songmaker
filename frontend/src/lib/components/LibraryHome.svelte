@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { HOME_PAGE_LABEL } from '$lib/constants';
+	import { HOME_PAGE_LABEL } from '#lib/constants.ts';
 	import HomeWrite from './HomeWrite.svelte';
 	import HomeListen from './HomeListen.svelte';
 	import NewPlaceMenu from './NewPlaceMenu.svelte';

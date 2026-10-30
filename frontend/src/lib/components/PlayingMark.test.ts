@@ -1,9 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { PLAYING_MARK_LABEL } from '$lib/constants';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { PLAYING_MARK_LABEL } from '#lib/constants.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import PlayingMark from './PlayingMark.svelte';
 import playingMarkSource from './PlayingMark.svelte?raw';

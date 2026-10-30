@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '$lib/api/types';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { audioPlayer, type AudioPlayerCallbacks } from '$lib/services/audioPlayer.svelte';
-import type { PlaybackInfo } from '$lib/services/playbackTypes';
+import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '#lib/api/types.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { audioPlayer, type AudioPlayerCallbacks } from '#lib/services/audioPlayer.svelte.ts';
+import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import {
 	fromSharedAlbum,
 	fromSharedSong,

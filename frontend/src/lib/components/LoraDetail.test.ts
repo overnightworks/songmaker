@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api/fetch';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { ApiError } from '#lib/api/fetch.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 
 const jobStore = vi.hoisted(() => {
 	let value: { job: Record<string, unknown> }[] = [];
@@ -37,37 +37,37 @@ const cancelJob = vi.fn();
 const trackJob = vi.fn();
 const removeJob = vi.fn();
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	ApiError,
 	addLoraSample: (...args: unknown[]) => addLoraSample(...args),
 	patchLoraSample: (...args: unknown[]) => patchLoraSample(...args),
 	deleteLoraSample: (...args: unknown[]) => deleteLoraSample(...args)
 }));
 
-vi.mock('$lib/api/loras', () => ({
+vi.mock('#lib/api/loras.ts', () => ({
 	listOwnPlayableTakes: (...args: unknown[]) => listOwnPlayableTakes(...args),
 	addLoraSampleFromGeneration: (...args: unknown[]) => addLoraSampleFromGeneration(...args)
 }));
 
-vi.mock('$lib/stores/loras', () => ({
+vi.mock('#lib/stores/loras.ts', () => ({
 	refreshLora: (...args: unknown[]) => refreshLora(...args),
 	trainLora: (...args: unknown[]) => trainLora(...args),
 	isLoraActive: (status: string) =>
 		['queued', 'preprocessing', 'training', 'exporting'].includes(status)
 }));
 
-vi.mock('$lib/api/jobs', () => ({
+vi.mock('#lib/api/jobs.ts', () => ({
 	fetchJob: (...args: unknown[]) => fetchJob(...args),
 	cancelJob: (...args: unknown[]) => cancelJob(...args)
 }));
 
-vi.mock('$lib/stores/jobs', () => ({
+vi.mock('#lib/stores/jobs.ts', () => ({
 	activeJobs: jobStore.activeJobs,
 	trackJob: (...args: unknown[]) => trackJob(...args),
 	removeJob: (...args: unknown[]) => removeJob(...args)
 }));
 
-vi.mock('$lib/stores/toast', () => ({ addToast: (...args: unknown[]) => addToast(...args) }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: (...args: unknown[]) => addToast(...args) }));
 
 import LoraDetail from './LoraDetail.svelte';
 import loraDetailSource from './LoraDetail.svelte?raw';

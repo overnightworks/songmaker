@@ -1,8 +1,8 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { tick, type Snippet } from 'svelte';
-	import { uploadReferenceAudio } from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
+	import { uploadReferenceAudio } from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
 	import {
 		activeModels,
 		activeModelsError,
@@ -13,8 +13,8 @@
 		loadGenerationDefaults,
 		presets,
 		savePreset
-	} from '$lib/stores/presets';
-	import { followAppPageLink } from '$lib/stores/navigation';
+	} from '#lib/stores/presets.ts';
+	import { followAppPageLink } from '#lib/stores/navigation.ts';
 	import {
 		changedRecipeFields,
 		changedRecipeTabs,
@@ -28,8 +28,8 @@
 		type RecipeStandard,
 		type RecipeTab,
 		type RecipeValues
-	} from '$lib/utils/recipe-standard';
-	import { RECIPE_PANEL_LABEL, VOICE_PICKER_NONE_LABEL } from '$lib/constants';
+	} from '#lib/utils/recipe-standard.ts';
+	import { RECIPE_PANEL_LABEL, VOICE_PICKER_NONE_LABEL } from '#lib/constants.ts';
 	import {
 		RECIPE_AUTO_LABEL,
 		RECIPE_BPM_LABEL,
@@ -65,7 +65,7 @@
 		RECIPE_TABS_LABEL,
 		RECIPE_TAKES_LABEL,
 		RECIPE_TAKES_OPTIONS
-	} from '$lib/constants/recipe';
+	} from '#lib/constants/recipe.ts';
 	import ParamControls from '../ParamControls.svelte';
 	import VoicePicker from '../VoicePicker.svelte';
 
@@ -83,7 +83,6 @@
 	const TABS_SAVED_WITH_VERSION: readonly RecipeTab[] = ['song', 'engine'];
 
 	let selected = $state<RecipeTab>('song');
-	let referenceFilename = $state<string | null>(null);
 	let referenceUploading = $state(false);
 	let referenceError = $state<string | null>(null);
 	let savingPreset = $state(false);
@@ -100,7 +99,6 @@
 	const sharedPresets = $derived(matchingPresets.filter((preset) => preset.is_shared));
 	const chosenPreset = $derived(matchingEnginePreset(values, $presets));
 	const hasEngineChange = $derived(changedFields.has('preset'));
-	const referencePath = $derived(values.genParams?.reference_audio_path ?? null);
 
 	function change(field: RecipeField): void {
 		onchange(resetRecipeField(values, field, standard));
@@ -147,11 +145,7 @@
 		referenceError = null;
 		try {
 			const result = await uploadReferenceAudio(file);
-			onchange({
-				...values,
-				genParams: { ...values.genParams, reference_audio_path: result.path }
-			});
-			referenceFilename = result.filename;
+			onchange({ ...values, reference: { id: result.id, filename: result.filename } });
 		} catch (error) {
 			referenceError = describeFailure(error, RECIPE_REFERENCE_UPLOAD_ERROR);
 		} finally {
@@ -238,8 +232,8 @@
 {/snippet}
 
 {#snippet referenceControl()}
-	{#if referencePath}
-		<span class="reference-name">{referenceFilename ?? referencePath}</span>
+	{#if values.reference}
+		<span class="reference-name">{values.reference.filename}</span>
 	{:else}
 		<label class="upload"
 			>{referenceUploading ? RECIPE_REFERENCE_UPLOADING : RECIPE_REFERENCE_UPLOAD}<input

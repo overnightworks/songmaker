@@ -4,7 +4,7 @@
 	// overlay over the workspace: it only has the library show the page,
 	// through the frame every address route resolves in.
 	import { onMount } from 'svelte';
-	import { openPlaylistsAddress } from '$lib/stores/libraryContext';
+	import { openPlaylistsAddress } from '#lib/stores/libraryContext.ts';
 
 	onMount(() => {
 		void openPlaylistsAddress();

@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		playableTracks,
 		trackPlaybackInfo,
 		type SharedCollectionView
-	} from '$lib/share/sharedCollection';
-	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
+	} from '#lib/share/sharedCollection.ts';
+	import { SharePlayback, type ShareStreamFetcher } from '#lib/share/sharePlayback.svelte.ts';
 	import {
 		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
-	} from '$lib/constants/now-playing';
+	} from '#lib/constants/now-playing.ts';
 	import {
 		SHARE_SONGS_HEADING,
 		SHARE_BACK_TO_PLAYER_LABEL,
@@ -19,14 +19,14 @@
 		shareNowPlayingLine,
 		SHARE_NO_AUDIO_NOTICE,
 		SHARE_NOW_PLAYING_NO_LYRICS
-	} from '$lib/constants/share';
-	import { formatTime, titleInitials } from '$lib/utils/format';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import PlaylistCover from '$lib/components/PlaylistCover.svelte';
-	import TransportBarFrame from '$lib/components/TransportBarFrame.svelte';
-	import NowPlayingFrame from '$lib/components/NowPlayingFrame.svelte';
-	import NowPlayingQueue from '$lib/components/NowPlayingQueue.svelte';
-	import ShareStatus from '$lib/components/ShareStatus.svelte';
+	} from '#lib/constants/share.ts';
+	import { formatTime, titleInitials } from '#lib/utils/format.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
+	import PlaylistCover from '#lib/components/PlaylistCover.svelte';
+	import TransportBarFrame from '#lib/components/TransportBarFrame.svelte';
+	import NowPlayingFrame from '#lib/components/NowPlayingFrame.svelte';
+	import NowPlayingQueue from '#lib/components/NowPlayingQueue.svelte';
+	import ShareStatus from '#lib/components/ShareStatus.svelte';
 	import SharedFooter from './SharedFooter.svelte';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';

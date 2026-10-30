@@ -1,16 +1,16 @@
-import { backLabel } from '$lib/routes/pageBack';
+import { backLabel } from '#lib/routes/pageBack.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
-import { phoneAppBar } from '$lib/stores/ui';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
+import { phoneAppBar } from '#lib/stores/ui.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import {
 	clearHitboxStyles,
 	clearPointer,
 	injectHitboxStyles,
 	minSquarePx,
 	setPointer
-} from '$lib/test-utils/hitbox';
+} from '#lib/test-utils/hitbox.ts';
 import {
 	ACCOUNT_MENU_LABEL,
 	ACCOUNT_MENU_LOGOUT_LABEL,
@@ -19,10 +19,10 @@ import {
 	HOME_PAGE_LABEL,
 	RAIL_SEARCH_LABEL,
 	SEARCH_OPEN_LABEL
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import type { Pathname } from '$app/types';
+import type { PathnameWithSearchOrHash } from '$app/types';
 import {
 	historyStandsStill,
 	installHistoryController,
@@ -30,37 +30,39 @@ import {
 	pushEntry,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry
-} from '$lib/history/historyController';
-import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
-import { reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
-import { resetLayersForTests } from '$lib/stores/layers';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { playlistList, resetPlaylistsForTests } from '$lib/stores/playlists';
-import { resetRailSearchForTests } from '$lib/stores/railSearch';
-import { railTreeQuery } from '$lib/stores/librarySearch';
+} from '#lib/history/historyController.ts';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { reportedNavigations, startFakeRouter } from '#lib/test-utils/app-navigation.ts';
+import { resetLayersForTests } from '#lib/stores/layers.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { playlistList, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
+import { resetRailSearchForTests } from '#lib/stores/railSearch.ts';
+import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 import { buildAlbum, buildPlaylist, buildSong } from './shell/rail-test-fixtures';
 import PhoneAppBar, { SEARCH_CLOSE_LABEL, SEARCH_SHEET_LABEL } from './PhoneAppBar.svelte';
 
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 
 const navigation = vi.hoisted(() => ({
 	openAppPage: vi.fn(),
 	openLibraryWall: vi.fn(),
 	openRailSearchTarget: vi.fn()
 }));
-vi.mock('$lib/stores/navigation', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/navigation')>()),
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/navigation.ts')>()),
 	...navigation
 }));
 
-vi.mock('$lib/api/library', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/library')>()),
+vi.mock('#lib/api/library.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/library.ts')>()),
 	searchLibrary: vi.fn(() => new Promise(() => undefined))
 }));
 
 const playlistsOnServer = vi.hoisted(() => ({ fetchPlaylists: vi.fn() }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchPlaylists: playlistsOnServer.fetchPlaylists
 }));
 
@@ -126,17 +128,20 @@ function stampNavigationsReportedSince(count: number): void {
 	for (const { type } of reportedNavigations.slice(count)) stampNavigatedEntry(type);
 }
 
-async function followLinkTo(address: Pathname): Promise<void> {
+async function followLinkTo(address: PathnameWithSearchOrHash): Promise<void> {
 	const reported = reportedNavigations.length;
 	// `resolve` has one overload per route; TypeScript cannot relate a union
 	// this wide to them, so the address is narrowed to one static route.
-	await goto(resolve(address as '/'));
+	await goto(resolve(address as '/(library)'));
 	stampNavigationsReportedSince(reported);
 }
 
 // History as a person left it: `from` the page they opened `opened` from, or
 // with no `from` the page the tab was entered on, with nothing of its own below.
-async function standOn(opened: Pathname, from?: Pathname): Promise<void> {
+async function standOn(
+	opened: PathnameWithSearchOrHash,
+	from?: PathnameWithSearchOrHash
+): Promise<void> {
 	if (from === undefined) {
 		await enterAppOn(opened);
 		return;
@@ -284,7 +289,12 @@ describe('PhoneAppBar', () => {
 
 	// #1402, #1506: Home and the Playlists page are places the app opens on, as
 	// the Library is.
-	it.each<{ place: string; address: Pathname; entered: string; from?: Pathname }>([
+	it.each<{
+		place: string;
+		address: PathnameWithSearchOrHash;
+		entered: string;
+		from?: PathnameWithSearchOrHash;
+	}>([
 		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'fresh' },
 		{ place: 'Home', address: HOME_ROUTE_PATH, entered: 'from an album', from: '/album/a1' },
 		{ place: 'the Playlists page', address: '/playlists', entered: 'fresh' },
@@ -326,7 +336,12 @@ describe('PhoneAppBar', () => {
 
 	// #1354 rule 25: ‹ is named after where it goes, and a page opened from
 	// another one carries no account circle (navigation.html, frame I3).
-	it.each<{ page: string; opened: Pathname; from?: Pathname; name: string }>([
+	it.each<{
+		page: string;
+		opened: PathnameWithSearchOrHash;
+		from?: PathnameWithSearchOrHash;
+		name: string;
+	}>([
 		{
 			page: 'an album opened from the Library',
 			opened: '/album/a1',

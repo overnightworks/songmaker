@@ -1,7 +1,7 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
-import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
 const TITLE = 'Delete song?';

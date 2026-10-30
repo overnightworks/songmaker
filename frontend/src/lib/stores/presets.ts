@@ -1,7 +1,7 @@
 import { writable, derived } from 'svelte/store';
-import { MODELS_LOAD_ERROR } from '$lib/constants';
-import type { PresetItem, VersionGenerationParams } from '$lib/api/types';
-import type { AvailableModel } from '$lib/api/client';
+import { MODELS_LOAD_ERROR } from '#lib/constants.ts';
+import type { PresetItem, VersionGenerationParams } from '#lib/api/types.ts';
+import type { AvailableModel } from '#lib/api/client.ts';
 import {
 	fetchPresets,
 	fetchBuiltinDefaults,
@@ -13,8 +13,8 @@ import {
 	updatePreset as updatePresetApi,
 	deletePresetApi,
 	setPresetDefault as setPresetDefaultApi
-} from '$lib/api/client';
-import { recipeModel } from '$lib/stores/recipe';
+} from '#lib/api/client.ts';
+import { recipeModel } from '#lib/stores/recipe.ts';
 
 export const presets = writable<PresetItem[]>([]);
 export const builtinDefaults = writable<Record<string, VersionGenerationParams>>({});

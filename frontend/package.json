@@ -4,6 +4,9 @@
 	"version": "0.0.1",
 	"type": "module",
 	"packageManager": "pnpm@10.32.1",
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && node scripts/inject_worker_precache.mjs",
@@ -47,5 +50,8 @@
 			"cookie": "1.1.1",
 			"deepmerge": "-"
 		}
+	},
+	"dependencies": {
+		"overnightworks-appkit": "https://github.com/overnightworks/appkit/releases/download/v0.8.0/overnightworks-appkit-0.8.0.tgz"
 	}
 }

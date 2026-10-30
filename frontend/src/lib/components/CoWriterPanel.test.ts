@@ -1,8 +1,8 @@
-import { makeHealthResponse, makeSong as song } from '$lib/test-utils/factories';
+import { makeHealthResponse, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CoWriterStreamEvent } from '$lib/api/client';
-import type { ChatMessageItem } from '$lib/api/types';
+import type { CoWriterStreamEvent } from '#lib/api/client.ts';
+import type { ChatMessageItem } from '#lib/api/types.ts';
 import {
 	COWRITER_CONVERSATION_MENU_LABEL,
 	COWRITER_DELETE_CONVERSATION_TITLE,
@@ -11,17 +11,17 @@ import {
 	COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 	COWRITER_RUNNING_TURN_POLL_MS
-} from '$lib/constants';
+} from '#lib/constants.ts';
 
-import { ApiError } from '$lib/api/fetch';
+import { ApiError } from '#lib/api/fetch.ts';
 
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
 const fetchConversations = vi.hoisted(() => vi.fn());
 const fetchConversationMessages = vi.hoisted(() => vi.fn());
 const fetchHealth = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		fetchConversations: (...args: Parameters<typeof fetchConversations>) =>
@@ -49,16 +49,16 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import CoWriterPanel from './CoWriterPanel.svelte';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
-import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
-import { historyComesToRest } from '$lib/history/historyController';
+import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
+import { historyComesToRest } from '#lib/history/historyController.ts';
 import {
 	deleteConversation,
 	fetchMemory,
 	saveUserMemory,
 	startNewConversation
-} from '$lib/api/client';
-import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
+} from '#lib/api/client.ts';
+import { startHealthPolling, stopHealthPolling } from '#lib/stores/health.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 

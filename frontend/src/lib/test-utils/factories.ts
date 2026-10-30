@@ -9,7 +9,7 @@ import type {
 	PlaylistEntryItem,
 	SongSummaryResponse,
 	VersionItem
-} from '$lib/api/types';
+} from '#lib/api/types.ts';
 
 export function makeAuthUser(overrides: Partial<AuthUser> = {}): AuthUser {
 	return { id: 'u1', username: 'felix', role: 'user', ...overrides };

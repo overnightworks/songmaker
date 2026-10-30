@@ -4,32 +4,35 @@ import { get } from 'svelte/store';
 
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { NetworkError } from '$lib/api/fetch';
-import { PLAYING_MARK_LABEL } from '$lib/constants';
-import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { openCollection, setOpenCollection } from '$lib/stores/collection';
-import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { NetworkError } from '#lib/api/fetch.ts';
+import { PLAYING_MARK_LABEL } from '#lib/constants.ts';
+import { LIBRARY_ROUTE_ID, PLAYLISTS_ROUTE_ID } from '#lib/routes/addresses.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { openCollection, setOpenCollection } from '#lib/stores/collection.ts';
+import { librarySurface, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
 import {
 	closeNowPlaying,
 	nowPlayingOpen,
 	nowPlayingPanel,
 	queueContext,
 	selectedSongId
-} from '$lib/stores/player';
-import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
-import { pendingDirtyNavigation } from '$lib/stores/navigation';
+} from '#lib/stores/player.ts';
+import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
+import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
 import {
 	playlistList,
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
-} from '$lib/stores/playlists';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { pressBack } from '$lib/test-utils/library-history';
-import { railTreeQuery } from '$lib/stores/librarySearch';
-import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
-import { chooseLibraryWallOrder } from '$lib/stores/ui';
-import { fetchLibraryListen } from '$lib/api/library';
+} from '#lib/stores/playlists.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { pressBack } from '#lib/test-utils/library-history.ts';
+import { railTreeQuery } from '#lib/stores/librarySearch.ts';
+import { resetLibraryOrderForTests } from '#lib/stores/libraryOrder.ts';
+import { chooseLibraryWallOrder } from '#lib/stores/ui.ts';
+import { fetchLibraryListen } from '#lib/api/library.ts';
 import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
@@ -44,18 +47,22 @@ import {
 } from './rail-test-fixtures';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
-vi.mock('$lib/api/library', async () =>
+vi.mock('#lib/api/library.ts', async () =>
 	(await import('./rail-test-fixtures')).railLibraryApiMock()
 );
-vi.mock('$lib/api/albums', async () => (await import('./rail-test-fixtures')).railAlbumsApiMock());
-vi.mock('$lib/api/songs', async () => (await import('./rail-test-fixtures')).railSongsApiMock());
+vi.mock('#lib/api/albums.ts', async () =>
+	(await import('./rail-test-fixtures')).railAlbumsApiMock()
+);
+vi.mock('#lib/api/songs.ts', async () => (await import('./rail-test-fixtures')).railSongsApiMock());
 const fetchPlaylists = vi.fn().mockResolvedValue([]);
 const fetchPlaylist = vi.fn();
-vi.mock('$lib/api/client', async () => {
+vi.mock('#lib/api/client.ts', async () => {
 	const { railClientApiMock } = await import('./rail-test-fixtures');
 	return railClientApiMock({
 		fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
@@ -156,7 +163,7 @@ describe('RailPlaylistsGroup', () => {
 
 	it('#1354 rule 40 (D3): on the Playlists page its group is the current page and unfolded', async () => {
 		librarySurface.set('playlists');
-		await goto(resolve(PLAYLISTS_ROUTE_PATH));
+		await goto(resolve(PLAYLISTS_ROUTE_ID));
 		const target = await render();
 		expect(
 			requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
@@ -169,10 +176,10 @@ describe('RailPlaylistsGroup', () => {
 	});
 
 	it.each([
-		{ address: PLAYLISTS_ROUTE_PATH, current: true },
+		{ address: PLAYLISTS_ROUTE_ID, current: true },
 		{ address: '/settings', current: false },
-		{ address: '/library', current: false },
-		{ address: '/', current: false }
+		{ address: LIBRARY_ROUTE_ID, current: false },
+		{ address: '/(library)', current: false }
 	] as const)(
 		'defect:#1523: with the surface still on playlists, the word Playlists is current: $current and its group is unfolded at $address',
 		async ({ address, current }) => {
@@ -190,7 +197,7 @@ describe('RailPlaylistsGroup', () => {
 
 	it('defect:#1523: the word Playlists is current again after Back from Settings, with no reload', async () => {
 		librarySurface.set('playlists');
-		await goto(resolve(PLAYLISTS_ROUTE_PATH));
+		await goto(resolve(PLAYLISTS_ROUTE_ID));
 		const target = await render();
 		const word = requireElement(target, 'a.page-link');
 		expect(word.getAttribute('aria-current')).toBe('page');

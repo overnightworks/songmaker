@@ -13,17 +13,17 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { selectedSong } from '$lib/stores/player';
+	import { selectedSong } from '#lib/stores/player.ts';
 	import {
 		albumWhoseSongsShow,
 		librarySurface,
 		playlistWhoseDetailShows
-	} from '$lib/stores/libraryContext';
-	import { openCollection } from '$lib/stores/collection';
-	import { loadActiveModels } from '$lib/stores/presets';
-	import { resourceSync, retryResourceSync } from '$lib/stores/resourceSync';
-	import { offline } from '$lib/stores/connectivity';
-	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
+	} from '#lib/stores/libraryContext.ts';
+	import { openCollection } from '#lib/stores/collection.ts';
+	import { loadActiveModels } from '#lib/stores/presets.ts';
+	import { resourceSync, retryResourceSync } from '#lib/stores/resourceSync.ts';
+	import { offline } from '#lib/stores/connectivity.ts';
+	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '#lib/constants.ts';
 	import LibraryHome from './LibraryHome.svelte';
 	import LibraryWall from './LibraryWall.svelte';
 	import SongDetailView from './SongDetailView.svelte';

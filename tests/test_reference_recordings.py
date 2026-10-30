@@ -59,9 +59,9 @@ def test_an_upload_creates_one_complete_row_for_its_0600_file(ctx, tmp_path):
     stored = _store(ctx, content, "my song.wav")
     [row] = _rows(ctx)
     assert row.user_id == "owner"
-    assert row.storage_path == stored
+    assert (stored.id, stored.storage_path) == (row.id, row.storage_path)
     assert (ctx.audio_dir / row.storage_path).read_bytes() == content
-    assert stat.S_IMODE((ctx.audio_dir / stored).stat().st_mode) == 0o600
+    assert stat.S_IMODE((ctx.audio_dir / stored.storage_path).stat().st_mode) == 0o600
     assert row.original_filename == "my song.wav"
     assert row.size_bytes == len(content)
     assert row.duration_sec == pytest.approx(2.0, abs=0.01)
@@ -195,7 +195,9 @@ def test_a_successful_upload_logs_user_reference_and_bytes_only(ctx, caplog):
             "/api/audio/upload", files={"file": ("private-name.wav", b"a" * 100)},
         )
     [row] = _rows(ctx)
-    assert response.json() == {"path": row.storage_path, "filename": "private-name.wav"}
+    assert response.json() == {
+        "id": row.id, "path": row.storage_path, "filename": "private-name.wav",
+    }
     message = next(
         r.getMessage() for r in caplog.records if r.name == "songmaker_cli.reference_audio"
     )

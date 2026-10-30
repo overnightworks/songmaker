@@ -1,9 +1,9 @@
-import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
+import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { editLyrics, loadSongData } from '$lib/stores/editor';
-import type { SongItem } from '$lib/api/types';
+import { editLyrics, loadSongData } from '#lib/stores/editor.ts';
+import type { SongItem } from '#lib/api/types.ts';
 import WriteColumn from './WriteColumn.svelte';
 
 function draftSongDefaults(): Partial<SongItem> {

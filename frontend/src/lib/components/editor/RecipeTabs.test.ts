@@ -5,10 +5,10 @@ import {
 	fetchActiveModels,
 	fetchGenerationDefaults,
 	uploadReferenceAudio
-} from '$lib/api/client';
+} from '#lib/api/client.ts';
 import { goto } from '$app/navigation';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import type { PresetItem } from '$lib/api/types';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import type { PresetItem } from '#lib/api/types.ts';
 import {
 	activeModels,
 	activeModelsError,
@@ -16,27 +16,27 @@ import {
 	builtinDefaults,
 	generationDefaultsError,
 	presets
-} from '$lib/stores/presets';
-import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
-import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { recipeModel } from '$lib/stores/recipe';
-import { makeSong } from '$lib/test-utils/factories';
+} from '#lib/stores/presets.ts';
+import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
+import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
+import { recipeModel } from '#lib/stores/recipe.ts';
+import { makeSong } from '#lib/test-utils/factories.ts';
 import { get } from 'svelte/store';
-import { loras } from '$lib/stores/loras';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import type { RecipeStandard, RecipeValues } from '$lib/utils/recipe-standard';
+import { loras } from '#lib/stores/loras.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import type { RecipeStandard, RecipeValues } from '#lib/utils/recipe-standard.ts';
 import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
 import RecipeTabs from './RecipeTabs.svelte';
 
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchActiveModels: vi.fn().mockResolvedValue([{ id: 'turbo', is_active: true }]),
 	fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
 	fetchVersions: vi.fn().mockResolvedValue([]),
 	uploadReferenceAudio: vi.fn(),
 	createPreset: vi.fn()
 }));
-vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
+vi.mock('#lib/api/loras.ts', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 
 const modelStandard: RecipeStandard = {
 	model: 'turbo',
@@ -61,6 +61,7 @@ function atStandard(overrides: Partial<RecipeValues> = {}): RecipeValues {
 		audioDuration: 0,
 		keyScale: '',
 		genParams: null,
+		reference: null,
 		model: 'turbo',
 		takes: 1,
 		...overrides
@@ -177,13 +178,15 @@ describe('RecipeTabs', () => {
 	it('Engine Reset all keeps Voice and Reference', async () => {
 		const target = await renderTabs(
 			atStandard({
-				genParams: { user_lora_id: 'mara', reference_audio_path: 'a.wav', lm_temperature: 0.5 }
+				genParams: { user_lora_id: 'mara', lm_temperature: 0.5 },
+				reference: { id: 'r1', filename: 'a.wav' }
 			})
 		);
 		await clickSettled(recipeTabNamed(target, 'Engine'));
 		expect(target.textContent).toContain('Saved with the version');
 		await clickSettled(getByRoleButton(target, 'Reset all'));
-		expect(props.values.genParams).toEqual({ user_lora_id: 'mara', reference_audio_path: 'a.wav' });
+		expect(props.values.genParams).toEqual({ user_lora_id: 'mara' });
+		expect(props.values.reference).toEqual({ id: 'r1', filename: 'a.wav' });
 	});
 
 	it('shows an engine field equal to its grey default as unchanged', async () => {
@@ -320,8 +323,8 @@ describe('RecipeTabs', () => {
 		expect(fetchGenerationDefaults).toHaveBeenCalled();
 	});
 
-	it('puts the uploaded reference path into the draft, with the input disabled while uploading', async () => {
-		const response = Promise.withResolvers<{ path: string; filename: string }>();
+	it('puts the uploaded reference into the draft, with the input disabled while uploading', async () => {
+		const response = Promise.withResolvers<{ id: string; path: string; filename: string }>();
 		vi.mocked(uploadReferenceAudio).mockReturnValueOnce(response.promise);
 		const target = await renderTabs();
 		const input = target.querySelector<HTMLInputElement>('input[type="file"]') as HTMLInputElement;
@@ -329,10 +332,11 @@ describe('RecipeTabs', () => {
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await tick();
 		expect(input.disabled).toBe(true);
-		response.resolve({ path: '/reference.wav', filename: 'ref.wav' });
+		response.resolve({ id: 'reference-1', path: '/reference.wav', filename: 'ref.wav' });
 		await vi.waitFor(() =>
-			expect(props.values.genParams?.reference_audio_path).toBe('/reference.wav')
+			expect(props.values.reference).toEqual({ id: 'reference-1', filename: 'ref.wav' })
 		);
+		expect(props.values.genParams).toBeNull();
 	});
 
 	it.each([
@@ -444,10 +448,14 @@ describe('RecipeTabs', () => {
 
 	it('removes the reference with its reset and keeps the voice', async () => {
 		const target = await renderTabs(
-			atStandard({ genParams: { user_lora_id: 'mara', reference_audio_path: 'a.wav' } })
+			atStandard({
+				genParams: { user_lora_id: 'mara' },
+				reference: { id: 'r1', filename: 'a.wav' }
+			})
 		);
 		await clickSettled(resetButton(target, 'reference') as HTMLElement);
 		expect(props.values.genParams).toEqual({ user_lora_id: 'mara' });
+		expect(props.values.reference).toBeNull();
 	});
 
 	it('offers no Repaint, Off or Source', async () => {

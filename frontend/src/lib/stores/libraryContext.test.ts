@@ -9,21 +9,21 @@ import {
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry,
 	standingHistoryEntry
-} from '$lib/test-utils/library-history';
+} from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makePlaylist as playlistItem,
 	makePlaylistDetail as playlistDetail,
 	makeSong as song
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, PlaylistDetailItem } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
-import { LIBRARY_HISTORY_KIND } from '$lib/constants';
-import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
+import type { AlbumItem, PlaylistDetailItem } from '#lib/api/types.ts';
+import { ApiError } from '#lib/api/fetch.ts';
+import { LIBRARY_HISTORY_KIND } from '#lib/constants.ts';
+import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
 import {
 	libraryBrowse,
 	librarySearch,
@@ -31,16 +31,21 @@ import {
 	librarySort,
 	loadLibraryBrowse,
 	resetLibrarySearchForTests
-} from '$lib/stores/librarySearch';
-import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded, songList } from '$lib/stores/libraryData';
-import { selectSong } from '$lib/stores/navigation';
-import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
+} from '#lib/stores/librarySearch.ts';
+import {
+	albumList,
+	allAlbumsLoad,
+	ensureAllAlbumsLoaded,
+	songList
+} from '#lib/stores/libraryData.ts';
+import { selectSong } from '#lib/stores/navigation.ts';
+import { selectedAlbumId, selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 import {
 	playlistList,
 	playlistLoad,
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
-} from '$lib/stores/playlists';
+} from '#lib/stores/playlists.ts';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -56,26 +61,28 @@ const searchLibrary = vi.fn();
 // mocked the same way navigation.test.ts does, so a crossing write's `goto`
 // call moves the URL like the real one does.
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args)
 }));
 // player.ts's ensureGenerationsLoaded, which openTakeAddress uses to resolve
 // a take number against the song's full generations, fetches through this
-// module's fetchSong rather than $lib/api/songs's -- both share the fetchSong
+// module's fetchSong rather than #lib/api/songs's -- both share the fetchSong
 // spy below so a test only has to program one mocked response either way.
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
@@ -99,15 +106,15 @@ import {
 	installHistoryController,
 	pushEntry,
 	replaceEntry
-} from '$lib/history/historyController';
-import { holdLayer } from '$lib/stores/layers';
-import { fakePage, holdRouteLoads } from '$lib/test-utils/app-navigation';
+} from '#lib/history/historyController.ts';
+import { holdLayer } from '#lib/stores/layers.ts';
+import { fakePage, holdRouteLoads, landed } from '#lib/test-utils/app-navigation.ts';
 import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,
 	LIBRARY_ROUTE_PATH,
 	songRoutePath
-} from '$lib/routes/addresses';
+} from '#lib/routes/addresses.ts';
 
 import {
 	applyLibraryHistory,
@@ -381,7 +388,7 @@ describe('applyLibraryHistory', () => {
 	});
 
 	it('clears a playlist collection that no longer exists', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchPlaylist.mockRejectedValueOnce(new ApiError(404, 'gone', '/api/playlists/gone'));
 		const state = { ...libraryRootState(), collection: { kind: 'playlist' as const, id: 'gone' } };
 		await applyLibraryHistory(state);
@@ -579,7 +586,7 @@ describe('applyLibraryHistory', () => {
 	});
 
 	it('keeps the selected song after a transient fetch error but clears it on 404', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchSong.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/songs/s9'));
 		await applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's9' });
 		expect(get(selectedSongId)).toBe('s9');
@@ -629,7 +636,7 @@ describe('applyLibraryHistory', () => {
 
 describe('hydrateLibraryFromHistory', () => {
 	it('1354_rule_31: replaces history after hydrate so a deleted playlist is not replayed', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		replaceHistoryEntry('/', {
 			...libraryRootState(),
 			surface: 'detail',
@@ -870,7 +877,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 
 		const written = writeLibraryHistory(libraryRootState(), songRoutePath('a1', 's1'), 'push');
 
-		expect(location.pathname).toBe(songRoutePath('a1', 's1'));
+		expect((await landed(location)).pathname).toBe(songRoutePath('a1', 's1'));
 		expect(historyEntry()).toEqual(libraryRootState());
 		await written;
 		expect(goto).toHaveBeenCalledWith(songRoutePath('a1', 's1'), {
@@ -905,7 +912,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 
 			const songMounted = writeLibraryHistory(song, songRoutePath('a2', 's1'), 'push');
 
-			expect(location.pathname).toBe(songRoutePath('a2', 's1'));
+			expect((await landed(location)).pathname).toBe(songRoutePath('a2', 's1'));
 			expect(historyEntry()).toEqual(song);
 			const songEntry = standingHistoryEntry();
 			routesLoaded();
@@ -925,7 +932,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// the page underneath instead of stepping past it.
 	it('installs a crossing push queued behind a step back the moment that step lands', async () => {
 		await writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'replace');
-		const leaveMenu = holdLayer('menu', () => undefined);
+		const leaveMenu = await landed(holdLayer('menu', () => undefined));
 		const lengthBefore = historyLength();
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
 
@@ -947,11 +954,11 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	it("gives a layer opened while the album's route still loads its entry at once, which Back closes and keeps the album", async () => {
 		await writeLibraryHistory(libraryRootState(), LIBRARY_ROUTE_PATH, 'replace');
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
-		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
+		await landed(void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push'));
 		const album = standingHistoryEntry();
 		let menuClosed = false;
 
-		holdLayer('menu', () => (menuClosed = true));
+		await landed(holdLayer('menu', () => (menuClosed = true)));
 
 		expect(standingHistoryEntry()).toEqual({ id: expect.any(Number), layer: 'menu' });
 		expect(standingHistoryEntry()?.id).toBeGreaterThan(album?.id ?? Number.NaN);
@@ -1036,15 +1043,14 @@ describe('a page load', () => {
 	});
 
 	// Issue #1263: only history the controller has moving holds a write.
-	it('writes at once before the router reports its start, and the start keeps that newer library', () => {
+	it('writes within the task before the router reports its start, and the start keeps that newer library', async () => {
 		const reportRouterStarted = reloadLibraryPageBeforeRouterStarts();
 		const scrolled = { ...playlistState, scrollAnchor: 960 };
-
 		void writeLibraryHistory(scrolled, '/playlist/p', 'replace');
-
 		expect(historyEntry()).toEqual(scrolled);
-		reportRouterStarted();
+		await landed(reportRouterStarted());
 		expect(historyEntry()).toEqual(scrolled);
+		expect(standingHistoryEntry()?.id).toBeDefined();
 	});
 });
 
@@ -1138,7 +1144,7 @@ describe('openSongAddress', () => {
 	});
 
 	it('reports an unknown album even when the song lookup also comes back empty', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
 		mountAddressRoute('/album/ghost/tide');
 
@@ -1455,7 +1461,7 @@ describe('openTakeAddress', () => {
 	});
 
 	it('reports an unknown album even when the song lookup also comes back empty', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
 		mountAddressRoute('/album/ghost/tide/take/1');
 
@@ -1545,7 +1551,7 @@ describe('resolveLegacySongQueryAddress', () => {
 	});
 
 	it('reports an unknown song id as the same honest 404 an unknown slug gets', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchSong.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/songs/dead'));
 
 		await expect(resolveLegacySongQueryAddress('dead', null)).resolves.toEqual({
@@ -1554,7 +1560,7 @@ describe('resolveLegacySongQueryAddress', () => {
 	});
 
 	it('propagates a failure that is not a missing song instead of calling it unknown', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchSong.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/songs/s9'));
 
 		await expect(resolveLegacySongQueryAddress('s9', null)).rejects.toThrow('boom');
@@ -1572,7 +1578,7 @@ describe('openAlbumAddress', () => {
 	});
 
 	it('reports an unknown slug without opening anything', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
 		mountAddressRoute('/album/ghost');
 
@@ -1622,7 +1628,7 @@ describe('openAlbumAddress', () => {
 	});
 
 	it('propagates a failure that is not a missing album instead of calling it unknown', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/albums/a9'));
 		mountAddressRoute('/album/a9');
 
@@ -1696,7 +1702,7 @@ describe('openPlaylistAddress', () => {
 	});
 
 	it('propagates a failure that is not a missing playlist instead of calling it unknown', async () => {
-		const { ApiError } = await import('$lib/api/fetch');
+		const { ApiError } = await import('#lib/api/fetch.ts');
 		fetchPlaylists.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/playlists'));
 		mountAddressRoute('/playlist/friday-night');
 
@@ -1975,8 +1981,8 @@ describe('an address route whose history moves on', () => {
 		collection: { kind: 'album' as const, id: 'a2' }
 	};
 
-	function moveHistoryOn(): void {
-		replaceEntry(albumRoutePath('a2'), { library: albumLeftFor });
+	async function moveHistoryOn(): Promise<void> {
+		await landed(replaceEntry(albumRoutePath('a2'), { library: albumLeftFor }));
 	}
 
 	const notFound = new ApiError(404, 'not found', '/api/lookup');
@@ -2015,7 +2021,7 @@ describe('an address route whose history moves on', () => {
 		'mounts the $route route over the address history moved on to before it resolved',
 		async ({ mountedAt, lookup, resolve }) => {
 			mountAddressRoute(mountedAt);
-			moveHistoryOn();
+			await moveHistoryOn();
 
 			await expect(resolve()).resolves.toBe('found');
 
@@ -2030,7 +2036,7 @@ describe('an address route whose history moves on', () => {
 		async ({ mountedAt, lookup, lookupFindsNothing, resolve }) => {
 			mountAddressRoute(mountedAt);
 			lookup.mockImplementationOnce(async () => {
-				moveHistoryOn();
+				await moveHistoryOn();
 				return lookupFindsNothing();
 			});
 
@@ -2046,7 +2052,7 @@ describe('an address route whose history moves on', () => {
 		async ({ mountedAt, lookup, resolve }) => {
 			mountAddressRoute(mountedAt);
 			lookup.mockImplementationOnce(async () => {
-				moveHistoryOn();
+				await moveHistoryOn();
 				throw new ApiError(500, 'boom', '/api/lookup');
 			});
 
@@ -2059,7 +2065,7 @@ describe('an address route whose history moves on', () => {
 
 	it('mounts the route of the address history moved on to before the Playlists page resolved', async () => {
 		mountAddressRoute('/playlists');
-		moveHistoryOn();
+		await moveHistoryOn();
 
 		await expect(openPlaylistsAddress()).resolves.toBe('found');
 
@@ -2072,7 +2078,7 @@ describe('an address route whose history moves on', () => {
 		'resolves nothing for the $route route mounted over its address under the page the router kept',
 		async ({ mountedAt, lookup, resolve }) => {
 			mountAddressRoute(mountedAt);
-			replaceEntry(mountedAt, { library: albumLeftFor });
+			await landed(replaceEntry(mountedAt, { library: albumLeftFor }));
 			await mountRouteUnderKeptPage();
 
 			await expect(resolve()).resolves.toBe('found');

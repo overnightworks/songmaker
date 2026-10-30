@@ -8,7 +8,7 @@
 		transportButtonFace,
 		transportButtonLabel,
 		type TransportState
-	} from '$lib/services/audioPlayer.svelte';
+	} from '#lib/services/audioPlayer.svelte.ts';
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';

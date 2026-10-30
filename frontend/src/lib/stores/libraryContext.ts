@@ -1,7 +1,7 @@
 import { untrack } from 'svelte';
 import { get, writable } from 'svelte/store';
 import { page } from '$app/state';
-import { fetchAlbum } from '$lib/api/albums';
+import { fetchAlbum } from '#lib/api/albums.ts';
 import {
 	historyMoves,
 	historyStandsStill,
@@ -9,22 +9,24 @@ import {
 	loadHistoryPageForTests,
 	mountAddressOver,
 	navigateTo,
-	pageStateOfHistoryState,
 	pushEntry,
 	remountOverStandingEntry,
 	replaceEntry,
 	resetHistoryControllerForTests,
 	showStandingPage,
+	standingAddress,
 	standingHistoryState,
-	standingPageEntryId
-} from '$lib/history/historyController';
-import { fetchPlaylists } from '$lib/api/client';
-import { isNotFound } from '$lib/api/fetch';
-import type { LibrarySort } from '$lib/api/library';
-import { fetchSong, fetchSongs } from '$lib/api/songs';
-import type { PlaylistItem, SongItem } from '$lib/api/types';
-import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
-import { type OpenCollection, openCollection, setOpenCollection } from '$lib/stores/collection';
+	standingPageEntryId,
+	standingPageState
+} from '#lib/history/historyController.ts';
+import { pageStateOfHistoryState } from '#lib/history/routerHistoryState.ts';
+import { fetchPlaylists } from '#lib/api/client.ts';
+import { isNotFound } from '#lib/api/fetch.ts';
+import type { LibrarySort } from '#lib/api/library.ts';
+import { fetchSong, fetchSongs } from '#lib/api/songs.ts';
+import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
+import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '#lib/constants.ts';
+import { type OpenCollection, openCollection, setOpenCollection } from '#lib/stores/collection.ts';
 import {
 	libraryBrowse,
 	librarySearch,
@@ -32,21 +34,21 @@ import {
 	restoreLibraryBrowse,
 	restoreLibrarySearch,
 	searchQuery
-} from '$lib/stores/librarySearch';
+} from '#lib/stores/librarySearch.ts';
 import {
 	albumList,
 	loadSongsForAlbum,
 	rereadAllAlbums,
 	songList,
 	upsertSongInList
-} from '$lib/stores/libraryData';
+} from '#lib/stores/libraryData.ts';
 import {
 	ensureGenerationsLoaded,
 	selectedAlbumId,
 	selectedGenerationId,
 	selectedSongId
-} from '$lib/stores/player';
-import { deselectPlaylist, loadPlaylistDetail, playlistList } from '$lib/stores/playlists';
+} from '#lib/stores/player.ts';
+import { deselectPlaylist, loadPlaylistDetail, playlistList } from '#lib/stores/playlists.ts';
 import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,
@@ -61,11 +63,11 @@ import {
 	standsOnLibraryPage,
 	standsOnPlaylistsPage,
 	takeRoutePath
-} from '$lib/routes/addresses';
-import { standingPathname } from '$lib/routes/standingAddress';
-import type { RailSearchTarget } from '$lib/stores/railSearch';
-import { CREATED_SORTS } from '$lib/utils/recency';
-import { songTakesLoaded } from '$lib/utils/playable';
+} from '#lib/routes/addresses.ts';
+import { standingPathname } from '#lib/routes/standingAddress.ts';
+import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
+import { CREATED_SORTS } from '#lib/utils/recency.ts';
+import { songTakesLoaded } from '#lib/utils/playable.ts';
 
 // 'home' shows Home (LibraryHome: Listen), 'browse' the library wall (the
 // LibraryWall component), 'playlists' the Playlists page's wall of playlists
@@ -244,29 +246,26 @@ type HistoryWriteMode = 'push' | 'replace';
 // place.
 //
 // The library shows a new page the moment its stores change, so its entry
-// stands in the same task (issue #1263): the address moves with the screen,
-// and a Back pressed at once steps onto the entry the page was opened from.
-// A write from a library page -- an entry carrying a library state -- is
-// therefore shallow routing (`pushState`/`replaceState`), synchronous and
-// without a route resolution. When it changes which route file the address
-// names (`/`, `/library`, `/album/<slug>`, `/album/<slug>/<song>`,
-// `/album/<slug>/<song>/take/<n>`, `/playlists`, `/playlist/<slug>`;
-// `libraryRouteShape` names which), a `goto` then mounts the route of that
-// address over the entry already standing, carrying the library as its page
-// state. A mount moves no entry: a newer one supersedes it and a Back aborts
-// it, and a write that keeps the route while a mount is loading re-issues the
-// mount over the entry now standing, or the older mount would land on it with
-// the library it started with. Such an entry keeps the navigation index of the library entry
-// under it, so Back or Forward between the two is shallow: the library applies
-// the entry and the mounted route stays, as it does for same-shape churn --
-// filter, sort, scroll, search cursor, another song of the open album, another
-// take of the open song -- which never mounts anything. Issue #276 measured
-// what a `goto` costs per write against how often that churn fires, which is
-// why only a crossing mounts. From any other page -- an app page, or an
-// address its route states as unknown, unreachable or still loading, which
-// writes no library state -- the library shows nothing before its route
-// loads, so there the write is one `goto`, and Back onto that page navigates
-// and loads its route again.
+// stands within the same task (issue #1263): the address moves with the screen,
+// and a Back pressed at once steps onto the entry the page was opened from. A
+// write from a library page -- an entry carrying a library state -- is
+// therefore shallow routing (`pushState`/`replaceState`), which loads no route.
+// When it changes which route file the address names (`libraryRouteShape` lists
+// them), a `goto` then mounts the route of that address over the entry already
+// standing, carrying the library as its page state. A mount moves no entry: a
+// newer one supersedes it and a Back aborts it, and a write that keeps the
+// route while a mount is loading re-issues the mount over the entry now
+// standing, or the older mount would land on it with the library it started
+// with. Such an entry keeps the navigation index of the library entry under it,
+// so Back or Forward between the two is shallow: the library applies the entry
+// and the mounted route stays, as it does for same-shape churn -- filter, sort,
+// scroll, search cursor, another song of the open album, another take of the
+// open song -- which never mounts anything. Issue #276 measured what a `goto`
+// costs per write against how often that churn fires, which is why only a
+// crossing mounts. From any other page -- an app page, or an address its route
+// states as unknown, unreachable or still loading, which writes no library
+// state -- the library shows nothing before its route loads, so there the write
+// is one `goto`, and Back onto that page navigates and loads its route again.
 //
 // Only history the controller has moving holds a write: a step back it has
 // underway (a layer closing, Go to song leaving full Now Playing),
@@ -306,7 +305,7 @@ function writeLibraryHistoryNow(
 	mode: HistoryWriteMode
 ): Promise<void> {
 	const crossesRoutes =
-		libraryRouteShape(window.location.pathname) !== libraryRouteShape(pathnameOf(url));
+		libraryRouteShape(standingAddress().pathname) !== libraryRouteShape(pathnameOf(url));
 	if (!crossesRoutes) {
 		const written = writeShallowLibraryHistory(state, url, mode);
 		return remountOverStandingEntry(url, libraryPageState(written));
@@ -319,7 +318,7 @@ function writeLibraryHistoryNow(
 
 function historyStandsInLibraryWorkspace(): boolean {
 	return (
-		libraryRouteShape(window.location.pathname) !== 'external' &&
+		libraryRouteShape(standingAddress().pathname) !== 'external' &&
 		isLibraryHistoryState(libraryHistoryEntry())
 	);
 }
@@ -358,7 +357,7 @@ export function restoreLibraryHistoryOnRouterStart(): () => void {
 		const restored = loaded;
 		loaded = null;
 		if (!isLibraryHistoryState(restored) || isLibraryHistoryState(libraryHistoryEntry())) return;
-		writeShallowLibraryHistory(restored, window.location.href, 'replace');
+		writeShallowLibraryHistory(restored, standingAddress().href, 'replace');
 	};
 }
 
@@ -378,17 +377,18 @@ export function currentLibraryHistoryState(): unknown {
 	return latestHeldWrite ?? libraryHistoryEntry();
 }
 
-// What a history entry says about the library, whichever way it was written:
-// the router keeps it under its page state, and an entry written raw before
-// the router did (a tab kept open across the change) is that state itself.
-// Every read of an entry -- the standing one or the one a popstate lands on --
-// goes through here, and the address history stands on decides what it says
-// (`entryForAddress`): a popstate reaches its handler after the address moved,
-// and a handler that attaches late hears the entry history stands on.
-export function libraryHistoryEntry(entry: unknown = standingHistoryState()): unknown {
-	const pageState = pageStateOfHistoryState(entry);
-	const written = pageState === null ? entry : (pageState.library ?? null);
-	return entryForAddress(written, window.location.pathname);
+// What a history entry says about the library, whichever way it was written: the
+// router keeps it under its page state, and an entry written raw before the
+// router did is that state itself. Every read of an entry -- the standing one,
+// as the controller wrote it until the router has landed it, or the one a
+// popstate lands on -- goes through here, and the address history stands on
+// decides what it says (`entryForAddress`).
+export function libraryHistoryEntry(entry?: unknown): unknown {
+	const standing = entry === undefined;
+	const pageState = standing ? standingPageState() : pageStateOfHistoryState(entry);
+	const raw = standing ? standingHistoryState() : entry;
+	const written = pageState === null ? raw : (pageState.library ?? null);
+	return entryForAddress(written, (standing ? standingAddress() : window.location).pathname);
 }
 
 // Home had no address of its own before #1506: the Library wall stood at `/`,

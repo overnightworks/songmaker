@@ -1,11 +1,11 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path; the server answers the sign-in address with a redirect */
-	import { signInAddress } from '$lib/api/fetch';
+	import { signInAddress } from '#lib/api/fetch.ts';
 	import {
 		COWRITER_PROBLEM_LOOKS,
 		cowriterWaitClock,
 		type CowriterProblem
-	} from '$lib/utils/cowriter-ui';
+	} from '#lib/utils/cowriter-ui.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {

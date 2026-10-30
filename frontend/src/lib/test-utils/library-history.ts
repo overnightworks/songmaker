@@ -1,5 +1,5 @@
 import { tick } from 'svelte';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	restoreLibraryHistoryOnRouterStart,
@@ -7,25 +7,31 @@ import {
 	openLibraryAddress,
 	loadLibraryHistoryPageForTests,
 	type LibraryHistoryState
-} from '$lib/stores/libraryContext';
-import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
+} from '#lib/stores/libraryContext.ts';
+import {
+	followShellLayers,
+	initNavigation,
+	resetNavigationForTests
+} from '#lib/stores/navigation.ts';
 import {
 	historyComesToRest,
 	installHistoryController,
 	mountRouteOfLandedAddress,
 	ownStepBacksUnderwayForTests,
-	pageStateOfHistoryState,
+	standingPageState,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
 	type HistoryEntry
-} from '$lib/history/historyController';
-import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
+} from '#lib/history/historyController.ts';
+import { pageStateOfHistoryState } from '#lib/history/routerHistoryState.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
 import {
 	fakePage,
+	laterTask,
 	reportedNavigations,
 	startFakeRouter,
 	writeHistoryEntry
-} from '$lib/test-utils/app-navigation';
+} from '#lib/test-utils/app-navigation.ts';
 
 // The one place tests touch the browser history: they seed and read entries,
 // and press Back and Forward, through these helpers, so the shape an entry is
@@ -89,6 +95,7 @@ export async function pressForward(): Promise<void> {
 // A popstate that lands where history already stands -- what a user's Back
 // from an entry above it delivers -- resolving once the library has reacted.
 export async function landOnStandingEntry(): Promise<void> {
+	await laterTask();
 	window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
 	await tick();
 }
@@ -109,6 +116,7 @@ async function traverseHistory(step: () => void): Promise<void> {
 	const landed = new Promise((resolve) =>
 		window.addEventListener('popstate', resolve, { once: true })
 	);
+	await laterTask();
 	step();
 	await landed;
 	await tick();
@@ -138,7 +146,8 @@ export function reloadLibraryPage(): Promise<void> {
 // controller has underway lands -- below the one it stands on now, which is
 // as far as a test needs to tell them apart.
 export function plannedHistoryIndex(): number {
-	const standing = standingHistoryEntry()?.id ?? Number.NEGATIVE_INFINITY;
+	const standing =
+		(standingPageState()?.entry as HistoryEntry | undefined)?.id ?? Number.NEGATIVE_INFINITY;
 	return ownStepBacksUnderwayForTests() ? standing - 1 : standing;
 }
 

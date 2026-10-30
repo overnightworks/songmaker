@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { AlbumItem } from '$lib/api/types';
-	import { createSong } from '$lib/api/client';
-	import { addSongToList } from '$lib/stores/libraryData';
-	import { selectSong } from '$lib/stores/navigation';
+	import type { AlbumItem } from '#lib/api/types.ts';
+	import { createSong } from '#lib/api/client.ts';
+	import { addSongToList } from '#lib/stores/libraryData.ts';
+	import { selectSong } from '#lib/stores/navigation.ts';
 	import {
 		NEW_PLACE_TEXT_MAX_LENGTH,
 		NEW_SONG_CLOSE_LABEL,
@@ -12,7 +12,7 @@
 		NEW_SONG_REFUSED,
 		NEW_SONG_TITLE_LABEL,
 		newSongCardLabel
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {

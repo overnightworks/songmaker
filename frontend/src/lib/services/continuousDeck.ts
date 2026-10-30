@@ -1,4 +1,4 @@
-import type { QueueStreamTrackItem } from '$lib/api/types';
+import type { QueueStreamTrackItem } from '#lib/api/types.ts';
 
 const MP3_MIME_TYPE = 'audio/mpeg';
 const CHUNK_BYTES = 1024 * 1024;

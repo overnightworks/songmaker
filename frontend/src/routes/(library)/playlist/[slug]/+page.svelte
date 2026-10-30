@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { describeFailure } from '$lib/api/fetch';
-	import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
-	import { openPlaylistAddress } from '$lib/stores/libraryContext';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { LIBRARY_ROUTE_ID } from '#lib/routes/addresses.ts';
+	import { openPlaylistAddress } from '#lib/stores/libraryContext.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
 
 	type AddressState = 'resolving' | 'open' | 'unknown' | 'unreachable';
 
@@ -64,7 +64,7 @@
 	<div class="address-overlay" role="alert">
 		<h1>{UNKNOWN_PLAYLIST_HEADING}</h1>
 		<p>{UNKNOWN_PLAYLIST_MESSAGE}</p>
-		<a class="address-action" href={resolve(LIBRARY_ROUTE_PATH)}>{BACK_TO_LIBRARY_LABEL}</a>
+		<a class="address-action" href={resolve(LIBRARY_ROUTE_ID)}>{BACK_TO_LIBRARY_LABEL}</a>
 	</div>
 {:else if addressState === 'unreachable'}
 	<div class="address-overlay" role="alert">

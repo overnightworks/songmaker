@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
 import {
@@ -133,7 +133,7 @@ describe('generation API contract', () => {
 
 describe('generation API wire bytes (#1882 done-when: wire bytes unchanged)', () => {
 	it('uploads the reference audio as multipart form data and returns the stored file', async () => {
-		const stored = { path: '/audio/ref.wav', filename: 'ref.wav' };
+		const stored = { id: 'reference-1', path: '/audio/ref.wav', filename: 'ref.wav' };
 		mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(stored) });
 		const file = new File(['wav'], 'ref.wav', { type: 'audio/wav' });
 

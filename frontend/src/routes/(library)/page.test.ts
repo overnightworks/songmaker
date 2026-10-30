@@ -1,22 +1,26 @@
-import { historyEntry, historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
-import { startFakeRouter } from '$lib/test-utils/app-navigation';
-import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
+import {
+	historyEntry,
+	historyLength,
+	replaceHistoryEntry
+} from '#lib/test-utils/library-history.ts';
+import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
+import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, unmount, type Component } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, SongItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { browserReportsOnline } from '$lib/test-utils/network';
-import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
-import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
-import { resetCollectionForTests } from '$lib/stores/collection';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { libraryRootState, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
-import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { toasts } from '$lib/stores/toast';
+import type { AlbumItem, SongItem } from '#lib/api/types.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { browserReportsOnline } from '#lib/test-utils/network.ts';
+import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { resetCollectionForTests } from '#lib/stores/collection.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { libraryRootState, resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
+import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
+import { resetResourceSyncForTests, startLibraryResourceSync } from '#lib/stores/resourceSync.ts';
+import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { toasts } from '#lib/stores/toast.ts';
 
 const SONG_ID = 'song-uuid-1';
 const GENERATION_ID = 'gen-uuid-1';
@@ -34,7 +38,9 @@ const api = vi.hoisted(() => ({
 	fetchActiveModels: vi.fn()
 }));
 
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 // Stands in for the router the way the real one behaves for a same-shape
 // write: it moves the history entry, but nothing here re-resolves the
 // mounted route -- a route-crossing `goto` from this page therefore never
@@ -44,7 +50,7 @@ vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation'
 // does pin is that `goto` is called with the right path and options, and
 // what the page renders while it waits or fails.
 vi.mock('$app/navigation', async () => {
-	const navigation = (await import('$lib/test-utils/app-navigation')).fakeAppNavigation();
+	const navigation = (await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation();
 	return {
 		...navigation,
 		goto: vi.fn(async (...args: Parameters<typeof navigation.goto>) => {
@@ -54,23 +60,26 @@ vi.mock('$app/navigation', async () => {
 		})
 	};
 });
-vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/songs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/songs')>()),
+// Like the real `resolve`, a route ID loses its route groups and keeps a leading slash.
+vi.mock('$app/paths', () => ({
+	resolve: vi.fn((routeId: string) => routeId.replace(/\/\([^/)]+\)/g, '').replace(/^(?!\/)/, '/'))
+}));
+vi.mock('#lib/api/songs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/songs.ts')>()),
 	fetchSong: api.fetchSong,
 	fetchSongs: api.fetchSongs
 }));
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
+vi.mock('#lib/api/albums.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/albums.ts')>()),
 	fetchAlbum: api.fetchAlbum,
 	fetchAlbums: api.fetchAlbums
 }));
-vi.mock('$lib/api/library', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/library')>()),
+vi.mock('#lib/api/library.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/library.ts')>()),
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchSongs: api.fetchSongs,
 	fetchSong: api.fetchSong,
 	fetchVersions: api.fetchVersions,

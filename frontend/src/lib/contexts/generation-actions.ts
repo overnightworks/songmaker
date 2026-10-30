@@ -1,7 +1,7 @@
 import { setContext, getContext } from 'svelte';
-import type { GenerationItem, ShareResult, SongItem } from '$lib/api/types';
-import { useSeed } from '$lib/stores/recipe';
-import { rate, setKeep, setPick } from '$lib/stores/takeActions';
+import type { GenerationItem, ShareResult, SongItem } from '#lib/api/types.ts';
+import { useSeed } from '#lib/stores/recipe.ts';
+import { rate, setKeep, setPick } from '#lib/stores/takeActions.ts';
 
 export interface GenerationActions {
 	pick: (genId: string, picked: boolean) => void;

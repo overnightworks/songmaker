@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { openPlaylist } from '$lib/stores/navigation';
-	import { createNewPlaylist } from '$lib/stores/playlists';
+	import { openPlaylist } from '#lib/stores/navigation.ts';
+	import { createNewPlaylist } from '#lib/stores/playlists.ts';
 	import {
 		NEW_PLACE_TEXT_MAX_LENGTH,
 		NEW_PLAYLIST_CARD_LABEL,
@@ -10,7 +10,7 @@
 		NEW_PLAYLIST_HINT,
 		NEW_PLAYLIST_NAME_LABEL,
 		NEW_PLAYLIST_REFUSED
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import NewPlaceCard from './NewPlaceCard.svelte';
 
 	interface Props {

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
-	import type { PlaybackInfo } from '$lib/services/playbackTypes';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
+	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 	import {
 		NOW_PLAYING_QUEUE_TAB,
 		NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -11,10 +11,10 @@
 		type NowPlayingSource,
 		type PlaybackSource,
 		takeVersion
-	} from '$lib/constants/now-playing';
-	import { NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
-	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
+	} from '#lib/constants/now-playing.ts';
+	import { NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS, NOW_PLAYING_NO_LYRICS } from '#lib/constants.ts';
+	import { albumList, songList } from '#lib/stores/libraryData.ts';
+	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
 	import {
 		buildQueueViewModel,
 		canPlayNextSong,
@@ -40,13 +40,13 @@
 		shuffleLabel,
 		toggleShuffle,
 		windowEnded
-	} from '$lib/stores/player';
-	import { libraryTakePool, type LibraryTakePool } from '$lib/stores/playbackSettings';
-	import { setKeep, setPick } from '$lib/stores/takeActions';
-	import { addToast } from '$lib/stores/toast';
-	import { describeFailure, NetworkError } from '$lib/api/fetch';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import { isEditableElement } from '$lib/utils/escape-level-up';
+	} from '#lib/stores/player.ts';
+	import { libraryTakePool, type LibraryTakePool } from '#lib/stores/playbackSettings.ts';
+	import { setKeep, setPick } from '#lib/stores/takeActions.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { isEditableElement } from '#lib/utils/escape-level-up.ts';
 	import NowPlayingCuration from './NowPlayingCuration.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
 	import NowPlayingQueue from './NowPlayingQueue.svelte';

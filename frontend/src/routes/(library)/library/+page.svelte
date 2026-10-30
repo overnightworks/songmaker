@@ -4,7 +4,7 @@
 	// address route resolves in. The legacy `?song=<uuid>` form belongs to Home
 	// (`/`), whose route redirects it; here the query is ignored.
 	import { onMount } from 'svelte';
-	import { openLibraryAddress } from '$lib/stores/libraryContext';
+	import { openLibraryAddress } from '#lib/stores/libraryContext.ts';
 
 	onMount(() => {
 		void openLibraryAddress();

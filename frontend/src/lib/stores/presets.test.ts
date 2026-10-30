@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { PresetItem } from '$lib/api/types';
+import type { PresetItem } from '#lib/api/types.ts';
 
 const api = vi.hoisted(() => ({
 	fetchPresets: vi.fn(),
@@ -16,9 +16,9 @@ const api = vi.hoisted(() => ({
 	setPresetDefault: vi.fn()
 }));
 
-vi.mock('$lib/api/client', () => api);
+vi.mock('#lib/api/client.ts', () => api);
 
-import { recipeModel } from '$lib/stores/recipe';
+import { recipeModel } from '#lib/stores/recipe.ts';
 import {
 	activeModelIds,
 	activeModels,

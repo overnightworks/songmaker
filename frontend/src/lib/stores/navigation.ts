@@ -1,9 +1,9 @@
-import { listOfPage, SETTINGS_HREF } from '$lib/routes/pageBack';
+import { listOfPage, SETTINGS_HREF } from '#lib/routes/pageBack.ts';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { get, writable } from 'svelte/store';
-import { layerSwitch, resetLayersForTests } from '$lib/stores/layers';
-import { fetchAlbum } from '$lib/api/albums';
+import { layerSwitch, resetLayersForTests } from '#lib/stores/layers.ts';
+import { fetchAlbum } from '#lib/api/albums.ts';
 import {
 	historyComesToRest,
 	attachLandingHandler,
@@ -12,12 +12,12 @@ import {
 	stepBackOr,
 	stepBackOrGoTo,
 	type Landing
-} from '$lib/history/historyController';
-import { describeFailure, isNotFound } from '$lib/api/fetch';
-import { draftHasUnversionedChanges, pendingVersionLoad } from '$lib/stores/editor';
-import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/jobs';
-import { addToast } from '$lib/stores/toast';
-import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
+} from '#lib/history/historyController.ts';
+import { describeFailure, isNotFound } from '#lib/api/fetch.ts';
+import { draftHasUnversionedChanges, pendingVersionLoad } from '#lib/stores/editor.ts';
+import { hydrateActiveGeneration, hydrateGenerationFailure } from '#lib/stores/jobs.ts';
+import { addToast } from '#lib/stores/toast.ts';
+import { albumList, loadSongsForAlbum, songList } from '#lib/stores/libraryData.ts';
 import {
 	selectedSongId,
 	selectedGenerationId,
@@ -27,28 +27,29 @@ import {
 	ensureGenerationsLoaded,
 	escapeNowPlaying,
 	nowPlayingFullChosen
-} from '$lib/stores/player';
+} from '#lib/stores/player.ts';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
 	ensurePlaylistsLoaded,
 	loadPlaylistDetail,
 	selectedPlaylist
-} from '$lib/stores/playlists';
-import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
-import type { PlaylistItem, SongItem } from '$lib/api/types';
-import type { RailSearchTarget } from '$lib/stores/railSearch';
+} from '#lib/stores/playlists.ts';
+import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
+import type { PlaylistItem, SongItem } from '#lib/api/types.ts';
+import type { SettingsSectionRoute } from '#lib/settingsSections.ts';
+import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
 import {
 	ADMIN_WORKER_POOL_HREF,
 	API_ERROR_GENERIC_MESSAGE,
 	SONG_LINK_NOT_FOUND_TOAST
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	isPlaylistRoutePath,
 	isSongRoutePath,
 	LIBRARY_ROUTE_PATH,
 	libraryRouteShape,
 	PLAYLISTS_ROUTE_PATH
-} from '$lib/routes/addresses';
+} from '#lib/routes/addresses.ts';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
@@ -70,7 +71,7 @@ import {
 	snapshotLibraryHistory,
 	writeLibraryHistory,
 	type DetailTab
-} from '$lib/stores/libraryContext';
+} from '#lib/stores/libraryContext.ts';
 
 export type { DetailTab };
 export { detailTab };
@@ -83,8 +84,9 @@ function currentHistoryIndex(): number {
 // Every history write in this module goes through writeLibraryHistory, which
 // owns the choice between shallow routing and a navigation; see the note on
 // it in libraryContext.ts. Its promise settles once a crossing has mounted its
-// route; the entry itself stands at once, unless history the controller has
-// moving still holds it.
+// route; the entry itself stands within the task -- the history controller
+// answers from it until the router lands it -- unless history the controller
+// has moving still holds it.
 function replaceLibraryHistory(): Promise<void> {
 	cancelLibraryHistoryApply();
 	const next = snapshotLibraryHistory(currentHistoryIndex());
@@ -191,7 +193,7 @@ let addressedSong: { id: string; slug: string } | null = null;
 function syncSongAddressToRename(song: SongItem): void {
 	const previous = addressedSong;
 	addressedSong = { id: song.id, slug: song.slug };
-	if (!previous || previous.id !== song.id || previous.slug === song.slug) return;
+	if (previous?.id !== song.id || previous.slug === song.slug) return;
 	if (!isSongRoutePath(window.location.pathname)) return;
 	void replaceLibraryHistory();
 }
@@ -214,7 +216,7 @@ let addressedPlaylist: { id: string; slug: string } | null = null;
 function syncPlaylistAddressToRename(playlist: PlaylistItem): void {
 	const previous = addressedPlaylist;
 	addressedPlaylist = { id: playlist.id, slug: playlist.slug };
-	if (!previous || previous.id !== playlist.id || previous.slug === playlist.slug) return;
+	if (previous?.id !== playlist.id || previous.slug === playlist.slug) return;
 	if (!isPlaylistRoutePath(window.location.pathname)) return;
 	void replaceLibraryHistory();
 }
@@ -295,15 +297,13 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // dirty-draft question as every other way out before it navigates. Pending
 // history-layer steps must land before pushing the page: a step back landing
 // after the push would take the address back to the song (#1143).
-type AppPageHref =
-	Extract<RailSearchTarget, { kind: 'page' }>['href'] | typeof ADMIN_WORKER_POOL_HREF;
+type AppPageHref = SettingsSectionRoute | typeof SETTINGS_HREF | typeof ADMIN_WORKER_POOL_HREF;
 
 export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		await historyComesToRest();
 		await keepLibraryPageAsLeft();
-		const args: [AppPageHref] = [href];
-		await goto(resolve(...(args as Parameters<typeof resolve>)));
+		await goto(resolve(href));
 	});
 }
 

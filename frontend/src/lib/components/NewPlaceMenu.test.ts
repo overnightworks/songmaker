@@ -2,19 +2,19 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, PlaylistItem } from '$lib/api/types';
-import { LIBRARY_NEW_MENU_LABEL } from '$lib/constants';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { toasts } from '$lib/stores/toast';
-import { makeAlbum, makePlaylist } from '$lib/test-utils/factories';
+import type { AlbumItem, PlaylistItem } from '#lib/api/types.ts';
+import { LIBRARY_NEW_MENU_LABEL } from '#lib/constants.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { toasts } from '#lib/stores/toast.ts';
+import { makeAlbum, makePlaylist } from '#lib/test-utils/factories.ts';
 import {
 	describeBackClosesOverlay,
 	replaceHistoryEntry,
 	standingHistoryEntry
-} from '$lib/test-utils/library-history';
+} from '#lib/test-utils/library-history.ts';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
 import NewPlaceMenu from './NewPlaceMenu.svelte';

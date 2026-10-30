@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { openCollection } from '$lib/stores/collection';
+	import { openCollection } from '#lib/stores/collection.ts';
 	import {
 		albumWhoseSongsShow,
 		libraryWallShows,
 		placeShown,
 		librarySurface
-	} from '$lib/stores/libraryContext';
+	} from '#lib/stores/libraryContext.ts';
 	import {
 		albumList,
 		allAlbumsLoad,
@@ -15,33 +15,33 @@
 		ensureAllAlbumsLoaded,
 		loadSongsForAlbum,
 		songList
-	} from '$lib/stores/libraryData';
-	import { isSongCurrent, selectedSongId } from '$lib/stores/player';
-	import { matchesRailQuery, normalizedRailTreeQuery } from '$lib/stores/librarySearch';
+	} from '#lib/stores/libraryData.ts';
+	import { isSongCurrent, selectedSongId } from '#lib/stores/player.ts';
+	import { matchesRailQuery, normalizedRailTreeQuery } from '#lib/stores/librarySearch.ts';
 	import {
 		ensureLastPlayedRead,
 		inLibraryOrder,
 		libraryPlaceOrder
-	} from '$lib/stores/libraryOrder';
-	import { libraryWallOrder } from '$lib/stores/ui';
-	import { pickedTake, songPlayability } from '$lib/utils/playable';
+	} from '#lib/stores/libraryOrder.ts';
+	import { libraryWallOrder } from '#lib/stores/ui.ts';
+	import { pickedTake, songPlayability } from '#lib/utils/playable.ts';
 	import {
 		compareAlbumTracks,
 		openAlbum,
 		openRailSearchTarget,
 		selectSong
-	} from '$lib/stores/navigation';
+	} from '#lib/stores/navigation.ts';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_RETRY_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
 		LIBRARY_PAGE_LABEL,
 		RAIL_LIBRARY_NAV_LABEL
-	} from '$lib/constants';
-	import type { SongItem } from '$lib/api/types';
-	import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
-	import { standingPathname } from '$lib/routes/standingAddress';
-	import { titleInitials } from '$lib/utils/format';
+	} from '#lib/constants.ts';
+	import type { SongItem } from '#lib/api/types.ts';
+	import { LIBRARY_ROUTE_ID, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+	import { standingPathname } from '#lib/routes/standingAddress.ts';
+	import { titleInitials } from '#lib/utils/format.ts';
 	import PlayingMark from '../PlayingMark.svelte';
 	import Icon from '../Icon.svelte';
 	import RailGroup from './RailGroup.svelte';
@@ -197,7 +197,7 @@
 	count={albumCount}
 	expandTrigger={libraryWallIsSurface || isAlbumDetail || loadFailure !== null || filtering}
 	page={{
-		href: resolve(LIBRARY_ROUTE_PATH),
+		href: resolve(LIBRARY_ROUTE_ID),
 		current: onLibraryPage,
 		open: () => void openRailSearchTarget({ kind: 'page', href: LIBRARY_ROUTE_PATH })
 	}}

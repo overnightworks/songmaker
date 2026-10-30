@@ -1,21 +1,25 @@
 import type { AfterNavigate, BeforeNavigate, NavigationTarget } from '@sveltejs/kit';
 import { flushSync, onMount } from 'svelte';
 import { vi } from 'vitest';
+import { routerHistoryEntry, routerHistoryEntryOf } from '#lib/test-utils/router-history-layout.ts';
 import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 
 // A stand-in for SvelteKit's router, shared by every test that mocks it:
 //   vi.mock('$app/navigation', async () =>
-//     (await import('$lib/test-utils/app-navigation')).fakeAppNavigation());
+//     (await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation());
 //   vi.mock('$app/state', async () =>
-//     (await import('$lib/test-utils/app-navigation')).fakeAppState());
+//     (await import('#lib/test-utils/app-navigation.ts')).fakeAppState());
 // It writes history the way SvelteKit does: `goto` adds (or, with
 // `replaceState`, rewrites) a router entry once its route has loaded -- at
 // once, unless a test holds route loads -- and tells every mounted
 // `afterNavigate` callback; a Back or Forward that navigates tells every
 // mounted `beforeNavigate` callback first, and a `goto` one of them starts
 // supersedes it before it loads anything; `pushState` and `replaceState` are
-// shallow routing, which keeps the page state under the entry's states key and
-// the address of the page it was written over beside it. Like SvelteKit, it keeps
+// shallow routing, which keeps the page state in the entry and the address of
+// the page it was written over beside it. Like SvelteKit 3, whose shallow
+// writes are async, they land a microtask after the call -- the history entry
+// and the page state change then, not before -- unless a test holds them. Like
+// SvelteKit, it keeps
 // its place in history in memory and reads it back from an entry only when it
 // starts or a Back or Forward lands, and a landing on the entry of another
 // navigation is a navigation of its own -- and so is a landing on an entry of
@@ -26,13 +30,8 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 // It also owns every raw write into the test browser's history, which tests
 // reach through library-history.ts. It imports no store: the stores import
 // `$app/navigation`, so a fake that imported them back would wait on itself.
-const ROUTER_HISTORY_INDEX = 'sveltekit:history';
-const ROUTER_NAVIGATION_INDEX = 'sveltekit:navigation';
-const ROUTER_PAGE_URL = 'sveltekit:pageurl';
-const ROUTER_STATES = 'sveltekit:states';
 
 type HistoryWriteMode = 'push' | 'replace';
-type RouterEntry = Record<string, unknown>;
 
 interface GotoOptions {
 	replaceState?: boolean;
@@ -67,19 +66,13 @@ let navigationsStarted = 0;
 // The route a `goto` loads before it writes its entry, while a test holds it;
 // otherwise the route is there at once.
 let heldRouteLoad: Promise<void> | null = null;
+// The same for the shallow writes: held, none lands until a test releases them.
+let heldShallowWrites: Promise<void> | null = null;
+let releaseShallowWrites: () => void = () => undefined;
 
 // Every navigation the fake router reported since it last started, in order,
 // with the address of the page it navigated to.
 export const reportedNavigations: { type: AfterNavigate['type']; pathname: string }[] = [];
-
-function routerEntry(entry: unknown): RouterEntry | null {
-	return typeof entry === 'object' && entry !== null ? (entry as RouterEntry) : null;
-}
-
-function routerIndex(entry: RouterEntry | null, key: string): number | undefined {
-	const index = entry?.[key];
-	return typeof index === 'number' ? index : undefined;
-}
 
 function navigationTarget(url: URL): NavigationTarget {
 	return { params: {}, route: { id: null }, url, scroll: null };
@@ -103,16 +96,15 @@ function reportNavigation(type: 'enter' | 'goto' | 'popstate', from: URL | null)
 export function startFakeRouter(): void {
 	hasNavigated = false;
 	reportedNavigations.length = 0;
-	const loaded = routerEntry(history.state);
-	currentHistoryIndex = routerIndex(loaded, ROUTER_HISTORY_INDEX) ?? highestHistoryIndex + 1;
-	currentNavigationIndex = routerIndex(loaded, ROUTER_NAVIGATION_INDEX) ?? currentHistoryIndex;
+	const loaded = routerHistoryEntryOf(history.state);
+	currentHistoryIndex = loaded?.historyIndex ?? highestHistoryIndex + 1;
+	currentNavigationIndex = loaded?.navigationIndex ?? currentHistoryIndex;
 	highestHistoryIndex = Math.max(highestHistoryIndex, currentHistoryIndex);
 	writeHistoryEntry(
-		{
-			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
-			[ROUTER_NAVIGATION_INDEX]: currentNavigationIndex,
-			[ROUTER_STATES]: {}
-		},
+		routerHistoryEntry(
+			{},
+			{ historyIndex: currentHistoryIndex, navigationIndex: currentNavigationIndex }
+		),
 		location.href,
 		'replace'
 	);
@@ -143,6 +135,32 @@ export function holdRouteLoads(): () => void {
 	};
 }
 
+// Holds every shallow write until the returned function releases them, which
+// then land in the order they were issued.
+export function holdShallowWrites(): () => Promise<void> {
+	heldShallowWrites = new Promise((resolve) => (releaseShallowWrites = resolve));
+	return releaseHeldShallowWrites;
+}
+
+// Releases the held writes and waits until every one of them has landed.
+async function releaseHeldShallowWrites(): Promise<void> {
+	heldShallowWrites = null;
+	releaseShallowWrites();
+	await laterTask();
+}
+
+// A later task, where a person's Back or Forward starts.
+export function laterTask(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve));
+}
+
+// A write the controller issued, once the router has landed it: the browser's
+// own entry and address answer for it from then on.
+export async function landed<T>(write: T): Promise<T> {
+	await laterTask();
+	return write;
+}
+
 async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<void> {
 	navigationsStarted += 1;
 	const navigation = navigationsStarted;
@@ -156,11 +174,10 @@ async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<v
 	}
 	const state = options.state ?? {};
 	writeHistoryEntry(
-		{
-			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
-			[ROUTER_NAVIGATION_INDEX]: currentNavigationIndex,
-			[ROUTER_STATES]: state
-		},
+		routerHistoryEntry(state, {
+			historyIndex: currentHistoryIndex,
+			navigationIndex: currentNavigationIndex
+		}),
 		url,
 		options.replaceState ? 'replace' : 'push'
 	);
@@ -171,18 +188,22 @@ async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<v
 	reportNavigation('goto', from);
 }
 
-function writeShallowEntry(url: string | URL, state: App.PageState, mode: HistoryWriteMode): void {
+async function writeShallowEntry(
+	url: string | URL,
+	state: App.PageState,
+	mode: HistoryWriteMode
+): Promise<void> {
+	await heldShallowWrites;
 	if (mode === 'push') {
 		stepHistoryIndexUp();
 		hasNavigated = true;
 	}
 	writeHistoryEntry(
-		{
-			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
-			[ROUTER_NAVIGATION_INDEX]: currentNavigationIndex,
-			[ROUTER_PAGE_URL]: fakePage.url.href,
-			[ROUTER_STATES]: state
-		},
+		routerHistoryEntry(state, {
+			historyIndex: currentHistoryIndex,
+			navigationIndex: currentNavigationIndex,
+			pageUrl: fakePage.url.href
+		}),
 		url,
 		mode
 	);
@@ -208,17 +229,16 @@ function followTraversal(event: PopStateEvent): void {
 }
 
 function moveWithTraversal(event: PopStateEvent): void {
-	const landing = routerEntry(event.state);
-	const historyIndex = routerIndex(landing, ROUTER_HISTORY_INDEX);
+	const landing = routerHistoryEntryOf(event.state);
+	const historyIndex = landing?.historyIndex;
 	if (landing === null || historyIndex === undefined) {
 		fakePage.url = new URL(location.href);
 		return;
 	}
 	const from = fakePage.url;
-	const pageUrl = landing[ROUTER_PAGE_URL];
-	const landedPage = new URL(typeof pageUrl === 'string' ? pageUrl : location.href);
-	const landedState = (landing[ROUTER_STATES] ?? {}) as App.PageState;
-	const navigationIndex = routerIndex(landing, ROUTER_NAVIGATION_INDEX);
+	const landedPage = new URL(landing.pageUrl ?? location.href);
+	const landedState = (landing.pageState ?? {}) as App.PageState;
+	const navigationIndex = landing.navigationIndex;
 	const onlyHashChanges = withoutHash(location) === withoutHash(from);
 	const shallow = navigationIndex === currentNavigationIndex && (hasNavigated || onlyHashChanges);
 	currentHistoryIndex = historyIndex;

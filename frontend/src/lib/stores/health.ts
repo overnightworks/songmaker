@@ -1,5 +1,5 @@
-import { fetchHealth } from '$lib/api/client';
-import type { HealthResponse } from '$lib/api/types';
+import { fetchHealth } from '#lib/api/client.ts';
+import type { HealthResponse } from '#lib/api/types.ts';
 import { createPollingStore } from './adminPolling';
 
 const HEALTH_POLL_INTERVAL_MS = 15_000;

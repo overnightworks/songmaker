@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 
 const ANY_API_PATH = '/api';
 

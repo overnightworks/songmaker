@@ -117,6 +117,13 @@ def service_client(base_url: str) -> httpx.AsyncClient:
     )
 
 
+@dataclass(frozen=True)
+class _RunTarget:
+    agent: AgentDefinition
+    service_url: str
+    audience_scope: str
+
+
 @functools.cache
 def _cowriter_agent() -> AgentDefinition:
     # Imported here: the endpoint's tool catalog needs the optional `mcp` library, which the
@@ -134,35 +141,44 @@ async def run_cowriter_turn(
     if isinstance(unusable, TurnProblem):
         yield unusable
         return
-    agent, service_url = unusable
-    tokens = await asyncio.to_thread(_fetch_tokens, caller.app, caller.session_id)
+    tokens = await asyncio.to_thread(
+        _fetch_tokens, caller.app, caller.session_id, unusable.audience_scope,
+    )
     if isinstance(tokens, TurnProblem):
         yield tokens
         return
     person = RunPerson(normalised_oidc_issuer(get_settings().oidc_issuer) or "", caller.user.id)
     # Closing this generator must end the run's stream at once, so its release runs now.
-    async with aclosing(_stream_run(service_url, agent.request(messages), tokens, person)) as run:
+    async with aclosing(_stream_run(
+        unusable.service_url, unusable.agent.request(messages), tokens, person,
+    )) as run:
         async for outcome in run:
             yield outcome
 
 
-def _problem_before_the_run(app: FastAPI) -> TurnProblem | tuple[AgentDefinition, str]:
+def _problem_before_the_run(app: FastAPI) -> TurnProblem | _RunTarget:
     from songmaker_cli.cowriter.mcp_endpoint import cowriter_mcp_availability
 
     availability = cowriter_mcp_availability(app)
     if availability.problem is not None:
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, f"mcp {availability.problem.value}")
-    service_url = get_settings().agent_service_url
+    settings = get_settings()
+    service_url = settings.agent_service_url
     if not service_url:
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "no agent service url")
+    audience_scope = settings.agent_service_audience_scope
+    if not audience_scope:
+        return TurnProblem(ChatTurnProblem.UNAVAILABLE, "no agent service audience scope")
     try:
-        return _cowriter_agent(), service_url
+        return _RunTarget(_cowriter_agent(), service_url, audience_scope)
     except AgentFileError:
         log.exception("The co-writer's agent file is refused")
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "agent file refused")
 
 
-def _fetch_tokens(app: FastAPI, session_id: str | None) -> _RunTokens | TurnProblem:
+def _fetch_tokens(
+    app: FastAPI, session_id: str | None, audience_scope: str,
+) -> _RunTokens | TurnProblem:
     """The person's fresh access token, then songmaker's workload token; never both unchecked."""
     if session_id is None:
         return TurnProblem(ChatTurnProblem.SIGN_IN_AGAIN, "no session")
@@ -175,7 +191,7 @@ def _fetch_tokens(app: FastAPI, session_id: str | None) -> _RunTokens | TurnProb
     )
     if isinstance(user, AccessTokenRefusal):
         return _problem_of_refusal(user)
-    workload = relying_party.workload_access_token()
+    workload = relying_party.workload_access_token(scopes=(audience_scope,))
     if isinstance(workload, OidcRefusal):
         return TurnProblem(ChatTurnProblem.UNAVAILABLE, "workload token refused")
     return _RunTokens(user, workload)

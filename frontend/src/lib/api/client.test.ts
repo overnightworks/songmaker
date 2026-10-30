@@ -1,11 +1,11 @@
-import { makeHealthResponse } from '$lib/test-utils/factories';
+import { makeHealthResponse } from '#lib/test-utils/factories.ts';
 import { describe, expect, it, onTestFinished, vi, beforeEach } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
 import { installRefusalReactions } from './fetch';

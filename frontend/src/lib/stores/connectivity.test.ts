@@ -1,9 +1,9 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError } from '$lib/api/fetch';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { browserReportsOnline, lostNetwork, serverRefusal } from '$lib/test-utils/network';
+import { ApiError } from '#lib/api/fetch.ts';
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import { browserReportsOnline, lostNetwork, serverRefusal } from '#lib/test-utils/network.ts';
 import {
 	offline,
 	reloadWhileUnreachable,

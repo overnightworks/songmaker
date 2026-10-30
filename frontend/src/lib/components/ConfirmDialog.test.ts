@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import ConfirmDialog from './ConfirmDialog.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];

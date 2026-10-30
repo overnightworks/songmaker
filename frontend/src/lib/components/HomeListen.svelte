@@ -1,39 +1,39 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { LibraryListenItem } from '$lib/api/library';
-	import type { SongItem } from '$lib/api/types';
+	import type { LibraryListenItem } from '#lib/api/library.ts';
+	import type { SongItem } from '#lib/api/types.ts';
 	import {
 		HOME_LISTEN_LABEL,
 		HOME_LISTEN_LIMIT,
 		HOME_LISTEN_EMPTY,
 		HOME_LISTEN_LOADING,
 		HOME_LISTEN_ERROR
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		ensureLastPlayedRead,
 		readLastPlayed,
 		libraryListenItems,
 		libraryListenState
-	} from '$lib/stores/libraryOrder';
+	} from '#lib/stores/libraryOrder.ts';
 	import {
 		albumList,
 		albumSongsLoad,
 		allAlbumsLoad,
 		songList,
 		ensureAllAlbumsLoaded
-	} from '$lib/stores/libraryData';
-	import { playlistList, playlistLoad, ensurePlaylistsLoaded } from '$lib/stores/playlists';
+	} from '#lib/stores/libraryData.ts';
+	import { playlistList, playlistLoad, ensurePlaylistsLoaded } from '#lib/stores/playlists.ts';
 	import {
 		collectionTransport,
 		toggleOrStartCollection,
 		playAlbum,
 		queueContext
-	} from '$lib/stores/player';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
-	import { whenBackOnline } from '$lib/stores/connectivity';
-	import { activityTimeLabel } from '$lib/utils/format';
-	import { albumRowOffersPlay } from '$lib/utils/playable';
+	} from '#lib/stores/player.ts';
+	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+	import { openAlbum, openPlaylist } from '#lib/stores/navigation.ts';
+	import { whenBackOnline } from '#lib/stores/connectivity.ts';
+	import { activityTimeLabel } from '#lib/utils/format.ts';
+	import { albumRowOffersPlay } from '#lib/utils/playable.ts';
 	import LibraryRow from './LibraryRow.svelte';
 	import HomeListSection, { homeListPhase } from './HomeListSection.svelte';
 

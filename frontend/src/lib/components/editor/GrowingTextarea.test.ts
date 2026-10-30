@@ -4,8 +4,8 @@ import {
 	PHONE_VIEWPORT_HEIGHT_PX,
 	phoneViewport,
 	removePhoneViewport
-} from '$lib/test-utils/on-screen-keyboard';
-import { watchTypingOnPhone } from '$lib/stores/ui';
+} from '#lib/test-utils/on-screen-keyboard.ts';
+import { watchTypingOnPhone } from '#lib/stores/ui.ts';
 import GrowingTextarea from './GrowingTextarea.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];

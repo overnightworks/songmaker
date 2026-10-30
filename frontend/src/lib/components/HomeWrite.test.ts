@@ -1,24 +1,27 @@
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { LibraryWriteItem } from '$lib/api/types';
+import type { LibraryWriteItem } from '#lib/api/types.ts';
 import {
 	HOME_WRITE_EMPTY,
 	HOME_WRITE_ERROR,
 	HOME_WRITE_LOADING,
 	homeWriteOpenLabel,
 	songEditorOpenLabel
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	ensureLibraryWriteRead,
 	outdateLibraryWrite,
 	resetLibraryWriteForTests
-} from '$lib/stores/libraryWrite';
-import { reportSessionCheckReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { selectedSongId } from '$lib/stores/player';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { makeSong } from '$lib/test-utils/factories';
-import { songList, resetLibraryDataForTests } from '$lib/stores/libraryData';
+} from '#lib/stores/libraryWrite.ts';
+import {
+	reportSessionCheckReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { makeSong } from '#lib/test-utils/factories.ts';
+import { songList, resetLibraryDataForTests } from '#lib/stores/libraryData.ts';
 import HomeWrite from './HomeWrite.svelte';
 
 const writeFetch = vi.fn<typeof globalThis.fetch>();

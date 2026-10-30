@@ -4,10 +4,10 @@ import {
 	makeSong,
 	makePlaylistEntry,
 	makePlaylistDetail as playlistItem
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
+import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
 import {
 	NOW_PLAYING_LABEL,
 	MINI_PLAYER_WITHOUT_COVER_MEDIA,
@@ -20,14 +20,14 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	audioPlayer,
 	STALL_RECOVERY_MS,
 	type PlaybackInfo
-} from '$lib/services/audioPlayer.svelte';
-import type { PlaylistDetailItem } from '$lib/api/types';
-import { albumList, songList } from '$lib/stores/libraryData';
+} from '#lib/services/audioPlayer.svelte.ts';
+import type { PlaylistDetailItem } from '#lib/api/types.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
 import {
 	closeNowPlaying,
 	nowPlayingDockable,
@@ -39,19 +39,22 @@ import {
 	setPendingStartForTests,
 	setShuffle,
 	shuffleEnabled
-} from '$lib/stores/player';
-import * as playerStore from '$lib/stores/player';
-import { dismissToast, toasts } from '$lib/stores/toast';
-import { openCollection } from '$lib/stores/collection';
-import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { watchTypingOnPhone } from '$lib/stores/ui';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+} from '#lib/stores/player.ts';
+import * as playerStore from '#lib/stores/player.ts';
+import { dismissToast, toasts } from '#lib/stores/toast.ts';
+import { openCollection } from '#lib/stores/collection.ts';
+import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
+import { watchTypingOnPhone } from '#lib/stores/ui.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
 import { get } from 'svelte/store';
-import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
+import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '#lib/constants.ts';
 import PlayerBar from './PlayerBar.svelte';
-import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
-import { browserReportsOnline } from '$lib/test-utils/network';
-import { nowPlayingFromLabel, nowPlayingTakeLabel } from '$lib/constants/now-playing';
+import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
+import { browserReportsOnline } from '#lib/test-utils/network.ts';
+import { nowPlayingFromLabel, nowPlayingTakeLabel } from '#lib/constants/now-playing.ts';
 
 function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
 	return {

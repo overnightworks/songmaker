@@ -1,18 +1,18 @@
-import { historyEntry, historyLength } from '$lib/test-utils/library-history';
+import { historyEntry, historyLength } from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makeHealthResponse,
 	makeSong as song,
 	makeVersion as version
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { phoneAppBar } from '$lib/stores/ui';
+import { phoneAppBar } from '#lib/stores/ui.ts';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
-import type { GenerationItem, JobItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, JobItem, SongItem } from '#lib/api/types.ts';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MAX_PX,
@@ -53,11 +53,11 @@ import {
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
-} from '$lib/constants';
-import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
-import { menuRow } from '$lib/test-utils/collection-menu';
-import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
-import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
+} from '#lib/constants.ts';
+import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { menuRow } from '#lib/test-utils/collection-menu.ts';
+import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
+import { PHONE_APP_BAR_PROPS } from '#lib/test-utils/phone-app-bar.ts';
 import {
 	discardDraft,
 	editLyrics,
@@ -68,9 +68,9 @@ import {
 	loadVersionAsDraft,
 	setDraftPrompt,
 	versions
-} from '$lib/stores/editor';
-import { openVersionLabel } from '$lib/constants/now-playing';
-import { activeJobs, generationFailures } from '$lib/stores/jobs';
+} from '#lib/stores/editor.ts';
+import { openVersionLabel } from '#lib/constants/now-playing.ts';
+import { activeJobs, generationFailures } from '#lib/stores/jobs.ts';
 import {
 	detailTab,
 	type DetailTab,
@@ -80,10 +80,10 @@ import {
 	resetNavigationForTests,
 	selectSong,
 	openEditTab
-} from '$lib/stores/navigation';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { clearSelection, toggleSelection } from '$lib/stores/selection';
+} from '#lib/stores/navigation.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { selectedAlbumId, selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { clearSelection, toggleSelection } from '#lib/stores/selection.ts';
 import {
 	pendingTakeUse,
 	recipeModel,
@@ -92,7 +92,7 @@ import {
 	setSourceFromGeneration,
 	sourceGeneration,
 	sourceMode
-} from '$lib/stores/recipe';
+} from '#lib/stores/recipe.ts';
 
 const fetchAlbum = vi.fn();
 const uploadSongCover = vi.fn();
@@ -108,25 +108,25 @@ const listLoras = vi.fn();
 // through `goto` -- unmocked, that call needs a live SvelteKit router this
 // harness never mounts.
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn()
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
 	fetchAlbums: vi.fn()
 }));
-vi.mock('$lib/api/loras', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/loras')>();
+vi.mock('#lib/api/loras.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/loras.ts')>();
 	return { ...actual, listLoras: (...args: unknown[]) => listLoras(...args) };
 });
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn()
 }));
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		fetchVersions: vi.fn().mockResolvedValue([]),
@@ -181,7 +181,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchPlaylists: vi.fn().mockResolvedValue([])
 	};
 });
-vi.mock('$lib/stores/toast', () => ({
+vi.mock('#lib/stores/toast.ts', () => ({
 	addToast: vi.fn(),
 	addUndoToast: vi.fn()
 }));
@@ -201,12 +201,15 @@ import {
 	fetchVersions,
 	renameSong,
 	updateSong
-} from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { playlistList, playlistLoad } from '$lib/stores/playlists';
-import { addToast, addUndoToast } from '$lib/stores/toast';
-import { loras } from '$lib/stores/loras';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+} from '#lib/api/client.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { playlistList, playlistLoad } from '#lib/stores/playlists.ts';
+import { addToast, addUndoToast } from '#lib/stores/toast.ts';
+import { loras } from '#lib/stores/loras.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
 
 function sourceRecipeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { inference_steps: 8, guidance_scale: 1.5 } };
@@ -820,7 +823,7 @@ describe('SongDetailView recipe and takes', () => {
 	);
 
 	it.each(['Cancel', 'Delete'])('asks once before take deletion and honors %s', async (choice) => {
-		const { deleteGeneration } = await import('$lib/api/client');
+		const { deleteGeneration } = await import('#lib/api/client.ts');
 		vi.mocked(deleteGeneration).mockClear();
 		const target = await renderView();
 		target.querySelector<HTMLButtonElement>('.take-row .menu-trigger')?.click();
@@ -1053,7 +1056,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 
 describe('SongDetailView recipe line reads the draft', () => {
 	it('keeps the changed dot after Save version (C4, #1935 acceptance 2)', async () => {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), bpm: 145, version_count: 2 })
 		);
@@ -1101,7 +1104,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 	});
 
 	it('Save persists the draft as a new version, then switches songs', async () => {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), lyrics: 'unsaved edit', version_count: 2 })
 		);
@@ -1161,7 +1164,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 	it.each([false, true])('saves the draft from its visible action (phone: %s)', async (phone) => {
 		stubLibraryMedia({ narrow: phone, compact: phone });
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), version_count: 2 })
 		);
@@ -1191,7 +1194,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 	});
 
 	it('toasts the actual saved version number from the versions API response, not version_count', async () => {
-		const { updateSong, fetchVersions } = await import('$lib/api/client');
+		const { updateSong, fetchVersions } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), version_count: 2 })
 		);
@@ -1227,7 +1230,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		'C4: cross-song $use or Open vN: $choice leaves it unapplied, the seed unset, and drops what was pending',
 		async ({ button, saveFails, use }) => {
 			if (saveFails) {
-				const { updateSong } = await import('$lib/api/client');
+				const { updateSong } = await import('#lib/api/client.ts');
 				vi.mocked(updateSong).mockRejectedValueOnce(new Error('save failed'));
 			}
 			songList.set(albumSongs());
@@ -1712,7 +1715,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		recipeModel.set('turbo');
 		stubLibraryMedia({ narrow: phone });
 		openEditTab();
-		const { fetchVersions } = await import('$lib/api/client');
+		const { fetchVersions } = await import('#lib/api/client.ts');
 		vi.mocked(fetchVersions).mockResolvedValueOnce([LATEST, FIRST]);
 		const shown = await shownToasts();
 		shown.toasts.set([]);
@@ -1725,8 +1728,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		vi.mocked(addUndoToast).mockReset();
 	});
 
-	function shownToasts(): Promise<typeof import('$lib/stores/toast')> {
-		return vi.importActual<typeof import('$lib/stores/toast')>('$lib/stores/toast');
+	function shownToasts(): Promise<typeof import('#lib/stores/toast.ts')> {
+		return vi.importActual<typeof import('#lib/stores/toast.ts')>('#lib/stores/toast.ts');
 	}
 
 	function versionChip(target: HTMLElement): HTMLButtonElement {
@@ -2273,7 +2276,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 	});
 
 	it('Generate after a load saves the loaded text as the next version; the hint and the Undo toast go', async () => {
-		const { fetchVersions } = await import('$lib/api/client');
+		const { fetchVersions } = await import('#lib/api/client.ts');
 		const next = version({ id: 'v3', version_number: 3, lyrics: 'first draft' });
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), lyrics: 'first draft', version_count: 3 })

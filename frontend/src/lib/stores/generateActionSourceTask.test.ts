@@ -5,12 +5,12 @@ import {
 	makeHealthResponse,
 	makeSong,
 	makeVersion
-} from '$lib/test-utils/factories';
-import type { JobItem } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
+} from '#lib/test-utils/factories.ts';
+import type { JobItem } from '#lib/api/types.ts';
+import { ApiError } from '#lib/api/fetch.ts';
 
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchHealth: vi.fn(),
 	fetchVersions: vi.fn(),
 	updateSong: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	repaintGeneration: vi.fn(),
 	coverGeneration: vi.fn()
 }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 import {
 	coverGeneration,
@@ -27,7 +27,7 @@ import {
 	generateSong,
 	repaintGeneration,
 	updateSong
-} from '$lib/api/client';
+} from '#lib/api/client.ts';
 import { discardDraft, loadSongData, setDraftLyrics } from './editor';
 import { resetConnectivityForTests } from './connectivity';
 import { generate, runSourceTask } from './generateAction';

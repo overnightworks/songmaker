@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { untrack, type ComponentProps } from 'svelte';
-	import { setGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
+	import {
+		setGenerationActions,
+		type GenerationActions
+	} from '#lib/contexts/generation-actions.ts';
 	import TakesList from '../TakesList.svelte';
 
 	let { actions, ...props }: ComponentProps<typeof TakesList> & { actions: GenerationActions } =

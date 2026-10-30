@@ -4,7 +4,7 @@ import {
 	PHONE_VIEWPORT_HEIGHT_PX,
 	phoneViewport,
 	removePhoneViewport
-} from '$lib/test-utils/on-screen-keyboard';
+} from '#lib/test-utils/on-screen-keyboard.ts';
 
 beforeEach(() => {
 	localStorage.clear();

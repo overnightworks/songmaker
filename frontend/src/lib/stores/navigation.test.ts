@@ -1,4 +1,5 @@
-import { modifiedClicks } from '$lib/test-utils/modified-clicks';
+import { modifiedClicks } from '#lib/test-utils/modified-clicks.ts';
+import { routerHistoryEntry } from '#lib/test-utils/router-history-layout.ts';
 import {
 	historyEntry,
 	mountAddressRoute,
@@ -11,14 +12,14 @@ import {
 	replaceHistoryEntry,
 	standingHistoryEntry,
 	watchBack
-} from '$lib/test-utils/library-history';
+} from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makePlaylist as playlistItem,
 	makeSong as song,
 	makeVersion
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get, type Writable } from 'svelte/store';
 import { mount, tick, unmount } from 'svelte';
@@ -28,19 +29,20 @@ import {
 	fakePage,
 	followBeforeNavigate,
 	holdRouteLoads,
+	landed,
 	reportedNavigations,
 	startFakeRouter
-} from '$lib/test-utils/app-navigation';
+} from '#lib/test-utils/app-navigation.ts';
 import {
 	historyComesToRest,
 	installHistoryController,
 	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
 	stampNavigatedEntry
-} from '$lib/history/historyController';
-import SongDetailView from '$lib/components/SongDetailView.svelte';
+} from '#lib/history/historyController.ts';
+import SongDetailView from '#lib/components/SongDetailView.svelte';
 
-import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
+import { resetLibrarySearchForTests, searchQuery } from '#lib/stores/librarySearch.ts';
 import {
 	applyLibraryHistory,
 	captureLibraryScroll,
@@ -54,9 +56,9 @@ import {
 	openSongAddress,
 	resetLibraryContextForTests,
 	showSongTab
-} from '$lib/stores/libraryContext';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { albumList, songList, updateSongInList } from '$lib/stores/libraryData';
+} from '#lib/stores/libraryContext.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { albumList, songList, updateSongInList } from '#lib/stores/libraryData.ts';
 import {
 	closeNowPlaying,
 	dockNowPlaying,
@@ -67,21 +69,21 @@ import {
 	openNowPlaying,
 	selectedGenerationId,
 	selectedSongId
-} from '$lib/stores/player';
+} from '#lib/stores/player.ts';
 import {
 	resetPlaylistsForTests,
 	selectedPlaylistId,
 	updatePlaylistInList
-} from '$lib/stores/playlists';
+} from '#lib/stores/playlists.ts';
 import {
 	activeJobs,
 	generationFailures,
 	removeJob,
 	resetGenerationFailuresForTests
-} from '$lib/stores/jobs';
-import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+} from '#lib/stores/jobs.ts';
+import { setDesktopNowPlayingSurface } from '#lib/stores/playbackSettings.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { albumRoutePath, HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import {
 	API_ERROR_GENERIC_MESSAGE,
 	ADMIN_WORKER_POOL_HREF,
@@ -94,9 +96,9 @@ import {
 	LIBRARY_HISTORY_KIND,
 	TAKES_ERROR,
 	TAKES_RETRY_LABEL
-} from '$lib/constants';
-import type { RailSearchTarget } from '$lib/stores/railSearch';
-import type { SongItem } from '$lib/api/types';
+} from '#lib/constants.ts';
+import type { RailSearchTarget } from '#lib/stores/railSearch.ts';
+import type { SongItem } from '#lib/api/types.ts';
 
 const fetchSong = vi.fn();
 const fetchAlbum = vi.fn();
@@ -109,33 +111,35 @@ const fetchActiveGeneration = vi.fn();
 // SvelteKit goto) so tests can assert the landed-on route, not just that
 // goto was called with some argument (see issue #264's done-when).
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 vi.mock('$app/paths', () => ({
 	resolve: vi.fn((path: string) => path)
 }));
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
 	fetchAlbums: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
-vi.mock('$lib/api/loras', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/loras')>()),
+vi.mock('#lib/api/loras.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/loras.ts')>()),
 	listLoras: vi.fn().mockResolvedValue([])
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchHealth: vi.fn().mockResolvedValue({ status: 'ok' }),
 	fetchActiveModels: vi.fn().mockResolvedValue([]),
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
@@ -184,7 +188,7 @@ import {
 	selectNeighborSong,
 	selectSong
 } from './navigation';
-import { closeTopLayer, historyLayerState } from '$lib/stores/layers';
+import { closeTopLayer, historyLayerState } from '#lib/stores/layers.ts';
 import {
 	discardDraft,
 	handleSave,
@@ -195,13 +199,13 @@ import {
 	pendingVersionLoad,
 	setDraftLyrics,
 	versions
-} from '$lib/stores/editor';
-import { fetchVersions, updateSong } from '$lib/api/client';
-import { fetchAlbums } from '$lib/api/albums';
-import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
-import { libraryRootState } from '$lib/stores/libraryContext';
+} from '#lib/stores/editor.ts';
+import { fetchVersions, updateSong } from '#lib/api/client.ts';
+import { fetchAlbums } from '#lib/api/albums.ts';
+import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
+import { libraryRootState } from '#lib/stores/libraryContext.ts';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
-import { toasts } from '$lib/stores/toast';
+import { toasts } from '#lib/stores/toast.ts';
 
 function openNavigationSheet(): Writable<boolean> {
 	const sheet = historyLayerState('search-sheet', false);
@@ -362,7 +366,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		selectedGenerationId.set('g1');
-		persistLibraryHistory();
+		await landed(persistLibraryHistory());
 
 		// Pinning the take crosses a second time (issue #281: the take is its
 		// own route file too), and stands at once like the song's own write.
@@ -409,7 +413,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 			const album = historyEntry();
 			nextRouteNeverLoads();
 
-			void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+			await landed(void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' })));
 
 			expect(window.location.pathname).toBe('/album/a1/s1');
 			expect(historyEntry().songId).toBe('s1');
@@ -504,12 +508,11 @@ describe('history writes across the route boundary (issue #269)', () => {
 		]);
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		selectedGenerationId.set('g1');
-		persistLibraryHistory();
-		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1/take/1'));
+		await landed(persistLibraryHistory());
 		vi.mocked(goto).mockClear();
 
 		selectedGenerationId.set('g2');
-		persistLibraryHistory();
+		await landed(persistLibraryHistory());
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/album/a1/s1/take/2');
@@ -1016,7 +1019,7 @@ describe('Back and Forward across an app page', () => {
 	it('Back from Settings returns to the playlist left, and Forward to Settings', async () => {
 		await openPlaylist('p1');
 		captureLibraryScroll(320);
-		persistLibraryHistory();
+		await landed(persistLibraryHistory());
 		const left = historyEntry();
 		await goto(resolve(SETTINGS));
 
@@ -1906,12 +1909,12 @@ describe('revealPlayingSong', () => {
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		await vi.waitFor(() =>
-			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
+			expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
+				'/album/a1/s1',
+				'/album/a1/s1/take/1'
+			])
 		);
-		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
-			'/album/a1/s1',
-			'/album/a1/s1/take/1'
-		]);
+		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 
 	// Issue #265's S7 removed the separate ensureLibraryWorkspaceRoute guard
@@ -1924,12 +1927,12 @@ describe('revealPlayingSong', () => {
 		replaceHistoryEntry('/settings');
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		await vi.waitFor(() =>
-			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
+			expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
+				'/album/a1/s1',
+				'/album/a1/s1/take/1'
+			])
 		);
-		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual([
-			'/album/a1/s1',
-			'/album/a1/s1/take/1'
-		]);
+		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 });
 
@@ -1949,11 +1952,7 @@ describe('initNavigation', () => {
 
 		window.dispatchEvent(
 			new PopStateEvent('popstate', {
-				state: {
-					'sveltekit:history': 7,
-					'sveltekit:navigation': 3,
-					'sveltekit:states': { library: album }
-				}
+				state: routerHistoryEntry({ library: album }, { historyIndex: 7, navigationIndex: 3 })
 			})
 		);
 

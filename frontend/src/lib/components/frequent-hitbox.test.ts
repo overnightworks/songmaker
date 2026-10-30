@@ -2,7 +2,7 @@ import {
 	makePlaylistDetail as playlistDetail,
 	makePlaylistEntry as playlistEntry,
 	makeSong as song
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -13,17 +13,17 @@ import {
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL
-} from '$lib/constants';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
-import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
-import { currentUser, authLoading } from '$lib/stores/auth';
-import { theme } from '$lib/stores/ui';
+} from '#lib/constants.ts';
+import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
+import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { resetCollectionForTests, setOpenCollection } from '#lib/stores/collection.ts';
+import { playlistList, playlistLoad, selectedPlaylistDetail } from '#lib/stores/playlists.ts';
+import { currentUser, authLoading } from '#lib/stores/auth.ts';
+import { theme } from '#lib/stores/ui.ts';
 import { get } from 'svelte/store';
-import { historyLayerState } from '$lib/stores/layers';
-import { HITBOX_STYLE } from '$lib/styles/hitbox';
+import { historyLayerState } from '#lib/stores/layers.ts';
+import { HITBOX_STYLE } from '#lib/styles/hitbox.ts';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -32,26 +32,26 @@ import {
 	px,
 	minSquarePx,
 	setPointer
-} from '$lib/test-utils/hitbox';
+} from '#lib/test-utils/hitbox.ts';
 import {
 	clearComponentStyles,
 	elementScopeClass,
 	injectComponentStyles
-} from '$lib/test-utils/component-styles';
+} from '#lib/test-utils/component-styles.ts';
 
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn()
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbum: vi.fn(),
 	fetchAlbums: vi.fn()
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn()
 }));
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		bulkDeleteGenerations: vi.fn(),
@@ -64,8 +64,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchCapabilities: vi.fn().mockResolvedValue({})
 	};
 });
-vi.mock('$lib/stores/navigation', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/navigation.ts')>();
 	return {
 		...actual,
 		backToCollection: vi.fn(),
@@ -76,13 +76,13 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => {
 		persistLibraryHistory: vi.fn()
 	};
 });
-vi.mock('$lib/stores/toast', () => ({
+vi.mock('#lib/stores/toast.ts', () => ({
 	addToast: vi.fn()
 }));
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$app/environment', () => ({
+vi.mock('$app/env', () => ({
 	browser: true,
 	dev: true
 }));
@@ -91,14 +91,14 @@ vi.mock('$app/state', () => ({
 }));
 // The shell owns the live library stream since issue #269; jsdom has no
 // EventSource and this file measures hitboxes, not the stream.
-vi.mock('$lib/stores/resourceSync', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/resourceSync')>()),
+vi.mock('#lib/stores/resourceSync.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/resourceSync.ts')>()),
 	startLibraryResourceSync: vi.fn(),
 	stopLibraryResourceSync: vi.fn(),
 	waitForResourceReady: vi.fn(async () => false)
 }));
-vi.mock('$lib/stores/auth', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/auth')>();
+vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/auth.ts')>();
 	return {
 		...actual,
 		checkAuth: vi.fn(async () => {
@@ -110,8 +110,8 @@ vi.mock('$lib/stores/auth', async (importOriginal) => {
 	};
 });
 
-import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
-import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
+import { removeFromPlaylist, reorderPlaylistEntry } from '#lib/api/client.ts';
+import { backToCollection, openLibraryWall } from '#lib/stores/navigation.ts';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';

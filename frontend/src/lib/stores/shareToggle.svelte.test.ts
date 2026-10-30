@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import type { ShareKind } from '$lib/routes/addresses';
+import type { ShareKind } from '#lib/routes/addresses.ts';
 import { createShareToggle } from './shareToggle.svelte';
 
 it.each<{ kind: ShareKind; address: string }>([

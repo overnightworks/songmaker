@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeAlbum, makePlaylist, makeSong } from '$lib/test-utils/factories';
+import { makeAlbum, makePlaylist, makeSong } from '#lib/test-utils/factories.ts';
 import { backLabel, backTargetName, pageBackShown } from './pageBack';
 
 const titles = {

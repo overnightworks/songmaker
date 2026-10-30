@@ -1,30 +1,30 @@
-import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
+import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 
 // rescoringTakeIds stays real so the pending state is driven the way the app
 // drives it: by the scoring job sitting in the jobs store.
-vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/takeActions')>()),
+vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/takeActions.ts')>()),
 	setPick: vi.fn().mockResolvedValue(undefined),
 	setKeep: vi.fn().mockResolvedValue(undefined),
 	rate: vi.fn().mockResolvedValue(undefined),
 	rescore: vi.fn().mockResolvedValue(undefined)
 }));
-vi.mock('$lib/stores/navigation', () => ({
+vi.mock('#lib/stores/navigation.ts', () => ({
 	revealPlayingSong: vi.fn().mockResolvedValue(undefined),
 	openTakeVersion: vi.fn().mockResolvedValue(undefined)
 }));
 
 import { get } from 'svelte/store';
-import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '$lib/constants';
-import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '$lib/constants/now-playing';
-import { activeJobs } from '$lib/stores/jobs';
-import { rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
-import { openTakeVersion, revealPlayingSong } from '$lib/stores/navigation';
-import { nowPlayingOpen, nowPlayingSurface } from '$lib/stores/player';
-import { pendingTakeUse } from '$lib/stores/recipe';
+import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '#lib/constants.ts';
+import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '#lib/constants/now-playing.ts';
+import { activeJobs } from '#lib/stores/jobs.ts';
+import { rate, rescore, setKeep, setPick } from '#lib/stores/takeActions.ts';
+import { openTakeVersion, revealPlayingSong } from '#lib/stores/navigation.ts';
+import { nowPlayingOpen, nowPlayingSurface } from '#lib/stores/player.ts';
+import { pendingTakeUse } from '#lib/stores/recipe.ts';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
 const generationDefaults = {

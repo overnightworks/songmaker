@@ -1,12 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NO_ACCESS_BACK_LABEL, NO_ACCESS_HEADING, NO_ACCESS_MESSAGE } from '$lib/constants/auth';
-import { ACCOUNT_MENU_LOGOUT_LABEL, SIGN_OUT_FAILED_MESSAGE } from '$lib/constants';
-import { signOutFailed } from '$lib/stores/auth';
+import { APP_NAME, SIGN_OUT_FAILED_MESSAGE } from '#lib/constants.ts';
+import { signOutFailed } from '#lib/stores/auth.ts';
 
 const mockLogout = vi.hoisted(() => vi.fn());
-vi.mock('$lib/stores/auth', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/auth')>()),
+vi.mock('#lib/stores/auth.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/auth.ts')>()),
 	logout: mockLogout
 }));
 
@@ -22,6 +21,12 @@ async function renderPage(): Promise<HTMLElement> {
 	return target;
 }
 
+function logOutButton(target: HTMLElement): HTMLButtonElement | undefined {
+	return Array.from(target.querySelectorAll('button')).find(
+		(button) => button.textContent?.trim() === 'Log out'
+	);
+}
+
 beforeEach(() => {
 	mockLogout.mockReset();
 	signOutFailed.set(false);
@@ -34,37 +39,41 @@ afterEach(async () => {
 });
 
 describe('no-access page', () => {
-	it('says the account has no access, with a name or group nowhere', async () => {
+	it('says the account has no access to the app, with a name or group nowhere', async () => {
 		const target = await renderPage();
 
-		expect(target.querySelector('h1')?.textContent).toBe(NO_ACCESS_HEADING);
-		expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(NO_ACCESS_MESSAGE);
+		expect(target.querySelector('h1')?.textContent).toBe('No access');
+		expect(target.textContent).toContain(
+			`You are signed in, but this account has no access to ${APP_NAME}.`
+		);
 	});
 
-	it('offers Sign out and Back, Back leading to the signed-out page', async () => {
+	it('offers Log out as its one way on', async () => {
 		const target = await renderPage();
 
-		const actions = Array.from(target.querySelectorAll('.actions a, .actions button'));
-		expect(actions.map((action) => action.textContent?.trim())).toEqual([
-			ACCOUNT_MENU_LOGOUT_LABEL,
-			NO_ACCESS_BACK_LABEL
-		]);
-		expect(actions[1].getAttribute('href')).toBe('/login');
+		expect(logOutButton(target)).toBeDefined();
+		expect(target.querySelectorAll('main a')).toHaveLength(0);
 	});
 
 	it('logs out through the sign-out the person menu uses', async () => {
 		const target = await renderPage();
 
-		target.querySelector<HTMLButtonElement>('.actions button')?.click();
+		logOutButton(target)?.click();
 
 		expect(mockLogout).toHaveBeenCalledOnce();
 	});
 
-	it('tells a sign-out the server did not confirm', async () => {
+	it('shows no alert while the sign-out has not failed', async () => {
+		const target = await renderPage();
+
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+	});
+
+	it('tells a sign-out the server did not confirm, as an alert', async () => {
 		const target = await renderPage();
 		signOutFailed.set(true);
 		await tick();
 
-		expect(target.textContent).toContain(SIGN_OUT_FAILED_MESSAGE);
+		expect(target.querySelector('[role="alert"]')?.textContent).toBe(SIGN_OUT_FAILED_MESSAGE);
 	});
 });

@@ -25,7 +25,7 @@
 // text's words, each carrying the whole cue span: nothing in such a take
 // says where inside a segment one line ends and the next begins, so the
 // lines it covers light together rather than on invented timing (#45).
-import type { WhisperCue, WhisperWordCue } from '$lib/api/types';
+import type { WhisperCue, WhisperWordCue } from '#lib/api/types.ts';
 import { normalizeLyricsToken } from './lyrics-normalize';
 import { SequenceMatcher } from './sequence-matcher';
 

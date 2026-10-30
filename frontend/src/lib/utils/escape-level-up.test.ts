@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { closeTopLayer, holdLayer, resetLayersForTests } from '$lib/stores/layers';
+import { closeTopLayer, holdLayer, resetLayersForTests } from '#lib/stores/layers.ts';
 import { escapeLevelUpTarget, handleGlobalEscape, isEditableElement } from './escape-level-up';
 
 describe('escapeLevelUpTarget', () => {

@@ -8,12 +8,12 @@
 		SIGN_OUT_FAILED_MESSAGE,
 		THEME_SWITCH_TO_DARK_LABEL,
 		THEME_SWITCH_TO_LIGHT_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import { page } from '$app/state';
-	import { currentUser, signOutFailed } from '$lib/stores/auth';
-	import { leaveForLogout, openAppPage } from '$lib/stores/navigation';
-	import { theme, toggleTheme } from '$lib/stores/ui';
-	import { accountInitial } from '$lib/utils/format';
+	import { currentUser, signOutFailed } from '#lib/stores/auth.ts';
+	import { leaveForLogout, openAppPage } from '#lib/stores/navigation.ts';
+	import { theme, toggleTheme } from '#lib/stores/ui.ts';
+	import { accountInitial } from '#lib/utils/format.ts';
 	import Icon from './Icon.svelte';
 	import LegalLinks from './LegalLinks.svelte';
 	import MenuPopover from './MenuPopover.svelte';

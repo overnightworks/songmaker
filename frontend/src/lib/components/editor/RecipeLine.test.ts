@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeSong } from '$lib/test-utils/factories';
+import { makeSong } from '#lib/test-utils/factories.ts';
 import {
 	editAudioDuration,
 	editBpm,
@@ -9,16 +9,17 @@ import {
 	discardDraft,
 	loadSongData,
 	setDraftBpm,
-	setDraftGenParams
-} from '$lib/stores/editor';
-import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
-import { activeModels, builtinDefaults, loadActiveModels, presets } from '$lib/stores/presets';
-import { loras } from '$lib/stores/loras';
-import { fetchBuiltinDefaults, fetchGenerationDefaults, fetchPresets } from '$lib/api/client';
+	setDraftGenParams,
+	setDraftReference
+} from '#lib/stores/editor.ts';
+import { recipeModel, recipeOpen, takesPerGenerate } from '#lib/stores/recipe.ts';
+import { activeModels, builtinDefaults, loadActiveModels, presets } from '#lib/stores/presets.ts';
+import { loras } from '#lib/stores/loras.ts';
+import { fetchBuiltinDefaults, fetchGenerationDefaults, fetchPresets } from '#lib/api/client.ts';
 import RecipeLine from './RecipeLine.svelte';
 
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchActiveModels: vi.fn().mockResolvedValue([
 		{ id: 'turbo', is_active: true },
 		{ id: 'sft', is_active: true }
@@ -28,7 +29,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
 	fetchVersions: vi.fn().mockResolvedValue([])
 }));
-vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
+vi.mock('#lib/api/loras.ts', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 
 let mounted: ReturnType<typeof mount>;
 
@@ -112,10 +113,10 @@ describe('RecipeLine', () => {
 	});
 
 	it.each([
-		['a voice', { user_lora_id: 'mara' }],
-		['a reference', { reference_audio_path: 'ref.wav' }]
-	])('requests no list for a closed line whose draft holds only %s', async (_name, genParams) => {
-		setDraftGenParams(genParams);
+		['a voice', () => setDraftGenParams({ user_lora_id: 'mara' })],
+		['a reference', () => setDraftReference({ id: 'r1', filename: 'ref.wav' })]
+	])('requests no list for a closed line whose draft holds only %s', async (_name, hold) => {
+		hold();
 		await renderLine();
 		await tick();
 		await tick();

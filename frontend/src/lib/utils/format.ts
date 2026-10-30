@@ -3,7 +3,7 @@ import {
 	ALBUM_ART_INITIAL_COUNT,
 	DAY_LABEL_TODAY,
 	DAY_LABEL_YESTERDAY
-} from '$lib/constants';
+} from '#lib/constants.ts';
 
 const DAY_MS = 86_400_000;
 export const DAYS_NAMED_BY_WEEKDAY = 7;

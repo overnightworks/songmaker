@@ -14,12 +14,12 @@ import {
 	installHistoryController,
 	replaceEntry,
 	resetHistoryControllerForTests
-} from '$lib/history/historyController';
-import { startFakeRouter } from '$lib/test-utils/app-navigation';
-import { standingHistoryEntry } from '$lib/test-utils/library-history';
+} from '#lib/history/historyController.ts';
+import { laterTask, startFakeRouter } from '#lib/test-utils/app-navigation.ts';
+import { standingHistoryEntry } from '#lib/test-utils/library-history.ts';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
 interface Pending {
@@ -162,6 +162,7 @@ describe('layers as history entries', () => {
 		const landed = new Promise((resolve) =>
 			window.addEventListener('popstate', resolve, { once: true })
 		);
+		await laterTask();
 		history.back();
 		await landed;
 	}
@@ -170,6 +171,7 @@ describe('layers as history entries', () => {
 		let editorOpen = true;
 		let drawerOpen = true;
 		holdLayer('details-editing', () => (editorOpen = false));
+		await laterTask();
 		const editing = standingHistoryEntry();
 		const save = pendingWork();
 		const saved = holdOpenWhile('details-saving', save.work);
@@ -191,9 +193,11 @@ describe('layers as history entries', () => {
 	it('held re-hold pushes no new entry', async () => {
 		let editorOpen = true;
 		holdLayer('details-editing', () => (editorOpen = false));
+		await laterTask();
 		const editing = standingHistoryEntry();
 		const save = pendingWork();
 		const saved = holdOpenWhile('details-saving', save.work);
+		await laterTask();
 		const lengthWithBoth = history.length;
 
 		await pressBack();

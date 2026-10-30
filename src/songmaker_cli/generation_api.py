@@ -222,7 +222,7 @@ async def api_upload_reference_audio(
         raise HTTPException(400, "File is empty or too small")
 
     try:
-        rel_path = await run_in_threadpool(
+        stored = await run_in_threadpool(
             store_reference_audio,
             ctx.db,
             ctx.audio_dir,
@@ -237,7 +237,9 @@ async def api_upload_reference_audio(
     except ReferenceAudioStorageError as exc:
         raise HTTPException(500, str(exc)) from exc
 
-    return ReferenceAudioResponse(path=rel_path, filename=file.filename)
+    return ReferenceAudioResponse(
+        id=stored.id, path=stored.storage_path, filename=file.filename,
+    )
 
 
 # ── Generations ──────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ import type {
 	ChatTurnProblemFrame,
 	ConversationItem,
 	SongItem
-} from '$lib/api/types';
+} from '#lib/api/types.ts';
 import {
 	COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
@@ -18,14 +18,14 @@ import {
 	COWRITER_UNAVAILABLE_TEXT,
 	DAY_LABEL_TODAY,
 	EDITOR_VIEW_COWRITER_LABEL
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	DAY_LABEL_LOCALE,
 	DAYS_NAMED_BY_WEEKDAY,
 	localClockTime,
 	localWeekday,
 	localDaysBetween
-} from '$lib/utils/format';
+} from '#lib/utils/format.ts';
 
 const SONG_ID_TARGETING_TOOLS = new Set([
 	'update_song_lyrics',

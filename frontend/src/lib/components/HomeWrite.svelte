@@ -8,17 +8,17 @@
 		HOME_WRITE_WORK_LABELS,
 		homeWriteOpenLabel,
 		songEditorOpenLabel
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		libraryWriteItems,
 		libraryWriteState,
 		libraryWriteLoading,
 		ensureLibraryWriteRead,
 		outdateLibraryWrite
-	} from '$lib/stores/libraryWrite';
-	import { whenBackOnline } from '$lib/stores/connectivity';
-	import { selectSong } from '$lib/stores/navigation';
-	import { activityTimeLabel } from '$lib/utils/format';
+	} from '#lib/stores/libraryWrite.ts';
+	import { whenBackOnline } from '#lib/stores/connectivity.ts';
+	import { selectSong } from '#lib/stores/navigation.ts';
+	import { activityTimeLabel } from '#lib/utils/format.ts';
 	import LibraryRow from './LibraryRow.svelte';
 	import HomeListSection, { homeListPhase } from './HomeListSection.svelte';
 

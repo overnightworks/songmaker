@@ -1,4 +1,4 @@
-import { currentUser } from '$lib/stores/auth';
+import { currentUser } from '#lib/stores/auth.ts';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,31 +10,31 @@ import {
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_SELECT_MODEL_TITLE,
 	HITBOX_FREQUENT_PX
-} from '$lib/constants';
-import { seedFromTake } from '$lib/stores/recipe';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { failed, queued, running } from '$lib/test-utils/generate-states';
+} from '#lib/constants.ts';
+import { seedFromTake } from '#lib/stores/recipe.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
+import { failed, queued, running } from '#lib/test-utils/generate-states.ts';
 import {
 	clearHitboxStyles,
 	clearPointer,
 	injectHitboxStyles,
 	minSquarePx,
 	setPointer
-} from '$lib/test-utils/hitbox';
+} from '#lib/test-utils/hitbox.ts';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
 	return writable<GenerateState>({ kind: 'idle' });
 });
-vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/generateAction.ts')>()),
 	generateAction: action,
 	generate: vi.fn(),
 	cancelGeneration: vi.fn()
 }));
 
-import { cancelGeneration, generate, type GenerateState } from '$lib/stores/generateAction';
+import { cancelGeneration, generate, type GenerateState } from '#lib/stores/generateAction.ts';
 import GenerateButton from './GenerateButton.svelte';
 import generateButtonSource from './GenerateButton.svelte?raw';
 

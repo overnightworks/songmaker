@@ -1,14 +1,18 @@
 import { mount, tick, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import type { GenerationItem, SongItem } from '$lib/api/types';
-import type { GenerationActions } from '$lib/contexts/generation-actions';
-import { selectedSongId } from '$lib/stores/player';
-import { clearSource, resetRecipeSourceForSong, setSourceFromGeneration } from '$lib/stores/recipe';
+import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import type { GenerationItem, SongItem } from '#lib/api/types.ts';
+import type { GenerationActions } from '#lib/contexts/generation-actions.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import {
+	clearSource,
+	resetRecipeSourceForSong,
+	setSourceFromGeneration
+} from '#lib/stores/recipe.ts';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
 
 let list: ReturnType<typeof mount> | undefined;
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { holdLayer, resetLayersForTests } from '$lib/stores/layers';
+import { holdLayer, resetLayersForTests } from '#lib/stores/layers.ts';
 import { focusFirstIn, handleFocusTrapKeydown } from './focus-trap';
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {

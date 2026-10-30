@@ -2,27 +2,32 @@ import {
 	makeAlbum as album,
 	makeSong as song,
 	makeSongSummary as searchSong
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, SongItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded, songList } from '$lib/stores/libraryData';
-import { selectedSongId } from '$lib/stores/player';
+import type { AlbumItem, SongItem } from '#lib/api/types.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import {
+	albumList,
+	allAlbumsLoad,
+	ensureAllAlbumsLoaded,
+	songList
+} from '#lib/stores/libraryData.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
 
 const searchLibrary = vi.fn();
 const fetchAlbums = vi.fn();
 const fetchSongs = vi.fn();
 
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
 	fetchLibraryWrite: async () => ({ items: [] })
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args)
 }));
 

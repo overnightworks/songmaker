@@ -1,11 +1,11 @@
-import type { ShareResult } from '$lib/api/types';
+import type { ShareResult } from '#lib/api/types.ts';
 import {
 	SHARE_BUTTON_COPIED_TOAST,
 	SHARE_BUTTON_COPY_FAILED_TOAST,
 	SHARE_BUTTON_FAILED_TOAST,
 	SHARE_BUTTON_UNSHARED_TOAST
-} from '$lib/constants';
-import { sharePagePath, type ShareKind } from '$lib/routes/addresses';
+} from '#lib/constants.ts';
+import { sharePagePath, type ShareKind } from '#lib/routes/addresses.ts';
 import { addToast } from './toast';
 
 interface ShareToggleSource {

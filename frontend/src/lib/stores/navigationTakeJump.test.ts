@@ -4,29 +4,29 @@ import {
 	pressBack,
 	pressForward,
 	replaceHistoryEntry
-} from '$lib/test-utils/library-history';
-import { makeAlbum as album, makeGeneration, makeSong as song } from '$lib/test-utils/factories';
+} from '#lib/test-utils/library-history.ts';
+import { makeAlbum as album, makeGeneration, makeSong as song } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { mount, tick, unmount } from 'svelte';
-import SongDetailView from '$lib/components/SongDetailView.svelte';
+import SongDetailView from '#lib/components/SongDetailView.svelte';
 import { goto } from '$app/navigation';
-import { startFakeRouter } from '$lib/test-utils/app-navigation';
-import { historyComesToRest, installHistoryController } from '$lib/history/historyController';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { resetPlaylistsForTests } from '$lib/stores/playlists';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { startFakeRouter } from '#lib/test-utils/app-navigation.ts';
+import { historyComesToRest, installHistoryController } from '#lib/history/historyController.ts';
+import { resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
+import { resetLibraryContextForTests } from '#lib/stores/libraryContext.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { resetPlaylistsForTests } from '#lib/stores/playlists.ts';
+import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_UNSAVED_DISCARD_LABEL,
 	EDITOR_UNSAVED_TITLE
-} from '$lib/constants';
-import { activeJobs, removeJob, resetGenerationFailuresForTests } from '$lib/stores/jobs';
-import { toasts } from '$lib/stores/toast';
+} from '#lib/constants.ts';
+import { activeJobs, removeJob, resetGenerationFailuresForTests } from '#lib/stores/jobs.ts';
+import { toasts } from '#lib/stores/toast.ts';
 
 const fetchSong = vi.fn();
 const fetchAlbum = vi.fn();
@@ -39,33 +39,35 @@ const fetchActiveGeneration = vi.fn();
 // SvelteKit goto) so tests can assert the landed-on route, not just that
 // goto was called with some argument (see issue #264's done-when).
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 vi.mock('$app/paths', () => ({
 	resolve: vi.fn((path: string) => path)
 }));
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
 	fetchAlbums: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
-vi.mock('$lib/api/loras', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/loras')>()),
+vi.mock('#lib/api/loras.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/loras.ts')>()),
 	listLoras: vi.fn().mockResolvedValue([])
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchHealth: vi.fn().mockResolvedValue({ status: 'ok' }),
 	fetchActiveModels: vi.fn().mockResolvedValue([]),
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
@@ -98,7 +100,7 @@ import {
 	selectSong
 } from './navigation';
 
-import { discardDraft, editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { discardDraft, editLyrics, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
 const SOURCE_TAKE_ID = 'source';
 const OTHER_TAKE_ID = 'other';
 const UNSAVED_LYRICS = 'unsaved edit';

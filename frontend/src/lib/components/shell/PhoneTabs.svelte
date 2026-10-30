@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { PHONE_TABS, PHONE_TABS_NAV_LABEL } from '$lib/constants/phone-tabs';
-	import { libraryRouteShape } from '$lib/routes/addresses';
-	import type { Place } from '$lib/stores/libraryContext';
+	import { PHONE_TABS, PHONE_TABS_NAV_LABEL } from '#lib/constants/phone-tabs.ts';
+	import { libraryRouteShape } from '#lib/routes/addresses.ts';
+	import type { Place } from '#lib/stores/libraryContext.ts';
 	import Icon from '../Icon.svelte';
 
 	let { pathname, onSelect }: { pathname: string; onSelect: (place: Place) => void } = $props();

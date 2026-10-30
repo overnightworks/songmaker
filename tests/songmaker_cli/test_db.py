@@ -2659,7 +2659,7 @@ def test_training_epoch_migration_up_and_down(
     )
 
     db_path = tmp_path / "training-epochs.db"
-    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config = Config(str(Path(__file__).parents[2] / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
     command.upgrade(config, migration.revision)
@@ -2854,7 +2854,7 @@ def test_last_played_at_migration_adds_and_removes_nullable_column(tmp_path: Pat
         "songmaker_cli.db.migrations.versions.05a349e664e2_add_last_played_at_to_songs",
     )
     db_path = tmp_path / "last-played-at.db"
-    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config = Config(str(Path(__file__).parents[2] / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
     command.upgrade(config, migration.revision)
@@ -2881,7 +2881,7 @@ def test_playlist_cover_key_migration_adds_and_removes_nullable_column(tmp_path:
         "songmaker_cli.db.migrations.versions.889dfb248896_add_playlist_cover_key",
     )
     db_path = tmp_path / "playlist-cover-key.db"
-    config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    config = Config(str(Path(__file__).parents[2] / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
     command.upgrade(config, migration.revision)

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SEEK_PLAYBACK_LABEL, seekPositionLabel } from '$lib/constants';
+	import { SEEK_PLAYBACK_LABEL, seekPositionLabel } from '#lib/constants.ts';
 
 	interface Props {
 		currentTime: number;

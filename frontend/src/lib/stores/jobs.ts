@@ -4,22 +4,22 @@ import {
 	fetchJob,
 	fetchLastFailedGeneration,
 	type JobStatus
-} from '$lib/api/client';
-import { ApiError, isNotFound } from '$lib/api/fetch';
+} from '#lib/api/client.ts';
+import { ApiError, isNotFound } from '#lib/api/fetch.ts';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
 	JOB_TYPE_COVER,
 	JOB_TYPE_GENERATE
-} from '$lib/constants';
-import { offline } from '$lib/stores/connectivity';
-import { requestSongRefresh } from '$lib/stores/resourceSync';
+} from '#lib/constants.ts';
+import { offline } from '#lib/stores/connectivity.ts';
+import { requestSongRefresh } from '#lib/stores/resourceSync.ts';
 import {
 	ImmediateReopenGap,
 	nextReconnectDelayMs,
 	watchReconnectOpportunities
-} from '$lib/stores/sseReconnect';
-import { addToast } from '$lib/stores/toast';
+} from '#lib/stores/sseReconnect.ts';
+import { addToast } from '#lib/stores/toast.ts';
 
 const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
 

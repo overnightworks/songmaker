@@ -4,13 +4,13 @@
 		OwnPlayableTakeResponse,
 		UserLoraItem,
 		UserLoraSampleItem
-	} from '$lib/api/types';
-	import { addLoraSample, patchLoraSample, deleteLoraSample, ApiError } from '$lib/api/client';
-	import { cancelJob, fetchJob } from '$lib/api/jobs';
-	import { addLoraSampleFromGeneration, listOwnPlayableTakes } from '$lib/api/loras';
-	import { activeJobs, removeJob, trackJob } from '$lib/stores/jobs';
-	import { refreshLora, trainLora, isLoraActive } from '$lib/stores/loras';
-	import { addToast } from '$lib/stores/toast';
+	} from '#lib/api/types.ts';
+	import { addLoraSample, patchLoraSample, deleteLoraSample, ApiError } from '#lib/api/client.ts';
+	import { cancelJob, fetchJob } from '#lib/api/jobs.ts';
+	import { addLoraSampleFromGeneration, listOwnPlayableTakes } from '#lib/api/loras.ts';
+	import { activeJobs, removeJob, trackJob } from '#lib/stores/jobs.ts';
+	import { refreshLora, trainLora, isLoraActive } from '#lib/stores/loras.ts';
+	import { addToast } from '#lib/stores/toast.ts';
 	import {
 		LORA_AUDIO_EXTENSIONS,
 		LORA_MAX_SAMPLES,
@@ -43,7 +43,7 @@
 		loraTrainingEpochLabel,
 		loraTrainingQueuePositionLabel,
 		loraTrainingRemainingLabel
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 
 	interface Props {
 		lora: UserLoraItem;

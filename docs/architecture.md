@@ -118,7 +118,7 @@ User clicks "Generate"                    User clicks "Score"
 
   Repaint: POST /generations/{id}/repaint
   Cover:   POST /generations/{id}/cover
-  Upload:  POST /api/audio/upload (reference audio)
+  Upload:  POST /api/audio/upload (reference audio; answers the row's id, which a version save links as `reference_recording_id`)
   Art:     POST /api/albums/{id}/cover and POST /api/songs/{id}/cover (files on the audio volume)
 
   User clicks "Chat"
@@ -438,7 +438,13 @@ same-*shape* churn — filter, sort,
 scroll, search cursor, another song of the open album (#275), another take of
 the open song (#281), another open playlist (#286), a history layer over the
 library — is shallow routing (`pushState`/`replaceState` from
-`$app/navigation`): synchronous, no route resolution. `libraryRouteShape`
+`$app/navigation`): it loads no route. The router writes the entry once it has
+resolved the route: at once on kit 2, a few microtasks later on kit 3, within
+the task, because routes resolve on the client and there is no reroute hook
+(a hook or server-side resolution would break that, and with it #1263). Until
+then the history controller answers where history stands from what it wrote,
+and it issues its next write, navigation or step back only after the write
+landed. `libraryRouteShape`
 (home / library / playlists / album / album-song / album-song-take / playlist / external) is what
 the crossing check compares — only the route-file depth decides a crossing,
 never which resource the address names, and `/playlist/[slug]` is one route
@@ -694,7 +700,7 @@ Shared album and playlist streams release the request session before building
 count-windowed snapshots. Admission in `queue_streams.py` caps measured audio
 at six hours; a longer queue receives 422 rather than a shortened stream.
 The ffmpeg timeout is 336 seconds, derived from that cap, the measured-rate
-policy and its reserve. `tests/test_queue_streams.py` proves admission before
+policy and its reserve. `tests/songmaker_cli/test_queue_streams.py` proves admission before
 ffmpeg and request-session release through the shared builders.
 
 Escape and Back close the same thing (#1182): the topmost open layer — a
@@ -763,7 +769,7 @@ non-public page navigates the whole window to `/login/oidc?next=…`; the signed
 page `/login` starts nothing by itself and the public paths never redirect.
 
 Outside its `*.test.ts` files, `lib/api` imports only itself, packages,
-`$lib/constants`, `$lib/routes/` and `$lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
+`#lib/constants`, `#lib/routes/` and `#lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
 and no `import()` or `import.meta`; `eslint.config.js` enforces it (#925 G2).
 
 Only `lib/api/fetch.ts` calls global `fetch`; other modules reach the server
@@ -776,7 +782,11 @@ boundary. `eslint.config.js` enforces this, including `window.fetch`,
 Only `lib/history/historyController.ts` writes or traverses history: no other
 module touches the global `history` or imports `pushState` or `replaceState` from
 `$app/navigation` (`goto(…, { replaceState })` stays allowed). Tests may drive
-and fake it; `eslint.config.js` enforces this (#1006 H6d).
+and fake it; `eslint.config.js` enforces this (#1006 H6d). Only
+`lib/history/routerHistoryState.ts` reads SvelteKit's private history-entry
+layout (its page state and place), and tests build such entries only through
+`lib/test-utils/router-history-layout.ts`; eslint refuses a `sveltekit:`
+literal anywhere else.
 
 Frequent studio actions (theme toggle, pick/keep, playlist reorder/remove, new album/playlist, playlist-picker add, the co-writer conversation row's delete ✕) share the `[data-hitbox='frequent']` primitive in `frontend/src/lib/styles/hitbox.ts`. The visible glyph or inset face stays compact; the control's hitbox is 24×24px on a fine pointer and 44×44px when any pointer is coarse (including hybrid mouse+touch devices). Labelled controls (album/playlist header Play, the editor's Generate, the compact Edit | Co-writer | Takes tabs, Now Playing's Queue | This take tabs, the library search field) take the sibling `[data-hitbox='text']` instead: it raises the height to the same touch target and leaves the width to the label and the layout, since forcing the square would clamp a width the layout owns and `data-hitbox-face` — a fixed 24/44px box — cuts straight through a word (#163). A face is only ever drawn on an icon-only control. PlayerBar and the share surface's transport/Now Playing frames are out of this primitive's scope.
 
@@ -898,9 +908,10 @@ cover), a playable-song count, and each song’s album name beneath its queue
 title. The bar follows the current song’s album cover. On desktop the sticky
 transport remains in view, so the same observer keeps the bar hidden (#1462).
 Every share page ends in `SharedFooter.svelte`: "Powered by" and
-`LegalLinks.svelte`, the one owner of the Impressum · Datenschutz ·
-Nutzungsbedingungen links the sign-in page uses too. They point to the
-central legal pages (`lib/constants/legal.ts`) with songmaker's section anchor;
+`LegalLinks.svelte`, which renders the Impressum · Datenschutz ·
+Nutzungsbedingungen links that `lib/constants/legal.ts` owns (the account menu
+uses it too; the sign-in pages hand the same list to appkit's `SignInPage`).
+They point to the central legal pages with songmaker's section anchor;
 songmaker holds no legal text of its own, and the share page opens them in a new
 tab so playback keeps running. Playback is owned by `lib/share/sharePlayback.svelte.ts`
 (`SharePlayback`), never `stores/player.ts` — a `share-import-boundary.test.ts`
@@ -993,7 +1004,8 @@ through `cowriter/service_turn.py`:
 2. It turns the session's refresh token into a fresh user access token
    (`fresh_access_token` through `DatabaseSessionTransaction` in
    `auth_stores.py`) and takes songmaker's workload token from the same
-   relying party.
+   relying party, asking only for the agent service's audience scope
+   (`AGENT_SERVICE_AUDIENCE_SCOPE`).
 3. It posts the `RunRequest` of `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
    everything else in the messages; no model) to `AGENT_SERVICE_URL`.
@@ -1078,7 +1090,7 @@ until its own move.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.25.0`; `uv.lock`
+pinned in the `server` extra to a release wheel (`pyproject.toml` names the tag); `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 
@@ -1340,14 +1352,14 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
   │     ├── AlbumCoverSuggestion (job, private PNG path, created_at)
   │     └── Song (title, slug — unique per album, track_number, share_slug?, is_shared)
-  │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
+  │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params, reference_recording_id? → ReferenceRecording, ON DELETE RESTRICT)
   │           ├── Generation (MP3, seed, status, whisper_text, whisper_cues?, model_mode, created_by?, share_slug?, is_shared)
   │           │     ├── Score (scorer, value JSON)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
   ├── UserSongWork (song, edited_at?, edit_kind?, played_at?, album_played_at? — this person's own latest edit and its kind, latest listen, and latest listen outside a playlist, on any song they can open, owner or not)
-  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?; one row per uploaded reference file, counted by the upload quota)
+  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
   ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?)
@@ -1696,7 +1708,7 @@ SIGKILLed and even the values the run did produce would be lost.
 
 **Shared infrastructure** (`worker_base.py`):
 - DB singleton with thread-safe initialization
-- Path helpers (`_audio_dir`, `_data_dir`)
+- Path helpers (`audio_dir()`, `data_dir()`)
 - Timeout constants, terminal status set
 - Common startup, shutdown, and restart recovery for every named worker job
   type. MusicWorker executes the model jobs `generate`, `lora_training`,
@@ -1880,22 +1892,6 @@ never been observed; with a newer observation, it is `alive`.
   the lifecycle reaper to terminalize it (heartbeat threshold plus one tick).
   A second process finds no
   unlocked candidate to clean up.
-
-**Backwards-compatible shim** (`worker.py`):
-- Imports tasks from music_worker and scoring_worker
-- Runs both on the legacy `arq:queue` queue
-- Logs a deprecation warning on startup
-
-### Adding a new modality
-
-1. Write task function (e.g. `generate_image()`)
-2. Add queue constant (`ARQ_IMAGE_QUEUE_NAME`)
-3. Add health check function (`is_image_worker_healthy()`)
-4. Add API routing (`pool.enqueue_job("generate_image", ..., _queue_name=...)`)
-5. Create worker module (`image_worker.py` with `ImageWorkerSettings`)
-6. Add Docker Compose service
-
-No existing code changes needed.
 
 ## VRAM Management
 

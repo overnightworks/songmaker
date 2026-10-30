@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { detailTab, navigateToSongTab, type DetailTab } from '$lib/stores/navigation';
-	import { DETAIL_TABS } from '$lib/stores/libraryContext';
+	import { detailTab, navigateToSongTab, type DetailTab } from '#lib/stores/navigation.ts';
+	import { DETAIL_TABS } from '#lib/stores/libraryContext.ts';
 	import {
 		EDITOR_TAB_EDIT_LABEL,
 		EDITOR_TAB_TAKES_LABEL,
 		EDITOR_TABS_LABEL,
 		EDITOR_VIEW_COWRITER_LABEL
-	} from '$lib/constants';
-	import { generateAction, isGenerateBusy } from '$lib/stores/generateAction';
-	import { typingOnPhone } from '$lib/stores/ui';
+	} from '#lib/constants.ts';
+	import { generateAction, isGenerateBusy } from '#lib/stores/generateAction.ts';
+	import { typingOnPhone } from '#lib/stores/ui.ts';
 
 	interface Props {
 		takeCount: number;
