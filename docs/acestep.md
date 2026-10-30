@@ -1,6 +1,6 @@
 # ACE-Step Integration
 
-Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored submodule is pinned to `924604f` on the fork branch `songmaker/vendor-2026-08-24`. That branch is based on upstream `main` at `14c0211` and folds in, as clean merges (no squashes), the focused patches tracked upstream as [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091) (VRAM preflight opt-out), [#1092](https://github.com/ace-step/ACE-Step-1.5/pull/1092) (DiT param exposure), [#1300](https://github.com/ace-step/ACE-Step-1.5/pull/1300) (failure-cache carries `error`), and [#1301](https://github.com/ace-step/ACE-Step-1.5/pull/1301) (duration-aware LM/DiT VRAM reserve). It also folds in `fix/batch-reduction-surfaced` on `FlexOr2/ACE-Step-1.5` (issue #211: `requested_batch_size`/`delivered_batch_size` in the job result), not yet submitted upstream. `songmaker/vendor-2026-08-24` supersedes the prior `songmaker/vendor-2026-08-20` line and the two loose fix branches it grew (`fix/failure-cache-carries-error`, `fix/duration-aware-lm-reserve`) — those branches still exist for their upstream PRs but are no longer tracked independently; sync by fast-forwarding this one line.
+Upstream: [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). The vendored submodule is pinned to `ae8abf2` on the fork branch `songmaker/vendor-2026-10-30`, which adds only the Python 3.14 lift (`requires-python` `<3.15` and its re-lock) to `songmaker/vendor-2026-08-24` (`924604f`). That line is based on upstream `main` at `14c0211` and folds in, as clean merges (no squashes), the focused patches tracked upstream as [#1091](https://github.com/ace-step/ACE-Step-1.5/pull/1091) (VRAM preflight opt-out), [#1092](https://github.com/ace-step/ACE-Step-1.5/pull/1092) (DiT param exposure), [#1300](https://github.com/ace-step/ACE-Step-1.5/pull/1300) (failure-cache carries `error`), and [#1301](https://github.com/ace-step/ACE-Step-1.5/pull/1301) (duration-aware LM/DiT VRAM reserve). It also folds in `fix/batch-reduction-surfaced` on `FlexOr2/ACE-Step-1.5` (issue #211: `requested_batch_size`/`delivered_batch_size` in the job result), not yet submitted upstream. `songmaker/vendor-2026-08-24` supersedes the prior `songmaker/vendor-2026-08-20` line and the two loose fix branches it grew (`fix/failure-cache-carries-error`, `fix/duration-aware-lm-reserve`) — those branches still exist for their upstream PRs but are no longer tracked independently; sync by fast-forwarding `songmaker/vendor-2026-10-30`, the branch the submodule tracks.
 
 ## How Songmaker Uses ACE-Step
 
@@ -144,16 +144,16 @@ scripts/build_images.sh leaves    # compose leaves only (assumes bases exist)
 **Image hierarchy:**
 
 ```
-python:3.12-slim
-  └── songmaker/gpu-torch-base   (torch 2.10+cu128 + cudnn — heavy CUDA layer)
-        └── songmaker/acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
-              └── songmaker-acestep-worker   (wrapper venv + entrypoint)
-
 python:3.14-slim
+  ├── songmaker/gpu-torch-base   (torch 2.10+cu128 + cudnn — heavy CUDA layer)
+  │     └── songmaker/acestep-base   (upstream ACE-Step source + delta deps at /opt/acestep)
+  │           └── songmaker-acestep-worker   (wrapper venv + entrypoint)
   ├── songmaker-music-worker     (server extras only — no torch, no scoring)
   ├── songmaker-scoring-worker   (server + scoring + whisper, CPU torch)
   └── songmaker-web              (server extras + frontend build, no torch)
 ```
+
+**One Python for every image:** the `FROM python:3.14…` line of each Dockerfile is the only owner of the version. `gpu-torch-base` creates the model venv on the image's own Python, so the model venv and the wrapper venv both run 3.14.
 
 **The rule:** if you edit any `docker/base/*.Dockerfile`, run `scripts/build_images.sh` first before `docker compose up --build`. Otherwise compose fails with `manifest unknown` for `FROM songmaker/acestep-base:latest`.
 

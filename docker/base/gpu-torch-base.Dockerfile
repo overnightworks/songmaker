@@ -10,7 +10,7 @@
 # This is the heavy layer (~6-7 GB after install). Anything downstream stays
 # light so the cache survives unrelated changes.
 FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
-FROM python:3.12.16-slim@sha256:8523d6abeb48ceae0b7240d30c5808fc26cb79c1a635bacdf19cf3baecfbec07
+FROM python:3.14.10-slim@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -33,7 +33,7 @@ WORKDIR /opt/acestep
 # into. Downstream `uv sync` discovers /opt/acestep/.venv, sees torch already
 # installed at the upstream-pinned version, and only installs the delta deps.
 ENV UV_HTTP_TIMEOUT=600
-RUN uv venv --python 3.12 .venv \
+RUN uv venv --python "$(command -v python3)" .venv \
     && uv pip install --python .venv/bin/python \
         --only-binary :all: \
         --index-url https://download.pytorch.org/whl/cu128 \
