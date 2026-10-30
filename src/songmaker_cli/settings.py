@@ -275,8 +275,9 @@ class Settings(BaseSettings):
     # Where the co-writer turn starts its runs; checked where the turn runs, so workers and the
     # migrate step start without it.
     agent_service_url: str | None = None
-    # The OAuth scope of the agent service's audience; the workload grant asks for exactly this, so
-    # the token names only the service it is for. Checked where the turn runs.
+    # The OAuth scope of the agent service's audience; the workload grant and the person sign-in
+    # request it, and the token is limited to that audience once the realm makes the scope
+    # optional. Checked where the turn runs.
     agent_service_audience_scope: str | None = None
 
     # ── Rate limits ───────────────────────────────────────────────────

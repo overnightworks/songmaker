@@ -3,7 +3,7 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.25.0`, hash-locked in `uv.lock`.
+the `server` extra to a release wheel, hash-locked in `uv.lock`; `pyproject.toml` names the tag.
 Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
@@ -510,7 +510,7 @@ being in place.
 
 `POST /chat/turn` starts one run of `agents/cowriter.md` at the agent service (`AGENT_SERVICE_URL`, default `http://agent-service:8080`) and reads its event stream to the end; no model runs inside `songmaker-web`. `cowriter/service_turn.py` owns the turn.
 
-**Three tokens per turn.** The person's refresh token (the session row holds it; see "Authentication") becomes a fresh user access token through `fresh_access_token`, which stores a rotated refresh token in its own committed transaction before the token is handed out. Songmaker's workload token comes from the client-credentials grant of the songmaker client, which requests only the agent service's audience scope (`AGENT_SERVICE_AUDIENCE_SCOPE`, one scope token; an unset value ends the turn `unavailable` before any token is fetched), so the token names only the service it is for. Both travel in plain HTTP on `hal_agent_songmaker` to the service (`Authorization` and `Agent-Workload-Token`), which mints the run capability that `/mcp` receives. None of the three reaches a log line, an error frame, a job record, the chat history or the browser: the job's error holds only a closed problem and detail name, such as `sign_in_again: sign-in-again` or `unavailable: provider_unavailable`. The HTTP client reads no proxy from the environment and follows no redirect.
+**Three tokens per turn.** The person's refresh token (the session row holds it; see "Authentication") becomes a fresh user access token through `fresh_access_token`, which stores a rotated refresh token in its own committed transaction before the token is handed out. Songmaker's workload token comes from the client-credentials grant of the songmaker client, which requests the agent service's audience scope (`AGENT_SERVICE_AUDIENCE_SCOPE`, one scope token; an unset value ends the turn `unavailable` before any token is fetched). The person sign-in requests the same scope next to `openid`. A token is limited to that audience only once the realm makes the scope optional (overnightworks/hal#748); until then the realm's default scopes still put the same audience in it. Both travel in plain HTTP on `hal_agent_songmaker` to the service (`Authorization` and `Agent-Workload-Token`), which mints the run capability that `/mcp` receives. None of the three reaches a log line, an error frame, a job record, the chat history or the browser: the job's error holds only a closed problem and detail name, such as `sign_in_again: sign-in-again` or `unavailable: provider_unavailable`. The HTTP client reads no proxy from the environment and follows no redirect.
 
 **The network.** `songmaker-web` joins `hal_agent_songmaker` (external, internal, fixed name), whose only other member is the agent service. The service is a direct peer of `songmaker-web:8080`; "Direct peers" above says what such a peer meets.
 
