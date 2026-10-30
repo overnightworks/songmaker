@@ -1,0 +1,8 @@
+claim_id = "46b1f9dec4a94502a92a189322e1f597"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "6c2a933580b31fa4a769fb9de543bd641d6b178a"
+branch = "claude/issue-2058-frontend-code-type-checks-against-kit-3"
+scope = ["docs/testing.md", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/settingsSections.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/railSearch.ts", "frontend/src/routes/(library)/+page.svelte", "frontend/src/routes/(library)/album", "frontend/src/routes/(library)/playlist/[slug]/+page.svelte", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/service-worker-precache.test.ts", "frontend/src/service-worker.test.ts"]
+opened_commit = "36a5ccde3e05ca70bd9a31de7dbd1580b86dfe6d"
+whole_reason = "One typed-API rename across its consumers, one to three lines per file; a split leaves the kit-3 probe unable to show a clean resolve/Pathname slate."
