@@ -213,7 +213,7 @@ async function routerStanding(page: Page): Promise<RouterStanding> {
 
 export async function standsOnLayerEntry(page: Page): Promise<boolean> {
 	const state = await page.evaluate(() => history.state as unknown);
-	const entry = routerHistoryEntryOf(state)?.pageState?.entry as { layer?: string } | undefined;
+	const entry = routerHistoryEntryOf(state)?.pageState?.entry as App.PageState['entry'];
 	return entry?.layer !== undefined;
 }
 
