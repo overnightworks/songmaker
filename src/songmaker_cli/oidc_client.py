@@ -71,6 +71,8 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         raise ValueError(f"PUBLIC_BASE_URL is required for sign-in: {error.detail}") from None
     issuer = normalised_oidc_issuer(settings.oidc_issuer)
     endpoints = f"{issuer}/{_REALM_ENDPOINT_PREFIX}"
+    audience_scope = settings.agent_service_audience_scope
+    scopes = {"scopes": ("openid", audience_scope)} if audience_scope else {}
     return OidcClientConfig(
         issuer=issuer,
         authorization_endpoint=f"{endpoints}/auth",
@@ -82,6 +84,7 @@ def build_oidc_client_config(settings: Settings) -> OidcClientConfig:
         redirect_uri=f"{public_base_url}{OIDC_CALLBACK_PATH}",
         post_logout_redirect_uri=f"{public_base_url}{SIGNED_OUT_PATH}",
         leeway_seconds=OIDC_LEEWAY_SECONDS,
+        **scopes,
     )
 
 

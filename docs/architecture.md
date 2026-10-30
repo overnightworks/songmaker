@@ -1003,7 +1003,8 @@ through `cowriter/service_turn.py`:
 2. It turns the session's refresh token into a fresh user access token
    (`fresh_access_token` through `DatabaseSessionTransaction` in
    `auth_stores.py`) and takes songmaker's workload token from the same
-   relying party.
+   relying party, asking only for the agent service's audience scope
+   (`AGENT_SERVICE_AUDIENCE_SCOPE`).
 3. It posts the `RunRequest` of `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
    everything else in the messages; no model) to `AGENT_SERVICE_URL`.
@@ -1087,7 +1088,7 @@ until its own move.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.25.0`; `uv.lock`
+pinned in the `server` extra to a release wheel (`pyproject.toml` names the tag); `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 

@@ -219,6 +219,7 @@ class CowriterStack:
     agent: FakeAgentService
     issuer: FakeIssuer
     session_id: str
+    audience_scope: str
 
 
 def attach_cowriter_service(
@@ -239,7 +240,9 @@ def attach_cowriter_service(
     from songmaker_cli.settings import get_settings
 
     app = client.app
+    audience_scope = "agent-service-audience.test"
     monkeypatch.setenv("AGENT_SERVICE_URL", SERVICE_URL)
+    monkeypatch.setenv("AGENT_SERVICE_AUDIENCE_SCOPE", audience_scope)
     get_settings.cache_clear()
     setattr(app.state, AVAILABILITY_ATTRIBUTE, McpEndpointAvailability())
     issuer = a_fake_issuer()
@@ -261,7 +264,7 @@ def attach_cowriter_service(
         session_id = record.id
     for name, value in issued_cookies(session_id, config).items():
         client.cookies.set(name, value)
-    return CowriterStack(agent, issuer, session_id)
+    return CowriterStack(agent, issuer, session_id, audience_scope)
 
 
 def signed_in_request(client: TestClient):
