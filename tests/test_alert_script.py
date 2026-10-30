@@ -349,19 +349,63 @@ def test_failing_credentials_producer_never_reports_sent(
     assert not args_file.exists(), "curl must not start without its credentials"
 
 
-def test_failed_credential_write_does_not_count_as_sent(tmp_path: Path) -> None:
+def _assert_failed_with_reason_and_no_credentials(
+    result: subprocess.CompletedProcess[str],
+    password: str,
+    recorded_files: list[Path],
+) -> None:
+    assert result.returncode != 0
+    assert "sent" not in result.stdout
+    assert password not in result.stderr
+    assert password not in result.stdout
+    for recorded in recorded_files:
+        assert password not in recorded.read_text()
+
+
+def test_silent_curl_failure_names_curl_and_its_status(tmp_path: Path) -> None:
+    args_file = tmp_path / "curl-args.txt"
+    env_file = tmp_path / "curl-env.txt"
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        VALID_ENV,
+        fake_curl_exit_code=35,
+        extra_env={"FAKE_CURL_ARGS_FILE": str(args_file), "FAKE_CURL_ENV_FILE": str(env_file)},
+    )
+
+    _assert_failed_with_reason_and_no_credentials(
+        result,
+        VALID_ENV["SMTP_PASSWORD"],
+        [args_file, env_file],
+    )
+    assert "curl exit 35" in result.stderr
+
+
+def test_failed_credential_write_names_the_write_and_its_status(tmp_path: Path) -> None:
     # Larger than a pipe holds, so the write fails once curl exits unread.
-    password_larger_than_a_pipe_buffer = "x" * 200_000
+    password_larger_than_a_pipe_buffer = "SENTINEL" + "x" * 200_000
+    args_file = tmp_path / "curl-args.txt"
+    env_file = tmp_path / "curl-env.txt"
 
     result = _run_alert(
         tmp_path,
         ["subject", "body"],
         {**VALID_ENV, "SMTP_PASSWORD": password_larger_than_a_pipe_buffer},
-        extra_env={"FAKE_CURL_UNREAD_CONFIG": "1"},
+        extra_env={
+            "FAKE_CURL_UNREAD_CONFIG": "1",
+            "FAKE_CURL_ARGS_FILE": str(args_file),
+            "FAKE_CURL_ENV_FILE": str(env_file),
+        },
     )
 
-    assert result.returncode != 0
-    assert "sent" not in result.stdout
+    _assert_failed_with_reason_and_no_credentials(
+        result,
+        password_larger_than_a_pipe_buffer,
+        [args_file, env_file],
+    )
+    assert "curl exit 0, credential write exit" in result.stderr
+    assert "credential write exit 0" not in result.stderr
 
 
 def test_env_file_is_not_exported_into_curls_environment(tmp_path: Path) -> None:
