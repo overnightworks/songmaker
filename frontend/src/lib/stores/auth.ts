@@ -160,11 +160,9 @@ function hasSessionToLose(): boolean {
 let sessionLostRun: Promise<void> | null = null;
 
 export function handleSessionLost(): Promise<void> {
-	if (!sessionLostRun) {
-		sessionLostRun = reactToSessionLost().finally(() => {
-			sessionLostRun = null;
-		});
-	}
+	sessionLostRun ??= reactToSessionLost().finally(() => {
+		sessionLostRun = null;
+	});
 	return sessionLostRun;
 }
 
