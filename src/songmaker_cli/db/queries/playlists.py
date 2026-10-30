@@ -15,7 +15,7 @@ from songmaker_cli.db.models import (
     PlaylistEntry,
     Song,
 )
-from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
+from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing, is_playable_take
 
 INITIAL_PLAYLIST_POSITION: Final[int] = 0
 PLAYLIST_SKIP_NO_PLAYABLE: Final = "no_playable_take"
@@ -36,7 +36,7 @@ class PlaylistAlbumAddResult:
 
 
 def best_playable_generation(song: Song) -> Generation | None:
-    live = [gen for gen in song.generations if not gen.is_archived and gen.mp3_path]
+    live = [gen for gen in song.generations if is_playable_take(gen)]
     if not live:
         return None
     for gen in live:

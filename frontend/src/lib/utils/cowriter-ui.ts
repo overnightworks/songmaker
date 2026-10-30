@@ -107,11 +107,6 @@ export const COWRITER_PROBLEM_LOOKS: Record<CowriterProblem, { tone: string; ico
 	unavailable: { tone: 'wait', icon: 'circle-alert' }
 };
 
-/** A wait as the clock "m:ss". */
-export function cowriterWaitClock(seconds: number): string {
-	return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-}
-
 export function providerDisplayName(provider: string): string {
 	return provider.charAt(0).toUpperCase() + provider.slice(1);
 }

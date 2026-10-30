@@ -31,6 +31,7 @@ import {
 	activeJobs,
 	dismissGenerationFailure,
 	generationFailures,
+	isActiveJobStatus,
 	showGenerationUnavailableRefusal,
 	trackJob,
 	type ActiveJob
@@ -117,16 +118,12 @@ function jobTakesHaveLanded(job: JobItem, song: SongItem): boolean {
 	return landed.length >= takesTheJobWillLand(job);
 }
 
-function isStillWorking(job: JobItem): boolean {
-	return job.status === 'queued' || job.status === 'running';
-}
-
 function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): ActiveJob | null {
 	const active = jobs.find(
 		({ songId, job, awaitingTakes }) =>
 			songId === song.id &&
 			job.type === JOB_TYPE_GENERATE &&
-			(isStillWorking(job) || awaitingTakes === true) &&
+			(isActiveJobStatus(job.status) || awaitingTakes === true) &&
 			!jobTakesHaveLanded(job, song)
 	);
 	return active ?? null;
@@ -232,7 +229,7 @@ function generatingState(
 		readout: reconnecting ? lastSeenReadout(job) : progressReadout(job),
 		reconnecting,
 		offline,
-		ended: job !== null && !isStillWorking(job)
+		ended: job !== null && !isActiveJobStatus(job.status)
 	};
 }
 
@@ -284,7 +281,7 @@ export const generateAction = readable<GenerateState>(undefined, (set) => {
 		const jobs = new Map(get(activeJobs).map(({ job }) => [job.id, job]));
 		for (const [jobId, observation] of stageObservations) {
 			const job = jobs.get(jobId);
-			if (!job || !isStillWorking(job) || phaseLabel(job) !== observation.phase) {
+			if (!job || !isActiveJobStatus(job.status) || phaseLabel(job) !== observation.phase) {
 				stageObservations.delete(jobId);
 			}
 		}

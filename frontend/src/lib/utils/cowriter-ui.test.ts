@@ -16,7 +16,6 @@ import {
 	cowriterThinkingLabel,
 	cowriterToolCallTarget,
 	cowriterTurnError,
-	cowriterWaitClock,
 	providerDisplayName,
 	type CowriterTurnError
 } from './cowriter-ui';
@@ -79,15 +78,6 @@ describe('co-writer copy', () => {
 
 	it('defect:#1856: names no failure for a frame that carries an empty message', () => {
 		expect(cowriterTurnError({ type: 'error', status: 500, message: '' })).toBeNull();
-	});
-
-	it.each([
-		[0, '0:00'],
-		[40, '0:40'],
-		[65, '1:05'],
-		[COWRITER_BUSY_WAIT_CEILING_SECONDS, '5:00']
-	])('C8 shows a wait of %i seconds as %s', (seconds, clock) => {
-		expect(cowriterWaitClock(seconds)).toBe(clock);
 	});
 
 	it.each([

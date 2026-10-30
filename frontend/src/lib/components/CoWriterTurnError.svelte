@@ -1,11 +1,8 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path; the server answers the sign-in address with a redirect */
 	import { signInAddress } from '#lib/api/fetch.ts';
-	import {
-		COWRITER_PROBLEM_LOOKS,
-		cowriterWaitClock,
-		type CowriterProblem
-	} from '#lib/utils/cowriter-ui.ts';
+	import { COWRITER_PROBLEM_LOOKS, type CowriterProblem } from '#lib/utils/cowriter-ui.ts';
+	import { formatTime } from '#lib/utils/format.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -40,7 +37,7 @@
 	{:else if problem !== 'not_enabled'}
 		<button type="button" class="retry-turn" disabled={remaining > 0} onclick={onretry}>
 			Try again{#if remaining > 0}
-				<span class="wait-time">&nbsp;{cowriterWaitClock(remaining)}</span>{/if}
+				<span class="wait-time">&nbsp;{formatTime(remaining)}</span>{/if}
 		</button>
 	{/if}
 </div>
