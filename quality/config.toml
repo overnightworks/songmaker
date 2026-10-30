@@ -150,3 +150,9 @@ what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1127 -> 11
 item = "#2045"
 date = 2026-10-30
 reason = "versions link references by key: the generated API types gain ReferenceResponse, the upload id and the reference field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+
+[[gate.loosened]]
+what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1137 -> 1139"
+item = "#2070"
+date = 2026-10-30
+reason = "the song summary and the song item gain the generated share_url field; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
