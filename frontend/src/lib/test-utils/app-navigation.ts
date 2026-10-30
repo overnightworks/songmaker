@@ -303,6 +303,7 @@ function moveWithTraversal(event: PopStateEvent): void {
 	fakePage.url = entryPage;
 	fakePage.state = landedState;
 	fakePage.route = routeShownAt(entryPage);
+	fakeNavigating.to = navigationTarget(landedAddress);
 	reportNavigation('popstate', from, landedAddress);
 }
 

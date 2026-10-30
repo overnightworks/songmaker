@@ -11,6 +11,7 @@ import {
 import { currentUser } from '#lib/stores/auth.ts';
 import { makeAuthUser } from '#lib/test-utils/factories.ts';
 import {
+	holdRouteLoads,
 	holdShallowWrites,
 	laterTask,
 	reportFakeRouterEnter,
@@ -145,6 +146,24 @@ describe('settings index on the desktop', () => {
 
 		await render();
 
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith('/settings/generation', { replace: true })
+		);
+	});
+
+	it('does not redirect while a navigation is still under way, only once it has landed', async () => {
+		landOnPage();
+		await laterTask();
+		const releaseRouteLoads = holdRouteLoads();
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the fake router takes the address as is
+		void goto('/settings');
+		vi.mocked(goto).mockClear();
+
+		await render();
+		await laterTask();
+		expect(goto).not.toHaveBeenCalled();
+
+		releaseRouteLoads();
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith('/settings/generation', { replace: true })
 		);
