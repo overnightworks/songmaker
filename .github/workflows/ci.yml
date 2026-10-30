@@ -152,16 +152,16 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://songmaker:songmaker@localhost:5432/songmaker_test # why: disposable password for this isolated GitHub Actions service container.
       POSTGRESQL_CONTRACT_MODULES: >-
-        tests/test_postgresql.py
-        tests/test_cover_accounting.py
+        tests/songmaker_cli/test_db_postgresql.py
+        tests/songmaker_cli/test_cover_runner_accounting.py
         tests/test_reference_quota.py
         tests/test_auth_write_lock_postgres.py
         tests/test_person_token_paths_postgres.py
         tests/test_reference_save_lock_postgres.py
         tests/test_song_version_lock_postgres.py
-        tests/test_coherence_verdict_lock_postgres.py
-        tests/test_coherence_verdict_migration.py
-        tests/test_reference_recordings_migration.py
+        tests/songmaker_cli/mcp_server/test_tools_coherence_verdict_lock_postgres.py
+        tests/songmaker_cli/db/test_migrations_coherence_verdict.py
+        tests/songmaker_cli/db/test_migrations_reference_recordings.py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
         with:

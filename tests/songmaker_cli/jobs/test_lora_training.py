@@ -60,7 +60,7 @@ def lora_training_config(monkeypatch: pytest.MonkeyPatch) -> None:
         await job_runner(*args, **kwargs)
 
     monkeypatch.setattr(
-        "test_jobs_lora_training.run_lora_training_job",
+        "test_lora_training.run_lora_training_job",
         run_with_test_training_config,
     )
 
