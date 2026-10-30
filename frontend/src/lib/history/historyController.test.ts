@@ -13,7 +13,6 @@ import {
 	mountRouteOfLandedAddress,
 	navigateTo,
 	pageBelowStandingPage,
-	pageStateOfHistoryState,
 	pushEntry,
 	remountOverStandingEntry,
 	replaceEntry,
@@ -33,7 +32,8 @@ import {
 	reportedNavigations,
 	startFakeRouter
 } from '#lib/test-utils/app-navigation.ts';
-import { pressBack, watchBack } from '#lib/test-utils/library-history.ts';
+import { pressBack, standingHistoryEntry, watchBack } from '#lib/test-utils/library-history.ts';
+import { routerHistoryEntry } from '#lib/test-utils/router-history-layout.ts';
 
 type Ledger = Parameters<typeof land>[0];
 type Landing = ReturnType<typeof land>;
@@ -169,11 +169,11 @@ describe('entry ids', () => {
 	it.each([
 		{
 			stored: 'under SvelteKit states key',
-			state: { 'sveltekit:history': 3, 'sveltekit:states': { entry: { id: 5, layer: 'menu' } } },
+			state: routerHistoryEntry({ entry: { id: 5, layer: 'menu' } }, { historyIndex: 3 }),
 			entry: { id: 5, layer: 'menu' }
 		},
 		{ stored: 'raw beside the states key', state: { entry: { id: 5 } }, entry: null },
-		{ stored: 'without an id', state: { 'sveltekit:states': { entry: { id: 0 } } }, entry: null },
+		{ stored: 'without an id', state: routerHistoryEntry({ entry: { id: 0 } }), entry: null },
 		{ stored: 'nowhere', state: null, entry: null }
 	])("the popstate reader reads the entry under SvelteKit's states key ($stored)", (fixture) => {
 		expect(landedEntry(new PopStateEvent('popstate', { state: fixture.state }))).toEqual(
@@ -227,10 +227,6 @@ describe('history adapter', () => {
 		await landed;
 	}
 
-	function standingEntry(): unknown {
-		return pageStateOfHistoryState(history.state)?.entry;
-	}
-
 	function seedForeignEntry(url: string): void {
 		history.replaceState(null, '', url);
 	}
@@ -262,7 +258,7 @@ describe('history adapter', () => {
 
 		expect(layer.id).toBeGreaterThan(page.id);
 		expect(replaced).toEqual(layer);
-		expect(history.state['sveltekit:states'].entry).toEqual(layer);
+		expect(standingHistoryEntry()).toEqual(layer);
 	});
 
 	it("a page's own Back goes to the page it was pushed over, after a rename too", () => {
@@ -294,7 +290,7 @@ describe('history adapter', () => {
 		await steppedBack;
 
 		expect(landings.slice(1).map(({ settled }) => settled)).toEqual([[], [page.id]]);
-		expect(history.state['sveltekit:states'].entry).toEqual(page);
+		expect(standingHistoryEntry()).toEqual(page);
 	});
 
 	it('keeps stamping and pushing entries when session storage refuses writes', () => {
@@ -306,7 +302,7 @@ describe('history adapter', () => {
 
 		expect(first).toEqual({ id: 1 });
 		expect(pushed.id).toBe(2);
-		expect(standingEntry()).toEqual(pushed);
+		expect(standingHistoryEntry()).toEqual(pushed);
 	});
 
 	it('ids stay monotonic after session storage starts refusing writes', () => {
@@ -348,7 +344,7 @@ describe('history adapter', () => {
 		'loads onto entry $loadedOnto and keeps stamping entries when the browser denies $denied session storage',
 		async ({ spyOn, loadedOnto, ids }) => {
 			if (loadedOnto !== null) {
-				history.replaceState({ 'sveltekit:states': { entry: { id: loadedOnto } } }, '', '/album/c');
+				history.replaceState(routerHistoryEntry({ entry: { id: loadedOnto } }), '', '/album/c');
 			}
 			spyOn().mockImplementation(() => {
 				throw storageAccessDenied();
@@ -376,7 +372,7 @@ describe('history adapter', () => {
 		const stamped = replaceEntry('/album/a', {});
 
 		expect(stamped).toEqual({ id: expect.any(Number) });
-		expect(standingEntry()).toEqual(stamped);
+		expect(standingHistoryEntry()).toEqual(stamped);
 	});
 
 	it('an id-less entry below stamped entries stays foreign', async () => {
@@ -385,7 +381,7 @@ describe('history adapter', () => {
 		await traverse(() => history.back());
 
 		expect(replaceEntry('/album/a', {})).toBeNull();
-		expect(standingEntry()).toBeUndefined();
+		expect(standingHistoryEntry()).toBeNull();
 	});
 
 	it('stepBackTo on the first entry resolves at once', async () => {
@@ -410,7 +406,7 @@ describe('history adapter', () => {
 			keepFocus: true,
 			state: {}
 		});
-		const replaced = standingEntry();
+		const replaced = standingHistoryEntry();
 		await navigateTo('/settings', {
 			replaceState: false,
 			noScroll: true,
@@ -419,7 +415,7 @@ describe('history adapter', () => {
 		});
 
 		expect(replaced).toEqual(page);
-		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(page.id);
+		expect((standingHistoryEntry() as HistoryEntry).id).toBeGreaterThan(page.id);
 		expect(pageBelowStandingPage()).toBe(addressOf('/album/a/song'));
 	});
 
@@ -463,7 +459,7 @@ describe('history adapter', () => {
 
 		expect(menuOpen).toBe(false);
 		expect(stackedLayers()).toEqual([]);
-		expect(standingEntry()).toEqual(page);
+		expect(standingHistoryEntry()).toEqual(page);
 		expect(location.pathname).toBe('/settings/voices');
 	});
 
@@ -474,7 +470,7 @@ describe('history adapter', () => {
 
 		await stepBackOrGoTo('/login');
 
-		expect(standingEntry()).toEqual(signIn);
+		expect(standingHistoryEntry()).toEqual(signIn);
 		expect(goto).not.toHaveBeenCalled();
 	});
 
@@ -604,7 +600,7 @@ describe('history adapter', () => {
 
 		holdLayer('album-menu', () => undefined);
 
-		expect(standingEntry()).toEqual({ id: expect.any(Number), layer: 'album-menu' });
+		expect(standingHistoryEntry()).toEqual({ id: expect.any(Number), layer: 'album-menu' });
 		expect(standingPageEntryId()).toBe(page.id);
 	});
 
@@ -617,7 +613,7 @@ describe('history adapter', () => {
 
 		expect(menuOpen).toBe(false);
 		expect(stackedLayers()).toEqual([]);
-		expect(standingEntry()).toEqual(song);
+		expect(standingHistoryEntry()).toEqual(song);
 	});
 
 	it.each([false, true])(
@@ -626,14 +622,14 @@ describe('history adapter', () => {
 			const wall = pushEntry('/', {});
 			const album = pushEntry('/album/a', {});
 			if (open) holdLayer('now-playing', () => undefined);
-			const below = standingEntry();
+			const below = standingHistoryEntry();
 			holdLayer('album-menu', () => undefined);
 			await traverse(() => history.back());
 			expect(stackedLayers()).toHaveLength(open ? 1 : 0);
 			await traverse(() => history.forward());
-			await vi.waitFor(() => expect(standingEntry()).toEqual(below));
+			await vi.waitFor(() => expect(standingHistoryEntry()).toEqual(below));
 			await traverse(() => history.back());
-			expect(standingEntry()).toEqual(open ? album : wall);
+			expect(standingHistoryEntry()).toEqual(open ? album : wall);
 		}
 	);
 
@@ -645,7 +641,7 @@ describe('history adapter', () => {
 		await vi.mocked(goto)('/settings');
 		stampNavigatedEntry('link');
 
-		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(song.id);
+		expect((standingHistoryEntry() as HistoryEntry).id).toBeGreaterThan(song.id);
 		expect(pageBelowStandingPage()).toBe(addressOf('/album/a'));
 	});
 
@@ -659,7 +655,7 @@ describe('history adapter', () => {
 		await vi.mocked(goto)('/album/c', { replaceState: true });
 		stampNavigatedEntry('goto');
 
-		expect(standingEntry()).toBeUndefined();
+		expect(standingHistoryEntry()).toBeNull();
 	});
 
 	it('the router start gets back the id and the page below the entry was loaded with', () => {
@@ -669,7 +665,7 @@ describe('history adapter', () => {
 
 		stampNavigatedEntry('enter');
 
-		expect(standingEntry()).toEqual(loaded);
+		expect(standingHistoryEntry()).toEqual(loaded);
 		expect(pageBelowStandingPage()).toBe(addressOf('/'));
 		expect(location.pathname).toBe('/album/a');
 	});
@@ -705,7 +701,7 @@ describe('history adapter', () => {
 
 		await traverse(() => stampNavigatedEntry('enter'));
 
-		expect(standingEntry()).toEqual(page);
+		expect(standingHistoryEntry()).toEqual(page);
 		expect(location.pathname).toBe('/settings/voices');
 	});
 
@@ -745,10 +741,6 @@ describe('route convergence after a landing', () => {
 		vi.restoreAllMocks();
 	});
 
-	function standingEntry(): unknown {
-		return pageStateOfHistoryState(history.state)?.entry;
-	}
-
 	async function backFromSettings(): Promise<void> {
 		await vi.mocked(goto)('/settings');
 		stampNavigatedEntry('goto');
@@ -762,18 +754,18 @@ describe('route convergence after a landing', () => {
 
 		expect(fakePage.url.pathname).toBe('/album/b');
 		expect(location.pathname).toBe('/album/b');
-		expect(standingEntry()).toEqual(albumB);
+		expect(standingHistoryEntry()).toEqual(albumB);
 		expect(fakePage.state).toEqual({ entry: albumB });
 		expect(reportedNavigations.at(-1)).toEqual({ type: 'goto', pathname: '/album/b' });
 	});
 
 	it('Back onto an entry the router wrote at its own address mounts it as it is', async () => {
-		const albumA = standingEntry();
+		const albumA = standingHistoryEntry();
 
 		await backFromSettings();
 
 		expect(fakePage.url.pathname).toBe('/album/a');
-		expect(standingEntry()).toEqual(albumA);
+		expect(standingHistoryEntry()).toEqual(albumA);
 		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/album/a' });
 	});
 
@@ -793,11 +785,11 @@ describe('route convergence after a landing', () => {
 		const albumBMounted = remountOverStandingEntry('/album/b', {});
 
 		expect(location.pathname).toBe('/album/b');
-		expect(standingEntry()).toEqual(albumB);
+		expect(standingHistoryEntry()).toEqual(albumB);
 		routesLoaded();
 		await Promise.all([albumMounted, albumBMounted]);
 		expect(fakePage.url.pathname).toBe('/album/b');
-		expect(standingEntry()).toEqual(albumB);
+		expect(standingHistoryEntry()).toEqual(albumB);
 	});
 
 	function navigationTo(pathname: string): NavigationTarget {

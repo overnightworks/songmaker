@@ -9,7 +9,6 @@ import {
 	loadHistoryPageForTests,
 	mountAddressOver,
 	navigateTo,
-	pageStateOfHistoryState,
 	pushEntry,
 	remountOverStandingEntry,
 	replaceEntry,
@@ -18,6 +17,7 @@ import {
 	standingHistoryState,
 	standingPageEntryId
 } from '#lib/history/historyController.ts';
+import { pageStateOfHistoryState } from '#lib/history/routerHistoryState.ts';
 import { fetchPlaylists } from '#lib/api/client.ts';
 import { isNotFound } from '#lib/api/fetch.ts';
 import type { LibrarySort } from '#lib/api/library.ts';
