@@ -6,7 +6,7 @@ that state through these helpers when assembling the admin Worker Pool view.
 
 The key prefixes here MUST stay in sync with ``acestep_worker.heartbeat`` and
 ``acestep_worker.lm_failure``;
-see ``tests/test_acestep_state.py`` for the cross-package assertion.
+see ``tests/songmaker_cli/test_acestep_state.py`` for the cross-package assertion.
 """
 
 from __future__ import annotations
