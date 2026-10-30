@@ -153,6 +153,10 @@ export async function unkeepGeneration(genId: string): Promise<void> {
 	await apiFetch(`/api/generations/${genId}/unkeep`, { method: 'POST' });
 }
 
+export async function unarchiveGeneration(genId: string): Promise<void> {
+	await apiFetch(`/api/generations/${genId}/unarchive`, { method: 'POST' });
+}
+
 export async function shareGeneration(genId: string): Promise<ShareResult> {
 	return apiFetch<ShareResult>(`/api/generations/${genId}/share`, { method: 'POST' });
 }

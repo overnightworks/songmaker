@@ -27,6 +27,11 @@ log = logging.getLogger(__name__)
 INITIAL_GENERATION_NUMBER: Final[int] = 1
 COHERENCE_SCORE_KEY: Final = "lyrical_coherence"
 COHERENCE_SUMMARY_KEY: Final = "lyrical_summary"
+ARCHIVED_TAKE_DETAIL: Final = "Restore this take first."
+
+
+class ArchivedTakeError(Exception):
+    """The take is archived; keep, pick, share and playlist add need it restored first."""
 
 
 def _probe_audio_duration_or_none(audio_dir: Path, mp3_rel: str) -> float | None:
@@ -258,9 +263,36 @@ def _require_generation(session: Session, generation_id: str) -> Generation:
     return gen
 
 
+def _lock_generation(session: Session, generation_id: str) -> Generation:
+    """Lock the take and reload it, so a concurrent archive or restore is seen.
+
+    The lock is limited to the take (`of=Generation`) because the eager join to its
+    reference recording is an outer join, which PostgreSQL cannot lock.
+    """
+    gen = (
+        session.query(Generation)
+        .filter_by(id=generation_id)
+        .with_for_update(of=Generation)
+        .populate_existing()
+        .first()
+    )
+    if not gen:
+        raise ValueError(f"Generation not found: {generation_id}")
+    return gen
+
+
+def lock_unarchived_generation(session: Session, generation_id: str) -> Generation:
+    """The one refusal of an archived take: lock it, or raise `ArchivedTakeError`."""
+    gen = _lock_generation(session, generation_id)
+    if gen.is_archived:
+        raise ArchivedTakeError(generation_id)
+    return gen
+
+
 def pick_generation(session: Session, generation_id: str) -> None:
     gen = _require_generation(session, generation_id)
     session.query(Generation).filter_by(song_id=gen.song_id).update({"is_picked": False})
+    gen = lock_unarchived_generation(session, generation_id)
     gen.is_picked = True
     session.flush()
 
@@ -272,7 +304,7 @@ def unpick_generation(session: Session, generation_id: str) -> None:
 
 
 def keep_generation(session: Session, generation_id: str) -> None:
-    gen = _require_generation(session, generation_id)
+    gen = lock_unarchived_generation(session, generation_id)
     gen.is_kept = True
     session.flush()
 
@@ -409,15 +441,7 @@ def delete_generation(session: Session, generation_id: str) -> list[str]:
     """
     # Lock the take before the ORM delete removes its scores and ratings, the order
     # retention's final deletion uses, so the two never wait on each other in a cycle.
-    gen = (
-        session.query(Generation)
-        .filter_by(id=generation_id)
-        .with_for_update(of=Generation)
-        .first()
-    )
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
-
+    gen = _lock_generation(session, generation_id)
     return _delete_locked_generation(session, gen)
 
 
@@ -436,6 +460,7 @@ def get_generation_by_slug(session: Session, slug: str) -> Generation | None:
 
 
 def enable_generation_sharing(session: Session, generation_id: str) -> Generation:
+    lock_unarchived_generation(session, generation_id)
     gen = enable_sharing(session, Generation, generation_id)
     gen.is_kept = True
     session.flush()

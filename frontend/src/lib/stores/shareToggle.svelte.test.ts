@@ -1,6 +1,13 @@
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { ShareKind } from '#lib/routes/addresses.ts';
+import { get } from 'svelte/store';
+import { ApiError } from '#lib/api/fetch.ts';
+import { toasts } from '#lib/stores/toast.ts';
 import { createShareToggle } from './shareToggle.svelte';
+
+beforeEach(() => {
+	toasts.set([]);
+});
 
 it.each<{ kind: ShareKind; address: string }>([
 	{ kind: 'album', address: '/share/abc' },
@@ -17,4 +24,18 @@ it.each<{ kind: ShareKind; address: string }>([
 	}));
 
 	expect(toggle.sharedTooltip).toBe(`Shared: ${address}`);
+});
+
+it('toasts the server detail when sharing is refused', async () => {
+	const toggle = createShareToggle(() => ({
+		kind: 'gen',
+		isShared: false,
+		shareSlug: null,
+		onshare: vi.fn().mockRejectedValue(new ApiError(409, 'Restore this take first.', '/share')),
+		onunshare: vi.fn()
+	}));
+
+	await toggle.toggle();
+
+	expect(get(toasts).map((toast) => toast.message)).toEqual(['Restore this take first.']);
 });

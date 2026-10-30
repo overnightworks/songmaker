@@ -56,6 +56,7 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries.albums import get_album
 from songmaker_cli.db.queries.auth import record_audit
+from songmaker_cli.db.queries.generations import ARCHIVED_TAKE_DETAIL, ArchivedTakeError
 from songmaker_cli.db.queries.playlists import (
     add_album_to_playlist,
     add_generation_to_playlist,
@@ -235,7 +236,10 @@ def api_delete_playlist_cover(
 
 @router.post(
     "/playlists/{playlist_id}/entries/generation",
-    responses={404: {"description": "Playlist or generation not found"}},
+    responses={
+        404: {"description": "Playlist or generation not found"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
+    },
 )
 def api_add_generation_to_playlist(
     playlist_id: str,
@@ -249,6 +253,8 @@ def api_add_generation_to_playlist(
         entry = add_generation_to_playlist(session, playlist_id, req.generation_id)
     except ValueError:
         raise HTTPException(404, "Generation not found")
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     session.commit()
     entry = session.merge(entry)
     playlist = get_playlist(session, playlist_id)
@@ -261,6 +267,7 @@ def api_add_generation_to_playlist(
     responses={
         400: {"description": "Song has no playable take"},
         404: {"description": "Playlist or song not found"},
+        409: {"description": ARCHIVED_TAKE_DETAIL},
     },
 )
 def api_add_song_to_playlist(
@@ -283,6 +290,8 @@ def api_add_song_to_playlist(
         add_song_to_playlist(session, playlist_id, req.song_id)
     except ValueError:
         raise HTTPException(404, "Song not found")
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     session.commit()
     return StatusResponse()
 

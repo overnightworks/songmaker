@@ -15,6 +15,7 @@ from songmaker_cli.db.models import (
     PlaylistEntry,
     Song,
 )
+from songmaker_cli.db.queries.generations import ArchivedTakeError, lock_unarchived_generation
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing, is_playable_take
 
 INITIAL_PLAYLIST_POSITION: Final[int] = 0
@@ -168,9 +169,7 @@ def _next_position(session: Session, playlist_id: str) -> int:
 def add_generation_to_playlist(
     session: Session, playlist_id: str, generation_id: str,
 ) -> PlaylistEntry:
-    gen = session.query(Generation).filter_by(id=generation_id).first()
-    if not gen:
-        raise ValueError(f"Generation not found: {generation_id}")
+    gen = lock_unarchived_generation(session, generation_id)
     position = _next_position(session, playlist_id)
     entry = PlaylistEntry(
         playlist_id=playlist_id, generation_id=generation_id, position=position,
@@ -237,7 +236,16 @@ def add_album_to_playlist(
                 )
             )
             continue
-        entries.append(add_generation_to_playlist(session, playlist_id, playable.id))
+        try:
+            entries.append(add_generation_to_playlist(session, playlist_id, playable.id))
+        except ArchivedTakeError:
+            skipped.append(
+                PlaylistAlbumSkip(
+                    song_id=song.id,
+                    title=song.title,
+                    reason=PLAYLIST_SKIP_NO_PLAYABLE,
+                )
+            )
     return PlaylistAlbumAddResult(entries=entries, skipped=skipped)
 
 

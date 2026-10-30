@@ -53,6 +53,7 @@ export {
 	unpickGeneration,
 	keepGeneration,
 	unkeepGeneration,
+	unarchiveGeneration,
 	shareGeneration,
 	unshareGeneration
 } from './generations';

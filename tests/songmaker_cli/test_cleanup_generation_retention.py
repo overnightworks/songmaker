@@ -195,15 +195,16 @@ def _seed_audio_files(factory, audio_dir: Path, gen_id: str) -> list[Path]:
     return [mp3, wav]
 
 
-def _mark_after_archiving(factory, gen_id: str, mark) -> None:
-    """The take is archived long ago and marked afterwards, as the API allows."""
+def _mark_after_archiving(factory, gen_id: str, flag: str) -> None:
+    """A take archived long ago that still carries a mark; the row is set directly,
+    because the API refuses to mark an archived take."""
     _age(factory, gen_id, created_days_ago=90, archived_days_ago=60)
     with factory() as session:
-        mark(session, gen_id)
+        setattr(get_generation(session, gen_id), flag, True)
         session.commit()
 
 
-@pytest.mark.parametrize("mark", [keep_generation, pick_generation])
+@pytest.mark.parametrize("mark", ["is_kept", "is_picked"])
 def test_an_archived_pick_or_keep_past_the_window_is_not_deleted(
     retention_factory, tmp_path: Path, mark,
 ) -> None:
@@ -249,8 +250,8 @@ def test_a_dry_run_names_only_the_takes_a_real_run_would_delete(
         for gen_id in ("g1", "g2", "g3", "g4")
         for path in _seed_audio_files(retention_factory, audio_dir, gen_id)
     ]
-    _mark_after_archiving(retention_factory, "g1", keep_generation)
-    _mark_after_archiving(retention_factory, "g2", pick_generation)
+    _mark_after_archiving(retention_factory, "g1", "is_kept")
+    _mark_after_archiving(retention_factory, "g2", "is_picked")
     _age(retention_factory, "g3", created_days_ago=90, archived_days_ago=60)
 
     report = run_generation_retention(retention_factory, audio_dir, dry_run=True)
@@ -267,7 +268,7 @@ def test_an_archived_keep_that_is_also_an_anchor_is_not_deleted(
     with retention_factory() as session:
         get_generation(session, "g2").src_generation_id = "g1"
         session.commit()
-    _mark_after_archiving(retention_factory, "g1", keep_generation)
+    _mark_after_archiving(retention_factory, "g1", "is_kept")
 
     report = run_generation_retention(retention_factory, tmp_path / "audio")
 
@@ -293,11 +294,13 @@ def test_the_report_names_exactly_the_takes_stage_one_wrote(
         assert get_generation(session, "g2").is_archived is False
 
 
-@pytest.mark.parametrize("unmark", [unkeep_generation, unpick_generation])
+@pytest.mark.parametrize(
+    ("mark", "unmark"),
+    [("is_kept", unkeep_generation), ("is_picked", unpick_generation)],
+)
 def test_a_take_unmarked_after_long_archiving_is_deleted_at_the_next_run(
-    retention_factory, tmp_path: Path, unmark,
+    retention_factory, tmp_path: Path, mark, unmark,
 ) -> None:
-    mark = keep_generation if unmark is unkeep_generation else pick_generation
     _mark_after_archiving(retention_factory, "g1", mark)
     with retention_factory() as session:
         unmark(session, "g1")

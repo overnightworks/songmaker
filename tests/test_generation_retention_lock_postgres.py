@@ -12,21 +12,26 @@ from httpx import Response
 from postgres_lock_harness import CommitPause, race, wrote_to_tables
 from support.web_app import make_test_app, seed_session, seed_user
 
-from songmaker_cli.db.models import Album, Generation, Song, Version
+from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, Version
 
 ADMIN = "admin-1"
 RETENTION_RUN = "/api/admin/generation-retention/run"
 LONG_AGO = timedelta(days=90)
 ARCHIVED_LONG_AGO = timedelta(days=60)
 NOT_FOUND = {"detail": "Not Found"}
+RESTORE_FIRST = {"detail": "Restore this take first."}
+PLAYLIST = "playlist-1"
 
 
-def _take(name: str, number: int, *, archived: bool, old: bool) -> Generation:
+def _take(
+    name: str, number: int, *, archived: bool, old: bool, picked: bool = False,
+) -> Generation:
     now = datetime.now(timezone.utc)
     return Generation(
         id=name, song_id="song-1", version_id="version-1", generation_number=number,
         mp3_path=f"album-1/{name}.mp3",
-        is_archived=archived, archived_at=now - ARCHIVED_LONG_AGO if archived else None,
+        is_picked=picked, is_archived=archived,
+        archived_at=now - ARCHIVED_LONG_AGO if archived else None,
         created_at=now - LONG_AGO if old else now,
     )
 
@@ -47,6 +52,7 @@ class _World:
             session.add(Version(id="version-1", song_id="song-1", version_number=1,
                                 lyrics="", prompt=""))
             session.flush()
+            session.add(Playlist(id=PLAYLIST, title="P", slug="p", created_by=ADMIN))
             session.add_all(
                 _take(name, number, **flags)
                 for number, (name, flags) in enumerate(takes.items(), start=1)
@@ -63,6 +69,16 @@ class _World:
 
     def mark(self, route: str, take: str) -> Callable[[], Response]:
         return lambda: self.client.post(f"/api/generations/{take}/{route}")
+
+    def share(self, take: str) -> Callable[[], Response]:
+        return lambda: self.client.post(f"/api/generations/{take}/share")
+
+    def add_to_playlist(self, route: str, body: dict[str, str]) -> Callable[[], Response]:
+        return lambda: self.client.post(f"/api/playlists/{PLAYLIST}/entries/{route}", json=body)
+
+    def entry_count(self) -> int:
+        with self.pg_factory() as session:
+            return session.query(PlaylistEntry).count()
 
     def delete(self, take: str) -> Callable[[], Response]:
         return lambda: self.client.delete(f"/api/generations/{take}")
@@ -95,19 +111,83 @@ def test_stage_one_leaves_a_take_that_a_keep_or_pick_commits_first(
     }
 
 
-@pytest.mark.parametrize("route", ["keep", "pick"])
-def test_stage_two_leaves_an_archived_take_that_a_keep_or_pick_commits_first(
-    pg_factory, tmp_path, route,
+def test_stage_two_leaves_an_archived_take_that_a_restore_commits_first(
+    pg_factory, tmp_path,
 ) -> None:
     world = _World(pg_factory, tmp_path, {"x": {"archived": True, "old": True}})
     answers = race(
-        pg_factory, world.mark(route, "x"), world.retention(), _holding_a_generation_write(),
+        pg_factory, world.mark("unarchive", "x"), world.retention(),
+        _holding_a_generation_write(),
     )
     assert answers["first"].status_code == 200
     assert answers["second"].status_code == 200
     assert answers["second"].json()["deleted_ids"] == []
-    assert world.state("x") is not None
+    assert world.state("x") == {"archived": False, "kept": False, "picked": False}
     assert world.files["x"].exists()
+
+
+def _stage_one_archives_x() -> dict[str, dict[str, bool]]:
+    return {"x": {"archived": False, "old": True}}
+
+
+@pytest.mark.parametrize("route", ["keep", "share"])
+def test_a_keep_or_take_share_waits_for_the_archive_of_the_take_and_answers_409(
+    pg_factory, tmp_path, route,
+) -> None:
+    world = _World(pg_factory, tmp_path, _stage_one_archives_x())
+    action = world.share("x") if route == "share" else world.mark(route, "x")
+    answers = race(pg_factory, world.retention(), action, _holding_a_generation_write())
+    assert answers["first"].json()["archived_ids"] == ["x"]
+    assert answers["second"].status_code == 409
+    assert answers["second"].json() == RESTORE_FIRST
+    assert world.state("x") == {"archived": True, "kept": False, "picked": False}
+
+
+def test_a_pick_waits_for_the_archive_of_the_take_and_leaves_the_sibling_pick(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path, {
+        "x": {"archived": False, "old": True},
+        "y": {"archived": False, "old": False, "picked": True},
+    })
+    answers = race(
+        pg_factory, world.retention(), world.mark("pick", "x"), _holding_a_generation_write(),
+    )
+    assert answers["first"].json()["archived_ids"] == ["x"]
+    assert answers["second"].status_code == 409
+    assert answers["second"].json() == RESTORE_FIRST
+    assert world.state("x") == {"archived": True, "kept": False, "picked": False}
+    assert world.state("y") == {"archived": False, "kept": False, "picked": True}
+
+
+def test_a_song_add_waits_for_the_archive_of_its_only_take_and_answers_409(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path, _stage_one_archives_x())
+    answers = race(
+        pg_factory, world.retention(),
+        world.add_to_playlist("song", {"song_id": "song-1"}), _holding_a_generation_write(),
+    )
+    assert answers["second"].status_code == 409
+    assert answers["second"].json() == RESTORE_FIRST
+    assert world.entry_count() == 0
+
+
+def test_an_album_add_waits_for_the_archive_of_the_take_and_skips_the_song(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path, _stage_one_archives_x())
+    answers = race(
+        pg_factory, world.retention(),
+        world.add_to_playlist("album", {"album_id": "album-1"}), _holding_a_generation_write(),
+    )
+    assert answers["second"].status_code == 200
+    body = answers["second"].json()
+    assert body["added_count"] == 0
+    assert [(s["song_id"], s["reason"]) for s in body["skipped"]] == [
+        ("song-1", "no_playable_take"),
+    ]
+    assert world.entry_count() == 0
 
 
 def test_a_pick_of_a_sibling_waits_for_the_archive_of_another_take_and_both_finish(

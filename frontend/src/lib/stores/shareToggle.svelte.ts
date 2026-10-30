@@ -1,4 +1,5 @@
 import type { ShareResult } from '#lib/api/types.ts';
+import { describeFailure } from '#lib/api/fetch.ts';
 import {
 	SHARE_BUTTON_COPIED_TOAST,
 	SHARE_BUTTON_COPY_FAILED_TOAST,
@@ -42,8 +43,8 @@ export function createShareToggle(source: () => ShareToggleSource) {
 					addToast(SHARE_BUTTON_COPY_FAILED_TOAST, 'success');
 				}
 			}
-		} catch {
-			addToast(SHARE_BUTTON_FAILED_TOAST, 'error');
+		} catch (e) {
+			addToast(describeFailure(e, SHARE_BUTTON_FAILED_TOAST), 'error');
 		} finally {
 			busy = false;
 		}

@@ -23,6 +23,7 @@ from songmaker_cli.api_models import (
     RateLimitUpdateRequest,
     StatusResponse,
 )
+from songmaker_cli.api_models.release import ReleaseInfo
 from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
     CoverSettingsRequest,
@@ -344,6 +345,14 @@ def api_capabilities(
         scoring=True,
         chat_model=get_claude_chat_model(session),
     )
+
+
+# ── Release ──────────────────────────────────────────────────────
+
+
+@router.get("/release")
+def api_release(_user: AuthenticatedUser = Depends(get_current_user)) -> ReleaseInfo:
+    return ReleaseInfo.from_settings(get_settings())
 
 
 # ── Provider reachability (shared by Co-Writer and Scoring) ────────

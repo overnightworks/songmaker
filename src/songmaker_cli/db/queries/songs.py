@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
@@ -22,6 +23,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries.activity import record_song_edit
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
+from songmaker_cli.db.queries.generations import ArchivedTakeError, lock_unarchived_generation
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
@@ -581,8 +583,9 @@ def enable_song_sharing(session: Session, song_id: str) -> Song:
     song = enable_sharing(session, Song, song_id)
     picked = next((g for g in song.generations if g.is_picked), None)
     if picked:
-        picked.is_kept = True
-        session.flush()
+        with contextlib.suppress(ArchivedTakeError):
+            lock_unarchived_generation(session, picked.id).is_kept = True
+            session.flush()
     return song
 
 
