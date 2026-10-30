@@ -1,7 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { APP_NAME } from '#lib/constants.ts';
-import { SIGN_IN_ACTION_LABEL, SIGNED_OUT_HEADING } from '#lib/constants/auth.ts';
 import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import Page from './+page.svelte';
 
@@ -25,9 +24,11 @@ describe('signed-out page', () => {
 		const target = renderPage();
 		await tick();
 
-		expect(target.querySelector('h1')?.textContent).toBe(SIGNED_OUT_HEADING);
-		const actions = Array.from(target.querySelectorAll('.actions a, .actions button'));
-		expect(actions.map((action) => action.textContent?.trim())).toEqual([SIGN_IN_ACTION_LABEL]);
+		expect(target.querySelector('h1')?.textContent).toBe('You are logged out.');
+		const actions = Array.from(target.querySelectorAll('a, button')).filter(
+			(action) => !action.closest('nav')
+		);
+		expect(actions.map((action) => action.textContent?.trim())).toEqual(['Log in']);
 		expect(actions[0].getAttribute('href')).toBe('/login/oidc');
 	});
 
@@ -35,7 +36,9 @@ describe('signed-out page', () => {
 		const target = renderPage();
 		await tick();
 
-		expect(target.querySelector('.actions a')?.hasAttribute('data-sveltekit-reload')).toBe(true);
+		expect(
+			target.querySelector('a[href="/login/oidc"]')?.hasAttribute('data-sveltekit-reload')
+		).toBe(true);
 	});
 
 	it('shows no failure', async () => {
@@ -57,7 +60,7 @@ describe('signed-out page', () => {
 		const target = renderPage();
 		await tick();
 
-		expect(Array.from(target.querySelectorAll('.legal-links a')).map((a) => a.textContent)).toEqual(
+		expect(Array.from(target.querySelectorAll('nav a')).map((a) => a.textContent)).toEqual(
 			LEGAL_SECTIONS.map((section) => section.label)
 		);
 	});
