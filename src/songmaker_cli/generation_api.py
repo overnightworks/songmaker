@@ -608,10 +608,19 @@ def _toggle_generation(
         action(session, gen_id)
     except ValueError:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
-    except ArchivedTakeError:
-        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
     session.commit()
     return StatusResponse()
+
+
+def _mark_generation(
+    gen_id: str, user: AuthenticatedUser, session: Session,
+    action: Callable[[Session, str], None],
+) -> StatusResponse:
+    """Toggle a mark that an archived take refuses with 409."""
+    try:
+        return _toggle_generation(gen_id, user, session, action)
+    except ArchivedTakeError:
+        raise HTTPException(409, ARCHIVED_TAKE_DETAIL)
 
 
 @router.post(
@@ -626,7 +635,7 @@ def api_pick_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    return _toggle_generation(gen_id, user, session, pick_generation)
+    return _mark_generation(gen_id, user, session, pick_generation)
 
 
 @router.post(
@@ -653,7 +662,7 @@ def api_keep_generation(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    return _toggle_generation(gen_id, user, session, keep_generation)
+    return _mark_generation(gen_id, user, session, keep_generation)
 
 
 @router.post(

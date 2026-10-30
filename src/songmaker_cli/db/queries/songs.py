@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
@@ -582,11 +583,9 @@ def enable_song_sharing(session: Session, song_id: str) -> Song:
     song = enable_sharing(session, Song, song_id)
     picked = next((g for g in song.generations if g.is_picked), None)
     if picked:
-        try:
+        with contextlib.suppress(ArchivedTakeError):
             lock_unarchived_generation(session, picked.id).is_kept = True
-        except ArchivedTakeError:
-            return song
-        session.flush()
+            session.flush()
     return song
 
 
