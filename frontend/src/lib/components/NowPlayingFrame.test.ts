@@ -1,7 +1,7 @@
 import { createRawSnippet, mount, tick, unmount, type Snippet } from 'svelte';
 import { fromStore, writable } from 'svelte/store';
 import { afterEach, describe, expect, it } from 'vitest';
-import { makeGeneration } from '$lib/test-utils/factories';
+import { makeGeneration } from '#lib/test-utils/factories.ts';
 import NowPlayingFrame from './NowPlayingFrame.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;

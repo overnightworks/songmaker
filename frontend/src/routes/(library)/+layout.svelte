@@ -9,9 +9,9 @@
 	// the workspace rather than replacing it, so the workspace underneath never
 	// unmounts for a resolution that fails or is still in flight.
 	import { onMount } from 'svelte';
-	import LibraryWorkspace from '$lib/components/LibraryWorkspace.svelte';
-	import { inertWhileAddressOverlay } from '$lib/stores/libraryAddressOverlay';
-	import { restoreLastPlayback } from '$lib/stores/player';
+	import LibraryWorkspace from '#lib/components/LibraryWorkspace.svelte';
+	import { inertWhileAddressOverlay } from '#lib/stores/libraryAddressOverlay.ts';
+	import { restoreLastPlayback } from '#lib/stores/player.ts';
 
 	let { children } = $props();
 

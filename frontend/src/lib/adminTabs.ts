@@ -1,4 +1,4 @@
-import { ADMIN_VOICES_TAB_LABEL } from '$lib/constants';
+import { ADMIN_VOICES_TAB_LABEL } from '#lib/constants.ts';
 
 export const ADMIN_TABS = [
 	{ id: 'voices', label: ADMIN_VOICES_TAB_LABEL },

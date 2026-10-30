@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-import { hangsUntilAborted } from '$lib/test-utils/network';
+import { hangsUntilAborted } from '#lib/test-utils/network.ts';
 import { ApiError, NetworkError } from './fetch';
 import {
 	fetchSharedCollection,

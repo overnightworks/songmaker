@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { describeFailure } from '$lib/api/fetch';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import { addToast } from '$lib/stores/toast';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { addToast } from '#lib/stores/toast.ts';
 	import {
 		previewGenerationRetention,
 		runGenerationRetention,
 		type GenerationRetentionReport
-	} from '$lib/api/client';
+	} from '#lib/api/client.ts';
 
 	const RETENTION_EXPLANATION =
 		'Takes that are neither picked nor kept are archived after the retention window, then permanently deleted after the hard-delete window.';

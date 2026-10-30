@@ -1,5 +1,5 @@
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
-import type { AlbumSongsLoadStatus } from '$lib/stores/libraryData';
+import type { AlbumItem, GenerationItem, SongItem } from '#lib/api/types.ts';
+import type { AlbumSongsLoadStatus } from '#lib/stores/libraryData.ts';
 
 /*
  * The one frontend owner of "something to hear", mirroring the backend's

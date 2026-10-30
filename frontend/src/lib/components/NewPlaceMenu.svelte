@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { historyLayerState } from '$lib/stores/layers';
+	import { historyLayerState } from '#lib/stores/layers.ts';
 	import {
 		LIBRARY_NEW_ALBUM_LABEL,
 		LIBRARY_NEW_FACE,
 		LIBRARY_NEW_MENU_CLOSE_LABEL,
 		LIBRARY_NEW_MENU_LABEL,
 		LIBRARY_NEW_PLAYLIST_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import NewAlbumCard from './NewAlbumCard.svelte';

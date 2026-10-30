@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchMediaBytes } from '$lib/api/fetch';
-	import { readVizColors } from '$lib/utils/visualizer';
-	import { theme } from '$lib/stores/ui';
+	import { fetchMediaBytes } from '#lib/api/fetch.ts';
+	import { readVizColors } from '#lib/utils/visualizer.ts';
+	import { theme } from '#lib/stores/ui.ts';
 
 	interface Props {
 		audioUrl: string;

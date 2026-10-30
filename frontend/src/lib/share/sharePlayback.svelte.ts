@@ -4,22 +4,22 @@
 // enforces that boundary for every file under lib/share and
 // lib/components/share.
 
-import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
+import type { QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
 import {
 	audioPlayer,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
 	type PlayerTenure
-} from '$lib/services/audioPlayer.svelte';
+} from '#lib/services/audioPlayer.svelte.ts';
 import {
 	playableTracks,
 	trackPlaybackInfo,
 	type SharedCollectionView,
 	type SharedTrack
 } from './sharedCollection';
-import { updateMediaSessionMetadata } from '$lib/services/mediaSession';
-import { shuffled } from '$lib/utils/shuffle';
-import type { QueueRowItem, QueueViewModel } from '$lib/stores/player';
+import { updateMediaSessionMetadata } from '#lib/services/mediaSession.ts';
+import { shuffled } from '#lib/utils/shuffle.ts';
+import type { QueueRowItem, QueueViewModel } from '#lib/stores/player.ts';
 
 export type ShareStreamFetcher = () => Promise<QueueStreamManifest>;
 

@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LibraryListenItem } from '$lib/api/library';
+import type { LibraryListenItem } from '#lib/api/library.ts';
 import { get } from 'svelte/store';
 import {
 	COLLECTION_MENU_ARCHIVE_LABEL,
@@ -8,19 +8,19 @@ import {
 	HOME_LISTEN_EMPTY,
 	HOME_LISTEN_ERROR,
 	PLAYING_MARK_LABEL
-} from '$lib/constants';
-import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
-import { deletePlaylist, playlistList, playlistLoad } from '$lib/stores/playlists';
+} from '#lib/constants.ts';
+import { albumList, allAlbumsLoad, songList } from '#lib/stores/libraryData.ts';
+import { deletePlaylist, playlistList, playlistLoad } from '#lib/stores/playlists.ts';
 import {
 	ensureLastPlayedRead,
 	readLastPlayed,
 	resetLibraryOrderForTests
-} from '$lib/stores/libraryOrder';
-import { queueContext } from '$lib/stores/player';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { makeAlbum, makePlaylist, makeSong, makeGeneration } from '$lib/test-utils/factories';
-import { toasts } from '$lib/stores/toast';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+} from '#lib/stores/libraryOrder.ts';
+import { queueContext } from '#lib/stores/player.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { makeAlbum, makePlaylist, makeSong, makeGeneration } from '#lib/test-utils/factories.ts';
+import { toasts } from '#lib/stores/toast.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import { openCollectionMenu, requireButtonContainingText } from './shell/rail-test-fixtures';
 import AlbumDetailView from './AlbumDetailView.svelte';
 import HomeListen from './HomeListen.svelte';

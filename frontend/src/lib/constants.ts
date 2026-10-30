@@ -1,4 +1,4 @@
-import type { JobItem } from '$lib/api/types';
+import type { JobItem } from '#lib/api/types.ts';
 
 export const APP_NAME = 'Hallucinai';
 

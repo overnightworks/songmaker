@@ -1,15 +1,15 @@
 import { derived, get, writable } from 'svelte/store';
-import { describeFailure } from '$lib/api/fetch';
-import { fetchAlbums } from '$lib/api/albums';
-import { searchLibrary, type LibrarySort } from '$lib/api/library';
-import { fetchSongs } from '$lib/api/songs';
-import type { LibrarySearchResponse, SongItem, SongSummaryResponse } from '$lib/api/types';
+import { describeFailure } from '#lib/api/fetch.ts';
+import { fetchAlbums } from '#lib/api/albums.ts';
+import { searchLibrary, type LibrarySort } from '#lib/api/library.ts';
+import { fetchSongs } from '#lib/api/songs.ts';
+import type { LibrarySearchResponse, SongItem, SongSummaryResponse } from '#lib/api/types.ts';
 import {
 	LIBRARY_ALBUM_PAGE_SIZE,
 	LIBRARY_QUERY_REQUIRED,
 	LIBRARY_SEARCH_PAGE_SIZE,
 	LIBRARY_SONG_PAGE_SIZE
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	albumList,
 	overlaySongList,
@@ -17,8 +17,8 @@ import {
 	removeSongFromList,
 	songList,
 	upsertSongInList
-} from '$lib/stores/libraryData';
-import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
+} from '#lib/stores/libraryData.ts';
+import { selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
 
 const SEARCH_FAILED_MESSAGE = 'Search failed';
 

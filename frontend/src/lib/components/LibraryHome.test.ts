@@ -1,21 +1,21 @@
-import { resetLibraryWriteForTests } from '$lib/stores/libraryWrite';
+import { resetLibraryWriteForTests } from '#lib/stores/libraryWrite.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { LibraryListenItem } from '$lib/api/library';
+import type { LibraryListenItem } from '#lib/api/library.ts';
 import {
 	HOME_PAGE_LABEL,
 	LIBRARY_NEW_ALBUM_LABEL,
 	LIBRARY_NEW_MENU_LABEL,
 	LIBRARY_NEW_PLAYLIST_LABEL,
 	NEW_ALBUM_CARD_LABEL
-} from '$lib/constants';
+} from '#lib/constants.ts';
 
-import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
+import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
-import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
-import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
-import { makeAlbum } from '$lib/test-utils/factories';
+import { resetLibraryOrderForTests } from '#lib/stores/libraryOrder.ts';
+import { albumList, allAlbumsLoad } from '#lib/stores/libraryData.ts';
+import { makeAlbum } from '#lib/test-utils/factories.ts';
 import LibraryHome from './LibraryHome.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];

@@ -1,4 +1,4 @@
-import { pageBelowStandingPage } from '$lib/history/historyController';
+import { pageBelowStandingPage } from '#lib/history/historyController.ts';
 
 // The address history stands on now. `page.state` follows every entry history
 // stands on -- shallow routing included, which leaves `page.url` where the

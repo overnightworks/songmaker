@@ -1,16 +1,16 @@
 import { derived, get, writable } from 'svelte/store';
-import { fetchAlbumCoverSuggestions, type CoverSuggestionDiscard } from '$lib/api/albums';
-import { describeFailure, NetworkError } from '$lib/api/fetch';
-import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
-import { ALBUM_COVER_SUGGESTION_FAILED_FALLBACK } from '$lib/constants';
-import { reloadWhileUnreachable } from '$lib/stores/connectivity';
+import { fetchAlbumCoverSuggestions, type CoverSuggestionDiscard } from '#lib/api/albums.ts';
+import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
+import type { CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
+import { ALBUM_COVER_SUGGESTION_FAILED_FALLBACK } from '#lib/constants.ts';
+import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
 import {
 	discardMarkOf,
 	markCoverSuggestionsDiscarded,
 	namesNothing,
 	releaseCoverSuggestions
-} from '$lib/stores/coverRuns';
-import { activeJobs, trackJob } from '$lib/stores/jobs';
+} from '#lib/stores/coverRuns.ts';
+import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
 
 /**
  * The one owner of the watched album's cover state: its suggestions, its run

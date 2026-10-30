@@ -2,11 +2,11 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path, and the URL is already a resolved library address built by albumRoutePath */
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { describeFailure } from '$lib/api/fetch';
-	import { albumRoutePath, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
-	import { openSongAddress } from '$lib/stores/libraryContext';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { albumRoutePath, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+	import { openSongAddress } from '#lib/stores/libraryContext.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
 
 	type AddressState = 'resolving' | 'open' | 'unknown-song' | 'unknown-album' | 'unreachable';
 

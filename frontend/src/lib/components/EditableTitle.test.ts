@@ -2,7 +2,7 @@ import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import EditableTitle from './EditableTitle.svelte';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
 let mounted: ReturnType<typeof mount> | undefined;
 

@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { QueueStreamSkipItem } from '$lib/api/types';
+import type { QueueStreamSkipItem } from '#lib/api/types.ts';
 import QueueStreamFeedback from './QueueStreamFeedback.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];

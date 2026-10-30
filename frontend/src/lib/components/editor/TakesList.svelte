@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { SongItem, GenerationItem, UserLoraItem } from '$lib/api/types';
-	import type { SourceMode } from '$lib/stores/recipe';
+	import type { SongItem, GenerationItem, UserLoraItem } from '#lib/api/types.ts';
+	import type { SourceMode } from '#lib/stores/recipe.ts';
 	import {
 		COARSE_POINTER_MEDIA,
 		TAKE_DELETE_TITLE_TEMPLATE,
@@ -12,7 +12,7 @@
 		TAKES_MOBILE_HINT,
 		TAKES_RETRY_LABEL,
 		takesDraftBanner
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		TAKE_SELECT_ALL_UNKEPT_LABEL,
 		bulkDeleteLabel,
@@ -23,20 +23,23 @@
 		foldedGroupLabel,
 		takeRowLabel,
 		EARLIER_VERSIONS_LABEL
-	} from '$lib/constants/now-playing';
-	import { removeGenerationFromSong } from '$lib/stores/libraryData';
-	import { currentVersionIndex, versions } from '$lib/stores/editor';
-	import { selectedGenerationId } from '$lib/stores/player';
-	import { sourceGeneration } from '$lib/stores/recipe';
-	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
-	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
+	} from '#lib/constants/now-playing.ts';
+	import { removeGenerationFromSong } from '#lib/stores/libraryData.ts';
+	import { currentVersionIndex, versions } from '#lib/stores/editor.ts';
+	import { selectedGenerationId } from '#lib/stores/player.ts';
+	import { sourceGeneration } from '#lib/stores/recipe.ts';
+	import { clearGenerationSelection, persistLibraryHistory } from '#lib/stores/navigation.ts';
+	import {
+		getGenerationActions,
+		type GenerationActions
+	} from '#lib/contexts/generation-actions.ts';
 	import {
 		selectionMode,
 		selectedIds,
 		selectAllUnkept,
 		clearSelection,
 		keepOnlySelected
-	} from '$lib/stores/selection';
+	} from '#lib/stores/selection.ts';
 	import {
 		groupTakes,
 		isGroupOpen,
@@ -47,15 +50,15 @@
 		takeGroupKey,
 		toggleTakeGroup,
 		type TakeGroup
-	} from '$lib/stores/takeFolds';
-	import { addToast } from '$lib/stores/toast';
-	import { bulkDeleteGenerations } from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	} from '#lib/stores/takeFolds.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { bulkDeleteGenerations } from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import Icon from '../Icon.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
-	import { generateAction, isGenerateJobActive } from '$lib/stores/generateAction';
+	import { generateAction, isGenerateJobActive } from '#lib/stores/generateAction.ts';
 	import TakeRow from './TakeRow.svelte';
 	import TakeTaskCard from './TakeTaskCard.svelte';
 

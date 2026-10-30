@@ -1,6 +1,6 @@
 import { get, readonly, writable } from 'svelte/store';
-import { fetchLibraryWrite } from '$lib/api/library';
-import type { LibraryWriteItem } from '$lib/api/types';
+import { fetchLibraryWrite } from '#lib/api/library.ts';
+import type { LibraryWriteItem } from '#lib/api/types.ts';
 
 export type WriteReadState = 'unread' | 'failed' | 'ready' | 'outdated';
 type RemovedKind = 'song' | 'album';

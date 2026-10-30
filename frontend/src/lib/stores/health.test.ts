@@ -1,10 +1,10 @@
-import { makeHealthResponse } from '$lib/test-utils/factories';
+import { makeHealthResponse } from '#lib/test-utils/factories.ts';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
-import type { HealthResponse } from '$lib/api/types';
+import type { HealthResponse } from '#lib/api/types.ts';
 
 const mockFetchHealth = vi.fn<() => Promise<HealthResponse>>();
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchHealth: () => mockFetchHealth()
 }));
 

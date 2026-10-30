@@ -1,6 +1,6 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LEGAL_SECTIONS } from '$lib/constants/legal';
+import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import LegalLinks from './LegalLinks.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;

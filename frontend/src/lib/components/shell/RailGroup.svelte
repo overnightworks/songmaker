@@ -1,9 +1,9 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { untrack, type Snippet } from 'svelte';
-	import { readStorage, writeStorage } from '$lib/utils/storage';
-	import { getRailCollapsed } from '$lib/contexts/rail-collapsed';
-	import { followPlainClick } from '$lib/stores/navigation';
+	import { readStorage, writeStorage } from '#lib/utils/storage.ts';
+	import { getRailCollapsed } from '#lib/contexts/rail-collapsed.ts';
+	import { followPlainClick } from '#lib/stores/navigation.ts';
 
 	const isRailCollapsed = getRailCollapsed();
 

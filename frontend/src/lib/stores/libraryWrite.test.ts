@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { LibraryWriteItem } from '$lib/api/types';
-import { lostNetwork } from '$lib/test-utils/network';
-import { makeAlbum, makeSong } from '$lib/test-utils/factories';
+import type { LibraryWriteItem } from '#lib/api/types.ts';
+import { lostNetwork } from '#lib/test-utils/network.ts';
+import { makeAlbum, makeSong } from '#lib/test-utils/factories.ts';
 import {
 	addAlbumToList,
 	addSongsToList,

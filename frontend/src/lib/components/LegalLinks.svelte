@@ -1,7 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- external addresses, not app routes */
 	import type { Snippet } from 'svelte';
-	import { LEGAL_SECTIONS } from '$lib/constants/legal';
+	import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 
 	interface Props {
 		// A page that must not be left — a share page keeps playing — opens

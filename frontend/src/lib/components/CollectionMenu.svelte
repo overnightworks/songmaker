@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ShareResult, UnplayableSongSummary } from '$lib/api/types';
+	import type { ShareResult, UnplayableSongSummary } from '#lib/api/types.ts';
 	import {
 		ALBUM_COVER_UPLOAD_LABEL,
 		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -16,8 +16,8 @@
 		COLLECTION_MENU_SHARE_LABEL,
 		COLLECTION_MENU_SHARE_OFF_HINT,
 		COLLECTION_MENU_SHARE_ON_HINT
-	} from '$lib/constants';
-	import { createShareToggle } from '$lib/stores/shareToggle.svelte';
+	} from '#lib/constants.ts';
+	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import ShareDialog from './ShareDialog.svelte';

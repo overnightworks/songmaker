@@ -1,10 +1,10 @@
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APP_NAME, SEEK_PLAYBACK_LABEL, TRANSPORT_PLAY_LABEL } from '$lib/constants';
-import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '$lib/constants/now-playing';
-import { SHARE_NO_AUDIO_NOTICE } from '$lib/constants/share';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { APP_NAME, SEEK_PLAYBACK_LABEL, TRANSPORT_PLAY_LABEL } from '#lib/constants.ts';
+import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
+import { SHARE_NO_AUDIO_NOTICE } from '#lib/constants/share.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-song' } } }));
 

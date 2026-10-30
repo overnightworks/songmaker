@@ -6,7 +6,7 @@
 		SONG_MENU_RENAME_LABEL,
 		SONG_MENU_SAVE_LABEL,
 		SONG_MENU_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import Icon from '../Icon.svelte';
 	import MenuPopover from '../MenuPopover.svelte';
 

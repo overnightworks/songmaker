@@ -13,18 +13,18 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { describeFailure } from '$lib/api/fetch';
-	import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
-	import { LIBRARY_ROUTE_PATH, readLegacySongQuery } from '$lib/routes/addresses';
+	import { describeFailure } from '#lib/api/fetch.ts';
+	import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '#lib/constants.ts';
+	import { LIBRARY_ROUTE_PATH, readLegacySongQuery } from '#lib/routes/addresses.ts';
 	import {
 		currentLibraryHistoryState,
 		isLibraryHistoryState,
 		openHomeAddress,
 		resolveLegacySongQueryAddress
-	} from '$lib/stores/libraryContext';
-	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
-	import { addToast } from '$lib/stores/toast';
+	} from '#lib/stores/libraryContext.ts';
+	import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+	import { libraryAddressOverlayActive } from '#lib/stores/libraryAddressOverlay.ts';
+	import { addToast } from '#lib/stores/toast.ts';
 
 	type AddressState = 'idle' | 'resolving' | 'unknown-song' | 'unreachable';
 

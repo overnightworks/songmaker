@@ -1,4 +1,4 @@
-import { makeGeneration as gen } from '$lib/test-utils/factories';
+import { makeGeneration as gen } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,11 +10,11 @@ import {
 	TAKE_PLAYLIST_LABEL,
 	TAKE_REPAINT_LABEL,
 	TAKE_SHARE_LABEL
-} from '$lib/constants';
-import { TAKE_USE_SEED_LABEL } from '$lib/constants/take-task';
-import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+} from '#lib/constants.ts';
+import { TAKE_USE_SEED_LABEL } from '#lib/constants/take-task.ts';
+import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
+import { HITBOX_STYLE as hitboxCss } from '#lib/styles/hitbox.ts';
 import TakeMenu from './TakeMenu.svelte';
 
 function px(value: string): number {

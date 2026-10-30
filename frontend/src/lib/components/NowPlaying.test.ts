@@ -3,12 +3,12 @@ import {
 	makeGeneration as generation,
 	makePlaylistEntry as playlistEntry,
 	makeSong as song
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { SongItem } from '$lib/api/types';
-import type { PlaybackInfo } from '$lib/services/playbackTypes';
+import type { SongItem } from '#lib/api/types.ts';
+import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_GO_TO_SONG,
@@ -19,7 +19,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL,
 	PLAYER_WAITING_FOR_NETWORK
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -28,9 +28,9 @@ import {
 	nowPlayingOpenSourceLabel,
 	nowPlayingSheetCloseLabel,
 	nowPlayingTakeLabel
-} from '$lib/constants/now-playing';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { albumList, resetLibraryDataForTests, songList } from '$lib/stores/libraryData';
+} from '#lib/constants/now-playing.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
 import {
 	closeNowPlaying,
 	expandNowPlaying,
@@ -47,24 +47,27 @@ import {
 	setShuffle,
 	shuffleEnabled,
 	shuffleLabel
-} from '$lib/stores/player';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { setLibraryTakePool } from '$lib/stores/playbackSettings';
-import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { toasts } from '$lib/stores/toast';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
-import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
-import { followShellLayers, resetNavigationForTests } from '$lib/stores/navigation';
+} from '#lib/stores/player.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { setLibraryTakePool } from '#lib/stores/playbackSettings.ts';
+import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
+import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { toasts } from '#lib/stores/toast.ts';
+import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
+import { setDesktopNowPlayingSurface } from '#lib/stores/playbackSettings.ts';
+import { followShellLayers, resetNavigationForTests } from '#lib/stores/navigation.ts';
 import {
 	clearHitboxStyles,
 	injectHitboxStyles,
 	minHeightPx,
 	setPointer
-} from '$lib/test-utils/hitbox';
-import { laidOutSeekLine, pointerOnSeekLine } from '$lib/test-utils/seek-line';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+} from '#lib/test-utils/hitbox.ts';
+import { laidOutSeekLine, pointerOnSeekLine } from '#lib/test-utils/seek-line.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import nowPlayingFrameSource from './NowPlayingFrame.svelte?raw';
 
 // setPick/setKeep stay mocked so a curation click asserts the call it makes,
@@ -78,16 +81,16 @@ import nowPlayingFrameSource from './NowPlayingFrame.svelte?raw';
 // through `goto` -- unmocked, that call needs a live SvelteKit router this
 // harness never mounts.
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
-vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/takeActions')>()),
+vi.mock('#lib/stores/takeActions.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/takeActions.ts')>()),
 	setPick: vi.fn().mockResolvedValue(true),
 	setKeep: vi.fn().mockResolvedValue(undefined)
 }));
 
-import { setKeep, setPick } from '$lib/stores/takeActions';
+import { setKeep, setPick } from '#lib/stores/takeActions.ts';
 import NowPlaying from './NowPlaying.svelte';
 
 function playingSongDefaults(): Partial<SongItem> {

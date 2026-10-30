@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import PlaylistPicker from './PlaylistPicker.svelte';
 
 const NIGHT_DRIVE = {

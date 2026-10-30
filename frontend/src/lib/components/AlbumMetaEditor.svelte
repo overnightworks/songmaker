@@ -19,8 +19,8 @@
 		COLLECTION_MENU_EDIT_DETAILS_LABEL,
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
-	} from '$lib/constants';
-	import { holdOpenWhile } from '$lib/stores/layers';
+	} from '#lib/constants.ts';
+	import { holdOpenWhile } from '#lib/stores/layers.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {

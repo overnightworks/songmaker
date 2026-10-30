@@ -1,13 +1,13 @@
 <script lang="ts">
-	import type { WhisperCue } from '$lib/api/types';
-	import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '$lib/constants';
+	import type { WhisperCue } from '#lib/api/types.ts';
+	import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '#lib/constants.ts';
 	import {
 		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 		NOW_PLAYING_LYRICS_ROW_LABEL
-	} from '$lib/constants/now-playing';
-	import { alignInWorker } from '$lib/services/lyricsAlignment.svelte';
-	import { activeLyricLineIndices, type AlignedLyricLine } from '$lib/utils/lyrics-align';
-	import { preferredScrollBehavior } from '$lib/utils/motion';
+	} from '#lib/constants/now-playing.ts';
+	import { alignInWorker } from '#lib/services/lyricsAlignment.svelte.ts';
+	import { activeLyricLineIndices, type AlignedLyricLine } from '#lib/utils/lyrics-align.ts';
+	import { preferredScrollBehavior } from '#lib/utils/motion.ts';
 
 	let {
 		lyrics,

@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+import { describeBackClosesOverlay } from '#lib/test-utils/library-history.ts';
 import ShareDialog from './ShareDialog.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];

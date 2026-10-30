@@ -1,10 +1,10 @@
 import { tick } from 'svelte';
 import { expect, vi, type Mock } from 'vitest';
 
-import { makeAlbum as album } from '$lib/test-utils/factories';
-import { announcedText, getByRoleButton } from '$lib/test-utils/accessible-name';
-import { requireElement } from '$lib/components/shell/rail-test-fixtures';
-import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
+import { makeAlbum as album } from '#lib/test-utils/factories.ts';
+import { announcedText, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { requireElement } from '#lib/components/shell/rail-test-fixtures.ts';
+import type { CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
 
 // What the album cover editor tests share: the editor is reached through the
 // album header, so these helpers drive the page as a person does.

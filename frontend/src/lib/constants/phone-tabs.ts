@@ -1,5 +1,5 @@
-import { HOME_PAGE_LABEL, LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL } from '$lib/constants';
-import type { Place } from '$lib/stores/libraryContext';
+import { HOME_PAGE_LABEL, LIBRARY_PAGE_LABEL, PLAYLISTS_PAGE_LABEL } from '#lib/constants.ts';
+import type { Place } from '#lib/stores/libraryContext.ts';
 
 export const PHONE_TABS = [
 	{ place: 'home', label: HOME_PAGE_LABEL, icon: 'home' },

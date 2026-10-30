@@ -1,4 +1,4 @@
-import type { VersionGenerationParams } from '$lib/api/types';
+import type { VersionGenerationParams } from '#lib/api/types.ts';
 
 // The one registry of which generation_params keys the app knows how to edit
 // and what it calls each one. ParamControls renders its form fields straight

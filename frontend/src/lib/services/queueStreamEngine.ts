@@ -1,4 +1,4 @@
-import type { GenerationItem, QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
+import type { GenerationItem, QueueStreamManifest, QueueStreamTrackItem } from '#lib/api/types.ts';
 import type { PlaybackInfo } from './playbackTypes';
 
 export interface StreamFallbackState {

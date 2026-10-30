@@ -1,40 +1,40 @@
 import {
 	loadHistoryPageForTests,
 	resetHistoryControllerForTests
-} from '$lib/history/historyController';
+} from '#lib/history/historyController.ts';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makePlaylistDetail as playlistDetail,
 	makeSong as song
-} from '$lib/test-utils/factories';
-import { historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
-import { PHONE_APP_BAR_PROPS } from '$lib/test-utils/phone-app-bar';
+} from '#lib/test-utils/factories.ts';
+import { historyLength, replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
+import { PHONE_APP_BAR_PROPS } from '#lib/test-utils/phone-app-bar.ts';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
-import { currentVersionHeadLabel } from '$lib/constants/now-playing';
+import { currentVersionHeadLabel } from '#lib/constants/now-playing.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { SongItem } from '$lib/api/types';
-import { albumList, songList } from '$lib/stores/libraryData';
-import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
-import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '$lib/constants';
+import type { SongItem } from '#lib/api/types.ts';
+import { albumList, songList } from '#lib/stores/libraryData.ts';
+import { selectedAlbumId, selectedGenerationId, selectedSongId } from '#lib/stores/player.ts';
+import { resetCollectionForTests, setOpenCollection } from '#lib/stores/collection.ts';
+import { selectedPlaylistDetail } from '#lib/stores/playlists.ts';
+import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '#lib/constants.ts';
 
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn()
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbum: vi.fn(),
 	fetchAlbums: vi.fn()
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn()
 }));
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		fetchVersions: vi.fn().mockResolvedValue([]),
@@ -45,7 +45,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		unsharePlaylist: vi.fn()
 	};
 });
-vi.mock('$lib/stores/toast', () => ({
+vi.mock('#lib/stores/toast.ts', () => ({
 	addToast: vi.fn(),
 	addUndoToast: vi.fn()
 }));
@@ -55,7 +55,7 @@ vi.mock('$lib/stores/toast', () => ({
 // through `goto` -- unmocked, that call needs a live SvelteKit router this
 // harness never mounts.
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/state', () => ({
 	page: { url: new URL('https://songmaker.test/settings') }
@@ -183,7 +183,7 @@ describe('song editor survives list revalidation', () => {
 	it('keeps unsaved lyrics when the open song object is replaced', async () => {
 		selectedGenerationId.set(null);
 		await renderView((target) => mount(SongDetailView, { target }));
-		const { setDraftLyrics, editLyrics, isDirty } = await import('$lib/stores/editor');
+		const { setDraftLyrics, editLyrics, isDirty } = await import('#lib/stores/editor.ts');
 		setDraftLyrics('unsaved verse');
 		expect(get(isDirty)).toBe(true);
 		songList.set([
@@ -202,7 +202,7 @@ describe('song editor survives list revalidation', () => {
 	it('reloads the editor when a different song is selected', async () => {
 		selectedGenerationId.set(null);
 		await renderView((target) => mount(SongDetailView, { target }));
-		const { setDraftLyrics, editLyrics } = await import('$lib/stores/editor');
+		const { setDraftLyrics, editLyrics } = await import('#lib/stores/editor.ts');
 		setDraftLyrics('unsaved verse');
 		songList.set([
 			song(detailSongDefaults()),

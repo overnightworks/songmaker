@@ -5,19 +5,19 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	SONG_NEXT_LABEL,
 	SONG_PREVIOUS_LABEL
-} from '$lib/constants';
-import { shownTransportFace } from '$lib/test-utils/transport-face';
-import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '$lib/constants/now-playing';
-import { SHARE_NO_AUDIO_NOTICE } from '$lib/constants/share';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import type { PlaybackInfo } from '$lib/services/playbackTypes';
+} from '#lib/constants.ts';
+import { shownTransportFace } from '#lib/test-utils/transport-face.ts';
+import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '#lib/constants/now-playing.ts';
+import { SHARE_NO_AUDIO_NOTICE } from '#lib/constants/share.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
 import {
 	trackPlaybackInfo,
 	type SharedCollectionView,
 	type SharedTrack
-} from '$lib/share/sharedCollection';
-import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
-import { LEGAL_SECTIONS } from '$lib/constants/legal';
+} from '#lib/share/sharedCollection.ts';
+import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { LEGAL_SECTIONS } from '#lib/constants/legal.ts';
 import nowPlayingFrameSource from '../NowPlayingFrame.svelte?raw';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
 import SharedCollection from './SharedCollection.svelte';

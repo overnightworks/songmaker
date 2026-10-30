@@ -763,7 +763,7 @@ non-public page navigates the whole window to `/login/oidc?next=…`; the signed
 page `/login` starts nothing by itself and the public paths never redirect.
 
 Outside its `*.test.ts` files, `lib/api` imports only itself, packages,
-`$lib/constants`, `$lib/routes/` and `$lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
+`#lib/constants`, `#lib/routes/` and `#lib/utils/recency`, with no `.` or `..` path segment after a leading `./`,
 and no `import()` or `import.meta`; `eslint.config.js` enforces it (#925 G2).
 
 Only `lib/api/fetch.ts` calls global `fetch`; other modules reach the server

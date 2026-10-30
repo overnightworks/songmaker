@@ -3,21 +3,21 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
-import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '$lib/constants';
-import { visibleSettingsSections } from '$lib/settingsSections';
-import { currentUser } from '$lib/stores/auth';
-import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
-import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { makeAuthUser, makeSong } from '$lib/test-utils/factories';
+import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '#lib/constants.ts';
+import { visibleSettingsSections } from '#lib/settingsSections.ts';
+import { currentUser } from '#lib/stores/auth.ts';
+import { discardDraft, loadSongData, setDraftLyrics } from '#lib/stores/editor.ts';
+import { pendingDirtyNavigation } from '#lib/stores/navigation.ts';
+import { makeAuthUser, makeSong } from '#lib/test-utils/factories.ts';
 import { createComponentMount, requireElement } from './rail-test-fixtures';
 
-vi.mock('$lib/api/songs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/songs')>()),
+vi.mock('#lib/api/songs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/songs.ts')>()),
 	fetchVersions: vi.fn().mockResolvedValue([])
 }));
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
 

@@ -1,22 +1,26 @@
-import { backLabel } from '$lib/routes/pageBack';
+import { backLabel } from '#lib/routes/pageBack.ts';
 import {
 	historyEntry,
 	pressBack,
 	replaceHistoryEntry,
 	standingHistoryEntry,
 	watchBack
-} from '$lib/test-utils/library-history';
-import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
+} from '#lib/test-utils/library-history.ts';
+import {
+	fakePage,
+	reportFakeRouterEnter,
+	startFakeRouter
+} from '#lib/test-utils/app-navigation.ts';
 import {
 	documentLoads as documentLoadStandIn,
 	documentLoadsStandIn
-} from '$lib/test-utils/document-loads';
+} from '#lib/test-utils/document-loads.ts';
 import {
 	historyStandsStill,
 	pushEntry,
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
-} from '$lib/history/historyController';
+} from '#lib/history/historyController.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -33,10 +37,13 @@ import {
 	RATE_LIMITED_TOAST_MESSAGE,
 	RAIL_SETTINGS_LABEL,
 	SEARCH_OPEN_LABEL
-} from '$lib/constants';
-import { SEARCH_SHEET_LABEL } from '$lib/components/PhoneAppBar.svelte';
-import { apiFetch } from '$lib/api/fetch';
-import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
+} from '#lib/constants.ts';
+import { SEARCH_SHEET_LABEL } from '#lib/components/PhoneAppBar.svelte';
+import { apiFetch } from '#lib/api/fetch.ts';
+import {
+	AUTH_CHECK_NETWORK_ERROR,
+	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS
+} from '#lib/constants/auth.ts';
 import {
 	checkAuth,
 	currentUser,
@@ -44,9 +51,9 @@ import {
 	authCheckError,
 	handleSessionLost,
 	resetAuthForTests
-} from '$lib/stores/auth';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { openCollection } from '$lib/stores/collection';
+} from '#lib/stores/auth.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { openCollection } from '#lib/stores/collection.ts';
 import {
 	currentLibraryHistoryState,
 	isLibraryHistoryState,
@@ -56,30 +63,33 @@ import {
 	resetLibraryContextForTests,
 	openHomeAddress,
 	openLibraryAddress
-} from '$lib/stores/libraryContext';
-import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
-import { resetNavigationForTests } from '$lib/stores/navigation';
-import { songList } from '$lib/stores/libraryData';
-import { toasts } from '$lib/stores/toast';
+} from '#lib/stores/libraryContext.ts';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { resetNavigationForTests } from '#lib/stores/navigation.ts';
+import { songList } from '#lib/stores/libraryData.ts';
+import { toasts } from '#lib/stores/toast.ts';
 import {
 	closeNowPlaying,
 	nowPlayingDockable,
 	nowPlayingSurface,
 	openNowPlaying,
 	selectedSongId
-} from '$lib/stores/player';
+} from '#lib/stores/player.ts';
 import {
 	NOW_PLAYING_DOCKED_WIDTH_PX,
 	NOW_PLAYING_EXPAND_LABEL,
 	NOW_PLAYING_STACKED_MAX_PX
-} from '$lib/constants/now-playing';
-import type { PlaybackInfo } from '$lib/services/playbackTypes';
-import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { phoneAppBar, railCollapsed, railWidth } from '$lib/stores/ui';
-import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
+} from '#lib/constants/now-playing.ts';
+import type { PlaybackInfo } from '#lib/services/playbackTypes.ts';
+import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { phoneAppBar, railCollapsed, railWidth } from '#lib/stores/ui.ts';
+import { HITBOX_STYLE as hitboxCss } from '#lib/styles/hitbox.ts';
 
 const { liveStream } = vi.hoisted(() => ({
 	liveStream: {
@@ -89,16 +99,18 @@ const { liveStream } = vi.hoisted(() => ({
 	}
 }));
 
-vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
+vi.mock('$app/state', async () =>
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppState()
+);
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/environment', () => ({
 	browser: true,
 	dev: true
 }));
-vi.mock('$lib/stores/auth', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/auth')>();
+vi.mock('#lib/stores/auth.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/auth.ts')>();
 	return {
 		...actual,
 		checkAuth: vi.fn(async () => {
@@ -109,15 +121,15 @@ vi.mock('$lib/stores/auth', async (importOriginal) => {
 		})
 	};
 });
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		fetchCapabilities: vi.fn().mockResolvedValue({})
 	};
 });
-vi.mock('$lib/stores/resourceSync', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/stores/resourceSync')>();
+vi.mock('#lib/stores/resourceSync.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/stores/resourceSync.ts')>();
 	return {
 		...actual,
 		startLibraryResourceSync: liveStream.start,
@@ -125,16 +137,16 @@ vi.mock('$lib/stores/resourceSync', async (importOriginal) => {
 		waitForResourceReady: liveStream.waitForReady
 	};
 });
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
-vi.mock('$lib/api/albums', () => ({
+vi.mock('#lib/api/albums.ts', () => ({
 	fetchAlbum: vi.fn(),
 	fetchAlbums: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
 }));
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSong: vi.fn(),
 	fetchSongs: vi
 		.fn()
@@ -864,7 +876,8 @@ describe('auth check failure', () => {
 	});
 
 	it('with the server out of reach and the browser online shows the offline strip, not the session error, and loads the app once the server answers', async () => {
-		const actual = await vi.importActual<typeof import('$lib/stores/auth')>('$lib/stores/auth');
+		const actual =
+			await vi.importActual<typeof import('#lib/stores/auth.ts')>('#lib/stores/auth.ts');
 		vi.mocked(checkAuth).mockImplementation(actual.checkAuth);
 		currentUser.set(null);
 		authLoading.set(true);

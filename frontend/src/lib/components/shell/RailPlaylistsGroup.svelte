@@ -1,38 +1,38 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
-	import { standingPathname } from '$lib/routes/standingAddress';
-	import { openCollection } from '$lib/stores/collection';
+	import { PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
+	import { standingPathname } from '#lib/routes/standingAddress.ts';
+	import { openCollection } from '#lib/stores/collection.ts';
 	import {
 		placeShown,
 		librarySurface,
 		playlistsWallShows,
 		playlistWhoseDetailShows
-	} from '$lib/stores/libraryContext';
-	import { openPlaylist, openRailSearchTarget } from '$lib/stores/navigation';
+	} from '#lib/stores/libraryContext.ts';
+	import { openPlaylist, openRailSearchTarget } from '#lib/stores/navigation.ts';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
 		playlistLoad,
 		selectedPlaylistDetail,
 		selectedPlaylistId
-	} from '$lib/stores/playlists';
+	} from '#lib/stores/playlists.ts';
 	import {
 		isPlaylistEntryCurrent,
 		playPlaylistEntryAndShowNowPlaying,
 		queueContext,
 		selectedSongId
-	} from '$lib/stores/player';
-	import { whenBackOnline } from '$lib/stores/connectivity';
-	import { matchesRailQuery, normalizedRailTreeQuery } from '$lib/stores/librarySearch';
+	} from '#lib/stores/player.ts';
+	import { whenBackOnline } from '#lib/stores/connectivity.ts';
+	import { matchesRailQuery, normalizedRailTreeQuery } from '#lib/stores/librarySearch.ts';
 	import {
 		ensureLastPlayedRead,
 		inLibraryOrder,
 		libraryPlaceOrder
-	} from '$lib/stores/libraryOrder';
-	import { libraryWallOrder } from '$lib/stores/ui';
-	import { PLAYLISTS_PAGE_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
+	} from '#lib/stores/libraryOrder.ts';
+	import { libraryWallOrder } from '#lib/stores/ui.ts';
+	import { PLAYLISTS_PAGE_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '#lib/constants.ts';
 	import PlaylistCover from '../PlaylistCover.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
 	import Icon from '../Icon.svelte';

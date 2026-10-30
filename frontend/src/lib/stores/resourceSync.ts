@@ -1,14 +1,14 @@
 import { get, writable, type Writable } from 'svelte/store';
-import { ApiError, NetworkError, describeFailure, isTransientApiFailure } from '$lib/api/fetch';
-import { fetchMe } from '$lib/api/auth';
+import { ApiError, NetworkError, describeFailure, isTransientApiFailure } from '#lib/api/fetch.ts';
+import { fetchMe } from '#lib/api/auth.ts';
 import {
 	compareDecimalId,
 	parseGenerationCreated,
 	parseResourceHello,
 	parseResourceResync
-} from '$lib/api/resourceEvents';
-import { fetchSong } from '$lib/api/songs';
-import type { GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
+} from '#lib/api/resourceEvents.ts';
+import { fetchSong } from '#lib/api/songs.ts';
+import type { GenerationCreatedResourceEvent, SongItem } from '#lib/api/types.ts';
 import {
 	RESOURCE_EVENT_GENERATION_CREATED,
 	EVENT_SOURCE_CLOSED,
@@ -21,25 +21,28 @@ import {
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
-} from '$lib/constants';
-import { leavesForFreshDocument } from '$lib/history/historyController';
-import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
+} from '#lib/constants.ts';
+import { leavesForFreshDocument } from '#lib/history/historyController.ts';
+import {
+	cancelLibraryHistoryApply,
+	hydrateLibraryFromHistory
+} from '#lib/stores/libraryContext.ts';
 import {
 	applySyncedSong,
 	cancelLibraryDataLoads,
 	forgetSyncedSong,
 	listLoadedSongIds,
 	watchLoadedSongIds
-} from '$lib/stores/librarySearch';
-import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
-import { selectedSongId } from '$lib/stores/player';
-import { classifyAuthFailure, handleSessionLost, type AuthFailureKind } from '$lib/stores/auth';
-import { reportResourceStreamReachable } from '$lib/stores/connectivity';
+} from '#lib/stores/librarySearch.ts';
+import { cancelAlbumSongLoads } from '#lib/stores/libraryData.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { classifyAuthFailure, handleSessionLost, type AuthFailureKind } from '#lib/stores/auth.ts';
+import { reportResourceStreamReachable } from '#lib/stores/connectivity.ts';
 import {
 	ImmediateReopenGap,
 	nextReconnectDelayMs,
 	watchReconnectOpportunities
-} from '$lib/stores/sseReconnect';
+} from '#lib/stores/sseReconnect.ts';
 
 // The browser only sends `Last-Event-ID` on its own native retry; the owner
 // reopens a dropped stream itself (see `scheduleReconnect`), so it hands the

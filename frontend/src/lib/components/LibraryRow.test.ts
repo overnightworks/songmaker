@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, expect, it, vi } from 'vitest';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import LibraryRow from './LibraryRow.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;

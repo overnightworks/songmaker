@@ -5,14 +5,14 @@
 		editPrompt,
 		setDraftLyrics,
 		setDraftPrompt
-	} from '$lib/stores/editor';
-	import { getGenerationActions } from '$lib/contexts/generation-actions';
-	import type { SongItem } from '$lib/api/types';
+	} from '#lib/stores/editor.ts';
+	import { getGenerationActions } from '#lib/contexts/generation-actions.ts';
+	import type { SongItem } from '#lib/api/types.ts';
 	import {
 		EDITOR_LYRICS_LABEL,
 		EDITOR_STYLE_PROMPT_LABEL,
 		versionLoadedFromLabel
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import Icon from '../Icon.svelte';
 	import GrowingTextarea from './GrowingTextarea.svelte';
 	import RecipeLine from './RecipeLine.svelte';

@@ -1,5 +1,5 @@
-import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
-import { HOME_PAGE_LABEL, RAIL_SETTINGS_LABEL } from '$lib/constants';
+import type { AlbumItem, PlaylistItem, SongItem } from '#lib/api/types.ts';
+import { HOME_PAGE_LABEL, RAIL_SETTINGS_LABEL } from '#lib/constants.ts';
 import {
 	albumRoutePath,
 	HOME_ROUTE_PATH,
@@ -10,9 +10,9 @@ import {
 	PLAYLISTS_ROUTE_PATH,
 	songAlbumRoutePath,
 	songRoutePath
-} from '$lib/routes/addresses';
-import type { StandingPage } from '$lib/routes/standingAddress';
-import { visibleRailSearchPages } from '$lib/stores/railSearch';
+} from '#lib/routes/addresses.ts';
+import type { StandingPage } from '#lib/routes/standingAddress.ts';
+import { visibleRailSearchPages } from '#lib/stores/railSearch.ts';
 
 const LIBRARY_HREF = LIBRARY_ROUTE_PATH;
 const PLAYLISTS_HREF = PLAYLISTS_ROUTE_PATH;

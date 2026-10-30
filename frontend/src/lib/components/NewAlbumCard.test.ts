@@ -1,35 +1,35 @@
-import { makeAlbum as album } from '$lib/test-utils/factories';
+import { makeAlbum as album } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { albumList } from '$lib/stores/libraryData';
-import { addToast } from '$lib/stores/toast';
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { openCollection, resetCollectionForTests } from '#lib/stores/collection.ts';
+import { albumList } from '#lib/stores/libraryData.ts';
+import { addToast } from '#lib/stores/toast.ts';
+import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 import {
 	captureUnhandledRejections,
 	createButton,
 	createSettled,
 	field,
 	type
-} from '$lib/test-utils/new-place-card';
+} from '#lib/test-utils/new-place-card.ts';
 
 const createAlbum = vi.fn();
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	createAlbum: (...args: unknown[]) => createAlbum(...args),
 	fetchAlbums: vi.fn(),
 	fetchSongs: vi.fn().mockResolvedValue({ items: [], has_more: false })
 }));
-vi.mock('$lib/api/songs', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
+vi.mock('#lib/api/songs.ts', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
 
 import NewAlbumCard from './NewAlbumCard.svelte';
 

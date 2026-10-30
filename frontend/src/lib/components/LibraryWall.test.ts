@@ -1,10 +1,10 @@
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { replaceHistoryEntry } from '#lib/test-utils/library-history.ts';
 import {
 	makeAlbum as album,
 	makePlaylist as playlist,
 	makeSong,
 	makeGeneration
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -18,22 +18,25 @@ import {
 	librarySurface,
 	resetLibraryContextForTests,
 	setLibrarySurface
-} from '$lib/stores/libraryContext';
-import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
+} from '#lib/stores/libraryContext.ts';
+import { libraryBrowse, resetLibrarySearchForTests } from '#lib/stores/librarySearch.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { openCollection, setOpenCollection, type OpenCollection } from '#lib/stores/collection.ts';
 import {
 	albumList,
 	allAlbumsLoad,
 	albumSongsLoad,
 	resetLibraryDataForTests,
 	songList
-} from '$lib/stores/libraryData';
-import { chooseLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
-import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
-import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+} from '#lib/stores/libraryData.ts';
+import { chooseLibraryWallOrder, libraryWallOrder } from '#lib/stores/ui.ts';
+import { resetLibraryOrderForTests } from '#lib/stores/libraryOrder.ts';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import {
 	playAlbum,
 	setShuffle,
@@ -42,10 +45,10 @@ import {
 	pendingStart,
 	playStartNotice,
 	toggleOrStartCollection
-} from '$lib/stores/player';
-import { fetchSong } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
-import { LIBRARY_NEW_MENU_LABEL, LIBRARY_WALL_PLAYED_PAGE_SIZE } from '$lib/constants';
+} from '#lib/stores/player.ts';
+import { fetchSong } from '#lib/api/client.ts';
+import { NetworkError } from '#lib/api/fetch.ts';
+import { LIBRARY_NEW_MENU_LABEL, LIBRARY_WALL_PLAYED_PAGE_SIZE } from '#lib/constants.ts';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -53,15 +56,15 @@ const fetchLibraryListen = vi.fn();
 const fetchAlbums = vi.fn();
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	fetchLibraryListen: (...args: unknown[]) => fetchLibraryListen(...args)
 }));
-vi.mock('$lib/api/albums', () => ({ fetchAlbum: vi.fn(), fetchAlbums: vi.fn() }));
-vi.mock('$lib/api/songs', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/albums.ts', () => ({ fetchAlbum: vi.fn(), fetchAlbums: vi.fn() }));
+vi.mock('#lib/api/songs.ts', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
+vi.mock('#lib/api/client.ts', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),

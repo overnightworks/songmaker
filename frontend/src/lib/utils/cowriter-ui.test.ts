@@ -1,8 +1,12 @@
-import { makeSong as song } from '$lib/test-utils/factories';
+import { makeSong as song } from '#lib/test-utils/factories.ts';
 import { describe, expect, it } from 'vitest';
 
-import { COWRITER_BUSY_WAIT_CEILING_SECONDS } from '$lib/constants';
-import type { ChatTurnFailureFrame, ChatTurnProblemFrame, ConversationItem } from '$lib/api/types';
+import { COWRITER_BUSY_WAIT_CEILING_SECONDS } from '#lib/constants.ts';
+import type {
+	ChatTurnFailureFrame,
+	ChatTurnProblemFrame,
+	ConversationItem
+} from '#lib/api/types.ts';
 import {
 	conversationConfirmLabel,
 	conversationLineLabel,

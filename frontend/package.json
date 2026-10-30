@@ -4,6 +4,9 @@
 	"version": "0.0.1",
 	"type": "module",
 	"packageManager": "pnpm@10.32.1",
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build && node scripts/inject_worker_precache.mjs",

@@ -5,9 +5,9 @@ import {
 	SONG_MENU_DELETE_LABEL,
 	SONG_MENU_RENAME_LABEL,
 	SONG_MENU_SAVE_LABEL
-} from '$lib/constants';
-import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
+} from '#lib/constants.ts';
+import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import SongMenu from './SongMenu.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];

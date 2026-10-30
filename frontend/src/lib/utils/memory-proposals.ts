@@ -1,4 +1,4 @@
-import type { MemoryBundle, MemoryScopeItem } from '$lib/api/types';
+import type { MemoryBundle, MemoryScopeItem } from '#lib/api/types.ts';
 
 export type MemoryScope = 'user' | 'song' | 'album';
 

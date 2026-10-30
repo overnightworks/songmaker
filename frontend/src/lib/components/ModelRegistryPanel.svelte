@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { getRegistry, downloadModel } from '$lib/api/client';
-	import { createPollingStore } from '$lib/stores/adminPolling';
-	import { activeJobs, trackJob } from '$lib/stores/jobs';
-	import { addToast } from '$lib/stores/toast';
-	import { ApiError, describeFailure } from '$lib/api/fetch';
-	import type { RegistryResponse } from '$lib/api/types';
-	import { MODEL_REGISTRY_LOAD_FAILED } from '$lib/constants';
-	import { offline } from '$lib/stores/connectivity';
-	import { COMPACT_STACK_CLASS, ensureCompactUiStyles } from '$lib/styles/compact-ui';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { getRegistry, downloadModel } from '#lib/api/client.ts';
+	import { createPollingStore } from '#lib/stores/adminPolling.ts';
+	import { activeJobs, trackJob } from '#lib/stores/jobs.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
+	import type { RegistryResponse } from '#lib/api/types.ts';
+	import { MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants.ts';
+	import { offline } from '#lib/stores/connectivity.ts';
+	import { COMPACT_STACK_CLASS, ensureCompactUiStyles } from '#lib/styles/compact-ui.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 
 	const POLL_INTERVAL_MS = 5000;
 	const DOWNLOAD_JOB_TYPE = 'download_model_on_worker';

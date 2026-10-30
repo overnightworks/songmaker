@@ -1,19 +1,22 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError } from '$lib/api/fetch';
-import { lostNetwork } from '$lib/test-utils/network';
-import { COMPACT_LAYOUT_MEDIA, MODEL_REGISTRY_LOAD_FAILED } from '$lib/constants';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { COMPACT_STACK_CLASS } from '$lib/styles/compact-ui';
+import { ApiError } from '#lib/api/fetch.ts';
+import { lostNetwork } from '#lib/test-utils/network.ts';
+import { COMPACT_LAYOUT_MEDIA, MODEL_REGISTRY_LOAD_FAILED } from '#lib/constants.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { COMPACT_STACK_CLASS } from '#lib/styles/compact-ui.ts';
 
 const api = vi.hoisted(() => ({
 	getRegistry: vi.fn(),
 	downloadModel: vi.fn()
 }));
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return { ...actual, ...api };
 });
 

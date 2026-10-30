@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-	import { albumCoverWaitingText } from '$lib/constants/album-cover-mark';
+	import { albumCoverWaitingText } from '#lib/constants/album-cover-mark.ts';
 	import CoverRunElapsed from './CoverRunElapsed.svelte';
 
 	let { running, startedAt, waiting }: CoverMark = $props();

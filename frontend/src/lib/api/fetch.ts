@@ -4,8 +4,8 @@ import {
 	RATE_LIMITED_STATUS,
 	SERVER_ERROR_STATUS_FLOOR,
 	SIGN_IN_NEXT_PARAM
-} from '$lib/constants';
-import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
+} from '#lib/constants.ts';
+import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
 
 const API_TIMEOUT_MS = 30_000;
 

@@ -1,13 +1,13 @@
 import {
 	makePlaylistDetail as detail,
 	makePlaylistEntry as entry
-} from '$lib/test-utils/factories';
+} from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import type { PlaylistDetailItem, PlaylistEntryItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import type { PlaylistDetailItem, PlaylistEntryItem } from '#lib/api/types.ts';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
 import {
 	collectionActionLabel,
 	LIBRARY_RETRY_LABEL,
@@ -16,8 +16,8 @@ import {
 	songEditorOpenLabel,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_PAUSE_LABEL
-} from '$lib/constants';
-import { setOpenCollection } from '$lib/stores/collection';
+} from '#lib/constants.ts';
+import { setOpenCollection } from '#lib/stores/collection.ts';
 import {
 	closeNowPlaying,
 	nowPlayingOpen,
@@ -25,18 +25,18 @@ import {
 	queueContext,
 	setShuffle,
 	shuffleEnabled
-} from '$lib/stores/player';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+} from '#lib/stores/player.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
 import {
 	loadPlaylistDetail,
 	playlistDetailLoad,
 	playlistList,
 	resetPlaylistsForTests,
 	selectedPlaylistDetail
-} from '$lib/stores/playlists';
+} from '#lib/stores/playlists.ts';
 
-vi.mock('$lib/api/client', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/api/client')>();
+vi.mock('#lib/api/client.ts', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('#lib/api/client.ts')>();
 	return {
 		...actual,
 		sharePlaylist: vi.fn(),
@@ -46,23 +46,23 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchPlaylist: vi.fn()
 	};
 });
-vi.mock('$lib/stores/toast', () => ({
+vi.mock('#lib/stores/toast.ts', () => ({
 	addToast: vi.fn()
 }));
-vi.mock('$lib/stores/navigation', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/navigation')>()),
+vi.mock('#lib/stores/navigation.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/navigation.ts')>()),
 	selectSong: vi.fn()
 }));
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
-import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
-import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
+import { accessibleName, getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { menuRow, menuRowLabels } from '#lib/test-utils/collection-menu.ts';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '#lib/test-utils/library-history.ts';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
-import { selectSong } from '$lib/stores/navigation';
-import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
-import { addToast } from '$lib/stores/toast';
+import { selectSong } from '#lib/stores/navigation.ts';
+import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '#lib/api/client.ts';
+import { addToast } from '#lib/stores/toast.ts';
 
 function populatedPlaylistDefaults(): Partial<PlaylistDetailItem> {
 	return {

@@ -1,18 +1,21 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { GenerationRetentionReport } from '$lib/api/client';
-import { ApiError } from '$lib/api/fetch';
-import { lostNetwork } from '$lib/test-utils/network';
-import { addToast } from '$lib/stores/toast';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+import type { GenerationRetentionReport } from '#lib/api/client.ts';
+import { ApiError } from '#lib/api/fetch.ts';
+import { lostNetwork } from '#lib/test-utils/network.ts';
+import { addToast } from '#lib/stores/toast.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
 
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn() }));
+vi.mock('#lib/api/client.ts', () => ({
 	previewGenerationRetention: vi.fn(),
 	runGenerationRetention: vi.fn()
 }));
 
-import { previewGenerationRetention, runGenerationRetention } from '$lib/api/client';
+import { previewGenerationRetention, runGenerationRetention } from '#lib/api/client.ts';
 import Panel from './TakeRetentionPanel.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;

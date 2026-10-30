@@ -3,13 +3,13 @@
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 		EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
-	} from '$lib/constants';
+	} from '#lib/constants.ts';
 	import {
 		cancelGeneration,
 		generateAction,
 		isGenerateJobActive,
 		offersCancel
-	} from '$lib/stores/generateAction';
+	} from '#lib/stores/generateAction.ts';
 	import Icon from '../Icon.svelte';
 
 	interface Props {

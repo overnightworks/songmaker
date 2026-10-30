@@ -1,9 +1,12 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OFFLINE_STRIP_MESSAGE } from '$lib/constants';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { browserReportsOnline } from '$lib/test-utils/network';
+import { OFFLINE_STRIP_MESSAGE } from '#lib/constants.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
+import { browserReportsOnline } from '#lib/test-utils/network.ts';
 import OfflineStrip from './OfflineStrip.svelte';
 
 let component: ReturnType<typeof mount>;

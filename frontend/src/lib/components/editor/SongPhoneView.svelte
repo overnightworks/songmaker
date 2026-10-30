@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
-	import { detailTab } from '$lib/stores/navigation';
-	import { typingOnPhone } from '$lib/stores/ui';
+	import { detailTab } from '#lib/stores/navigation.ts';
+	import { typingOnPhone } from '#lib/stores/ui.ts';
 	import DetailTabs from './DetailTabs.svelte';
 	import GenerateButton from './GenerateButton.svelte';
 	import TakesList from './TakesList.svelte';

@@ -1,20 +1,20 @@
 import type { Pathname } from '$app/types';
 import { get, writable } from 'svelte/store';
 
-import { describeFailure, NetworkError } from '$lib/api/fetch';
-import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
-import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
+import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
+import { searchLibrary, type LibrarySearchHit } from '#lib/api/library.ts';
+import type { AlbumCoverUrls, PlaylistItem } from '#lib/api/types.ts';
 import {
 	LIBRARY_SEARCH_DEBOUNCE_MS,
 	PLAYLISTS_PAGE_LABEL,
 	LIBRARY_PAGE_LABEL,
 	RAIL_SETTINGS_LABEL
-} from '$lib/constants';
-import { LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
-import { visibleSettingsSections } from '$lib/settingsSections';
-import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-import { matchesRailQuery, normalizeRailQuery } from '$lib/stores/librarySearch';
-import { compareByCreatedAt } from '$lib/utils/recency';
+} from '#lib/constants.ts';
+import { LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '#lib/routes/addresses.ts';
+import { visibleSettingsSections } from '#lib/settingsSections.ts';
+import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+import { matchesRailQuery, normalizeRailQuery } from '#lib/stores/librarySearch.ts';
+import { compareByCreatedAt } from '#lib/utils/recency.ts';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
 

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '$lib/constants';
-	import { isAdmin } from '$lib/stores/auth';
-	import { railTreeQuery } from '$lib/stores/librarySearch';
+	import { RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants.ts';
+	import { isAdmin } from '#lib/stores/auth.ts';
+	import { railTreeQuery } from '#lib/stores/librarySearch.ts';
 	import {
 		groupRailSearchResults,
 		railSearch,
@@ -10,10 +10,10 @@
 		visibleRailSearchPages,
 		type RailSearchTarget,
 		type RailSearchTextPart
-	} from '$lib/stores/railSearch';
-	import { openRailSearchTarget } from '$lib/stores/navigation';
-	import { ensurePlaylistsLoaded, playlistList } from '$lib/stores/playlists';
-	import { titleInitials } from '$lib/utils/format';
+	} from '#lib/stores/railSearch.ts';
+	import { openRailSearchTarget } from '#lib/stores/navigation.ts';
+	import { ensurePlaylistsLoaded, playlistList } from '#lib/stores/playlists.ts';
+	import { titleInitials } from '#lib/utils/format.ts';
 	import PlaylistCover from '../PlaylistCover.svelte';
 
 	// `onchoose` runs before a chosen result opens: a sheet holding the search

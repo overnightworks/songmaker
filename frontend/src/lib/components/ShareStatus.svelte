@@ -1,6 +1,6 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { APP_NAME } from '$lib/constants';
+	import { APP_NAME } from '#lib/constants.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {
