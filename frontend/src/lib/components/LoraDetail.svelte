@@ -8,7 +8,7 @@
 	import { addLoraSample, patchLoraSample, deleteLoraSample, ApiError } from '#lib/api/client.ts';
 	import { cancelJob, fetchJob } from '#lib/api/jobs.ts';
 	import { addLoraSampleFromGeneration, listOwnPlayableTakes } from '#lib/api/loras.ts';
-	import { activeJobs, removeJob, trackJob } from '#lib/stores/jobs.ts';
+	import { activeJobs, isActiveJobStatus, removeJob, trackJob } from '#lib/stores/jobs.ts';
 	import { refreshLora, trainLora, isLoraActive } from '#lib/stores/loras.ts';
 	import { addToast } from '#lib/stores/toast.ts';
 	import {
@@ -126,7 +126,7 @@
 				cancelledTrainingJob = job;
 				return;
 			}
-			if (job.status === 'queued' || job.status === 'running') trackJob(job, {});
+			if (isActiveJobStatus(job.status)) trackJob(job, {});
 		} catch {
 			addToast(LORA_TRAINING_PROGRESS_LOAD_FAILED, 'error');
 		}

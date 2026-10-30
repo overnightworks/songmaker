@@ -174,6 +174,10 @@ const pendingReconnects = new Map<string, PendingReconnect>();
 const takeArrivalWaits = new Map<string, () => void>();
 let stopWatchingReconnectOpportunities: (() => void) | null = null;
 
+export function isActiveJobStatus(status: JobStatus['status']): boolean {
+	return status === 'queued' || status === 'running';
+}
+
 function isTerminalJobStatus(status: JobStatus['status']): boolean {
 	return (
 		status === 'completed' || status === 'partial' || status === 'failed' || status === 'cancelled'

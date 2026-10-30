@@ -230,6 +230,10 @@ def _shared_audio_file_response(ctx: AppContext, stored_filename: str) -> FileRe
     return _audio_file_response(audio_path)
 
 
+def _offered_cover[T](file_exists: bool, build_urls: Callable[[], T]) -> T | None:
+    return build_urls() if file_exists else None
+
+
 def _shared_cover_response(
     request: Request,
     resolve_entity: Callable[[], Album | Song | Playlist | None],
@@ -338,12 +342,10 @@ def get_shared_album(
     ctx: AppContext = request.app.state.ctx
     songs = sorted(album.songs, key=lambda s: s.track_number)
     picked_by_song = {s.id: _picked_generation(s) for s in songs}
-    cover = None
-    if (
-        album.cover_key
-        and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
-    ):
-        cover = public_album_cover_urls(slug, album.cover_key)
+    cover = _offered_cover(
+        album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key),
+        lambda: public_album_cover_urls(slug, album.cover_key),
+    )
     song_items = []
     for s in songs:
         gen = picked_by_song[s.id]
@@ -463,19 +465,18 @@ def get_shared_song(
         raise HTTPException(404, NOT_FOUND_DETAIL)
     gen = _picked_generation(song)
     media = share_pick_media(gen)
-    cover = None
-    if (
-        song.cover_key
-        and song_cover_file_exists(ctx.audio_dir, song.id, song.cover_key)
-    ):
-        cover = public_song_cover_urls(slug, song.cover_key)
-    album_cover = None
-    if song.album and song.album.cover_key and album_cover_file_exists(
-        ctx.audio_dir, song.album.id, song.album.cover_key
-    ):
-        album_cover = public_album_cover_urls_at(
-            f"/shared/song/{slug}/album-cover", song.album.cover_key
-        )
+    cover = _offered_cover(
+        song_cover_file_exists(ctx.audio_dir, song.id, song.cover_key),
+        lambda: public_song_cover_urls(slug, song.cover_key),
+    )
+    song_album = song.album
+    album_cover = _offered_cover(
+        song_album is not None
+        and album_cover_file_exists(ctx.audio_dir, song_album.id, song_album.cover_key),
+        lambda: public_album_cover_urls_at(
+            f"/shared/song/{slug}/album-cover", song_album.cover_key
+        ),
+    )
     response = SharedSongResponse(
         title=song.title,
         artist=song.album.artist if song.album else "",
@@ -574,15 +575,13 @@ def get_shared_generation(
         raise HTTPException(404, NOT_FOUND_DETAIL)
     media = share_pick_media(gen)
     album = gen.song.album
-    album_cover = None
-    if (
-        album
-        and album.cover_key
-        and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
-    ):
-        album_cover = public_album_cover_urls_at(
+    album_cover = _offered_cover(
+        album is not None
+        and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key),
+        lambda: public_album_cover_urls_at(
             f"/shared/gen/{slug}/album-cover", album.cover_key
-        )
+        ),
+    )
     response = SharedGenerationResponse(
         title=gen.song.title,
         artist=album.artist if album else "",
@@ -691,17 +690,18 @@ def _presented_playlist_entries(playlist: Playlist) -> list[PlaylistEntry]:
 
 def _shared_entry_album_cover(ctx: AppContext, entry, slug: str):
     album = _entry_album(entry)
-    if album is None or not album_cover_file_exists(
-        ctx.audio_dir, album.id, album.cover_key,
-    ):
-        return None
-    return shared_playlist_album_cover_urls(slug, album.id, album.cover_key)
+    return _offered_cover(
+        album is not None
+        and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key),
+        lambda: shared_playlist_album_cover_urls(slug, album.id, album.cover_key),
+    )
 
 
 def _shared_playlist_cover(ctx: AppContext, playlist, slug: str):
-    if not playlist_cover_file_exists(ctx.audio_dir, playlist.id, playlist.cover_key):
-        return None
-    return shared_playlist_cover_urls(slug, playlist.cover_key)
+    return _offered_cover(
+        playlist_cover_file_exists(ctx.audio_dir, playlist.id, playlist.cover_key),
+        lambda: shared_playlist_cover_urls(slug, playlist.cover_key),
+    )
 
 
 def _shared_playlist_album_covers(ctx: AppContext, entries, slug: str) -> list:
@@ -709,12 +709,13 @@ def _shared_playlist_album_covers(ctx: AppContext, entries, slug: str) -> list:
     covered_album_ids = set()
     for entry in entries:
         album = _entry_album(entry)
-        if not _is_uncovered_album(ctx, album, covered_album_ids):
+        if album is None or album.id in covered_album_ids:
+            continue
+        cover = _shared_entry_album_cover(ctx, entry, slug)
+        if cover is None:
             continue
         covered_album_ids.add(album.id)
-        album_covers.append(shared_playlist_album_cover_urls(
-            slug, album.id, album.cover_key,
-        ))
+        album_covers.append(cover)
         if len(album_covers) == 4:
             break
     return album_covers
@@ -723,14 +724,6 @@ def _shared_playlist_album_covers(ctx: AppContext, entries, slug: str) -> list:
 def _entry_album(entry):
     generation = entry.generation
     return generation.song.album if generation is not None and generation.song else None
-
-
-def _is_uncovered_album(ctx: AppContext, album, covered_album_ids: set) -> bool:
-    return (
-        album is not None
-        and album.id not in covered_album_ids
-        and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
-    )
 
 
 @router.get(

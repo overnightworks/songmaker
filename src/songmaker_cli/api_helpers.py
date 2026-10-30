@@ -306,6 +306,15 @@ def slugify(value: str, max_length: int = _UNBOUNDED_SLUG_LENGTH) -> str:
     return _slugify(value, max_length=max_length) or "untitled"
 
 
+def _first_free_slug(base_slug: str, is_taken: Callable[[str], bool]) -> str:
+    candidate = base_slug
+    counter = 1
+    while is_taken(candidate):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
+
+
 def _acquire_unique_slug(
     session: Session,
     caller: str,
@@ -323,12 +332,7 @@ def _acquire_unique_slug(
     """
     commit_auth_state_before_lock(session, caller)
     _begin_exclusive(session, lock_id)
-    candidate = base_slug
-    counter = 1
-    while is_taken(candidate):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
+    return _first_free_slug(base_slug, is_taken)
 
 
 def unique_album_id(session: Session, title: str) -> str:
@@ -351,17 +355,16 @@ def unique_lora_slug_under_capacity_lock(
     keep its slug choice and per-musician capacity check in one transaction.
     """
     base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
-    candidate = base_slug
-    counter = 1
-    while (
-        session.query(UserLora)
-        .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
-        .first()
-        is not None
-    ):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
+
+    def is_taken(candidate: str) -> bool:
+        return (
+            session.query(UserLora)
+            .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
+            .first()
+            is not None
+        )
+
+    return _first_free_slug(base_slug, is_taken)
 
 
 def unique_song_slug(
