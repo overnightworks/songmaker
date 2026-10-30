@@ -21,7 +21,7 @@
 
 [file_lines]
 "frontend/e2e/back-closes-overlay.spec.ts" = 1241
-"frontend/e2e/helpers.ts" = 839
+"frontend/e2e/helpers.ts" = 836
 "frontend/e2e/library.spec.ts" = 1304
 "frontend/e2e/offline.spec.ts" = 807
 "frontend/e2e/seed.ts" = 1180
@@ -42,8 +42,8 @@
 "frontend/src/lib/components/SongDetailView.test.ts" = 2306
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
-"frontend/src/lib/history/historyController.test.ts" = 918
-"frontend/src/lib/history/historyController.ts" = 950
+"frontend/src/lib/history/historyController.test.ts" = 910
+"frontend/src/lib/history/historyController.ts" = 936
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
@@ -52,7 +52,7 @@
 "frontend/src/lib/stores/jobs.test.ts" = 906
 "frontend/src/lib/stores/libraryContext.test.ts" = 2196
 "frontend/src/lib/stores/libraryContext.ts" = 1267
-"frontend/src/lib/stores/navigation.test.ts" = 3047
+"frontend/src/lib/stores/navigation.test.ts" = 3044
 "frontend/src/lib/stores/player.test.ts" = 5286
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
