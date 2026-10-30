@@ -109,6 +109,7 @@ from songmaker_cli.db.queries.memory import (
 )
 from songmaker_cli.db.queries.playlists import best_playable_generation
 from songmaker_cli.db.queries.settings import get_cowriter_tail_token_budget
+from songmaker_cli.db.queries.sharing import is_playable_take
 from songmaker_cli.db.queries.songs import list_songs
 from songmaker_cli.db.queries.versions import get_version
 
@@ -340,10 +341,6 @@ def _mentioned_version_block(
     return TurnContextBlock(TURN_BLOCK_MENTIONED_VERSIONS, body)
 
 
-def _generation_is_playable(generation: Generation) -> bool:
-    return (not generation.is_archived) and bool(generation.mp3_path)
-
-
 def _format_take(generation: Generation) -> str:
     whisper = generation.whisper_text or ""
     parts = [
@@ -381,7 +378,7 @@ def resolve_take_block(
                 422,
                 "Generation does not belong to the current song",
             )
-        if not _generation_is_playable(generation):
+        if not is_playable_take(generation):
             raise HTTPException(422, "Generation is not playable")
         return TurnContextBlock(TURN_BLOCK_CURRENT_TAKE, _format_take(generation))
 

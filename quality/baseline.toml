@@ -62,11 +62,11 @@
 "frontend/src/routes/settings/users/page.test.ts" = 861
 "src/acestep_worker/wrapper.py" = 1089
 "src/songmaker_cli/constants.py" = 814
-"src/songmaker_cli/conversation_api.py" = 975
+"src/songmaker_cli/conversation_api.py" = 972
 "src/songmaker_cli/jobs/generation.py" = 1151
 "src/songmaker_cli/jobs/lora_training.py" = 1552
-"src/songmaker_cli/queue_streams.py" = 976
-"src/songmaker_cli/sharing_api.py" = 868
+"src/songmaker_cli/queue_streams.py" = 963
+"src/songmaker_cli/sharing_api.py" = 861
 "tests/acestep_engine/test_client.py" = 870
 "tests/acestep_worker/test_wrapper.py" = 1631
 "tests/acestep_worker/test_wrapper_train_lora.py" = 1294
