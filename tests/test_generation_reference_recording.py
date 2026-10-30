@@ -421,9 +421,10 @@ def test_deleting_a_reference_a_take_links_is_refused_by_the_database(
         session.query(Generation).update({Generation.is_archived: True})
         session.commit()
 
-    with seeded_db() as session, pytest.raises(IntegrityError):
-        session.query(ReferenceRecording).filter_by(id=reference_id).delete()
-        session.flush()
+    with seeded_db() as session:
+        delete_reference = session.query(ReferenceRecording).filter_by(id=reference_id)
+        with pytest.raises(IntegrityError):
+            delete_reference.delete()
 
 
 def test_the_take_response_names_the_reference_by_its_original_filename(
