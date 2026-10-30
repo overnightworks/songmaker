@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
-from typing import Any, Callable
+from typing import Any, Callable, Final
 
 from agent_providers.codex.image import (
     CodexImageCliError,
@@ -66,10 +66,15 @@ _USER_FACING_ERRORS: tuple[tuple[type[Exception], str], ...] = (
     (RuntimeError, JOB_ERROR_INTERNAL),
 )
 
+JOB_ERROR_REFERENCE_DELETED_DURING_TAKE: Final[str] = (
+    "The reference track was deleted while this take was generating."
+)
+
 _GENERATION_SETUP_MESSAGES: frozenset[str] = frozenset({
     JOB_ERROR_SONG_NOT_FOUND,
     JOB_ERROR_VERSION_NOT_FOUND,
     JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND,
+    JOB_ERROR_REFERENCE_DELETED_DURING_TAKE,
     JOB_ERROR_USER_LORA_UNAVAILABLE,
 })
 
@@ -85,6 +90,10 @@ def generation_error_messages() -> frozenset[str]:
 
 class GenerationSetupError(Exception):
     pass
+
+
+class ReferenceDeletedDuringTake(GenerationSetupError):
+    """The take's reference row was gone when the take reached persistence; it ends the job."""
 
 
 def _sanitize_error(exc: Exception, job_id: str) -> str:

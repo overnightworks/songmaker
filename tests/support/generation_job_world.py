@@ -47,6 +47,24 @@ def persist_via_post_process(*, ctx, generation_id, db_factory, **kwargs):
     )
 
 
+def persist_with_output_files(*, ctx, generation_id, db_factory, on_outputs_written, **kwargs):
+    """Stand in for post_process_generation's files: outputs first, the worker audio last."""
+    outputs = [
+        ctx.audio_dir / ctx.user_id / f"{generation_id}{suffix}"
+        for suffix in (".mp3", ".wav", ".raw.wav")
+    ]
+    for output in outputs:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"audio")
+    on_outputs_written(outputs)
+    try:
+        return persist_via_post_process(
+            ctx=ctx, generation_id=generation_id, db_factory=db_factory, **kwargs,
+        )
+    finally:
+        Path(kwargs["worker_audio_path"]).unlink(missing_ok=True)
+
+
 @pytest.fixture
 def db_factory(tmp_path: Path):
     factory = init_db(tmp_path / "test.db")
@@ -94,7 +112,7 @@ def seeded_db(db_factory, tmp_path: Path):
     return db_factory
 
 
-def patch_generation_dispatch(dto_or_side_effect):
+def patch_generation_dispatch(dto_or_side_effect, post_process=persist_via_post_process):
     if isinstance(dto_or_side_effect, list):
         dispatch = AsyncMock(side_effect=dto_or_side_effect)
     elif callable(dto_or_side_effect) or isinstance(dto_or_side_effect, BaseException):
@@ -116,6 +134,6 @@ def patch_generation_dispatch(dto_or_side_effect):
 
     return (
         patch_dispatch(),
-        patch("songmaker_cli.jobs.post_process_generation", side_effect=persist_via_post_process),
+        patch("songmaker_cli.jobs.post_process_generation", side_effect=post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     )

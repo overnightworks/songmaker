@@ -58,33 +58,24 @@ def resolve_owned_reference_audio(
     return candidate
 
 
-@dataclass(frozen=True)
-class LinkedReference:
-    """The file a version's link names: its stored relative path and where it resolved."""
-
-    storage_path: str
-    absolute_path: str
-
-
-NO_REFERENCE: Final = LinkedReference(storage_path="", absolute_path="")
-
-
 def resolve_linked_reference_audio(
     factory: sessionmaker[Session],
     audio_dir: Path,
     user_id: str,
     reference_recording_id: str | None,
-) -> LinkedReference:
-    """The job user's own row behind a version's link; a missing or foreign row is rejected."""
+) -> str:
+    """The absolute file behind a version's link, or "" for none.
+
+    The job user's own row is required: a missing or foreign row is rejected.
+    """
     if reference_recording_id is None:
-        return NO_REFERENCE
+        return ""
     with factory() as session:
         recording = get_owned_reference_recording(session, user_id, reference_recording_id)
         if recording is None:
             raise ReferenceAudioRejected(REFERENCE_AUDIO_NOT_OWNED_DETAIL)
         storage_path = recording.storage_path
-    resolved = resolve_owned_reference_audio(audio_dir, user_id, storage_path)
-    return LinkedReference(storage_path=storage_path, absolute_path=str(resolved))
+    return str(resolve_owned_reference_audio(audio_dir, user_id, storage_path))
 
 
 REFERENCE_AUDIO_QUOTA_DETAIL: Final = "Reference audio storage limit reached."

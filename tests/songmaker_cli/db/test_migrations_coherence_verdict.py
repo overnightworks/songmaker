@@ -78,8 +78,10 @@ def _seed(
             id="v1", song_id="s1", version_number=1, lyrics="x", prompt="y", bpm=120,
             audio_duration=0, key_scale="", created_at=datetime.now(UTC),
         ))
-        session.add(Generation(
+        session.execute(Generation.__table__.insert().values(
             id="g1", song_id="s1", version_id="v1", generation_number=1, mp3_path="g1.mp3", seed=1,
+            status="completed", is_archived=False, is_picked=False, is_kept=False,
+            model_mode="sft", is_shared=False, created_at=datetime.now(UTC),
         ))
         session.flush()
         for name, value in values.items():

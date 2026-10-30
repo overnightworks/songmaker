@@ -1,23 +1,42 @@
-"""A take records the reference audio its job actually ran with."""
+"""A take links the reference recording its job actually ran with."""
 
 from __future__ import annotations
 
 import wave
+from functools import partial
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from support.generation_job_world import (
     make_generation_dto,
     patch_generation_dispatch,
+    persist_via_post_process,
+    persist_with_output_files,
     run_async,
 )
 
-from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
-from songmaker_cli.db.models import Generation, ReferenceRecording, User, Version
-from songmaker_cli.db.queries.jobs import get_job
+from songmaker_cli.api_models import (
+    CoverTaskParams,
+    GenerationResponse,
+    RepaintTaskParams,
+    SharedGenerationResponse,
+)
+from songmaker_cli.api_models.songs import ReferenceResponse
+from songmaker_cli.constants import JOB_ERROR_GPU_OUT_OF_MEMORY, JOB_ERROR_UNEXPECTED
+from songmaker_cli.db.models import (
+    Generation,
+    ReferenceRecording,
+    ResourceEvent,
+    User,
+    Version,
+)
+from songmaker_cli.db.queries.jobs import JobStatusUpdate, get_job, update_job_status
 from songmaker_cli.db.queries.songs import update_song
 from songmaker_cli.jobs import run_generation_job
+from songmaker_cli.jobs._runtime import ReferenceDeletedDuringTake
+from songmaker_cli.scheduler import WorkerGpuOutOfMemory, WorkerTaskFailed
 
 REFERENCE_A = "u1/refs/aaaaaaaa-0000-0000-0000-000000000001.wav"
 REFERENCE_B = "u1/refs/bbbbbbbb-0000-0000-0000-000000000002.wav"
@@ -35,11 +54,12 @@ def _run_job(
     *,
     count: int = 1,
     on_dispatch=None,
+    post_process=persist_via_post_process,
     **task,
 ) -> None:
     """Run the job; ``on_dispatch`` replaces the worker dispatch with a callable."""
     dispatch, post_process, defaults = patch_generation_dispatch(
-        on_dispatch or make_generation_dto(seed=42)
+        on_dispatch or make_generation_dto(seed=42), post_process,
     )
     with dispatch, post_process, defaults:
         run_async(
@@ -60,13 +80,15 @@ def _run_job(
 
 
 def _recorded_references(seeded_db) -> list[str | None]:
+    """The linked row id of each take the job saved; no take carries a path."""
     with seeded_db() as session:
         takes = (
             session.query(Generation)
             .filter(Generation.song_id == "s1", Generation.id != "g0")
             .all()
         )
-        return [take.generation_params.get("reference_audio_path") for take in takes]
+        assert all("reference_audio_path" not in (take.generation_params or {}) for take in takes)
+        return [take.reference_recording_id for take in takes]
 
 
 def _record_reference(seeded_db, relative: str, user_id: str = "u1") -> str:
@@ -88,25 +110,26 @@ def _link_version_reference(seeded_db, reference_id: str) -> None:
         session.commit()
 
 
-def _name_version_reference_of(seeded_db, relative: str, user_id: str) -> None:
-    _link_version_reference(seeded_db, _record_reference(seeded_db, relative, user_id))
+def _name_version_reference_of(seeded_db, relative: str, user_id: str) -> str:
+    reference_id = _record_reference(seeded_db, relative, user_id)
+    _link_version_reference(seeded_db, reference_id)
+    return reference_id
 
 
-def _name_version_reference(seeded_db, relative: str) -> None:
-    _name_version_reference_of(seeded_db, relative, "u1")
+def _name_version_reference(seeded_db, relative: str) -> str:
+    return _name_version_reference_of(seeded_db, relative, "u1")
 
 
-@pytest.mark.parametrize(("linked", "expected"), [(True, REFERENCE_A), (False, "")])
-def test_take_records_the_reference_the_job_resolved(
-    seeded_db, tmp_path: Path, linked: bool, expected: str
+@pytest.mark.parametrize("linked", [True, False])
+def test_take_links_the_reference_the_job_resolved(
+    seeded_db, tmp_path: Path, linked: bool
 ) -> None:
     _write_reference(tmp_path, REFERENCE_A)
-    if linked:
-        _name_version_reference(seeded_db, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A) if linked else None
 
     _run_job(seeded_db, tmp_path)
 
-    assert _recorded_references(seeded_db) == [expected]
+    assert _recorded_references(seeded_db) == [reference_id]
 
 
 def test_take_keeps_its_reference_after_the_version_is_edited_in_place(
@@ -114,7 +137,7 @@ def test_take_keeps_its_reference_after_the_version_is_edited_in_place(
 ) -> None:
     _write_reference(tmp_path, REFERENCE_A)
     _write_reference(tmp_path, REFERENCE_B)
-    _name_version_reference(seeded_db, REFERENCE_A)
+    captured = _name_version_reference(seeded_db, REFERENCE_A)
     replacement = _record_reference(seeded_db, REFERENCE_B)
     _run_job(seeded_db, tmp_path)
 
@@ -124,27 +147,27 @@ def test_take_keeps_its_reference_after_the_version_is_edited_in_place(
 
     with seeded_db() as session:
         assert session.query(Version).filter_by(id="v1").one().reference_recording_id == replacement
-    assert _recorded_references(seeded_db) == [REFERENCE_A]
+    assert _recorded_references(seeded_db) == [captured]
 
 
-def test_every_take_of_a_batch_records_the_reference(seeded_db, tmp_path: Path) -> None:
+def test_every_take_of_a_batch_links_the_reference(seeded_db, tmp_path: Path) -> None:
     _write_reference(tmp_path, REFERENCE_A)
-    _name_version_reference(seeded_db, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
 
     _run_job(seeded_db, tmp_path, count=2)
 
-    assert _recorded_references(seeded_db) == [REFERENCE_A, REFERENCE_A]
+    assert _recorded_references(seeded_db) == [reference_id, reference_id]
 
 
 @pytest.mark.parametrize("task", ["repaint", "cover"])
-def test_repaint_and_cover_takes_record_the_reference(seeded_db, tmp_path: Path, task: str) -> None:
+def test_repaint_and_cover_takes_link_the_reference(seeded_db, tmp_path: Path, task: str) -> None:
     _write_reference(tmp_path, REFERENCE_A)
     with seeded_db() as session:
         session.add(
             Generation(id="g0", song_id="s1", mp3_path="u1/g0.mp3", model_mode="sft", seed=1)
         )
         session.commit()
-    _name_version_reference(seeded_db, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
     source_wav = tmp_path / "source.wav"
     with wave.open(str(source_wav), "wb") as writer:
         writer.setnchannels(1)
@@ -175,7 +198,7 @@ def test_repaint_and_cover_takes_record_the_reference(seeded_db, tmp_path: Path,
 
     _run_job(seeded_db, tmp_path, **options)
 
-    assert _recorded_references(seeded_db) == [REFERENCE_A]
+    assert _recorded_references(seeded_db) == [reference_id]
 
 
 def _run_recording_dispatch(seeded_db, tmp_path: Path) -> list[str]:
@@ -212,3 +235,215 @@ def test_a_job_whose_version_links_another_users_row_fails_before_dispatch(
             "failed", "setup_error", "Reference audio not found",
         )
     assert _recorded_references(seeded_db) == []
+
+
+# ── a reference deleted while a take generates ─────────────────────
+
+DELETED_DURING_TAKE = "The reference track was deleted while this take was generating."
+
+
+def _delete_reference(seeded_db, reference_id: str, *, takes: tuple[str, ...] = ()) -> None:
+    """Remove the row the way a delete would: the links first, then the row."""
+    with seeded_db() as session:
+        session.query(Version).filter_by(id="v1").one().reference_recording_id = None
+        for take_id in takes:
+            session.query(ResourceEvent).filter_by(generation_id=take_id).delete()
+            session.query(Generation).filter_by(id=take_id).delete()
+        session.flush()
+        session.query(ReferenceRecording).filter_by(id=reference_id).delete()
+        session.commit()
+
+
+def _saved_takes(seeded_db) -> list[str]:
+    with seeded_db() as session:
+        return [take.id for take in session.query(Generation).filter_by(song_id="s1")]
+
+
+def _job_outcome(seeded_db) -> tuple[str, str | None, str | None]:
+    with seeded_db() as session:
+        job = get_job(session, "j1")
+        return job.status, job.error, job.error_type
+
+
+def _dispatching(tmp_path: Path, steps) -> tuple[list[int], object]:
+    """A dispatch that writes each take's worker audio, then runs that take's step."""
+    calls: list[int] = []
+
+    def dispatch(**_kwargs):
+        calls.append(len(calls))
+        step = steps[calls[-1]]
+        worker_audio = tmp_path / f"worker-{calls[-1]}.wav"
+        worker_audio.write_bytes(b"RIFF")
+        if isinstance(step, Exception):
+            raise step
+        step()
+        return make_generation_dto(seed=42, audio_path=str(worker_audio))
+
+    return calls, dispatch
+
+
+def test_a_reference_gone_at_persistence_fails_the_job_and_saves_nothing(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    outputs: list[Path] = []
+    _, dispatch = _dispatching(tmp_path, [lambda: _delete_reference(seeded_db, reference_id)])
+
+    _run_job(
+        seeded_db, tmp_path, on_dispatch=dispatch,
+        post_process=partial(persist_with_output_files, on_outputs_written=outputs.extend),
+    )
+
+    assert len(outputs) == 3
+    assert not any(path.exists() for path in outputs)
+    assert not (tmp_path / "worker-0.wav").exists()
+    assert _job_outcome(seeded_db) == ("failed", DELETED_DURING_TAKE, "generation_error")
+    assert _saved_takes(seeded_db) == []
+
+
+def test_outputs_exist_before_the_failure_that_removes_them(seeded_db, tmp_path: Path) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    existed: list[bool] = []
+
+    def record_existence(outputs: list[Path]) -> None:
+        existed.extend(path.exists() for path in outputs)
+
+    _, dispatch = _dispatching(tmp_path, [lambda: _delete_reference(seeded_db, reference_id)])
+    _run_job(
+        seeded_db, tmp_path, on_dispatch=dispatch,
+        post_process=partial(persist_with_output_files, on_outputs_written=record_existence),
+    )
+
+    assert existed == [True, True, True]
+
+
+def test_a_reference_gone_on_the_first_of_three_takes_submits_no_further_take(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    calls, dispatch = _dispatching(tmp_path, [lambda: _delete_reference(seeded_db, reference_id)])
+
+    _run_job(seeded_db, tmp_path, count=3, on_dispatch=dispatch)
+
+    assert calls == [0]
+    assert _job_outcome(seeded_db) == ("failed", DELETED_DURING_TAKE, "generation_error")
+
+
+def test_a_reference_gone_after_a_gpu_memory_failure_ends_with_the_deletion_line(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    _, dispatch = _dispatching(
+        tmp_path, [WorkerGpuOutOfMemory("need 18.5 GB"),
+                   lambda: _delete_reference(seeded_db, reference_id)],
+    )
+
+    _run_job(seeded_db, tmp_path, count=2, on_dispatch=dispatch)
+
+    assert _job_outcome(seeded_db) == ("failed", DELETED_DURING_TAKE, "generation_error")
+
+
+def test_a_gpu_memory_failure_still_wins_over_a_later_take_failure(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    _name_version_reference(seeded_db, REFERENCE_A)
+    _, dispatch = _dispatching(
+        tmp_path, [WorkerGpuOutOfMemory("need 18.5 GB"), WorkerTaskFailed("boom")],
+    )
+
+    _run_job(seeded_db, tmp_path, count=2, on_dispatch=dispatch)
+
+    status, error, error_type = _job_outcome(seeded_db)
+    assert (status, error_type) == ("failed", "gpu_out_of_memory")
+    assert error == JOB_ERROR_GPU_OUT_OF_MEMORY
+
+
+def test_a_reference_gone_after_an_earlier_take_was_saved_and_deleted_fails_the_job(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+
+    def delete_first_take_and_reference() -> None:
+        _delete_reference(seeded_db, reference_id, takes=tuple(_saved_takes(seeded_db)))
+
+    _, dispatch = _dispatching(tmp_path, [lambda: None, delete_first_take_and_reference])
+
+    _run_job(seeded_db, tmp_path, count=2, on_dispatch=dispatch)
+
+    assert _job_outcome(seeded_db) == ("failed", DELETED_DURING_TAKE, "generation_error")
+    assert _saved_takes(seeded_db) == []
+
+
+def test_a_job_cancelled_before_the_deletion_is_reported_stays_cancelled(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    _, dispatch = _dispatching(tmp_path, [lambda: _delete_reference(seeded_db, reference_id)])
+
+    def cancel_as_the_deletion_surfaces(**kwargs):
+        try:
+            return persist_via_post_process(**kwargs)
+        except ReferenceDeletedDuringTake:
+            with seeded_db() as session:
+                update_job_status(session, "j1", JobStatusUpdate("cancelled"))
+                session.commit()
+            raise
+
+    _run_job(
+        seeded_db, tmp_path, on_dispatch=dispatch, post_process=cancel_as_the_deletion_surfaces,
+    )
+
+    assert _job_outcome(seeded_db)[0] == "cancelled"
+
+
+def test_a_take_number_conflict_fails_as_before_not_with_the_deletion_line(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    _name_version_reference(seeded_db, REFERENCE_A)
+    conflict = IntegrityError("INSERT", {}, Exception("uq_generation_song_number"))
+
+    with patch("songmaker_cli.jobs.generation.create_generation", side_effect=conflict):
+        _run_job(seeded_db, tmp_path)
+
+    status, error, _ = _job_outcome(seeded_db)
+    assert (status, error) == ("failed", JOB_ERROR_UNEXPECTED)
+    assert _saved_takes(seeded_db) == []
+
+
+def test_deleting_a_reference_a_take_links_is_refused_by_the_database(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    _run_job(seeded_db, tmp_path)
+    with seeded_db() as session:
+        session.query(Version).filter_by(id="v1").update({Version.reference_recording_id: None})
+        session.query(Generation).update({Generation.is_archived: True})
+        session.commit()
+
+    with seeded_db() as session, pytest.raises(IntegrityError):
+        session.query(ReferenceRecording).filter_by(id=reference_id).delete()
+        session.flush()
+
+
+def test_the_take_response_names_the_reference_by_its_original_filename(
+    seeded_db, tmp_path: Path,
+) -> None:
+    _write_reference(tmp_path, REFERENCE_A)
+    reference_id = _name_version_reference(seeded_db, REFERENCE_A)
+    _run_job(seeded_db, tmp_path)
+
+    with seeded_db() as session:
+        take = session.query(Generation).filter_by(song_id="s1").one()
+        response = GenerationResponse.from_orm(take)
+
+    assert response.reference == ReferenceResponse(id=reference_id, filename="ref.wav")
+    assert "reference" not in SharedGenerationResponse.model_fields

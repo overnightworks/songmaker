@@ -246,6 +246,9 @@ class Generation(ShareMixin, Base):
         ForeignKey(GENERATIONS_ID, ondelete=SET_NULL), nullable=True,
     )
     audio_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reference_recording_id: Mapped[str | None] = mapped_column(
+        ForeignKey("reference_recordings.id", ondelete="RESTRICT"), nullable=True, index=True,
+    )
     created_by: Mapped[str | None] = mapped_column(
         ForeignKey(USERS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
@@ -253,6 +256,7 @@ class Generation(ShareMixin, Base):
 
     song: Mapped[Song] = relationship(back_populates="generations")
     version: Mapped[Version | None] = relationship(back_populates="generations")
+    reference_recording: Mapped[ReferenceRecording | None] = relationship(lazy="joined")
     src_generation: Mapped[Generation | None] = relationship(
         remote_side=[id], foreign_keys=[src_generation_id],
     )
