@@ -694,7 +694,7 @@ Shared album and playlist streams release the request session before building
 count-windowed snapshots. Admission in `queue_streams.py` caps measured audio
 at six hours; a longer queue receives 422 rather than a shortened stream.
 The ffmpeg timeout is 336 seconds, derived from that cap, the measured-rate
-policy and its reserve. `tests/test_queue_streams.py` proves admission before
+policy and its reserve. `tests/songmaker_cli/test_queue_streams.py` proves admission before
 ffmpeg and request-session release through the shared builders.
 
 Escape and Back close the same thing (#1182): the topmost open layer — a

@@ -12,7 +12,7 @@ excludes the base-image label.
 ```bash
 # Backend — targeted (local / agents)
 pytest tests/songmaker_cli/db -q --tb=short
-pytest tests/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
+pytest tests/songmaker_cli/test_queue_streams.py tests/songmaker_cli/test_playlist_api.py -q
 
 # Frontend — targeted (local / agents)
 cd frontend && pnpm exec vitest run src/lib/stores/player.test.ts
