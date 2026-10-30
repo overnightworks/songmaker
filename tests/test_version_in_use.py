@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from support.generation_job_world import worker_up
 from support.web_app import (
     make_authenticated_user,
     make_fake_redis,
@@ -96,20 +95,6 @@ def _job_version(client: TestClient, job_id: str) -> str | None:
 def _version_ids(client: TestClient) -> set[str]:
     with _database(client) as session:
         return {version.id for version in session.query(Version).filter_by(song_id="song")}
-
-
-def worker_up() -> ExitStack:
-    stack = ExitStack()
-    stack.enter_context(
-        patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
-    )
-    for health in (
-        "is_music_worker_healthy", "is_scoring_worker_healthy", "_has_online_acestep_worker",
-    ):
-        stack.enter_context(
-            patch(f"songmaker_cli.generation_api.{health}", AsyncMock(return_value=True)),
-        )
-    return stack
 
 
 TAKE_JOB_REQUESTS = {
@@ -209,11 +194,12 @@ def test_m6_a_job_that_names_no_version_holds_none(client):
 def test_a_job_for_a_version_that_is_gone_or_belongs_to_another_song_answers_404_and_leaves_no_job(
     client, version_id,
 ):
-    with _database(client) as session, pytest.raises(HTTPException) as refusal:
-        create_job_with_rate_limit(
-            session, OWNER, JobType.GENERATE, song_id="song", version_id=version_id,
-            redis=make_fake_redis(),
-        )
+    with _database(client) as session:
+        with pytest.raises(HTTPException) as refusal:
+            create_job_with_rate_limit(
+                session, OWNER, JobType.GENERATE, song_id="song", version_id=version_id,
+                redis=make_fake_redis(),
+            )
     assert (refusal.value.status_code, refusal.value.detail) == (404, "Version not found")
     with _database(client) as session:
         assert session.query(Job).count() == 0

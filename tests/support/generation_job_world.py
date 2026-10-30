@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -151,3 +151,17 @@ def patch_generation_dispatch(dto_or_side_effect, post_process=persist_via_post_
         patch("songmaker_cli.jobs.post_process_generation", side_effect=post_process),
         patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
     )
+
+
+def worker_up() -> ExitStack:
+    stack = ExitStack()
+    stack.enter_context(
+        patch("songmaker_cli.generation_api.get_arq_pool", return_value=AsyncMock()),
+    )
+    for health in (
+        "is_music_worker_healthy", "is_scoring_worker_healthy", "_has_online_acestep_worker",
+    ):
+        stack.enter_context(
+            patch(f"songmaker_cli.generation_api.{health}", AsyncMock(return_value=True)),
+        )
+    return stack

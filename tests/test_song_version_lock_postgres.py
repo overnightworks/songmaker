@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 from postgres_lock_harness import CommitPause, race, wrote_to_tables
+from support.generation_job_world import worker_up
 from support.web_app import make_authenticated_user, make_test_app, seed_session
-from test_version_in_use import worker_up
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import (
