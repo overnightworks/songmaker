@@ -1,0 +1,8 @@
+claim_id = "4691b44addb34ded9ddd366e16b9caa1"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "a1429244bafbffa355d41f13d83b1a52e7fc202c"
+branch = "claude/issue-2098-acestep-worker-on-python-3-14"
+scope = [".gitmodules", "AGENTS.md", "docker/base/gpu-torch-base.Dockerfile", "docs/acestep.md", "vendor/acestep"]
+opened_commit = "efe4f860e2a9bdf5543a88f9ac2f57527c9eb712"
+whole_reason = "One interpreter move of one image chain: the fork's lift, its pin and the base image's Python change together, or the model venv either refuses to sync or silently stays on 3.12."
