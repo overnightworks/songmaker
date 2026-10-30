@@ -6,7 +6,7 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { NetworkError } from '#lib/api/fetch.ts';
 import { PLAYING_MARK_LABEL } from '#lib/constants.ts';
-import { PLAYLISTS_ROUTE_ID } from '#lib/routes/addresses.ts';
+import { LIBRARY_ROUTE_ID, PLAYLISTS_ROUTE_ID } from '#lib/routes/addresses.ts';
 import {
 	reportResourceStreamReachable,
 	resetConnectivityForTests
@@ -178,7 +178,7 @@ describe('RailPlaylistsGroup', () => {
 	it.each([
 		{ address: PLAYLISTS_ROUTE_ID, current: true },
 		{ address: '/settings', current: false },
-		{ address: '/(library)/library', current: false },
+		{ address: LIBRARY_ROUTE_ID, current: false },
 		{ address: '/(library)', current: false }
 	] as const)(
 		'defect:#1523: with the surface still on playlists, the word Playlists is current: $current and its group is unfolded at $address',

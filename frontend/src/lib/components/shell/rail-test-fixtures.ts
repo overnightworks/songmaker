@@ -252,10 +252,10 @@ export function songsPage(
 }
 
 export function railPathsMock() {
-	// Like the real `resolve`, a route ID loses its route groups: `/(library)?song=s1` is `/?song=s1`.
+	// Like the real `resolve`, a route ID loses its route groups and keeps a leading slash.
 	return {
 		resolve: vi.fn((routeId: string) =>
-			routeId.replace(/\/\([^/)]+\)/g, '').replace(/^(?=\?)/, '/')
+			routeId.replace(/\/\([^/)]+\)/g, '').replace(/^(?!\/)/, '/')
 		)
 	};
 }
