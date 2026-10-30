@@ -245,7 +245,7 @@ describe('an address no route matches', () => {
 		await laterTask();
 
 		expect(replaceState).not.toHaveBeenCalled();
-		expect(history.length).toBe(entries);
+		expect(history).toHaveLength(entries);
 	});
 
 	it('opens a layer with no entry of its own and no remount, and Escape closes it', async () => {
@@ -256,7 +256,7 @@ describe('an address no route matches', () => {
 		await laterTask();
 		expect(pushState).not.toHaveBeenCalled();
 		expect(goto).not.toHaveBeenCalled();
-		expect(history.length).toBe(entries);
+		expect(history).toHaveLength(entries);
 
 		expect(closeTopLayer()).toBe(true);
 		await laterTask();
