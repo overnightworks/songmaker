@@ -118,15 +118,6 @@ include = [
 # ---------------------------------------------------------------
 # uv configuration
 # ---------------------------------------------------------------
-# The appkit wheel carries the family look (tokens and fonts) that the frontend
-# build copies out of it. It reaches only scripts/copy_kit_assets.py: never make
-# this a default group or include it in an image's sync or export, or the wheel
-# lands in the production venvs.
-[dependency-groups]
-frontend = [
-    "overnightworks-appkit @ https://github.com/overnightworks/appkit/releases/download/v0.6.0/overnightworks_appkit-0.6.0-py3-none-any.whl#sha256=ea6debbc632ae8f1b77966986b1f9036987571465ef0949bb1b29b898a7267fb",
-]
-
 [tool.uv]
 override-dependencies = [
     "numpy>=1.26",
