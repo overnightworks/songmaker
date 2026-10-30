@@ -250,6 +250,8 @@ def _outcome_of(decoded: RunEvent | StreamViolation) -> TurnOutcome | None:
                 tool_use_id=decoded.tool_use_id, content=decoded.content,
                 is_error=decoded.is_error,
             )
+        case Succeeded() if not decoded.text:
+            return TurnProblem(ChatTurnProblem.UNAVAILABLE, "no answer text")
         case Succeeded():
             return TurnAnswer(decoded.text)
         case Failed():

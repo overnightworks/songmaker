@@ -28,6 +28,7 @@ from agent_runtime_client.wire import (
     Heartbeat,
     RejectionCode,
     RouteKind,
+    RunFile,
     RunRejection,
     RunStarted,
     Succeeded,
@@ -104,8 +105,8 @@ class RunScript:
             **self._common(), tool_use_id=tool_use_id, content=content, is_error=is_error,
         ))
 
-    def succeeded(self, text: str) -> bytes:
-        return encode_event(Succeeded(**self._common(), text=text))
+    def succeeded(self, text: str, files: tuple[RunFile, ...] = ()) -> bytes:
+        return encode_event(Succeeded(**self._common(), text=text, files=files))
 
     def failed(self, code: FailureCode, message: str = "The run failed.") -> bytes:
         return encode_event(Failed(**self._common(), code=code, message=message))
