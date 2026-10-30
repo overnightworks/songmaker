@@ -251,14 +251,7 @@ export function songsPage(
 	return { items: [], total: 0, offset: 0, limit: 200, has_more: false, ...overrides };
 }
 
-export function railPathsMock() {
-	// Like the real `resolve`, a route ID loses its route groups and keeps a leading slash.
-	return {
-		resolve: vi.fn((routeId: string) =>
-			routeId.replace(/\/\([^/)]+\)/g, '').replace(/^(?!\/)/, '/')
-		)
-	};
-}
+export { fakeAppPaths as railPathsMock } from '#lib/test-utils/app-paths.ts';
 
 export function railLibraryApiMock() {
 	return {

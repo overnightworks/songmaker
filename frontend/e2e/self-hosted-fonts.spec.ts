@@ -45,12 +45,22 @@ async function loadedFaces(page: Page): Promise<string[]> {
 	);
 }
 
+// The font files the installed worker filled its cache with: the worker is
+// ready once it has installed, which is when it precaches the build.
 async function precachedFontPaths(page: Page): Promise<string[]> {
-	const response = await page.request.get('/service-worker.js');
-	expect(response.ok()).toBe(true);
-	return [...(await response.text()).matchAll(/\/_app\/immutable\/[^"'`,\s]+\.woff2?/g)].map(
-		([path]) => path
-	);
+	await page.goto('/login');
+	return page.evaluate(async () => {
+		await navigator.serviceWorker.ready;
+		const paths: string[] = [];
+		for (const name of await caches.keys()) {
+			const cache = await caches.open(name);
+			for (const request of await cache.keys()) {
+				const { pathname } = new URL(request.url);
+				if (/\.woff2?$/.test(pathname)) paths.push(pathname);
+			}
+		}
+		return paths;
+	});
 }
 
 async function expectSelfHostedFonts(page: Page): Promise<void> {
@@ -113,7 +123,10 @@ test(
 	}
 );
 
-test('precached fonts are served as woff2', { tag: ONLY_IN_SHELL.desktop }, async ({ page }) => {
+test('precached fonts are served as woff2', { tag: ONLY_IN_SHELL.desktop }, async ({ browser }) => {
+	// The config blocks the worker; this test is about what it cached, and no stub is set.
+	const context = await browser.newContext({ storageState: ANONYMOUS, serviceWorkers: 'allow' });
+	const page = await context.newPage();
 	const fontPaths = await precachedFontPaths(page);
 
 	expect(fontPaths.length).toBeGreaterThan(0);
@@ -121,4 +134,5 @@ test('precached fonts are served as woff2', { tag: ONLY_IN_SHELL.desktop }, asyn
 	const font = await page.request.get(fontPaths[0]);
 	expect(font.ok()).toBe(true);
 	expect(font.headers()['content-type']).toBe('font/woff2');
+	await context.close();
 });

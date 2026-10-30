@@ -156,7 +156,6 @@ vi.mock('#lib/api/songs.ts', () => ({
 import Layout from './+layout.svelte';
 import layoutSource from './+layout.svelte?raw';
 import { goto } from '$app/navigation';
-import { resolve } from '$app/paths';
 
 // `?raw` yields an empty string for a stylesheet under this vitest config
 // (CSS processing is off), so app.css is read from disk instead.
@@ -1020,7 +1019,7 @@ describe('a reload over the phone Now Playing', () => {
 				return USER;
 			});
 			mountLayout(address);
-			await goto(resolve(address === HOME_ROUTE_PATH ? '/(library)' : '/(library)/library'));
+			await vi.mocked(goto)(address);
 			await openAddress();
 
 			await vi.waitFor(() =>

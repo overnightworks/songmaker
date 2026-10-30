@@ -1,6 +1,8 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { navigating } from '$app/state';
+	import { historyComesToRest, standingPageEntryId } from '#lib/history/historyController.ts';
 	import Icon from '#lib/components/Icon.svelte';
 	import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '#lib/constants.ts';
 	import { visibleSettingsSections } from '#lib/settingsSections.ts';
@@ -20,10 +22,27 @@
 
 	const railListsSections = $derived(compact === false);
 
+	// The redirect starts once this page's own navigation has landed and the
+	// root layout has stamped it. The root layout holds this page back until the
+	// session is known, so the page usually mounts after the router's start has
+	// landed and `afterNavigate` never reports it: that start is landed when
+	// nothing navigates and its entry has its id. A navigation still under way
+	// reports through `afterNavigate`, in the run where the layout stamps it.
+	let landed = $state(navigating.to === null && standingPageEntryId() !== null);
+	afterNavigate(() => {
+		landed = true;
+	});
+
 	$effect(() => {
-		if (!railListsSections) return;
+		if (!railListsSections || !landed) return;
 		const [firstVisible] = sections;
-		goto(firstVisible.href, { replaceState: true });
+		let left = false;
+		void historyComesToRest().then(() => {
+			if (!left) goto(firstVisible.href, { replace: true });
+		});
+		return () => {
+			left = true;
+		};
 	});
 </script>
 
