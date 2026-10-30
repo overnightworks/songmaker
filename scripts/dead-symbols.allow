@@ -151,7 +151,7 @@ songmaker_cli/song_api.py:api_cleanup_song # HTTP dispatcher: router.post('/song
 songmaker_cli/song_api.py:api_create_song # HTTP dispatcher: router.post('/songs', responses={404: {'description': 'Album or reference audio not found'}})
 songmaker_cli/song_api.py:api_delete_song # HTTP dispatcher: router.delete('/songs/{song_id}', responses={404: {'description': SONG_NOT_FOUND_DETAIL}})
 songmaker_cli/song_api.py:api_delete_song_cover # HTTP dispatcher: router.delete('/songs/{song_id}/cover')
-songmaker_cli/song_api.py:api_delete_version # HTTP dispatcher: router.delete('/versions/{version_id}', responses={404: {'description': 'Version not found'}})
+songmaker_cli/song_api.py:api_delete_version # HTTP dispatcher: router.delete('/versions/{version_id}', responses={404: {'description': 'Version not found'}, 409: {'description': 'A queued or running job renders this version'}})
 songmaker_cli/song_api.py:api_get_song # HTTP dispatcher: router.get('/songs/{song_id}')
 songmaker_cli/song_api.py:api_get_song_cover # HTTP dispatcher: router.get('/songs/{song_id}/cover', responses={404: {'description': 'Song or cover not found'}})
 songmaker_cli/song_api.py:api_list_songs # HTTP dispatcher: router.get('/songs')

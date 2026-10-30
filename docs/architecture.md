@@ -1366,7 +1366,7 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?)
+  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?, version? → Version, ON DELETE SET NULL — the version a take job renders; a queued or running job blocks its deletion)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
@@ -1543,6 +1543,7 @@ close the stream.
 | DELETE | `/api/albums/{id}` | user | Delete album (cascade: songs, generations, files) |
 | GET/PUT | `/api/songs/{id}` | user | Get/update song |
 | PUT | `/api/songs/{id}/album` | user | Move song to different album |
+| DELETE | `/api/versions/{id}?delete_generations=false` | user | Delete one version of a song: a missing version, or one the caller cannot open, answers 404; the owner, or an admin (every song they can open), may delete. `delete_generations=true` also deletes its takes. While a queued or running take job references the version, answers 409 "This version has a take rendering; wait for it to finish or cancel it." and changes nothing. |
 | POST | `/api/songs` | user | Create song in album |
 | POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue). Like repaint and cover, missing music/online ACE-Step workers return 503 {detail, error_type, job_id}: "Generating isn't available right now.", generation_unavailable, and the stored FAILED job ID. |
 | POST | `/api/songs/{id}/listen` | user | Record that a playable song was started; this moves the caller's own Listen without changing any edit time, and leaves the song itself alone. Every accepted listen stamps the caller's own `UserSongWork.played_at`, and one without a `playlist_id` also its `album_played_at`. An optional body `{ "playlist_id": … }` names the caller's playlist it was played from, which then also records `last_played_at` and `last_played_song_id` on that playlist without changing its edit time. Checks run in order: song ownership 404, unplayable song 422, playlist unknown or not the caller's (admins included) 404, playlist without a take of the song 422. A rejected request records nothing. |

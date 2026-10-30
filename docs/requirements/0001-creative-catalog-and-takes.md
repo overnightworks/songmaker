@@ -34,13 +34,17 @@ Quelle: OPERATOR — Issue #20, “Verhalten”, locked-in independent Pick and 
 ### REQ-CURATION-06: Running take cleanup for a song or album preserves every Pick and Keep.
 Quelle: DESK — CLAUDE.md, “Product Context”, paragraph 3; corroborated by current song and album cleanup behavior.
 
+### REQ-CURATION-07: Automatic retention never deletes an audio take that is a Pick or a Keep, even when it was archived before it was marked.
+Quelle: OPERATOR — Issue #2066, chat ruling dated 2026-10-30.
+
+### REQ-CURATION-08: Stage 1 of automatic retention re-checks Pick and Keep when it writes, so a Keep that commits between selection and write wins.
+Quelle: OPERATOR — Issue #2066, chat ruling dated 2026-10-30.
+
 ## Non-goals
 
 - This revision does not decide exactly when an edit creates a new version.
 - Imported audio may lack a version link, and deleting a version may detach its
   retained generations; this revision does not promise permanent provenance.
-- This revision does not govern automatic retention of an already archived Pick
-  or Keep.
 - Library pool, shuffle, player, and user-interface behavior belong to the
   Library/Listening requirement document.
 - This document does not prescribe database, API, storage, or generation-engine

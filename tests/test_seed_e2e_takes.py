@@ -56,6 +56,7 @@ def test_seeded_takes_record_the_owner_as_their_maker(
 def seeded_job(tmp_path):
     from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
+    from songmaker_cli.db.queries.songs import get_song
 
     factory = init_test_db(tmp_path / "completion.db")
     with factory() as session:
@@ -64,7 +65,10 @@ def seeded_job(tmp_path):
         session.commit()
         audio_dir = tmp_path / "audio"
         song_id = _seed_song_at_version(session, audio_dir)
-        job = create_job(session, JobType.GENERATE, user_id=_OWNER_ID, song_id=song_id)
+        job = create_job(
+            session, JobType.GENERATE, user_id=_OWNER_ID, song_id=song_id,
+            version_id=get_song(session, song_id).latest_version.id,
+        )
         update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING, take_count=2))
         session.commit()
         yield session, audio_dir, job
@@ -81,11 +85,12 @@ def test_completion_preserves_takes_and_adds_the_declared_batch_without_events(
     session, audio_dir, job = seeded_job
     existing_ids = {g.id for g in session.query(Generation)}
     events_before = session.query(ResourceEvent).count()
-    # Completion belongs to the latest version, even if it changed after dispatch.
+    # Completion belongs to the job's version, even if a newer one was saved after dispatch.
+    version_id = job.version_id
     update_song(session, job.song_id, force_new_version=True)
     job.take_count = take_count
     session.commit()
-    version_id = get_song(session, job.song_id).latest_version.id
+    assert get_song(session, job.song_id).latest_version.id != version_id
 
     audio = (SCRIPTS.parent / "frontend/e2e/fixtures/take.mp3").read_bytes()
     seed_e2e_job_states.complete_generation_job(session, audio_dir, audio, job_id=job.id)
@@ -288,3 +293,15 @@ def test_1928_c10_take_seed_base_numbers_the_takes_and_without_it_they_have_no_s
 
         seeds = [g.seed for g in session.query(Generation).filter_by(song_id=song_id)]
         assert sorted(seeds, key=lambda seed: -1 if seed is None else seed) == expected_seeds
+
+
+def test_completion_of_a_job_without_a_version_writes_no_takes(seeded_job):
+    session, audio_dir, job = seeded_job
+    job.version_id = None
+    session.commit()
+    ids_before = {g.id for g in session.query(Generation)}
+
+    with pytest.raises(SystemExit):
+        seed_e2e_job_states.complete_generation_job(session, audio_dir, b"mp3", job_id=job.id)
+
+    assert {g.id for g in session.query(Generation)} == ids_before

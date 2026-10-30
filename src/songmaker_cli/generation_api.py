@@ -334,7 +334,8 @@ async def api_generate_song(
     _check_version_lora_ready(session, version, user)
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song_id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song_id, version_id=version.id,
+        redis=ctx.redis,
     )
     record_audit(
         session, user.id, AuditAction.GENERATE, ResourceType.SONG,
@@ -437,7 +438,7 @@ async def api_repaint_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
     )
     record_audit(
         session, user.id, AuditAction.REPAINT, ResourceType.GENERATION, gen_id,
@@ -506,7 +507,7 @@ async def api_cover_generation(
     prompt = req.prompt if req.prompt is not None else version.prompt
 
     job = create_job_with_rate_limit(
-        session, user, JobType.GENERATE, song_id=song.id, redis=ctx.redis,
+        session, user, JobType.GENERATE, song_id=song.id, version_id=version.id, redis=ctx.redis,
     )
     record_audit(
         session, user.id, AuditAction.COVER, ResourceType.GENERATION, gen_id,

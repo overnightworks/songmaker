@@ -38,11 +38,23 @@ def create_job(
     user_id: str | None = None,
     song_id: str | None = None,
     album_id: str | None = None,
+    version_id: str | None = None,
 ) -> Job:
-    job = Job(type=job_type, user_id=user_id, song_id=song_id, album_id=album_id)
+    job = Job(
+        type=job_type, user_id=user_id, song_id=song_id, album_id=album_id,
+        version_id=version_id,
+    )
     session.add(job)
     session.flush()
     return job
+
+
+def has_active_job_for_version(session: Session, version_id: str) -> bool:
+    return session.query(
+        session.query(Job)
+        .filter(Job.version_id == version_id, Job.status.in_(JOB_ACTIVE_STATUSES))
+        .exists()
+    ).scalar()
 
 
 def count_user_jobs_in_window(
