@@ -640,7 +640,7 @@ def test_run_server_serves_mcp_outside_the_middleware_with_the_ci_fixture_key(
 ):
     """An unauthenticated /mcp call meets the endpoint's own head checks: 401 with an empty
     body, where the Host check of the middleware would answer 400."""
-    fixture_key = Path(__file__).parent / "fixtures" / "agent_service_capability_public_key.pem"
+    fixture_key = Path(__file__).parents[2] / "fixtures" / "agent_service_capability_public_key.pem"
     monkeypatch.setenv("AGENT_SERVICE_MCP_ORIGIN", ORIGIN)
     monkeypatch.setenv("AGENT_SERVICE_CAPABILITY_KEY_FILE", str(fixture_key))
     client, _ = make_test_app(tmp_path)

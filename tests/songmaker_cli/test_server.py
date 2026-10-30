@@ -1897,7 +1897,7 @@ def test_real_access_record_is_readable_by_rate_window_parser(
 
     import structlog
 
-    parser_path = Path(__file__).resolve().parents[1] / "scripts" / "e2e_rate_window.py"
+    parser_path = Path(__file__).resolve().parents[2] / "scripts" / "e2e_rate_window.py"
     spec = importlib.util.spec_from_file_location("e2e_rate_window", parser_path)
     assert spec is not None
     assert spec.loader is not None

@@ -100,13 +100,13 @@ songmaker_cli/playlist_api.py:api_update_playlist # HTTP dispatcher: router.put(
 songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: router.put('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
 songmaker_cli/reimport_api.py:api_reimport # HTTP dispatcher: router.post('/songs/{song_id}/reimport', responses={413: {'description': 'Uploaded audio file is too large'}, 422: {'description': 'Reimport upload is invalid'}})
 songmaker_cli/resource_event_api.py:api_stream_resource_events # HTTP dispatcher: router.get(_ROUTE_PATH, responses={400: {'description': 'Last event ID is invalid'}, 429: {'description': 'Too many open resource event streams'}, 503: {'description': 'Resource event stream capacity is unavailable'}})
-songmaker_cli/scoring/audiobox_aesthetics.py:clear_cache # GPU cache cleanup seam used by tests/test_scorers_extended.py
+songmaker_cli/scoring/audiobox_aesthetics.py:clear_cache # GPU cache cleanup seam used by tests/songmaker_cli/test_scoring_scorers_extended.py
 songmaker_cli/scoring/audiobox_aesthetics.py:score_audiobox # Scorer registry: register('audiobox')
 songmaker_cli/scoring/bpm_accuracy.py:score_bpm # Scorer registry: register('bpm_accuracy')
 songmaker_cli/scoring/emotional_dynamics.py:score_emotional_dynamics # Scorer registry: register('emotional_dynamics')
 songmaker_cli/scoring/silence_detection.py:score_silence # Scorer registry: register('silence')
 songmaker_cli/scoring/spectral_quality.py:score_spectral_quality # Scorer registry: register('spectral_quality')
-songmaker_cli/scoring/text_accuracy.py:clear_cache # Whisper cache cleanup seam used by tests/test_scorers_extended.py
+songmaker_cli/scoring/text_accuracy.py:clear_cache # Whisper cache cleanup seam used by tests/songmaker_cli/test_scoring_scorers_extended.py
 songmaker_cli/scoring/text_accuracy.py:score_text_accuracy # Scorer registry: register('text_accuracy')
 songmaker_cli/scoring_worker.py:ScoringWorkerSettings # arq CLI entry point selected by docker-compose.yml scoring-worker command
 songmaker_cli/settings_api.py:api_capabilities # HTTP dispatcher: router.get('/capabilities')

@@ -53,7 +53,7 @@ def test_cli_catalog_uses_the_explicit_cli_aliases(monkeypatch):
 
 
 def test_codex_cli_catalog_lists_visible_models_from_the_cli_catalog(monkeypatch):
-    fixture = Path(__file__).parent / "fixtures" / "codex-debug-models.json"
+    fixture = Path(__file__).parents[1] / "fixtures" / "codex-debug-models.json"
     monkeypatch.setattr(
         "agent_providers.catalog.codex_cli_model_catalog",
         fixture.read_text,
