@@ -103,7 +103,7 @@ describe('writes the router has not landed yet', () => {
 		startFakeRouter();
 		stampNavigatedEntry('enter');
 		await laterTask();
-		expect(history.state).not.toEqual(written);
+		expect(standingHistoryEntry()).not.toEqual(written);
 		await releaseWrites();
 		await historyComesToRest();
 
