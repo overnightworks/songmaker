@@ -213,7 +213,8 @@ async function routerStanding(page: Page): Promise<RouterStanding> {
 
 export async function standsOnLayerEntry(page: Page): Promise<boolean> {
 	const state = await page.evaluate(() => history.state as unknown);
-	return routerHistoryEntryOf(state)?.pageState?.layer !== undefined;
+	const entry = routerHistoryEntryOf(state)?.pageState?.entry as { layer?: string } | undefined;
+	return entry?.layer !== undefined;
 }
 
 /**
@@ -258,10 +259,9 @@ export async function loseNetwork(
 }
 
 /**
- * Waits until the service worker has installed and controls the page, so that
- * what it precached (the route code of every address) answers once the
- * network is cut. A cut inside the install window, the first seconds after a
- * first-ever load, is owned by #1160.
+ * Waits until the service worker has installed and controls the page, so that what it precached
+ * (the route code of every address) answers once the network is cut. A cut inside the install
+ * window, the first seconds after a first-ever load, is owned by #1160.
  */
 export async function waitForServiceWorkerControl(page: Page): Promise<void> {
 	await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));

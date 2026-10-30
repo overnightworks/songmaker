@@ -816,7 +816,7 @@ const NOW_PLAYING_LEAVES: {
 		// an entry no layer marks, and Back is meant from then on.
 		name: 'a reload',
 		leave: async (page) => {
-			expect(await standsOnLayerEntry(page)).toBe(true);
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(true);
 			await page.reload();
 			await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
 		}
