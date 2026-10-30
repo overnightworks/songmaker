@@ -709,12 +709,13 @@ def _shared_playlist_album_covers(ctx: AppContext, entries, slug: str) -> list:
     covered_album_ids = set()
     for entry in entries:
         album = _entry_album(entry)
-        if not _is_uncovered_album(ctx, album, covered_album_ids):
+        if album is None or album.id in covered_album_ids:
+            continue
+        cover = _shared_entry_album_cover(ctx, entry, slug)
+        if cover is None:
             continue
         covered_album_ids.add(album.id)
-        album_covers.append(shared_playlist_album_cover_urls(
-            slug, album.id, album.cover_key,
-        ))
+        album_covers.append(cover)
         if len(album_covers) == 4:
             break
     return album_covers
@@ -723,14 +724,6 @@ def _shared_playlist_album_covers(ctx: AppContext, entries, slug: str) -> list:
 def _entry_album(entry):
     generation = entry.generation
     return generation.song.album if generation is not None and generation.song else None
-
-
-def _is_uncovered_album(ctx: AppContext, album, covered_album_ids: set) -> bool:
-    return (
-        album is not None
-        and album.id not in covered_album_ids
-        and album_cover_file_exists(ctx.audio_dir, album.id, album.cover_key)
-    )
 
 
 @router.get(
