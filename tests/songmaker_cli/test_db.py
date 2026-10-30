@@ -3217,8 +3217,7 @@ def test_unarchive_generation_clears_timestamp(seeded_session: Session) -> None:
 
 
 def test_archive_generation_not_found(seeded_session: Session) -> None:
-    with pytest.raises(ValueError, match="Generation not found"):
-        archive_generation(seeded_session, "missing")
+    assert archive_generation(seeded_session, "missing") is None
 
 
 def test_unarchive_generation_not_found(seeded_session: Session) -> None:

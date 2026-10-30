@@ -75,7 +75,7 @@
 "tests/test_auto_deploy_alerting.py" = 1389
 "tests/songmaker_cli/test_conversation_api.py" = 853
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
-"tests/songmaker_cli/test_db.py" = 3624
+"tests/songmaker_cli/test_db.py" = 3623
 "tests/test_jobs.py" = 3215
 "tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_library_api.py" = 1627

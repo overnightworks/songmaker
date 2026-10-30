@@ -283,22 +283,29 @@ def unkeep_generation(session: Session, generation_id: str) -> None:
     session.flush()
 
 
+def _expired_for_archive_filters() -> tuple[ColumnElement[bool], ...]:
+    """What makes a take archivable by retention: neither picked, kept nor archived."""
+    return (
+        Generation.is_picked.is_(False),
+        Generation.is_kept.is_(False),
+        Generation.is_archived.is_(False),
+    )
+
+
 def archive_generation(session: Session, generation_id: str) -> Generation | None:
-    """Archive the take, or return None when it is a Pick, a Keep or already archived.
+    """Archive the take, or return None when no such take is archivable any more.
 
     The row lock is limited to the take (`of=Generation`) because the eager join to
     its reference recording is an outer join, which PostgreSQL cannot lock.
     """
     gen = (
         session.query(Generation)
-        .filter_by(id=generation_id)
+        .filter(Generation.id == generation_id, *_expired_for_archive_filters())
         .with_for_update(of=Generation)
         .populate_existing()
         .first()
     )
     if gen is None:
-        raise ValueError(f"Generation not found: {generation_id}")
-    if gen.is_picked or gen.is_kept or gen.is_archived:
         return None
     gen.is_archived = True
     gen.archived_at = datetime.now(timezone.utc)
@@ -319,12 +326,7 @@ def list_generations_expired_for_archive(
 ) -> list[Generation]:
     return (
         session.query(Generation)
-        .filter(
-            Generation.is_picked.is_(False),
-            Generation.is_kept.is_(False),
-            Generation.is_archived.is_(False),
-            Generation.created_at < cutoff,
-        )
+        .filter(*_expired_for_archive_filters(), Generation.created_at < cutoff)
         .all()
     )
 
@@ -350,6 +352,13 @@ def list_generations_expired_for_delete(
     return session.query(Generation).filter(*_expired_for_delete_filters(cutoff)).all()
 
 
+def _delete_locked_generation(session: Session, gen: Generation) -> list[str]:
+    paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
+    session.delete(gen)
+    session.flush()
+    return paths
+
+
 def delete_expired_generation(
     session: Session, generation_id: str, cutoff: datetime,
 ) -> list[str] | None:
@@ -367,10 +376,7 @@ def delete_expired_generation(
     )
     if gen is None:
         return None
-    paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
-    session.delete(gen)
-    session.flush()
-    return paths
+    return _delete_locked_generation(session, gen)
 
 
 def get_generations(session: Session, generation_ids: list[str]) -> list[Generation]:
@@ -412,11 +418,7 @@ def delete_generation(session: Session, generation_id: str) -> list[str]:
     if not gen:
         raise ValueError(f"Generation not found: {generation_id}")
 
-    paths = [p for p in [gen.mp3_path, gen.wav_path] if p]
-    session.delete(gen)
-    session.flush()
-
-    return paths
+    return _delete_locked_generation(session, gen)
 
 
 def get_generation_by_slug(session: Session, slug: str) -> Generation | None:

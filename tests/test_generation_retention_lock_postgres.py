@@ -150,3 +150,16 @@ def test_the_final_deletion_waits_for_a_manual_delete_of_the_take_and_leaves_it_
     assert answers["second"].status_code == 200
     assert answers["second"].json()["deleted_ids"] == []
     assert world.state("x") is None
+
+
+def test_stage_one_waits_for_a_manual_delete_of_the_take_and_leaves_it_out_of_its_report(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path, {"x": {"archived": False, "old": True}})
+    answers = race(
+        pg_factory, world.delete("x"), world.retention(), _holding_a_generation_write(),
+    )
+    assert answers["first"].status_code == 200
+    assert answers["second"].status_code == 200
+    assert answers["second"].json()["archived_ids"] == []
+    assert world.state("x") is None
