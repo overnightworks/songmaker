@@ -1,7 +1,0 @@
-claim_id = "31791d18aacd4bff9de63d5409f5af89"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "89b8540b084be65a69f431b3e19dc396403998ae"
-branch = "claude/issue-2068-architecture-worker-section-true-today"
-scope = ["docs/architecture.md"]
-opened_commit = "84eb88df3c1775a4fa5945b20dad0b79c893ed08"
