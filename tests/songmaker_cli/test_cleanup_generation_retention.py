@@ -243,15 +243,22 @@ def test_an_archived_unmarked_take_past_the_window_is_deleted_with_its_scores_ra
 def test_a_dry_run_names_only_the_takes_a_real_run_would_delete(
     retention_factory, tmp_path: Path,
 ) -> None:
+    audio_dir = tmp_path / "audio"
+    files = [
+        path
+        for gen_id in ("g1", "g2", "g3", "g4")
+        for path in _seed_audio_files(retention_factory, audio_dir, gen_id)
+    ]
     _mark_after_archiving(retention_factory, "g1", keep_generation)
     _mark_after_archiving(retention_factory, "g2", pick_generation)
     _age(retention_factory, "g3", created_days_ago=90, archived_days_ago=60)
 
-    report = run_generation_retention(retention_factory, tmp_path / "audio", dry_run=True)
+    report = run_generation_retention(retention_factory, audio_dir, dry_run=True)
 
     assert report.deleted_ids == ["g3"]
     with retention_factory() as session:
         assert {gen.id for gen in session.query(Generation)} == {"g1", "g2", "g3", "g4"}
+    assert all(path.exists() for path in files)
 
 
 def test_an_archived_keep_that_is_also_an_anchor_is_not_deleted(
