@@ -21,7 +21,7 @@ from songmaker_cli.covers import remove_album_cover_files, remove_song_cover_fil
 from songmaker_cli.db.queries.albums import delete_album, list_expired_albums
 from songmaker_cli.db.queries.generations import (
     archive_generation,
-    delete_generation,
+    delete_expired_generation,
     list_generations_expired_for_archive,
     list_generations_expired_for_delete,
 )
@@ -116,6 +116,8 @@ def run_generation_retention(
     than `final_deletion_days` ago, unless referenced as a
     reproducibility anchor by another generation.
 
+    Both stages re-check at their write, so a take that became a Pick or a
+    Keep after selection is left alone. The report names the takes written.
     `dry_run=True` returns the IDs that would be affected without
     performing any writes.
     """
@@ -124,27 +126,37 @@ def run_generation_retention(
     archive_cutoff = now - timedelta(days=settings.generation_retention_days)
     delete_cutoff = now - timedelta(days=settings.final_deletion_days)
     report = GenerationRetentionReport()
-    paths: list[str] = []
 
     with db_factory() as session:
-        to_archive = list_generations_expired_for_archive(session, archive_cutoff)
-        report.archived_ids = [g.id for g in to_archive]
+        to_archive = sorted(
+            g.id for g in list_generations_expired_for_archive(session, archive_cutoff)
+        )
+        to_delete = sorted(
+            g.id for g in list_generations_expired_for_delete(session, delete_cutoff)
+        )
+    if dry_run:
+        report.archived_ids, report.deleted_ids = to_archive, to_delete
+        return report
 
-        to_delete = list_generations_expired_for_delete(session, delete_cutoff)
-        report.deleted_ids = [g.id for g in to_delete]
+    # One transaction per take: each locks only its own row, so a Pick or Keep
+    # that commits first wins and no transaction waits for a second take while
+    # holding the first.
+    for gen_id in to_archive:
+        with db_factory() as session:
+            if archive_generation(session, gen_id) is None:
+                continue
+            session.commit()
+        report.archived_ids.append(gen_id)
 
-        if dry_run:
-            return report
+    for gen_id in to_delete:
+        with db_factory() as session:
+            paths = delete_expired_generation(session, gen_id, delete_cutoff)
+            if paths is None:
+                continue
+            session.commit()
+        cleanup_generation_files(audio_dir, paths)
+        report.deleted_ids.append(gen_id)
 
-        for gen in to_archive:
-            archive_generation(session, gen.id)
-
-        for gen_id in report.deleted_ids:
-            paths.extend(delete_generation(session, gen_id))
-
-        session.commit()
-
-    cleanup_generation_files(audio_dir, paths)
     if report.archived_count or report.deleted_count:
         log.info(
             "generation_retention: archived=%d hard_deleted=%d",
