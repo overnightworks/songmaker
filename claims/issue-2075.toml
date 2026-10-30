@@ -1,0 +1,8 @@
+claim_id = "91a9a26148e1466e969aa800a278fac1"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "809e37568f065d98757a1f31634c838dd54d8558"
+branch = "claude/issue-2075-sign-in-pages-from-appkit-signinpage"
+scope = ["docs/design/README.md", "docs/design/sign-in.html", "docs/security.md", "frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/home-library-addresses.spec.ts", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/lib/components/SignInCard.svelte", "frontend/src/lib/constants/auth.ts", "frontend/src/routes/auth/callback", "frontend/src/routes/login", "frontend/src/routes/no-access"]
+opened_commit = "ea83e59bc6dee32ffb65893c38c33bd5b9e155aa"
+whole_reason = "One release swap: the pin, the three routes that render the kit page, the deleted card and strings, and the tests and docs that name them must move together or the sign-in pages break."
