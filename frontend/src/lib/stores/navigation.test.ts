@@ -1,4 +1,5 @@
 import { modifiedClicks } from '#lib/test-utils/modified-clicks.ts';
+import { routerHistoryEntry } from '#lib/test-utils/router-history-layout.ts';
 import {
 	historyEntry,
 	mountAddressRoute,
@@ -1951,11 +1952,7 @@ describe('initNavigation', () => {
 
 		window.dispatchEvent(
 			new PopStateEvent('popstate', {
-				state: {
-					'sveltekit:history': 7,
-					'sveltekit:navigation': 3,
-					'sveltekit:states': { library: album }
-				}
+				state: routerHistoryEntry({ library: album }, { historyIndex: 7, navigationIndex: 3 })
 			})
 		);
 

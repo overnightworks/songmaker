@@ -1,6 +1,7 @@
 import type { AfterNavigate, BeforeNavigate, NavigationTarget } from '@sveltejs/kit';
 import { flushSync, onMount } from 'svelte';
 import { vi } from 'vitest';
+import { routerHistoryEntry, routerHistoryEntryOf } from '#lib/test-utils/router-history-layout.ts';
 import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 
 // A stand-in for SvelteKit's router, shared by every test that mocks it:
@@ -14,8 +15,8 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 // `afterNavigate` callback; a Back or Forward that navigates tells every
 // mounted `beforeNavigate` callback first, and a `goto` one of them starts
 // supersedes it before it loads anything; `pushState` and `replaceState` are
-// shallow routing, which keeps the page state under the entry's states key and
-// the address of the page it was written over beside it. Like SvelteKit, it keeps
+// shallow routing, which keeps the page state in the entry and the address of
+// the page it was written over beside it. Like SvelteKit, it keeps
 // its place in history in memory and reads it back from an entry only when it
 // starts or a Back or Forward lands, and a landing on the entry of another
 // navigation is a navigation of its own -- and so is a landing on an entry of
@@ -26,13 +27,8 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 // It also owns every raw write into the test browser's history, which tests
 // reach through library-history.ts. It imports no store: the stores import
 // `$app/navigation`, so a fake that imported them back would wait on itself.
-const ROUTER_HISTORY_INDEX = 'sveltekit:history';
-const ROUTER_NAVIGATION_INDEX = 'sveltekit:navigation';
-const ROUTER_PAGE_URL = 'sveltekit:pageurl';
-const ROUTER_STATES = 'sveltekit:states';
 
 type HistoryWriteMode = 'push' | 'replace';
-type RouterEntry = Record<string, unknown>;
 
 interface GotoOptions {
 	replaceState?: boolean;
@@ -72,15 +68,6 @@ let heldRouteLoad: Promise<void> | null = null;
 // with the address of the page it navigated to.
 export const reportedNavigations: { type: AfterNavigate['type']; pathname: string }[] = [];
 
-function routerEntry(entry: unknown): RouterEntry | null {
-	return typeof entry === 'object' && entry !== null ? (entry as RouterEntry) : null;
-}
-
-function routerIndex(entry: RouterEntry | null, key: string): number | undefined {
-	const index = entry?.[key];
-	return typeof index === 'number' ? index : undefined;
-}
-
 function navigationTarget(url: URL): NavigationTarget {
 	return { params: {}, route: { id: null }, url, scroll: null };
 }
@@ -103,16 +90,15 @@ function reportNavigation(type: 'enter' | 'goto' | 'popstate', from: URL | null)
 export function startFakeRouter(): void {
 	hasNavigated = false;
 	reportedNavigations.length = 0;
-	const loaded = routerEntry(history.state);
-	currentHistoryIndex = routerIndex(loaded, ROUTER_HISTORY_INDEX) ?? highestHistoryIndex + 1;
-	currentNavigationIndex = routerIndex(loaded, ROUTER_NAVIGATION_INDEX) ?? currentHistoryIndex;
+	const loaded = routerHistoryEntryOf(history.state);
+	currentHistoryIndex = loaded?.historyIndex ?? highestHistoryIndex + 1;
+	currentNavigationIndex = loaded?.navigationIndex ?? currentHistoryIndex;
 	highestHistoryIndex = Math.max(highestHistoryIndex, currentHistoryIndex);
 	writeHistoryEntry(
-		{
-			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
-			[ROUTER_NAVIGATION_INDEX]: currentNavigationIndex,
-			[ROUTER_STATES]: {}
-		},
+		routerHistoryEntry(
+			{},
+			{ historyIndex: currentHistoryIndex, navigationIndex: currentNavigationIndex }
+		),
 		location.href,
 		'replace'
 	);
@@ -156,11 +142,10 @@ async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<v
 	}
 	const state = options.state ?? {};
 	writeHistoryEntry(
-		{
-			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
-			[ROUTER_NAVIGATION_INDEX]: currentNavigationIndex,
-			[ROUTER_STATES]: state
-		},
+		routerHistoryEntry(state, {
+			historyIndex: currentHistoryIndex,
+			navigationIndex: currentNavigationIndex
+		}),
 		url,
 		options.replaceState ? 'replace' : 'push'
 	);
@@ -177,12 +162,11 @@ function writeShallowEntry(url: string | URL, state: App.PageState, mode: Histor
 		hasNavigated = true;
 	}
 	writeHistoryEntry(
-		{
-			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
-			[ROUTER_NAVIGATION_INDEX]: currentNavigationIndex,
-			[ROUTER_PAGE_URL]: fakePage.url.href,
-			[ROUTER_STATES]: state
-		},
+		routerHistoryEntry(state, {
+			historyIndex: currentHistoryIndex,
+			navigationIndex: currentNavigationIndex,
+			pageUrl: fakePage.url.href
+		}),
 		url,
 		mode
 	);
@@ -208,17 +192,16 @@ function followTraversal(event: PopStateEvent): void {
 }
 
 function moveWithTraversal(event: PopStateEvent): void {
-	const landing = routerEntry(event.state);
-	const historyIndex = routerIndex(landing, ROUTER_HISTORY_INDEX);
+	const landing = routerHistoryEntryOf(event.state);
+	const historyIndex = landing?.historyIndex;
 	if (landing === null || historyIndex === undefined) {
 		fakePage.url = new URL(location.href);
 		return;
 	}
 	const from = fakePage.url;
-	const pageUrl = landing[ROUTER_PAGE_URL];
-	const landedPage = new URL(typeof pageUrl === 'string' ? pageUrl : location.href);
-	const landedState = (landing[ROUTER_STATES] ?? {}) as App.PageState;
-	const navigationIndex = routerIndex(landing, ROUTER_NAVIGATION_INDEX);
+	const landedPage = new URL(landing.pageUrl ?? location.href);
+	const landedState = (landing.pageState ?? {}) as App.PageState;
+	const navigationIndex = landing.navigationIndex;
 	const onlyHashChanges = withoutHash(location) === withoutHash(from);
 	const shallow = navigationIndex === currentNavigationIndex && (hasNavigated || onlyHashChanges);
 	currentHistoryIndex = historyIndex;
