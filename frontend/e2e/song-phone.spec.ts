@@ -45,6 +45,7 @@ import {
 	openSettingsSectionFromSearch,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
+	standsOnLayerEntry,
 	workspace
 } from './helpers';
 import {
@@ -815,15 +816,9 @@ const NOW_PLAYING_LEAVES: {
 		// an entry no layer marks, and Back is meant from then on.
 		name: 'a reload',
 		leave: async (page) => {
-			await page.addInitScript(() => {
-				window.addEventListener('popstate', () => {
-					if (history.state?.layer === undefined) {
-						document.documentElement.setAttribute('data-e2e-stepped-back', '');
-					}
-				});
-			});
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(true);
 			await page.reload();
-			await expect(page.locator('html[data-e2e-stepped-back]')).toBeAttached();
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
 		}
 	},
 	{
