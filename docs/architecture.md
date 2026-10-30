@@ -908,9 +908,10 @@ cover), a playable-song count, and each song’s album name beneath its queue
 title. The bar follows the current song’s album cover. On desktop the sticky
 transport remains in view, so the same observer keeps the bar hidden (#1462).
 Every share page ends in `SharedFooter.svelte`: "Powered by" and
-`LegalLinks.svelte`, the one owner of the Impressum · Datenschutz ·
-Nutzungsbedingungen links the sign-in page uses too. They point to the
-central legal pages (`lib/constants/legal.ts`) with songmaker's section anchor;
+`LegalLinks.svelte`, which renders the Impressum · Datenschutz ·
+Nutzungsbedingungen links that `lib/constants/legal.ts` owns (the account menu
+uses it too; the sign-in pages hand the same list to appkit's `SignInPage`).
+They point to the central legal pages with songmaker's section anchor;
 songmaker holds no legal text of its own, and the share page opens them in a new
 tab so playback keeps running. Playback is owned by `lib/share/sharePlayback.svelte.ts`
 (`SharePlayback`), never `stores/player.ts` — a `share-import-boundary.test.ts`
@@ -1003,7 +1004,8 @@ through `cowriter/service_turn.py`:
 2. It turns the session's refresh token into a fresh user access token
    (`fresh_access_token` through `DatabaseSessionTransaction` in
    `auth_stores.py`) and takes songmaker's workload token from the same
-   relying party.
+   relying party, asking only for the agent service's audience scope
+   (`AGENT_SERVICE_AUDIENCE_SCOPE`).
 3. It posts the `RunRequest` of `agents/cowriter.md` (the thirteen tools of
    `cowriter_tool_declarations()`, the agent file's body as the system prompt,
    everything else in the messages; no model) to `AGENT_SERVICE_URL`.
@@ -1087,7 +1089,7 @@ until its own move.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.25.0`; `uv.lock`
+pinned in the `server` extra to a release wheel (`pyproject.toml` names the tag); `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is `webauth`. Its own tests live in its repository.
 

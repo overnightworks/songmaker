@@ -10,6 +10,7 @@ import os
 import re
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from fake_oidc_issuer import Person
@@ -505,6 +506,24 @@ def test_the_start_route_answers_a_redirect_to_the_realm(world: World) -> None:
     assert started.headers["location"].startswith(
         "https://issuer.test/realms/test/protocol/openid-connect/auth?",
     )
+
+
+@pytest.mark.parametrize(
+    ("configured", "asked_for"),
+    [("audience:other-service", "openid audience:other-service"), (None, "openid")],
+)
+def test_the_sign_in_asks_for_openid_and_the_configured_audience_scope(
+    tmp_path: Path, fresh_settings, configured: str | None, asked_for: str,
+) -> None:
+    environment = {"AGENT_SERVICE_AUDIENCE_SCOPE": configured} if configured else {}
+    with patch.dict("os.environ", environment):
+        if configured is None:
+            os.environ.pop("AGENT_SERVICE_AUDIENCE_SCOPE", None)
+        client, _ = make_test_app(tmp_path)
+        started = client.get("/login/oidc", follow_redirects=False)
+
+    query = parse_qs(urlsplit(started.headers["location"]).query)
+    assert query["scope"] == [asked_for]
 
 
 # -- M24: the issuer is down -----------------------------------------------------

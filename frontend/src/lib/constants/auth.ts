@@ -1,16 +1,5 @@
-import { APP_NAME } from '#lib/constants.ts';
-
 // Auth copy kept apart from lib/constants.ts (issue #117).
 
-// The sign-in pages (docs/design/sign-in.html, boards 2-4).
-export const SIGNED_OUT_HEADING = 'You are logged out.';
-export const SIGN_IN_ACTION_LABEL = 'Log in';
-export const NO_ACCESS_HEADING = 'No access';
-export const NO_ACCESS_MESSAGE = `You are signed in, but this account has no access to ${APP_NAME}.`;
-export const NO_ACCESS_BACK_LABEL = 'Back';
-export const SIGN_IN_FAILED_HEADING = 'Login failed';
-export const SIGN_IN_FAILED_MESSAGE = 'Sign-in did not work. Please try again.';
-export const SIGN_IN_RETRY_LABEL = 'Try again';
 // The route a sign-out posts to; the server answers the page that ends the identity provider's session.
 export const LOGOUT_ADDRESS = '/auth/logout';
 
