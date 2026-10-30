@@ -1699,7 +1699,7 @@ SIGKILLed and even the values the run did produce would be lost.
 
 **Shared infrastructure** (`worker_base.py`):
 - DB singleton with thread-safe initialization
-- Path helpers (`_audio_dir`, `_data_dir`)
+- Path helpers (`audio_dir()`, `data_dir()`)
 - Timeout constants, terminal status set
 - Common startup, shutdown, and restart recovery for every named worker job
   type. MusicWorker executes the model jobs `generate`, `lora_training`,
@@ -1883,22 +1883,6 @@ never been observed; with a newer observation, it is `alive`.
   the lifecycle reaper to terminalize it (heartbeat threshold plus one tick).
   A second process finds no
   unlocked candidate to clean up.
-
-**Backwards-compatible shim** (`worker.py`):
-- Imports tasks from music_worker and scoring_worker
-- Runs both on the legacy `arq:queue` queue
-- Logs a deprecation warning on startup
-
-### Adding a new modality
-
-1. Write task function (e.g. `generate_image()`)
-2. Add queue constant (`ARQ_IMAGE_QUEUE_NAME`)
-3. Add health check function (`is_image_worker_healthy()`)
-4. Add API routing (`pool.enqueue_job("generate_image", ..., _queue_name=...)`)
-5. Create worker module (`image_worker.py` with `ImageWorkerSettings`)
-6. Add Docker Compose service
-
-No existing code changes needed.
 
 ## VRAM Management
 
