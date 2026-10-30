@@ -26,9 +26,8 @@ import {
 // top of the page it covers, so Back closes the topmost overlay first.
 
 // What the controller stamps into an entry's page state. `layer` marks an entry
-// an open layer pushed over the page it covers; `below` is the address of the
-// page a pushed page entry stands over, so a page's own Back can name where it
-// goes (#1389).
+// an open layer pushed over its page; `below` is the address of the page a pushed
+// page entry stands over, so a page's own Back can name where it goes (#1389).
 export interface HistoryEntry {
 	readonly id: number;
 	readonly layer?: string;
@@ -418,7 +417,6 @@ function rendersErrorPageAt(url: string): boolean {
 // address on while the landed route loads. The address wins (issue #1006, H3):
 // the route of the address history stands on is mounted over it, under the
 // same entry, superseding the other route's load if it is still loading.
-//
 // The router keeps the page it shows -- its route and its params -- when it
 // navigates to the address that page already names, whatever route it mounts
 // there. A Back it routes shallowly moves that page's address on without
@@ -463,7 +461,6 @@ function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> 
 // A Back or Forward that navigates mounts the address it lands on before the
 // router loads anything of the page under it. Every other navigation's target
 // is an address history has yet to move to.
-//
 // A Back pressed while a navigation loads aborts it. A Back onto an entry of
 // the navigation the router was heading to -- the first of two quick Backs
 // from Settings lands on the album, the second on the wall shallow routing
@@ -475,7 +472,10 @@ function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> 
 // start: the next Back of the same task aborts it too, and nothing else is
 // left to mount the address it lands on (#1340). That mount also aborts the
 // router's Back navigation, so a landing that remounts mounts its address
-// twice -- harmless, both target the address history stands on (#1006).
+// twice -- harmless, both target the one history stands on (#1006). The router
+// takes that mount as its current navigation at once and reports none of it
+// while the Back counts as loading, so the catch's `navigationsStarted ===
+// startedAs` still holds.
 export function mountRouteOfLandedAddress(
 	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
 ): void {
@@ -626,8 +626,8 @@ export { ownStepBacksUnderway as ownStepBacksUnderwayForTests };
 
 // History moves while one of the controller's own step-backs is underway or a
 // navigation is loading the route it writes its entry for: an entry written
-// meanwhile would land under the step's landing, or be superseded along with
-// the navigation's own entry.
+// meanwhile would land under the step's landing or be superseded with the
+// navigation's own entry.
 export function historyMoves(): boolean {
 	return ownStepBacksUnderway() || navigationsUnderway > 0 || routerStarting;
 }
@@ -639,9 +639,8 @@ export function historyStandsStill(): Promise<void> {
 	return new Promise((resolve) => stillnessWaiters.push(resolve));
 }
 
-// Resolves once history has come to rest: a write released when history
-// stands still may navigate and move it again, so the wait starts over until
-// nothing is left to land.
+// Resolves once history has come to rest: a write released when it stands still
+// may move it again, so the wait starts over until nothing is left to land.
 export function historyComesToRest(): Promise<void> {
 	if (!historyMoves()) return writesLanded;
 	return historyStandsStill().then(historyComesToRest);
@@ -780,7 +779,9 @@ export function loadAfresh(url: string): Promise<void> {
 	});
 }
 
-// The address history stands on, loaded afresh; over a page entry a reload.
+// The address history stands on, loaded afresh; over a page entry a reload, which
+// keeps the entry's stamped id and loads the document whatever the `#` part,
+// where `assign` only scrolls on a hash address and pushes an id-less entry.
 export function reloadAfresh(): Promise<void> {
 	return leaveOnce(() => {
 		if (standsOnLayerEntry()) documentLoads.replace(documentAddress(location.href));
@@ -864,9 +865,8 @@ function followRouterStart(): void {
 	});
 }
 
-// The root layout installs the controller once for the whole app: from then
-// on every landing is heard and every layer opened owns an entry. The
-// returned function uninstalls it.
+// The root layout installs the controller once for the whole app: from then on
+// every landing is heard, every layer opened owns an entry. Returns uninstall.
 export function installHistoryController(): () => void {
 	if (uninstall !== null) throw new Error('The history controller is already installed');
 	window.addEventListener('popstate', onPopstate);

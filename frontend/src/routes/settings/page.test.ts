@@ -77,6 +77,8 @@ describe('settings index on the phone', () => {
 
 	it('lists every section an admin can open, each linking to its page, without redirecting', async () => {
 		const target = await render();
+		landOnPage();
+		await laterTask();
 
 		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Admin']);
 		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([

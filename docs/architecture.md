@@ -439,9 +439,9 @@ scroll, search cursor, another song of the open album (#275), another take of
 the open song (#281), another open playlist (#286), a history layer over the
 library — is shallow routing (`pushState`/`replaceState` from
 `$app/navigation`): it loads no route. The router writes the entry once it has
-resolved the route: at once on kit 2, a few microtasks later on kit 3, within
-the task, because routes resolve on the client and there is no reroute hook
-(a hook or server-side resolution would break that, and with it #1263). Until
+resolved the route, within the task, because routes resolve on the client and
+there is no reroute hook (a hook or server-side resolution would break that,
+and with it #1263). Until
 then the history controller answers where history stands from what it wrote,
 and it issues its next write, navigation or step back only after the write
 landed. `libraryRouteShape`
@@ -778,6 +778,11 @@ through a `lib/api` function. The named exceptions are
 function), and `service-worker.ts` for its cache. Tests may stub the network
 boundary. `eslint.config.js` enforces this, including `window.fetch`,
 `globalThis.fetch` and `self.fetch` (#925 G3).
+
+The service worker takes its install list from `$app/manifest` (`immutable` and
+`assets`, made root-absolute), its cache version from `$app/env` and `self` from
+`$app/service-worker`. `immutable` holds only the non-inlined files under
+`_app/immutable`.
 
 Only `lib/history/historyController.ts` writes or traverses history: no other
 module touches the global `history` or imports `pushState` or `replaceState` from

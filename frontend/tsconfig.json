@@ -4,8 +4,7 @@
 		"sourceMap": true,
 		"strict": true
 	},
-	// Restated from the generated config so the Playwright harness in e2e/ is
-	// type-checked by `pnpm check` as well.
+	// What `pnpm check` covers, the Playwright harness in e2e/ included.
 	"include": [
 		".svelte-kit/types/**/$types.d.ts",
 		"vite.config.ts",
