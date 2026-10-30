@@ -133,7 +133,9 @@ test('no access offers Log out and nothing else to press', async ({ page }) => {
 
 	await expect(page.getByRole('heading', { name: NO_ACCESS_HEADING })).toBeVisible();
 	await expect(page.getByRole('button', { name: LOG_OUT_LABEL })).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Back', exact: true })).toHaveCount(0);
+	const card = page.getByRole('main');
+	await expect(card.getByRole('link')).toHaveCount(0);
+	await expect(card.getByRole('button')).toHaveCount(1);
 	guard.assertClean();
 });
 

@@ -132,8 +132,8 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   K12 (#1620) baut gegen diese Abschnitte: Weiterleitung, Personenmenü; die
   presentator-spezifischen Tafeln gelten nicht. Die drei Seiten abgemeldet, kein
   Zugang und Anmeldung fehlgeschlagen zeigt seit appkit v0.8.0 deren
-  `SignInPage`; ihr Bild ist `docs/family.html`, Abschnitt 3, in
-  overnightworks/appkit (#2075), die Tafeln 2 bis 4 hier sind überholt. Standard-Zuordnung der
+  `SignInPage`; ihr Bild ist Abschnitt 3 von `docs/family.html` in
+  overnightworks/appkit, die Tafeln 2 bis 4 hier sind überholt. Standard-Zuordnung der
   Abweisungen: `ACCOUNT_DEACTIVATED` → „No access“; `FOREIGN_ISSUER` und
   `USERNAME_TAKEN` → „Login failed“. Das Verhalten gehört dem webauth-README,
   Abschnitt „Signed out and refused“.
