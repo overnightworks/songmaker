@@ -5,10 +5,12 @@
 		editBpm,
 		editGenParams,
 		editKeyScale,
+		editReference,
 		setDraftAudioDuration,
 		setDraftBpm,
 		setDraftGenParams,
-		setDraftKeyScale
+		setDraftKeyScale,
+		setDraftReference
 	} from '#lib/stores/editor.ts';
 	import {
 		activeModels,
@@ -32,6 +34,7 @@
 		audioDuration: $editAudioDuration,
 		keyScale: $editKeyScale,
 		genParams: $editGenParams,
+		reference: $editReference,
 		model: $recipeModel,
 		takes: $takesPerGenerate
 	});
@@ -48,6 +51,7 @@
 		if (next.audioDuration !== values.audioDuration) setDraftAudioDuration(next.audioDuration);
 		if (next.keyScale !== values.keyScale) setDraftKeyScale(next.keyScale);
 		if (next.genParams !== values.genParams) setDraftGenParams(next.genParams);
+		if (next.reference !== values.reference) setDraftReference(next.reference);
 		if (next.model !== values.model) recipeModel.set(next.model);
 		if (next.takes !== values.takes) takesPerGenerate.set(next.takes);
 	}

@@ -198,9 +198,13 @@ class Version(Base):
     audio_duration: Mapped[int] = mapped_column(Integer, default=AUTO_LENGTH_SECONDS)
     key_scale: Mapped[str] = mapped_column(String(10), default="")
     generation_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reference_recording_id: Mapped[str | None] = mapped_column(
+        ForeignKey("reference_recordings.id", ondelete="RESTRICT"), nullable=True, index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
 
     song: Mapped[Song] = relationship(back_populates="versions")
+    reference_recording: Mapped[ReferenceRecording | None] = relationship(lazy="joined")
     generations: Mapped[list[Generation]] = relationship(back_populates="version")
 
     @validates("generation_params")

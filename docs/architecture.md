@@ -118,7 +118,7 @@ User clicks "Generate"                    User clicks "Score"
 
   Repaint: POST /generations/{id}/repaint
   Cover:   POST /generations/{id}/cover
-  Upload:  POST /api/audio/upload (reference audio)
+  Upload:  POST /api/audio/upload (reference audio; answers the row's id, which a version save links as `reference_recording_id`)
   Art:     POST /api/albums/{id}/cover and POST /api/songs/{id}/cover (files on the audio volume)
 
   User clicks "Chat"
@@ -1349,14 +1349,14 @@ User (id = Keycloak subject, username, role: admin|user)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
   │     ├── AlbumCoverSuggestion (job, private PNG path, created_at)
   │     └── Song (title, slug — unique per album, track_number, share_slug?, is_shared)
-  │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
+  │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params, reference_recording_id? → ReferenceRecording, ON DELETE RESTRICT)
   │           ├── Generation (MP3, seed, status, whisper_text, whisper_cues?, model_mode, created_by?, share_slug?, is_shared)
   │           │     ├── Score (scorer, value JSON)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
   ├── UserSongWork (song, edited_at?, edit_kind?, played_at?, album_played_at? — this person's own latest edit and its kind, latest listen, and latest listen outside a playlist, on any song they can open, owner or not)
-  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?; one row per uploaded reference file, counted by the upload quota)
+  ├── ReferenceRecording (storage_path — unique, `{user}/refs/{uuid}.{ext}`; original_filename, size_bytes, duration_sec?; one row per uploaded reference file, counted by the upload quota; a version links it by key, so the database refuses to delete a linked row)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
   ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?)

@@ -37,6 +37,22 @@ def create_reference_recording(
     return recording
 
 
+def get_owned_reference_recording(
+    session: Session, user_id: str, reference_id: str, *, lock: bool = False,
+) -> ReferenceRecording | None:
+    """The owner's own row, or None for a missing or foreign id.
+
+    ``lock`` takes the row lock until the transaction ends, so a concurrent delete
+    waits for a link that is being saved and a link being saved waits for a delete.
+    """
+    query = select(ReferenceRecording).where(
+        ReferenceRecording.id == reference_id, ReferenceRecording.user_id == user_id,
+    )
+    if lock:
+        query = query.with_for_update()
+    return session.execute(query).scalar_one_or_none()
+
+
 def owner_reference_usage(session: Session, user_id: str) -> ReferenceUsage:
     files, size = session.execute(
         select(

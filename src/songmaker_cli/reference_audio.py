@@ -8,6 +8,7 @@ import os
 import stat
 import uuid
 from contextlib import ExitStack
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -20,6 +21,7 @@ from songmaker_cli.constants import REFERENCE_AUDIO_DIR, REFERENCE_AUDIO_EXTENSI
 from songmaker_cli.db.models import User
 from songmaker_cli.db.queries.reference_recordings import (
     create_reference_recording,
+    get_owned_reference_recording,
     owner_reference_usage,
 )
 from songmaker_cli.settings import Settings
@@ -56,10 +58,45 @@ def resolve_owned_reference_audio(
     return candidate
 
 
+@dataclass(frozen=True)
+class LinkedReference:
+    """The file a version's link names: its stored relative path and where it resolved."""
+
+    storage_path: str
+    absolute_path: str
+
+
+NO_REFERENCE: Final = LinkedReference(storage_path="", absolute_path="")
+
+
+def resolve_linked_reference_audio(
+    factory: sessionmaker[Session],
+    audio_dir: Path,
+    user_id: str,
+    reference_recording_id: str | None,
+) -> LinkedReference:
+    """The job user's own row behind a version's link; a missing or foreign row is rejected."""
+    if reference_recording_id is None:
+        return NO_REFERENCE
+    with factory() as session:
+        recording = get_owned_reference_recording(session, user_id, reference_recording_id)
+        if recording is None:
+            raise ReferenceAudioRejected(REFERENCE_AUDIO_NOT_OWNED_DETAIL)
+        storage_path = recording.storage_path
+    resolved = resolve_owned_reference_audio(audio_dir, user_id, storage_path)
+    return LinkedReference(storage_path=storage_path, absolute_path=str(resolved))
+
+
 REFERENCE_AUDIO_QUOTA_DETAIL: Final = "Reference audio storage limit reached."
 REFERENCE_AUDIO_STORAGE_DETAIL: Final = "Reference audio storage could not be checked."
 _REFERENCE_LOCK_NAMESPACE: Final = "songmaker.reference-audio:"
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class StoredReference:
+    id: str
+    storage_path: str
 
 
 class ReferenceAudioQuotaExceeded(ValueError):
@@ -71,8 +108,7 @@ class ReferenceAudioStorageError(OSError):
 
 
 def _lock_reference_owner(session: Session, user_id: str) -> None:
-    """Serializes one owner's reference work: upload admission, explicit version saves
-    (`resolve_owned_reference_audio_under_lock`) and later remnant reconciliation.
+    """Serializes one owner's reference work: upload admission and later remnant reconciliation.
 
     The lock lasts until the caller commits or rolls back.
     """
@@ -81,14 +117,6 @@ def _lock_reference_owner(session: Session, user_id: str) -> None:
     _begin_exclusive(session, lock_id)
     if session.get(User, user_id) is None:
         raise ReferenceAudioStorageError("missing owner")
-
-
-def resolve_owned_reference_audio_under_lock(
-    session: Session, audio_dir: Path, user_id: str, stored_relative: str,
-) -> Path:
-    """Take the owner lock, then resolve: the lock lasts until the caller commits."""
-    _lock_reference_owner(session, user_id)
-    return resolve_owned_reference_audio(audio_dir, user_id, stored_relative)
 
 
 def _reference_directory(stack: ExitStack, audio_dir: Path, user_id: str) -> int:
@@ -148,7 +176,7 @@ def _record_reference(
     name: str,
     original_filename: str,
     size_bytes: int,
-) -> str:
+) -> StoredReference:
     """Insert the row for the file just written; a failure before the commit removes the file."""
     storage_path = str(Path(user_id) / REFERENCE_AUDIO_DIR / name)
     try:
@@ -173,7 +201,7 @@ def _record_reference(
         "Reference audio stored for user %s: reference %s, %d bytes",
         user_id, recording.id, size_bytes,
     )
-    return storage_path
+    return StoredReference(id=recording.id, storage_path=storage_path)
 
 
 def _log_commit_failure(user_id: str, failure: BaseException) -> None:
@@ -189,7 +217,7 @@ def store_reference_audio(
     content: bytes,
     settings: Settings,
     original_filename: str,
-) -> str:
+) -> StoredReference:
     """Own the session and lock from the row count through the commit of the new row."""
     if extension not in REFERENCE_AUDIO_EXTENSIONS:
         raise ReferenceAudioRejected("Unsupported reference audio extension")

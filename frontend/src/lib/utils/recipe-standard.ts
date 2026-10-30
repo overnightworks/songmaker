@@ -1,4 +1,4 @@
-import type { VersionGenerationParams } from '#lib/api/types.ts';
+import type { ReferenceResponse, VersionGenerationParams } from '#lib/api/types.ts';
 import { RECIPE_TAKES_STANDARD } from '#lib/constants/recipe.ts';
 // The one owner of "this recipe field differs from its standard". The
 // standard is the model default for every field, never the saved version, so
@@ -56,6 +56,7 @@ export interface RecipeValues {
 	audioDuration: number;
 	keyScale: string;
 	genParams: VersionGenerationParams | null;
+	reference: ReferenceResponse | null;
 	model: string | null;
 	takes: number;
 }
@@ -84,7 +85,7 @@ export function changedRecipeFields(
 	if (values.audioDuration !== 0) changed.add('duration');
 	if (values.keyScale !== '') changed.add('key');
 	if (values.genParams?.user_lora_id) changed.add('voice');
-	if (values.genParams?.reference_audio_path) changed.add('reference');
+	if (values.reference) changed.add('reference');
 	if (values.model !== null && values.model !== standard.model) changed.add('model');
 	if (values.takes !== RECIPE_TAKES_STANDARD) changed.add('takes');
 	for (const key of ENGINE_PARAM_KEYS) {
@@ -146,7 +147,7 @@ export function resetRecipeField(
 		case 'voice':
 			return withParams(values, (params) => withoutKeys(params, ['user_lora_id']));
 		case 'reference':
-			return withParams(values, (params) => withoutKeys(params, ['reference_audio_path']));
+			return { ...values, reference: null };
 		case 'preset':
 			return withoutEngineFields(values);
 		default:
