@@ -1,0 +1,8 @@
+claim_id = "2cffaac36ff64cfeb5e890d78d0a5aa5"
+agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
+role = "builder"
+base = "2c066dd392437a9ec8aa98700f5765e4492c8099"
+branch = "claude/issue-2056-co-writer-speaks-protocol-4"
+scope = ["docs/architecture.md", "pyproject.toml", "src/songmaker_cli/cowriter/service_turn.py", "tests/songmaker_cli/cowriter/test_service_turn.py", "tests/support/fake_agent_service.py", "uv.lock"]
+opened_commit = "47f11b988c8497a8349baecb015734a144d55895"
+whole_reason = "One wire switch: the pin, its lock, the one reader of the succeeded event, the fake service and its tests must change together or every co-writer turn fails."
