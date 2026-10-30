@@ -43,7 +43,7 @@
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/history/historyController.test.ts" = 910
-"frontend/src/lib/history/historyController.ts" = 936
+"frontend/src/lib/history/historyController.ts" = 935
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094

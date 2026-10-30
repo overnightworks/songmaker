@@ -68,6 +68,7 @@ let navigationsStarted = 0;
 let heldRouteLoad: Promise<void> | null = null;
 // The same for the shallow writes: held, none lands until a test releases them.
 let heldShallowWrites: Promise<void> | null = null;
+let releaseShallowWrites: () => void = () => undefined;
 
 // Every navigation the fake router reported since it last started, in order,
 // with the address of the page it navigated to.
@@ -93,6 +94,7 @@ function reportNavigation(type: 'enter' | 'goto' | 'popstate', from: URL | null)
 // loads onto (or starts counting), and writes its own entry over that one,
 // keeping the place and dropping whatever state the entry carried.
 export function startFakeRouter(): void {
+	releaseHeldShallowWrites();
 	hasNavigated = false;
 	reportedNavigations.length = 0;
 	const loaded = routerHistoryEntryOf(history.state);
@@ -137,12 +139,13 @@ export function holdRouteLoads(): () => void {
 // Holds every shallow write until the returned function releases them, which
 // then land in the order they were issued.
 export function holdShallowWrites(): () => void {
-	let release: () => void = () => undefined;
-	heldShallowWrites = new Promise((resolve) => (release = resolve));
-	return () => {
-		heldShallowWrites = null;
-		release();
-	};
+	heldShallowWrites = new Promise((resolve) => (releaseShallowWrites = resolve));
+	return releaseHeldShallowWrites;
+}
+
+function releaseHeldShallowWrites(): void {
+	heldShallowWrites = null;
+	releaseShallowWrites();
 }
 
 // A later task, where a person's Back or Forward starts.
