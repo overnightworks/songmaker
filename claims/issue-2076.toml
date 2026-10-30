@@ -1,8 +1,0 @@
-claim_id = "853d7313526541239c7249e30e9ea1c7"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "809e37568f065d98757a1f31634c838dd54d8558"
-branch = "claude/issue-2076-webauth-0-26-workload-grant-scope"
-scope = ["docker-compose.yml", "docker/.env.docker.example", "docs/architecture.md", "docs/security.md", "pyproject.toml", "src/songmaker_cli/cowriter/service_turn.py", "src/songmaker_cli/oidc_client.py", "src/songmaker_cli/settings.py", "tests/fake_oidc_issuer.py", "tests/songmaker_cli/cowriter/test_service_turn.py", "tests/songmaker_cli/test_settings.py", "tests/support/fake_agent_service.py", "tests/test_oidc_sign_in.py", "uv.lock"]
-opened_commit = "a6632bb35c14cf050666b0d6a433e44e7c0dc15e"
-whole_reason = "One breaking release: the pin, the setting with its Compose default, the one caller of the workload grant, its fakes and tests, and the docs that describe the token must move together or every co-writer turn fails."
