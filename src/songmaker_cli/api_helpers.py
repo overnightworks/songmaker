@@ -59,10 +59,11 @@ from songmaker_cli.db.queries.jobs import (
 from songmaker_cli.db.queries.playlists import get_playlist
 from songmaker_cli.db.queries.rate_limits import resolve_rate_limit
 from songmaker_cli.db.queries.songs import get_song
+from songmaker_cli.db.queries.versions import lock_song_and_find_version
 from songmaker_cli.db.queries.workers import list_worker_identities
 from songmaker_cli.generation_params import BaseGenerationParams
 from songmaker_cli.settings import get_settings
-from songmaker_cli.worker_liveness import read_worker_liveness
+from songmaker_cli.worker_liveness import WorkerLiveness, read_worker_liveness
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -224,40 +225,13 @@ def _job_type_rate_limit(job_type: JobType) -> tuple[int, str]:
 _QUEUEABLE_JOB_TYPES = frozenset({JobType.GENERATE, JobType.SCORE})
 
 
-def create_job_with_rate_limit(
+def _enforce_job_limits(
     session: Session,
     user: AuthenticatedUser,
     job_type: JobType,
-    song_id: str | None = None,
-    *,
-    redis: Redis,
-) -> Job:
-    """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
-
-    Prevents TOCTOU races where two concurrent requests both pass the rate
-    limit check before either creates a job.
-
-    Liveness is observed before the initial commit and exclusive write lock so
-    Redis round trips do not extend the serialized section. The initial commit
-    closes the implicit transaction opened by the auth
-    dependency (session renewal, IP/UA audit records) so that BEGIN IMMEDIATE
-    can acquire an exclusive write lock.  This means auth-layer mutations are
-    committed even when the rate limit rejects the request — that is correct
-    because session renewal and audit logging must persist regardless.
-
-    Callers must not perform any additional mutations between dependency
-    injection and this function; such mutations would be committed
-    unconditionally by the commit() here.
-    """
-    assert not session.new and not session.dirty and not session.deleted, (
-        "create_job_with_rate_limit: session has uncommitted mutations — "
-        "the commit() below would persist them unconditionally"
-    )
-    worker_ids = [worker.id for worker in list_worker_identities(session)]
-    worker_liveness = read_worker_liveness(redis, worker_ids)
-    session.commit()
-    _begin_exclusive(session)
-
+    worker_liveness: WorkerLiveness,
+) -> None:
+    """Recover stale jobs, then roll back with 429 when a queue or rate limit is reached."""
     settings = get_settings()
     max_queue_depth = resolve_rate_limit(
         session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
@@ -287,7 +261,55 @@ def create_job_with_rate_limit(
         session.rollback()
         raise HTTPException(429, f"Rate limit reached ({limit}/{job_type}s per hour).")
 
-    return create_job(session, job_type, user_id=user.id, song_id=song_id)
+
+def create_job_with_rate_limit(
+    session: Session,
+    user: AuthenticatedUser,
+    job_type: JobType,
+    song_id: str | None = None,
+    *,
+    version_id: str | None = None,
+    redis: Redis,
+) -> Job:
+    """Atomically check rate limits and create a job under BEGIN IMMEDIATE.
+
+    Prevents TOCTOU races where two concurrent requests both pass the rate
+    limit check before either creates a job.
+
+    Liveness is observed before the initial commit and exclusive write lock so
+    Redis round trips do not extend the serialized section. The initial commit
+    closes the implicit transaction opened by the auth
+    dependency (session renewal, IP/UA audit records) so that BEGIN IMMEDIATE
+    can acquire an exclusive write lock.  This means auth-layer mutations are
+    committed even when the rate limit rejects the request — that is correct
+    because session renewal and audit logging must persist regardless.
+
+    Callers must not perform any additional mutations between dependency
+    injection and this function; such mutations would be committed
+    unconditionally by the commit() here.
+    """
+    assert not session.new and not session.dirty and not session.deleted, (
+        "create_job_with_rate_limit: session has uncommitted mutations — "
+        "the commit() below would persist them unconditionally"
+    )
+    worker_ids = [worker.id for worker in list_worker_identities(session)]
+    worker_liveness = read_worker_liveness(redis, worker_ids)
+    session.commit()
+    _begin_exclusive(session)
+
+    _enforce_job_limits(session, user, job_type, worker_liveness)
+    if version_id is not None:
+        # Inside the exclusive section and before the insert: a lock taken earlier is
+        # released by the commit above, and one taken after the insert lets a delete that
+        # won the song row fail the insert's version key with a 500 instead of a 404.
+        assert song_id is not None
+        if lock_song_and_find_version(session, song_id, version_id) is None:
+            session.rollback()
+            raise HTTPException(404, "Version not found")
+
+    return create_job(
+        session, job_type, user_id=user.id, song_id=song_id, version_id=version_id,
+    )
 
 
 def gen_params_to_json(params: BaseGenerationParams | None) -> dict | None:
@@ -304,6 +326,15 @@ def gen_params_to_json(params: BaseGenerationParams | None) -> dict | None:
 def slugify(value: str, max_length: int = _UNBOUNDED_SLUG_LENGTH) -> str:
     """Turn a human title into a URL-safe slug, never empty."""
     return _slugify(value, max_length=max_length) or "untitled"
+
+
+def _first_free_slug(base_slug: str, is_taken: Callable[[str], bool]) -> str:
+    candidate = base_slug
+    counter = 1
+    while is_taken(candidate):
+        counter += 1
+        candidate = f"{base_slug}-{counter}"
+    return candidate
 
 
 def _acquire_unique_slug(
@@ -323,12 +354,7 @@ def _acquire_unique_slug(
     """
     commit_auth_state_before_lock(session, caller)
     _begin_exclusive(session, lock_id)
-    candidate = base_slug
-    counter = 1
-    while is_taken(candidate):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
+    return _first_free_slug(base_slug, is_taken)
 
 
 def unique_album_id(session: Session, title: str) -> str:
@@ -351,17 +377,16 @@ def unique_lora_slug_under_capacity_lock(
     keep its slug choice and per-musician capacity check in one transaction.
     """
     base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
-    candidate = base_slug
-    counter = 1
-    while (
-        session.query(UserLora)
-        .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
-        .first()
-        is not None
-    ):
-        counter += 1
-        candidate = f"{base_slug}-{counter}"
-    return candidate
+
+    def is_taken(candidate: str) -> bool:
+        return (
+            session.query(UserLora)
+            .filter(UserLora.user_id == user_id, UserLora.slug == candidate)
+            .first()
+            is not None
+        )
+
+    return _first_free_slug(base_slug, is_taken)
 
 
 def unique_song_slug(

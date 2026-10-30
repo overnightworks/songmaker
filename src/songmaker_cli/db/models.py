@@ -400,6 +400,9 @@ class Job(Base):
     album_id: Mapped[str | None] = mapped_column(
         ForeignKey(ALBUMS_ID, ondelete=SET_NULL), nullable=True, index=True,
     )
+    version_id: Mapped[str | None] = mapped_column(
+        ForeignKey("versions.id", ondelete=SET_NULL), nullable=True, index=True,
+    )
     worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
     heartbeat_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     started_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)

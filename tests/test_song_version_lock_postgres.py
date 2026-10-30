@@ -6,11 +6,20 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from postgres_lock_harness import race
+from postgres_lock_harness import CommitPause, race, wrote_to_tables
+from support.generation_job_world import worker_up
 from support.web_app import make_authenticated_user, make_test_app, seed_session
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
-from songmaker_cli.db.models import Album, ReferenceRecording, Song, User, Version
+from songmaker_cli.db.models import (
+    Album,
+    AvailableModel,
+    Job,
+    ReferenceRecording,
+    Song,
+    User,
+    Version,
+)
 from songmaker_cli.db.queries.songs import create_song, update_song
 from songmaker_cli.mcp_server.tools import tool_rename_song, tool_update_song_lyrics
 
@@ -38,10 +47,11 @@ def _seeded(references: list[str]):
             for name in FILES
         )
         session.flush()
+        session.add(AvailableModel(id="sft", is_active=True))
         session.add(Album(id="album-a", title="A", artist="A", created_by=OWNER))
         session.flush()
         song = create_song(
-            session, "Original", "album-a", "original", created_by=OWNER,
+            session, "Original", "album-a", "original", prompt="rock", created_by=OWNER,
             reference_recording_id=references[0],
         )
         for number, reference in enumerate(references[1:], start=2):
@@ -70,6 +80,18 @@ class _World:
         with self.pg_factory() as session:
             version_id = session.query(Version).filter_by(version_number=number).one().id
         return lambda: self.client.delete(f"/api/versions/{version_id}")
+
+    def enqueue(self, number: int):
+        with self.pg_factory() as session:
+            version_id = session.query(Version).filter_by(version_number=number).one().id
+        return lambda: self.client.post(
+            f"/api/songs/{self.song_id}/generate",
+            json={"count": 1, "model": "sft", "version_id": version_id},
+        )
+
+    def job_versions(self) -> list[str | None]:
+        with self.pg_factory() as session:
+            return [job.version_id for job in session.query(Job)]
 
     def cowrite(self, tool, *arguments: Any):
         def run() -> None:
@@ -168,3 +190,31 @@ def test_b6_a_second_delete_of_one_version_waits_and_then_answers_not_found(
     assert answers["second"].status_code == 404
     assert answers["second"].json() == {"detail": "Not Found"}
     assert world.versions() == {1: ("", REFERENCES["H"])}
+
+
+def test_m4_an_enqueue_waits_for_a_version_delete_and_answers_404_without_a_job(
+    pg_factory, tmp_path,
+) -> None:
+    world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
+    with worker_up():
+        answers = race(pg_factory, world.delete_version(2), world.enqueue(2))
+    assert answers["first"].status_code == 200
+    assert answers["second"].status_code == 404
+    assert answers["second"].json() == {"detail": "Not Found"}
+    assert world.job_versions() == []
+    assert world.versions() == {1: ("", REFERENCES["H"])}
+
+
+def test_m5_a_version_delete_waits_for_an_enqueue_and_answers_409(pg_factory, tmp_path) -> None:
+    world = _World(pg_factory, tmp_path, [REFERENCES["H"], REFERENCES["F"]])
+    enqueue_written = CommitPause(lambda session: wrote_to_tables(session, "jobs"))
+    with worker_up():
+        answers = race(
+            pg_factory, world.enqueue(2), world.delete_version(2), pause=enqueue_written,
+        )
+    assert answers["first"].status_code == 200
+    assert answers["second"].status_code == 409
+    assert set(world.versions()) == {1, 2}
+    [version_id] = world.job_versions()
+    with pg_factory() as session:
+        assert session.get(Version, version_id).version_number == 2
