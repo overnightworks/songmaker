@@ -1,4 +1,4 @@
-import type { RecipeField, RecipeTab } from '$lib/utils/recipe-standard';
+import type { RecipeField, RecipeTab } from '#lib/utils/recipe-standard.ts';
 
 /** The Takes-per-Generate value the page starts with: the recipe's standard for that field. */
 export const RECIPE_TAKES_STANDARD = 1;

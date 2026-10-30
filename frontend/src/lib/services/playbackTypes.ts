@@ -1,4 +1,4 @@
-import type { GenerationItem } from '$lib/api/types';
+import type { GenerationItem } from '#lib/api/types.ts';
 
 export interface PlaybackInfo {
 	generation: GenerationItem;

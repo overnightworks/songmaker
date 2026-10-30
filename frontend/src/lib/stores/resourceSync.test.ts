@@ -1,21 +1,21 @@
-import { documentLoadsStandIn } from '$lib/test-utils/document-loads';
-import { makeGeneration as gen, makeSong as song } from '$lib/test-utils/factories';
+import { documentLoadsStandIn } from '#lib/test-utils/document-loads.ts';
+import { makeGeneration as gen, makeSong as song } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get, writable } from 'svelte/store';
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
-import { ApiError, installRefusalReactions, NetworkError } from '$lib/api/fetch';
-import { currentUser, handleSessionLost, resetAuthForTests } from '$lib/stores/auth';
-import { selectedSongId } from '$lib/stores/player';
+import { ApiError, installRefusalReactions, NetworkError } from '#lib/api/fetch.ts';
+import { currentUser, handleSessionLost, resetAuthForTests } from '#lib/stores/auth.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
 import {
 	reloadAfresh,
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
-} from '$lib/history/historyController';
-import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
+} from '#lib/history/historyController.ts';
+import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '#lib/api/types.ts';
 import {
 	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_STREAM_PATH,
@@ -28,8 +28,8 @@ import {
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
-} from '$lib/constants';
-import { offline } from '$lib/stores/connectivity';
+} from '#lib/constants.ts';
+import { offline } from '#lib/stores/connectivity.ts';
 import {
 	ResourceSyncController,
 	requestSongRefresh,

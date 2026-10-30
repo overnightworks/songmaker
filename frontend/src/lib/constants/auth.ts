@@ -1,4 +1,4 @@
-import { APP_NAME } from '$lib/constants';
+import { APP_NAME } from '#lib/constants.ts';
 
 // Auth copy kept apart from lib/constants.ts (issue #117).
 
@@ -23,4 +23,4 @@ export const AUTH_CHECK_RETRY_LABEL = 'Retry';
 // A session check the server did not answer asks again this often, the same
 // cadence the library's return probe keeps, so the app loads within about a
 // second of the server's return (#1118).
-export { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS as AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants';
+export { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS as AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '#lib/constants.ts';

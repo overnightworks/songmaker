@@ -1,18 +1,18 @@
-import { makeGeneration, makeSong, makeVersion } from '$lib/test-utils/factories';
+import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchVersions: vi.fn().mockResolvedValue([]),
 	updateSong: vi.fn(),
 	deleteVersion: vi.fn(),
 	fetchSong: vi.fn()
 }));
 
-vi.mock('$lib/stores/libraryData', () => ({
+vi.mock('#lib/stores/libraryData.ts', () => ({
 	replaceSongInList: vi.fn()
 }));
-vi.mock('$lib/stores/player', async () => {
+vi.mock('#lib/stores/player.ts', async () => {
 	const { writable } = await import('svelte/store');
 	return {
 		selectedSongId: writable('s1')
@@ -46,9 +46,9 @@ import {
 	versionDeleteEditorLoss,
 	versionLoadUndoOutstanding
 } from './editor';
-import { selectedSongId } from '$lib/stores/player';
-import { toasts } from '$lib/stores/toast';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { toasts } from '#lib/stores/toast.ts';
+import type { GenerationItem, SongItem } from '#lib/api/types.ts';
 
 type VersionLoad = ReturnType<typeof loadVersionAsDraft>;
 
@@ -128,7 +128,7 @@ describe('the version reference', () => {
 	});
 
 	it('is saved by its key, and null clears it', async () => {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong)
 			.mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }))
 			.mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
@@ -199,7 +199,7 @@ describe('loadSongData', () => {
 	);
 
 	it('defect:#940 S9383 shows a toast when the versions cannot be loaded, and the song still opens at once', async () => {
-		const { fetchVersions } = await import('$lib/api/client');
+		const { fetchVersions } = await import('#lib/api/client.ts');
 		toasts.set([]);
 		vi.mocked(fetchVersions).mockRejectedValueOnce(new Error('connection dropped'));
 
@@ -276,7 +276,7 @@ describe('loadVersionAsDraft', () => {
 	});
 
 	it('asks nothing of the server', async () => {
-		const client = await import('$lib/api/client');
+		const client = await import('#lib/api/client.ts');
 		vi.clearAllMocks();
 		openSongWithTwoVersions();
 		vi.mocked(client.fetchVersions).mockClear();
@@ -396,7 +396,7 @@ describe('loadVersionAsDraft', () => {
 	});
 
 	async function saveSongS1(): Promise<void> {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
 		await handleSave('s1');
 	}
@@ -486,7 +486,7 @@ describe('loadVersionAsDraft', () => {
 	});
 
 	it('a version delete puts the latest into the editor, so it retires the undo of a load', async () => {
-		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+		const { deleteVersion, fetchSong, fetchVersions } = await import('#lib/api/client.ts');
 		openSongWithTwoVersions();
 		setDraftLyrics('an unsaved line');
 		const load = loadVersionAsDraft(older);
@@ -519,7 +519,7 @@ describe('loadVersionAsDraft', () => {
 		{ draft: 'a loaded older version', load: true, newVersion: true },
 		{ draft: 'an edit of the latest version', load: false, newVersion: false }
 	])('saving $draft asks for a new version: $newVersion', async ({ load, newVersion }) => {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
 		openSongWithTwoVersions();
 		if (load) loadVersionAsDraft(older);
@@ -532,7 +532,7 @@ describe('loadVersionAsDraft', () => {
 	});
 
 	it('the hint goes once the loaded draft is saved', async () => {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
 		openSongWithTwoVersions();
 		loadVersionAsDraft(older);
@@ -708,7 +708,7 @@ describe('handleDeleteVersion', () => {
 		'defect:#1598 confirmed delete replaces a dirty draft; surviving version: %s',
 		async (survives) => {
 			vi.clearAllMocks();
-			const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+			const { deleteVersion, fetchSong, fetchVersions } = await import('#lib/api/client.ts');
 			loadSongData(makeSong({ ...songDefaults, lyrics: 'deleted version' }));
 			selectedSongId.set('s1');
 			setDraftLyrics('typed draft');
@@ -729,7 +729,7 @@ describe('handleDeleteVersion', () => {
 	);
 
 	it('does not overwrite another song editor if the user navigates away', async () => {
-		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+		const { deleteVersion, fetchSong, fetchVersions } = await import('#lib/api/client.ts');
 		loadSongData(makeSong({ ...songDefaults, lyrics: 'keep me' }));
 		setDraftLyrics('unsaved on s2');
 		selectedSongId.set('s2');
@@ -746,7 +746,7 @@ describe('handleDeleteVersion', () => {
 	});
 
 	it('fails loud on failure', async () => {
-		const { deleteVersion } = await import('$lib/api/client');
+		const { deleteVersion } = await import('#lib/api/client.ts');
 		vi.mocked(deleteVersion).mockRejectedValueOnce(new Error('fail'));
 
 		await expect(handleDeleteVersion('s1', 'v1', false)).rejects.toThrow('fail');

@@ -13,11 +13,11 @@
 		deleteGeneration,
 		uploadSongCover,
 		deleteSongCover
-	} from '$lib/api/client';
-	import { describeFailure, NetworkError } from '$lib/api/fetch';
-	import { offline, whenBackOnline } from '$lib/stores/connectivity';
-	import { fetchAlbum } from '$lib/api/albums';
-	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
+	} from '#lib/api/client.ts';
+	import { describeFailure, NetworkError } from '#lib/api/fetch.ts';
+	import { offline, whenBackOnline } from '#lib/stores/connectivity.ts';
+	import { fetchAlbum } from '#lib/api/albums.ts';
+	import { startHealthPolling, stopHealthPolling } from '#lib/stores/health.ts';
 	import {
 		albumList,
 		songList,
@@ -28,8 +28,12 @@
 		removeSongFromList,
 		addSongsToList,
 		addAlbumToList
-	} from '$lib/stores/libraryData';
-	import { selectedSong, selectedGenerationId, ensureGenerationsLoaded } from '$lib/stores/player';
+	} from '#lib/stores/libraryData.ts';
+	import {
+		selectedSong,
+		selectedGenerationId,
+		ensureGenerationsLoaded
+	} from '#lib/stores/player.ts';
 	import {
 		albumTrackNeighbors,
 		backToCollection,
@@ -43,8 +47,8 @@
 		selectNeighborSong,
 		pendingDirtyNavigation,
 		detailTab
-	} from '$lib/stores/navigation';
-	import { openCollection } from '$lib/stores/collection';
+	} from '#lib/stores/navigation.ts';
+	import { openCollection } from '#lib/stores/collection.ts';
 	import {
 		isDirty,
 		draftHasUnversionedChanges,
@@ -59,21 +63,21 @@
 		computeDraftVersionNumber,
 		draftSavesAsNewVersion,
 		discardDraft
-	} from '$lib/stores/editor';
-	import type { VersionDeleteEditorLoss } from '$lib/stores/editor';
-	import { activeModels, loadActiveModels } from '$lib/stores/presets';
-	import { loras, loadLoras } from '$lib/stores/loras';
-	import { addToast, addUndoToast } from '$lib/stores/toast';
-	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
+	} from '#lib/stores/editor.ts';
+	import type { VersionDeleteEditorLoss } from '#lib/stores/editor.ts';
+	import { activeModels, loadActiveModels } from '#lib/stores/presets.ts';
+	import { loras, loadLoras } from '#lib/stores/loras.ts';
+	import { addToast, addUndoToast } from '#lib/stores/toast.ts';
+	import { addGenerationToPlaylist, addSongToPlaylist } from '#lib/stores/playlists.ts';
 	import {
 		applyTakeUse,
 		pendingTakeUse,
 		resetRecipeSourceForSong,
 		seedRecipeModel,
 		setSourceFromGeneration
-	} from '$lib/stores/recipe';
-	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
-	import type { SongItem, VersionItem } from '$lib/api/types';
+	} from '#lib/stores/recipe.ts';
+	import { setGenerationActions, takeActionsFor } from '#lib/contexts/generation-actions.ts';
+	import type { SongItem, VersionItem } from '#lib/api/types.ts';
 	import {
 		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
@@ -107,23 +111,23 @@
 		versionLabel,
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
-	} from '$lib/constants';
-	import { sharePagePath } from '$lib/routes/addresses';
-	import { titleInitials } from '$lib/utils/format';
-	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	} from '#lib/constants.ts';
+	import { sharePagePath } from '#lib/routes/addresses.ts';
+	import { titleInitials } from '#lib/utils/format.ts';
+	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 	import EditorHeader from './editor/EditorHeader.svelte';
 	import ListenTabs from './editor/ListenTabs.svelte';
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
-	import { phoneAppBar } from '$lib/stores/ui';
+	import { phoneAppBar } from '#lib/stores/ui.ts';
 	import SongPhoneView from './editor/SongPhoneView.svelte';
 	import CoWriterPanel from './CoWriterPanel.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import ShareLinkChip from './ShareLinkChip.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
-	import { songTakesLoaded } from '$lib/utils/playable';
+	import { songTakesLoaded } from '#lib/utils/playable.ts';
 
 	let showDeleteConfirm = $state(false);
 	let versionAwaitingReplace = $state<{

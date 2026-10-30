@@ -2,9 +2,9 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { VersionGenerationParams } from '$lib/api/types';
-import { COMPACT_LAYOUT_MEDIA } from '$lib/constants';
-import { toasts } from '$lib/stores/toast';
+import type { VersionGenerationParams } from '#lib/api/types.ts';
+import { COMPACT_LAYOUT_MEDIA } from '#lib/constants.ts';
+import { toasts } from '#lib/stores/toast.ts';
 
 import ParamControls from './ParamControls.svelte';
 

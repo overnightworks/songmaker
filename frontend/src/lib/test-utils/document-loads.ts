@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest';
-import type { DocumentLoads } from '$lib/history/documentLoads';
+import type { DocumentLoads } from '#lib/history/documentLoads.ts';
 
 type DocumentLoadMocks = { [Load in keyof DocumentLoads]: Mock<DocumentLoads[Load]> };
 

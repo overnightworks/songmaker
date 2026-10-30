@@ -6,8 +6,8 @@ import {
 	LM_BOOL_FIELDS,
 	LM_NUMBER_FIELDS,
 	LM_TEXT_FIELDS
-} from '$lib/constants/acestep-param-fields';
-import { RECIPE_TAKES_STANDARD } from '$lib/constants/recipe';
+} from '#lib/constants/acestep-param-fields.ts';
+import { RECIPE_TAKES_STANDARD } from '#lib/constants/recipe.ts';
 import {
 	changedRecipeFields,
 	changedRecipeTabs,

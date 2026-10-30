@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
-	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '$lib/constants';
+	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
+	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
+	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '#lib/constants.ts';
 
 	let {
 		title,

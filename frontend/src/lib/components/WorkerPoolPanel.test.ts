@@ -1,13 +1,16 @@
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
-import { toasts } from '$lib/stores/toast';
-import { closeTopLayer, dropLayersFrom } from '$lib/stores/layers';
-import { localClockTime } from '$lib/utils/format';
+import { toasts } from '#lib/stores/toast.ts';
+import { closeTopLayer, dropLayersFrom } from '#lib/stores/layers.ts';
+import { localClockTime } from '#lib/utils/format.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { WorkerPoolResponse } from '$lib/api/types';
-import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '$lib/constants';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+import type { WorkerPoolResponse } from '#lib/api/types.ts';
+import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '#lib/constants.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
 import WorkerPoolPanel from './WorkerPoolPanel.svelte';
 
 let poolResponse: WorkerPoolResponse;

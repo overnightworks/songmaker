@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { SEED_CHIP_CLEAR_LABEL, seedChipLabel } from '$lib/constants/take-task';
-	import { clearSeed, seedFromTake } from '$lib/stores/recipe';
+	import { SEED_CHIP_CLEAR_LABEL, seedChipLabel } from '#lib/constants/take-task.ts';
+	import { clearSeed, seedFromTake } from '#lib/stores/recipe.ts';
 	import Icon from '../Icon.svelte';
 </script>
 

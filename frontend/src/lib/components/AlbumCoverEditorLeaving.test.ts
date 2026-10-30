@@ -2,21 +2,21 @@
 // successful Upload stop a running suggestion and discard the unused ones.
 // Every way out is driven through the album header.
 
-import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
+import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, CoverSuggestionsResponse, JobItem } from '$lib/api/types';
-import { serverRefusal } from '$lib/test-utils/network';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { resetConnectivityForTests } from '$lib/stores/connectivity';
-import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
-import { dropLayersFrom, stackedLayers } from '$lib/stores/layers';
+import type { AlbumItem, CoverSuggestionsResponse, JobItem } from '#lib/api/types.ts';
+import { serverRefusal } from '#lib/test-utils/network.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
+import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
+import { listenForGlobalEscape } from '#lib/test-utils/global-escape.ts';
+import { dropLayersFrom, stackedLayers } from '#lib/stores/layers.ts';
 import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
-import { albumList, resetLibraryDataForTests, songList } from '$lib/stores/libraryData';
-import { selectedAlbumId } from '$lib/stores/player';
-import { activeJobs } from '$lib/stores/jobs';
+import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
+import { selectedAlbumId } from '#lib/stores/player.ts';
+import { activeJobs } from '#lib/stores/jobs.ts';
 import {
 	FakeJobEventSource,
 	coverSuggestions,
@@ -35,7 +35,7 @@ import {
 	uploadCoverFile,
 	deferred,
 	afterPageRead
-} from '$lib/test-utils/album-cover-editor';
+} from '#lib/test-utils/album-cover-editor.ts';
 
 const createAlbumCoverSuggestions = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();
@@ -45,34 +45,34 @@ const deleteAlbumCover = vi.fn();
 const uploadAlbumCover = vi.fn();
 const cancelJob = vi.fn();
 
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
+vi.mock('#lib/api/albums.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/albums.ts')>()),
 	createAlbumCoverSuggestions: (...args: unknown[]) => createAlbumCoverSuggestions(...args),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
 	selectAlbumCoverSuggestion: (...args: unknown[]) => selectAlbumCoverSuggestion(...args),
 	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
 }));
-vi.mock('$lib/api/jobs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/jobs')>()),
+vi.mock('#lib/api/jobs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/jobs.ts')>()),
 	cancelJob: (...args: unknown[]) => cancelJob(...args)
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args),
 	uploadAlbumCover: (...args: unknown[]) => uploadAlbumCover(...args)
 }));
-vi.mock('$lib/stores/toast', () => ({
+vi.mock('#lib/stores/toast.ts', () => ({
 	addToast: vi.fn(),
 	addUndoToast: vi.fn()
 }));
 
 import AlbumDetailView from './AlbumDetailView.svelte';
-import { addToast } from '$lib/stores/toast';
+import { addToast } from '#lib/stores/toast.ts';
 
 const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
 

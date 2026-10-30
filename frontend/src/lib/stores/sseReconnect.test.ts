@@ -6,7 +6,7 @@ import {
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
-} from '$lib/constants';
+} from '#lib/constants.ts';
 import {
 	ImmediateReopenGap,
 	nextReconnectDelayMs,

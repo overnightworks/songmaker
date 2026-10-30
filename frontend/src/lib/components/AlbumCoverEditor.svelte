@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { ApiError, describeFailure } from '$lib/api/fetch';
-	import { createAlbumCoverSuggestions, selectAlbumCoverSuggestion } from '$lib/api/albums';
-	import type { AlbumItem } from '$lib/api/types';
+	import { ApiError, describeFailure } from '#lib/api/fetch.ts';
+	import { createAlbumCoverSuggestions, selectAlbumCoverSuggestion } from '#lib/api/albums.ts';
+	import type { AlbumItem } from '#lib/api/types.ts';
 	import {
 		RATE_LIMITED_STATUS,
 		albumCoverStageLabel,
@@ -26,10 +26,10 @@
 		ALBUM_COVER_SUGGESTIONS_LOADING,
 		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
 		ALBUM_COVER_SWIPE_TRAVEL_PX
-	} from '$lib/constants';
-	import { updateAlbumInList } from '$lib/stores/libraryData';
-	import { addToast } from '$lib/stores/toast';
-	import { releaseCoverSuggestions } from '$lib/stores/coverRuns';
+	} from '#lib/constants.ts';
+	import { updateAlbumInList } from '#lib/stores/libraryData.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { releaseCoverSuggestions } from '#lib/stores/coverRuns.ts';
 	import {
 		beginCoverSave,
 		beginCoverSuggestion,
@@ -47,9 +47,9 @@
 		savingCoverAlbumIds,
 		showCoverActivityFailure,
 		updateCoverActivity
-	} from '$lib/stores/coverActivity';
-	import { offline } from '$lib/stores/connectivity';
-	import { holdOpenWhile } from '$lib/stores/layers';
+	} from '#lib/stores/coverActivity.ts';
+	import { offline } from '#lib/stores/connectivity.ts';
+	import { holdOpenWhile } from '#lib/stores/layers.ts';
 	import CoverRunElapsed from './CoverRunElapsed.svelte';
 	import Icon from './Icon.svelte';
 

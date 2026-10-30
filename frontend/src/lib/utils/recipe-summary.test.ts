@@ -1,7 +1,7 @@
-import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
+import { makeGeneration as generation, makeSong as song } from '#lib/test-utils/factories.ts';
 import { describe, expect, it, vi } from 'vitest';
-import type { GenerationItem } from '$lib/api/types';
-import { RECIPE_REFERENCE_LABEL } from '$lib/constants/recipe';
+import type { GenerationItem } from '#lib/api/types.ts';
+import { RECIPE_REFERENCE_LABEL } from '#lib/constants/recipe.ts';
 
 describe('buildTakeRecipe', () => {
 	it.each([
@@ -82,8 +82,9 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 	// from the registry, not from a second list living here.
 	it('shows a param the registry newly knows about, unlabeled by this file', async () => {
 		vi.resetModules();
-		vi.doMock('$lib/constants/acestep-param-fields', async (importOriginal) => {
-			const actual = await importOriginal<typeof import('$lib/constants/acestep-param-fields')>();
+		vi.doMock('#lib/constants/acestep-param-fields.ts', async (importOriginal) => {
+			const actual =
+				await importOriginal<typeof import('#lib/constants/acestep-param-fields.ts')>();
 			return {
 				...actual,
 				DIT_NUMBER_FIELDS: [
@@ -118,7 +119,7 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 			}
 		]);
 
-		vi.doUnmock('$lib/constants/acestep-param-fields');
+		vi.doUnmock('#lib/constants/acestep-param-fields.ts');
 		vi.resetModules();
 	});
 

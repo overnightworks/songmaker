@@ -1,7 +1,7 @@
 <script lang="ts">
-	import type { ShareResult } from '$lib/api/types';
-	import { SONG_SHARE_LABEL } from '$lib/constants';
-	import { createShareToggle } from '$lib/stores/shareToggle.svelte';
+	import type { ShareResult } from '#lib/api/types.ts';
+	import { SONG_SHARE_LABEL } from '#lib/constants.ts';
+	import { createShareToggle } from '#lib/stores/shareToggle.svelte.ts';
 	import Icon from './Icon.svelte';
 
 	interface Props {

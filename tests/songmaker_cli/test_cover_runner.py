@@ -382,7 +382,7 @@ def test_web_runner_reports_the_real_codex_usage_limit_transcript_end_to_end(
     override_provider_runtime(codex_cli_auth_file=auth_file)
     process_pool = CodexProcessPool(maximum_processes=8, maximum_image_runs=1)
     transcript = (
-        Path(__file__).parent / "fixtures" / "codex-cover-quota-exceeded.jsonl"
+        Path(__file__).parents[1] / "fixtures" / "codex-cover-quota-exceeded.jsonl"
     ).read_text()
 
     def fake_runner(_command, **kwargs) -> CliRunOutcome:

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
-	import type { UnplayableSongSummary } from '$lib/api/types';
+	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
+	import { focusFirstIn, handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
+	import type { UnplayableSongSummary } from '#lib/api/types.ts';
 
 	const SHARE_DIALOG_TITLE = 'Missing from the share page';
 	const SHARE_DIALOG_INTRO = "These songs have no playable take and won't appear when shared:";

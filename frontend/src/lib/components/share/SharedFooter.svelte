@@ -1,7 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { APP_NAME } from '$lib/constants';
-	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
+	import { APP_NAME } from '#lib/constants.ts';
+	import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
 	import LegalLinks from '../LegalLinks.svelte';
 </script>
 

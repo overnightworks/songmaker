@@ -1,11 +1,11 @@
-import { makeSong as song } from '$lib/test-utils/factories';
+import { makeSong as song } from '#lib/test-utils/factories.ts';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
+import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '#lib/test-utils/hitbox.ts';
 import EditorHeader from './EditorHeader.svelte';
 import editorHeaderSource from './EditorHeader.svelte?raw';
-import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
+import { getByRoleButton, getByRoleHeading } from '#lib/test-utils/accessible-name.ts';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 

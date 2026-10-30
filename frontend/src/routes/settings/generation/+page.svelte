@@ -18,10 +18,10 @@
 		setDefault,
 		unsetDefault,
 		deletePreset
-	} from '$lib/stores/presets';
-	import { fetchGenerationDefaults } from '$lib/api/client';
-	import type { VersionGenerationParams } from '$lib/api/types';
-	import ParamControls from '$lib/components/ParamControls.svelte';
+	} from '#lib/stores/presets.ts';
+	import { fetchGenerationDefaults } from '#lib/api/client.ts';
+	import type { VersionGenerationParams } from '#lib/api/types.ts';
+	import ParamControls from '#lib/components/ParamControls.svelte';
 
 	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
 	const activeIds = $derived($activeModelIds);

@@ -1,10 +1,10 @@
 import type { ComponentProps } from 'svelte';
-import type ShareButton from '$lib/components/ShareButton.svelte';
-import type SongMenu from '$lib/components/editor/SongMenu.svelte';
+import type ShareButton from '#lib/components/ShareButton.svelte';
+import type SongMenu from '#lib/components/editor/SongMenu.svelte';
 import { readonly, writable } from 'svelte/store';
-import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '$lib/constants';
-import { isEditableElement } from '$lib/utils/escape-level-up';
-import { readStorage, writeStorage } from '$lib/utils/storage';
+import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '#lib/constants.ts';
+import { isEditableElement } from '#lib/utils/escape-level-up.ts';
+import { readStorage, writeStorage } from '#lib/utils/storage.ts';
 
 interface PhoneAppBarState {
 	kind: 'song';

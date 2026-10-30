@@ -1,8 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ALBUM_COVER_EDIT_LABEL } from '$lib/constants';
-import { albumCoverMarkedLabel } from '$lib/constants/album-cover-mark';
+import { ALBUM_COVER_EDIT_LABEL } from '#lib/constants.ts';
+import { albumCoverMarkedLabel } from '#lib/constants/album-cover-mark.ts';
 import CoverActivityMark, { type CoverMark } from './CoverActivityMark.svelte';
 
 const STARTED_ONE_MINUTE_AGO = '2026-10-22T09:59:00Z';

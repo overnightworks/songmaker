@@ -1,4 +1,4 @@
-import { closeTopLayer } from '$lib/stores/layers';
+import { closeTopLayer } from '#lib/stores/layers.ts';
 
 const FOCUSABLE_SELECTOR = [
 	'a[href]',

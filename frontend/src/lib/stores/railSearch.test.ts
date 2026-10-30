@@ -2,18 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 const searchLibrary = vi.fn();
-vi.mock('$lib/api/library', () => ({
+vi.mock('#lib/api/library.ts', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
 }));
 
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { LIBRARY_SEARCH_DEBOUNCE_MS, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+import { ApiError, NetworkError } from '#lib/api/fetch.ts';
+import { LIBRARY_SEARCH_DEBOUNCE_MS, UNREACHABLE_RELOAD_DELAYS_MS } from '#lib/constants.ts';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests
+} from '#lib/stores/connectivity.ts';
 import {
 	buildAlbumSearchHit,
 	buildPlaylist,
 	buildSongSearchHit
-} from '$lib/components/shell/rail-test-fixtures';
+} from '#lib/components/shell/rail-test-fixtures.ts';
 import {
 	groupRailSearchResults,
 	railSearch,
@@ -22,7 +25,7 @@ import {
 	syncRailSearch,
 	visibleRailSearchPages
 } from './railSearch';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { LIBRARY_ROUTE_PATH } from '#lib/routes/addresses.ts';
 
 beforeEach(() => {
 	vi.useFakeTimers();

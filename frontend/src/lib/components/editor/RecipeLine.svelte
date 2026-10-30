@@ -11,22 +11,22 @@
 		setDraftGenParams,
 		setDraftKeyScale,
 		setDraftReference
-	} from '$lib/stores/editor';
+	} from '#lib/stores/editor.ts';
 	import {
 		activeModels,
 		effectiveGenerationDefaults,
 		loadBuiltins,
 		loadGenerationDefaults,
 		loadPresets
-	} from '$lib/stores/presets';
-	import { recipeModel, recipeOpen, takesPerGenerate } from '$lib/stores/recipe';
+	} from '#lib/stores/presets.ts';
+	import { recipeModel, recipeOpen, takesPerGenerate } from '#lib/stores/recipe.ts';
 	import {
 		engineParams,
 		recipeDiffersFromStandard,
 		type RecipeValues
-	} from '$lib/utils/recipe-standard';
-	import { RECIPE_PANEL_LABEL } from '$lib/constants';
-	import { RECIPE_CHANGED_LABEL } from '$lib/constants/recipe';
+	} from '#lib/utils/recipe-standard.ts';
+	import { RECIPE_PANEL_LABEL } from '#lib/constants.ts';
+	import { RECIPE_CHANGED_LABEL } from '#lib/constants/recipe.ts';
 	import RecipeTabs from './RecipeTabs.svelte';
 
 	const values = $derived<RecipeValues>({

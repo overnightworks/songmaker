@@ -1,4 +1,4 @@
-import { makeAlbum as album } from '$lib/test-utils/factories';
+import { makeAlbum as album } from '#lib/test-utils/factories.ts';
 import type { Component } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -6,26 +6,26 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 // a fresh session by loading the cards -- and the Svelte runtime and helpers
 // that drive them -- anew.
 const svelte = () => import('svelte');
-const cardHelpers = () => import('$lib/test-utils/new-place-card');
+const cardHelpers = () => import('#lib/test-utils/new-place-card.ts');
 
 const createAlbum = vi.fn();
 const createSong = vi.fn();
 const createNewPlaylist = vi.fn();
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	createAlbum: (...args: unknown[]) => createAlbum(...args),
 	createSong: (...args: unknown[]) => createSong(...args)
 }));
-vi.mock('$lib/stores/playlists', () => ({
+vi.mock('#lib/stores/playlists.ts', () => ({
 	createNewPlaylist: (...args: unknown[]) => createNewPlaylist(...args)
 }));
-vi.mock('$lib/stores/libraryData', () => ({ addAlbumToList: vi.fn(), addSongToList: vi.fn() }));
-vi.mock('$lib/stores/navigation', () => ({
+vi.mock('#lib/stores/libraryData.ts', () => ({ addAlbumToList: vi.fn(), addSongToList: vi.fn() }));
+vi.mock('#lib/stores/navigation.ts', () => ({
 	openAlbum: vi.fn().mockResolvedValue(undefined),
 	openPlaylist: vi.fn().mockResolvedValue(undefined),
 	selectSong: vi.fn().mockResolvedValue(undefined)
 }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
 
 const NIGHTDRIVE = album({ id: 'a-night', title: 'Nightdrive' });
 const TIDEWATER = album({ id: 'a-tide', title: 'Tidewater' });

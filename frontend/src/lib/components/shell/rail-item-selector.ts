@@ -1,6 +1,6 @@
 import { tick } from 'svelte';
 import type { Action } from 'svelte/action';
-import { REDUCED_MOTION_MEDIA } from '$lib/constants';
+import { REDUCED_MOTION_MEDIA } from '#lib/constants.ts';
 
 export const RAIL_ALBUM_ITEM_CLASS = 'album-label';
 export const RAIL_PLAYLIST_ITEM_CLASS = 'playlist-label';

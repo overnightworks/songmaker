@@ -6,13 +6,13 @@
 [ccn."src/songmaker_cli/scoring/pipeline.py"]
 "run_scoring_pipeline" = 16
 
-[ccn."tests/test_cover_suggestion_job.py"]
+[ccn."tests/songmaker_cli/test_cover_runner_suggestion_job.py"]
 "test_cover_job_generates_one_normalized_png_through_isolated_fake_cli" = 20
 
 [ccn."tests/songmaker_cli/cowriter/test_tools_ownership.py"]
 "test_tools_only_reach_owned_resources" = 18
 
-[ccn."tests/test_postgresql.py"]
+[ccn."tests/songmaker_cli/test_db_postgresql.py"]
 "_seed_libraries_of_many_musicians" = 18
 
 [ccn."tests/songmaker_cli/test_sharing_api.py"]
@@ -28,38 +28,38 @@
 "frontend/e2e/song-phone.spec.ts" = 865
 "frontend/e2e/song-versions.spec.ts" = 863
 "frontend/src/lib/api/types.ts" = 1137
-"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 972
-"frontend/src/lib/components/AlbumDetailView.test.ts" = 1107
+"frontend/src/lib/components/AlbumCoverEditor.test.ts" = 975
+"frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
 "frontend/src/lib/components/CoWriterPanel.test.ts" = 1847
-"frontend/src/lib/components/LibraryWall.test.ts" = 1134
+"frontend/src/lib/components/LibraryWall.test.ts" = 1137
 "frontend/src/lib/components/LoraDetail.svelte" = 968
-"frontend/src/lib/components/NowPlaying.test.ts" = 1094
+"frontend/src/lib/components/NowPlaying.test.ts" = 1097
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1109
-"frontend/src/lib/components/PlayerBar.test.ts" = 1642
+"frontend/src/lib/components/PlayerBar.test.ts" = 1645
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
-"frontend/src/lib/components/SongDetailView.svelte" = 1030
-"frontend/src/lib/components/SongDetailView.test.ts" = 2303
-"frontend/src/lib/components/WorkerPoolPanel.test.ts" = 938
+"frontend/src/lib/components/SongDetailView.svelte" = 1034
+"frontend/src/lib/components/SongDetailView.test.ts" = 2306
+"frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304
 "frontend/src/lib/history/historyController.test.ts" = 918
 "frontend/src/lib/history/historyController.ts" = 950
 "frontend/src/lib/services/audioPlayer.svelte.ts" = 1657
 "frontend/src/lib/services/audioPlayer.test.ts" = 3686
 "frontend/src/lib/services/continuousDeck.test.ts" = 1094
-"frontend/src/lib/share/sharePlayback.test.ts" = 834
+"frontend/src/lib/share/sharePlayback.test.ts" = 837
 "frontend/src/lib/stores/generateAction.test.ts" = 817
 "frontend/src/lib/stores/jobs.test.ts" = 906
-"frontend/src/lib/stores/libraryContext.test.ts" = 2189
+"frontend/src/lib/stores/libraryContext.test.ts" = 2196
 "frontend/src/lib/stores/libraryContext.ts" = 1267
-"frontend/src/lib/stores/navigation.test.ts" = 3045
-"frontend/src/lib/stores/player.test.ts" = 5283
+"frontend/src/lib/stores/navigation.test.ts" = 3047
+"frontend/src/lib/stores/player.test.ts" = 5286
 "frontend/src/lib/stores/player.ts" = 2242
 "frontend/src/lib/stores/resourceSync.test.ts" = 2039
-"frontend/src/lib/stores/resourceSync.ts" = 1070
-"frontend/src/routes/layout.test.ts" = 1403
-"frontend/src/routes/settings/users/+page.svelte" = 1118
-"frontend/src/routes/settings/users/page.test.ts" = 858
+"frontend/src/lib/stores/resourceSync.ts" = 1073
+"frontend/src/routes/layout.test.ts" = 1416
+"frontend/src/routes/settings/users/+page.svelte" = 1123
+"frontend/src/routes/settings/users/page.test.ts" = 861
 "src/acestep_worker/wrapper.py" = 1089
 "src/songmaker_cli/constants.py" = 814
 "src/songmaker_cli/conversation_api.py" = 975
@@ -75,16 +75,16 @@
 "tests/test_auto_deploy_alerting.py" = 1389
 "tests/songmaker_cli/test_conversation_api.py" = 853
 "tests/songmaker_cli/test_settings_api_providers.py" = 972
-"tests/test_db.py" = 3624
+"tests/songmaker_cli/test_db.py" = 3624
 "tests/test_jobs.py" = 3215
-"tests/test_jobs_lora_training.py" = 1933
+"tests/songmaker_cli/jobs/test_lora_training.py" = 1933
 "tests/songmaker_cli/test_library_api.py" = 1627
 "tests/songmaker_cli/test_lora_api.py" = 1297
 "tests/songmaker_cli/test_playlist_api.py" = 1105
-"tests/test_postgresql.py" = 858
+"tests/songmaker_cli/test_db_postgresql.py" = 858
 "tests/test_queue_streams.py" = 2417
 "tests/songmaker_cli/test_resource_event_api.py" = 1239
-"tests/test_scheduler.py" = 1285
+"tests/songmaker_cli/test_scheduler.py" = 1285
 "tests/songmaker_cli/test_server.py" = 1955
 "tests/songmaker_cli/test_sharing_api.py" = 2554
 
@@ -198,10 +198,10 @@
 "test_s8_live_stream_during_second_take.drive" = 68
 "test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetime" = 81
 
-[function_lines."tests/test_cover_accounting.py"]
+[function_lines."tests/songmaker_cli/test_cover_runner_accounting.py"]
 "test_postgresql_serializes_publication_and_cancellation" = 92
 
-[function_lines."tests/test_db.py"]
+[function_lines."tests/songmaker_cli/test_db.py"]
 "test_acestep_canonical_names_migration_renames_json_keys" = 68
 "test_generation_created_by_migration_keeps_existing_takes_unattributed_both_ways" = 67
 "test_playlist_slug_migration_backfills_dedupes_and_enforces_unique" = 71
@@ -218,18 +218,18 @@
 [function_lines."tests/test_install_cli_credentials_mirror.py"]
 "run_installer" = 94
 
-[function_lines."tests/test_jobs_lora_training.py"]
+[function_lines."tests/songmaker_cli/jobs/test_lora_training.py"]
 "test_happy_path_transitions_and_persists" = 90
 "test_reconcile_crashed_lora_preserves_an_adapter_after_adoption_crash" = 70
 "test_unknown_handover_probe_does_not_release_a_worker_owned_hold" = 65
 
-[function_lines."tests/test_lora_worker_auth.py"]
+[function_lines."tests/songmaker_cli/jobs/test_lora_training_worker_auth.py"]
 "test_lora_job_sends_configured_token_and_fails_on_worker_token_mismatch" = 66
 
 [function_lines."tests/test_music_worker.py"]
 "test_startup_recovers_music_job_types_and_reconciles_lora_once" = 70
 
-[function_lines."tests/test_postgresql.py"]
+[function_lines."tests/songmaker_cli/test_db_postgresql.py"]
 "test_alembic_migrations_on_postgresql" = 149
 "test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql" = 65
 "test_concurrent_lora_reconciliation_claims_one_locked_row" = 83
@@ -399,7 +399,7 @@ _seed_owned = [["tests/songmaker_cli/test_conversation_api_memory.py", "_seed"],
 client = [["tests/songmaker_cli/test_conversation_api_memory.py", "client"], ["tests/songmaker_cli/test_conversation_api_takes.py", "client"]]
 stranger_client = [["tests/songmaker_cli/test_conversation_api_memory.py", "stranger_client"]]
 
-[clones."tests/test_cover_runner.py"]
+[clones."tests/songmaker_cli/test_cover_runner.py"]
 _png_bytes = [["tests/songmaker_cli/test_playlist_api.py", "_png_bytes"]]
 
 [clones."tests/songmaker_cli/cowriter/test_mcp_endpoint.py"]
@@ -408,8 +408,8 @@ mcp_environment = [["tests/songmaker_cli/cowriter/test_service_turn.py", "mcp_ke
 [clones."tests/songmaker_cli/test_settings_api_providers.py"]
 _stream_events = [["tests/songmaker_cli/test_conversation_api_memory.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_mentions.py", "_stream_events"], ["tests/songmaker_cli/test_conversation_api_takes.py", "_stream_events"]]
 
-[clones."tests/test_db.py"]
-test_delete_album = [["tests/test_soft_delete.py", "test_soft_delete_album_cascades_to_live_songs"], ["tests/test_soft_delete.py", "test_soft_delete_song_hides_single_song"]]
+[clones."tests/songmaker_cli/test_db.py"]
+test_delete_album = [["tests/songmaker_cli/db/test_soft_delete.py", "test_soft_delete_album_cascades_to_live_songs"], ["tests/songmaker_cli/db/test_soft_delete.py", "test_soft_delete_song_hides_single_song"]]
 
 [clones."tests/test_lifecycle_job_reaper.py"]
 ctx = [["tests/test_lifecycle_queue_stream_cleanup.py", "ctx"], ["tests/test_lifecycle_reconciliation.py", "ctx"]]

@@ -1,14 +1,14 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { setRailCollapsed } from '$lib/contexts/rail-collapsed';
-	import { librarySurface, placeShown, type Place } from '$lib/stores/libraryContext';
-	import { selectedSongId } from '$lib/stores/player';
+	import { setRailCollapsed } from '#lib/contexts/rail-collapsed.ts';
+	import { librarySurface, placeShown, type Place } from '#lib/stores/libraryContext.ts';
+	import { selectedSongId } from '#lib/stores/player.ts';
 	import { page } from '$app/state';
-	import { HOME_ROUTE_PATH } from '$lib/routes/addresses';
-	import { standingPathname } from '$lib/routes/standingAddress';
-	import { followPlainClick, openHome } from '$lib/stores/navigation';
-	import { APP_NAME, HOME_PAGE_LABEL, RAIL_NAV_LABEL } from '$lib/constants';
-	import { kineticScroll } from '$lib/actions/kineticScroll';
+	import { HOME_ROUTE_PATH } from '#lib/routes/addresses.ts';
+	import { standingPathname } from '#lib/routes/standingAddress.ts';
+	import { followPlainClick, openHome } from '#lib/stores/navigation.ts';
+	import { APP_NAME, HOME_PAGE_LABEL, RAIL_NAV_LABEL } from '#lib/constants.ts';
+	import { kineticScroll } from '#lib/actions/kineticScroll.ts';
 	import Icon from '../Icon.svelte';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
@@ -23,7 +23,7 @@
 		RAIL_WIDTH_STEP_PX,
 		setRailWidth,
 		toggleRailCollapsed
-	} from '$lib/stores/ui';
+	} from '#lib/stores/ui.ts';
 
 	let { collapsed = false }: { collapsed?: boolean } = $props();
 

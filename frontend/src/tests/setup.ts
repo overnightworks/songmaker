@@ -24,5 +24,5 @@ if (!('ResizeObserver' in globalThis)) {
 // starts, so every test runs against the fake router unless it mocks
 // `$app/navigation` itself.
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { sharePlaylist, unsharePlaylist } from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
+	import { sharePlaylist, unsharePlaylist } from '#lib/api/client.ts';
+	import { describeFailure } from '#lib/api/fetch.ts';
 	import {
 		isPlaylistEntryCurrent,
 		playPlaylist,
 		playPlaylistEntry,
 		queueContext
-	} from '$lib/stores/player';
+	} from '#lib/stores/player.ts';
 	import {
 		selectedPlaylist,
 		selectedPlaylistDetail,
@@ -20,11 +20,11 @@
 		updatePlaylistInList,
 		uploadPlaylistCover,
 		deletePlaylistCover
-	} from '$lib/stores/playlists';
-	import { addToast } from '$lib/stores/toast';
-	import { selectSong } from '$lib/stores/navigation';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	} from '#lib/stores/playlists.ts';
+	import { addToast } from '#lib/stores/toast.ts';
+	import { selectSong } from '#lib/stores/navigation.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
@@ -33,9 +33,9 @@
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
 		PLAYLIST_ENTRY_REMOVE_LABEL,
 		playlistEntryOverflowLabel
-	} from '$lib/constants';
-	import { nowPlayingTakeMeta } from '$lib/constants/now-playing';
-	import { songCountLabel, titleInitials } from '$lib/utils/format';
+	} from '#lib/constants.ts';
+	import { nowPlayingTakeMeta } from '#lib/constants/now-playing.ts';
+	import { songCountLabel, titleInitials } from '#lib/utils/format.ts';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';

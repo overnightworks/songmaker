@@ -1,8 +1,8 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { SIGN_IN_START_PATH } from '$lib/api/fetch';
-	import SignInCard from '$lib/components/SignInCard.svelte';
-	import { SIGN_IN_ACTION_LABEL, SIGNED_OUT_HEADING } from '$lib/constants/auth';
+	import { SIGN_IN_START_PATH } from '#lib/api/fetch.ts';
+	import SignInCard from '#lib/components/SignInCard.svelte';
+	import { SIGN_IN_ACTION_LABEL, SIGNED_OUT_HEADING } from '#lib/constants/auth.ts';
 </script>
 
 <SignInCard heading={SIGNED_OUT_HEADING}>

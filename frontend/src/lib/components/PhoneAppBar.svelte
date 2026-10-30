@@ -5,16 +5,16 @@
 
 <script lang="ts">
 	import { page } from '$app/state';
-	import { APP_NAME, SEARCH_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
-	import { backLabel, backTargetName, pageBackShown } from '$lib/routes/pageBack';
-	import { standingPage } from '$lib/routes/standingAddress';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { inertWhileAddressOverlay } from '$lib/stores/libraryAddressOverlay';
-	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openHome, stepBackFromPage } from '$lib/stores/navigation';
-	import { playlistList } from '$lib/stores/playlists';
-	import { phoneAppBar } from '$lib/stores/ui';
-	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { APP_NAME, SEARCH_OPEN_LABEL, SONG_TITLE_LABEL } from '#lib/constants.ts';
+	import { backLabel, backTargetName, pageBackShown } from '#lib/routes/pageBack.ts';
+	import { standingPage } from '#lib/routes/standingAddress.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { inertWhileAddressOverlay } from '#lib/stores/libraryAddressOverlay.ts';
+	import { albumList, songList } from '#lib/stores/libraryData.ts';
+	import { openHome, stepBackFromPage } from '#lib/stores/navigation.ts';
+	import { playlistList } from '#lib/stores/playlists.ts';
+	import { phoneAppBar } from '#lib/stores/ui.ts';
+	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 	import AccountMenu from './AccountMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import ShareButton from './ShareButton.svelte';

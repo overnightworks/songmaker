@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { OFFLINE_STRIP_MESSAGE } from '$lib/constants';
-	import { offline } from '$lib/stores/connectivity';
+	import { OFFLINE_STRIP_MESSAGE } from '#lib/constants.ts';
+	import { offline } from '#lib/stores/connectivity.ts';
 	import Icon from './Icon.svelte';
 </script>
 

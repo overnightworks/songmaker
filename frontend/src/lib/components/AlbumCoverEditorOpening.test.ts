@@ -3,15 +3,15 @@
 // waiting suggestions leaves the closed cover without a mark. A Suggest that ×
 // retired holds nothing of what comes after it.
 
-import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
+import { makeAlbum as album, makeSong as song } from '#lib/test-utils/factories.ts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetConnectivityForTests } from '$lib/stores/connectivity';
-import { albumList, resetLibraryDataForTests, songList } from '$lib/stores/libraryData';
-import { selectedAlbumId } from '$lib/stores/player';
-import { activeJobs } from '$lib/stores/jobs';
-import type { JobItem } from '$lib/api/types';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { resetConnectivityForTests } from '#lib/stores/connectivity.ts';
+import { albumList, resetLibraryDataForTests, songList } from '#lib/stores/libraryData.ts';
+import { selectedAlbumId } from '#lib/stores/player.ts';
+import { activeJobs } from '#lib/stores/jobs.ts';
+import type { JobItem } from '#lib/api/types.ts';
+import { getByRoleButton } from '#lib/test-utils/accessible-name.ts';
 import {
 	FakeJobEventSource,
 	ONE_SUGGESTION,
@@ -28,7 +28,7 @@ import {
 	pressSuggestOnceLoaded,
 	shownImage,
 	uploadCoverFile
-} from '$lib/test-utils/album-cover-editor';
+} from '#lib/test-utils/album-cover-editor.ts';
 import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
 
 const fetchAlbumCoverSuggestions = vi.fn();
@@ -37,26 +37,26 @@ const discardAlbumCoverSuggestions = vi.fn();
 const uploadAlbumCover = vi.fn();
 const cancelJob = vi.fn();
 
-vi.mock('$lib/api/songs', () => ({
+vi.mock('#lib/api/songs.ts', () => ({
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
+vi.mock('#lib/api/albums.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/albums.ts')>()),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
 	createAlbumCoverSuggestions: (...args: unknown[]) => createAlbumCoverSuggestions(...args),
 	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
 }));
-vi.mock('$lib/api/jobs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/jobs')>()),
+vi.mock('#lib/api/jobs.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/jobs.ts')>()),
 	cancelJob: (...args: unknown[]) => cancelJob(...args)
 }));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	uploadAlbumCover: (...args: unknown[]) => uploadAlbumCover(...args)
 }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn(), addUndoToast: vi.fn() }));
+vi.mock('#lib/stores/toast.ts', () => ({ addToast: vi.fn(), addUndoToast: vi.fn() }));
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 

@@ -1,4 +1,4 @@
-import { modifiedClicks } from '$lib/test-utils/modified-clicks';
+import { modifiedClicks } from '#lib/test-utils/modified-clicks.ts';
 import { createRawSnippet, mount, tick, unmount, type Snippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -1,11 +1,11 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { goto } from '$app/navigation';
-	import Icon from '$lib/components/Icon.svelte';
-	import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
-	import { visibleSettingsSections } from '$lib/settingsSections';
-	import { isAdmin } from '$lib/stores/auth';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import Icon from '#lib/components/Icon.svelte';
+	import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '#lib/constants.ts';
+	import { visibleSettingsSections } from '#lib/settingsSections.ts';
+	import { isAdmin } from '#lib/stores/auth.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
 
 	let compact = $state<boolean | null>(null);
 

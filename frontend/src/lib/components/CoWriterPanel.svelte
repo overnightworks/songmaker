@@ -11,8 +11,8 @@
 		saveSongMemory,
 		saveAlbumMemory,
 		ApiError
-	} from '$lib/api/client';
-	import type { CoWriterStreamEvent } from '$lib/api/client';
+	} from '#lib/api/client.ts';
+	import type { CoWriterStreamEvent } from '#lib/api/client.ts';
 	import type {
 		ChatMessageItem,
 		ConversationItem,
@@ -20,8 +20,8 @@
 		MemoryBundle,
 		SongItem,
 		VersionItem
-	} from '$lib/api/types';
-	import { addToast } from '$lib/stores/toast';
+	} from '#lib/api/types.ts';
+	import { addToast } from '#lib/stores/toast.ts';
 	import {
 		COWRITER_CONVERSATION_MENU_LABEL,
 		EDITOR_VIEW_COWRITER_LABEL,
@@ -35,9 +35,9 @@
 		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
-	} from '$lib/constants';
-	import { historyLayerState } from '$lib/stores/layers';
-	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
+	} from '#lib/constants.ts';
+	import { historyLayerState } from '#lib/stores/layers.ts';
+	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '#lib/utils/focus-trap.ts';
 	import {
 		collectPendingProposals,
 		proposalKey,
@@ -45,15 +45,15 @@
 		stripMemoryProposals,
 		type MemoryProposal,
 		type MemoryScope
-	} from '$lib/utils/memory-proposals';
+	} from '#lib/utils/memory-proposals.ts';
 	import {
 		filterMentionItems,
 		mentionQueryAtCursor,
 		replaceMentionToken,
 		type MentionItem
-	} from '$lib/utils/mentions';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { playerTakeIdForSong } from '$lib/utils/cowriter-take';
+	} from '#lib/utils/mentions.ts';
+	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+	import { playerTakeIdForSong } from '#lib/utils/cowriter-take.ts';
 	import {
 		conversationConfirmLabel,
 		conversationLineLabel,
@@ -65,7 +65,7 @@
 		cowriterToolCallTarget,
 		type CowriterProblem,
 		type CowriterTurnError
-	} from '$lib/utils/cowriter-ui';
+	} from '#lib/utils/cowriter-ui.ts';
 	import ChatInput from './ChatInput.svelte';
 	import CoWriterTurnError from './CoWriterTurnError.svelte';
 	import AiNotice from './AiNotice.svelte';

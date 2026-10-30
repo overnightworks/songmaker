@@ -1,11 +1,15 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { SIGN_IN_PATH } from '$lib/api/fetch';
-	import Icon from '$lib/components/Icon.svelte';
-	import SignInCard from '$lib/components/SignInCard.svelte';
-	import { NO_ACCESS_BACK_LABEL, NO_ACCESS_HEADING, NO_ACCESS_MESSAGE } from '$lib/constants/auth';
-	import { ACCOUNT_MENU_LOGOUT_LABEL, SIGN_OUT_FAILED_MESSAGE } from '$lib/constants';
-	import { logout, signOutFailed } from '$lib/stores/auth';
+	import { SIGN_IN_PATH } from '#lib/api/fetch.ts';
+	import Icon from '#lib/components/Icon.svelte';
+	import SignInCard from '#lib/components/SignInCard.svelte';
+	import {
+		NO_ACCESS_BACK_LABEL,
+		NO_ACCESS_HEADING,
+		NO_ACCESS_MESSAGE
+	} from '#lib/constants/auth.ts';
+	import { ACCOUNT_MENU_LOGOUT_LABEL, SIGN_OUT_FAILED_MESSAGE } from '#lib/constants.ts';
+	import { logout, signOutFailed } from '#lib/stores/auth.ts';
 </script>
 
 <SignInCard heading={NO_ACCESS_HEADING} failure={NO_ACCESS_MESSAGE}>

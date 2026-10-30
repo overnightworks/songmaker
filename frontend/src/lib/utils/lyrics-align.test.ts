@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { WhisperCue } from '$lib/api/types';
+import type { WhisperCue } from '#lib/api/types.ts';
 import measuredTakes from './fixtures/lyrics-align-takes.json';
 import golden from './lyrics-align.fixtures.json';
 import { activeLyricLineIndices, alignLyricsToCues, type AlignedLyricLine } from './lyrics-align';

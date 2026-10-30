@@ -1,6 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { get } from 'svelte/store';
-import { theme } from '$lib/stores/ui';
+import { theme } from '#lib/stores/ui.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import WaveformRangePicker from './WaveformRangePicker.svelte';
 

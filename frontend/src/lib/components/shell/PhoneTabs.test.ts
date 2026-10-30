@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Place } from '$lib/stores/libraryContext';
+import type { Place } from '#lib/stores/libraryContext.ts';
 import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
 import Icon from '../Icon.svelte';
 import PhoneTabs from './PhoneTabs.svelte';

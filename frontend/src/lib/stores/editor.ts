@@ -4,18 +4,18 @@ import {
 	updateSong,
 	deleteVersion as apiDeleteVersion,
 	fetchSong
-} from '$lib/api/client';
-import { replaceSongInList } from '$lib/stores/libraryData';
-import { selectedSongId } from '$lib/stores/player';
-import { reloadWhileUnreachable } from '$lib/stores/connectivity';
-import { addToast } from '$lib/stores/toast';
+} from '#lib/api/client.ts';
+import { replaceSongInList } from '#lib/stores/libraryData.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { reloadWhileUnreachable } from '#lib/stores/connectivity.ts';
+import { addToast } from '#lib/stores/toast.ts';
 import type {
 	GenerationItem,
 	ReferenceResponse,
 	SongItem,
 	VersionGenerationParams,
 	VersionItem
-} from '$lib/api/types';
+} from '#lib/api/types.ts';
 
 const VERSIONS_LOAD_FAILED = 'Could not load versions';
 

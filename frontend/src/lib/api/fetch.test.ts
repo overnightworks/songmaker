@@ -4,7 +4,7 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+	(await import('#lib/test-utils/app-navigation.ts')).fakeAppNavigation()
 );
 
 import {
@@ -18,8 +18,8 @@ import {
 	isTransientApiFailure,
 	signInAddress
 } from './fetch';
-import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
-import { hangsUntilAborted } from '$lib/test-utils/network';
+import { API_ERROR_GENERIC_MESSAGE } from '#lib/constants.ts';
+import { hangsUntilAborted } from '#lib/test-utils/network.ts';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();

@@ -1,8 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
-import type { QueueStreamManifest } from '$lib/api/types';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { hangsUntilAborted } from '$lib/test-utils/network';
+import type { QueueStreamManifest } from '#lib/api/types.ts';
+import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+import { hangsUntilAborted } from '#lib/test-utils/network.ts';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-playlist' } } }));
 

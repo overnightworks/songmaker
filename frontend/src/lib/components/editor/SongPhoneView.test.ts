@@ -1,31 +1,31 @@
-import { failed } from '$lib/test-utils/generate-states';
+import { failed } from '#lib/test-utils/generate-states.ts';
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { detailTab, type DetailTab } from '$lib/stores/navigation';
-import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { generationFailures } from '$lib/stores/jobs';
-import { clearSelection, toggleSelection } from '$lib/stores/selection';
-import { selectedSongId } from '$lib/stores/player';
-import { watchTypingOnPhone } from '$lib/stores/ui';
+import { detailTab, type DetailTab } from '#lib/stores/navigation.ts';
+import { makeGeneration, makeSong } from '#lib/test-utils/factories.ts';
+import { generationFailures } from '#lib/stores/jobs.ts';
+import { clearSelection, toggleSelection } from '#lib/stores/selection.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
+import { watchTypingOnPhone } from '#lib/stores/ui.ts';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
-import { EDITOR_GENERATE_LABEL, EDITOR_MISSING_CONTENT_TITLE } from '$lib/constants';
-import type { GenerateState } from '$lib/stores/generateAction';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
+import { openOnScreenKeyboard } from '#lib/test-utils/on-screen-keyboard.ts';
+import { EDITOR_GENERATE_LABEL, EDITOR_MISSING_CONTENT_TITLE } from '#lib/constants.ts';
+import type { GenerateState } from '#lib/stores/generateAction.ts';
 
 const IDLE_GENERATE: GenerateState = { kind: 'idle' };
 const generateAction = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
 	return writable<GenerateState>({ kind: 'idle' });
 });
-vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+vi.mock('#lib/stores/generateAction.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/stores/generateAction.ts')>()),
 	generateAction
 }));
 
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchBuiltinDefaults: vi.fn().mockResolvedValue({}),
 	fetchPresets: vi.fn().mockResolvedValue([]),
 	fetchGenerationDefaults: vi.fn().mockResolvedValue({})

@@ -49,7 +49,7 @@ def unneeded_allow_patterns(flagged, patterns):
 
 def default_import_paths(filename, source):
     for specifier in default_import_pattern.findall(source):
-        if specifier.startswith("$lib/"):
+        if specifier.startswith("#lib/"):
             base = Path("frontend/src/lib") / specifier[5:]
         elif specifier.startswith("."):
             base = Path(filename).parent / specifier

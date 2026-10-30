@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
-	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { dialogHistoryLayer } from '#lib/utils/dialog-history-layer.ts';
+	import { handleFocusTrapKeydown } from '#lib/utils/focus-trap.ts';
 
 	let {
 		title,

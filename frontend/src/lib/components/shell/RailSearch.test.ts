@@ -2,8 +2,8 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { HITBOX_FREQUENT_PX, RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '$lib/constants';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { HITBOX_FREQUENT_PX, RAIL_SEARCH_CLEAR_LABEL, RAIL_SEARCH_LABEL } from '#lib/constants.ts';
+import { clearComponentStyles, injectComponentStyles } from '#lib/test-utils/component-styles.ts';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -11,11 +11,11 @@ import {
 	minHeightPx,
 	minSquarePx,
 	setPointer
-} from '$lib/test-utils/hitbox';
+} from '#lib/test-utils/hitbox.ts';
 
-import { railTreeQuery } from '$lib/stores/librarySearch';
-import { railSearch, resetRailSearchForTests } from '$lib/stores/railSearch';
-import { playlistList, resetPlaylistsForTests } from '$lib/stores/playlists';
+import { railTreeQuery } from '#lib/stores/librarySearch.ts';
+import { railSearch, resetRailSearchForTests } from '#lib/stores/railSearch.ts';
+import { playlistList, resetPlaylistsForTests } from '#lib/stores/playlists.ts';
 import {
 	buildAlbumSearchHit,
 	buildPlaylist,
@@ -27,9 +27,9 @@ import RailSearch from './RailSearch.svelte';
 import railSearchSource from './RailSearch.svelte?raw';
 
 const navigation = vi.hoisted(() => ({ openRailSearchTarget: vi.fn() }));
-vi.mock('$lib/stores/navigation', () => navigation);
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
+vi.mock('#lib/stores/navigation.ts', () => navigation);
+vi.mock('#lib/api/client.ts', async (importOriginal) => ({
+	...(await importOriginal<typeof import('#lib/api/client.ts')>()),
 	fetchPlaylists: vi.fn().mockResolvedValue([])
 }));
 

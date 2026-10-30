@@ -1,4 +1,4 @@
-import { HITBOX_STYLE } from '$lib/styles/hitbox';
+import { HITBOX_STYLE } from '#lib/styles/hitbox.ts';
 
 const STYLE_ATTRIBUTE = 'data-hitbox-styles';
 

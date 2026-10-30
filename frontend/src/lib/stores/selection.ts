@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
-import type { GenerationItem } from '$lib/api/types';
-import { selectedSongId } from '$lib/stores/player';
+import type { GenerationItem } from '#lib/api/types.ts';
+import { selectedSongId } from '#lib/stores/player.ts';
 
 export const selectedIds = writable<Set<string>>(new Set());
 export const selectionMode = writable(false);

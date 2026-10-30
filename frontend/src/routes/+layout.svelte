@@ -3,27 +3,31 @@
 	import { onDestroy } from 'svelte';
 	import { afterNavigate, beforeNavigate } from '$app/navigation';
 	import { page } from '$app/state';
-	import { fetchCapabilities } from '$lib/api/client';
+	import { fetchCapabilities } from '#lib/api/client.ts';
 	import {
 		installRefusalReactions,
 		NO_ACCESS_PATH,
 		SIGN_IN_FAILED_PATH,
 		SIGN_IN_PATH,
 		signInAddress
-	} from '$lib/api/fetch';
-	import AccountMenu from '$lib/components/AccountMenu.svelte';
-	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
-	import Rail from '$lib/components/shell/Rail.svelte';
-	import PhoneTabs from '$lib/components/shell/PhoneTabs.svelte';
-	import { standingPathname } from '$lib/routes/standingAddress';
-	import { isSongRoutePath, LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
-	import type { Place } from '$lib/stores/libraryContext';
-	import NowPlaying from '$lib/components/NowPlaying.svelte';
-	import PlayerBar from '$lib/components/PlayerBar.svelte';
-	import { APP_NAME } from '$lib/constants';
-	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
-	import { HITBOX_STYLE } from '$lib/styles/hitbox';
-	import OfflineStrip from '$lib/components/OfflineStrip.svelte';
+	} from '#lib/api/fetch.ts';
+	import AccountMenu from '#lib/components/AccountMenu.svelte';
+	import PhoneAppBar from '#lib/components/PhoneAppBar.svelte';
+	import Rail from '#lib/components/shell/Rail.svelte';
+	import PhoneTabs from '#lib/components/shell/PhoneTabs.svelte';
+	import { standingPathname } from '#lib/routes/standingAddress.ts';
+	import {
+		isSongRoutePath,
+		LIBRARY_ROUTE_PATH,
+		PLAYLISTS_ROUTE_PATH
+	} from '#lib/routes/addresses.ts';
+	import type { Place } from '#lib/stores/libraryContext.ts';
+	import NowPlaying from '#lib/components/NowPlaying.svelte';
+	import PlayerBar from '#lib/components/PlayerBar.svelte';
+	import { APP_NAME } from '#lib/constants.ts';
+	import { AUTH_CHECK_RETRY_LABEL } from '#lib/constants/auth.ts';
+	import { HITBOX_STYLE } from '#lib/styles/hitbox.ts';
+	import OfflineStrip from '#lib/components/OfflineStrip.svelte';
 	import {
 		checkAuth,
 		currentUser,
@@ -32,7 +36,7 @@
 		authCheckUnreachable,
 		handleSessionLost,
 		logout
-	} from '$lib/stores/auth';
+	} from '#lib/stores/auth.ts';
 	import {
 		backToCollection,
 		followShellLayers,
@@ -41,31 +45,31 @@
 		openLibraryWall,
 		openHome,
 		openRailSearchTarget
-	} from '$lib/stores/navigation';
-	import { followUnsavedDraftAtUnload } from '$lib/stores/editor';
-	import { closeTopLayer } from '$lib/stores/layers';
-	import { notifyRateLimited } from '$lib/stores/rateLimitNotice';
-	import { restoreLibraryHistoryOnRouterStart } from '$lib/stores/libraryContext';
+	} from '#lib/stores/navigation.ts';
+	import { followUnsavedDraftAtUnload } from '#lib/stores/editor.ts';
+	import { closeTopLayer } from '#lib/stores/layers.ts';
+	import { notifyRateLimited } from '#lib/stores/rateLimitNotice.ts';
+	import { restoreLibraryHistoryOnRouterStart } from '#lib/stores/libraryContext.ts';
 	import {
 		installHistoryController,
 		loadAfresh,
 		mountRouteOfLandedAddress,
 		stampNavigatedEntry
-	} from '$lib/history/historyController';
+	} from '#lib/history/historyController.ts';
 	import {
 		startLibraryResourceSync,
 		stopLibraryResourceSync,
 		waitForResourceReady
-	} from '$lib/stores/resourceSync';
-	import { openCollection } from '$lib/stores/collection';
+	} from '#lib/stores/resourceSync.ts';
+	import { openCollection } from '#lib/stores/collection.ts';
 	import {
 		escapeNowPlaying,
 		nowPlayingDockable,
 		nowPlayingOpen,
 		selectedSongId
-	} from '$lib/stores/player';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { NOW_PLAYING_STACKED_MEDIA } from '$lib/constants/now-playing';
+	} from '#lib/stores/player.ts';
+	import { audioPlayer } from '#lib/services/audioPlayer.svelte.ts';
+	import { NOW_PLAYING_STACKED_MEDIA } from '#lib/constants/now-playing.ts';
 	import {
 		initRailCollapsed,
 		initRailWidth,
@@ -73,11 +77,11 @@
 		railWidth,
 		initTheme,
 		watchTypingOnPhone
-	} from '$lib/stores/ui';
-	import { transportBarHidden } from '$lib/stores/transportBar';
-	import { offline } from '$lib/stores/connectivity';
-	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { escapeLevelUpTarget, handleGlobalEscape } from '$lib/utils/escape-level-up';
+	} from '#lib/stores/ui.ts';
+	import { transportBarHidden } from '#lib/stores/transportBar.ts';
+	import { offline } from '#lib/stores/connectivity.ts';
+	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
+	import { escapeLevelUpTarget, handleGlobalEscape } from '#lib/utils/escape-level-up.ts';
 	import { dev, browser } from '$app/environment';
 	import { get } from 'svelte/store';
 

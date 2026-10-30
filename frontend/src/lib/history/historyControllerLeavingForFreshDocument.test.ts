@@ -8,9 +8,9 @@ import {
 	reloadAfresh,
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
-} from '$lib/history/historyController';
-import { holdLayer, resetLayersForTests } from '$lib/stores/layers';
-import { documentLoadsStandIn } from '$lib/test-utils/document-loads';
+} from '#lib/history/historyController.ts';
+import { holdLayer, resetLayersForTests } from '#lib/stores/layers.ts';
+import { documentLoadsStandIn } from '#lib/test-utils/document-loads.ts';
 
 // Issue #1340, ruling A: a sign-out or a lost session leaves by a fresh
 // document load. Over a layer's entry the load replaces it, so Back finds no

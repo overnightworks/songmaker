@@ -1,18 +1,18 @@
-import { makeSong, makeVersion } from '$lib/test-utils/factories';
+import { makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-vi.mock('$lib/api/client', () => ({
+vi.mock('#lib/api/client.ts', () => ({
 	fetchVersions: vi.fn().mockResolvedValue([]),
 	updateSong: vi.fn(),
 	deleteVersion: vi.fn(),
 	fetchSong: vi.fn()
 }));
 
-vi.mock('$lib/stores/libraryData', () => ({
+vi.mock('#lib/stores/libraryData.ts', () => ({
 	replaceSongInList: vi.fn()
 }));
-vi.mock('$lib/stores/player', async () => {
+vi.mock('#lib/stores/player.ts', async () => {
 	const { writable } = await import('svelte/store');
 	return {
 		selectedSongId: writable('s1')
@@ -30,8 +30,8 @@ import {
 	setDraftLyrics,
 	versions
 } from './editor';
-import { selectedSongId } from '$lib/stores/player';
-import type { SongItem } from '$lib/api/types';
+import { selectedSongId } from '#lib/stores/player.ts';
+import type { SongItem } from '#lib/api/types.ts';
 
 const savedSongFields = {
 	slug: 'test',
@@ -128,7 +128,7 @@ describe('handleSave', () => {
 		editBefore,
 		action
 	}: Pick<(typeof saveScenarios)[number], 'from' | 'editBefore' | 'action'>): Promise<string> {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		let finishSave!: (song: SongItem) => void;
 		vi.mocked(updateSong).mockReturnValueOnce(
 			new Promise((resolve) => {
@@ -167,7 +167,7 @@ describe('handleSave', () => {
 	it.each(saveScenarios)(
 		'defect:#1598 save records only the sent draft and provenance: $scenario',
 		async (scenario) => {
-			const { updateSong } = await import('$lib/api/client');
+			const { updateSong } = await import('#lib/api/client.ts');
 			const { nextFrom, expectedLyrics, dirty } = scenario;
 			await saveWithIntervention(scenario);
 			expect(get(editLyrics)).toBe(expectedLyrics);
@@ -189,7 +189,7 @@ describe('handleSave', () => {
 
 	it('calls updateSong, resets dirty state, and returns the saved song', async () => {
 		vi.clearAllMocks();
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		const mockUpdate = vi.mocked(updateSong);
 		const saved = makeSong({ ...savedSongFields, version_count: 2 });
 		mockUpdate.mockResolvedValueOnce(saved);
@@ -206,7 +206,7 @@ describe('handleSave', () => {
 	});
 
 	it('fails loud: rejects instead of swallowing the error', async () => {
-		const { updateSong } = await import('$lib/api/client');
+		const { updateSong } = await import('#lib/api/client.ts');
 		vi.mocked(updateSong).mockRejectedValueOnce(new Error('Network error'));
 
 		loadSongData(makeSong(savedSongFields));

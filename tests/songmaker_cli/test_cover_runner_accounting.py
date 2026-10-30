@@ -314,7 +314,7 @@ def test_album_deletion_retains_cover_history(accounting_factory, running_cover,
 
 def test_migration_preserves_usage_across_upgrade_album_deletion_and_downgrade(accounting_pg_url):
     """1301-F3-C1-DURABLE: change the FK without erasing existing or orphaned jobs."""
-    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
     config.set_main_option(
         "sqlalchemy.url",
         accounting_pg_url.render_as_string(hide_password=False).replace("%", "%%"),
