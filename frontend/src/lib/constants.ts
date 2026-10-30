@@ -198,6 +198,7 @@ export const TAKE_PICK_LABEL = 'Pick';
 export const TAKE_OVERFLOW_LABEL = 'More';
 export const TAKE_SHARE_LABEL = 'Share';
 export const TAKE_PLAYLIST_LABEL = 'Add to playlist';
+export const TAKE_RESTORE_LABEL = 'Restore';
 export const TAKE_ARCHIVED_TITLE = 'Archived take';
 export const TAKE_DELETE_LABEL = 'Delete';
 export const TAKE_KEEP_LABEL = 'Keep';

@@ -40,6 +40,9 @@ Quelle: OPERATOR — Issue #2066, chat ruling dated 2026-10-30.
 ### REQ-CURATION-08: Stage 1 of automatic retention re-checks Pick and Keep when it writes, so a Keep that commits between selection and write wins.
 Quelle: OPERATOR — Issue #2066, chat ruling dated 2026-10-30.
 
+### REQ-CURATION-09: An archived audio take cannot be made a Pick or a Keep, shared, or added to a playlist until it is restored.
+Quelle: OPERATOR — Issue #2066, chat ruling dated 2026-10-30.
+
 ## Non-goals
 
 - This revision does not decide exactly when an edit creates a new version.
