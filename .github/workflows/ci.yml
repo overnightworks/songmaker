@@ -24,7 +24,7 @@ jobs:
       UV_PYTHON: ${{ matrix.python-version }} # why: .python-version would otherwise win over the matrix leg.
     strategy:
       matrix:
-        python-version: ["3.12", "3.14"]
+        python-version: ["3.14"]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.x
@@ -97,7 +97,7 @@ jobs:
           echo "### Backend: ${passed} passed, ${skipped:-0} skipped — ${total} coverage" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload backend coverage
-        if: ${{ !cancelled() && matrix.python-version == '3.14' }} # why: one leg owns the single Sonar coverage report.
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.x
         with:
           name: sonar-coverage-backend

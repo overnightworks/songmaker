@@ -1,11 +1,16 @@
 [gate]
 mandatory_jobs = [
-    "Backend (Python 3.12)",
     "Backend (Python 3.14)",
     "Alert rules (promtool)",
     "PostgreSQL contract (serial)",
     "Frontend (Node 22)",
 ]
+
+[[gate.loosened]]
+what = 'mandatory job "Backend (Python 3.12)" removed'
+item = "#2102"
+date = 2026-10-31
+reason = "the floor is 3.14 and no image runs 3.12 since #2098; overnightworks/quality#38"
 
 [[gate.loosened]]
 what = 'mandatory job "Acceptance evidence (integration)" removed'
