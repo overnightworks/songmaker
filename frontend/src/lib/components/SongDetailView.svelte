@@ -112,7 +112,6 @@
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
 	} from '#lib/constants.ts';
-	import { sharePagePath } from '#lib/routes/addresses.ts';
 	import { titleInitials } from '#lib/utils/format.ts';
 	import { usableAlbumPrimary } from '#lib/utils/contrast.ts';
 	import { subscribeCompactLayout } from '#lib/utils/compact-layout.ts';
@@ -521,15 +520,18 @@
 		if (!song) throw new Error('No song');
 		const songId = song.id;
 		const result = await shareSong(songId);
-		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug: result.share_slug }));
+		const { share_slug, share_url } = result;
+		updateSongInList(songId, (s) => ({ ...s, is_shared: true, share_slug, share_url }));
 		return result;
 	}
+
+	const SONG_UNSHARED = { is_shared: false, share_slug: null, share_url: null };
 
 	async function onSongShareDisable() {
 		if (!song) return;
 		const songId = song.id;
 		await unshareSong(songId);
-		updateSongInList(songId, (s) => ({ ...s, is_shared: false, share_slug: null }));
+		updateSongInList(songId, (s) => ({ ...s, ...SONG_UNSHARED }));
 	}
 
 	async function onDeleteSong(): Promise<void> {
@@ -737,9 +739,7 @@
 	{/snippet}
 
 	{#snippet sharedLink()}
-		{#if song.is_shared && song.share_slug}
-			<ShareLinkChip url={`${window.location.origin}${sharePagePath('song', song.share_slug)}`} />
-		{/if}
+		{#if song.share_url}<ShareLinkChip url={song.share_url} />{/if}
 	{/snippet}
 
 	{#snippet phoneEdit()}
