@@ -31,6 +31,10 @@ import {
 	editKeyScale,
 	setDraftGenParams,
 	setDraftLyrics,
+	setDraftPrompt,
+	setDraftBpm,
+	setDraftAudioDuration,
+	setDraftKeyScale,
 	isDirty,
 	versions,
 	draftLoadedFrom,
@@ -679,6 +683,12 @@ describe('draftVersionNumber', () => {
 		job: { id: 'j1', type: 'generate', status, progress: 0, version_id: versionId }
 	});
 
+	beforeEach(() => {
+		activeJobs.set([]);
+		versions.set([]);
+		(selectedSong as Writable<SongItem | null>).set(null);
+	});
+
 	// [case, versions, job status, job version, change of the draft, predicted number]
 	it.each([
 		['no versions yet', 'none', null, '', 'creative', 1],
@@ -686,18 +696,18 @@ describe('draftVersionNumber', () => {
 		['a creative change of a take-less latest', 'plain', null, '', 'creative', 2],
 		['a parameters-only change of a take-less latest', 'plain', null, '', 'params', 2],
 		['a creative change of a latest with a take', 'taken', null, '', 'creative', 3],
+		['a prompt change of a latest with a take', 'taken', null, '', 'prompt', 3],
+		['a BPM change of a latest with a take', 'taken', null, '', 'bpm', 3],
+		['a length change of a latest with a take', 'taken', null, '', 'duration', 3],
+		['a key change of a latest with a take', 'taken', null, '', 'key', 3],
+		['an older version draft, the latest has a take', 'taken', null, '', 'older', 3],
+		['an older version draft while the latest renders', 'plain', 'queued', 'v2', 'older', 3],
 		['a parameters-only change of a latest with a take', 'taken', null, '', 'params', 2],
 		['a creative change while the latest renders', 'plain', 'queued', 'v2', 'creative', 3],
 		['a parameters-only change while the latest runs', 'plain', 'running', 'v2', 'params', 3],
-		[
-			'a parameters-only change while a latest with a take renders',
-			'taken',
-			'queued',
-			'v2',
-			'params',
-			3
-		],
+		['a params change while a latest with a take renders', 'taken', 'queued', 'v2', 'params', 3],
 		['a creative change while an older version renders', 'plain', 'queued', 'v1', 'creative', 2],
+		['a params change while an older version renders', 'plain', 'queued', 'v1', 'params', 2],
 		['a finished job on the latest', 'plain', 'completed', 'v2', 'creative', 2],
 		['a gap in the numbers, never the version count', 'gap', null, '', 'creative', 4]
 	] as const)('predicts %s', (_case, shape, status, jobVersion, change, expected) => {
@@ -710,6 +720,10 @@ describe('draftVersionNumber', () => {
 		activeJobs.set(status ? [jobOf(status, jobVersion)] : []);
 
 		if (change === 'creative') setDraftLyrics('changed lyrics');
+		if (change === 'prompt') setDraftPrompt('changed prompt');
+		if (change === 'bpm') setDraftBpm(133);
+		if (change === 'duration') setDraftAudioDuration(77);
+		if (change === 'key') setDraftKeyScale('C major');
 		if (change === 'params') setDraftGenParams({ inference_steps: 99 });
 		if (change === 'older') loadVersionAsDraft(older);
 

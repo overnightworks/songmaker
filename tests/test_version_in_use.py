@@ -247,6 +247,7 @@ PARAMETER_EDITS = {
     "generation params": {"generation_params": {"inference_steps": 50}},
     "reference": {"reference_recording_id": "reference"},
 }
+TAKE_PARAMS = {"inference_steps": 25}
 VERSION_FIELDS = (
     "lyrics", "prompt", "bpm", "audio_duration", "key_scale", "generation_params",
     "reference_recording_id",
@@ -272,7 +273,8 @@ def _give_take_to_latest(client: TestClient) -> None:
     with _database(client) as session:
         session.add(Generation(
             id="latest-take", song_id="song", version_id="v2", generation_number=3,
-            mp3_path="u/latest.mp3",
+            mp3_path="u/latest.mp3", generation_params=TAKE_PARAMS,
+            reference_recording_id="reference",
         ))
         session.commit()
 
@@ -317,7 +319,8 @@ def test_v4_a_parameters_only_edit_of_a_version_with_a_take_rewrites_it(client, 
     assert set(versions) == {1, 2}
     assert _holds(versions[2], edit)
     with _database(client) as session:
-        assert session.get(Generation, "latest-take").version_id == "v2"
+        take = session.get(Generation, "latest-take")
+        assert (take.generation_params, take.reference_recording_id) == (TAKE_PARAMS, "reference")
 
 
 @pytest.mark.parametrize("status", [JobStatus.QUEUED, JobStatus.RUNNING])

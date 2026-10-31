@@ -337,7 +337,7 @@ class _VersionContent:
 
 
 def _rewrites_in_place(
-    session: Session, previous: Version | None, content: _VersionContent, force_new_version: bool,
+    session: Session, previous: Version, content: _VersionContent, force_new_version: bool,
 ) -> bool:
     """Whether a save rewrites the latest version instead of making the next one.
 
@@ -347,8 +347,9 @@ def _rewrites_in_place(
     change is creative; a change to only generation settings or the reference of a version
     with finished takes still rewrites it. A save that changes nothing makes no version.
     The caller holds the song row lock, so the job check sees every job enqueued before it.
+    The take check must read after the job check; a job ends only after its takes commit.
     """
-    if previous is None or force_new_version:
+    if force_new_version:
         return False
     if not content.differs_from(previous):
         return True
