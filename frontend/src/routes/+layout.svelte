@@ -76,6 +76,7 @@
 		railCollapsed,
 		railWidth,
 		initTheme,
+		loadThemeChoice,
 		watchTypingOnPhone
 	} from '#lib/stores/ui.ts';
 	import { transportBarHidden } from '#lib/stores/transportBar.ts';
@@ -266,6 +267,7 @@
 		const user = await checkAuth(() => void initAuth());
 		if (user) {
 			fetchCapabilities().catch(() => {});
+			void loadThemeChoice();
 			return;
 		}
 		if (get(authCheckError) || get(authCheckUnreachable)) {
