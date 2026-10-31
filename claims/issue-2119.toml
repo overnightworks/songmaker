@@ -1,7 +1,0 @@
-claim_id = "7f8a6405255441ce85945e78c3538fa8"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "f65a001e487860a24155b0e5128dd85177f536b1"
-branch = "claude/issue-2119-the-web-cover-runner-race-test-waits-on"
-scope = ["tests/songmaker_cli/test_cover_runner.py"]
-opened_commit = "6fe2dd7ab29bcc622adff94c8b544dc3da0e1e11"
