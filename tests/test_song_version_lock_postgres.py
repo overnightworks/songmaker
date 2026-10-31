@@ -218,3 +218,42 @@ def test_m5_a_version_delete_waits_for_an_enqueue_and_answers_409(pg_factory, tm
     [version_id] = world.job_versions()
     with pg_factory() as session:
         assert session.get(Version, version_id).version_number == 2
+
+
+@pytest.mark.parametrize("leg", list(EDITOR_LEGS))
+def test_r1_an_editor_save_waits_for_an_enqueue_and_makes_the_next_version(
+    pg_factory, tmp_path, leg,
+) -> None:
+    world = _World(pg_factory, tmp_path, [REFERENCES["F"], REFERENCES["H"]])
+    enqueue_written = CommitPause(lambda session: wrote_to_tables(session, "jobs"))
+    with worker_up():
+        answers = race(
+            pg_factory, world.enqueue(2), world.edit(leg), pause=enqueue_written,
+        )
+    assert answers["first"].status_code == 200
+    assert answers["second"].status_code == 200
+    assert world.versions() == {
+        1: ("", REFERENCES["F"]),
+        2: ("lyrics 2", REFERENCES["H"]),
+        3: _edited(leg, "lyrics 2", REFERENCES["H"]),
+    }
+    [version_id] = world.job_versions()
+    with pg_factory() as session:
+        assert session.get(Version, version_id).version_number == 2
+
+
+@pytest.mark.parametrize("leg", list(EDITOR_LEGS))
+def test_r2_an_enqueue_waits_for_an_editor_save_and_renders_the_saved_version(
+    pg_factory, tmp_path, leg,
+) -> None:
+    world = _World(pg_factory, tmp_path, [REFERENCES["F"], REFERENCES["H"]])
+    with worker_up():
+        answers = race(pg_factory, world.edit(leg), world.enqueue(2))
+    assert answers["first"].status_code == 200
+    assert answers["second"].status_code == 200
+    assert world.versions() == {
+        1: ("", REFERENCES["F"]), 2: _edited(leg, "lyrics 2", REFERENCES["H"]),
+    }
+    [version_id] = world.job_versions()
+    with pg_factory() as session:
+        assert session.get(Version, version_id).version_number == 2

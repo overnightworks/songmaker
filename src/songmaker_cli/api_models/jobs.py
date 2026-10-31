@@ -68,6 +68,7 @@ class JobResponse(BaseModel):
     id: str
     type: str
     status: str
+    version_id: str | None = None
     progress: float = 0.0
     phase: GenerationPhase | None = None
     take_index: int | None = None
@@ -95,6 +96,7 @@ class JobResponse(BaseModel):
             id=job.id,
             type=job.type,
             status=job.status,
+            version_id=job.version_id,
             progress=job.progress,
             phase=job.phase if job.status == JobStatus.RUNNING else None,
             take_index=job.take_index,

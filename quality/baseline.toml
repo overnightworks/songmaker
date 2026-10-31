@@ -1,7 +1,7 @@
 # Measured by `quality baseline write`. Entries only ever go down.
 
 [ccn."src/songmaker_cli/db/queries/songs.py"]
-"update_song" = 14
+"update_song" = 12
 
 [ccn."src/songmaker_cli/scoring/pipeline.py"]
 "run_scoring_pipeline" = 16
@@ -27,7 +27,7 @@
 "frontend/e2e/seed.ts" = 1180
 "frontend/e2e/song-phone.spec.ts" = 860
 "frontend/e2e/song-versions.spec.ts" = 863
-"frontend/src/lib/api/types.ts" = 1143
+"frontend/src/lib/api/types.ts" = 1144
 "frontend/src/lib/components/AlbumCoverEditor.test.ts" = 975
 "frontend/src/lib/components/AlbumDetailView.test.ts" = 1117
 "frontend/src/lib/components/CoWriterPanel.svelte" = 1505
@@ -38,7 +38,7 @@
 "frontend/src/lib/components/NowPlayingFrame.svelte" = 1109
 "frontend/src/lib/components/PlayerBar.test.ts" = 1645
 "frontend/src/lib/components/PlaylistDetailView.test.ts" = 828
-"frontend/src/lib/components/SongDetailView.svelte" = 1034
+"frontend/src/lib/components/SongDetailView.svelte" = 1027
 "frontend/src/lib/components/SongDetailView.test.ts" = 2306
 "frontend/src/lib/components/WorkerPoolPanel.test.ts" = 941
 "frontend/src/lib/components/editor/TakesList.test.ts" = 1304

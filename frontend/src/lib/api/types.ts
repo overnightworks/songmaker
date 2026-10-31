@@ -405,6 +405,7 @@ export interface JobItem {
 	id: string;
 	type: string;
 	status: string;
+	version_id?: string | null;
 	progress: number;
 	phase?: 'loading_model' | 'writing' | 'rendering' | 'saving_take' | null;
 	take_index?: number | null;
