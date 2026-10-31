@@ -10,12 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import mimetypes
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Final
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -75,18 +73,6 @@ from songmaker_cli.request_policies import (
 from songmaker_cli.settings import DEFAULT_SERVER_PORT, CoverExecutor, Settings, get_settings
 
 log = logging.getLogger(__name__)
-
-STATIC_ASSET_MEDIA_TYPES: Final = {".woff2": "font/woff2"}
-
-
-def _register_static_asset_media_types() -> None:
-    """Teach the static mount the asset types Python's own map lacks.
-
-    The slim image has no /etc/mime.types and Python 3.12 does not know
-    woff2, so fonts would go out as application/octet-stream under nosniff.
-    """
-    for suffix, media_type in STATIC_ASSET_MEDIA_TYPES.items():
-        mimetypes.add_type(media_type, suffix)
 
 
 def _record_background_loop_completion(
@@ -313,7 +299,6 @@ def create_app(
     sveltekit_app_dir = sveltekit_dir / "_app"
 
     if sveltekit_app_dir.exists():
-        _register_static_asset_media_types()
         app.mount(
             "/_app",
             StaticFiles(directory=str(sveltekit_app_dir)),
