@@ -58,7 +58,7 @@ def prometheus_rules_response(alerting_rules: int) -> str:
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
 CHECK_RUN_FIELD_SEPARATOR = "\x1f"
-REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.12)"
+REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.14)"
 SONAR_ACTIONS_JOB_NAME = "SonarCloud scan"
 
 REQUIRED_GRAFANA_PASSWORD = (

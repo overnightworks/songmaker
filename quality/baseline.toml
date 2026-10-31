@@ -167,7 +167,7 @@
 
 [function_lines."src/songmaker_cli/server.py"]
 "_lifespan" = 84
-"create_app" = 180
+"create_app" = 179
 
 [function_lines."tests/acestep_worker/test_wrapper.py"]
 "_make_deps" = 64
