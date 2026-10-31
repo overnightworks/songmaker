@@ -13,7 +13,7 @@ import {
 	shellOf,
 	waitForServiceWorkerControl
 } from './helpers';
-import { seedAccount, signedInApi, runMarker, type SeededAccount } from './seed';
+import { BASE_URL, seedAccount, signedInApi, runMarker, type SeededAccount } from './seed';
 
 const COPY_KEY = 'songmaker.theme';
 const THEME_PATH = '/api/settings/theme';
@@ -49,7 +49,10 @@ function themeAnswer(method: 'GET' | 'PUT') {
 
 async function choose(theme: 'light' | 'dark' | 'system') {
 	const api = await signedInApi(account);
-	const response = await api.put(THEME_PATH, { data: { theme } });
+	const response = await api.put(THEME_PATH, {
+		data: { theme },
+		headers: { origin: BASE_URL }
+	});
 	expect(response.ok()).toBe(true);
 	await api.dispose();
 }
