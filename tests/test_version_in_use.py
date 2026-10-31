@@ -19,10 +19,20 @@ from support.web_app import (
 from songmaker_cli.api_helpers import create_job_with_rate_limit
 from songmaker_cli.constants import JobStatus, JobType
 from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import Album, AvailableModel, Generation, Job, Song, User, Version
+from songmaker_cli.db.models import (
+    Album,
+    AvailableModel,
+    Generation,
+    Job,
+    ReferenceRecording,
+    Song,
+    User,
+    Version,
+)
 from songmaker_cli.db.queries.albums import delete_album
 from songmaker_cli.db.queries.jobs import JobStatusUpdate, create_job, update_job_status
 from songmaker_cli.db.queries.songs import delete_song
+from songmaker_cli.mcp_server.tools import tool_rename_song, tool_update_song_lyrics
 
 OWNER_ID = "owner"
 OWNER = make_authenticated_user(OWNER_ID, username="owner")
@@ -35,6 +45,10 @@ TERMINAL_STATUSES = [
 def _seed(session) -> None:
     session.add(User(id=OWNER_ID, username="owner", role="user"))
     session.flush()
+    session.add(ReferenceRecording(
+        id="reference", user_id=OWNER_ID, storage_path="owner/reference.wav",
+        original_filename="reference.wav", size_bytes=4,
+    ))
     session.add(Album(id="album", title="A", artist="B", created_by=OWNER_ID))
     session.add(Song(id="song", title="S", album_id="album", track_number=1, slug="s"))
     session.add(Song(id="other-song", title="O", album_id="album", track_number=2, slug="o"))
@@ -124,6 +138,7 @@ def test_m1_a_take_job_row_holds_the_version_the_endpoint_resolved(client, reque
     with worker_up():
         response = client.post(path, json=body)
     assert response.status_code == 200
+    assert response.json()["version_id"] == _job_version(client, response.json()["id"])
     assert _job_version(client, response.json()["id"]) == expected_version
 
 
@@ -219,3 +234,151 @@ def test_m8_purging_a_song_or_an_album_succeeds_with_old_jobs_on_its_versions(cl
         delete_album(session, "album")
         session.commit()
     assert _job_version(client, job_id) is None
+
+
+CREATIVE_EDITS = {
+    "lyrics": {"lyrics": "edited lyrics"},
+    "prompt": {"prompt": "edited prompt"},
+    "bpm": {"bpm": 120},
+    "length": {"audio_duration": 90},
+    "key": {"key_scale": "C major"},
+}
+PARAMETER_EDITS = {
+    "generation params": {"generation_params": {"inference_steps": 50}},
+    "reference": {"reference_recording_id": "reference"},
+}
+VERSION_FIELDS = (
+    "lyrics", "prompt", "bpm", "audio_duration", "key_scale", "generation_params",
+    "reference_recording_id",
+)
+
+
+def _versions(client: TestClient) -> dict[int, dict]:
+    """Version number to its id and content."""
+    with _database(client) as session:
+        return {
+            version.version_number: {
+                "id": version.id, **{field: getattr(version, field) for field in VERSION_FIELDS},
+            }
+            for version in session.query(Version).filter_by(song_id="song")
+        }
+
+
+def _save(client: TestClient, **body) -> None:
+    assert client.put("/api/songs/song", json=body).status_code == 200
+
+
+def _give_take_to_latest(client: TestClient) -> None:
+    with _database(client) as session:
+        session.add(Generation(
+            id="latest-take", song_id="song", version_id="v2", generation_number=3,
+            mp3_path="u/latest.mp3",
+        ))
+        session.commit()
+
+
+def _holds(version: dict, edit: dict) -> bool:
+    return all(version[field] == value for field, value in edit.items())
+
+
+@pytest.mark.parametrize(
+    "edit", [*CREATIVE_EDITS.values(), *PARAMETER_EDITS.values()],
+    ids=[*CREATIVE_EDITS, *PARAMETER_EDITS],
+)
+def test_v1_v2_a_latest_without_take_or_job_is_rewritten_in_place(client, edit):
+    _save(client, **edit)
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2}
+    assert versions[2]["id"] == "v2"
+    assert _holds(versions[2], edit)
+
+
+@pytest.mark.parametrize("edit", CREATIVE_EDITS.values(), ids=list(CREATIVE_EDITS))
+def test_v3_a_creative_edit_of_a_version_with_a_take_makes_the_next_version(client, edit):
+    _give_take_to_latest(client)
+    before = _versions(client)[2]
+
+    _save(client, **edit)
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2, 3}
+    assert _holds(versions[3], edit)
+    assert versions[2] == before
+
+
+@pytest.mark.parametrize("edit", PARAMETER_EDITS.values(), ids=list(PARAMETER_EDITS))
+def test_v4_a_parameters_only_edit_of_a_version_with_a_take_rewrites_it(client, edit):
+    _give_take_to_latest(client)
+
+    _save(client, **edit)
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2}
+    assert _holds(versions[2], edit)
+    with _database(client) as session:
+        assert session.get(Generation, "latest-take").version_id == "v2"
+
+
+@pytest.mark.parametrize("status", [JobStatus.QUEUED, JobStatus.RUNNING])
+@pytest.mark.parametrize(
+    "edit", [*CREATIVE_EDITS.values(), *PARAMETER_EDITS.values()],
+    ids=[*CREATIVE_EDITS, *PARAMETER_EDITS],
+)
+@pytest.mark.parametrize("with_take", [False, True], ids=["no take", "with take"])
+def test_v5_v6_v7_an_edit_during_a_render_makes_the_next_version_and_spares_the_rendered_one(
+    client, status, edit, with_take,
+):
+    if with_take:
+        _give_take_to_latest(client)
+    before = _versions(client)[2]
+    job_id = _add_job(client, "v2", status)
+
+    _save(client, **edit)
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2, 3}
+    assert _holds(versions[3], edit)
+    assert versions[2] == before
+    assert _job_version(client, job_id) == "v2"
+
+
+def test_v8_a_save_that_changes_nothing_during_a_render_makes_no_version(client):
+    before = _versions(client)
+    _add_job(client, "v2")
+
+    _save(client, lyrics="two", prompt="rock")
+
+    assert _versions(client) == before
+
+
+@pytest.mark.parametrize(
+    "job_version, status",
+    [("v1", JobStatus.QUEUED), *(("v2", status) for status in TERMINAL_STATUSES)],
+    ids=["older version", *TERMINAL_STATUSES],
+)
+def test_v9_v10_a_job_that_does_not_render_the_latest_leaves_it_rewritten_in_place(
+    client, job_version, status,
+):
+    _add_job(client, job_version, status)
+
+    _save(client, lyrics="edited lyrics")
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2}
+    assert versions[2]["lyrics"] == "edited lyrics"
+
+
+def test_c1_a_co_writer_write_during_a_render_makes_a_version_and_spares_the_rendered_one(client):
+    before = _versions(client)[2]
+    job_id = _add_job(client, "v2")
+    with _database(client) as session:
+        tool_update_song_lyrics(session, OWNER, "song", "co-written")
+        tool_rename_song(session, OWNER, "song", "Renamed")
+        session.commit()
+
+    versions = _versions(client)
+    assert set(versions) == {1, 2, 3, 4}
+    assert versions[2] == before
+    assert versions[3]["lyrics"] == "co-written"
+    assert _job_version(client, job_id) == "v2"

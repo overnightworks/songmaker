@@ -187,7 +187,7 @@ class UserSongWork(Base):
 
 
 class Version(Base):
-    """A content snapshot — lyrics, prompt, params. Each save = new version."""
+    """A content snapshot: lyrics, prompt, params. ``update_song`` decides when a save makes one."""
 
     __tablename__ = "versions"
 

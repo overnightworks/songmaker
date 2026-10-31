@@ -10,7 +10,7 @@ The README indexes the docs.
 
 A musician creates an **album** (EP, LP or concept album) holding **songs**; each song belongs to one album. **Playlists** collect favourite songs across albums.
 
-Song workflow: write lyrics and a style prompt, **generate** audio via ACE-Step, listen, tweak, generate again. Each edit creates an immutable **version** (lyrics, prompt, generation params); each attempt produces a **generation** (an audio file tied to one version). A song has many versions, a version many generations.
+Song workflow: write lyrics and a style prompt, **generate** audio via ACE-Step, listen, tweak, generate again. Saving rewrites the song's latest **version** (lyrics, prompt, generation params) until a take is queued or rendering for it, or until it has a take and the lyrics, prompt, BPM, key or length change; then the save makes a new version; each attempt produces a **generation** (an audio file tied to one version). A song has many versions, a version many generations.
 
 Two flags on generations: **pick** is THE one for this song on the album (one per song, replaces the previous pick); **keep** means "don't delete it" and survives cleanup but is not the album pick.
 

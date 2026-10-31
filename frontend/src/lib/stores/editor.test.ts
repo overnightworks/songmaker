@@ -1,6 +1,6 @@
 import { makeGeneration, makeSong, makeVersion } from '#lib/test-utils/factories.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { get, type Writable } from 'svelte/store';
 
 vi.mock('#lib/api/client.ts', () => ({
 	fetchVersions: vi.fn().mockResolvedValue([]),
@@ -15,7 +15,8 @@ vi.mock('#lib/stores/libraryData.ts', () => ({
 vi.mock('#lib/stores/player.ts', async () => {
 	const { writable } = await import('svelte/store');
 	return {
-		selectedSongId: writable('s1')
+		selectedSongId: writable('s1'),
+		selectedSong: writable(null)
 	};
 });
 
@@ -42,13 +43,14 @@ import {
 	handleSave,
 	handleDeleteVersion,
 	discardDraft,
-	computeDraftVersionNumber,
+	draftVersionNumber,
 	versionDeleteEditorLoss,
 	versionLoadUndoOutstanding
 } from './editor';
-import { selectedSongId } from '#lib/stores/player.ts';
+import { selectedSong, selectedSongId } from '#lib/stores/player.ts';
+import { activeJobs } from '#lib/stores/jobs.ts';
 import { toasts } from '#lib/stores/toast.ts';
-import type { GenerationItem, SongItem } from '#lib/api/types.ts';
+import type { SongItem } from '#lib/api/types.ts';
 
 type VersionLoad = ReturnType<typeof loadVersionAsDraft>;
 
@@ -662,44 +664,69 @@ describe('discardDraft', () => {
 	});
 });
 
-describe('computeDraftVersionNumber', () => {
-	it('predicts version_number + 1 for a normal save onto a version that already has takes', () => {
-		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion()];
-		const generations = [makeGeneration({ seed: null, created_at: '', version_number: 2 })];
-
-		expect(computeDraftVersionNumber(versions, generations, false)).toBe(3);
+describe('draftVersionNumber', () => {
+	const latest = makeVersion({ id: 'v2', version_number: 2 });
+	const older = makeVersion();
+	const takeOf = (versionNumber: number) =>
+		makeGeneration({ seed: null, created_at: '', version_number: versionNumber });
+	const shapes = {
+		none: [[], []],
+		plain: [[latest, older], []],
+		taken: [[latest, older], [takeOf(2)]],
+		gap: [[makeVersion({ id: 'v3', version_number: 3 }), older], [takeOf(3)]]
+	} as const;
+	const jobOf = (status: string, versionId: string) => ({
+		job: { id: 'j1', type: 'generate', status, progress: 0, version_id: versionId }
 	});
 
-	it('predicts the current version number when the take-less latest version will be overwritten in place', () => {
-		// v1 has never been generated into — handleSave() overwrites it rather
-		// than creating v2.
-		const versions = [makeVersion()];
-		const generations: GenerationItem[] = [];
+	// [case, versions, job status, job version, change of the draft, predicted number]
+	it.each([
+		['no versions yet', 'none', null, '', 'creative', 1],
+		['a draft loaded from an older version', 'plain', null, '', 'older', 3],
+		['a creative change of a take-less latest', 'plain', null, '', 'creative', 2],
+		['a parameters-only change of a take-less latest', 'plain', null, '', 'params', 2],
+		['a creative change of a latest with a take', 'taken', null, '', 'creative', 3],
+		['a parameters-only change of a latest with a take', 'taken', null, '', 'params', 2],
+		['a creative change while the latest renders', 'plain', 'queued', 'v2', 'creative', 3],
+		['a parameters-only change while the latest runs', 'plain', 'running', 'v2', 'params', 3],
+		[
+			'a parameters-only change while a latest with a take renders',
+			'taken',
+			'queued',
+			'v2',
+			'params',
+			3
+		],
+		['a creative change while an older version renders', 'plain', 'queued', 'v1', 'creative', 2],
+		['a finished job on the latest', 'plain', 'completed', 'v2', 'creative', 2],
+		['a gap in the numbers, never the version count', 'gap', null, '', 'creative', 4]
+	] as const)('predicts %s', (_case, shape, status, jobVersion, change, expected) => {
+		const [versionList, generations] = shapes[shape];
+		loadSongData(makeSong({ ...songDefaults, id: 's1', generations: [...generations] }));
+		versions.set([...versionList]);
+		(selectedSong as Writable<SongItem | null>).set(
+			makeSong({ id: 's1', generations: [...generations] })
+		);
+		activeJobs.set(status ? [jobOf(status, jobVersion)] : []);
 
-		expect(computeDraftVersionNumber(versions, generations, false)).toBe(1);
+		if (change === 'creative') setDraftLyrics('changed lyrics');
+		if (change === 'params') setDraftGenParams({ inference_steps: 99 });
+		if (change === 'older') loadVersionAsDraft(older);
+
+		expect(get(draftVersionNumber)).toBe(expected);
 	});
 
-	it('predicts version_number + 1 when a loaded draft is saved over a take-less latest version', () => {
-		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion()];
-		const generations = [makeGeneration({ seed: null, created_at: '', version_number: 1 })];
+	it('moves to the next version when a job renders the latest and back once it ends', () => {
+		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		versions.set([latest]);
+		setDraftLyrics('changed lyrics');
+		expect(get(draftVersionNumber)).toBe(2);
 
-		expect(computeDraftVersionNumber(versions, generations, true)).toBe(3);
-	});
+		activeJobs.set([jobOf('queued', 'v2')]);
+		expect(get(draftVersionNumber)).toBe(3);
 
-	it('predicts from the highest surviving version_number, not the count, after a middle version was deleted', () => {
-		// v2 was deleted; v1 and v3 remain, both with takes. song.version_count
-		// would now read 2, but the next save must land on v4.
-		const versions = [makeVersion({ id: 'v3', version_number: 3 }), makeVersion()];
-		const generations = [
-			makeGeneration({ seed: null, created_at: '', version_number: 3 }),
-			makeGeneration({ seed: null, created_at: '', id: 'g2' })
-		];
-
-		expect(computeDraftVersionNumber(versions, generations, false)).toBe(4);
-	});
-
-	it('returns 1 when the song has no versions yet', () => {
-		expect(computeDraftVersionNumber([], [], false)).toBe(1);
+		activeJobs.set([jobOf('completed', 'v2')]);
+		expect(get(draftVersionNumber)).toBe(2);
 	});
 });
 

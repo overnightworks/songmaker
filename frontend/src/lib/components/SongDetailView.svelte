@@ -60,8 +60,7 @@
 		versionLoadUndoOutstanding,
 		handleDeleteVersion,
 		handleSave,
-		computeDraftVersionNumber,
-		draftSavesAsNewVersion,
+		draftVersionNumber,
 		discardDraft
 	} from '#lib/stores/editor.ts';
 	import type { VersionDeleteEditorLoss } from '#lib/stores/editor.ts';
@@ -192,12 +191,6 @@
 			: []
 	);
 	const dirty = $derived($isDirty);
-	// song.version_count is a *count* of surviving versions, not the highest
-	// version number — the two diverge once any version has been deleted, so
-	// neither label below may use it. See computeDraftVersionNumber().
-	const draftVersionNumber = $derived(
-		computeDraftVersionNumber($versions, song?.generations ?? [], $draftSavesAsNewVersion)
-	);
 	const latestVersionNumber = $derived($versions[0]?.version_number ?? song?.version_count ?? 1);
 
 	let editorSongId: string | null = null;
@@ -399,7 +392,7 @@
 					loadStatus: takesStatus,
 					loadError: takesError,
 					dirty,
-					draftVersionNumber,
+					draftVersionNumber: $draftVersionNumber,
 					latestVersionNumber,
 					onsource: setSourceFromGeneration,
 					onretry: () => {
