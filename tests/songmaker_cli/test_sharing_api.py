@@ -24,8 +24,13 @@ from support.web_app import (
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.api_models.playlists import SharedPlaylistEntryResponse
+from songmaker_cli.api_models.songs import ShareKind, public_share_url
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import COVER_DIRNAME, PLAYLIST_COVER_DIRNAME, SONG_COVER_DIRNAME
+from songmaker_cli.constants import (
+    COVER_DIRNAME,
+    PLAYLIST_COVER_DIRNAME,
+    SONG_COVER_DIRNAME,
+)
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
 
@@ -2377,17 +2382,13 @@ def test_shared_cover_endpoints_hide_missing_media(
     assert response.status_code == 404
 
 
-# ── Public base URL (#339) ───────────────────────────────────────────
+# ── Public base URL ──────────────────────────────────────────────────
 #
-# Share links no longer trust request.base_url. In the Docker + Cloudflare
-# Tunnel deployment, TLS terminates at the Cloudflare edge and uvicorn runs
-# with proxy_headers=False (#328) so nothing rewrites the ASGI scope's
-# scheme -- request.base_url reports "http" even when the request actually
-# arrived over https (see auth.request_is_https(), which resolves the same
-# case correctly via the trusted-proxy-verified X-Forwarded-Proto, and
-# docs/security.md "Proxy trust"). PUBLIC_BASE_URL is the one, validated
-# owner of "what address am I reachable at from outside" instead; all four
-# share endpoints call api_helpers.resolve_public_base_url().
+# Share links never read request.base_url: behind a TLS-terminating proxy
+# it reads "http" (docs/security.md "Proxy trust").
+# PUBLIC_BASE_URL, validated once by the Settings field, is the one owner of
+# "what address am I reachable at from outside", and public_share_url() is the
+# one builder of an absolute share address.
 
 _FOUR_SHARE_ROUTES = [
     "/api/albums/test_album/share",
@@ -2417,23 +2418,30 @@ def test_share_url_carries_https_behind_a_tls_proxy(
     assert resp.json()["share_url"].startswith("https://songmaker.example/share/")
 
 
-@pytest.mark.parametrize("share_path", _FOUR_SHARE_ROUTES)
-def test_share_fails_named_when_public_base_url_is_unconfigured(
-    two_take_app: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-    share_path: str,
+@pytest.mark.parametrize(
+    ("kind", "address"),
+    [
+        (ShareKind.ALBUM, "https://songmaker.example/share/abc"),
+        (ShareKind.SONG, "https://songmaker.example/share/song/abc"),
+        (ShareKind.GENERATION, "https://songmaker.example/share/gen/abc"),
+        (ShareKind.PLAYLIST, "https://songmaker.example/share/playlist/abc"),
+    ],
+)
+def test_public_share_url_joins_the_public_origin_and_the_kinds_page(
+    monkeypatch: pytest.MonkeyPatch, kind: ShareKind, address: str,
 ) -> None:
-    """An unresolvable public address fails loudly rather than building a
-    share link with a guessed (and possibly wrong) scheme."""
-    from songmaker_cli.settings import get_settings
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://songmaker.example")
 
+    assert public_share_url(kind, "abc") == address
+
+
+def test_public_share_url_refuses_an_unconfigured_origin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("PUBLIC_BASE_URL", "")
-    get_settings.cache_clear()
 
-    resp = two_take_app.post(share_path)
-
-    assert resp.status_code == 500
-    assert "PUBLIC_BASE_URL" in resp.json()["detail"]
+    with pytest.raises(RuntimeError, match="PUBLIC_BASE_URL"):
+        public_share_url(ShareKind.SONG, "abc")
 
 
 _FOUR_SHARE_TARGETS = [
@@ -2452,18 +2460,17 @@ def test_failed_share_leaves_the_resource_private(
     model_class: type,
     entity_id: str,
 ) -> None:
-    """A share attempt that fails to resolve a public address must not leave
-    the resource public (#339 finding 1). Before the fix, enable_*_sharing()
-    ran and committed before resolve_public_base_url() got a chance to raise
-    -- a musician who saw "Share failed" actually had their album, song,
-    take, or playlist sitting world-readable with a live slug."""
+    """A share attempt that cannot build its public address must not leave
+    the resource public (#339 finding 1): a musician who saw "Share failed"
+    must not have an album, song, take, or playlist sitting world-readable
+    with a live slug."""
     from songmaker_cli.settings import get_settings
 
     monkeypatch.setenv("PUBLIC_BASE_URL", "")
     get_settings.cache_clear()
 
-    resp = two_take_app.post(share_path)
-    assert resp.status_code == 500
+    with pytest.raises(RuntimeError, match="PUBLIC_BASE_URL"):
+        two_take_app.post(share_path)
 
     factory = two_take_app.app.state.ctx.db
     with factory() as session:
@@ -2472,83 +2479,21 @@ def test_failed_share_leaves_the_resource_private(
         assert entity.share_slug is None
 
 
-def test_share_fails_named_when_public_base_url_is_malformed(
+def test_song_summary_carries_the_share_address_exactly_while_shared(
     two_take_app: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("PUBLIC_BASE_URL", "songmaker.example")  # no scheme
-    from songmaker_cli.settings import get_settings
+    def listed_song() -> dict:
+        return two_take_app.get("/api/songs").json()["items"][0]
 
-    get_settings.cache_clear()
+    assert listed_song()["share_url"] is None
+    assert two_take_app.get("/api/songs/s1").json()["share_url"] is None
 
-    resp = two_take_app.post("/api/albums/test_album/share")
+    shared = two_take_app.post("/api/songs/s1/share").json()
 
-    assert resp.status_code == 500
-    assert "PUBLIC_BASE_URL" in resp.json()["detail"]
+    assert listed_song()["share_url"] == shared["share_url"]
+    assert two_take_app.get("/api/songs/s1").json()["share_url"] == shared["share_url"]
 
+    two_take_app.delete("/api/songs/s1/share")
 
-def test_resolve_public_base_url_strips_query_and_fragment(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from songmaker_cli.api_helpers import resolve_public_base_url
-    from songmaker_cli.settings import get_settings
-
-    monkeypatch.setenv("PUBLIC_BASE_URL", "https://songmaker.example?x=1#frag")
-    get_settings.cache_clear()
-
-    assert resolve_public_base_url() == "https://songmaker.example"
-
-
-def test_resolve_public_base_url_rejects_a_path(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Unlike a query string or fragment, a path is not discarded -- a value
-    like ``https://domain/app`` means someone intended a subdirectory
-    deployment, and silently dropping it would build exactly the half-link
-    this function exists to prevent (#339 finding 2)."""
-    from fastapi import HTTPException
-
-    from songmaker_cli.api_helpers import resolve_public_base_url
-    from songmaker_cli.settings import get_settings
-
-    monkeypatch.setenv("PUBLIC_BASE_URL", "https://songmaker.example/app")
-    get_settings.cache_clear()
-
-    with pytest.raises(HTTPException) as exc_info:
-        resolve_public_base_url()
-    assert exc_info.value.status_code == 500
-    assert "PUBLIC_BASE_URL" in exc_info.value.detail
-
-
-def test_resolve_public_base_url_trims_surrounding_whitespace(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """PUBLIC_BASE_URL=https://host<trailing space> is the single most common
-    .env typo -- urlsplit would otherwise fold the space into the netloc and
-    hand back a broken link with a 200 (#339 finding 2)."""
-    from songmaker_cli.api_helpers import resolve_public_base_url
-    from songmaker_cli.settings import get_settings
-
-    monkeypatch.setenv("PUBLIC_BASE_URL", " https://songmaker.example \n")
-    get_settings.cache_clear()
-
-    assert resolve_public_base_url() == "https://songmaker.example"
-
-
-def test_resolve_public_base_url_rejects_an_embedded_scheme(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``http://https://host`` parses as scheme="http", netloc="https:" --
-    a non-empty netloc that is not a host. A looser "netloc is non-empty"
-    check would let this through (#339 finding 2)."""
-    from fastapi import HTTPException
-
-    from songmaker_cli.api_helpers import resolve_public_base_url
-    from songmaker_cli.settings import get_settings
-
-    monkeypatch.setenv("PUBLIC_BASE_URL", "http://https://host")
-    get_settings.cache_clear()
-
-    with pytest.raises(HTTPException) as exc_info:
-        resolve_public_base_url()
-    assert exc_info.value.status_code == 500
+    assert listed_song()["share_url"] is None
+    assert two_take_app.get("/api/songs/s1").json()["share_url"] is None

@@ -239,6 +239,42 @@ def test_token_clients_are_trimmed_and_matched_exactly(given: str, admitted: set
     assert Settings(**_required_settings(), token_clients=given).token_client_ids == admitted
 
 
+@pytest.mark.parametrize(
+    ("given", "origin"),
+    [
+        ("", ""),
+        ("  ", ""),
+        ("https://songmaker.example", "https://songmaker.example"),
+        (" https://songmaker.example \n", "https://songmaker.example"),
+        ("https://songmaker.example/", "https://songmaker.example"),
+        ("https://songmaker.example?x=1#frag", "https://songmaker.example"),
+        ("http://127.0.0.1:8080", "http://127.0.0.1:8080"),
+        ("http://[::1]:8080", "http://[::1]:8080"),
+    ],
+)
+def test_public_base_url_is_stored_as_the_bare_origin(given: str, origin: str) -> None:
+    assert Settings(**_required_settings(), public_base_url=given).public_base_url == origin
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        "songmaker.example",
+        "ftp://songmaker.example",
+        "http://https://host",
+        "https://user:pass@songmaker.example",
+        "https://songmaker.example/app",
+    ],
+)
+def test_a_malformed_public_base_url_fails_loud_and_names_the_value(malformed: str) -> None:
+    required = _required_settings()
+
+    with pytest.raises(ValidationError, match="PUBLIC_BASE_URL") as refused:
+        Settings(**required, public_base_url=malformed)
+
+    assert malformed in str(refused.value)
+
+
 @pytest.mark.parametrize("malformed", ["two scopes", " padded", "tab\tseparated", '"quoted"', ""])
 def test_an_agent_service_audience_scope_that_is_not_one_scope_token_fails_loud(
     malformed: str,

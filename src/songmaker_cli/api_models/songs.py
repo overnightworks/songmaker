@@ -5,7 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from enum import StrEnum
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -191,6 +192,31 @@ class UnplayableSongSummary(BaseModel):
 
     id: str
     title: str
+
+
+class ShareKind(StrEnum):
+    ALBUM = "album"
+    SONG = "song"
+    GENERATION = "generation"
+    PLAYLIST = "playlist"
+
+
+# The page each kind of share address opens; the web router's `addresses.ts`
+# holds the same prefixes for its relative paths.
+SHARE_PAGE_PREFIXES: Final[dict[ShareKind, str]] = {
+    ShareKind.ALBUM: "/share/",
+    ShareKind.SONG: "/share/song/",
+    ShareKind.GENERATION: "/share/gen/",
+    ShareKind.PLAYLIST: "/share/playlist/",
+}
+
+
+def public_share_url(kind: ShareKind, slug: str) -> str:
+    """The absolute address a shared resource opens at, for anyone anywhere."""
+    origin = get_settings().public_base_url
+    if not origin:
+        raise RuntimeError("PUBLIC_BASE_URL is not configured; no share address can be built")
+    return f"{origin}{SHARE_PAGE_PREFIXES[kind]}{slug}"
 
 
 class ShareResponse(BaseModel):
@@ -476,6 +502,7 @@ class SongSummaryResponse(BaseModel):
     generation_count: int = 0
     is_shared: bool = False
     share_slug: str | None = None
+    share_url: str | None = None
     best_scores: dict | None = None
     best_rating: float | None = None
     cover: AlbumCoverUrls | None = None
@@ -509,6 +536,11 @@ class SongSummaryResponse(BaseModel):
             generation_count=generation_count,
             is_shared=song.is_shared,
             share_slug=song.share_slug,
+            share_url=(
+                public_share_url(ShareKind.SONG, song.share_slug)
+                if song.is_shared and song.share_slug
+                else None
+            ),
             cover=cover,
             created_at=song.created_at.isoformat(),
         )
