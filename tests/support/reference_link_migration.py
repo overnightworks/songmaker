@@ -12,10 +12,10 @@ from types import ModuleType
 
 import pytest
 import sqlalchemy as sa
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import URL, Engine, make_url
+from support.migration_chain import seeded_then_upgraded
 
 RECORDING_COLUMN = "reference_recording_id"
 RECORDING_PATH = "u1/refs/a.wav"
@@ -109,8 +109,9 @@ def upgraded_after_seeding(
     **seed: object,
 ) -> Engine:
     """Seed the world at the previous revision, then upgrade to the case's migration."""
-    config, engine = database
-    command.upgrade(config, case.previous_revision)
-    case.seed(engine, **seed)
-    command.upgrade(config, case.migration.revision)
-    return engine
+    return seeded_then_upgraded(
+        database,
+        case.previous_revision,
+        case.migration.revision,
+        lambda engine: case.seed(engine, **seed),
+    )

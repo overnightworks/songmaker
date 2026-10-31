@@ -8,7 +8,7 @@ import pytest
 from alembic import command
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
-from support.migration_chain import is_on_the_single_chain
+from support.migration_chain import is_on_the_single_chain, seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.d8b4f2a6c1e9_users_choose_their_theme"
@@ -30,11 +30,9 @@ def _themes(engine) -> list[str]:
 
 
 def _upgraded_with_two_people(database):
-    config, engine = database
-    command.upgrade(config, PREVIOUS_REVISION)
-    seed_users(engine)
-    command.upgrade(config, _theme_migration().revision)
-    return config, engine
+    return seeded_then_upgraded(
+        database, PREVIOUS_REVISION, _theme_migration().revision, seed_users
+    )
 
 
 def test_the_migration_follows_the_previous_revision_on_the_single_chain():
@@ -43,12 +41,12 @@ def test_the_migration_follows_the_previous_revision_on_the_single_chain():
 
 
 def test_upgrade_gives_every_existing_person_the_device_choice(reference_link_database):
-    _, engine = _upgraded_with_two_people(reference_link_database)
+    engine = _upgraded_with_two_people(reference_link_database)
     assert _themes(engine) == ["system", "system"]
 
 
 def test_a_person_added_afterwards_without_a_theme_gets_the_device_choice(reference_link_database):
-    _, engine = _upgraded_with_two_people(reference_link_database)
+    engine = _upgraded_with_two_people(reference_link_database)
     execute(
         engine,
         "INSERT INTO users (id, username, role, created_at, updated_at) "
@@ -58,19 +56,20 @@ def test_a_person_added_afterwards_without_a_theme_gets_the_device_choice(refere
 
 
 def test_the_database_refuses_a_value_outside_the_three_ways(reference_link_database):
-    _, engine = _upgraded_with_two_people(reference_link_database)
+    engine = _upgraded_with_two_people(reference_link_database)
     with pytest.raises(IntegrityError):
         execute(engine, f"UPDATE users SET {COLUMN} = 'auto' WHERE id = 'u1'")
 
 
 def test_the_database_refuses_no_theme(reference_link_database):
-    _, engine = _upgraded_with_two_people(reference_link_database)
+    engine = _upgraded_with_two_people(reference_link_database)
     with pytest.raises(IntegrityError):
         execute(engine, f"UPDATE users SET {COLUMN} = NULL WHERE id = 'u1'")
 
 
 def test_downgrade_drops_the_column_and_its_check_and_keeps_the_people(reference_link_database):
-    config, engine = _upgraded_with_two_people(reference_link_database)
+    config, _ = reference_link_database
+    engine = _upgraded_with_two_people(reference_link_database)
     command.downgrade(config, PREVIOUS_REVISION)
     assert COLUMN not in _users_table_columns(engine)
     assert not any(

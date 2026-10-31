@@ -6,7 +6,7 @@ import importlib
 
 from alembic import command
 from sqlalchemy import inspect, text
-from support.migration_chain import is_on_the_single_chain
+from support.migration_chain import is_on_the_single_chain, seeded_then_upgraded
 from support.reference_link_migration import execute, seed_users
 
 MIGRATION_MODULE = "songmaker_cli.db.migrations.versions.e3a91c5d7f20_jobs_remember_their_version"
@@ -59,11 +59,9 @@ def _job_count(engine) -> int:
 
 
 def _upgraded_with_a_job(database):
-    config, engine = database
-    command.upgrade(config, PREVIOUS_REVISION)
-    _seed_job_at_the_previous_revision(engine)
-    command.upgrade(config, _migration().revision)
-    return config, engine
+    return seeded_then_upgraded(
+        database, PREVIOUS_REVISION, _migration().revision, _seed_job_at_the_previous_revision
+    )
 
 
 def test_the_migration_follows_the_previous_revision_on_the_single_chain():
@@ -74,7 +72,7 @@ def test_the_migration_follows_the_previous_revision_on_the_single_chain():
 def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(
     reference_link_database,
 ):
-    _, engine = _upgraded_with_a_job(reference_link_database)
+    engine = _upgraded_with_a_job(reference_link_database)
     inspector = inspect(engine)
     column = next(c for c in inspector.get_columns("jobs") if c["name"] == COLUMN)
     assert column["nullable"] is True
@@ -87,13 +85,13 @@ def test_upgrade_adds_an_indexed_nullable_key_that_the_database_sets_null(
 
 
 def test_upgrade_keeps_an_existing_job_without_a_version(reference_link_database):
-    _, engine = _upgraded_with_a_job(reference_link_database)
+    engine = _upgraded_with_a_job(reference_link_database)
     with engine.connect() as connection:
         assert connection.execute(text(f"SELECT {COLUMN} FROM jobs")).scalars().all() == [None]
 
 
 def test_deleting_a_version_sets_its_jobs_key_to_null(reference_link_database):
-    _, engine = _upgraded_with_a_job(reference_link_database)
+    engine = _upgraded_with_a_job(reference_link_database)
     execute(engine, f"UPDATE jobs SET {COLUMN} = 'version'")
     execute(engine, "DELETE FROM versions")
     with engine.connect() as connection:
@@ -101,7 +99,8 @@ def test_deleting_a_version_sets_its_jobs_key_to_null(reference_link_database):
 
 
 def test_downgrade_drops_the_key_and_keeps_the_job(reference_link_database):
-    config, engine = _upgraded_with_a_job(reference_link_database)
+    config, _ = reference_link_database
+    engine = _upgraded_with_a_job(reference_link_database)
     command.downgrade(config, PREVIOUS_REVISION)
     assert COLUMN not in _job_columns(engine)
     assert not any(
