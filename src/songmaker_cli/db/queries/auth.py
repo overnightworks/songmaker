@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session, joinedload
 from songmaker_cli.db.models import (
     AuditLog,
     ResourceEventCursor,
-    ThemeChoice,
     User,
     UserSession,
 )
+from songmaker_cli.theme_types import ThemeChoice
 
 if TYPE_CHECKING:
     from pydantic import SecretStr

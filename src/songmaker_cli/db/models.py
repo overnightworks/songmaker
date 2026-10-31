@@ -8,7 +8,6 @@ from __future__ import annotations
 import secrets
 import uuid
 from datetime import datetime
-from enum import StrEnum
 from typing import Final
 
 from pydantic import SecretStr
@@ -40,6 +39,7 @@ from songmaker_cli.generation_params import (
 )
 from songmaker_cli.timestamps import aware_timestamp as aware_timestamp
 from songmaker_cli.timestamps import utcnow
+from songmaker_cli.theme_types import ThemeChoice
 from songmaker_cli.whisper_cues import stored_whisper_cues
 
 SONG_SLUG_MAX_LENGTH: Final = 220
@@ -430,12 +430,6 @@ class AlbumCoverSuggestion(Base):
 
 
 # ── Auth ────────────────────────────────────────────────────────────
-
-
-class ThemeChoice(StrEnum):
-    LIGHT = "light"
-    DARK = "dark"
-    SYSTEM = "system"
 
 
 class User(Base):
