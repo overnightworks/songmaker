@@ -1,8 +1,0 @@
-claim_id = "eb9ae4a744564271b5ef3f6f7989d453"
-agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
-role = "builder"
-base = "4e2f92676d3dd678da5c1b58c97b60835982540a"
-branch = "claude/issue-2089-edit-during-render-new-version"
-scope = ["AGENTS.md", "docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/editorSave.test.ts", "quality/baseline.toml", "quality/config.toml", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/songs.py", "tests/test_song_version_lock_postgres.py", "tests/test_version_in_use.py"]
-opened_commit = "29a1f207c691e5f1a7d5c5ab8bbbb86ba78cb40b"
-whole_reason = "One rule and its two readers: the save rule, the job's version on the API and the editor's prediction land together, or the editor names a version number the save does not produce."
