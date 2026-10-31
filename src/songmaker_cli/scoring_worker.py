@@ -1,7 +1,7 @@
 """arq scoring worker — runs scoring jobs.
 
 Started as a separate process:
-    arq songmaker_cli.scoring_worker.ScoringWorkerSettings
+    python -m songmaker_cli.arq_worker songmaker_cli.scoring_worker.ScoringWorkerSettings
 """
 
 from __future__ import annotations

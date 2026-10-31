@@ -52,4 +52,4 @@ RUN chown root:root /app && chown -R root:root src && chmod 755 /app && \
     install -d -o songmaker -g songmaker /app/data/audio
 USER songmaker
 
-ENTRYPOINT ["/app/.venv/bin/arq"]
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "songmaker_cli.arq_worker"]
