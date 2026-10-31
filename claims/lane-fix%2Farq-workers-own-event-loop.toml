@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "6a0437693d729fbe791077e34c67d49a0a83c402"
 branch = "fix/arq-workers-own-event-loop"
-scope = ["docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "src/songmaker_cli/arq_worker.py", "tests/songmaker_cli/test_arq_worker.py"]
+scope = ["docker/docker-compose.e2e-voices.yml", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "src/songmaker_cli/arq_worker.py", "tests/songmaker_cli/test_arq_worker.py"]
 opened_commit = "7177e69b28791dcdfe826a62534a147b95c3a42c"
 whole_reason = "One worker start: the entry that gives arq an event loop on Python 3.14, both images' entrypoints that call it, and its test change together, or the live workers keep crashing"
