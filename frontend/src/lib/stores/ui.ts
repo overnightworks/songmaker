@@ -226,35 +226,56 @@ function rememberChoice(choice: ThemeChoice): void {
 	applyChoice(choice);
 }
 
-// Counts toggles, so a load answer that arrives after one is known to be stale.
-let togglesStarted = 0;
+// Every pending request passes `current` before it writes: a sign-out ends the session it
+// started in, and the server's latest answer is what a failed save falls back to.
+let session = 0;
+let serverChoice: ThemeChoice | undefined;
+let savesPending = 0;
+let savesSucceeded = 0;
+
+function current(startedIn: number): boolean {
+	return startedIn === session;
+}
 
 /** The server holds the person's choice; the copy only paints before it answers. */
 export async function loadThemeChoice(): Promise<void> {
-	const togglesBeforeLoad = togglesStarted;
+	const startedIn = session;
+	const succeededBefore = savesSucceeded;
 	try {
 		const answer = await fetchTheme();
-		if (togglesStarted === togglesBeforeLoad) rememberChoice(answer.theme);
+		if (!current(startedIn) || savesSucceeded !== succeededBefore) return;
+		serverChoice = answer.theme;
+		if (savesPending === 0) rememberChoice(answer.theme);
 	} catch {
 		// The copy stays in effect; the next load asks again.
 	}
 }
 
-/** Switches light and dark at once, then saves it; a refused save puts the previous choice back. */
+/** Switches light and dark at once, then saves it; a refused save puts the server's choice back. */
 export async function toggleTheme(): Promise<void> {
-	togglesStarted += 1;
+	const startedIn = session;
 	const previous = getStoredChoice() ?? 'system';
 	const next: Theme = get(theme) === 'dark' ? 'light' : 'dark';
 	rememberChoice(next);
+	savesPending += 1;
 	try {
 		await updateTheme(next);
+		if (!current(startedIn)) return;
+		savesSucceeded += 1;
+		serverChoice = next;
 	} catch (error) {
-		rememberChoice(previous);
+		if (!current(startedIn)) return;
+		rememberChoice(serverChoice ?? previous);
 		addToast(describeFailure(error, 'Saving the theme failed'), 'error');
+	} finally {
+		if (current(startedIn)) savesPending -= 1;
 	}
 }
 
 export function forgetThemeChoice(): void {
+	session += 1;
+	serverChoice = undefined;
+	savesPending = 0;
 	removeStorage(STORAGE_KEY);
 }
 

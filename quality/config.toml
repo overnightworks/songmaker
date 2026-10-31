@@ -161,4 +161,4 @@ reason = "the song summary and the song item gain the generated share_url field;
 what = "size baseline raises file_lines frontend/src/lib/api/types.ts 1139 -> 1143"
 item = "#2107"
 date = 2026-10-31
-reason = "the person's theme choice gains the generated ThemeSettings type and the ThemeChoice enum; the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"
+reason = "the person's theme choice gains the generated ThemeSettings interface (an inline union of the three choices); the generator's --check gates the file; overnightworks/quality#174 asks quality to exempt generated files"

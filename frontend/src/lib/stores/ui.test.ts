@@ -421,6 +421,67 @@ describe('theme', () => {
 			expect(localStorage.getItem(COPY_KEY)).toBe('dark');
 		});
 
+		it('does not restore the copy when the load answers after the choice was forgotten', async () => {
+			stubDevice('light');
+			let answerLoad: (answer: { theme: string }) => void = () => {};
+			mockFetchTheme.mockReturnValue(new Promise((resolve) => (answerLoad = resolve)));
+			const { theme, loadThemeChoice, forgetThemeChoice } = await import('./ui');
+
+			const loaded = loadThemeChoice();
+			forgetThemeChoice();
+			answerLoad({ theme: 'dark' });
+			await loaded;
+
+			expect(localStorage.getItem(COPY_KEY)).toBeNull();
+			expect(get(theme)).toBe('light');
+			expect(document.documentElement.dataset.theme).toBeUndefined();
+		});
+
+		it('does not restore the copy when a save fails after the choice was forgotten', async () => {
+			stubDevice('light');
+			let refuseSave: (error: Error) => void = () => {};
+			mockUpdateTheme.mockReturnValue(new Promise((_, reject) => (refuseSave = reject)));
+			const { toggleTheme, forgetThemeChoice } = await import('./ui');
+
+			const toggled = toggleTheme();
+			forgetThemeChoice();
+			refuseSave(new Error('refused'));
+			await toggled;
+
+			expect(localStorage.getItem(COPY_KEY)).toBeNull();
+		});
+
+		it.each(['the save fails first', 'the load answers first'])(
+			'shows the server choice when %s while the copy was light and the server holds dark',
+			async (order) => {
+				stubDevice('light');
+				localStorage.setItem(COPY_KEY, 'light');
+				let answerLoad: (answer: { theme: string }) => void = () => {};
+				let refuseSave: (error: Error) => void = () => {};
+				mockFetchTheme.mockReturnValue(new Promise((resolve) => (answerLoad = resolve)));
+				mockUpdateTheme.mockReturnValue(new Promise((_, reject) => (refuseSave = reject)));
+				const { theme, loadThemeChoice, toggleTheme } = await import('./ui');
+
+				const loaded = loadThemeChoice();
+				const toggled = toggleTheme();
+				if (order === 'the save fails first') {
+					refuseSave(new Error('refused'));
+					await toggled;
+					answerLoad({ theme: 'dark' });
+					await loaded;
+				} else {
+					answerLoad({ theme: 'dark' });
+					await loaded;
+					refuseSave(new Error('refused'));
+					await toggled;
+				}
+
+				expect(get(theme)).toBe('dark');
+				expect(document.documentElement.dataset.theme).toBe('dark');
+				expect(localStorage.getItem(COPY_KEY)).toBe('dark');
+			}
+		);
+
 		it('keeps the copy when the server cannot be asked', async () => {
 			stubDevice('light');
 			localStorage.setItem(COPY_KEY, 'dark');

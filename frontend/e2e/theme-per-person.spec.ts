@@ -77,7 +77,7 @@ test('1: dark chosen in browser A is shown by browser B of the same person at it
 	await other.context.close();
 });
 
-test('20: an open browser B does not change when A switches, and its next load does', async ({
+test("20: an open browser B has not changed right after A switches, and its next load shows A's choice", async ({
 	browser,
 	page
 }) => {
