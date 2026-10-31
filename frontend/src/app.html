@@ -11,7 +11,9 @@
 				try {
 					localStorage.removeItem('theme');
 					t = localStorage.getItem('songmaker.theme');
-				} catch (e) {}
+				} catch (e) {
+					// Storage can be blocked (private mode, blocked site data); the device's scheme paints instead.
+				}
 				if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t;
 				if (typeof window.matchMedia !== 'function') {
 					document.documentElement.dataset.pointer = 'fine';
