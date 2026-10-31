@@ -249,6 +249,7 @@ describe('logout', () => {
 			keeps: true
 		}
 	])('H4: when $answer, the theme copy is kept: $keeps', async ({ reply, keeps }) => {
+		onTestFinished(() => localStorage.clear());
 		localStorage.setItem('songmaker.theme', 'dark');
 		currentUser.set(KNOWN_USER);
 		mockFetchMe.mockImplementationOnce(reply);

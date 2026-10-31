@@ -3,6 +3,7 @@ import type ShareButton from '#lib/components/ShareButton.svelte';
 import type SongMenu from '#lib/components/editor/SongMenu.svelte';
 import { get, readonly, writable } from 'svelte/store';
 import { fetchTheme, updateTheme } from '#lib/api/settings.ts';
+import type { ThemeSettings } from '#lib/api/types.ts';
 import { describeFailure } from '#lib/api/fetch.ts';
 import { addToast } from '#lib/stores/toast.ts';
 import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '#lib/constants.ts';
@@ -106,7 +107,7 @@ export function watchTypingOnPhone(root: Document, compact: boolean): () => void
 }
 
 type Theme = 'dark' | 'light';
-type ThemeChoice = Theme | 'system';
+type ThemeChoice = ThemeSettings['theme'];
 
 const STORAGE_KEY = 'songmaker.theme';
 const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
@@ -225,10 +226,15 @@ function rememberChoice(choice: ThemeChoice): void {
 	applyChoice(choice);
 }
 
+// Counts toggles, so a load answer that arrives after one is known to be stale.
+let togglesStarted = 0;
+
 /** The server holds the person's choice; the copy only paints before it answers. */
 export async function loadThemeChoice(): Promise<void> {
+	const togglesBeforeLoad = togglesStarted;
 	try {
-		rememberChoice((await fetchTheme()).theme);
+		const answer = await fetchTheme();
+		if (togglesStarted === togglesBeforeLoad) rememberChoice(answer.theme);
 	} catch {
 		// The copy stays in effect; the next load asks again.
 	}
@@ -236,6 +242,7 @@ export async function loadThemeChoice(): Promise<void> {
 
 /** Switches light and dark at once, then saves it; a refused save puts the previous choice back. */
 export async function toggleTheme(): Promise<void> {
+	togglesStarted += 1;
 	const previous = getStoredChoice() ?? 'system';
 	const next: Theme = get(theme) === 'dark' ? 'light' : 'dark';
 	rememberChoice(next);

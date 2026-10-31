@@ -404,6 +404,23 @@ describe('theme', () => {
 			expect(localStorage.getItem(COPY_KEY)).toBe('system');
 		});
 
+		it("does not undo a toggle made while the load is pending when the load's answer arrives", async () => {
+			stubDevice('light');
+			let answerLoad: (answer: { theme: string }) => void = () => {};
+			mockFetchTheme.mockReturnValue(new Promise((resolve) => (answerLoad = resolve)));
+			mockUpdateTheme.mockResolvedValue({ theme: 'dark' });
+			const { theme, loadThemeChoice, toggleTheme } = await import('./ui');
+
+			const loaded = loadThemeChoice();
+			await toggleTheme();
+			answerLoad({ theme: 'system' });
+			await loaded;
+
+			expect(get(theme)).toBe('dark');
+			expect(document.documentElement.dataset.theme).toBe('dark');
+			expect(localStorage.getItem(COPY_KEY)).toBe('dark');
+		});
+
 		it('keeps the copy when the server cannot be asked', async () => {
 			stubDevice('light');
 			localStorage.setItem(COPY_KEY, 'dark');
