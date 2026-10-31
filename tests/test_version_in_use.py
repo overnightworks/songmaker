@@ -49,6 +49,10 @@ def _seed(session) -> None:
         id="reference", user_id=OWNER_ID, storage_path="owner/reference.wav",
         original_filename="reference.wav", size_bytes=4,
     ))
+    session.add(ReferenceRecording(
+        id="take-reference", user_id=OWNER_ID, storage_path="owner/take-reference.wav",
+        original_filename="take-reference.wav", size_bytes=4,
+    ))
     session.add(Album(id="album", title="A", artist="B", created_by=OWNER_ID))
     session.add(Song(id="song", title="S", album_id="album", track_number=1, slug="s"))
     session.add(Song(id="other-song", title="O", album_id="album", track_number=2, slug="o"))
@@ -274,7 +278,7 @@ def _give_take_to_latest(client: TestClient) -> None:
         session.add(Generation(
             id="latest-take", song_id="song", version_id="v2", generation_number=3,
             mp3_path="u/latest.mp3", generation_params=TAKE_PARAMS,
-            reference_recording_id="reference",
+            reference_recording_id="take-reference",
         ))
         session.commit()
 
@@ -320,7 +324,8 @@ def test_v4_a_parameters_only_edit_of_a_version_with_a_take_rewrites_it(client, 
     assert _holds(versions[2], edit)
     with _database(client) as session:
         take = session.get(Generation, "latest-take")
-        assert (take.generation_params, take.reference_recording_id) == (TAKE_PARAMS, "reference")
+        assert take.generation_params == TAKE_PARAMS
+        assert take.reference_recording_id == "take-reference"
 
 
 @pytest.mark.parametrize("status", [JobStatus.QUEUED, JobStatus.RUNNING])
