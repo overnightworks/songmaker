@@ -565,7 +565,7 @@ def run_ffmpeg_concat(concat_path: Path, output_path: Path) -> None:
         raise HTTPException(504, "Queue stream build timed out") from exc
     except subprocess.CalledProcessError as exc:
         output_path.unlink(missing_ok=True)
-        detail = (exc.stderr or exc.stdout or "").strip()
+        detail = str.strip(exc.stderr or exc.stdout or "")
         log.warning("ffmpeg queue stream build failed: %s", detail)
         raise HTTPException(422, "Could not build queue stream") from exc
 
