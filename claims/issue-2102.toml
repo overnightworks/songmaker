@@ -3,6 +3,6 @@ agent = "Claude 2317454d-1f9b-4425-b0c5-6e7c06b780c0"
 role = "builder"
 base = "4e2f92676d3dd678da5c1b58c97b60835982540a"
 branch = "claude/issue-2102-python-floor-314"
-scope = [".github/workflows/ci.yml", "AGENTS.md", "pyproject.toml", "quality/config.toml", "sonar-project.properties", "src/songmaker_cli/server.py", "tests/auto_deploy_support.py", "uv.lock"]
+scope = [".github/workflows/ci.yml", "AGENTS.md", "pyproject.toml", "quality/baseline.toml", "quality/config.toml", "sonar-project.properties", "src/songmaker_cli/server.py", "tests/auto_deploy_support.py", "uv.lock"]
 opened_commit = "c176e0525fde3632d8f9f280b25ce2dd7d07ad86"
 whole_reason = "One floor move: the floor, its lock, the CI leg, the gate's mandatory list, Sonar's version and the 3.12-only shim change together, or the gate, CI or Sonar names an interpreter the lock no longer serves."
