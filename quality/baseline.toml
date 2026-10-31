@@ -83,7 +83,7 @@
 "tests/songmaker_cli/test_playlist_api.py" = 1105
 "tests/songmaker_cli/test_db_postgresql.py" = 858
 "tests/songmaker_cli/test_queue_streams.py" = 2417
-"tests/songmaker_cli/test_resource_event_api.py" = 1217
+"tests/songmaker_cli/test_resource_event_api.py" = 1235
 "tests/songmaker_cli/test_scheduler.py" = 1285
 "tests/songmaker_cli/test_server.py" = 1955
 "tests/songmaker_cli/test_sharing_api.py" = 2499
@@ -241,9 +241,6 @@
 [function_lines."tests/test_reference_quota.py"]
 "test_postgresql_failed_reference_write_releases_admission" = 75
 "test_postgresql_reference_admission_is_atomic" = 66
-
-[function_lines."tests/songmaker_cli/test_resource_event_api.py"]
-"test_outer_app_deadline_bounds_blocked_synthetic_terminal_and_releases_lease" = 65
 
 [function_lines."tests/songmaker_cli/test_server.py"]
 "test_lifespan_shutdown_order_drains_pending_lease_releases" = 60
